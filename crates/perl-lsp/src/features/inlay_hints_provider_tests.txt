@@ -1,0 +1,15 @@
+This file marks that the inlay hints provider has been updated to work with the new AST structure.
+
+Changes made:
+1. Extended get_node_children() in declaration.rs to handle all NodeKind variants
+2. Updated visit_children() in inlay_hints_provider.rs to handle modern Perl constructs
+3. Fixed get_parameter_names() to properly check builtin signatures
+4. Added comprehensive tests for modern Perl syntax
+
+The provider now correctly traverses:
+- Try/catch/finally blocks
+- Given/when/default statements
+- Method definitions with signatures
+- Signature parameters (mandatory, optional, slurpy, named)
+- Nested control flow structures
+- Eval and do blocks

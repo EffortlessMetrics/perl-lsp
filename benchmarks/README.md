@@ -17,8 +17,42 @@ just bench-quick
 # Compare against baseline
 just bench-compare
 
+# Generate performance alerts
+just bench-alert
+
+# Check for critical regressions (CI gate)
+just bench-alert-check
+
 # Save current run as a new baseline
 just bench-baseline
+```
+
+## Automated Performance Regression Alerts
+
+The perl-lsp project now includes automated performance regression detection with configurable thresholds and PR comment integration. See [docs/PERFORMANCE_MONITORING.md](../docs/PERFORMANCE_MONITORING.md) for comprehensive documentation.
+
+### Alert Levels
+
+- **WARNING** (10% slower): Yellow flag, investigate
+- **REGRESSION** (20% slower): Red flag, fix before merge
+- **CRITICAL** (50% slower): Blocks merge (optional)
+- **IMPROVED** (10% faster): Celebrated in PR comments
+
+### Configuration
+
+Thresholds are configured in `.ci/benchmark-thresholds.yaml`:
+
+```yaml
+defaults:
+  warn_threshold_pct: 10
+  regression_threshold_pct: 20
+  critical_threshold_pct: 50
+
+categories:
+  lsp:  # Stricter for LSP operations
+    warn_threshold_pct: 5
+    regression_threshold_pct: 15
+    critical_threshold_pct: 30
 ```
 
 ## Directory Structure

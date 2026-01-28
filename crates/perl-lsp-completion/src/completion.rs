@@ -99,6 +99,7 @@ mod packages;
 mod sort;
 mod test_more;
 mod variables;
+mod workspace;
 
 // Re-export public types
 pub use self::context::CompletionContext;
@@ -477,6 +478,12 @@ impl CompletionProvider {
 
             // Also suggest variables without sigils in some contexts
             variables::add_all_variables(&mut completions, &context, &self.symbol_table);
+            if is_cancelled() {
+                return vec![];
+            }
+
+            // Add workspace symbol completions from other files
+            workspace::add_workspace_symbol_completions(&mut completions, &context, &self.workspace_index);
             if is_cancelled() {
                 return vec![];
             }

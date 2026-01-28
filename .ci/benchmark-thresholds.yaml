@@ -1,0 +1,152 @@
+# Performance Regression Alert Thresholds
+#
+# NOTE: These are ALERTS, not merge-blocking gates.
+# Regressions are reported via PR comments; CI does not fail.
+# Gating on performance is blocked on #211/#210 (CI cleanup).
+#
+# This file configures automated performance regression detection.
+# Thresholds are specified per benchmark category and individual benchmarks.
+#
+# See docs/PERFORMANCE_MONITORING.md for details.
+
+# Global defaults (applied to all benchmarks unless overridden)
+defaults:
+  # Warning threshold: Issue a warning comment on PR
+  warn_threshold_pct: 10
+
+  # Regression threshold: Mark as regression but don't fail
+  regression_threshold_pct: 20
+
+  # Critical threshold: Fail the CI check
+  critical_threshold_pct: 50
+
+  # Improvement threshold: Highlight as performance win
+  improvement_threshold_pct: 10
+
+# Category-specific thresholds
+categories:
+  parser:
+    warn_threshold_pct: 10
+    regression_threshold_pct: 20
+    critical_threshold_pct: 50
+
+  lexer:
+    warn_threshold_pct: 10
+    regression_threshold_pct: 20
+    critical_threshold_pct: 50
+
+  lsp:
+    # LSP operations are more critical for user experience
+    warn_threshold_pct: 5
+    regression_threshold_pct: 15
+    critical_threshold_pct: 30
+
+  index:
+    warn_threshold_pct: 15
+    regression_threshold_pct: 25
+    critical_threshold_pct: 60
+
+# Critical path benchmarks (stricter thresholds)
+critical_path:
+  # LSP response times (must stay under 1ms for editor responsiveness)
+  - name: "lsp/document_insertions"
+    warn_threshold_pct: 5
+    regression_threshold_pct: 10
+    critical_threshold_pct: 20
+    target_ms: 1.0
+
+  # Incremental parsing (must be fast for real-time editing)
+  - name: "parser/incremental_edits"
+    warn_threshold_pct: 5
+    regression_threshold_pct: 15
+    critical_threshold_pct: 30
+    target_ms: 5.0
+
+  # Position conversions (affects all LSP operations)
+  - name: "lsp/position_conversions"
+    warn_threshold_pct: 5
+    regression_threshold_pct: 10
+    critical_threshold_pct: 20
+    target_us: 100
+
+  # Symbol lookup (affects go-to-definition)
+  - name: "index/symbol_lookup"
+    warn_threshold_pct: 10
+    regression_threshold_pct: 20
+    critical_threshold_pct: 40
+    target_us: 1
+
+# Performance targets (SLOs)
+targets:
+  parser:
+    parse_simple_script: 50us
+    parse_complex_script: 500us
+    large_file_parsing: 50ms
+
+  lexer:
+    simple_tokens: 10us
+    slash_disambiguation: 50us
+    large_file: 10ms
+
+  lsp:
+    document_insertions: 1ms
+    position_conversions: 100us
+    incremental_edits: 5ms
+
+  index:
+    initial_index_small: 100ms
+    initial_index_medium: 200ms
+    incremental_update: 10ms
+    symbol_lookup: 1us
+
+# Alerting configuration
+alerting:
+  # Post PR comment on any warning/regression
+  comment_on_warning: true
+
+  # Post PR comment on regression
+  comment_on_regression: true
+
+  # Fail CI on critical regression
+  fail_on_critical: false  # Set to true to gate merges
+
+  # Include performance trend charts in comments
+  include_trends: false  # Future: enable when trend storage is implemented
+
+  # Notification channels
+  channels:
+    github_comment: true
+    slack_webhook: false  # Future: Slack notifications
+    email: false          # Future: email alerts
+
+# Baseline management
+baselines:
+  # Baseline file naming convention
+  format: "v{version}.json"
+
+  # Auto-save baseline on release tags
+  auto_save_on_release: true
+
+  # Keep N most recent baselines
+  retention_count: 10
+
+# Trend tracking
+trends:
+  # Enable historical trend tracking
+  enabled: false  # Future: implement trend storage
+
+  # Storage backend
+  backend: "github_artifacts"  # Options: github_artifacts, s3, filesystem
+
+  # Metrics to track over time
+  metrics:
+    - mean_ns
+    - stddev_ns
+    - min_ns
+    - max_ns
+    - memory_kb
+
+# Exemptions (benchmarks to skip for alerting)
+exemptions:
+  # Add benchmark names that are known to be noisy
+  - "memory_profile/*"  # Memory profiling is informational only

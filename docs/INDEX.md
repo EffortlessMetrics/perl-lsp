@@ -2,6 +2,14 @@
 
 This is the front door. If you want X, read Y.
 
+## Documentation Site
+
+**📖 [Browse the documentation site](https://effortlessmetrics.github.io/tree-sitter-perl/)** - Searchable, organized documentation with navigation
+
+For local preview: `just docs-serve`
+
+See [DOCUMENTATION_SITE.md](DOCUMENTATION_SITE.md) for setup and deployment details.
+
 ## Canonical Truth Sources
 
 | What               | Where                                      | Verified By        |

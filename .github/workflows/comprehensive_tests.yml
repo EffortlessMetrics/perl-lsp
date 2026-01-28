@@ -56,7 +56,7 @@ jobs:
         
         for test_file in crates/perl-parser/tests/*.rs; do
           test_name=$(basename "$test_file" .rs)
-          TEST_COUNT=$(cargo test --locked -p perl-parser --test "$test_name" --features test-compat -- --list 2>/dev/null | grep -c ": test" || echo "0")
+          TEST_COUNT=$(cargo test --locked -p perl-parser --test "$test_name" -- --list 2>/dev/null | grep -c ": test" || echo "0")
           
           if [ "$TEST_COUNT" = "0" ]; then
             EMPTY_TESTS="$EMPTY_TESTS $test_name"

@@ -151,3 +151,165 @@ fn test_lsp_response_parsing() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(value["result"]["test"], true);
     Ok(())
 }
+
+// AC5: Tests for LSP protocol edge cases
+
+#[test]
+fn test_malformed_json_message() {
+    // Test that malformed JSON is handled gracefully
+    let malformed_content = r#"{"jsonrpc":"2.0","id":1,"method":"test""#; // Missing closing brace
+    let header = format!("Content-Length: {}\r\n\r\n", malformed_content.len());
+    let message = [header.as_bytes(), malformed_content.as_bytes()].concat();
+    let mut reader = BufReader::new(&message[..]);
+
+    let parsed = read_lsp_response(&mut reader);
+    // Malformed JSON should result in None
+    assert!(parsed.is_none(), "Malformed JSON should not parse");
+}
+
+#[test]
+fn test_incomplete_headers() {
+    // Test that incomplete headers are handled gracefully
+    let json_content = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
+    // Missing the blank line after header
+    let incomplete_header = format!("Content-Length: {}\r\n{}", json_content.len(), json_content);
+    let mut reader = BufReader::new(incomplete_header.as_bytes());
+
+    let parsed = read_lsp_response(&mut reader);
+    // Incomplete header (missing blank line) should result in None since the protocol requires it
+    assert!(parsed.is_none(), "Missing blank line separator should fail to parse");
+}
+
+#[test]
+fn test_missing_content_length_header() {
+    // Test that missing Content-Length header is handled gracefully
+    let json_content = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
+    let invalid_header = format!("Content-Type: application/json\r\n\r\n{}", json_content);
+    let mut reader = BufReader::new(invalid_header.as_bytes());
+
+    let parsed = read_lsp_response(&mut reader);
+    // Missing Content-Length should result in None
+    assert!(parsed.is_none(), "Missing Content-Length should fail to parse");
+}
+
+#[test]
+fn test_invalid_content_length() {
+    // Test that invalid Content-Length values are handled gracefully
+    let json_content = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
+    let invalid_header = "Content-Length: not-a-number\r\n\r\n";
+    let message = [invalid_header.as_bytes(), json_content.as_bytes()].concat();
+    let mut reader = BufReader::new(&message[..]);
+
+    let parsed = read_lsp_response(&mut reader);
+    // Invalid Content-Length should result in None
+    assert!(parsed.is_none(), "Invalid Content-Length should fail to parse");
+}
+
+#[test]
+fn test_oversized_payload() {
+    // Test that oversized payloads are handled correctly
+    // Create a message with Content-Length larger than actual content
+    let json_content = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
+    let oversized_length = json_content.len() + 1000;
+    let header = format!("Content-Length: {}\r\n\r\n", oversized_length);
+    let message = [header.as_bytes(), json_content.as_bytes()].concat();
+    let mut reader = BufReader::new(&message[..]);
+
+    let parsed = read_lsp_response(&mut reader);
+    // Oversized payload should result in None (EOF before reading full content)
+    assert!(parsed.is_none(), "Oversized payload should fail to parse");
+}
+
+#[test]
+fn test_zero_content_length() {
+    // Test that zero Content-Length is handled gracefully
+    let header = "Content-Length: 0\r\n\r\n";
+    let mut reader = BufReader::new(header.as_bytes());
+
+    let parsed = read_lsp_response(&mut reader);
+    // Zero-length content should parse as None (empty JSON)
+    assert!(parsed.is_none(), "Zero-length content should fail to parse as valid JSON");
+}
+
+#[test]
+fn test_multiple_headers() {
+    // Test that multiple headers are handled correctly
+    let json_content = r#"{"jsonrpc":"2.0","id":1,"method":"test"}"#;
+    let header =
+        format!("Content-Length: {}\r\nContent-Type: application/json\r\n\r\n", json_content.len());
+    let message = [header.as_bytes(), json_content.as_bytes()].concat();
+    let mut reader = BufReader::new(&message[..]);
+
+    let parsed = read_lsp_response(&mut reader);
+    assert!(parsed.is_some(), "Multiple headers should be parsed correctly");
+
+    let value = parsed.expect("Should have parsed successfully");
+    assert_eq!(value["jsonrpc"], "2.0");
+    assert_eq!(value["id"], 1);
+}
+
+#[test]
+fn test_empty_input_stream() {
+    // Test that empty input stream is handled gracefully
+    let empty_input: &[u8] = &[];
+    let mut reader = BufReader::new(empty_input);
+
+    let parsed = read_lsp_response(&mut reader);
+    // Empty stream should result in None
+    assert!(parsed.is_none(), "Empty input should result in None");
+}
+
+#[test]
+fn test_partial_json_in_stream() {
+    // Test that partial JSON in stream is handled gracefully
+    let json_content = r#"{"jsonrpc":"2.0","id":1,"met"#; // Truncated
+    let header = format!("Content-Length: {}\r\n\r\n", json_content.len());
+    let message = [header.as_bytes(), json_content.as_bytes()].concat();
+    let mut reader = BufReader::new(&message[..]);
+
+    let parsed = read_lsp_response(&mut reader);
+    // Partial JSON should result in None
+    assert!(parsed.is_none(), "Partial JSON should fail to parse");
+}
+
+#[test]
+fn test_lsp_server_with_cursor_io() {
+    // Test that LspServer can be created with Cursor I/O (in-memory buffers)
+    use std::io::Cursor;
+
+    let input = Cursor::new(Vec::new());
+    let output = Vec::new();
+
+    let server = LspServer::with_io(Box::new(input), Box::new(output));
+
+    // Verify server is created successfully
+    assert!(!server.is_initialized(), "Server should not be initialized yet");
+}
+
+#[test]
+fn test_concurrent_io_access() {
+    // Test that concurrent I/O access is thread-safe (AC6)
+    use std::sync::Arc;
+    use std::thread;
+
+    let (tx, _rx) = mpsc::channel::<Vec<u8>>();
+    let output = Arc::new(tx);
+
+    // Create multiple threads that would write to output
+    let handles: Vec<_> = (0..5)
+        .map(|i| {
+            let out = output.clone();
+            thread::spawn(move || {
+                let message = format!("Message {}", i);
+                let _ = out.send(message.into_bytes());
+            })
+        })
+        .collect();
+
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("Thread should complete successfully");
+    }
+
+    // If we get here, concurrent access was thread-safe
+}

@@ -21,6 +21,7 @@ perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-diagnostics-codes = { workspace = true }
 perl-pragma = { workspace = true }
+perl-position-tracking = { workspace = true }
 lsp-types = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"

@@ -414,20 +414,164 @@ fn test_comprehensive_coverage() -> Result<(), Box<dyn std::error::Error>> {
     // Critical functions that must be present
     let critical = vec![
         // I/O
-        "print", "printf", "say", "open", "close", "read", "write", // String
-        "substr", "index", "rindex", "sprintf", "join", "split", // Array
-        "push", "pop", "shift", "unshift", "splice", "reverse", // Hash
-        "keys", "values", "each", "delete", "exists", // File
-        "stat", "lstat",
+        "print",
+        "printf",
+        "say",
+        "open",
+        "close",
+        "read",
+        "write",
+        // String
+        "substr",
+        "index",
+        "rindex",
+        "sprintf",
+        "join",
+        "split",
+        // Array
+        "push",
+        "pop",
+        "shift",
+        "unshift",
+        "splice",
+        "reverse",
+        // Hash
+        "keys",
+        "values",
+        "each",
+        "delete",
+        "exists",
+        // File
+        "stat",
+        "lstat",
         // Note: -e, -f, -d, -r, -w, -x are file test operators, not functions
         // Process
-        "system", "exec", "fork", "wait", "kill", // Math
-        "abs", "int", "sqrt", "sin", "cos", "atan2", // Refs
-        "ref", "bless", "tie", "tied", "untie",
+        "system",
+        "exec",
+        "fork",
+        "wait",
+        "kill",
+        // Math
+        "abs",
+        "int",
+        "sqrt",
+        "sin",
+        "cos",
+        "atan2",
+        // Refs
+        "ref",
+        "bless",
+        "tie",
+        "tied",
+        "untie",
+        // Socket functions (AC1: Issue #418)
+        "socket",
+        "bind",
+        "listen",
+        "accept",
+        "connect",
+        "send",
+        "recv",
+        "shutdown",
+        "socketpair",
+        "getsockopt",
+        "setsockopt",
+        // Deprecated but commonly-used functions (AC2: Issue #418)
+        "dump",
+        "reset",
     ];
 
     for func in critical {
         assert!(provider.has_builtin(func), "Missing critical function: {}", func);
     }
+    Ok(())
+}
+
+#[test]
+fn test_socket_functions_coverage() -> Result<(), Box<dyn std::error::Error>> {
+    // AC1 (Issue #418): Verify all socket-related functions have signatures
+    let ast = Parser::new("").parse()?;
+    let provider = SignatureHelpProvider::new(&ast);
+
+    let socket_functions = vec![
+        "socket",
+        "bind",
+        "listen",
+        "accept",
+        "connect",
+        "send",
+        "recv",
+        "shutdown",
+        "socketpair",
+        "getsockopt",
+        "setsockopt",
+    ];
+
+    for func in socket_functions {
+        assert!(provider.has_builtin(func), "Missing socket function: {}", func);
+
+        // AC4: Verify functions have documentation
+        let sig = provider.get_builtin_signature(func);
+        assert!(sig.is_some(), "Missing signature for socket function: {}", func);
+
+        let sig = sig.unwrap();
+        assert!(
+            !sig.documentation.is_empty(),
+            "Missing documentation for socket function: {}",
+            func
+        );
+        assert!(
+            !sig.signatures.is_empty(),
+            "Missing signature variants for socket function: {}",
+            func
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_deprecated_functions_coverage() -> Result<(), Box<dyn std::error::Error>> {
+    // AC2 (Issue #418): Verify deprecated but commonly-used functions have signatures
+    let ast = Parser::new("").parse()?;
+    let provider = SignatureHelpProvider::new(&ast);
+
+    let deprecated_functions = vec!["dump", "reset"];
+
+    for func in deprecated_functions {
+        assert!(provider.has_builtin(func), "Missing deprecated function: {}", func);
+
+        // AC4: Verify functions have documentation
+        let sig = provider.get_builtin_signature(func);
+        assert!(sig.is_some(), "Missing signature for deprecated function: {}", func);
+
+        let sig = sig.unwrap();
+        assert!(
+            !sig.documentation.is_empty(),
+            "Missing documentation for deprecated function: {}",
+            func
+        );
+        assert!(
+            !sig.signatures.is_empty(),
+            "Missing signature variants for deprecated function: {}",
+            func
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_builtin_count_threshold() -> Result<(), Box<dyn std::error::Error>> {
+    // AC3 & AC5 (Issue #418): Verify total built-in function count reaches at least 150 signatures
+    let ast = Parser::new("").parse()?;
+    let provider = SignatureHelpProvider::new(&ast);
+
+    let count = provider.builtin_count();
+    assert!(count >= 150, "Built-in function count ({}) below threshold (150)", count);
+
+    // Document actual count for visibility
+    eprintln!("Total built-in function signatures: {}", count);
+
     Ok(())
 }

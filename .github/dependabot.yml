@@ -1,0 +1,176 @@
+version: 2
+updates:
+  # Cargo dependencies for the main workspace
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    groups:
+      # Group all serde-related crates together
+      serde:
+        patterns:
+          - "serde*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group all tokio-related crates together
+      tokio:
+        patterns:
+          - "tokio*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group all tracing-related crates together
+      tracing:
+        patterns:
+          - "tracing*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group all lsp-types and tower-lsp dependencies
+      lsp:
+        patterns:
+          - "lsp-types"
+          - "lsp-server"
+          - "tower-lsp"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group all testing dependencies
+      testing:
+        patterns:
+          - "proptest*"
+          - "quickcheck*"
+          - "rstest*"
+          - "criterion*"
+          - "mockall*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group tree-sitter related dependencies
+      tree-sitter:
+        patterns:
+          - "tree-sitter*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group pest parser dependencies
+      pest:
+        patterns:
+          - "pest*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group all other minor and patch updates
+      dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+    ignore:
+      # Exclude major version updates for critical dependencies
+      # These require manual review and testing
+      - dependency-name: "tree-sitter"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "lsp-types"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tower-lsp"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tokio"
+        update-types: ["version-update:semver-major"]
+    labels:
+      - "dependencies"
+      - "cargo"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # GitHub Actions workflow dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      # Group all actions/* updates together
+      actions:
+        patterns:
+          - "actions/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group rust toolchain actions
+      rust-toolchain:
+        patterns:
+          - "dtolnay/rust-toolchain*"
+          - "actions-rust-lang/*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group all other GitHub Actions
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+    labels:
+      - "dependencies"
+      - "github-actions"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+
+  # npm dependencies for vscode-extension
+  - package-ecosystem: "npm"
+    directory: "/vscode-extension"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    groups:
+      # Group all vscode related packages
+      vscode:
+        patterns:
+          - "@vscode/*"
+          - "vscode*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group all typescript/eslint related packages
+      typescript:
+        patterns:
+          - "typescript"
+          - "@typescript-eslint/*"
+          - "eslint*"
+        update-types:
+          - "minor"
+          - "patch"
+      # Group all other npm dependencies
+      npm-dependencies:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+    ignore:
+      # VSCode engine updates require careful compatibility checks
+      - dependency-name: "vscode"
+        update-types: ["version-update:semver-major"]
+    labels:
+      - "dependencies"
+      - "npm"
+      - "vscode-extension"
+      - "automated"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"

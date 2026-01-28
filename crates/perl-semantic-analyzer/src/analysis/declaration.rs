@@ -283,6 +283,10 @@ impl<'a> DeclarationProvider<'a> {
             NodeKind::MethodCall { method, object, .. } => {
                 self.find_method_declaration(node, method, object)
             }
+            NodeKind::IndirectCall { method, object, .. } => {
+                // Handle indirect calls (e.g., "move $obj 10, 20" or "new Class")
+                self.find_method_declaration(node, method, object)
+            }
             NodeKind::Identifier { name } => self.find_identifier_declaration(node, name),
             _ => None,
         }

@@ -119,8 +119,12 @@ impl TriviaLexer {
         // Then get the next meaningful token
         let token = self.lexer.next_token()?;
 
-        // Skip EOF tokens
+        // Edge case fix: If we hit EOF but have trailing trivia, return it with the EOF token
         if matches!(token.token_type, TokenType::EOF) {
+            if !trivia.is_empty() {
+                // Return EOF with trailing trivia so it's not lost
+                return Some((token, trivia));
+            }
             return None;
         }
 

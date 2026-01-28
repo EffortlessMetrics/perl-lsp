@@ -274,7 +274,10 @@ impl<'a> Parser<'a> {
 
     /// Get current position
     fn current_position(&mut self) -> usize {
-        self.tokens.peek().map(|t| t.start).unwrap_or(0)
+        self.tokens.peek().map(|t| t.start).unwrap_or_else(|_| {
+            // Default position when no token available
+            0
+        })
     }
 
     /// Get previous position

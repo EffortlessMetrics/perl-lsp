@@ -73,6 +73,27 @@ just debt-report                      # Show technical debt status
 just debt-check                       # Verify debt budget compliance
 ```
 
+### Supply Chain Security
+
+```bash
+just sbom                             # Generate SBOM (both formats)
+just sbom-spdx                        # Generate SBOM in SPDX format
+just sbom-cyclonedx                   # Generate SBOM in CycloneDX format
+just sbom-verify                      # Verify SBOM generation
+just security-audit                   # Run security audit (cargo-audit)
+
+# Verify release artifact provenance
+gh attestation verify <artifact> --owner EffortlessMetrics
+```
+
+### Code Coverage
+
+```bash
+just coverage                         # Generate HTML coverage report locally
+just coverage-summary                 # Show coverage summary in terminal
+just coverage-lcov                    # Generate lcov.info for CI
+```
+
 ## Development Workflow
 
 **Local-first development** - all gates run locally before CI:
@@ -106,6 +127,8 @@ CI is optional/opt-in. The repo is local-first by design.
 | Features catalog | `features.toml` |
 | CI gate policy | `.ci/gate-policy.yaml` |
 | Technical debt ledger | `.ci/debt-ledger.yaml` |
+| Dependabot config | `.github/dependabot.yml` |
+| Supply chain security | `deny.toml`, `docs/SUPPLY_CHAIN_SECURITY.md` |
 
 ## Architecture Patterns
 
@@ -138,6 +161,8 @@ RUSTC_WRAPPER=""        # Disable rustc wrapper
 - **[COMMANDS_REFERENCE.md](docs/COMMANDS_REFERENCE.md)** - Full command catalog
 - **[LSP_IMPLEMENTATION_GUIDE.md](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Server architecture
 - **[DEBT_TRACKING.md](docs/DEBT_TRACKING.md)** - Technical debt and flaky test tracking
+- **[DEPENDENCY_MANAGEMENT.md](docs/DEPENDENCY_MANAGEMENT.md)** - Automated dependency updates with Dependabot
+- **[DEPENDENCY_QUICK_REFERENCE.md](docs/DEPENDENCY_QUICK_REFERENCE.md)** - Quick commands for dependency management
 - **[features.toml](features.toml)** - Canonical LSP capability definitions
 
 ## Coding Standards

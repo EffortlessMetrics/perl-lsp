@@ -27,6 +27,11 @@ serde = { version = "1.0.228", features = ["derive"] }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
+criterion = "0.5"
+
+[[bench]]
+name = "cache_benchmark"
+harness = false
 
 [lints]
 workspace = true

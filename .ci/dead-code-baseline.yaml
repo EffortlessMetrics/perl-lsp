@@ -1,0 +1,77 @@
+# Dead Code Detection Baseline
+# Generated: 2026-01-28 14:50:00 UTC
+#
+# This file tracks the baseline for dead code detection.
+# When new dead code is introduced, the checks will fail.
+#
+# To update this baseline: just dead-code-baseline
+
+schema_version: 1
+last_updated: "2026-01-28"
+
+# Thresholds (fail if exceeded)
+thresholds:
+  # Maximum allowed unused dependencies
+  max_unused_dependencies: 5
+
+  # Maximum allowed dead code items (functions, types, etc.)
+  max_dead_code_items: 10
+
+  # Maximum allowed unused imports
+  max_unused_imports: 20
+
+  # Maximum allowed unused variables
+  max_unused_variables: 10
+
+# Current baseline counts (placeholder - will be updated by script)
+baseline:
+  unused_dependencies: 0
+  dead_code_items: 0
+  unused_imports: 0
+  unused_variables: 0
+
+# Allowed exceptions (items that are intentionally unused)
+allowed_exceptions:
+  # Example: functions that are part of public API but not used internally
+  # - crate: perl-parser
+  #   type: function
+  #   name: parse_legacy_syntax
+  #   reason: "Public API for backward compatibility"
+
+  # Example: dependencies used only in specific build configurations
+  # - crate: perl-lsp
+  #   dependency: tokio
+  #   reason: "Used in async runtime feature"
+
+# Known issues to be addressed
+known_issues:
+  # Track specific dead code items that need cleanup
+  # - crate: perl-parser-core
+  #   type: dead_code
+  #   item: legacy_parser_function
+  #   issue: "#XXX"
+  #   notes: "Remove after migration to v3 parser"
+
+# Policy
+policy:
+  # Enforcement level: strict, warn, or disabled
+  # - strict: fail CI on any dead code exceeding threshold
+  # - warn: report but don't fail (current - pending #211/#210)
+  enforcement: warn
+
+  # Auto-update baseline on PR (requires manual approval)
+  auto_update_baseline: false
+
+  # Fail CI if baseline is exceeded (requires enforcement: strict to take effect)
+  fail_on_baseline_exceeded: false
+
+  # Warn if approaching threshold (80% of max)
+  warn_threshold_percent: 80
+
+# Maintenance
+maintenance:
+  # Review dead code baseline every N days
+  review_interval_days: 30
+
+  # Next scheduled review
+  next_review: "2026-02-27"

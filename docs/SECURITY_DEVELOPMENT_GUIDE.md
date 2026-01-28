@@ -288,3 +288,27 @@ cargo test -p perl-parser authentication_timing_tests -- --nocapture
 4. **Review Requirements**: Specify security review requirements for changes
 
 This security framework ensures that all code contributions maintain enterprise-grade security standards while providing comprehensive protection against common attack vectors.
+
+## Supply Chain Security
+
+This project implements comprehensive supply chain security measures including SBOM generation and SLSA provenance attestation. For detailed information, see:
+
+- **[SUPPLY_CHAIN_SECURITY.md](SUPPLY_CHAIN_SECURITY.md)** - Complete supply chain security documentation
+- **SBOM Generation**: `just sbom` to generate Software Bill of Materials
+- **Security Audit**: `just security-audit` to run vulnerability scans
+- **Provenance Verification**: `gh attestation verify` to verify build attestations
+
+### Quick Start
+
+```bash
+# Generate SBOM for dependency audit
+just sbom
+
+# Run security audit
+just security-audit
+
+# Verify a release artifact
+gh attestation verify perl-lsp-v0.9.0-x86_64-unknown-linux-gnu.tar.gz --owner EffortlessMetrics
+```
+
+See [SUPPLY_CHAIN_SECURITY.md](SUPPLY_CHAIN_SECURITY.md) for comprehensive documentation on SBOM formats, SLSA provenance, and verification procedures.

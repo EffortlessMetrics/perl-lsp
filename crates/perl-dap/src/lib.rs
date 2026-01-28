@@ -369,16 +369,16 @@ pub mod dispatcher; // AC5: Message dispatcher
 pub mod inline_values; // Inline value extraction for debug sessions
 pub mod protocol; // AC5: DAP protocol types // AC7: Breakpoint manager
 
-// Phase 2 modules (AC5-AC12) - TODO
-// TODO: Implement session management (AC5)
-// TODO: Implement AST-based breakpoint validation (AC7)
-// TODO: Implement variable renderer with lazy expansion (AC8)
-// TODO: Implement stack trace provider (AC8)
-// TODO: Implement control flow handlers (AC9)
-// TODO: Implement safe evaluation (AC10)
+// Phase 2 modules (AC5-AC12) - Tracked in GitHub issues
+// See #449: Implement session management (AC5)
+// See #450: Implement AST-based breakpoint validation (AC7)
+// See #452: Implement variable renderer with lazy expansion (AC8)
+// See #453: Implement stack trace provider (AC8)
+// See #454: Implement control flow handlers (AC9)
+// See #455: Implement safe evaluation (AC10)
 
-// Phase 3 modules (AC13-AC19) - TODO
-// TODO: Implement security validation (AC16)
+// Phase 3 modules (AC13-AC19) - Tracked in GitHub issues
+pub mod security; // #358: Security validation and hardening (AC16)
 
 // Re-export Phase 1 public types
 pub use bridge_adapter::BridgeAdapter;

@@ -804,18 +804,17 @@ impl<'a> PerlLexer<'a> {
                         break;
                     }
 
-                    // Skip line comment using byte-level operations - optimized
+                    // Skip line comment using memchr for fast newline search
                     self.position += 1; // Skip # directly
-                    while self.position < self.input_bytes.len() {
-                        if self.input_bytes[self.position] == b'\n' {
-                            break;
-                        }
-                        // For ASCII comments, skip bytes directly for speed
-                        if self.input_bytes[self.position] < 128 {
-                            self.position += 1;
-                        } else {
-                            self.advance(); // Only use UTF-8 parsing for non-ASCII
-                        }
+
+                    // Use memchr to find newline quickly
+                    if let Some(newline_offset) =
+                        memchr::memchr(b'\n', &self.input_bytes[self.position..])
+                    {
+                        self.position += newline_offset;
+                    } else {
+                        // No newline found, skip to end
+                        self.position = self.input_bytes.len();
                     }
                 }
                 _ => {

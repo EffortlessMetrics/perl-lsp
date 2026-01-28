@@ -457,4 +457,158 @@ mod tests {
         let results = index.search_fuzzy("user name");
         assert!(results.contains(&"get_user_name".to_string()));
     }
+
+    #[test]
+    fn test_cache_mutex_poisoning_recovery() {
+        use std::panic;
+
+        // Create a cache and verify it works normally
+        let cache = Arc::new(AstCache::new(10, 60));
+        let ast = Arc::new(Node::new(
+            perl_parser_core::NodeKind::Program { statements: vec![] },
+            perl_parser_core::SourceLocation { start: 0, end: 0 },
+        ));
+
+        // Normal operation should work
+        cache.put("test.pl".to_string(), "content", ast.clone());
+        assert!(cache.get("test.pl", "content").is_some());
+
+        // Simulate mutex poisoning by panicking while holding the lock
+        let cache_clone = Arc::clone(&cache);
+        let handle = std::thread::spawn(move || {
+            panic::catch_unwind(panic::AssertUnwindSafe(|| {
+                let _lock = cache_clone.cache.lock();
+                panic!("Simulated panic while holding lock");
+            }))
+        });
+        let _ = handle.join();
+
+        // After poisoning, operations should gracefully degrade (return None/skip)
+        // get() should return None instead of panicking
+        assert!(cache.get("test.pl", "content").is_none());
+
+        // put() should skip caching instead of panicking
+        cache.put("test2.pl".to_string(), "content2", ast.clone());
+
+        // cleanup() should skip instead of panicking
+        cache.cleanup();
+    }
+
+    #[test]
+    fn test_cache_concurrent_access() {
+        use std::thread;
+
+        let cache = Arc::new(AstCache::new(100, 60));
+        let mut handles = vec![];
+
+        // Spawn multiple threads that access the cache concurrently
+        for i in 0..10 {
+            let cache_clone = Arc::clone(&cache);
+            let handle = thread::spawn(move || {
+                let ast = Arc::new(Node::new(
+                    perl_parser_core::NodeKind::Program { statements: vec![] },
+                    perl_parser_core::SourceLocation { start: 0, end: 0 },
+                ));
+
+                // Perform multiple operations
+                for j in 0..50 {
+                    let key = format!("file_{}_{}.pl", i, j);
+                    let content = format!("content_{}", j);
+
+                    // Put
+                    cache_clone.put(key.clone(), &content, ast.clone());
+
+                    // Get
+                    let _ = cache_clone.get(&key, &content);
+
+                    // Cleanup (occasionally)
+                    if j % 10 == 0 {
+                        cache_clone.cleanup();
+                    }
+                }
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all threads to complete
+        for handle in handles {
+            handle.join().expect("Thread should not panic");
+        }
+
+        // Cache should still be functional
+        let ast = Arc::new(Node::new(
+            perl_parser_core::NodeKind::Program { statements: vec![] },
+            perl_parser_core::SourceLocation { start: 0, end: 0 },
+        ));
+        cache.put("final.pl".to_string(), "final", ast.clone());
+        assert!(cache.get("final.pl", "final").is_some());
+    }
+
+    #[test]
+    fn test_cache_ttl_expiration() {
+        use std::thread;
+        use std::time::Duration;
+
+        // Create cache with 1 second TTL
+        let cache = AstCache::new(10, 1);
+        let ast = Arc::new(Node::new(
+            perl_parser_core::NodeKind::Program { statements: vec![] },
+            perl_parser_core::SourceLocation { start: 0, end: 0 },
+        ));
+
+        cache.put("test.pl".to_string(), "content", ast.clone());
+
+        // Should be cached immediately
+        assert!(cache.get("test.pl", "content").is_some());
+
+        // Wait for TTL to expire
+        thread::sleep(Duration::from_millis(1100));
+
+        // Should be expired now
+        assert!(cache.get("test.pl", "content").is_none());
+    }
+
+    #[test]
+    fn test_cache_content_hash_validation() {
+        let cache = AstCache::new(10, 60);
+        let ast1 = Arc::new(Node::new(
+            perl_parser_core::NodeKind::Program { statements: vec![] },
+            perl_parser_core::SourceLocation { start: 0, end: 0 },
+        ));
+        let ast2 = Arc::new(Node::new(
+            perl_parser_core::NodeKind::Program { statements: vec![] },
+            perl_parser_core::SourceLocation { start: 1, end: 1 },
+        ));
+
+        // Cache with original content
+        cache.put("test.pl".to_string(), "original content", ast1.clone());
+        assert!(cache.get("test.pl", "original content").is_some());
+
+        // Different content should invalidate cache
+        assert!(cache.get("test.pl", "modified content").is_none());
+
+        // Update with new content and AST
+        cache.put("test.pl".to_string(), "modified content", ast2.clone());
+        assert!(cache.get("test.pl", "modified content").is_some());
+        assert!(cache.get("test.pl", "original content").is_none());
+    }
+
+    #[test]
+    fn test_parallel_processing_graceful_degradation() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let processed = Arc::new(AtomicUsize::new(0));
+        let files = vec!["file1.pl".to_string(), "file2.pl".to_string(), "file3.pl".to_string()];
+
+        let processed_clone = Arc::clone(&processed);
+        let results = parallel::process_files_parallel(files, 2, move |_file| {
+            processed_clone.fetch_add(1, Ordering::SeqCst);
+            42 // Return a value
+        });
+
+        // All files should be processed
+        assert_eq!(results.len(), 3);
+        assert_eq!(processed.load(Ordering::SeqCst), 3);
+        assert!(results.iter().all(|&x| x == 42));
+    }
 }

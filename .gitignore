@@ -25,6 +25,10 @@ log.html
 *.zip
 *.vsix
 
+# Supply chain security artifacts (generated locally)
+sbom-*.json
+SHA256SUMS
+
 # Property test regression files
 **/tests/_proptest-regressions/
 scripts/__pycache__/
@@ -76,6 +80,7 @@ GENERATIVE_*.md
 PROMOTION_*.md
 QUALITY_*.md
 SECURITY_*.md
+!docs/SECURITY_*.md
 SCHEMA_*.md
 BENCHMARK_*.md
 DOCUMENTATION_*.md

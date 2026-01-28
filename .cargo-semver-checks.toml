@@ -1,0 +1,77 @@
+# cargo-semver-checks configuration
+# See: https://github.com/obi1kenobi/cargo-semver-checks
+
+# Baseline strategy: compare against last release tag
+# For unpublished crates, use git baseline
+[baseline]
+# Use git tags for baseline comparison
+default-strategy = "git-tag"
+
+# Pattern for release tags (e.g., v0.8.5)
+tag-pattern = "v{major}.{minor}.{patch}"
+
+# Crates to check
+[[packages]]
+name = "perl-parser"
+check = true
+# Core parser library - strict semver enforcement
+
+[[packages]]
+name = "perl-lexer"
+check = true
+# Tokenizer library - strict semver enforcement
+
+[[packages]]
+name = "perl-parser-core"
+check = true
+# Core parser types - strict semver enforcement
+
+[[packages]]
+name = "perl-lsp"
+check = true
+# LSP server binary - check for API stability
+
+[[packages]]
+name = "perl-corpus"
+check = true
+# Test corpus - best-effort API checking
+
+# Exclude internal/test-only crates
+[[packages]]
+name = "perl-parser-pest"
+check = false
+reason = "deprecated legacy parser"
+
+[[packages]]
+name = "perl-tdd-support"
+check = false
+reason = "test-only utilities"
+
+[[packages]]
+name = "xtask"
+check = false
+reason = "internal build tooling"
+
+# Lints configuration
+[lints]
+# Fail on any breaking change in patch/minor releases
+breaking = "deny"
+
+# Warn on removals of deprecated items (ok in major releases)
+deprecated-removals = "warn"
+
+# Allow adding new items (additive changes)
+additions = "allow"
+
+# Rustdoc format compatibility
+[rustdoc]
+# Handle rustdoc version mismatches gracefully
+fail-on-unsupported-format = false
+
+# Reporting
+[output]
+# Default to human-readable for local use; CI can override via --format=json
+format = "human"  # Options: human, json
+
+# Include suggestions for fixes
+include-suggestions = true

@@ -85,7 +85,6 @@ lsp-compat = [
   "perl-tdd-support/lsp-compat",
 ]  # LSP type compatibility shim for migration period
 workspace = ["perl-workspace-index/workspace"]  # Workspace-wide indexing for cross-file features
-test-compat = []  # Enables compatibility shim for old test API
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
 lsp-ga-lock = []

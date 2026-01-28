@@ -1,0 +1,63 @@
+# Codecov Configuration
+# See: https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  precision: 2
+  round: down
+  range: "70..100"
+
+  status:
+    project:
+      default:
+        target: 70%           # Initial baseline target
+        threshold: 1%         # Allow 1% coverage drop without failing
+        if_ci_failed: error   # Fail if CI failed
+    patch:
+      default:
+        target: 75%           # New code should have higher coverage
+        threshold: 2%         # Allow 2% variance for patch coverage
+        if_ci_failed: error
+
+# Files/patterns to exclude from coverage analysis
+ignore:
+  - "archive/**"
+  - "crates/tree-sitter-perl-rs/**"
+  - "crates/tree-sitter-perl-c/**"
+  - "crates/*/tests/**"
+  - "crates/*/benches/**"
+  - "crates/*/examples/**"
+  - "crates/*/build.rs"
+  - "xtask/**"
+  - "fuzz/**"
+  - "**/*_generated.rs"
+
+# Per-crate coverage flags for detailed tracking
+flags:
+  parser:
+    paths:
+      - crates/perl-parser/src/
+    target: 75%
+  lsp:
+    paths:
+      - crates/perl-lsp/src/
+    target: 70%
+  lexer:
+    paths:
+      - crates/perl-lexer/src/
+    target: 80%
+  dap:
+    paths:
+      - crates/perl-dap/src/
+    target: 65%
+  corpus:
+    paths:
+      - crates/perl-corpus/src/
+    target: 60%
+
+# PR comment configuration
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true

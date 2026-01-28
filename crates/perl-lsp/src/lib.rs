@@ -213,11 +213,10 @@
 //!
 //! The runtime delegates all parsing and analysis to `perl_parser`:
 //!
-//! ```rust,ignore
+//! ```text
 //! use perl_parser::Parser;
 //! use perl_lsp::convert::to_lsp_diagnostic;
 //!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "my $x = 1;";
 //! let mut parser = Parser::new(code);
 //! let ast = parser.parse()?;
@@ -309,7 +308,6 @@
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
-#![allow(missing_docs)] // Temporarily allow until migration is complete
 #![allow(
     // Migrated from perl-parser - these patterns are acceptable in LSP runtime code
     clippy::collapsible_match,

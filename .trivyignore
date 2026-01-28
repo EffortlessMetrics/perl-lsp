@@ -1,0 +1,28 @@
+# Trivy Ignore File
+# ====================
+# This file contains CVEs and vulnerabilities that are intentionally ignored
+# by Trivy security scanning. Each entry should include:
+# - CVE ID or vulnerability ID
+# - Justification for ignoring
+# - Issue tracker reference if applicable
+# - Review date for re-evaluation
+#
+# Format:
+#   CVE-YYYY-XXXXX  # Reason, issue #NNN, review: YYYY-MM-DD
+#
+# Documentation: docs/SECURITY_SCANNING.md#false-positive-management
+
+# Example entries (remove when real ignores are added):
+# CVE-2024-12345  # False positive: affects only Windows, we're Linux-only, review: 2026-03-01
+# CVE-2024-67890  # Not exploitable: no network exposure in our use case, issue #123, review: 2026-06-01
+
+# Test fixtures and sample data (not production code)
+# These directories contain intentional test patterns that may trigger false positives
+test_corpus/**
+tree-sitter-perl/test/corpus/**
+archive/**
+.runs/**
+
+# Build artifacts (not scanned)
+target/**
+.git/**
