@@ -1,0 +1,29 @@
+[package]
+name = "perl-dap-breakpoint"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Tree-sitter Perl Contributors"]
+description = "Breakpoint validation for Perl DAP"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+readme = "README.md"
+keywords = ["perl", "dap", "debug", "breakpoint"]
+categories = ["development-tools", "parsing"]
+
+[dependencies]
+# Perl parser for AST-based validation
+perl-parser = { path = "../perl-parser" }
+
+# Rope for position mapping
+ropey = "1.6.1"
+
+# Error handling
+thiserror = "2.0.18"
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+tempfile = "3.24.0"
+
+[lints]
+workspace = true

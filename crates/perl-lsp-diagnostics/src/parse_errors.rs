@@ -7,6 +7,7 @@ use perl_parser_core::error::ParseError;
 use super::types::{Diagnostic, DiagnosticSeverity};
 
 /// Convert a parse error to a diagnostic
+#[allow(dead_code)]
 pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
     let message = error.to_string();
     let location = match error {

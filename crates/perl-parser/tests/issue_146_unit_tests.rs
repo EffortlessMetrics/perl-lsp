@@ -16,7 +16,6 @@ mod tdd_workflow_unit_tests {
 
     /// Test that tdd_workflow.rs signature variable fix is correct
     #[test]
-    #[ignore = "issue-146: tdd_workflow.rs module not yet implemented"]
     fn test_signature_variable_fix() -> Result<(), Box<dyn std::error::Error>> {
         let content = fs::read_to_string(TDD_WORKFLOW_PATH)?;
 
@@ -31,7 +30,6 @@ mod tdd_workflow_unit_tests {
 
     /// Test that tower_lsp imports are replaced with lsp_types
     #[test]
-    #[ignore = "issue-146: tdd_workflow.rs module not yet implemented"]
     fn test_lsp_imports_fix() -> Result<(), Box<dyn std::error::Error>> {
         let content = fs::read_to_string(TDD_WORKFLOW_PATH)?;
 
@@ -46,7 +44,6 @@ mod tdd_workflow_unit_tests {
 
     /// Test that generate_basic_test method compiles correctly
     #[test]
-    #[ignore = "issue-146: tdd_workflow.rs module not yet implemented"]
     fn test_generate_basic_test_method() -> Result<(), Box<dyn std::error::Error>> {
         // This test validates that the method signature and implementation are correct
         let content = fs::read_to_string(TDD_WORKFLOW_PATH)?;
@@ -82,7 +79,6 @@ mod refactoring_module_tests {
 
     /// Test that refactoring.rs file exists after implementation
     #[test]
-    #[ignore = "issue-146: refactoring.rs module not yet implemented"]
     fn test_refactoring_module_exists() {
         assert!(
             Path::new(REFACTORING_PATH).exists(),
@@ -93,7 +89,6 @@ mod refactoring_module_tests {
 
     /// Test refactoring module structure after implementation
     #[test]
-    #[ignore = "issue-146: refactoring.rs module not yet implemented"]
     fn test_refactoring_module_structure() -> Result<(), Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(REFACTORING_PATH)?;
 

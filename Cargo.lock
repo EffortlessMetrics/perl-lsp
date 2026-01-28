@@ -1495,6 +1495,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-dap-breakpoint"
+version = "0.1.0"
+dependencies = [
+ "perl-parser",
+ "perl-tdd-support",
+ "ropey",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "perl-dap-eval"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "perl-tdd-support",
+ "regex",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "perl-dap-stack"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "perl-tdd-support",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "perl-dap-variables"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "perl-tdd-support",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "perl-diagnostics-codes"
 version = "0.8.8"
 dependencies = [
@@ -1642,6 +1687,7 @@ dependencies = [
  "lsp-types",
  "perl-diagnostics-codes",
  "perl-parser-core",
+ "perl-pragma",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",

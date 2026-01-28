@@ -43,10 +43,10 @@ pub fn validate_name(
     }
 
     // Check if it starts with a number
-    if let Some(first_char) = name.chars().next() {
-        if first_char.is_numeric() {
-            return Err("Name cannot start with a number".to_string());
-        }
+    if let Some(first_char) = name.chars().next()
+        && first_char.is_numeric()
+    {
+        return Err("Name cannot start with a number".to_string());
     }
 
     // Check if it contains only valid characters

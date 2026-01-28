@@ -16,6 +16,7 @@ pub struct QuickFixDiagnostic {
     /// The diagnostic message
     pub message: String,
     /// The diagnostic code (e.g., "undefined-variable")
+    #[allow(dead_code)]
     pub code: Option<String>,
 }
 

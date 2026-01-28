@@ -3,6 +3,7 @@ use std::io::Write;
 use std::time::Duration;
 
 mod common;
+#[allow(unused_imports)]
 use common::{
     initialize_lsp, read_response, read_response_timeout, send_notification, send_request,
     short_timeout, start_lsp_server,

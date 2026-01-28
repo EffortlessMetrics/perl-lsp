@@ -43,10 +43,10 @@ impl<'a> Helpers<'a> {
     /// Find pragma insertion position
     pub fn find_pragma_insert_position(&self) -> usize {
         // After shebang if present
-        if self.source.starts_with("#!") {
-            if let Some(pos) = self.source.find('\n') {
-                return pos + 1;
-            }
+        if self.source.starts_with("#!")
+            && let Some(pos) = self.source.find('\n')
+        {
+            return pos + 1;
         }
         0
     }

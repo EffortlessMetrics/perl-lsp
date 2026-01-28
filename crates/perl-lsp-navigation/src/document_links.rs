@@ -26,31 +26,32 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
 
     for (i, line) in text.lines().enumerate() {
         // "use Foo::Bar;" — defer resolution to documentLink/resolve
-        if let Some(rest) = line.trim().strip_prefix("use ") {
-            if let Some(pkg) = rest.split_whitespace().next() {
-                let pkg = pkg.trim_end_matches(';');
-                // Skip pragmas and core modules
-                if !is_pragma(pkg) {
-                    // Defer expensive resolution - use data field
-                    if let Some(link) = make_deferred_module_link(uri, i as u32, line, pkg) {
-                        out.push(link);
-                    }
+        if let Some(rest) = line.trim().strip_prefix("use ")
+            && let Some(pkg) = rest.split_whitespace().next()
+        {
+            let pkg = pkg.trim_end_matches(';');
+            // Skip pragmas and core modules
+            if !is_pragma(pkg) {
+                // Defer expensive resolution - use data field
+                if let Some(link) = make_deferred_module_link(uri, i as u32, line, pkg) {
+                    out.push(link);
                 }
             }
         }
 
         // "require Module::Name" (module form)
-        if let Some(rest) = line.trim().strip_prefix("require ") {
-            if let Some(pkg) = rest.split_whitespace().next() {
-                let pkg = pkg.trim_end_matches(';');
-                // Check if it's a module name (not a quoted file path)
-                if !pkg.starts_with('"') && !pkg.starts_with('\'') && pkg.contains("::") {
-                    if !is_pragma(pkg) {
-                        if let Some(link) = make_deferred_module_link(uri, i as u32, line, pkg) {
-                            out.push(link);
-                        }
-                    }
-                }
+        if let Some(rest) = line.trim().strip_prefix("require ")
+            && let Some(pkg) = rest.split_whitespace().next()
+        {
+            let pkg = pkg.trim_end_matches(';');
+            // Check if it's a module name (not a quoted file path)
+            if !pkg.starts_with('"')
+                && !pkg.starts_with('\'')
+                && pkg.contains("::")
+                && !is_pragma(pkg)
+                && let Some(link) = make_deferred_module_link(uri, i as u32, line, pkg)
+            {
+                out.push(link);
             }
         }
 

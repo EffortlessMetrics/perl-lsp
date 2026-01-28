@@ -3,9 +3,10 @@
 //! This module provides go-to-type-definition functionality,
 //! finding the type/class definition for variables and references.
 
-use perl_parser_core::ast::{Node, NodeKind};
 use std::collections::HashMap;
 use std::str::FromStr;
+
+use perl_parser_core::ast::{Node, NodeKind};
 
 #[cfg(feature = "lsp-compat")]
 use lsp_types::LocationLink;
@@ -105,10 +106,10 @@ impl TypeDefinitionProvider {
             NodeKind::Binary { op, left, right } if op == "->" => {
                 // Handle Package->new pattern
                 if let NodeKind::Identifier { name: pkg } = &left.kind {
-                    if let NodeKind::Identifier { name: method } = &right.kind {
-                        if method == "new" {
-                            return Some(pkg.clone());
-                        }
+                    if let NodeKind::Identifier { name: method } = &right.kind
+                        && method == "new"
+                    {
+                        return Some(pkg.clone());
                     }
                     // Also handle Package->method where we want Package
                     return Some(pkg.clone());
@@ -247,10 +248,8 @@ impl TypeDefinitionProvider {
                     f(stmt);
                 }
             }
-            NodeKind::Package { block, .. } => {
-                if let Some(b) = block {
-                    f(b);
-                }
+            NodeKind::Package { block: Some(b), .. } => {
+                f(b);
             }
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 f(variable);

@@ -66,10 +66,10 @@ pub fn find_node_at_range(node: &Node, range: (usize, usize)) -> Option<&Node> {
                         return Some(result);
                     }
                 }
-                if let Some(branch) = else_branch {
-                    if let Some(result) = find_node_at_range(branch, range) {
-                        return Some(result);
-                    }
+                if let Some(branch) = else_branch
+                    && let Some(result) = find_node_at_range(branch, range)
+                {
+                    return Some(result);
                 }
             }
             NodeKind::Binary { left, right, .. } => {

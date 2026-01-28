@@ -31,22 +31,20 @@ impl CompletionContext {
             if scope.kind == ScopeKind::Package
                 && scope.location.start <= position
                 && position <= scope.location.end
+                && scope_start.is_none_or(|s| scope.location.start >= s)
             {
-                if scope_start.is_none_or(|s| scope.location.start >= s) {
-                    scope_start = Some(scope.location.start);
-                }
+                scope_start = Some(scope.location.start);
             }
         }
 
-        if let Some(start) = scope_start {
-            if let Some(sym) = symbol_table
+        if let Some(start) = scope_start
+            && let Some(sym) = symbol_table
                 .symbols
                 .values()
                 .flat_map(|v| v.iter())
                 .find(|sym| sym.kind == SymbolKind::Package && sym.location.start == start)
-            {
-                return sym.name.clone();
-            }
+        {
+            return sym.name.clone();
         }
 
         // Fallback: find last package declaration without block before position

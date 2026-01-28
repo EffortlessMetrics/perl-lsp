@@ -18,34 +18,32 @@ pub fn check_deprecated_syntax(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
         match &n.kind {
             // Check for deprecated 'defined @array' or 'defined %hash'
             NodeKind::FunctionCall { name, args } => {
-                if name == "defined" {
-                    if let Some(arg) = args.first() {
-                        if let NodeKind::Variable { sigil, name } = &arg.kind {
-                            if sigil == "@" || sigil == "%" {
-                                let type_name = if sigil == "@" { "array" } else { "hash" };
-                                diagnostics.push(Diagnostic {
-                                    range: (n.location.start, n.location.end),
-                                    severity: DiagnosticSeverity::Warning,
-                                    code: Some("deprecated-defined".to_string()),
-                                    message: format!(
-                                        "Use of 'defined {}{}' is deprecated",
-                                        sigil, name
-                                    ),
-                                    related_information: vec![
-                                        RelatedInformation {
-                                            location: (arg.location.start, arg.location.end),
-                                            message: format!("💡 Use 'if ({}{})'  or 'if ({}{}[0])' instead", sigil, name, sigil, name),
-                                        },
-                                        RelatedInformation {
-                                            location: (n.location.start, n.location.end),
-                                            message: format!("ℹ️ Testing definedness of {} is deprecated because it was rarely useful and often wrong. Empty {}s are false in boolean context.", type_name, type_name),
-                                        }
-                                    ],
-                                    tags: vec![DiagnosticTag::Deprecated],
-                                });
+                if name == "defined"
+                    && let Some(arg) = args.first()
+                    && let NodeKind::Variable { sigil, name } = &arg.kind
+                    && (sigil == "@" || sigil == "%")
+                {
+                    let type_name = if sigil == "@" { "array" } else { "hash" };
+                    diagnostics.push(Diagnostic {
+                        range: (n.location.start, n.location.end),
+                        severity: DiagnosticSeverity::Warning,
+                        code: Some("deprecated-defined".to_string()),
+                        message: format!(
+                            "Use of 'defined {}{}' is deprecated",
+                            sigil, name
+                        ),
+                        related_information: vec![
+                            RelatedInformation {
+                                location: (arg.location.start, arg.location.end),
+                                message: format!("💡 Use 'if ({}{})'  or 'if ({}{}[0])' instead", sigil, name, sigil, name),
+                            },
+                            RelatedInformation {
+                                location: (n.location.start, n.location.end),
+                                message: format!("ℹ️ Testing definedness of {} is deprecated because it was rarely useful and often wrong. Empty {}s are false in boolean context.", type_name, type_name),
                             }
-                        }
-                    }
+                        ],
+                        tags: vec![DiagnosticTag::Deprecated],
+                    });
                 }
             }
 

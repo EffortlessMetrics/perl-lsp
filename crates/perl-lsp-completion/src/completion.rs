@@ -719,10 +719,10 @@ impl CompletionProvider {
     /// Check if we're in a test context
     fn is_test_context(&self, source: &str, filepath: Option<&str>) -> bool {
         // Check if file ends with .t
-        if let Some(path) = filepath {
-            if path.ends_with(".t") {
-                return true;
-            }
+        if let Some(path) = filepath
+            && path.ends_with(".t")
+        {
+            return true;
         }
 
         // Check if source contains Test::More or Test2::V0

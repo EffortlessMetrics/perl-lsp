@@ -23,13 +23,21 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+/// Diagnostic deduplication utilities
 mod dedup;
+/// Core diagnostics provider
 mod diagnostics;
+/// ERROR node classification and reporting
 mod error_nodes;
+/// Lint checks (common mistakes, deprecations, strict warnings)
 mod lints;
+/// Parse error to diagnostic conversion
 mod parse_errors;
+/// Scope analysis integration
 mod scope;
+/// Core diagnostic types
 mod types;
+/// AST walker utilities
 mod walker;
 
 pub use diagnostics::{

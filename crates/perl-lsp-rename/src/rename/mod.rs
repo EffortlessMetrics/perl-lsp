@@ -97,7 +97,9 @@ mod resolve;
 mod types;
 mod validate;
 
-pub use apply::{adjust_location_for_sigil, apply_rename_edits};
+pub use apply::adjust_location_for_sigil;
+#[allow(unused_imports)]
+pub use apply::apply_rename_edits;
 pub use resolve::{find_symbol_at_position, get_symbol_range_at_position};
 pub use types::{RenameOptions, RenameResult, TextEdit};
 pub use validate::{can_rename_symbol, validate_name};
@@ -152,10 +154,10 @@ impl RenameProvider {
             };
 
         // Validate the new name
-        if options.validate_new_name {
-            if let Err(error) = validate_name(new_name, kind, &self.symbol_table) {
-                return RenameResult { edits: vec![], is_valid: false, error: Some(error) };
-            }
+        if options.validate_new_name
+            && let Err(error) = validate_name(new_name, kind, &self.symbol_table)
+        {
+            return RenameResult { edits: vec![], is_valid: false, error: Some(error) };
         }
 
         // Check if we can rename this symbol

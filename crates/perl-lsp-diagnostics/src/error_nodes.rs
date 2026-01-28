@@ -14,6 +14,7 @@ use super::walker::walk_node;
 /// This function walks the AST looking for ERROR nodes, classifies them
 /// using the error classifier, and generates appropriate diagnostics with
 /// helpful suggestions and explanations.
+#[allow(dead_code)]
 pub fn check_error_nodes(
     node: &Node,
     source: &str,

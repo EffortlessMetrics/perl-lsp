@@ -94,6 +94,7 @@ pub fn is_in_string(position: usize, source: &str) -> bool {
 }
 
 /// Apply rename edits to source text
+#[allow(dead_code)]
 pub fn apply_rename_edits(source: &str, edits: &[TextEdit]) -> String {
     let mut result = source.to_string();
 

@@ -9,6 +9,7 @@ use super::types::Diagnostic;
 ///
 /// This function sorts diagnostics by range, severity, code, and message,
 /// then removes exact duplicates (same range, severity, code, and message).
+#[allow(dead_code)]
 pub fn deduplicate_diagnostics(diagnostics: &mut Vec<Diagnostic>) {
     // Sort by range, severity, code, and message
     diagnostics.sort_by(|a, b| {

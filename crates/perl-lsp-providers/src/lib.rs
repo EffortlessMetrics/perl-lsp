@@ -60,42 +60,42 @@ pub use perl_parser_core::{Parser, ast, position};
 /// IDE integration helpers (LSP/DAP runtime support).
 pub mod ide;
 
-// Re-export tooling for backward compatibility
+/// Re-exports from `perl_lsp_tooling` for backward compatibility.
 pub mod tooling_export {
     pub use perl_lsp_tooling::*;
 }
 
-// Re-export diagnostics for backward compatibility
+/// Re-exports from `perl_lsp_diagnostics` for backward compatibility.
 pub mod diagnostics {
     pub use perl_lsp_diagnostics::*;
 }
 
-// Re-export semantic tokens for backward compatibility
+/// Re-exports from `perl_lsp_semantic_tokens` for backward compatibility.
 pub mod semantic_tokens {
     pub use perl_lsp_semantic_tokens::*;
 }
 
-// Re-export inlay hints for backward compatibility
+/// Re-exports from `perl_lsp_inlay_hints` for backward compatibility.
 pub mod inlay_hints {
     pub use perl_lsp_inlay_hints::*;
 }
 
-// Re-export rename for backward compatibility
+/// Re-exports from `perl_lsp_rename` for backward compatibility.
 pub mod rename {
     pub use perl_lsp_rename::*;
 }
 
-// Re-export completion for backward compatibility
+/// Re-exports from `perl_lsp_completion` for backward compatibility.
 pub mod completion {
     pub use perl_lsp_completion::*;
 }
 
-// Re-export code actions for backward compatibility
+/// Re-exports from `perl_lsp_code_actions` for backward compatibility.
 pub mod code_actions {
     pub use perl_lsp_code_actions::*;
 }
 
-// Re-export navigation for backward compatibility
+/// Re-exports from `perl_lsp_navigation` for backward compatibility.
 pub mod navigation {
     pub use perl_lsp_navigation::*;
 }

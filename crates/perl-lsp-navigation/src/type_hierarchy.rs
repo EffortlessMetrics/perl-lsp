@@ -146,15 +146,14 @@ impl TypeHierarchyProvider {
                 }
             }
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
-                if declarator == "our" {
-                    if let NodeKind::Variable { sigil, name: var_name } = &variable.kind {
-                        if sigil == "@" && var_name == "ISA" {
-                            if let Some(init) = initializer {
-                                for parent in self.extract_isa_parents(init) {
-                                    index.add_inheritance(current_package, &parent);
-                                }
-                            }
-                        }
+                if declarator == "our"
+                    && let NodeKind::Variable { sigil, name: var_name } = &variable.kind
+                    && sigil == "@"
+                    && var_name == "ISA"
+                    && let Some(init) = initializer
+                {
+                    for parent in self.extract_isa_parents(init) {
+                        index.add_inheritance(current_package, &parent);
                     }
                 }
             }
@@ -162,13 +161,13 @@ impl TypeHierarchyProvider {
                 if declarator == "our" {
                     // Check if any variable is @ISA
                     for var in variables {
-                        if let NodeKind::Variable { sigil, name: var_name } = &var.kind {
-                            if sigil == "@" && var_name == "ISA" {
-                                if let Some(init) = initializer {
-                                    for parent in self.extract_isa_parents(init) {
-                                        index.add_inheritance(current_package, &parent);
-                                    }
-                                }
+                        if let NodeKind::Variable { sigil, name: var_name } = &var.kind
+                            && sigil == "@"
+                            && var_name == "ISA"
+                            && let Some(init) = initializer
+                        {
+                            for parent in self.extract_isa_parents(init) {
+                                index.add_inheritance(current_package, &parent);
                             }
                         }
                     }
@@ -210,11 +209,11 @@ impl TypeHierarchyProvider {
                 '<' => '>',
                 _ => delim_start,
             };
-            if let Some(start) = arg.find(delim_start) {
-                if let Some(end) = arg.rfind(delim_end) {
-                    let content = &arg[start + 1..end];
-                    return content.split_whitespace().map(|s| s.to_string()).collect();
-                }
+            if let Some(start) = arg.find(delim_start)
+                && let Some(end) = arg.rfind(delim_end)
+            {
+                let content = &arg[start + 1..end];
+                return content.split_whitespace().map(|s| s.to_string()).collect();
             }
         }
 

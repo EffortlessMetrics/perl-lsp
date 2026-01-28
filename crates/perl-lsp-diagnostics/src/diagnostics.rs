@@ -4,6 +4,10 @@
 
 use perl_parser_core::Node;
 use perl_parser_core::error::ParseError;
+use perl_pragma::PragmaTracker;
+use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
+
+use crate::scope::scope_issues_to_diagnostics;
 
 // Re-export types from types module
 pub use crate::types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
@@ -29,9 +33,9 @@ impl DiagnosticsProvider {
     /// including parse errors, semantic issues, and lint warnings.
     pub fn get_diagnostics(
         &self,
-        _ast: &std::sync::Arc<Node>,
+        ast: &std::sync::Arc<Node>,
         parse_errors: &[ParseError],
-        _source: &str,
+        source: &str,
     ) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
 
@@ -42,7 +46,7 @@ impl DiagnosticsProvider {
                     (*location, format!("Expected {expected}, found {found}"))
                 }
                 ParseError::SyntaxError { location, message } => (*location, message.clone()),
-                ParseError::UnexpectedEof => (_source.len(), "Unexpected end of input".to_string()),
+                ParseError::UnexpectedEof => (source.len(), "Unexpected end of input".to_string()),
                 ParseError::LexerError { message } => (0, message.clone()),
                 _ => (0, error.to_string()),
             };
@@ -56,6 +60,12 @@ impl DiagnosticsProvider {
                 tags: Vec::new(),
             });
         }
+
+        // Run scope analysis to detect undeclared/unused/shadowing issues
+        let pragma_map = PragmaTracker::build(ast);
+        let scope_analyzer = ScopeAnalyzer::new();
+        let scope_issues = scope_analyzer.analyze(ast, source, &pragma_map);
+        diagnostics.extend(scope_issues_to_diagnostics(scope_issues));
 
         diagnostics
     }
