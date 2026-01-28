@@ -16,7 +16,6 @@ members = [
     "crates/perl-lsp-protocol",
     "crates/perl-lsp-transport",
     "crates/perl-diagnostics-codes",
-    "crates/perl-lsp-diagnostics",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
     "crates/perl-symbol-table",
@@ -64,7 +63,6 @@ perl-uri = { path = "crates/perl-uri", version = "0.8.8" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.8.8" }
 perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.8.8" }
 perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.8.8" }
-perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.8.8" }
 perl-dap = { path = "crates/perl-dap", version = "0.1.0" }
 
 # Tier 2: Single-level dependencies
