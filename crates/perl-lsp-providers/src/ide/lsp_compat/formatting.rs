@@ -1,9 +1,9 @@
-//! LSP feature module (deprecated)
+//! LSP formatting provider (deprecated)
 //!
-//! **DEPRECATED**: This module has moved to the `perl-lsp` crate.
+//! **DEPRECATED**: This module has moved to `perl-lsp-formatting` crate.
 //!
 //! For backwards compatibility during the migration period, this module
-//! is kept as an empty stub. Migrate to `perl_lsp::features::formatting`.
+//! re-exports types from `perl-lsp-formatting`.
 //!
 //! # LSP Context
 //!
@@ -24,8 +24,14 @@
 //!
 //! ```ignore
 //! // Old:
-//! use perl_parser::formatting;
+//! use perl_lsp_providers::formatting::{FormattingProvider, FormattingOptions};
 //!
 //! // New:
-//! use perl_lsp::features::formatting;
+//! use perl_lsp_formatting::{FormattingProvider, FormattingOptions};
 //! ```
+
+// Re-export all public types from perl-lsp-formatting for backward compatibility
+pub use perl_lsp_formatting::{
+    FormattingProvider, FormattingOptions, FormattedDocument, FormatTextEdit,
+    FormatPosition, FormatRange, FormattingError,
+};

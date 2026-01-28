@@ -66,3 +66,8 @@ pub mod tooling;
 pub mod tooling_export {
     pub use perl_lsp_tooling::*;
 }
+
+// Re-export diagnostics for backward compatibility
+pub mod diagnostics {
+    pub use perl_lsp_diagnostics::*;
+}

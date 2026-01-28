@@ -30,6 +30,8 @@ perl-refactoring = { workspace = true }
 perl-incremental-parsing = { workspace = true }
 perl-lexer = { workspace = true }
 perl-lsp-tooling = { workspace = true }
+perl-lsp-formatting = { workspace = true }
+perl-lsp-diagnostics = { workspace = true }
 perl-position-tracking = { workspace = true }
 rustc-hash = "2.1.1"
 serde = { version = "1.0.228", features = ["derive"] }
