@@ -13,8 +13,7 @@ static HEX_COLOR_RE: Lazy<Option<Regex>> =
     Lazy::new(|| Regex::new(r"#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})\b").ok());
 
 /// Regex for ANSI escape codes: \e[31m, \e[32m, etc.
-static ANSI_COLOR_RE: Lazy<Option<Regex>> =
-    Lazy::new(|| Regex::new(r"\\e\[([0-9;]+)m").ok());
+static ANSI_COLOR_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"\\e\[([0-9;]+)m").ok());
 
 /// Color information with range and RGBA values
 #[derive(Debug, Clone)]

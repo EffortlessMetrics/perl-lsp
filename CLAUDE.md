@@ -147,7 +147,8 @@ RUSTC_WRAPPER=""        # Disable rustc wrapper
 - **No fatal constructs in production code** - the following are banned:
   - `unwrap()`, `expect()` - use `?`, `.ok_or_else()`, or pattern matching
   - `panic!()`, `todo!()`, `unimplemented!()` - return `Result`/`Option`
-  - `std::process::abort()` - never use, not even as fallback
+  - `std::process::abort()` - never use, not even in binaries
+  - `std::process::exit()` - allowed **only** in `bin/` directories and `lifecycle.rs`
   - `dbg!()` - use `tracing::debug!` instead
   - **Exception**: One centralized `#[allow(clippy::expect_used)]` for `lsp_types::Uri` fallback (see `crates/perl-lsp/src/util/uri.rs`)
   - In tests: use `Result<()>` return types, or `perl_tdd_support::must`/`must_some` helpers

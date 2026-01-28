@@ -314,7 +314,7 @@ fn lexer_regex_literal_nested_delimiters() -> TestResult {
 ///
 /// Tests feature spec: ROADMAP.md#regex-literal-handling
 #[test]
-fn lexer_regex_literal_very_long_pattern() {
+fn lexer_regex_literal_very_long_pattern() -> TestResult {
     // Create a regex pattern just under the MAX_REGEX_BYTES limit (64KB)
     let pattern_len = 60 * 1024; // 60KB
     let mut pattern = String::from("/");
@@ -322,27 +322,21 @@ fn lexer_regex_literal_very_long_pattern() {
     pattern.push('/');
 
     let mut lexer = PerlLexer::new(&pattern);
-    let result = lexer.next_token();
+    let tok = lexer.next_token().ok_or("Expected token for long pattern")?;
 
-    match result {
-        Some(tok) => {
-            assert!(
-                matches!(tok.token_type, TokenType::RegexMatch | TokenType::UnknownRest),
-                "Expected regex or UnknownRest for long pattern, got {:?}",
-                tok.token_type
-            );
-        }
-        None => {
-            panic!("Expected token for long pattern");
-        }
-    }
+    assert!(
+        matches!(tok.token_type, TokenType::RegexMatch | TokenType::UnknownRest),
+        "Expected regex or UnknownRest for long pattern, got {:?}",
+        tok.token_type
+    );
+    Ok(())
 }
 
 /// Test extremely long regex pattern (exceeds budget limit)
 ///
 /// Tests feature spec: ROADMAP.md#regex-literal-handling
 #[test]
-fn lexer_regex_literal_exceeds_budget_limit() {
+fn lexer_regex_literal_exceeds_budget_limit() -> TestResult {
     // Create a regex pattern that exceeds MAX_REGEX_BYTES (64KB)
     let pattern_len = 70 * 1024; // 70KB
     let mut pattern = String::from("/");
@@ -350,21 +344,15 @@ fn lexer_regex_literal_exceeds_budget_limit() {
     pattern.push('/');
 
     let mut lexer = PerlLexer::new(&pattern);
-    let result = lexer.next_token();
+    let tok = lexer.next_token().ok_or("Expected token for pattern exceeding budget")?;
 
-    match result {
-        Some(tok) => {
-            // Should emit UnknownRest token after hitting limit
-            assert!(
-                matches!(tok.token_type, TokenType::UnknownRest),
-                "Expected UnknownRest for pattern exceeding budget, got {:?}",
-                tok.token_type
-            );
-        }
-        None => {
-            panic!("Expected token for pattern exceeding budget");
-        }
-    }
+    // Should emit UnknownRest token after hitting limit
+    assert!(
+        matches!(tok.token_type, TokenType::UnknownRest),
+        "Expected UnknownRest for pattern exceeding budget, got {:?}",
+        tok.token_type
+    );
+    Ok(())
 }
 
 /// Test regex with Unicode characters

@@ -30,7 +30,7 @@ pub enum StackParseError {
 /// - `main::(script.pl):42:`
 static CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
-        r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)"
+        r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)",
     )
 });
 
@@ -40,7 +40,7 @@ static CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
 /// - `  #0  main::foo at script.pl line 10`
 static STACK_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
-        r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)"
+        r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)",
     )
 });
 
@@ -49,7 +49,7 @@ static STACK_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
 /// - `$ = My::Module::method(arg1, arg2) called from file `/path/file.pm' line 123`
 static VERBOSE_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
-        r"^\s*[\$\@\.]\s*=\s*(?P<func>[A-Za-z_][\w:]*+?)\((?P<args>.*?)\)\s+called\s+from\s+file\s+[`'](?P<file>[^'`]+)[`']\s+line\s+(?P<line>\d+)"
+        r"^\s*[\$\@\.]\s*=\s*(?P<func>[A-Za-z_][\w:]*+?)\((?P<args>.*?)\)\s+called\s+from\s+file\s+[`'](?P<file>[^'`]+)[`']\s+line\s+(?P<line>\d+)",
     )
 });
 
@@ -58,23 +58,32 @@ static VERBOSE_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
 /// - `. = My::Module::method() called from '-e' line 1`
 static SIMPLE_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
-        r"^\s*[\$\@\.]\s*=\s*(?P<func>[A-Za-z_][\w:]*+?)\s*\(\)\s+called\s+from\s+[`'](?P<file>[^'`]+)[`']\s+line\s+(?P<line>\d+)"
+        r"^\s*[\$\@\.]\s*=\s*(?P<func>[A-Za-z_][\w:]*+?)\s*\(\)\s+called\s+from\s+[`'](?P<file>[^'`]+)[`']\s+line\s+(?P<line>\d+)",
     )
 });
 
 /// Pattern for eval context in stack traces.
 /// Matches formats like:
 /// - `(eval 10)[/path/file.pm:42]`
-static EVAL_CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
-    Regex::new(r"^\(eval\s+(?P<eval_num>\d+)\)\[(?P<file>[^\]:]+):(?P<line>\d+)\]")
-});
+static EVAL_CONTEXT_RE: Lazy<Result<Regex, regex::Error>> =
+    Lazy::new(|| Regex::new(r"^\(eval\s+(?P<eval_num>\d+)\)\[(?P<file>[^\]:]+):(?P<line>\d+)\]"));
 
 // Accessor functions for regexes
-fn context_re() -> Option<&'static Regex> { CONTEXT_RE.as_ref().ok() }
-fn stack_frame_re() -> Option<&'static Regex> { STACK_FRAME_RE.as_ref().ok() }
-fn verbose_frame_re() -> Option<&'static Regex> { VERBOSE_FRAME_RE.as_ref().ok() }
-fn simple_frame_re() -> Option<&'static Regex> { SIMPLE_FRAME_RE.as_ref().ok() }
-fn eval_context_re() -> Option<&'static Regex> { EVAL_CONTEXT_RE.as_ref().ok() }
+fn context_re() -> Option<&'static Regex> {
+    CONTEXT_RE.as_ref().ok()
+}
+fn stack_frame_re() -> Option<&'static Regex> {
+    STACK_FRAME_RE.as_ref().ok()
+}
+fn verbose_frame_re() -> Option<&'static Regex> {
+    VERBOSE_FRAME_RE.as_ref().ok()
+}
+fn simple_frame_re() -> Option<&'static Regex> {
+    SIMPLE_FRAME_RE.as_ref().ok()
+}
+fn eval_context_re() -> Option<&'static Regex> {
+    EVAL_CONTEXT_RE.as_ref().ok()
+}
 
 /// Parser for Perl debugger stack trace output.
 ///

@@ -11,11 +11,8 @@ use crate::protocol::InlineValueText;
 
 /// Regex for matching Perl scalar variables.
 /// Stored as Option to avoid panics; if compilation fails, inline values are skipped.
-static SCALAR_VAR_RE: Lazy<Option<Regex>> = Lazy::new(|| {
-    Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*")
-        .or_else(|_| Regex::new(r"\$\w+"))
-        .ok()
-});
+static SCALAR_VAR_RE: Lazy<Option<Regex>> =
+    Lazy::new(|| Regex::new(r"\$[A-Za-z_][A-Za-z0-9_]*").or_else(|_| Regex::new(r"\$\w+")).ok());
 
 /// Collect inline values for scalar variables within a line range.
 ///

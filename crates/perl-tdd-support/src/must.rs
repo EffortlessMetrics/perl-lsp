@@ -2,6 +2,10 @@
 //!
 //! This module provides panic-on-failure helpers that are safe to use in tests,
 //! avoiding explicit `unwrap()` calls which are denied by clippy policy.
+//!
+//! Note: This module is explicitly allowed to use `panic!` since it's a test-only
+//! helper that needs to fail tests on unexpected conditions.
+#![allow(clippy::panic)]
 
 /// Extract the value from a Result, or panic with the error.
 ///

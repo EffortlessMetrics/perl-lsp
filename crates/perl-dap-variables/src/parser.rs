@@ -39,11 +39,9 @@ pub enum VariableParseError {
 static SCALAR_VAR_RE: Lazy<Result<Regex, regex::Error>> =
     Lazy::new(|| Regex::new(r"^\s*(?P<name>[\$\@\%][\w:]+)\s*=\s*(?P<value>.*?)$"));
 
-static UNDEF_RE: Lazy<Result<Regex, regex::Error>> =
-    Lazy::new(|| Regex::new(r"^undef$"));
+static UNDEF_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| Regex::new(r"^undef$"));
 
-static INTEGER_RE: Lazy<Result<Regex, regex::Error>> =
-    Lazy::new(|| Regex::new(r"^-?\d+$"));
+static INTEGER_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| Regex::new(r"^-?\d+$"));
 
 static NUMBER_RE: Lazy<Result<Regex, regex::Error>> =
     Lazy::new(|| Regex::new(r"^-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$"));
@@ -60,8 +58,9 @@ static HASH_REF_RE: Lazy<Result<Regex, regex::Error>> =
 static CODE_REF_RE: Lazy<Result<Regex, regex::Error>> =
     Lazy::new(|| Regex::new(r"^CODE\(0x[0-9a-fA-F]+\)$"));
 
-static OBJECT_RE: Lazy<Result<Regex, regex::Error>> =
-    Lazy::new(|| Regex::new(r"^(?P<class>[\w:]+)=(?P<type>ARRAY|HASH|SCALAR|GLOB)\(0x[0-9a-fA-F]+\)$"));
+static OBJECT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
+    Regex::new(r"^(?P<class>[\w:]+)=(?P<type>ARRAY|HASH|SCALAR|GLOB)\(0x[0-9a-fA-F]+\)$")
+});
 
 static GLOB_RE: Lazy<Result<Regex, regex::Error>> =
     Lazy::new(|| Regex::new(r"^\*(?P<name>[\w:]+)$"));
@@ -72,16 +71,36 @@ static REGEX_RE: Lazy<Result<Regex, regex::Error>> =
     Lazy::new(|| Regex::new(r"^(?:\(\?(?P<flags>[xism-]*)(?:-[xism]+)?:)?(?P<pattern>.*?)\)?$"));
 
 // Accessor functions - return Option<&Regex>, treating compile failure as "no match"
-fn scalar_var_re() -> Option<&'static Regex> { SCALAR_VAR_RE.as_ref().ok() }
-fn undef_re() -> Option<&'static Regex> { UNDEF_RE.as_ref().ok() }
-fn integer_re() -> Option<&'static Regex> { INTEGER_RE.as_ref().ok() }
-fn number_re() -> Option<&'static Regex> { NUMBER_RE.as_ref().ok() }
-fn quoted_string_re() -> Option<&'static Regex> { QUOTED_STRING_RE.as_ref().ok() }
-fn array_ref_re() -> Option<&'static Regex> { ARRAY_REF_RE.as_ref().ok() }
-fn hash_ref_re() -> Option<&'static Regex> { HASH_REF_RE.as_ref().ok() }
-fn code_ref_re() -> Option<&'static Regex> { CODE_REF_RE.as_ref().ok() }
-fn object_re() -> Option<&'static Regex> { OBJECT_RE.as_ref().ok() }
-fn glob_re() -> Option<&'static Regex> { GLOB_RE.as_ref().ok() }
+fn scalar_var_re() -> Option<&'static Regex> {
+    SCALAR_VAR_RE.as_ref().ok()
+}
+fn undef_re() -> Option<&'static Regex> {
+    UNDEF_RE.as_ref().ok()
+}
+fn integer_re() -> Option<&'static Regex> {
+    INTEGER_RE.as_ref().ok()
+}
+fn number_re() -> Option<&'static Regex> {
+    NUMBER_RE.as_ref().ok()
+}
+fn quoted_string_re() -> Option<&'static Regex> {
+    QUOTED_STRING_RE.as_ref().ok()
+}
+fn array_ref_re() -> Option<&'static Regex> {
+    ARRAY_REF_RE.as_ref().ok()
+}
+fn hash_ref_re() -> Option<&'static Regex> {
+    HASH_REF_RE.as_ref().ok()
+}
+fn code_ref_re() -> Option<&'static Regex> {
+    CODE_REF_RE.as_ref().ok()
+}
+fn object_re() -> Option<&'static Regex> {
+    OBJECT_RE.as_ref().ok()
+}
+fn glob_re() -> Option<&'static Regex> {
+    GLOB_RE.as_ref().ok()
+}
 
 /// Parser for Perl debugger variable output.
 ///
@@ -121,7 +140,8 @@ impl VariableParser {
     ///
     /// Returns a [`VariableParseError`] if the line cannot be parsed.
     pub fn parse_assignment(&self, line: &str) -> Result<(String, PerlValue), VariableParseError> {
-        let re = scalar_var_re().ok_or_else(|| VariableParseError::UnrecognizedFormat(line.to_string()))?;
+        let re = scalar_var_re()
+            .ok_or_else(|| VariableParseError::UnrecognizedFormat(line.to_string()))?;
         if let Some(caps) = re.captures(line) {
             let name = caps
                 .name("name")

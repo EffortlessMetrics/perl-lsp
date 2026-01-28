@@ -2591,114 +2591,79 @@ impl Default for PureRustPerlParser {
 mod tests {
     use super::*;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
-    fn test_basic_parsing() {
+    fn test_basic_parsing() -> TestResult {
         let mut parser = PureRustPerlParser::new();
         let source = "$var";
-        let result = parser.parse(source);
-        assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = parser.parse(source)?;
         let sexp = parser.to_sexp(&ast);
         println!("AST: {:?}", ast);
         println!("S-expression: {}", sexp);
+        Ok(())
     }
 
     #[test]
-    fn test_variable_parsing() {
+    fn test_variable_parsing() -> TestResult {
         let mut parser = PureRustPerlParser::new();
         let source = "$scalar @array %hash";
-        let result = parser.parse(source);
-        assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = parser.parse(source)?;
         let sexp = parser.to_sexp(&ast);
         println!("S-expression: {}", sexp);
+        Ok(())
     }
 
     #[test]
-    fn test_assignment_parsing() {
+    fn test_assignment_parsing() -> TestResult {
         let mut parser = PureRustPerlParser::new();
         let source = "my $var = 42;";
-        let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("Success! AST: {:?}", ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                panic!("Parse should succeed");
-            }
-        }
+        let ast = parser.parse(source)?;
+        let sexp = parser.to_sexp(&ast);
+        println!("Success! AST: {:?}", ast);
+        println!("S-expression: {}", sexp);
+        Ok(())
     }
 
     #[test]
-    fn test_function_declaration() {
+    fn test_function_declaration() -> TestResult {
         let mut parser = PureRustPerlParser::new();
         let source = "sub hello { print 'Hello'; }";
-        let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                panic!("Parse should succeed");
-            }
-        }
+        let ast = parser.parse(source)?;
+        let sexp = parser.to_sexp(&ast);
+        println!("S-expression: {}", sexp);
+        Ok(())
     }
 
     #[test]
-    fn test_if_statement() {
+    fn test_if_statement() -> TestResult {
         let mut parser = PureRustPerlParser::new();
         let source = "if ($x > 0) { print 'positive'; }";
-        let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                panic!("Parse should succeed");
-            }
-        }
+        let ast = parser.parse(source)?;
+        let sexp = parser.to_sexp(&ast);
+        println!("S-expression: {}", sexp);
+        Ok(())
     }
 
     #[test]
-    fn test_array_assignment() {
+    fn test_array_assignment() -> TestResult {
         let mut parser = PureRustPerlParser::new();
         let source = "@array = (1, 2, 3);";
-        let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("Array assignment AST: {:?}", ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                panic!("Parse should succeed");
-            }
-        }
+        let ast = parser.parse(source)?;
+        let sexp = parser.to_sexp(&ast);
+        println!("Array assignment AST: {:?}", ast);
+        println!("S-expression: {}", sexp);
+        Ok(())
     }
 
     #[test]
-    fn test_hash_assignment() {
+    fn test_hash_assignment() -> TestResult {
         let mut parser = PureRustPerlParser::new();
         let source = "%hash = (a => 1, b => 2);";
-        let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("Hash assignment AST: {:?}", ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                panic!("Parse should succeed");
-            }
-        }
+        let ast = parser.parse(source)?;
+        let sexp = parser.to_sexp(&ast);
+        println!("Hash assignment AST: {:?}", ast);
+        println!("S-expression: {}", sexp);
+        Ok(())
     }
 }

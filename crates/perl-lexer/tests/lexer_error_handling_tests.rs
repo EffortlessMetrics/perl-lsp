@@ -425,22 +425,20 @@ fn test_mutation_lexer_error_message_quality() {
         let error_tokens: Vec<_> =
             tokens.iter().filter(|t| matches!(t.token_type, TokenType::Error(_))).collect();
 
-        if !error_tokens.is_empty() {
-            let error_messages: Vec<String> = error_tokens
-                .iter()
-                .map(|t| {
-                    if let TokenType::Error(msg) = &t.token_type {
-                        msg.to_string()
-                    } else {
-                        String::new()
-                    }
-                })
-                .collect();
-            panic!(
-                "{}: unexpected error tokens. Input: {}\nError messages: {:?}",
-                description, input, error_messages
-            );
-        }
+        let error_messages: Vec<String> = error_tokens
+            .iter()
+            .filter_map(|t| {
+                if let TokenType::Error(msg) = &t.token_type { Some(msg.to_string()) } else { None }
+            })
+            .collect();
+
+        assert!(
+            error_tokens.is_empty(),
+            "{}: unexpected error tokens. Input: {}\nError messages: {:?}",
+            description,
+            input,
+            error_messages
+        );
     }
 
     // Test that error messages would contain essential keywords if triggered
@@ -568,22 +566,21 @@ fn test_mutation_arc_str_message_storage() {
     let error_msg: Arc<str> = Arc::from("test error message");
     let error_token = TokenType::Error(error_msg.clone());
 
+    // Verify the error token is an Error variant
+    assert!(matches!(error_token, TokenType::Error(_)), "TokenType::Error should contain Arc<str>");
+
     // Verify the error token contains the expected message
-    if let TokenType::Error(msg) = error_token {
-        assert_eq!(
-            msg.as_ref(),
-            "test error message",
-            "Error token should preserve Arc<str> message"
-        );
-        // Arc reference counting works
-        assert_eq!(
-            Arc::strong_count(&msg),
-            2,
-            "Arc<str> should enable shared ownership (original + clone)"
-        );
-    } else {
-        panic!("TokenType::Error should contain Arc<str>");
-    }
+    let TokenType::Error(msg) = error_token else {
+        return; // Already asserted above, so this is unreachable
+    };
+
+    assert_eq!(msg.as_ref(), "test error message", "Error token should preserve Arc<str> message");
+    // Arc reference counting works
+    assert_eq!(
+        Arc::strong_count(&msg),
+        2,
+        "Arc<str> should enable shared ownership (original + clone)"
+    );
 }
 
 // LSP Integration - Lexer Error to Diagnostic Conversion

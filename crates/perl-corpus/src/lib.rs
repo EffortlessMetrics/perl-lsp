@@ -263,8 +263,9 @@ pub use tie_interface::{
 // Regex patterns - use Option for graceful degradation if compilation fails
 static SEC_RE: once_cell::sync::Lazy<Option<Regex>> =
     once_cell::sync::Lazy::new(|| Regex::new(r"(?m)^=+\s*$").ok());
-static META_RE: once_cell::sync::Lazy<Option<Regex>> =
-    once_cell::sync::Lazy::new(|| Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$").ok());
+static META_RE: once_cell::sync::Lazy<Option<Regex>> = once_cell::sync::Lazy::new(|| {
+    Regex::new(r"(?m)^#\s*@(?P<k>id|tags|perl|flags):\s*(?P<v>.*)$").ok()
+});
 
 fn slugify_title(title: &str) -> String {
     let mut slug = String::new();

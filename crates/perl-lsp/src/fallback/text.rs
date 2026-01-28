@@ -10,8 +10,7 @@ use regex::Regex;
 use serde_json::json;
 
 /// Matches package declarations: `package Foo::Bar`
-static PACKAGE_RE: Lazy<Option<Regex>> =
-    Lazy::new(|| Regex::new(r"^\s*package\s+([\w:]+)").ok());
+static PACKAGE_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"^\s*package\s+([\w:]+)").ok());
 /// Matches subroutine definitions: `sub foo`
 static SUB_RE: Lazy<Option<Regex>> = Lazy::new(|| Regex::new(r"^\s*sub\s+(\w+)").ok());
 
