@@ -39,6 +39,9 @@ static VARIABLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ERROR_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static DANGEROUS_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static ASSIGNMENT_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static DEREF_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
@@ -209,6 +212,27 @@ fn regex_mutation_re() -> Option<&'static Regex> {
         })
         .as_ref()
         .ok()
+}
+
+/// Regex to match potential assignment operators (any sequence of operator chars)
+fn assignment_ops_re() -> Option<&'static Regex> {
+    ASSIGNMENT_OPS_RE
+        .get_or_init(|| {
+            // Match any sequence of operator characters to tokenize operators
+            Regex::new(r"([!~^&|+\-*/%=<>]+)")
+        })
+        .as_ref()
+        .ok()
+}
+
+/// Regex to match dynamic subroutine dereferencing: &{...}
+fn deref_re() -> Option<&'static Regex> {
+    DEREF_RE.get_or_init(|| Regex::new(r"&[\s]*\{")).as_ref().ok()
+}
+
+/// Regex to match glob operations: <*...>
+fn glob_re() -> Option<&'static Regex> {
+    GLOB_RE.get_or_init(|| Regex::new(r"<\*[^>]*>")).as_ref().ok()
 }
 
 /// Check if the match is an escape sequence (preceded by backslash)
@@ -1906,19 +1930,51 @@ fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
 /// Note: Method calls ($obj->print) are intentionally NOT exempted because
 /// dangerous operations remain dangerous regardless of invocation syntax.
 fn validate_safe_expression(expression: &str) -> Option<String> {
-    // Check for assignment operators
-    let assignment_ops = [
-        "=", "+=", "-=", "*=", "/=", "%=", "**=", ".=", "&=", "|=", "^=", "<<=", ">>=", "&&=",
-        "||=", "//=",
-    ];
-    for op in &assignment_ops {
-        // Look for assignment operators not in quoted strings (simple heuristic)
-        // This is a basic check - full parsing would be more robust
-        if expression.contains(op) {
-            return Some(format!(
-                "Safe evaluation mode: assignment operator '{}' not allowed (use allowSideEffects: true)",
-                op
-            ));
+    // Check for assignment operators using regex to properly handle multi-char ops
+    // This avoids false positives for comparison operators (e.g., == contains =)
+    if let Some(re) = assignment_ops_re() {
+        for mat in re.find_iter(expression) {
+            let op = mat.as_str();
+            let start = mat.start();
+
+            // Allow harmless occurrences in single-quoted literals
+            if is_in_single_quotes(expression, start) {
+                continue;
+            }
+
+            // Check if it's strictly an assignment operator
+            match op {
+                "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | ".=" | "&=" | "|=" | "^="
+                | "<<=" | ">>=" | "&&=" | "||=" | "//=" | "x=" => {
+                    return Some(format!(
+                        "Safe evaluation mode: assignment operator '{}' not allowed (use allowSideEffects: true)",
+                        op
+                    ));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    // Check for dynamic subroutine calls &{...}
+    // This blocks tricks like &{"sys"."tem"}("ls")
+    if let Some(re) = deref_re() {
+        if re.is_match(expression) {
+            return Some(
+                "Safe evaluation mode: dynamic subroutine calls (&{...}) not allowed (use allowSideEffects: true)"
+                    .to_string(),
+            );
+        }
+    }
+
+    // Check for glob operations <*...>
+    // This blocks filesystem access via globs
+    if let Some(re) = glob_re() {
+        if re.is_match(expression) {
+            return Some(
+                "Safe evaluation mode: glob operations (<*...>) not allowed (use allowSideEffects: true)"
+                    .to_string(),
+            );
         }
     }
 
@@ -2774,5 +2830,84 @@ mod tests {
         let frames: Vec<StackFrame> = vec![];
         let filtered = filter_internal_frames(frames);
         assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn test_safe_eval_bypass_prevention() {
+        // These patterns attempt to bypass safe evaluation checks
+        let bypasses = [
+            "&{'sys'.'tem'}('ls')", // Dynamic function name via concatenation
+            "& { 'sys' . 'tem' }",  // Dynamic function name with spaces
+            "<*.txt>",               // Glob operator for filesystem access
+            "CORE::print",          // Explicitly blocked by dangerous ops regex
+        ];
+
+        for expr in bypasses {
+            let err = validate_safe_expression(expr);
+            assert!(
+                err.is_some(),
+                "Expression '{}' should be blocked but was allowed",
+                expr
+            );
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_assignment_ops_precision() {
+        // These are comparison/binding operators (SAFE) but were previously blocked
+        // because they contain '='
+        let allowed = [
+            "$a == $b",
+            "$a != $b",
+            "$a <= $b",
+            "$a >= $b",
+            "$a <=> $b",
+            "$a =~ /regex/",
+            "$a !~ /regex/",
+            "$a ~~ $b", // Smart match
+            // Logical ops
+            "$a && $b",
+            "$a || $b",
+            "$a // $b",
+            // Bitwise ops
+            "$a & $b",
+            "$a | $b",
+            "$a ^ $b",
+            "$a << $b",
+            "$a >> $b",
+            // Range
+            "1..10",
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "unexpected block for {expr:?}: {err:?}");
+        }
+
+        // These are strict assignment operators (UNSAFE) and MUST be blocked
+        let blocked = [
+            "$a = 1",
+            "$a += 1",
+            "$a -= 1",
+            "$a *= 1",
+            "$a /= 1",
+            "$a %= 1",
+            "$a **= 1",
+            "$a .= 's'",
+            "$a &= 1",
+            "$a |= 1",
+            "$a ^= 1",
+            "$a <<= 1",
+            "$a >>= 1",
+            "$a &&= 1",
+            "$a ||= 1",
+            "$a //= 1",
+            "$a x= 3", // Repetition assignment
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
     }
 }
