@@ -74,7 +74,7 @@ mod types;
 pub use enhanced::EnhancedCodeActionsProvider;
 pub use types::{CodeAction, CodeActionEdit, CodeActionKind};
 
-use crate::ide::lsp_compat::diagnostics::Diagnostic;
+use perl_lsp_diagnostics::Diagnostic;
 use perl_parser_core::Node;
 
 /// Code actions provider

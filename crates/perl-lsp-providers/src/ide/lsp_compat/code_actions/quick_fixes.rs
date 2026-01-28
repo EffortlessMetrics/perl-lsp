@@ -4,7 +4,7 @@
 
 use super::ast_utils::{find_declaration_position, get_indent_at};
 use super::types::{CodeAction, CodeActionEdit, CodeActionKind};
-use crate::ide::lsp_compat::diagnostics::Diagnostic;
+use perl_lsp_diagnostics::Diagnostic;
 use crate::ide::lsp_compat::rename::TextEdit;
 use perl_parser_core::SourceLocation;
 
