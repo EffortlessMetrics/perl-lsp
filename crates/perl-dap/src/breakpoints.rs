@@ -700,9 +700,8 @@ print "result: $final\n";
         store
             .breakpoints
             .lock()
-            .map_err(|e| format!("lock failed: {e}"))
-            .ok()
-            .map(|mut bps| bps.insert(source_path.to_string(), vec![record]));
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(source_path.to_string(), vec![record]);
 
         // 1. Add 5 lines at line 5 (shift down)
         store.adjust_breakpoints_for_edit(source_path, 5, 5);

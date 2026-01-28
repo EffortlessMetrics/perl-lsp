@@ -8,7 +8,7 @@
 use perl_parser::{ParseError, Parser};
 use perl_tdd_support::must_err;
 
-/// Test that deeply nested blocks are rejected with RecursionLimit error
+/// Test that deeply nested blocks are rejected with NestingTooDeep error
 #[test]
 #[ignore = "recursion limit behavior changed with error recovery"]
 fn parser_depth_limit_nested_blocks() {
@@ -124,7 +124,7 @@ fn parser_depth_limit_reasonable_nesting() {
 fn parser_depth_limit_mixed_nesting() {
     // Create a mix of blocks and expressions that exceeds the limit.
     // Each { ( pair adds multiple depth increments, so depth=100 should
-    // quickly exceed the limit of 128 and trigger RecursionLimit.
+    // quickly exceed the limit of 128 and trigger NestingTooDeep.
     let depth = 100;
     let mut code = String::new();
 
