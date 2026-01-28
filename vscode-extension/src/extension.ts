@@ -192,15 +192,15 @@ export async function activate(context: vscode.ExtensionContext) {
 
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
-            { label: '$(refresh) Restart Server', description: 'Restart the language server', command: 'perl-lsp.restart' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Run tests for the active file', command: 'perl-lsp.runTests' },
+            { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
+            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
-            { label: '$(output) Show Output', description: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
-            { label: '$(info) Show Version', description: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
+            { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
+            { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
-            { label: '$(gear) Configure Settings', description: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:effortlesssteven.perl-lsp'] }
+            { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:effortlesssteven.perl-lsp'] }
         ];
 
         const selection = await vscode.window.showQuickPick(items, {
