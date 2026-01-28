@@ -77,7 +77,7 @@ jobs:
       
       - name: Create GitHub Release asset
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: vscode-extension/${{ env.VSIX_FILE }}
           fail_on_unmatched_files: true
