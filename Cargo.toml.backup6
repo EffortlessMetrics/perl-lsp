@@ -79,7 +79,6 @@ perl-refactoring = { path = "crates/perl-refactoring", version = "0.8.8" }
 
 # Tier 4: Three-level dependencies
 perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.8.8" }
-perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.8.8" }
 perl-lsp-providers = { path = "crates/perl-lsp-providers", version = "0.8.8", default-features = false }
 
 # Tier 5: Application crates
