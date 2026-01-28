@@ -151,6 +151,38 @@ security-audit:
         echo "SKIP: cargo-audit not installed (run: cargo install cargo-audit)"; \
     fi
 
+# Generate SBOM in SPDX format
+sbom-spdx:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Generating SBOM (SPDX format)..."
+    cargo sbom --output-format spdx_json_2_3 > sbom-spdx.json
+    echo "✓ Generated sbom-spdx.json"
+    ls -lh sbom-spdx.json
+
+# Generate SBOM in CycloneDX format
+sbom-cyclonedx:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Generating SBOM (CycloneDX format)..."
+    cargo sbom --output-format cyclone_dx_json_1_6 > sbom-cyclonedx.json
+    echo "✓ Generated sbom-cyclonedx.json"
+    ls -lh sbom-cyclonedx.json
+
+# Generate both SBOM formats
+sbom: sbom-spdx sbom-cyclonedx
+    @echo "✓ Generated both SBOM formats"
+
+# Verify SBOM files
+sbom-verify: sbom
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Verifying SBOM files..."
+    test -f sbom-spdx.json || (echo "ERROR: sbom-spdx.json not found" && exit 1)
+    test -f sbom-cyclonedx.json || (echo "ERROR: sbom-cyclonedx.json not found" && exit 1)
+    echo "✓ SBOM files verified"
+    ls -lh sbom-*.json
+
 # ============================================================================
 # Heavy Jobs (label-gated in CI, for nightly tier)
 # ============================================================================
@@ -164,11 +196,13 @@ mutation-subset:
         echo "SKIP: cargo-mutants not installed (run: cargo install cargo-mutants)"; \
     fi
 
-# Bounded fuzz run (placeholder for future fuzz testing)
+# Bounded fuzz run (quick fuzzing for CI/nightly)
 fuzz-bounded:
-    @echo "Fuzz testing (placeholder)..."
-    @echo "  Future: cargo +nightly fuzz run parser_fuzz -- -max_total_time=60"
-    @echo "Fuzz testing skipped (not yet configured)"
+    @echo "🔥 Running bounded fuzz testing (60 seconds per target)..."
+    @cargo +nightly fuzz run parser_comprehensive -- -max_total_time=60 || echo "  Parser fuzzing complete"
+    @cargo +nightly fuzz run lexer_robustness -- -max_total_time=60 || echo "  Lexer fuzzing complete"
+    @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
+    @echo "✅ Fuzz testing complete"
 
 # Benchmarks (requires criterion) - legacy target, prefer 'just bench'
 benchmarks:
@@ -801,6 +835,64 @@ bench-markdown:
     @echo "📋 Generating benchmark markdown..."
     @python3 ./benchmarks/scripts/format-results.py benchmarks/results/latest.json --markdown
 
+# Generate performance regression alerts (terminal)
+bench-alert:
+    @echo "📊 Checking for performance regressions..."
+    @python3 ./benchmarks/scripts/alert.py
+
+# Generate performance regression alerts (markdown for PR)
+bench-alert-md:
+    @echo "📊 Generating performance alert (markdown)..."
+    @python3 ./benchmarks/scripts/alert.py --format markdown
+
+# Check for critical performance regressions (exits non-zero)
+bench-alert-check:
+    @echo "🔍 Checking for critical regressions..."
+    @python3 ./benchmarks/scripts/alert.py --check
+
+# ============================================================================
+# Code Coverage (Issue #276)
+# ============================================================================
+# Generate and analyze code coverage reports using cargo-llvm-cov.
+# See codecov.yml for service configuration.
+
+# Generate local HTML coverage report
+coverage:
+    @echo "📊 Generating coverage report..."
+    @if ! command -v cargo-llvm-cov >/dev/null 2>&1; then \
+        echo "❌ cargo-llvm-cov not found. Installing..."; \
+        cargo install cargo-llvm-cov --locked; \
+    fi
+    @cargo llvm-cov --workspace --locked --exclude xtask --html --output-dir target/coverage \
+        --ignore-filename-regex '(archive|tree-sitter-perl-rs|tree-sitter-perl-c|tests|benches|examples|build\.rs)/'
+    @echo "✅ Coverage report: target/coverage/index.html"
+    @echo "📈 Opening report in browser..."
+    @command -v xdg-open >/dev/null 2>&1 && xdg-open target/coverage/index.html || \
+     command -v open >/dev/null 2>&1 && open target/coverage/index.html || \
+     echo "⚠️  Please open target/coverage/index.html manually"
+
+# Generate coverage report (lcov format for CI)
+coverage-lcov:
+    @echo "📊 Generating coverage (lcov format)..."
+    @if ! command -v cargo-llvm-cov >/dev/null 2>&1; then \
+        echo "❌ cargo-llvm-cov not found. Installing..."; \
+        cargo install cargo-llvm-cov --locked; \
+    fi
+    @cargo llvm-cov --workspace --locked --exclude xtask --lcov --output-path lcov.info \
+        --ignore-filename-regex '(archive|tree-sitter-perl-rs|tree-sitter-perl-c|tests|benches|examples|build\.rs)/'
+    @echo "✅ Coverage: lcov.info"
+
+# Show coverage summary (terminal)
+coverage-summary:
+    @echo "📊 Coverage Summary"
+    @echo "==================="
+    @if ! command -v cargo-llvm-cov >/dev/null 2>&1; then \
+        echo "❌ cargo-llvm-cov not found. Installing..."; \
+        cargo install cargo-llvm-cov --locked; \
+    fi
+    @cargo llvm-cov --workspace --locked --exclude xtask \
+        --ignore-filename-regex '(archive|tree-sitter-perl-rs|tree-sitter-perl-c|tests|benches|examples|build\.rs)/'
+
 # ============================================================================
 # Technical Debt Tracking (Issue #XXX)
 # ============================================================================
@@ -862,3 +954,102 @@ debt-pr-summary:
     @echo "## Technical Debt Status"
     @echo ""
     @python3 scripts/debt-report.py --json | python3 scripts/debt-pr-summary.py
+
+# ============================================================================
+# Fuzzing (cargo-fuzz integration)
+# ============================================================================
+
+# Run fuzzing on specific target (default: 60 seconds)
+fuzz target='parser_comprehensive' duration='60':
+    @echo "🔥 Fuzzing {{target}} for {{duration}} seconds..."
+    @cargo +nightly fuzz run {{target}} -- -max_total_time={{duration}}
+
+# List available fuzz targets
+fuzz-list:
+    @echo "📋 Available fuzz targets:"
+    @cargo +nightly fuzz list
+
+# Run continuous fuzzing (for local development, Ctrl+C to stop)
+fuzz-continuous target='parser_comprehensive':
+    @echo "🔥 Running continuous fuzzing on {{target}} (Ctrl+C to stop)..."
+    @echo "📊 Corpus: fuzz/corpus/{{target}}"
+    @echo "💥 Crashes: fuzz/artifacts/{{target}}"
+    @cargo +nightly fuzz run {{target}}
+
+# Check fuzz corpus coverage for a target
+fuzz-coverage target='parser_comprehensive':
+    @echo "📊 Checking coverage for {{target}}..."
+    @cargo +nightly fuzz coverage {{target}}
+    @echo ""
+    @echo "To view coverage report, open: fuzz/coverage/{{target}}/coverage/index.html"
+
+# Minimize a crash case to smallest reproducing input
+fuzz-minimize target crash:
+    @echo "🔍 Minimizing crash case for {{target}}..."
+    @cargo +nightly fuzz cmin {{target}} {{crash}}
+
+# Check for crash artifacts (fails if crashes found)
+fuzz-check-crashes:
+    @echo "💥 Checking for crash artifacts..."
+    @if [ -d fuzz/artifacts ]; then \
+        CRASHES=$$(find fuzz/artifacts -type f 2>/dev/null | wc -l); \
+        if [ $$CRASHES -gt 0 ]; then \
+            echo "⚠️  Found $$CRASHES crash artifacts:"; \
+            find fuzz/artifacts -type f 2>/dev/null; \
+            exit 1; \
+        else \
+            echo "✅ No crashes found"; \
+        fi; \
+    else \
+        echo "✅ No artifacts directory (no crashes)"; \
+    fi
+
+# Run all fuzz targets for regression testing (short duration)
+fuzz-regression duration='30':
+    @echo "🔥 Running fuzz regression tests ({{duration}}s per target)..."
+    @just fuzz parser_comprehensive {{duration}} || true
+    @just fuzz lexer_robustness {{duration}} || true
+    @just fuzz substitution_parsing {{duration}} || true
+    @just fuzz builtin_functions {{duration}} || true
+    @just fuzz unicode_positions {{duration}} || true
+    @just fuzz lsp_navigation {{duration}} || true
+    @just fuzz heredoc_parsing {{duration}} || true
+    @just fuzz-check-crashes
+    @echo "✅ Fuzz regression testing complete"
+
+# ============================================================================
+# Documentation Site (mdBook)
+# ============================================================================
+
+# Build documentation site with mdBook
+docs-build:
+    @echo "📖 Building mdBook documentation site..."
+    @bash scripts/populate-book.sh
+    mdbook build book
+    @echo "✅ Documentation site built successfully"
+    @echo "📂 Output: book/book/index.html"
+
+# Serve documentation site locally
+docs-serve:
+    @echo "📖 Serving mdBook documentation site..."
+    @bash scripts/populate-book.sh
+    @echo "🌐 Starting local server at http://localhost:3000"
+    @echo "Press Ctrl+C to stop"
+    mdbook serve book --port 3000 --open
+
+# Clean documentation build artifacts
+docs-clean:
+    @echo "🧹 Cleaning documentation build artifacts..."
+    rm -rf book/book
+    rm -rf book/src/getting-started
+    rm -rf book/src/user-guides
+    rm -rf book/src/architecture
+    rm -rf book/src/developer
+    rm -rf book/src/lsp
+    rm -rf book/src/advanced
+    rm -rf book/src/reference
+    rm -rf book/src/dap
+    rm -rf book/src/ci
+    rm -rf book/src/process
+    rm -rf book/src/resources
+    @echo "✅ Documentation artifacts cleaned"

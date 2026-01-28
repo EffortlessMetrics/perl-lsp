@@ -73,6 +73,14 @@ just debt-report                      # Show technical debt status
 just debt-check                       # Verify debt budget compliance
 ```
 
+### Code Coverage
+
+```bash
+just coverage                         # Generate HTML coverage report locally
+just coverage-summary                 # Show coverage summary in terminal
+just coverage-lcov                    # Generate lcov.info for CI
+```
+
 ## Development Workflow
 
 **Local-first development** - all gates run locally before CI:

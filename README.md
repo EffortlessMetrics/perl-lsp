@@ -1,5 +1,7 @@
 # perl-lsp
 
+[![codecov](https://codecov.io/gh/EffortlessMetrics/tree-sitter-perl-rs/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/tree-sitter-perl-rs)
+
 A production-ready Perl language server and parser ecosystem written in Rust.
 
 ## What This Is
