@@ -26,3 +26,7 @@
 ## 2026-01-27 - Transient Status Bar Feedback
 **Learning:** For long-running operations like tests where the "Output" panel is too hidden and "Notifications" are too intrusive, temporarily hijacking the Status Bar Item provides excellent, non-disruptive feedback.
 **Action:** When implementing async commands that have a corresponding Status Bar Item, use a `try...finally` block to temporarily update the item's text (e.g., `$(sync~spin) Processing...`) and restore it afterwards.
+
+## 2026-01-27 - Structured Status Bar Menus
+**Learning:** Flat status bar menus can become cluttered as features grow. Using `QuickPickItemKind.Separator` to group actions (Actions, Information, Configuration) significantly reduces cognitive load. Including a direct "Configure Settings" link in the menu bridges the gap between usage and configuration.
+**Action:** When implementing `showStatusMenu` commands, use separators to organize items logically and always include a shortcut to the extension's settings.

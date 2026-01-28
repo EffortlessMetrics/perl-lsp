@@ -184,22 +184,34 @@ export async function activate(context: vscode.ExtensionContext) {
 
     const statusMenuCommand = vscode.commands.registerCommand('perl-lsp.showStatusMenu', async () => {
         interface MenuAction extends vscode.QuickPickItem {
-            command: string;
+            command?: string;
+            args?: any[];
         }
 
         const items: MenuAction[] = [
+            { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Restart the language server', command: 'perl-lsp.restart' },
+            { label: '$(organization) Organize Use Statements', description: 'Sort and deduplicate imports', command: 'perl-lsp.organizeImports' },
             { label: '$(beaker) Run Tests in Current File', description: 'Run tests for the active file', command: 'perl-lsp.runTests' },
+
+            { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', description: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
-            { label: '$(info) Show Version', description: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' }
+            { label: '$(info) Show Version', description: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
+
+            { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
+            { label: '$(gear) Configure Settings', description: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:effortlesssteven.perl-lsp'] }
         ];
 
         const selection = await vscode.window.showQuickPick(items, {
             placeHolder: 'Perl Language Server Actions'
         });
 
-        if (selection) {
-            vscode.commands.executeCommand(selection.command);
+        if (selection && selection.command) {
+            if (selection.args) {
+                vscode.commands.executeCommand(selection.command, ...selection.args);
+            } else {
+                vscode.commands.executeCommand(selection.command);
+            }
         }
     });
     
