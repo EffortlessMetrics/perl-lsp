@@ -23,7 +23,7 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
 
     private findDebugAdapter(): string | undefined {
         // First, try to find perl-dap in PATH
-        const pathDap = this.which('perl-dap');
+        const pathDap = this.findExecutable('perl-dap');
         if (pathDap) {
             return pathDap;
         }
@@ -37,7 +37,7 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
         ];
 
         for (const p of possiblePaths) {
-            if (this.fileExists(p)) {
+            if (this.isExecutable(p)) {
                 return p;
             }
         }
@@ -45,21 +45,48 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
         return undefined;
     }
 
-    private which(command: string): string | undefined {
-        try {
-            const { execSync } = require('child_process');
-            const result = execSync(`which ${command}`, { encoding: 'utf8' });
-            return result.trim();
-        } catch {
-            // Ignore errors
+    private findExecutable(command: string): string | undefined {
+        // If it's already an absolute path, check it
+        if (path.isAbsolute(command)) {
+            return this.isExecutable(command) ? command : undefined;
         }
+
+        const pathEnv = process.env.PATH || '';
+        const pathDirs = pathEnv.split(path.delimiter);
+
+        // On Windows, we need to check extensions
+        const isWindows = process.platform === 'win32';
+        const extensions = isWindows
+            ? (process.env.PATHEXT ? process.env.PATHEXT.split(';') : ['.EXE', '.CMD', '.BAT', '.COM'])
+            : [''];
+
+        for (const dir of pathDirs) {
+            if (!dir) continue;
+
+            for (const ext of extensions) {
+                const fullPath = path.join(dir, command + ext);
+                if (this.isExecutable(fullPath)) {
+                    return fullPath;
+                }
+            }
+        }
+
         return undefined;
     }
 
-    private fileExists(path: string): boolean {
+    private isExecutable(filePath: string): boolean {
         try {
             const fs = require('fs');
-            return fs.existsSync(path) && fs.statSync(path).isFile();
+            // Check if file exists and is a file
+            const stats = fs.statSync(filePath);
+            if (!stats.isFile()) return false;
+
+            // On Windows, existence is enough (permissions are complex)
+            // On Unix, check for execute permission
+            if (process.platform !== 'win32') {
+                fs.accessSync(filePath, fs.constants.X_OK);
+            }
+            return true;
         } catch {
             return false;
         }
