@@ -594,25 +594,33 @@ impl ExecuteCommandProvider {
         let content = std::fs::read_to_string(file_path)
             .map_err(|e| format!("Failed to read file: {}", e))?;
 
-        let mut all_violations: Vec<perl_lsp_providers::tooling::perl_critic::Violation> = Vec::new();
         let code_text = perl_parser::util::code_slice(&content);
         let mut parser = Parser::new(code_text);
 
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => crate::ast::Node::new(
-                crate::ast::NodeKind::Error {
-                    message: format!("{}", e),
-                    expected: vec![],
-                    found: None,
-                    partial: None,
-                },
-                crate::ast::SourceLocation { start: 0, end: code_text.len() },
-            ),
+        let (ast, parse_error) = match parser.parse() {
+            Ok(ast) => (ast, None),
+            Err(error) => {
+                let message = error.to_string();
+                (
+                    crate::ast::Node::new(
+                        crate::ast::NodeKind::Error {
+                            message,
+                            expected: vec![],
+                            found: None,
+                            partial: None,
+                        },
+                        crate::ast::SourceLocation { start: 0, end: code_text.len() },
+                    ),
+                    Some(error),
+                )
+            }
         };
 
-        let analyzer = perl_lsp_providers::tooling::perl_critic::BuiltInAnalyzer::new();
-        let all_violations = analyzer.analyze(&ast, code_text);
+        let analyzer = BuiltInAnalyzer::new();
+        let mut all_violations = analyzer.analyze(&ast, code_text);
+        if let Some(error) = parse_error {
+            all_violations.push(self.create_syntax_error_violation(&error, code_text, file_path));
+        }
 
         let formatted_violations: Vec<_> = all_violations
             .iter()
