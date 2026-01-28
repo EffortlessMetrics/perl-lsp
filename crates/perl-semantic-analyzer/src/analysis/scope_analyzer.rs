@@ -903,6 +903,19 @@ impl ScopeAnalyzer {
             let parent = ancestors[i];
 
             match &parent.kind {
+                // Method call: Class->method (Class is bareword)
+                NodeKind::Binary { op, left, right: _ } if op == "->" => {
+                    // Check if current node is the class name (left side of the -> operation)
+                    if std::ptr::eq(left.as_ref(), current) {
+                        return true;
+                    }
+                }
+                NodeKind::MethodCall { object, .. } => {
+                    // Check if current node is the class name (object)
+                    if std::ptr::eq(object.as_ref(), current) {
+                        return true;
+                    }
+                }
                 // Hash subscript: $hash{key} or %hash{key}
                 NodeKind::Binary { op, left: _, right } if op == "{}" => {
                     // Check if current node is the key (right side of the {} operation)
