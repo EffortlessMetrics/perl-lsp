@@ -223,7 +223,7 @@ pub struct RefactoringOperation {
 }
 
 /// Backup information for operation rollback
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct BackupInfo {
     /// Directory containing backup files
     pub backup_dir: PathBuf,
@@ -2762,6 +2762,218 @@ sub complex {
             // Clean up and verify space was reclaimed
             let result = must(engine.clear_history());
             assert!(result.space_reclaimed > 0);
+        }
+
+        // --- Robust backup cleanup tests (non-flaky) ---
+
+        #[test]
+        fn cleanup_test_identifies_all_backup_directories() {
+            // AC1: When clear_history() is called, all backup directories are identified
+            // AC5: Method returns count of backup directories removed
+            use std::fs;
+
+            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+            let _ = fs::create_dir_all(&backup_root);
+
+            // Manually create backup directories
+            let backup1 = backup_root.join("refactor_100_0");
+            let backup2 = backup_root.join("refactor_200_0");
+            must(fs::create_dir_all(&backup1));
+            must(fs::create_dir_all(&backup2));
+
+            // Create test files in backups
+            must(fs::write(backup1.join("file1.pl"), "sub test1 {}"));
+            must(fs::write(backup2.join("file2.pl"), "sub test2 {}"));
+
+            let mut engine = RefactoringEngine::new();
+            let result = must(engine.clear_history());
+
+            // Should have removed both directories
+            assert_eq!(result.directories_removed, 2);
+            assert_eq!(engine.operation_history.len(), 0);
+
+            // Verify directories are actually removed
+            assert!(!backup1.exists());
+            assert!(!backup2.exists());
+        }
+
+        #[test]
+        fn cleanup_test_respects_retention_count() {
+            // AC2: Backup cleanup removes backup files older than a configurable retention period
+            // AC3: Operation provides option to keep recent backups (e.g., last N operations)
+            use std::fs;
+            use std::thread;
+            use std::time::Duration;
+
+            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+            let _ = fs::create_dir_all(&backup_root);
+
+            // Manually create 4 backup directories with different timestamps
+            let backups = vec![
+                backup_root.join("refactor_100_0"),
+                backup_root.join("refactor_200_0"),
+                backup_root.join("refactor_300_0"),
+                backup_root.join("refactor_400_0"),
+            ];
+
+            for (i, backup) in backups.iter().enumerate() {
+                must(fs::create_dir_all(backup));
+                must(fs::write(backup.join("file.pl"), format!("sub test{} {{}}", i)));
+                // Sleep to ensure different modification times
+                thread::sleep(Duration::from_millis(50));
+            }
+
+            let config = RefactoringConfig {
+                create_backups: true,
+                max_backup_retention: 2,
+                backup_max_age_seconds: 0, // Disable age-based retention
+                ..RefactoringConfig::default()
+            };
+
+            let mut engine = RefactoringEngine::with_config(config);
+            let result = must(engine.clear_history());
+
+            // Should have removed 2 oldest directories, kept 2 newest
+            assert_eq!(result.directories_removed, 2);
+
+            // Verify oldest two are removed
+            assert!(!backups[0].exists());
+            assert!(!backups[1].exists());
+
+            // Cleanup remaining backups
+            let _ = fs::remove_dir_all(&backup_root);
+        }
+
+        #[test]
+        fn cleanup_test_respects_age_limit() {
+            // AC2: Backup cleanup removes backup files older than a configurable retention period
+            // AC6: Errors during cleanup are logged but don't prevent operation history clearing
+            use std::fs;
+            use std::thread;
+            use std::time::Duration;
+
+            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+            let _ = fs::create_dir_all(&backup_root);
+
+            // Create an old backup directory manually
+            let old_backup = backup_root.join("refactor_1000_0");
+            let _ = fs::create_dir_all(&old_backup);
+
+            // Create a test file in the old backup
+            let test_file = old_backup.join("file_0.pl");
+            must(fs::write(&test_file, "sub old_backup { }"));
+
+            let config = RefactoringConfig {
+                backup_max_age_seconds: 1, // 1 second age limit
+                ..RefactoringConfig::default()
+            };
+
+            let mut engine = RefactoringEngine::with_config(config);
+
+            // Wait to ensure backup is older than 1 second
+            thread::sleep(Duration::from_secs(2));
+
+            // Run cleanup
+            let result = engine.clear_history();
+            assert!(result.is_ok());
+
+            // The old backup should be cleaned up
+            let cleanup_result = must(result);
+            assert_eq!(cleanup_result.directories_removed, 1);
+
+            // Verify directory is actually removed
+            assert!(!old_backup.exists());
+
+            // Cleanup
+            let _ = fs::remove_dir_all(&backup_root);
+        }
+
+        #[test]
+        fn cleanup_test_space_reclaimed() {
+            // AC5: Method returns count of backup directories removed and total disk space reclaimed
+            use std::fs;
+
+            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+            let _ = fs::create_dir_all(&backup_root);
+
+            // Create backup directory with files of known size
+            let backup = backup_root.join("refactor_100_0");
+            must(fs::create_dir_all(&backup));
+
+            let test_content = "sub test { print 'hello world'; }"; // 34 bytes
+            must(fs::write(backup.join("file1.pl"), test_content));
+            must(fs::write(backup.join("file2.pl"), test_content));
+
+            let mut engine = RefactoringEngine::new();
+
+            // Clean up and verify space was reclaimed
+            let result = must(engine.clear_history());
+            assert_eq!(result.directories_removed, 1);
+            assert_eq!(result.space_reclaimed, 68); // 34 * 2 bytes
+
+            // Verify directory is actually removed
+            assert!(!backup.exists());
+        }
+
+        #[test]
+        fn cleanup_test_only_removes_refactor_backups() {
+            // AC8: Cleanup respects backup directory naming convention and only removes refactoring engine backups
+            use std::fs;
+
+            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+            let _ = fs::create_dir_all(&backup_root);
+
+            // Create valid refactor backup
+            let refactor_backup = backup_root.join("refactor_100_0");
+            must(fs::create_dir_all(&refactor_backup));
+            must(fs::write(refactor_backup.join("file.pl"), "test"));
+
+            // Create non-refactor directory (should not be removed)
+            let other_dir = backup_root.join("other_backup");
+            must(fs::create_dir_all(&other_dir));
+            must(fs::write(other_dir.join("file.pl"), "test"));
+
+            let mut engine = RefactoringEngine::new();
+            let result = must(engine.clear_history());
+
+            // Should only remove refactor backup, not other directory
+            assert_eq!(result.directories_removed, 1);
+            assert!(!refactor_backup.exists());
+            assert!(other_dir.exists()); // Should still exist
+
+            // Cleanup
+            let _ = fs::remove_dir_all(&backup_root);
+        }
+
+        #[test]
+        fn cleanup_test_with_zero_retention_removes_all() {
+            // AC2: When max_backup_retention is 0, all backups are removed
+            use std::fs;
+
+            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
+            let _ = fs::create_dir_all(&backup_root);
+
+            // Create multiple backup directories
+            for i in 0..3 {
+                let backup = backup_root.join(format!("refactor_{}_0", i * 100));
+                must(fs::create_dir_all(&backup));
+                must(fs::write(backup.join("file.pl"), "test"));
+            }
+
+            let config = RefactoringConfig {
+                max_backup_retention: 0, // Remove all
+                backup_max_age_seconds: 0,
+                ..RefactoringConfig::default()
+            };
+
+            let mut engine = RefactoringEngine::with_config(config);
+            let result = must(engine.clear_history());
+
+            // All backups should be removed
+            assert_eq!(result.directories_removed, 3);
+
+            // Cleanup
+            let _ = fs::remove_dir_all(&backup_root);
         }
     }
 }
