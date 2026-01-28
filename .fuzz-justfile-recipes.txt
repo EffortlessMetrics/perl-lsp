@@ -42,6 +42,7 @@ fuzz-seed-corpus:
     @mkdir -p fuzz/corpus/parser_comprehensive
     @mkdir -p fuzz/corpus/lexer_robustness
     @find examples -name "*.pl" -type f 2>/dev/null | head -50 | while read f; do cp "$$f" "fuzz/corpus/parser_comprehensive/" 2>/dev/null || true; done
+    @find test_corpus -name "*.pl" -type f 2>/dev/null | head -50 | while read f; do cp "$$f" "fuzz/corpus/lexer_robustness/" 2>/dev/null || true; done
     @echo "✅ Corpus seeding complete"
     @echo "   Parser corpus: $$(ls fuzz/corpus/parser_comprehensive/ 2>/dev/null | wc -l) files"
     @echo "   Lexer corpus: $$(ls fuzz/corpus/lexer_robustness/ 2>/dev/null | wc -l) files"

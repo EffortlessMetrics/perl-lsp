@@ -55,13 +55,15 @@ known_issues:
 # Policy
 policy:
   # Enforcement level: strict, warn, or disabled
+  # - strict: fail CI on any dead code exceeding threshold
+  # - warn: report but don't fail (current - pending #211/#210)
   enforcement: warn
 
   # Auto-update baseline on PR (requires manual approval)
   auto_update_baseline: false
 
-  # Fail CI if baseline is exceeded
-  fail_on_baseline_exceeded: true
+  # Fail CI if baseline is exceeded (requires enforcement: strict to take effect)
+  fail_on_baseline_exceeded: false
 
   # Warn if approaching threshold (80% of max)
   warn_threshold_percent: 80

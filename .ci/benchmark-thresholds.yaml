@@ -1,5 +1,9 @@
 # Performance Regression Alert Thresholds
 #
+# NOTE: These are ALERTS, not merge-blocking gates.
+# Regressions are reported via PR comments; CI does not fail.
+# Gating on performance is blocked on #211/#210 (CI cleanup).
+#
 # This file configures automated performance regression detection.
 # Thresholds are specified per benchmark category and individual benchmarks.
 #

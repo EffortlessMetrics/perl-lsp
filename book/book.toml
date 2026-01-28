@@ -14,7 +14,6 @@ git-repository-url = "https://github.com/EffortlessMetrics/tree-sitter-perl"
 git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/{path}"
 site-url = "/tree-sitter-perl/"
-cname = ""
 default-theme = "light"
 preferred-dark-theme = "navy"
 smart-punctuation = true

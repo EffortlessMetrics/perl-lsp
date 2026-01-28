@@ -47,17 +47,11 @@ security-audit-strict:
 security-deny:
     @echo "Running cargo-deny policy checks..."
     @if command -v cargo-deny >/dev/null 2>&1; then \
-        cargo deny --locked check advisories && \
-        cargo deny --locked check licenses && \
-        cargo deny --locked check bans && \
-        cargo deny --locked check sources; \
+        cargo deny --locked check advisories licenses bans sources; \
     else \
         echo "Installing cargo-deny..."; \
         cargo install cargo-deny --locked && \
-        cargo deny --locked check advisories && \
-        cargo deny --locked check licenses && \
-        cargo deny --locked check bans && \
-        cargo deny --locked check sources; \
+        cargo deny --locked check advisories licenses bans sources; \
     fi
 
 # Trivy vulnerability scanner

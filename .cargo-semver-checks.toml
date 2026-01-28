@@ -70,7 +70,7 @@ fail-on-unsupported-format = false
 
 # Reporting
 [output]
-# Use JSON for machine-readable output in CI
+# Default to human-readable for local use; CI can override via --format=json
 format = "human"  # Options: human, json
 
 # Include suggestions for fixes
