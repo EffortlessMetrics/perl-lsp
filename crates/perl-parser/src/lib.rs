@@ -560,10 +560,6 @@ pub use workspace::workspace_index;
 pub use workspace::workspace_refactor;
 pub use workspace::workspace_rename;
 
-// Compatibility module for tests using old API
-#[cfg(any(test, feature = "test-compat"))]
-pub mod compat;
-
 pub use ast::{Node, NodeKind, SourceLocation};
 pub use error::{ParseError, ParseResult};
 #[cfg(feature = "incremental")]

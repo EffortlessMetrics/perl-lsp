@@ -270,11 +270,12 @@ impl InlayHintsProvider {
     /// Get parameter names for known functions
     fn get_parameter_names(&self, function_name: &str) -> Vec<String> {
         // Use consolidated builtin signatures
-        if let Some(params) = get_param_names(function_name).get(0..) {
+        let params = get_param_names(function_name);
+        if !params.is_empty() {
             return params.iter().map(|s| s.to_string()).collect();
         }
 
-        // Custom functions would be handled here
+        // Fallback for functions not in builtin_signatures_phf
         match function_name {
             // Custom functions from symbol table
             "open" => vec!["FILEHANDLE".to_string(), "mode".to_string(), "filename".to_string()],

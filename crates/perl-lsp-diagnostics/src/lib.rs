@@ -23,6 +23,9 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+/// Dead code detection
+#[cfg(not(target_arch = "wasm32"))]
+mod dead_code;
 /// Diagnostic deduplication utilities
 mod dedup;
 /// Core diagnostics provider
@@ -48,3 +51,7 @@ pub use diagnostics::{
 pub use lints::common_mistakes;
 pub use lints::deprecated;
 pub use lints::strict_warnings;
+
+// Re-export dead code detection (when not targeting WASM)
+#[cfg(not(target_arch = "wasm32"))]
+pub use dead_code::detect_dead_code;

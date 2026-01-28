@@ -470,4 +470,255 @@ mod tests {
         let result = remove_overlapping_tokens(input.clone());
         assert_eq!(result, input);
     }
+
+    // ==================== Mutation Hardening Tests (Issue #155) ====================
+    // These tests target specific mutation survivors identified in mutation analysis
+    // Focus: FnValue mutations (71%) and BinaryOperator mutations (25%)
+
+    /// Test that empty input produces empty output
+    /// Kills FnValue mutations on return statement
+    #[test]
+    fn mutation_hardening_empty_input() {
+        let input = vec![];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 0, "Empty input must produce empty output");
+    }
+
+    /// Test single token passes through unchanged
+    /// Kills FnValue mutations on result.push() at line 333
+    #[test]
+    fn mutation_hardening_single_token() {
+        let input = vec![tok(0, 0, 5, 0, 0)];
+        let result = remove_overlapping_tokens(input.clone());
+        assert_eq!(result.len(), 1, "Single token must be preserved");
+        assert_eq!(result[0], input[0], "Single token must match input exactly");
+    }
+
+    /// Test two non-overlapping tokens on same line
+    /// Kills BinaryOperator mutations on `start_char < last_start + last_length` comparison
+    #[test]
+    fn mutation_hardening_adjacent_non_overlapping() {
+        // Token A: [0, 5), Token B: [5, 10) - touching but not overlapping
+        let input = vec![tok(0, 0, 5, 0, 0), tok(0, 5, 5, 1, 0)];
+        let result = remove_overlapping_tokens(input.clone());
+        assert_eq!(result.len(), 2, "Adjacent non-overlapping tokens must both be kept");
+        assert_eq!(result[0], tok(0, 0, 5, 0, 0));
+        assert_eq!(result[1], tok(0, 5, 5, 1, 0));
+    }
+
+    /// Test exact boundary case: token end equals next token start
+    /// Kills BinaryOperator mutations on boundary comparisons
+    #[test]
+    fn mutation_hardening_exact_boundary() {
+        // Token A: [10, 15), Token B: [15, 20) - exact boundary
+        let input = vec![tok(0, 10, 5, 0, 0), tok(0, 15, 5, 1, 0)];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 2, "Tokens with exact boundaries must not overlap");
+    }
+
+    /// Test one-character overlap triggers replacement
+    /// Kills BinaryOperator mutations on overlap detection (< vs <=)
+    #[test]
+    fn mutation_hardening_single_char_overlap() {
+        // Token A: [0, 6), Token B: [5, 10) - overlap by 1 char at position 5
+        // A is kept because it comes first and B is not longer (A=6, B=5)
+        let input = vec![tok(0, 0, 6, 0, 0), tok(0, 5, 5, 1, 0)];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 1, "Single char overlap must trigger deduplication");
+        assert_eq!(result[0], tok(0, 0, 6, 0, 0), "First token kept (longer)");
+    }
+
+    /// Test partial overlap with length comparison
+    /// Kills BinaryOperator mutations on `length > last_length` at line 324
+    #[test]
+    fn mutation_hardening_partial_overlap_length_determines_winner() {
+        // Token A: [0, 5) len=5, Token B: [3, 10) len=7 - partial overlap, B longer
+        let input = vec![tok(0, 0, 5, 0, 0), tok(0, 3, 7, 1, 0)];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 1, "Partial overlap must keep only one token");
+        assert_eq!(result[0], tok(0, 3, 7, 1, 0), "Longer overlapping token must win");
+    }
+
+    /// Test equal length overlap keeps first token
+    /// Kills BinaryOperator mutations on equality in length comparison
+    #[test]
+    fn mutation_hardening_equal_length_keeps_first() {
+        // Token A: [0, 5) len=5, Token B: [2, 7) len=5 - equal length overlap
+        let input = vec![tok(0, 0, 5, 0, 0), tok(0, 2, 5, 1, 0)];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 1, "Equal length overlap must keep first token");
+        assert_eq!(result[0], tok(0, 0, 5, 0, 0), "First token must be kept when lengths equal");
+    }
+
+    /// Test tokens on different lines never overlap
+    /// Kills BinaryOperator mutations on `line == last_line` comparison at line 322
+    #[test]
+    fn mutation_hardening_different_lines_no_overlap() {
+        let input = vec![
+            tok(0, 0, 100, 0, 0), // Line 0, very long token
+            tok(1, 0, 5, 1, 0),   // Line 1, early position
+        ];
+        let result = remove_overlapping_tokens(input.clone());
+        assert_eq!(result.len(), 2, "Tokens on different lines must never overlap");
+        assert_eq!(result[0], tok(0, 0, 100, 0, 0));
+        assert_eq!(result[1], tok(1, 0, 5, 1, 0));
+    }
+
+    /// Test three tokens with cascading overlaps
+    /// Kills FnValue mutations on multiple push operations
+    #[test]
+    fn mutation_hardening_three_tokens_cascading() {
+        // A: [0, 5), B: [4, 9), C: [8, 12) - A overlaps B, B would overlap C
+        let input = vec![
+            tok(0, 0, 5, 0, 0), // len=5
+            tok(0, 4, 5, 1, 0), // len=5 (overlaps A)
+            tok(0, 8, 4, 2, 0), // len=4 (would overlap B)
+        ];
+        let result = remove_overlapping_tokens(input);
+        // A is kept (4 < 0+5, but 5 > 5 is false, so B is skipped)
+        // C doesn't overlap A (8 < 0+5 is false), so C is kept
+        assert_eq!(result.len(), 2, "First and third tokens kept");
+        assert_eq!(result[0], tok(0, 0, 5, 0, 0));
+        assert_eq!(result[1], tok(0, 8, 4, 2, 0));
+    }
+
+    /// Test zero-length token handling
+    /// Kills FnValue mutations and edge case handling
+    #[test]
+    fn mutation_hardening_zero_length_token() {
+        let input = vec![
+            tok(0, 5, 0, 0, 0), // Zero-length token [5, 5)
+            tok(0, 5, 5, 1, 0), // Normal token at same position [5, 10)
+        ];
+        let result = remove_overlapping_tokens(input);
+        // Zero-length token [5,5) doesn't overlap with [5,10) per < check (5 < 5+0 is false)
+        assert_eq!(result.len(), 2, "Zero-length token at same position doesn't technically overlap");
+        assert_eq!(result[0], tok(0, 5, 0, 0, 0));
+        assert_eq!(result[1], tok(0, 5, 5, 1, 0));
+    }
+
+    /// Test multiple zero-length tokens
+    /// Kills FnValue mutations in edge cases
+    #[test]
+    fn mutation_hardening_multiple_zero_length() {
+        let input = vec![tok(0, 5, 0, 0, 0), tok(0, 5, 0, 1, 0), tok(0, 5, 0, 2, 0)];
+        let result = remove_overlapping_tokens(input);
+        // Zero-length tokens at same position don't overlap each other (5 < 5+0 is false)
+        assert_eq!(result.len(), 3, "Multiple zero-length tokens are all kept");
+    }
+
+    /// Test large position values don't cause arithmetic overflow
+    /// Kills BinaryOperator mutations in arithmetic operations
+    #[test]
+    fn mutation_hardening_large_positions() {
+        let input = vec![tok(1000, u32::MAX - 100, 50, 0, 0), tok(1000, u32::MAX - 40, 20, 1, 0)];
+        let result = remove_overlapping_tokens(input);
+        // Overflow is prevented by saturating operations in the original code
+        assert_eq!(result.len(), 2, "Large positions must not cause overflow issues");
+    }
+
+    /// Test sorting preserves token order correctly
+    /// Kills BinaryOperator mutations in sort_by_key at line 310
+    #[test]
+    fn mutation_hardening_sort_order() {
+        // Input in reverse order
+        let input = vec![tok(2, 10, 5, 0, 0), tok(1, 10, 5, 1, 0), tok(0, 10, 5, 2, 0)];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 3, "Non-overlapping tokens must all be preserved");
+        // Verify sorted by line
+        assert_eq!(result[0].0, 0);
+        assert_eq!(result[1].0, 1);
+        assert_eq!(result[2].0, 2);
+    }
+
+    /// Test sort order within same line
+    /// Kills BinaryOperator mutations in sort comparisons
+    #[test]
+    fn mutation_hardening_sort_order_same_line() {
+        // Input with tokens in reverse order on same line
+        let input = vec![tok(0, 30, 5, 0, 0), tok(0, 20, 5, 1, 0), tok(0, 10, 5, 2, 0)];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 3, "Non-overlapping tokens must all be preserved");
+        // Verify sorted by start position
+        assert_eq!(result[0].1, 10);
+        assert_eq!(result[1].1, 20);
+        assert_eq!(result[2].1, 30);
+    }
+
+    /// Test multiple overlaps where shorter tokens are systematically removed
+    /// Kills FnValue mutations on conditional push operations
+    #[test]
+    fn mutation_hardening_systematic_removal() {
+        // All tokens overlap at same position, increasing length
+        let input =
+            vec![tok(0, 0, 3, 0, 0), tok(0, 0, 5, 1, 0), tok(0, 0, 7, 2, 0), tok(0, 0, 9, 3, 0)];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 1, "Longest token must survive multiple replacements");
+        assert_eq!(result[0], tok(0, 0, 9, 3, 0), "Longest token must be the survivor");
+    }
+
+    /// Test interleaved tokens without overlap
+    /// Kills FnValue mutations on else branch at line 330
+    #[test]
+    fn mutation_hardening_interleaved_no_overlap() {
+        let input = vec![
+            tok(0, 0, 3, 0, 0),  // [0, 3)
+            tok(0, 5, 3, 1, 0),  // [5, 8)
+            tok(0, 10, 3, 2, 0), // [10, 13)
+            tok(0, 15, 3, 3, 0), // [15, 18)
+        ];
+        let result = remove_overlapping_tokens(input.clone());
+        assert_eq!(result.len(), 4, "All non-overlapping tokens must be preserved");
+        assert_eq!(result, input, "Token order and content must be unchanged");
+    }
+
+    /// Test overlap at exactly boundary minus one
+    /// Kills off-by-one errors in BinaryOperator mutations
+    #[test]
+    fn mutation_hardening_boundary_minus_one() {
+        // Token A: [0, 10), Token B: [9, 15) - overlap at position 9
+        let input = vec![tok(0, 0, 10, 0, 0), tok(0, 9, 6, 1, 0)];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 1, "Boundary-1 overlap must be detected");
+        assert_eq!(result[0], tok(0, 0, 10, 0, 0), "First longer token wins");
+    }
+
+    /// Test that token type and modifiers are preserved correctly
+    /// Kills mutations that might affect non-position fields
+    #[test]
+    fn mutation_hardening_preserves_metadata() {
+        let input = vec![
+            tok(0, 0, 5, 42, 7), // Specific type and modifiers
+        ];
+        let result = remove_overlapping_tokens(input.clone());
+        assert_eq!(result[0].3, 42, "Token type must be preserved");
+        assert_eq!(result[0].4, 7, "Token modifiers must be preserved");
+    }
+
+    /// Test mixed line and position sorting
+    /// Kills complex BinaryOperator mutations in sort logic
+    #[test]
+    fn mutation_hardening_mixed_line_position_sort() {
+        let input = vec![
+            tok(2, 5, 3, 0, 0),
+            tok(0, 15, 3, 1, 0),
+            tok(1, 10, 3, 2, 0),
+            tok(0, 5, 3, 3, 0),
+            tok(2, 0, 3, 4, 0),
+        ];
+        let result = remove_overlapping_tokens(input);
+        assert_eq!(result.len(), 5);
+        // Verify primary sort by line
+        assert!(result[0].0 <= result[1].0);
+        assert!(result[1].0 <= result[2].0);
+        // Verify secondary sort by position within same line
+        for i in 1..result.len() {
+            if result[i].0 == result[i - 1].0 {
+                assert!(
+                    result[i].1 >= result[i - 1].1,
+                    "Tokens on same line must be sorted by position"
+                );
+            }
+        }
+    }
 }

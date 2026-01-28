@@ -43,7 +43,7 @@
 pub use perl_parser_core::{Node, NodeKind, SourceLocation};
 pub use perl_parser_core::{ParseError, ParseResult, error};
 pub use perl_parser_core::{Parser, ast, position};
-pub use perl_workspace_index::{document_store, workspace_index, workspace_rename};
+pub use perl_workspace_index::{document_store, workspace_index};
 
 /// Refactoring and modernization helpers.
 pub mod refactor;
@@ -56,3 +56,6 @@ pub use refactor::modernize_refactored;
 pub use refactor::refactoring;
 #[cfg(not(target_arch = "wasm32"))]
 pub use refactor::workspace_refactor;
+#[cfg(not(target_arch = "wasm32"))]
+/// Workspace-wide symbol rename operations.
+pub use refactor::workspace_rename;

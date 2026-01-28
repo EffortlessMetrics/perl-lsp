@@ -1181,7 +1181,7 @@ impl DebugAdapter {
                 };
                 eprintln!("Attach request: TCP attachment to {}:{}{}", host, port, timeout_msg);
 
-                // TODO: Implement TCP socket connection to Perl::LanguageServer DAP
+                // TCP socket connection not yet implemented - See #449
                 // This will require:
                 // 1. Establishing TCP connection to host:port
                 // 2. Setting up bidirectional message proxying

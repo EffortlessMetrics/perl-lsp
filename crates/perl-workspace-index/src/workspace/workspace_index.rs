@@ -435,7 +435,7 @@ pub struct IndexMetrics {
 
     /// Last successful index time (as millis since epoch, atomic)
     ///
-    /// TODO: Future use:
+    /// Currently stored but not actively used. Future enhancements planned:
     /// - Telemetry: Report index freshness metrics to LSP clients
     /// - Cache invalidation: Detect stale indexes requiring reindexing
     /// - Incremental updates: Skip files unchanged since last_indexed timestamp

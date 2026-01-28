@@ -114,6 +114,21 @@ impl TriviaParserContext {
             }
         }
 
+        // Edge case fix: Collect any remaining trivia at EOF (e.g., trailing comments without newline)
+        if position < source.len() {
+            let trailing_trivia = Self::collect_trivia_at(&source, &mut position);
+            if !trailing_trivia.is_empty() {
+                // Create a synthetic EOF token to hold the trailing trivia
+                let eof_token = Token::new(TokenType::EOF, String::new(), position, position);
+                let eof_pos = position_tracker.offset_to_position(position);
+                tokens.push_back(TokenWithTrivia {
+                    token: eof_token,
+                    leading_trivia: trailing_trivia,
+                    range: Range::new(eof_pos, eof_pos),
+                });
+            }
+        }
+
         TriviaParserContext {
             _source: source,
             tokens,
@@ -195,11 +210,11 @@ impl TriviaParserContext {
                     {
                         let pod_start = *position;
 
-                        // Find =cut
+                        // Edge case fix: Find =cut at start of line (including position 0 or after newline)
                         let mut found_cut = false;
                         while *position < source.len() {
-                            if *position > 0
-                                && bytes[*position - 1] == b'\n'
+                            // Check for =cut at the start of a line
+                            if (*position == 0 || (*position > 0 && bytes[*position - 1] == b'\n'))
                                 && source[*position..].starts_with("=cut")
                             {
                                 *position += 4; // Skip "=cut"
@@ -216,6 +231,7 @@ impl TriviaParserContext {
                             *position += 1;
                         }
 
+                        // Edge case fix: If no =cut found, POD extends to end of file
                         if !found_cut {
                             *position = source.len();
                         }

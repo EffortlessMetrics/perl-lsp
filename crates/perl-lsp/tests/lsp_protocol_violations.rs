@@ -273,7 +273,6 @@ fn test_double_initialization() {
     assert!(response["error"].is_object());
 }
 
-#[cfg(feature = "stress-tests")]
 #[test]
 fn test_invalid_method_name_format() {
     let mut server = start_lsp_server();
@@ -293,7 +292,8 @@ fn test_invalid_method_name_format() {
     ];
 
     for (i, method) in invalid_methods.iter().enumerate() {
-        send_request(
+        // Fix: capture the response returned by send_request
+        let response = send_request(
             &mut server,
             json!({
                 "jsonrpc": "2.0",
@@ -303,10 +303,12 @@ fn test_invalid_method_name_format() {
             }),
         );
 
-        let response = read_response_timeout(&mut server, short_timeout());
-        if let Some(response) = response {
-            assert!(response["error"].is_object());
-        }
+        // Verify the server returns METHOD_NOT_FOUND error
+        assert!(response["error"].is_object(),
+            "Expected error for method '{}'", method);
+        assert_eq!(response["error"]["code"], -32601,
+            "Expected METHOD_NOT_FOUND (-32601) for method '{}', got {:?}",
+            method, response["error"]["code"]);
     }
 }
 

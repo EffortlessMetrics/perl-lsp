@@ -9,8 +9,8 @@ echo "   Perl Parser Comprehensive Test Suite"
 echo "========================================="
 echo ""
 
-# Enable test-compat feature for old API tests
-export CARGO_TEST_FEATURES="--features test-compat"
+# Feature flags for tests (if needed)
+export CARGO_TEST_FEATURES=""
 
 # Set ci cfg flag when running in CI
 if [ "${CI:-false}" = "true" ]; then

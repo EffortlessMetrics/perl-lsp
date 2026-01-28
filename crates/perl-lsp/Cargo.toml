@@ -67,7 +67,6 @@ workspace = true
 default = ["workspace"]  # Enable workspace indexing by default for cross-file features
 workspace = []  # Workspace-wide indexing for cross-file features
 incremental = ["perl-parser/incremental"]  # Incremental parsing support
-test-compat = []  # Enables compatibility shim for old test API
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
 lsp-ga-lock = ["perl-lsp-protocol/lsp-ga-lock"]

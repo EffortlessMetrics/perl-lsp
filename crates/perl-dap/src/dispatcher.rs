@@ -238,7 +238,7 @@ impl DapDispatcher {
         let capabilities = Capabilities {
             supports_configuration_done_request: Some(true),
             supports_evaluate_for_hovers: Some(true),
-            supports_conditional_breakpoints: Some(false), // TODO: Phase 2 (AC7)
+            supports_conditional_breakpoints: Some(false), // Phase 2 (AC7) - See #450
             supports_terminate_request: Some(true),
         };
 
