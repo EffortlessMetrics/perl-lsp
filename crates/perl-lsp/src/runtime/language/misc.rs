@@ -1041,8 +1041,26 @@ impl LspServer {
             eprintln!("Executing command: {}", command);
 
             // Use the new execute command provider for new commands
-            let root_path = self.root_path.lock().clone();
-            let provider = ExecuteCommandProvider::with_workspace_root(root_path);
+            let mut workspace_roots = Vec::new();
+
+            // Add legacy root path if available
+            if let Some(root_path) = self.root_path.lock().clone() {
+                workspace_roots.push(root_path);
+            }
+
+            // Add workspace folders
+            {
+                let folders = self.workspace_folders.lock();
+                for uri in folders.iter() {
+                    if let Ok(parsed) = url::Url::parse(uri) {
+                        if let Ok(path) = parsed.to_file_path() {
+                            workspace_roots.push(path);
+                        }
+                    }
+                }
+            }
+
+            let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots);
 
             match command {
                 // Keep existing test commands for backward compatibility
