@@ -198,9 +198,7 @@ fn test_directory_completion_with_slash() -> TestResult {
 
     // Should find lib directory with trailing slash
     assert!(
-        completions.iter().any(
-            |c| c.label == "lib/" && c.detail.as_deref() == Some("directory")
-        )
+        completions.iter().any(|c| c.label == "lib/" && c.detail.as_deref() == Some("directory"))
     );
 
     std::env::set_current_dir(old_cwd).ok();

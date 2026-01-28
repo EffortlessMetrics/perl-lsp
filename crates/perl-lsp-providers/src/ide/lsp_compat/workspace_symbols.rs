@@ -12,6 +12,16 @@
 //! 4. **Complete**: Provide symbol context for completion suggestions
 //! 5. **Analyze**: Support workspace refactoring and cross-reference analysis
 //!
+//! # Client capability requirements
+//!
+//! Requires client capability support for `workspace/symbol` requests and
+//! workspace symbol resolve support when available.
+//!
+//! # Protocol compliance
+//!
+//! Implements the workspace symbol protocol with stable sorting and paging
+//! behavior aligned to the LSP specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Symbol search**: O(log n) with prefix matching optimization

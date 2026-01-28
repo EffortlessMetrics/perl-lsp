@@ -158,8 +158,8 @@ impl SubprocessRuntime for OsSubprocessRuntime {
 #[cfg(test)]
 pub mod mock {
     use super::*;
-    use std::sync::{Arc, Mutex};
     use perl_tdd_support::must;
+    use std::sync::{Arc, Mutex};
 
     /// A recorded command invocation
     #[derive(Debug, Clone)]

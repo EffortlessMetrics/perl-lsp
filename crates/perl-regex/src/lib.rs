@@ -8,18 +8,12 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum RegexError {
     #[error("{message} at offset {offset}")]
-    Syntax {
-        message: String,
-        offset: usize,
-    },
+    Syntax { message: String, offset: usize },
 }
 
 impl RegexError {
     pub fn syntax(message: impl Into<String>, offset: usize) -> Self {
-        RegexError::Syntax {
-            message: message.into(),
-            offset,
-        }
+        RegexError::Syntax { message: message.into(), offset }
     }
 }
 

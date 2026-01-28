@@ -36,7 +36,7 @@ const MAX_NESTING_DEPTH: usize = 100;
 const MAX_REGEX_OPERATIONS: usize = 10_000;
 
 /// Maximum heredoc nesting depth
-const MAX_HEREDOC_DEPTH: usize = 10;
+const MAX_HEREDOC_DEPTH: usize = 100;
 
 /// Maximum heredoc content size (1MB)
 const MAX_HEREDOC_SIZE: usize = 1_000_000;

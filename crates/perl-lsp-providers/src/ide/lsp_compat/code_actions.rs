@@ -2,9 +2,9 @@
 //!
 //! This module provides automated fixes for common issues and refactoring actions.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Code actions integrate with the PSTX (Parse → Index → Navigate → Complete → Analyze) pipeline:
+//! Code actions integrate with the Parse → Index → Navigate → Complete → Analyze workflow:
 //!
 //! - **Parse**: AST analysis identifies code patterns requiring fixes or refactoring
 //! - **Index**: Symbol tables provide context for variable and function renaming actions
@@ -14,6 +14,16 @@
 //!
 //! This integration ensures code actions are contextually appropriate and maintain
 //! code correctness across the entire Perl workspace.
+//!
+//! # LSP Client Capabilities
+//!
+//! Requires client support for `textDocument/codeAction` capabilities and
+//! `workspace/workspaceEdit` to apply edits across files.
+//!
+//! # Protocol Compliance
+//!
+//! Implements LSP code action protocol semantics (LSP 3.17+) including
+//! range-based requests, diagnostic filtering, and edit application rules.
 //!
 //! # Performance Characteristics
 //!
@@ -26,6 +36,11 @@
 //!
 //! This module integrates with diagnostics and import optimization modules
 //! for import-related code actions.
+//!
+//! # See also
+//!
+//! - [`DiagnosticsProvider`](crate::ide::lsp_compat::diagnostics::DiagnosticsProvider)
+//! - [`crate::ide::lsp_compat::references`]
 //!
 //! # Usage Examples
 //!

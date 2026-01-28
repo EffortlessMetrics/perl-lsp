@@ -165,25 +165,28 @@ fn file_covers_feature(file: &CorpusFile, feature: &GAFeature) -> bool {
 fn content_matches_nodekind(content: &str, nodekind: &str) -> bool {
     // Simple heuristics for common NodeKinds
     match nodekind {
-        "IfStatement" => content.contains("if ") || content.contains("unless "),
-        "WhileStatement" => content.contains("while "),
-        "ForStatement" => content.contains("for "),
-        "ForeachStatement" => content.contains("foreach "),
-        "SubroutineDeclaration" => content.contains("sub "),
-        "PackageDeclaration" => content.contains("package "),
-        "UseStatement" => content.contains("use "),
+        "If" => content.contains("if ") || content.contains("unless "),
+        "Unless" => content.contains("unless "),
+        "While" => content.contains("while "),
+        "For" => content.contains("for "),
+        "Foreach" => content.contains("foreach "),
+        "Subroutine" => content.contains("sub "),
+        "Package" => content.contains("package "),
+        "Use" => content.contains("use "),
         "Regex" => content.contains("m/") || content.contains("qr/"),
         "Substitution" => content.contains("s/"),
         "Heredoc" => content.contains("<<"),
-        "Hash" => content.contains("%") && content.contains('{'),
-        "Array" => content.contains("@") && content.contains('('),
-        "BuiltinFunction" => {
-            let builtins = ["map ", "grep ", "sort ", "push ", "pop ", "shift "];
+        "HashLiteral" => content.contains("%") && (content.contains('{') || content.contains('(')),
+        "ArrayLiteral" => content.contains("@") && (content.contains('(') || content.contains('[')),
+        "FunctionCall" => {
+            let builtins =
+                ["map ", "grep ", "sort ", "push ", "pop ", "shift ", "print ", "say ", "sprintf "];
             builtins.iter().any(|b| content.contains(b))
         }
-        "MatchStatement" => content.contains("given ") || content.contains("when "),
+        "Given" => content.contains("given "),
+        "When" => content.contains("when "),
+        "Default" => content.contains("default "),
         "Format" => content.contains("format "),
-        "Sprintf" => content.contains("sprintf "),
         _ => false,
     }
 }
@@ -198,32 +201,28 @@ fn define_ga_features() -> Vec<GAFeature> {
             id: "control-flow-if".to_string(),
             name: "If/Unless Statements".to_string(),
             priority: FeaturePriority::P0,
-            expected_nodekinds: vec!["IfStatement".to_string(), "UnlessStatement".to_string()],
+            expected_nodekinds: vec!["If".to_string(), "Unless".to_string()],
             description: "Conditional control flow with if/unless".to_string(),
         },
         GAFeature {
             id: "control-flow-loops".to_string(),
             name: "Loop Statements".to_string(),
             priority: FeaturePriority::P0,
-            expected_nodekinds: vec![
-                "WhileStatement".to_string(),
-                "ForStatement".to_string(),
-                "ForeachStatement".to_string(),
-            ],
+            expected_nodekinds: vec!["While".to_string(), "For".to_string(), "Foreach".to_string()],
             description: "Loop control flow with while/for/foreach".to_string(),
         },
         GAFeature {
             id: "subroutines".to_string(),
             name: "Subroutine Declarations".to_string(),
             priority: FeaturePriority::P0,
-            expected_nodekinds: vec!["SubroutineDeclaration".to_string()],
+            expected_nodekinds: vec!["Subroutine".to_string()],
             description: "Named subroutine declarations".to_string(),
         },
         GAFeature {
             id: "packages".to_string(),
             name: "Package Declarations".to_string(),
             priority: FeaturePriority::P0,
-            expected_nodekinds: vec!["PackageDeclaration".to_string()],
+            expected_nodekinds: vec!["Package".to_string()],
             description: "Package namespace declarations".to_string(),
         },
         GAFeature {
@@ -251,35 +250,39 @@ fn define_ga_features() -> Vec<GAFeature> {
             id: "hashes".to_string(),
             name: "Hash Data Structures".to_string(),
             priority: FeaturePriority::P1,
-            expected_nodekinds: vec!["Hash".to_string()],
+            expected_nodekinds: vec!["HashLiteral".to_string()],
             description: "Associative arrays (hashes)".to_string(),
         },
         GAFeature {
             id: "arrays".to_string(),
             name: "Array Data Structures".to_string(),
             priority: FeaturePriority::P1,
-            expected_nodekinds: vec!["Array".to_string()],
+            expected_nodekinds: vec!["ArrayLiteral".to_string()],
             description: "Indexed arrays".to_string(),
         },
         GAFeature {
             id: "builtin-functions".to_string(),
             name: "Builtin Functions".to_string(),
             priority: FeaturePriority::P0,
-            expected_nodekinds: vec!["BuiltinFunction".to_string()],
+            expected_nodekinds: vec!["FunctionCall".to_string()],
             description: "Common builtin functions (map, grep, sort, etc.)".to_string(),
         },
         GAFeature {
             id: "match-given".to_string(),
             name: "Match/Given Statements".to_string(),
             priority: FeaturePriority::P1,
-            expected_nodekinds: vec!["MatchStatement".to_string()],
+            expected_nodekinds: vec![
+                "Given".to_string(),
+                "When".to_string(),
+                "Default".to_string(),
+            ],
             description: "Pattern matching with match/given/when".to_string(),
         },
         GAFeature {
             id: "format-sprintf".to_string(),
             name: "Format/Sprintf".to_string(),
             priority: FeaturePriority::P2,
-            expected_nodekinds: vec!["Format".to_string(), "Sprintf".to_string()],
+            expected_nodekinds: vec!["Format".to_string(), "FunctionCall".to_string()],
             description: "String formatting functions".to_string(),
         },
     ]
@@ -305,12 +308,12 @@ mod tests {
 
     #[test]
     fn test_content_matches_nodekind() {
-        assert!(content_matches_nodekind("if ($x) { print $x; }", "IfStatement"));
-        assert!(content_matches_nodekind("while (1) { print; }", "WhileStatement"));
-        assert!(content_matches_nodekind("sub foo { print; }", "SubroutineDeclaration"));
-        assert!(content_matches_nodekind("package Foo;", "PackageDeclaration"));
+        assert!(content_matches_nodekind("if ($x) { print $x; }", "If"));
+        assert!(content_matches_nodekind("while (1) { print; }", "While"));
+        assert!(content_matches_nodekind("sub foo { print; }", "Subroutine"));
+        assert!(content_matches_nodekind("package Foo;", "Package"));
         assert!(content_matches_nodekind("m/pattern/", "Regex"));
         assert!(content_matches_nodekind("s/foo/bar/", "Substitution"));
-        assert!(content_matches_nodekind("map { $_ } @list", "BuiltinFunction"));
+        assert!(content_matches_nodekind("map { $_ } @list", "FunctionCall"));
     }
 }

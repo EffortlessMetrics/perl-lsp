@@ -91,6 +91,33 @@ impl<'a> Parser<'a> {
                     let op_token = self.tokens.next()?;
                     let start = op_token.start;
 
+                    // AC1: Disambiguate typeglob (*foo) from multiplication (*)
+                    // If TokenKind is Star and it is followed by an identifier or {
+                    if op_token.kind == TokenKind::Star {
+                        if let Some(next_kind) = self.peek_kind() {
+                            match next_kind {
+                                TokenKind::Identifier => {
+                                    let id_token = self.tokens.next()?;
+                                    let end = id_token.end;
+                                    return Ok(Node::new(
+                                        NodeKind::Typeglob { name: id_token.text.to_string() },
+                                        SourceLocation { start, end },
+                                    ));
+                                }
+                                TokenKind::LeftBrace => {
+                                    // Dynamic typeglob *{$name}
+                                    let brace_expr = self.parse_postfix()?; // This will handle { ... }
+                                    let end = brace_expr.location.end;
+                                    return Ok(Node::new(
+                                        NodeKind::Unary { op: "*".to_string(), operand: Box::new(brace_expr) },
+                                        SourceLocation { start, end },
+                                    ));
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+
                     // Check if we're at EOF or a terminator (for standalone operators)
                     if self.tokens.is_eof() || self.is_at_statement_end() {
                         // Create a placeholder for standalone operator

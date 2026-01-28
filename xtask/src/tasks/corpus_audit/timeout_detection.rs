@@ -294,9 +294,9 @@ fn check_deep_nesting(lines: &[&str], path: &Path) -> Vec<TimeoutRisk> {
         depth += trimmed.matches('[').count();
 
         // Count closing braces/brackets
-        depth -= trimmed.matches('}').count();
-        depth -= trimmed.matches(')').count();
-        depth -= trimmed.matches(']').count();
+        depth = depth.saturating_sub(trimmed.matches('}').count());
+        depth = depth.saturating_sub(trimmed.matches(')').count());
+        depth = depth.saturating_sub(trimmed.matches(']').count());
 
         max_depth = max_depth.max(depth);
 

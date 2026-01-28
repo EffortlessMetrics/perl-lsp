@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use perl_parser::position::{WirePosition as Position, PositionMapper, apply_edit_utf8};
+    use perl_parser::position::{PositionMapper, WirePosition as Position, apply_edit_utf8};
     use std::time::Instant;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -68,7 +68,8 @@ mod tests {
         };
 
         // Get byte offset
-        let byte_offset = mapper.lsp_pos_to_byte(pos_after_emoji).ok_or("invalid emoji position")?;
+        let byte_offset =
+            mapper.lsp_pos_to_byte(pos_after_emoji).ok_or("invalid emoji position")?;
 
         // The emoji starts at byte 4 ("let ") and is 4 bytes long
         assert_eq!(byte_offset, 8, "Should be at byte 8 after 4-byte emoji");

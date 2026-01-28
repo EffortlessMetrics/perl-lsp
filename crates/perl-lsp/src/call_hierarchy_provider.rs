@@ -1,5 +1,5 @@
-use perl_parser::ast::{Node, NodeKind};
 use perl_parser::PositionMapper;
+use perl_parser::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition, WireRange};
 use serde_json::{Value, json};
 

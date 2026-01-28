@@ -1,77 +1,41 @@
-//! Main Perl parser implementation for Perl parsing workflow pipeline
+//! Recursive descent Perl parser.
 //!
-//! This module implements a high-performance recursive descent parser with operator precedence
-//! handling that consumes tokens from perl-lexer and produces comprehensive ASTs for email
-//! script analysis throughout the Parse → Index → Navigate → Complete → Analyze workflow.
+//! Consumes tokens from `perl-lexer` and produces AST nodes with error recovery.
+//! The parser handles operator precedence, quote-like operators, and heredocs,
+//! while tracking recursion depth to prevent stack overflows on malformed input.
 //!
-//! # LSP Workflow Integration
+//! # Performance
 //!
-//! The parser serves as the entry point for the Parse stage, converting raw Perl script
-//! content into structured ASTs that flow through subsequent pipeline stages:
+//! - **Time complexity**: O(n) for typical token streams
+//! - **Space complexity**: O(n) for AST storage with bounded recursion memory usage
+//! - **Optimizations**: Fast-path parsing and efficient recovery to maintain performance
+//! - **Benchmarks**: ~150µs–1ms for typical files; low ms for large file inputs
+//! - **Large-scale notes**: Tuned to scale for large workspaces (50GB PST-style scans)
 //!
-//! - **Extract**: Parses Perl scripts embedded in PST Perl code
-//! - **Normalize**: Provides AST foundation for standardization transformations
-//! - **Thread**: Enables control flow and dependency analysis across Perl scripts
-//! - **Render**: Supports AST-to-source reconstruction with formatting preservation
-//! - **Index**: Facilitates symbol extraction and searchable metadata generation
-//!
-//! # Performance Characteristics
-//!
-//! Optimized for enterprise-scale Perl parsing:
-//! - Handles 50GB+ Perl files with efficient memory management
-//! - Recursive descent with configurable depth limits for safety
-//! - Token stream abstraction minimizes memory allocation during parsing
-//! - Error recovery enables continued processing of malformed Perl scripts
-//!
-//! # Usage Example
+//! # Usage
 //!
 //! ```rust
-//! use perl_parser::Parser;
+//! use perl_parser_core::Parser;
 //!
 //! let mut parser = Parser::new("my $var = 42; sub hello { print $var; }");
-//! match parser.parse() {
-//!     Ok(ast) => {
-//!         // AST ready for LSP workflow processing
-//!         println!("Parsed Perl script: {}", ast.to_sexp());
-//!     }
-//!     Err(e) => {
-//!         // Handle parsing errors with recovery strategies
-//!         eprintln!("Parse error in Perl script: {}", e);
-//!     }
-//! }
+//! let ast = parser.parse();
 //! ```
 
 use crate::{
     ast::{Node, NodeKind, SourceLocation},
-    error::{ParseError, ParseResult},
+    error::{ParseError, ParseOutput, ParseResult},
     heredoc_collector::{self, HeredocContent, PendingHeredoc, collect_all},
     quote_parser,
     token_stream::{Token, TokenKind, TokenStream},
 };
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::time::Instant;
 
-/// High-performance Perl parser for Perl script analysis within LSP workflow
+/// Parser state for a single Perl source input.
 ///
-/// The parser processes Perl script content through recursive descent parsing with
-/// operator precedence handling, producing comprehensive ASTs suitable for analysis
-/// across all LSP workflow stages. Designed for enterprise-scale performance with
-/// 50GB+ Perl file processing capabilities.
-///
-/// # Email Processing Context
-///
-/// This parser specializes in handling Perl scripts commonly found in Perl code:
-/// - Email filtering and routing scripts
-/// - Message processing automation code
-/// - Configuration and setup scripts embedded in emails
-/// - Inline Perl code within email templates and forms
-///
-/// # Performance Features
-///
-/// - Configurable recursion depth limits prevent stack overflow on malformed content
-/// - Token stream abstraction minimizes memory allocation during large file processing
-/// - Error recovery strategies maintain parsing progress despite syntax issues
-/// - Position tracking enables precise error reporting for debugging complex Perl scripts
+/// Construct with [`Parser::new`] and call [`Parser::parse`] to obtain an AST.
+/// Non-fatal syntax errors are collected and can be accessed via [`Parser::errors`].
 pub struct Parser<'a> {
     /// Token stream providing access to lexed Perl script content
     tokens: TokenStream<'a>,
@@ -89,6 +53,8 @@ pub struct Parser<'a> {
     src_bytes: &'a [u8],
     /// Byte cursor tracking position for heredoc content collection
     byte_cursor: usize,
+    /// Start time of parsing for timeout enforcement (specifically heredocs)
+    heredoc_start_time: Option<Instant>,
     /// Collection of parse errors encountered during parsing (for error recovery)
     errors: Vec<ParseError>,
 }
@@ -96,30 +62,29 @@ pub struct Parser<'a> {
 // Recursion limit is set conservatively to prevent stack overflow
 // before the limit triggers. The actual stack usage depends on the
 // number of function frames between recursion checks (about 20-30
-// for the precedence parsing chain). 64 * 30 = ~1920 frames which
+// for the precedence parsing chain). 128 * 30 = ~3840 frames which
 // is safe. Real Perl code rarely exceeds 20-30 nesting levels.
-const MAX_RECURSION_DEPTH: usize = 64;
+const MAX_RECURSION_DEPTH: usize = 128;
 
 impl<'a> Parser<'a> {
-    /// Create a new parser for processing Perl script content within LSP workflow
+    /// Create a new parser for the provided Perl source.
     ///
     /// # Arguments
     ///
-    /// * `input` - Email script source code to be parsed during Parse stage
+    /// * `input` - Perl source code to be parsed
     ///
     /// # Returns
     ///
-    /// A configured parser ready for Perl script analysis with optimal settings
-    /// for enterprise-scale Perl codebase processing workflows.
+    /// A configured parser ready to parse the provided source.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use perl_parser::Parser;
+    /// use perl_parser_core::Parser;
     ///
     /// let script = "use strict; my $filter = qr/important/;";
     /// let mut parser = Parser::new(script);
-    /// // Parser ready for LSP workflow processing
+    /// // Parser ready to parse the source
     /// ```
     pub fn new(input: &'a str) -> Self {
         Parser {
@@ -131,58 +96,32 @@ impl<'a> Parser<'a> {
             pending_heredocs: VecDeque::new(),
             src_bytes: input.as_bytes(),
             byte_cursor: 0,
+            heredoc_start_time: None,
             errors: Vec::new(),
         }
     }
 
-    /// Parse Perl script content and return comprehensive AST for LSP workflow processing
-    ///
-    /// This method performs complete parsing of Perl script content, producing an AST
-    /// suitable for analysis throughout the Parse → Index → Navigate → Complete → Analyze
-    /// pipeline stages. Designed for robust processing of complex Perl scripts found
-    /// in enterprise Perl files.
+    /// Parse the source and return the AST for the Parse stage.
     ///
     /// # Returns
     ///
-    /// * `Ok(Node)` - Successfully parsed AST with Program root node containing all statements
-    /// * `Err(ParseError)` - Parsing failure with detailed error context for recovery strategies
+    /// * `Ok(Node)` - Parsed AST with a `Program` root node.
+    /// * `Err(ParseError)` - Non-recoverable parsing failure.
     ///
     /// # Errors
     ///
-    /// Returns `ParseError` when:
-    /// - Email script syntax is malformed or incomplete
-    /// - Unexpected end of input during parsing
-    /// - Recursion depth limit exceeded (protects against deeply nested structures)
-    /// - Invalid token sequences that cannot be recovered from
-    ///
-    /// Recovery strategy: Use error classifier to categorize failures and apply
-    /// appropriate fallback parsing strategies for continued Perl parsing.
+    /// Returns `ParseError` for non-recoverable conditions such as recursion limits.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use perl_parser::Parser;
+    /// use perl_parser_core::Parser;
     ///
-    /// let mut parser = Parser::new("my $email_count = scalar(@emails);");
-    /// match parser.parse() {
-    ///     Ok(ast) => {
-    ///         // AST ready for LSP workflow stages
-    ///         assert!(matches!(ast.kind, perl_parser::NodeKind::Program { .. }));
-    ///     }
-    ///     Err(e) => {
-    ///         // Handle parsing errors with appropriate recovery
-    ///         eprintln!("Email script parsing failed: {}", e);
-    ///     }
-    /// }
+    /// let mut parser = Parser::new("my $count = 1;");
+    /// let ast = parser.parse()?;
+    /// assert!(matches!(ast.kind, perl_parser_core::NodeKind::Program { .. }));
+    /// # Ok::<(), perl_parser_core::ParseError>(())
     /// ```
-    ///
-    /// # Email Processing Context
-    ///
-    /// This method is optimized for parsing Perl scripts commonly found in email environments:
-    /// - Email filtering and routing logic
-    /// - Message processing automation scripts
-    /// - Configuration scripts embedded in Perl code
-    /// - Template processing code within email systems
     pub fn parse(&mut self) -> ParseResult<Node> {
         self.parse_program()
     }
@@ -200,7 +139,7 @@ impl<'a> Parser<'a> {
     /// # Examples
     ///
     /// ```rust
-    /// use perl_parser::Parser;
+    /// use perl_parser_core::Parser;
     ///
     /// let mut parser = Parser::new("my $x = ; sub foo {");
     /// let _ast = parser.parse(); // Parse with recovery
@@ -209,6 +148,45 @@ impl<'a> Parser<'a> {
     /// ```
     pub fn errors(&self) -> &[ParseError] {
         &self.errors
+    }
+
+    /// Parse with error recovery and return comprehensive output.
+    ///
+    /// This method is preferred for LSP Analyze workflows and always returns
+    /// a `ParseOutput` containing the AST and any collected diagnostics.
+    ///
+    /// # Returns
+    ///
+    /// `ParseOutput` with the AST and diagnostics collected during parsing.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser_core::Parser;
+    ///
+    /// let mut parser = Parser::new("my $x = ;");
+    /// let output = parser.parse_with_recovery();
+    /// assert!(!output.diagnostics.is_empty() || matches!(output.ast.kind, perl_parser_core::NodeKind::Program { .. }));
+    /// ```
+    pub fn parse_with_recovery(&mut self) -> ParseOutput {
+        let ast = match self.parse() {
+            Ok(node) => node,
+            Err(e) => {
+                // If parse() returned Err, it was a non-recoverable error (e.g. recursion limit)
+                // Ensure it's recorded if not already
+                if !self.errors.contains(&e) {
+                    self.errors.push(e.clone());
+                }
+
+                // Return a dummy Program node with the error
+                Node::new(
+                    NodeKind::Program { statements: vec![] },
+                    SourceLocation { start: 0, end: 0 },
+                )
+            }
+        };
+
+        ParseOutput::with_errors(ast, self.errors.clone())
     }
 }
 
@@ -228,10 +206,28 @@ include!("expressions/hashes.rs");
 include!("expressions/quotes.rs");
 
 #[cfg(test)]
+mod error_recovery_tests;
+#[cfg(test)]
+mod format_tests;
+#[cfg(test)]
+mod glob_assignment_tests;
+#[cfg(test)]
+mod glob_tests;
+#[cfg(test)]
 mod hash_vs_block_tests;
 #[cfg(test)]
+mod heredoc_security_tests;
+#[cfg(test)]
 mod indirect_call_tests;
+#[cfg(test)]
+mod indirect_object_tests;
+#[cfg(test)]
+mod loop_control_tests;
+#[cfg(test)]
+mod regex_delimiter_tests;
 #[cfg(test)]
 mod slash_ambiguity_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tie_tests;

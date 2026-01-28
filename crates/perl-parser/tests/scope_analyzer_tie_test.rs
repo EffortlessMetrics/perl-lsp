@@ -62,10 +62,14 @@ use strict;
 my $x = 10;
 tie my $y, 'Some::Package', $x;
 "#;
-    
+
     let issues = analyze_code(code);
     // $x is used in tie args, so it shouldn't be unused
-    assert!(!issues.iter().any(|i| matches!(i.kind, IssueKind::UnusedVariable) && i.variable_name == "$x"));
+    assert!(
+        !issues
+            .iter()
+            .any(|i| matches!(i.kind, IssueKind::UnusedVariable) && i.variable_name == "$x")
+    );
 }
 
 #[test]

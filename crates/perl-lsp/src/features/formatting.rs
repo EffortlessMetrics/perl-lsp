@@ -1,22 +1,22 @@
-//! Code formatting support using Perl::Tidy for Perl parsing workflow pipeline
+//! Code formatting support using Perl::Tidy for LSP workflows
 //!
 //! This module provides integration with perltidy for code formatting of Perl scripts
 //! throughout the LSP workflow, ensuring consistent code style and readability for
-//! large-scale Perl parsing operations.
+//! large-scale Perl development operations.
 //!
 //! # LSP Workflow Integration
 //!
 //! Formatting operations are integrated across LSP workflow stages:
-//! - **Extract**: Format Perl scripts during initial processing for consistency
-//! - **Normalize**: Apply standardized formatting rules to Perl parsing code
-//! - **Thread**: Maintain readable formatting during control flow analysis
-//! - **Render**: Ensure consistent output formatting for processed Perl scripts
-//! - **Index**: Generate consistently formatted code for indexing and search
+//! - **Parse**: Preserve syntax invariants while applying formatting rules
+//! - **Index**: Keep symbol offsets stable by producing consistent text
+//! - **Navigate**: Improve readability for definition and reference previews
+//! - **Complete**: Support on-type formatting and snippet insertion consistency
+//! - **Analyze**: Provide stable inputs for diagnostics and refactoring
 //!
 //! # Performance Characteristics
 //!
 //! Optimized for enterprise-scale Perl script formatting:
-//! - **large Perl codebase Support**: Efficient handling of large Perl script collections
+//! - **Large Codebase Support**: Efficient handling of large Perl script collections
 //! - **Incremental Formatting**: Format only changed code sections for performance
 //! - **Graceful Degradation**: Continues operation even when perltidy is unavailable
 //! - **Memory Efficient**: Streams large files to minimize memory usage during formatting
@@ -27,8 +27,8 @@
 //! use perl_parser::perltidy::{PerlTidyFormatter, PerlTidyConfig};
 //! use perl_parser::formatting::FormattingOptions;
 //!
-//! // Format Perl parsing script with standard options
-//! let script = "sub process_email{my$msg=shift;return$msg;}";
+//! // Format Perl script with standard options
+//! let script = "sub process_record { my $msg = shift; return $msg; }";
 //! let _options = FormattingOptions {
 //!     tab_size: 4,
 //!     insert_spaces: true,
@@ -97,8 +97,7 @@ impl CodeFormatter {
     /// Create a new code formatter for Perl script processing
     ///
     /// Constructs a formatter instance capable of formatting Perl Perl scripts
-    /// according to best practices and coding standards within LSP workflow
-    /// development workflows.
+    /// according to best practices and coding standards within LSP workflows.
     ///
     /// # Returns
     ///
@@ -125,7 +124,7 @@ impl CodeFormatter {
     ///
     /// # Arguments
     ///
-    /// * `content` - Email script source code to format
+    /// * `content` - Perl source code to format
     /// * `options` - Formatting configuration including indentation and style preferences
     ///
     /// # Returns
@@ -139,7 +138,7 @@ impl CodeFormatter {
     /// use perl_parser::{CodeFormatter, FormattingOptions};
     ///
     /// let formatter = CodeFormatter::new();
-    /// let script = "my$email_count=scalar(@emails);print$email_count;";
+    /// let script = "my $item_count = scalar(@items); print $item_count;";
     /// let options = FormattingOptions {
     ///     tab_size: 4,
     ///     insert_spaces: true,

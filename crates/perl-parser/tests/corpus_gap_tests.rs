@@ -1,14 +1,14 @@
 // Test harness for corpus gap coverage
 // These tests ensure the parser handles real-world Perl features missing from original corpus
 
+use perl_parser::Parser;
 use std::fs;
 use std::path::Path;
-use perl_parser::Parser;
 
 #[cfg(test)]
 mod corpus_gap_tests {
     use super::*;
-    
+
     // Helper to test a corpus file doesn't crash the parser
     fn test_corpus_file(filename: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut path = Path::new("test_corpus").join(filename);
@@ -17,10 +17,10 @@ mod corpus_gap_tests {
             path = Path::new("../../test_corpus").join(filename);
         }
         let content = fs::read_to_string(&path)?;
-        
+
         let mut parser = Parser::new(&content);
         let result = parser.parse();
-        
+
         assert!(result.is_ok(), "Failed to parse {}: {:?}", filename, result.err());
         Ok(())
     }
@@ -84,28 +84,34 @@ mod corpus_gap_tests {
     #[test]
     fn test_arbitrary_delimiters() {
         let delimiters = vec![
-            ('!', '!'), ('{', '}'), ('[', ']'), 
-            ('(', ')'), ('<', '>'), ('|', '|'),
-            ('#', '#'), ('/', '/'), ('@', '@'),
+            ('!', '!'),
+            ('{', '}'),
+            ('[', ']'),
+            ('(', ')'),
+            ('<', '>'),
+            ('|', '|'),
+            ('#', '#'),
+            ('/', '/'),
+            ('@', '@'),
         ];
-        
+
         for (open, close) in delimiters {
-            let code = format!("m{open}pattern{close}", open=open, close=close);
+            let code = format!("m{open}pattern{close}", open = open, close = close);
             let mut parser = Parser::new(&code);
             let result = parser.parse();
             assert!(result.is_ok(), "Failed to parse m{}{}", open, close);
         }
     }
-    
+
     // Benchmark corpus files (optional, run with --release)
     #[test]
     #[ignore] // Run with: cargo test --ignored --release
     fn bench_corpus_files() {
         use std::time::Instant;
-        
+
         let files = vec![
             "source_filters.pl",
-            "xs_inline_ffi.pl", 
+            "xs_inline_ffi.pl",
             "modern_perl_features.pl",
             "advanced_regex.pl",
             "data_end_sections.pl",
@@ -116,21 +122,21 @@ mod corpus_gap_tests {
             "glob_expressions.pl",
             "tie_interface.pl",
         ];
-        
+
         for file in files {
             let path = Path::new("test_corpus").join(file);
             let content = match fs::read_to_string(&path) {
                 Ok(c) => c,
                 Err(e) => panic!("Failed to read file {}: {}", file, e),
             };
-            
+
             let start = Instant::now();
             for _ in 0..100 {
                 let mut parser = Parser::new(&content);
                 let _ = parser.parse();
             }
             let duration = start.elapsed();
-            
+
             println!("{}: {:?} per parse", file, duration / 100);
         }
     }

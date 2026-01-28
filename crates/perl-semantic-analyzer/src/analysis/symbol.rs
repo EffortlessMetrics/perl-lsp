@@ -8,6 +8,18 @@
 //!
 //! See also [`crate::workspace_index`] for workspace-wide indexing and
 //! cross-file reference resolution.
+//!
+//! # Usage Examples
+//!
+//! ```no_run
+//! use perl_semantic_analyzer::{Parser, symbol::SymbolExtractor};
+//!
+//! let mut parser = Parser::new("sub hello { my $x = 1; }");
+//! let ast = parser.parse().expect("parse");
+//! let extractor = SymbolExtractor::new();
+//! let table = extractor.extract(&ast);
+//! assert!(table.symbols.contains_key("hello"));
+//! ```
 
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
@@ -15,9 +27,11 @@ use regex::Regex;
 use std::collections::{HashMap, HashSet};
 
 // Re-export the unified symbol types from perl-symbol-types
+/// Symbol kind enums used during Index/Analyze workflows.
 pub use perl_symbol_types::{SymbolKind, VarKind};
 
-/// A symbol definition in Perl code with comprehensive metadata.
+#[derive(Debug, Clone)]
+/// A symbol definition in Perl code with comprehensive metadata for Index/Navigate workflows.
 ///
 /// Represents a symbol definition with full context including scope,
 /// package qualification, and documentation for LSP features like
@@ -33,7 +47,6 @@ pub use perl_symbol_types::{SymbolKind, VarKind};
 /// - Scope rules: Lexical (`my`), package (`our`), dynamic (`local`), persistent (`state`)
 /// - Symbol types: Variables (`$`, `@`, `%`), subroutines, packages, constants
 /// - Attribute parsing: `:shared`, `:method`, `:lvalue` and custom attributes
-#[derive(Debug, Clone)]
 pub struct Symbol {
     /// Symbol name (without sigil for variables)
     pub name: String,
@@ -53,7 +66,8 @@ pub struct Symbol {
     pub attributes: Vec<String>,
 }
 
-/// A reference to a symbol with usage context for LSP analysis.
+#[derive(Debug, Clone)]
+/// A reference to a symbol with usage context for Navigate/Analyze workflows.
 ///
 /// Tracks symbol usage sites for features like find-all-references,
 /// rename refactoring, and unused symbol detection with precise
@@ -70,7 +84,6 @@ pub struct Symbol {
 /// - Rename refactoring: Update all references atomically
 /// - Unused detection: Identify unreferenced symbols
 /// - Call hierarchy: Build caller/callee relationships
-#[derive(Debug, Clone)]
 pub struct SymbolReference {
     /// Symbol name (without sigil for variables)
     pub name: String,
@@ -84,10 +97,11 @@ pub struct SymbolReference {
     pub is_write: bool,
 }
 
-/// Unique identifier for a scope
+/// Unique identifier for a scope used during Index/Analyze workflows.
 pub type ScopeId = usize;
 
-/// A lexical scope in Perl code with hierarchical symbol visibility.
+#[derive(Debug, Clone)]
+/// A lexical scope in Perl code with hierarchical symbol visibility for Parse/Analyze stages.
 ///
 /// Represents a lexical scope boundary (subroutine, block, package) with
 /// symbol visibility rules according to Perl's lexical scoping semantics.
@@ -103,7 +117,8 @@ pub type ScopeId = usize;
 /// - Subroutine scope: Local variables and parameters
 /// - Block scope: Lexical variables in control structures
 /// - Lexical precedence: Inner scopes shadow outer scopes
-#[derive(Debug, Clone)]
+///
+/// Workflow: Parse/Analyze scope tracking for symbol resolution.
 pub struct Scope {
     /// Unique scope identifier for reference tracking
     pub id: ScopeId,
@@ -117,7 +132,8 @@ pub struct Scope {
     pub symbols: HashSet<String>,
 }
 
-/// Classification of lexical scope types in Perl.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Classification of lexical scope types in Perl for Parse/Analyze workflows.
 ///
 /// Defines different scope boundaries with specific symbol visibility
 /// and resolution rules according to Perl language semantics.
@@ -128,7 +144,8 @@ pub struct Scope {
 /// - Subroutine: Function parameters and local variables
 /// - Block: Control structure lexical variables
 /// - Eval: Dynamic evaluation context
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Workflow: Parse/Analyze scope classification.
 pub enum ScopeKind {
     /// Global/file scope
     Global,
@@ -142,7 +159,8 @@ pub enum ScopeKind {
     Eval,
 }
 
-/// Comprehensive symbol table for Perl code analysis and LSP features.
+#[derive(Debug, Default)]
+/// Comprehensive symbol table for Perl code analysis and LSP features in Index/Analyze stages.
 ///
 /// Central data structure containing all symbols, references, and scopes
 /// with efficient indexing for LSP operations like go-to-definition,
@@ -167,7 +185,6 @@ pub enum ScopeKind {
 /// - Lexical scoping: `my`, `our`, `local`, `state` variable semantics
 /// - Symbol overloading: Multiple definitions with scope precedence
 /// - Context sensitivity: Scalar/array/hash context resolution
-#[derive(Debug, Default)]
 pub struct SymbolTable {
     /// Symbols indexed by name with multiple definitions support
     pub symbols: HashMap<String, Vec<Symbol>>,
@@ -184,7 +201,7 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
-    /// Create a new symbol table
+    /// Create a new symbol table for Index/Analyze workflows.
     pub fn new() -> Self {
         let mut table = SymbolTable {
             symbols: HashMap::new(),
@@ -249,7 +266,7 @@ impl SymbolTable {
         self.references.entry(name).or_default().push(reference);
     }
 
-    /// Find symbol definitions visible from a given scope
+    /// Find symbol definitions visible from a given scope for Navigate/Analyze workflows.
     pub fn find_symbol(&self, name: &str, from_scope: ScopeId, kind: SymbolKind) -> Vec<&Symbol> {
         let mut results = Vec::new();
         let mut current_scope_id = Some(from_scope);
@@ -288,7 +305,7 @@ impl SymbolTable {
         results
     }
 
-    /// Get all references to a symbol
+    /// Get all references to a symbol for Navigate/Analyze workflows.
     pub fn find_references(&self, symbol: &Symbol) -> Vec<&SymbolReference> {
         self.references
             .get(&symbol.name)
@@ -297,7 +314,7 @@ impl SymbolTable {
     }
 }
 
-/// Extract symbols from an AST
+/// Extract symbols from an AST for Parse/Index workflows.
 pub struct SymbolExtractor {
     table: SymbolTable,
     /// Source code for comment extraction
@@ -311,17 +328,21 @@ impl Default for SymbolExtractor {
 }
 
 impl SymbolExtractor {
-    /// Create a new symbol extractor without source (no documentation extraction)
+    /// Create a new symbol extractor without source (no documentation extraction).
+    ///
+    /// Used during Parse/Index stages when only symbols are required.
     pub fn new() -> Self {
         SymbolExtractor { table: SymbolTable::new(), source: String::new() }
     }
 
-    /// Create a symbol extractor with source text for documentation extraction
+    /// Create a symbol extractor with source text for documentation extraction.
+    ///
+    /// Used during Parse/Analyze stages to attach documentation metadata.
     pub fn new_with_source(source: &str) -> Self {
         SymbolExtractor { table: SymbolTable::new(), source: source.to_string() }
     }
 
-    /// Extract symbols from an AST node
+    /// Extract symbols from an AST node for Index/Analyze workflows.
     pub fn extract(mut self, node: &Node) -> SymbolTable {
         self.visit_node(node);
         self.table

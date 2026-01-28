@@ -4,8 +4,8 @@
 //! in the AST, which is essential for code formatting and refactoring tools.
 
 use perl_ast::v2::{Node, NodeKind};
-use perl_position_tracking::Range;
 use perl_lexer::TokenType;
+use perl_position_tracking::Range;
 
 /// Trivia represents non-semantic tokens like comments and whitespace
 #[derive(Debug, Clone, PartialEq)]
@@ -309,7 +309,7 @@ impl TriviaPreservingParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     fn must_some<T>(opt: Option<T>) -> T {
         opt.expect("Expected Some, got None")
     }

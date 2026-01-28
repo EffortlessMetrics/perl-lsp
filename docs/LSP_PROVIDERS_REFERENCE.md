@@ -3,7 +3,7 @@
 
 **Reference Documentation** - Complete technical specifications for Perl LSP providers
 
-This document provides comprehensive API reference for the seven LSP provider modules that deliver enhanced editor integration features for Perl development. Each provider integrates with the PSTX workflow pipeline (Parse → Index → Navigate → Complete → Analyze) to provide specialized functionality.
+This document provides comprehensive API reference for the seven LSP provider modules that deliver enhanced editor integration features for Perl development. Each provider integrates with the Parse → Index → Navigate → Complete → Analyze workflow to provide specialized functionality.
 
 ## Table of Contents
 

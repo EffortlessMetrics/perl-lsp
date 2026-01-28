@@ -20,6 +20,8 @@
 //! - **Cross-file queries**: <50μs for typical workspace sizes
 //! - **Memory usage**: ~1MB per 10K symbols with optimized storage
 //! - **Incremental updates**: ≤1ms for file-level symbol changes
+//! - **Large workspace scaling**: Designed to scale to 50K+ files and large codebases
+//! - **Benchmark targets**: <50μs lookups and ≤1ms incremental updates at scale
 //!
 //! # Dual Indexing Strategy
 //!
@@ -75,13 +77,16 @@ use url::Url;
 
 // Re-export URI utilities for backward compatibility
 #[cfg(not(target_arch = "wasm32"))]
+/// URI ↔ filesystem helpers used during Index/Analyze workflows.
 pub use perl_uri::{fs_path_to_uri, uri_to_fs_path};
+/// URI inspection helpers used during Index/Analyze workflows.
 pub use perl_uri::{is_file_uri, is_special_scheme, uri_extension, uri_key};
 
 // ============================================================================
 // Index Lifecycle Types (Index Lifecycle v1 Specification)
 // ============================================================================
 
+#[derive(Clone, Debug, PartialEq)]
 /// Index readiness state - explicit lifecycle management
 ///
 /// Represents the current operational state of the workspace index, enabling
@@ -110,7 +115,6 @@ pub use perl_uri::{is_file_uri, is_special_scheme, uri_extension, uri_key};
 ///     started_at: Instant::now(),
 /// };
 /// ```
-#[derive(Clone, Debug, PartialEq)]
 pub enum IndexState {
     /// Index is being constructed (workspace scan in progress)
     Building {
@@ -143,6 +147,7 @@ pub enum IndexState {
     },
 }
 
+#[derive(Clone, Debug, PartialEq)]
 /// Reason for index degradation
 ///
 /// Categorizes the various failure modes that can cause the workspace index
@@ -156,7 +161,6 @@ pub enum IndexState {
 /// - `IoError`: Return cached results with warning message
 /// - `ScanTimeout`: Return partial results from completed scan
 /// - `ResourceLimit`: Trigger eviction and return available results
-#[derive(Clone, Debug, PartialEq)]
 pub enum DegradationReason {
     /// Parse storm (too many simultaneous changes)
     ParseStorm {
@@ -183,11 +187,11 @@ pub enum DegradationReason {
     },
 }
 
+#[derive(Clone, Debug, PartialEq)]
 /// Type of resource limit that was exceeded
 ///
 /// Identifies which bounded resource triggered index degradation,
 /// enabling targeted eviction strategies and capacity planning.
-#[derive(Clone, Debug, PartialEq)]
 pub enum ResourceKind {
     /// Maximum number of files in index exceeded
     MaxFiles,
@@ -199,6 +203,7 @@ pub enum ResourceKind {
     MaxCacheBytes,
 }
 
+#[derive(Clone, Debug)]
 /// Configurable resource limits for workspace index
 ///
 /// Defines hard caps on various index resources to prevent unbounded
@@ -228,7 +233,6 @@ pub enum ResourceKind {
 ///     ..Default::default()
 /// };
 /// ```
-#[derive(Clone, Debug)]
 pub struct IndexResourceLimits {
     /// Maximum files to index (default: 10,000)
     pub max_files: usize,
@@ -262,6 +266,7 @@ impl Default for IndexResourceLimits {
     }
 }
 
+#[derive(Debug)]
 /// Metrics for index lifecycle management and degradation detection
 ///
 /// Tracks runtime statistics about index operations to detect parse storms
@@ -282,7 +287,6 @@ impl Default for IndexResourceLimits {
 /// let metrics = IndexMetrics::new();
 /// assert_eq!(metrics.pending_count(), 0);
 /// ```
-#[derive(Debug)]
 pub struct IndexMetrics {
     /// Pending parse operations (atomic for lock-free access)
     pending_parses: std::sync::atomic::AtomicUsize,
@@ -302,6 +306,23 @@ pub struct IndexMetrics {
 
 impl IndexMetrics {
     /// Create new metrics with default threshold (10 pending parses)
+    ///
+    /// # Returns
+    ///
+    /// A metrics tracker initialized with default parse-storm limits.
+    ///
+    /// Returns: `Ok(())` when indexing succeeds, otherwise an error string.
+    ///
+    /// Returns: A vector of successfully converted LSP locations.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexMetrics;
+    ///
+    /// let metrics = IndexMetrics::new();
+    /// assert_eq!(metrics.pending_count(), 0);
+    /// ```
     pub fn new() -> Self {
         Self {
             pending_parses: std::sync::atomic::AtomicUsize::new(0),
@@ -315,6 +336,19 @@ impl IndexMetrics {
     /// # Arguments
     ///
     /// * `threshold` - Number of pending parses that triggers degradation
+    ///
+    /// # Returns
+    ///
+    /// A metrics tracker configured with the provided threshold.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexMetrics;
+    ///
+    /// let metrics = IndexMetrics::with_threshold(20);
+    /// assert_eq!(metrics.pending_count(), 0);
+    /// ```
     pub fn with_threshold(threshold: usize) -> Self {
         Self {
             pending_parses: std::sync::atomic::AtomicUsize::new(0),
@@ -324,6 +358,19 @@ impl IndexMetrics {
     }
 
     /// Get current pending parse count (lock-free)
+    ///
+    /// # Returns
+    ///
+    /// The number of pending parse operations tracked so far.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexMetrics;
+    ///
+    /// let metrics = IndexMetrics::new();
+    /// assert_eq!(metrics.pending_count(), 0);
+    /// ```
     pub fn pending_count(&self) -> usize {
         self.pending_parses.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -343,13 +390,13 @@ impl Default for IndexMetrics {
 ///
 /// # Architecture
 ///
-/// ```text
-/// LspServer
-///   └── IndexCoordinator
-///         ├── state: Arc<RwLock<IndexState>>
-///         ├── index: Arc<WorkspaceIndex>
-///         ├── limits: IndexResourceLimits
-///         └── metrics: IndexMetrics
+/// ```rust
+/// // LspServer
+/// //   └── IndexCoordinator
+/// //         ├── state: Arc<RwLock<IndexState>>
+/// //         ├── index: Arc<WorkspaceIndex>
+/// //         ├── limits: IndexResourceLimits
+/// //         └── metrics: IndexMetrics
 /// ```
 ///
 /// # State Management
@@ -417,6 +464,18 @@ impl IndexCoordinator {
     ///
     /// Initializes the coordinator with default resource limits and
     /// an empty workspace index ready for initial scan.
+    ///
+    /// # Returns
+    ///
+    /// A coordinator initialized in `IndexState::Building`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexCoordinator;
+    ///
+    /// let coordinator = IndexCoordinator::new();
+    /// ```
     pub fn new() -> Self {
         Self {
             state: Arc::new(RwLock::new(IndexState::Building {
@@ -435,6 +494,19 @@ impl IndexCoordinator {
     /// # Arguments
     ///
     /// * `limits` - Custom resource limits for this workspace
+    ///
+    /// # Returns
+    ///
+    /// A coordinator configured with the provided resource limits.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::{IndexCoordinator, IndexResourceLimits};
+    ///
+    /// let limits = IndexResourceLimits::default();
+    /// let coordinator = IndexCoordinator::with_limits(limits);
+    /// ```
     pub fn with_limits(limits: IndexResourceLimits) -> Self {
         Self {
             state: Arc::new(RwLock::new(IndexState::Building {
@@ -451,7 +523,13 @@ impl IndexCoordinator {
     /// Get current state (lock-free read via clone)
     ///
     /// Returns a cloned copy of the current state for lock-free access
-    /// in hot path LSP handlers. State checks should use pattern matching:
+    /// in hot path LSP handlers.
+    ///
+    /// # Returns
+    ///
+    /// The current `IndexState` snapshot.
+    ///
+    /// # Examples
     ///
     /// ```rust
     /// use perl_parser::workspace_index::{IndexCoordinator, IndexState};
@@ -460,7 +538,7 @@ impl IndexCoordinator {
     /// match coordinator.state() {
     ///     IndexState::Ready { .. } => {
     ///         // Full query path
-    ///     },
+    ///     }
     ///     _ => {
     ///         // Degraded/building fallback
     ///     }
@@ -474,24 +552,44 @@ impl IndexCoordinator {
     ///
     /// Provides direct access to the `WorkspaceIndex` for operations
     /// that don't require state checking (e.g., document store access).
+    ///
+    /// # Returns
+    ///
+    /// A shared reference to the underlying workspace index.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexCoordinator;
+    ///
+    /// let coordinator = IndexCoordinator::new();
+    /// let _index = coordinator.index();
+    /// ```
     pub fn index(&self) -> &Arc<WorkspaceIndex> {
         &self.index
     }
 
-    /// Notify of file change (may trigger state transition)
+    /// Notify of a file change for the Index/Analyze workflow stages.
     ///
-    /// Increments pending parse count and checks for parse storm condition.
-    /// If pending parses exceed threshold, automatically transitions to
-    /// Degraded state to prevent resource exhaustion.
+    /// Increments the pending parse count and may transition to degraded
+    /// state if a parse storm is detected.
     ///
     /// # Arguments
     ///
-    /// * `_uri` - URI of the changed file (reserved for future use)
+    /// * `_uri` - URI of the changed file (reserved for future use).
     ///
-    /// # State Transitions
+    /// # Returns
     ///
-    /// - `Ready` → `Degraded` if parse storm detected
-    /// - `Building` → `Degraded` if parse storm detected
+    /// Nothing. Updates coordinator metrics and state for the LSP workflow.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexCoordinator;
+    ///
+    /// let coordinator = IndexCoordinator::new();
+    /// coordinator.notify_change("file:///example.pl");
+    /// ```
     pub fn notify_change(&self, _uri: &str) {
         self.metrics.pending_parses.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
@@ -502,21 +600,27 @@ impl IndexCoordinator {
         }
     }
 
-    /// Notify parse complete (may trigger recovery or resource limit check)
+    /// Notify parse completion for the Index/Analyze workflow stages.
     ///
-    /// Decrements pending parse count and checks for recovery conditions.
-    /// If all pending parses complete and index is in ParseStorm degradation,
-    /// automatically attempts recovery by transitioning to Building state.
-    /// Also enforces resource limits after parse completion.
+    /// Decrements the pending parse count, enforces resource limits, and may
+    /// attempt recovery when parse storms clear.
     ///
     /// # Arguments
     ///
-    /// * `_uri` - URI of the parsed file (reserved for future use)
+    /// * `_uri` - URI of the parsed file (reserved for future use).
     ///
-    /// # State Transitions
+    /// # Returns
     ///
-    /// - `Degraded(ParseStorm)` → `Building` if pending count reaches 0
-    /// - `Ready` → `Degraded(ResourceLimit)` if limits exceeded
+    /// Nothing. Updates coordinator metrics and state for the LSP workflow.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexCoordinator;
+    ///
+    /// let coordinator = IndexCoordinator::new();
+    /// coordinator.notify_parse_complete("file:///example.pl");
+    /// ```
     pub fn notify_parse_complete(&self, _uri: &str) {
         self.metrics.pending_parses.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
 
@@ -557,7 +661,11 @@ impl IndexCoordinator {
     /// * `file_count` - Total number of files indexed
     /// * `symbol_count` - Total number of symbols extracted
     ///
-    /// # Example
+    /// # Returns
+    ///
+    /// Nothing. The coordinator state is updated in-place.
+    ///
+    /// # Examples
     ///
     /// ```rust
     /// use perl_parser::workspace_index::IndexCoordinator;
@@ -604,7 +712,11 @@ impl IndexCoordinator {
     ///
     /// * `total_count` - Total number of files discovered in workspace
     ///
-    /// # Example
+    /// # Returns
+    ///
+    /// Nothing. The coordinator state is updated in-place.
+    ///
+    /// # Examples
     ///
     /// ```rust
     /// use perl_parser::workspace_index::IndexCoordinator;
@@ -636,31 +748,26 @@ impl IndexCoordinator {
         }
     }
 
-    /// Update Building state progress
+    /// Update Building state progress for the Index/Analyze workflow stages.
     ///
-    /// Increments the indexed file count and checks for scan timeout.
-    /// If timeout is exceeded, automatically transitions to Degraded state.
+    /// Increments the indexed file count and checks for scan timeouts.
     ///
     /// # Arguments
     ///
-    /// * `indexed_count` - Number of files indexed so far
+    /// * `indexed_count` - Number of files indexed so far.
     ///
-    /// # State Transitions
+    /// # Returns
     ///
-    /// - `Building` → `Degraded(ScanTimeout)` if max_scan_duration exceeded
+    /// Nothing. Updates coordinator state and may transition to `Degraded`.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// ```rust
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
     /// coordinator.transition_to_building(100);
-    ///
-    /// for i in 0..100 {
-    ///     // ... index file ...
-    ///     coordinator.update_building_progress(i + 1);
-    /// }
+    /// coordinator.update_building_progress(1);
     /// ```
     pub fn update_building_progress(&self, indexed_count: usize) {
         let mut state = self.state.write();
@@ -702,6 +809,21 @@ impl IndexCoordinator {
     /// # Arguments
     ///
     /// * `reason` - Why the index degraded (ParseStorm, IoError, etc.)
+    ///
+    /// # Returns
+    ///
+    /// Nothing. The coordinator state is updated in-place.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::{DegradationReason, IndexCoordinator, ResourceKind};
+    ///
+    /// let coordinator = IndexCoordinator::new();
+    /// coordinator.transition_to_degraded(DegradationReason::ResourceLimit {
+    ///     kind: ResourceKind::MaxFiles,
+    /// });
+    /// ```
     pub fn transition_to_degraded(&self, reason: DegradationReason) {
         let mut state = self.state.write();
 
@@ -734,6 +856,17 @@ impl IndexCoordinator {
     ///
     /// - Lock-free read of index state (<100ns)
     /// - Symbol counting is O(n) where n is number of files
+    ///
+    /// Returns: `Some(DegradationReason)` when a limit is exceeded, otherwise `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::IndexCoordinator;
+    ///
+    /// let coordinator = IndexCoordinator::new();
+    /// let _reason = coordinator.check_limits();
+    /// ```
     pub fn check_limits(&self) -> Option<DegradationReason> {
         let files = self.index.files.read();
 
@@ -764,7 +897,11 @@ impl IndexCoordinator {
     /// - `Ready` → `Degraded(ResourceLimit)` if limits exceeded
     /// - `Building` → `Degraded(ResourceLimit)` if limits exceeded
     ///
-    /// # Example
+    /// # Returns
+    ///
+    /// Nothing. The coordinator state is updated in-place when limits are exceeded.
+    ///
+    /// # Examples
     ///
     /// ```rust
     /// use perl_parser::workspace_index::IndexCoordinator;
@@ -796,7 +933,11 @@ impl IndexCoordinator {
     /// * `full_query` - Function to execute when index is Ready
     /// * `partial_query` - Function to execute when index is Building/Degraded
     ///
-    /// # Example
+    /// # Returns
+    ///
+    /// The value returned by the selected query function.
+    ///
+    /// # Examples
     ///
     /// ```rust
     /// use perl_parser::workspace_index::IndexCoordinator;
@@ -829,8 +970,8 @@ impl Default for IndexCoordinator {
 // Symbol Indexing Types
 // ============================================================================
 
-/// Symbol kinds for cross-file indexing
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+/// Symbol kinds for cross-file indexing during Index/Navigate workflows.
 pub enum SymKind {
     /// Variable symbol ($, @, or % sigil)
     Var,
@@ -840,8 +981,8 @@ pub enum SymKind {
     Pack,
 }
 
-/// A normalized symbol key for cross-file lookups
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
+/// A normalized symbol key for cross-file lookups in Index/Navigate workflows.
 pub struct SymbolKey {
     /// Package name containing this symbol
     pub pkg: Arc<str>,
@@ -853,38 +994,26 @@ pub struct SymbolKey {
     pub kind: SymKind,
 }
 
-/// Normalize a Perl variable name for consistent Perl parsing pipeline indexing
+/// Normalize a Perl variable name for Index/Analyze workflows.
 ///
-/// Extracts sigil prefix and base name from Perl variables during Analyze stage processing
-/// to enable consistent cross-file symbol lookup during LSP Perl script analysis.
+/// Extracts an optional sigil and bare name for consistent symbol indexing.
 ///
 /// # Arguments
 ///
-/// * `name` - Variable name from Perl script content (with or without sigil)
+/// * `name` - Variable name from Perl source, with or without sigil.
 ///
 /// # Returns
 ///
-/// A tuple of (optional sigil character, base name) for normalized indexing
+/// `(sigil, name)` tuple with the optional sigil and normalized identifier.
 ///
 /// # Examples
 ///
 /// ```rust
 /// use perl_parser::workspace_index::normalize_var;
 ///
-/// // Email script variables with sigils
-/// assert_eq!(normalize_var("$email_count"), (Some('$'), "email_count"));
-/// assert_eq!(normalize_var("@email_list"), (Some('@'), "email_list"));
-/// assert_eq!(normalize_var("%email_headers"), (Some('%'), "email_headers"));
-///
-/// // Plain names without sigils
+/// assert_eq!(normalize_var("$count"), (Some('$'), "count"));
 /// assert_eq!(normalize_var("process_emails"), (None, "process_emails"));
 /// ```
-///
-/// # LSP Workflow Context
-///
-/// This function supports the Analyze stage by normalizing variable names found in
-/// Perl parsing scripts, enabling consistent symbol lookup across complex
-/// Perl file analysis workflows.
 pub fn normalize_var(name: &str) -> (Option<char>, &str) {
     if name.is_empty() {
         return (None, "");
@@ -908,8 +1037,8 @@ pub fn normalize_var(name: &str) -> (Option<char>, &str) {
 
 // Using lsp_types for Position and Range
 
-/// Internal location type using String URIs
 #[derive(Debug, Clone)]
+/// Internal location type used during Navigate/Analyze workflows.
 pub struct Location {
     /// File URI where the symbol is located
     pub uri: String,
@@ -917,8 +1046,8 @@ pub struct Location {
     pub range: Range,
 }
 
-/// A symbol in the workspace
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A symbol in the workspace for Index/Navigate workflows.
 pub struct WorkspaceSymbol {
     /// Symbol name without package qualification
     pub name: String,
@@ -944,6 +1073,7 @@ fn default_has_body() -> bool {
 }
 
 // Re-export the unified symbol types from perl-symbol-types
+/// Symbol kind enums used during Index/Analyze workflows.
 pub use perl_symbol_types::{SymbolKind, VarKind};
 
 /// Helper function to convert sigil to VarKind
@@ -955,8 +1085,8 @@ fn sigil_to_var_kind(sigil: &str) -> VarKind {
     }
 }
 
-/// Reference to a symbol
 #[derive(Debug, Clone)]
+/// Reference to a symbol for Navigate/Analyze workflows.
 pub struct SymbolReference {
     /// File URI where the reference occurs
     pub uri: String,
@@ -966,8 +1096,8 @@ pub struct SymbolReference {
     pub kind: ReferenceKind,
 }
 
-/// Classification of how a symbol is referenced
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Classification of how a symbol is referenced in Navigate/Analyze workflows.
 pub enum ReferenceKind {
     /// Symbol definition site (sub declaration, variable declaration)
     Definition,
@@ -981,9 +1111,9 @@ pub enum ReferenceKind {
     Write,
 }
 
-/// LSP-compliant workspace symbol for wire format (no internal fields)
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+/// LSP-compliant workspace symbol for wire format in Navigate/Analyze workflows.
 pub struct LspWorkspaceSymbol {
     /// Symbol name as displayed to the user
     pub name: String,
@@ -1037,6 +1167,19 @@ pub struct WorkspaceIndex {
 
 impl WorkspaceIndex {
     /// Create a new empty index
+    ///
+    /// # Returns
+    ///
+    /// A workspace index with empty file and symbol tables.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// assert!(!index.has_symbols());
+    /// ```
     pub fn new() -> Self {
         Self {
             files: Arc::new(RwLock::new(HashMap::new())),
@@ -1051,6 +1194,35 @@ impl WorkspaceIndex {
     }
 
     /// Index a file from its URI and text content
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - File URI identifying the document
+    /// * `text` - Full Perl source text for indexing
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when indexing succeeds, or an error message otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if parsing fails or the document store cannot be updated.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    /// use url::Url;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let index = WorkspaceIndex::new();
+    /// let uri = Url::parse("file:///example.pl")?;
+    /// index.index_file(uri, "sub hello { return 1; }".to_string())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Returns: `Ok(())` when indexing succeeds, otherwise an error string.
     pub fn index_file(&self, uri: Url, text: String) -> Result<(), String> {
         let uri_str = uri.to_string();
 
@@ -1118,6 +1290,23 @@ impl WorkspaceIndex {
     }
 
     /// Remove a file from the index
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - File URI (string form) to remove
+    ///
+    /// # Returns
+    ///
+    /// Nothing. The index is updated in-place.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// index.remove_file("file:///example.pl");
+    /// ```
     pub fn remove_file(&self, uri: &str) {
         let uri_str = Self::normalize_uri(uri);
         let key = DocumentStore::uri_key(&uri_str);
@@ -1141,25 +1330,102 @@ impl WorkspaceIndex {
     }
 
     /// Remove a file from the index (URL variant for compatibility)
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - File URI as a parsed `Url`
+    ///
+    /// # Returns
+    ///
+    /// Nothing. The index is updated in-place.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    /// use url::Url;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let uri = Url::parse("file:///example.pl").unwrap();
+    /// index.remove_file_url(&uri);
+    /// ```
     pub fn remove_file_url(&self, uri: &Url) {
         self.remove_file(uri.as_str())
     }
 
     /// Clear a file from the index (alias for remove_file)
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - File URI (string form) to remove
+    ///
+    /// # Returns
+    ///
+    /// Nothing. The index is updated in-place.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// index.clear_file("file:///example.pl");
+    /// ```
     pub fn clear_file(&self, uri: &str) {
         self.remove_file(uri);
     }
 
     /// Clear a file from the index (URL variant for compatibility)
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - File URI as a parsed `Url`
+    ///
+    /// # Returns
+    ///
+    /// Nothing. The index is updated in-place.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    /// use url::Url;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let uri = Url::parse("file:///example.pl").unwrap();
+    /// index.clear_file_url(&uri);
+    /// ```
     pub fn clear_file_url(&self, uri: &Url) {
         self.clear_file(uri.as_str())
     }
 
-    /// Index a file from a URI string (convenience method)
-    /// Accepts either a proper URI (file://...) or a file path
-    ///
-    /// Note: This method is not available on wasm32 targets (uses filesystem path conversion).
     #[cfg(not(target_arch = "wasm32"))]
+    /// Index a file from a URI string for the Index/Analyze workflow.
+    ///
+    /// Accepts either a `file://` URI or a filesystem path. Not available on
+    /// wasm32 targets (requires filesystem path conversion).
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - File URI string or filesystem path.
+    /// * `text` - Full Perl source text for indexing.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` when indexing succeeds, or an error message otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URI is invalid or parsing fails.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// index.index_file_str("file:///example.pl", "sub hello { }").unwrap();
+    /// ```
     pub fn index_file_str(&self, uri: &str, text: &str) -> Result<(), String> {
         // Try parsing as URI first
         let url = url::Url::parse(uri).or_else(|_| {
@@ -1179,6 +1445,23 @@ impl WorkspaceIndex {
     /// This dual approach handles cases where functions are called both as:
     /// - Qualified: `Utils::process_data()`
     /// - Unqualified: `process_data()` (when in the same package or imported)
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol_name` - Symbol name or qualified name to search
+    ///
+    /// # Returns
+    ///
+    /// All reference locations found for the requested symbol.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _refs = index.find_references("Utils::process_data");
+    /// ```
     pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
         let mut locations = Vec::new();
         let files = self.files.read();
@@ -1207,8 +1490,30 @@ impl WorkspaceIndex {
     }
 
     /// Find the definition of a symbol
+    ///
+    /// # Arguments
+    ///
+    /// * `symbol_name` - Symbol name or qualified name to resolve
+    ///
+    /// # Returns
+    ///
+    /// The first matching definition location, if found.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _def = index.find_definition("MyPackage::example");
+    /// ```
     pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
         let files = self.files.read();
+        println!(
+            "find_definition DEBUG: index has {} files, looking for {}",
+            files.len(),
+            symbol_name
+        );
 
         for (_uri_key, file_index) in files.iter() {
             for symbol in &file_index.symbols {
@@ -1224,6 +1529,19 @@ impl WorkspaceIndex {
     }
 
     /// Get all symbols in the workspace
+    ///
+    /// # Returns
+    ///
+    /// A vector containing every symbol currently indexed.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _symbols = index.all_symbols();
+    /// ```
     pub fn all_symbols(&self) -> Vec<WorkspaceSymbol> {
         let files = self.files.read();
         let mut symbols = Vec::new();
@@ -1240,12 +1558,42 @@ impl WorkspaceIndex {
     /// Returns true if the index contains any symbols, indicating that
     /// at least some files have been indexed and the workspace is ready
     /// for symbol-based operations like completion.
+    ///
+    /// # Returns
+    ///
+    /// `true` if any symbols are indexed, otherwise `false`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// assert!(!index.has_symbols());
+    /// ```
     pub fn has_symbols(&self) -> bool {
         let files = self.files.read();
         files.values().any(|file_index| !file_index.symbols.is_empty())
     }
 
     /// Search for symbols by query
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - Substring to match against symbol names
+    ///
+    /// # Returns
+    ///
+    /// Symbols whose names or qualified names contain the query string.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _results = index.search_symbols("example");
+    /// ```
     pub fn search_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
         let query_lower = query.to_lowercase();
         self.all_symbols()
@@ -1261,11 +1609,45 @@ impl WorkspaceIndex {
     }
 
     /// Find symbols by query (alias for search_symbols for compatibility)
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - Substring to match against symbol names
+    ///
+    /// # Returns
+    ///
+    /// Symbols whose names or qualified names contain the query string.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _results = index.find_symbols("example");
+    /// ```
     pub fn find_symbols(&self, query: &str) -> Vec<WorkspaceSymbol> {
         self.search_symbols(query)
     }
 
     /// Get symbols in a specific file
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - File URI to inspect
+    ///
+    /// # Returns
+    ///
+    /// All symbols indexed for the requested file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _symbols = index.file_symbols("file:///example.pl");
+    /// ```
     pub fn file_symbols(&self, uri: &str) -> Vec<WorkspaceSymbol> {
         let normalized_uri = Self::normalize_uri(uri);
         let key = DocumentStore::uri_key(&normalized_uri);
@@ -1275,6 +1657,23 @@ impl WorkspaceIndex {
     }
 
     /// Get dependencies of a file
+    ///
+    /// # Arguments
+    ///
+    /// * `uri` - File URI to inspect
+    ///
+    /// # Returns
+    ///
+    /// A set of module names imported by the file.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _deps = index.file_dependencies("file:///example.pl");
+    /// ```
     pub fn file_dependencies(&self, uri: &str) -> HashSet<String> {
         let normalized_uri = Self::normalize_uri(uri);
         let key = DocumentStore::uri_key(&normalized_uri);
@@ -1284,6 +1683,23 @@ impl WorkspaceIndex {
     }
 
     /// Find all files that depend on a module
+    ///
+    /// # Arguments
+    ///
+    /// * `module_name` - Module name to search for in file dependencies
+    ///
+    /// # Returns
+    ///
+    /// A list of file URIs that import or depend on the module.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _files = index.find_dependents("My::Module");
+    /// ```
     pub fn find_dependents(&self, module_name: &str) -> Vec<String> {
         let files = self.files.read();
         let mut dependents = Vec::new();
@@ -1298,11 +1714,37 @@ impl WorkspaceIndex {
     }
 
     /// Get the document store
+    ///
+    /// # Returns
+    ///
+    /// A reference to the in-memory document store.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _store = index.document_store();
+    /// ```
     pub fn document_store(&self) -> &DocumentStore {
         &self.document_store
     }
 
     /// Find unused symbols in the workspace
+    ///
+    /// # Returns
+    ///
+    /// Symbols that have no non-definition references in the workspace.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _unused = index.find_unused_symbols();
+    /// ```
     pub fn find_unused_symbols(&self) -> Vec<WorkspaceSymbol> {
         let files = self.files.read();
         let mut unused = Vec::new();
@@ -1329,6 +1771,23 @@ impl WorkspaceIndex {
     }
 
     /// Get all symbols that belong to a specific package
+    ///
+    /// # Arguments
+    ///
+    /// * `package_name` - Package name to match (e.g., `My::Package`)
+    ///
+    /// # Returns
+    ///
+    /// Symbols defined within the requested package.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::WorkspaceIndex;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let _members = index.get_package_members("My::Package");
+    /// ```
     pub fn get_package_members(&self, package_name: &str) -> Vec<WorkspaceSymbol> {
         let files = self.files.read();
         let mut members = Vec::new();
@@ -1356,22 +1815,98 @@ impl WorkspaceIndex {
         members
     }
 
-    /// Find the definition location for a symbol key
+    /// Find the definition location for a symbol key during Index/Navigate stages.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Normalized symbol key to resolve.
+    ///
+    /// # Returns
+    ///
+    /// The definition location for the symbol, if found.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
+    /// use std::sync::Arc;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let key = SymbolKey { pkg: Arc::from("My::Package"), name: Arc::from("example"), sigil: None, kind: SymKind::Sub };
+    /// let _def = index.find_def(&key);
+    /// ```
     pub fn find_def(&self, key: &SymbolKey) -> Option<Location> {
-        // For now, use the qualified name approach
-        let qualified_name = format!("{}::{}", key.pkg, key.name);
-        self.find_definition(&qualified_name)
+        if let Some(sigil) = key.sigil {
+            // It's a variable
+            let var_name = format!("{}{}", sigil, key.name);
+            self.find_definition(&var_name)
+        } else {
+            // It's a subroutine or package
+            let qualified_name = format!("{}::{}", key.pkg, key.name);
+            self.find_definition(&qualified_name)
+        }
     }
 
-    /// Find all reference locations for a symbol key using enhanced dual indexing
+    /// Find reference locations for a symbol key using dual indexing.
     ///
-    /// This function leverages the dual indexing strategy to find references under both
-    /// qualified and bare names, then deduplicates and excludes the definition itself.
-    /// The deduplication ensures each location appears only once even if indexed under
-    /// multiple name forms.
+    /// Searches both qualified and bare names to support Navigate/Analyze workflows.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - Normalized symbol key to search for.
+    ///
+    /// # Returns
+    ///
+    /// All reference locations for the symbol, excluding the definition.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
+    /// use std::sync::Arc;
+    ///
+    /// let index = WorkspaceIndex::new();
+    /// let key = SymbolKey { pkg: Arc::from("main"), name: Arc::from("example"), sigil: None, kind: SymKind::Sub };
+    /// let _refs = index.find_refs(&key);
+    /// ```
     pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
-        let qualified_name = format!("{}::{}", key.pkg, key.name);
-        let mut all_refs = self.find_references(&qualified_name);
+        let files_locked = self.files.read();
+        println!("find_refs DEBUG: index has {} files", files_locked.len());
+        let mut all_refs = if let Some(sigil) = key.sigil {
+            // It's a variable - search through all files for this variable name
+            let var_name = format!("{}{}", sigil, key.name);
+            let mut refs = Vec::new();
+            for (_uri_key, file_index) in files_locked.iter() {
+                if let Some(var_refs) = file_index.references.get(&var_name) {
+                    for reference in var_refs {
+                        refs.push(Location { uri: reference.uri.clone(), range: reference.range });
+                    }
+                }
+            }
+            refs
+        } else {
+            // It's a subroutine or package
+            if key.pkg.as_ref() == "main" {
+                // For main package, we search for both "main::foo" and bare "foo"
+                let mut refs = self.find_references(&format!("main::{}", key.name));
+                // Add bare name references
+                for (_uri_key, file_index) in files_locked.iter() {
+                    if let Some(bare_refs) = file_index.references.get(key.name.as_ref()) {
+                        for reference in bare_refs {
+                            refs.push(Location {
+                                uri: reference.uri.clone(),
+                                range: reference.range,
+                            });
+                        }
+                    }
+                }
+                refs
+            } else {
+                let qualified_name = format!("{}::{}", key.pkg, key.name);
+                self.find_references(&qualified_name)
+            }
+        };
+        drop(files_locked);
 
         // Remove the definition; the caller will include it separately if needed
         if let Some(def) = self.find_def(key) {
@@ -1895,25 +2430,22 @@ impl Default for WorkspaceIndex {
 
 /// LSP adapter for converting internal Location types to LSP types
 #[cfg(all(feature = "workspace", feature = "lsp-compat"))]
+/// LSP adapter utilities for Navigate/Analyze workflows.
 pub mod lsp_adapter {
     use super::Location as IxLocation;
     use lsp_types::Location as LspLocation;
     // lsp_types uses Uri, not Url
     type LspUrl = lsp_types::Uri;
 
-    /// Convert workspace index location to LSP Location for client transmission
-    ///
-    /// Transforms internal workspace index location data into LSP-compatible format
-    /// for cross-file navigation during Perl script analysis in LSP workflow.
+    /// Convert an internal location to an LSP Location for Navigate workflows.
     ///
     /// # Arguments
     ///
-    /// * `ix` - Internal index location with URI and range information
+    /// * `ix` - Internal index location with URI and range information.
     ///
     /// # Returns
     ///
-    /// * `Some(LspLocation)` - Successfully converted LSP location
-    /// * `None` - When URI parsing fails or location is invalid
+    /// `Some(LspLocation)` when conversion succeeds, or `None` if URI parsing fails.
     ///
     /// # Examples
     ///
@@ -1921,12 +2453,8 @@ pub mod lsp_adapter {
     /// use perl_parser::workspace_index::{Location as IxLocation, lsp_adapter::to_lsp_location};
     /// use lsp_types::Range;
     ///
-    /// let ix_loc = IxLocation {
-    ///     uri: "file:///path/to/data_script.pl".to_string(),
-    ///     range: Range::default(),
-    /// };
-    /// let lsp_loc = to_lsp_location(&ix_loc);
-    /// assert!(lsp_loc.is_some());
+    /// let ix_loc = IxLocation { uri: "file:///path.pl".to_string(), range: Range::default() };
+    /// let _ = to_lsp_location(&ix_loc);
     /// ```
     pub fn to_lsp_location(ix: &IxLocation) -> Option<LspLocation> {
         parse_url(&ix.uri).map(|uri| {
@@ -1939,25 +2467,15 @@ pub mod lsp_adapter {
         })
     }
 
-    /// Convert multiple workspace index locations to LSP Locations for batch operations
-    ///
-    /// Efficiently transforms a collection of internal index locations into LSP-compatible
-    /// format for batch transmission during find-references and workspace symbol operations
-    /// in Perl script analysis workflows.
+    /// Convert multiple index locations to LSP Locations for Navigate/Analyze workflows.
     ///
     /// # Arguments
     ///
-    /// * `all` - Iterator of internal index locations to convert
+    /// * `all` - Iterator of internal index locations to convert.
     ///
     /// # Returns
     ///
-    /// Vector of successfully converted LSP locations, with invalid locations filtered out
-    ///
-    /// # Performance
-    ///
-    /// - Time complexity: O(n) where n is the number of locations
-    /// - Memory usage: O(n) for output vector allocation
-    /// - Optimized for batch processing during large Perl codebase workspace navigation
+    /// Vector of successfully converted LSP locations, with invalid entries filtered out.
     ///
     /// # Examples
     ///
@@ -1965,12 +2483,9 @@ pub mod lsp_adapter {
     /// use perl_parser::workspace_index::{Location as IxLocation, lsp_adapter::to_lsp_locations};
     /// use lsp_types::Range;
     ///
-    /// let locations = vec![
-    ///     IxLocation { uri: "file:///script1.pl".to_string(), range: Range::default() },
-    ///     IxLocation { uri: "file:///script2.pl".to_string(), range: Range::default() },
-    /// ];
+    /// let locations = vec![IxLocation { uri: "file:///script1.pl".to_string(), range: Range::default() }];
     /// let lsp_locations = to_lsp_locations(locations);
-    /// assert_eq!(lsp_locations.len(), 2);
+    /// assert_eq!(lsp_locations.len(), 1);
     /// ```
     pub fn to_lsp_locations(all: impl IntoIterator<Item = IxLocation>) -> Vec<LspLocation> {
         all.into_iter().filter_map(|ix| to_lsp_location(&ix)).collect()

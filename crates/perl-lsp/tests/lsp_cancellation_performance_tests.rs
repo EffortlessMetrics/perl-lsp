@@ -515,9 +515,8 @@ fn test_cancellation_check_threading_performance_ac12() -> Result<(), Box<dyn st
         // Collect results from all threads
         let mut all_measurements = Vec::new();
         for handle in handles {
-            let result = handle
-                .join()
-                .map_err(|e| format!("Thread failed to complete: {:?}", e))?;
+            let result =
+                handle.join().map_err(|e| format!("Thread failed to complete: {:?}", e))?;
             all_measurements.extend(result.measurements);
         }
 
@@ -908,7 +907,8 @@ fn force_garbage_collection() {
 /// Tests feature spec: LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md#incremental-parsing-preservation
 /// AC:12 - Incremental parsing performance preservation with cancellation support
 #[test]
-fn test_incremental_parsing_performance_preservation_ac12() -> Result<(), Box<dyn std::error::Error>> {
+fn test_incremental_parsing_performance_preservation_ac12() -> Result<(), Box<dyn std::error::Error>>
+{
     // Enhanced constraint checking for performance cancellation tests
     // These tests require specific threading conditions for reliable LSP initialization
     let thread_count =

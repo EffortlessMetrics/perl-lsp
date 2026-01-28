@@ -1,7 +1,7 @@
 //! Parser engine components and supporting utilities.
 
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
-pub use perl_ast::ast;
+pub mod ast;
 /// Experimental second-generation AST (work in progress).
 pub use perl_ast::v2 as ast_v2;
 /// Edit tracking for incremental parsing.
@@ -22,4 +22,3 @@ pub use perl_pragma as pragma_tracker;
 pub use perl_quote as quote_parser;
 /// Parser utilities and helpers.
 pub use perl_regex as regex_validator;
-

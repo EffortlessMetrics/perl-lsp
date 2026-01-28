@@ -31,16 +31,13 @@ fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>>
         }),
     );
 
-    let edits = response["result"]
-        .as_array()
-        .ok_or("formatting should return an array of edits")?;
+    let edits =
+        response["result"].as_array().ok_or("formatting should return an array of edits")?;
 
     assert!(!edits.is_empty(), "Should return formatting edits");
 
     // The server typically returns a single edit that replaces the whole document
-    let edit_text = edits
-        .first()
-        .ok_or("edits array should have at least one element")?["newText"]
+    let edit_text = edits.first().ok_or("edits array should have at least one element")?["newText"]
         .as_str()
         .ok_or("Edit should have newText")?;
 
@@ -101,11 +98,10 @@ sub second{my$b=2;return$b;}
     if let Some(result) = response.get("result") {
         if let Some(edits) = result.as_array() {
             if !edits.is_empty() {
-                let edit_text = edits
-                    .first()
-                    .ok_or("edits array should have at least one element")?["newText"]
-                    .as_str()
-                    .ok_or("Edit should have newText")?;
+                let edit_text =
+                    edits.first().ok_or("edits array should have at least one element")?["newText"]
+                        .as_str()
+                        .ok_or("Edit should have newText")?;
 
                 // Check that only the first sub was formatted
                 assert!(
@@ -155,16 +151,14 @@ return$x;
         }),
     );
 
-    let edits = response["result"]
-        .as_array()
-        .ok_or("formatting should return an array of edits")?;
+    let edits =
+        response["result"].as_array().ok_or("formatting should return an array of edits")?;
 
     if !edits.is_empty() {
-        let edit_text = edits
-            .first()
-            .ok_or("edits array should have at least one element")?["newText"]
-            .as_str()
-            .ok_or("Edit should have newText")?;
+        let edit_text =
+            edits.first().ok_or("edits array should have at least one element")?["newText"]
+                .as_str()
+                .ok_or("Edit should have newText")?;
 
         // Check that comments are preserved
         assert!(edit_text.contains("# Main script comment"), "Should preserve main comment");
@@ -223,16 +217,14 @@ fn formatting_with_custom_config() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let edits = response["result"]
-        .as_array()
-        .ok_or("formatting should return an array of edits")?;
+    let edits =
+        response["result"].as_array().ok_or("formatting should return an array of edits")?;
 
     if !edits.is_empty() {
-        let edit_text = edits
-            .first()
-            .ok_or("edits array should have at least one element")?["newText"]
-            .as_str()
-            .ok_or("Edit should have newText")?;
+        let edit_text =
+            edits.first().ok_or("edits array should have at least one element")?["newText"]
+                .as_str()
+                .ok_or("Edit should have newText")?;
 
         // Check for some formatting (exact format depends on perltidy version)
         assert!(edit_text.contains("sub test"), "Should contain formatted subroutine");

@@ -151,8 +151,10 @@ package Parent2;
         })),
     };
 
-    let prepare_response = server.handle_request(prepare_request).ok_or("Failed to get prepare response")?;
-    let result_value = prepare_response.result.ok_or("Failed to get result from prepare response")?;
+    let prepare_response =
+        server.handle_request(prepare_request).ok_or("Failed to get prepare response")?;
+    let result_value =
+        prepare_response.result.ok_or("Failed to get result from prepare response")?;
     let items_array = result_value.as_array().ok_or("Result is not an array")?;
     let items = items_array.clone();
     let child_item = &items[0];
@@ -177,7 +179,8 @@ package Parent2;
         })),
     };
 
-    let response = server.handle_request(supertypes_request).ok_or("Failed to get supertypes response")?;
+    let response =
+        server.handle_request(supertypes_request).ok_or("Failed to get supertypes response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return supertypes");
@@ -257,8 +260,10 @@ our @ISA = ('Base');
         })),
     };
 
-    let prepare_response = server.handle_request(prepare_request).ok_or("Failed to get prepare response")?;
-    let result_value = prepare_response.result.ok_or("Failed to get result from prepare response")?;
+    let prepare_response =
+        server.handle_request(prepare_request).ok_or("Failed to get prepare response")?;
+    let result_value =
+        prepare_response.result.ok_or("Failed to get result from prepare response")?;
     let items_array = result_value.as_array().ok_or("Result is not an array")?;
     let items = items_array.clone();
     let base_item = &items[0];
@@ -283,7 +288,8 @@ our @ISA = ('Base');
         })),
     };
 
-    let response = server.handle_request(subtypes_request).ok_or("Failed to get subtypes response")?;
+    let response =
+        server.handle_request(subtypes_request).ok_or("Failed to get subtypes response")?;
     let result = response.result.as_ref().and_then(|r| r.as_array());
 
     assert!(result.is_some(), "Should return subtypes");

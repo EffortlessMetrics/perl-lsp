@@ -1,116 +1,21 @@
-//! Token stream adapter for efficient Perl script tokenization within LSP workflow
+//! Token stream adapter between `perl-lexer` output and the parser.
 //!
-//! This module provides the critical bridge between perl-lexer's token output and the parser's
-//! token consumption model during Perl parsing workflows. Designed for high-performance
-//! tokenization of Perl scripts embedded in Perl code throughout the Parse → Index →
-//! Navigate → Complete → Analyze workflow stages.
+//! Provides buffered lookahead, skips trivia tokens, and resets lexer mode at
+//! statement boundaries. This stream is optimized for parser consumption rather
+//! than full-fidelity token preservation.
 //!
-//! # LSP Workflow Integration
-//!
-//! Token processing supports Perl parsing workflows:
-//! - **Extract**: Tokenizes raw Perl script content from Perl files
-//! - **Normalize**: Provides normalized token representation for consistent processing
-//! - **Thread**: Enables token-level analysis for control flow and dependency detection
-//! - **Render**: Supports token-to-source reconstruction during output generation
-//! - **Index**: Facilitates token-based symbol extraction for searchable metadata
-//!
-//! # Performance Characteristics
-//!
-//! Optimized for enterprise-scale Perl parsing:
-//! - Streaming token consumption minimizes memory usage during 50GB+ Perl codebase processing
-//! - Efficient token buffering reduces allocation overhead for large Perl scripts
-//! - Position tracking enables precise error reporting across complex Perl code
-//! - Token type simplification optimizes parser performance for common Perl script patterns
-//!
-//! # Usage Examples
-//!
-//! ## Basic Token Stream Creation
+//! # Basic usage
 //!
 //! ```
-//! use perl_tokenizer::{TokenStream, Token, TokenKind};
+//! use perl_tokenizer::{TokenKind, TokenStream};
 //!
-//! let code = "my $x = 42;";
-//! let mut stream = TokenStream::new(code);
-//!
-//! // Peek at the next token without consuming it
-//! if let Ok(token) = stream.peek() {
-//!     println!("Next token: {:?} = '{}'", token.kind, token.text);
-//! }
-//!
-//! // Consume tokens one by one
-//! while let Ok(token) = stream.next() {
-//!     if token.kind == TokenKind::Eof { break; }
-//!     println!("Token: {:?} at position {}-{}", token.kind, token.start, token.end);
-//! }
-//! ```
-//!
-//! ## Advanced Token Manipulation
-//!
-//! ```
-//! use perl_tokenizer::{TokenStream, TokenKind};
-//!
-//! let code = "sub hello { print \"world\"; }";
-//! let mut stream = TokenStream::new(code);
-//!
-//! // Look ahead at the next token
-//! if let Ok(next_token) = stream.peek() {
-//!     println!("Next token: {:?}", next_token.kind);
-//! }
-//!
-//! // Look ahead at second token
-//! if let Ok(second_token) = stream.peek_second() {
-//!     println!("Second token: {:?}", second_token.kind);
-//! }
-//!
-//! // Process tokens with error handling
-//! match stream.next() {
-//!     Ok(token) => {
-//!         if token.kind == TokenKind::Identifier {
-//!             println!("Got identifier: {}", token.text);
-//!         } else {
-//!             println!("Found token: {:?}", token.kind);
-//!         }
-//!     }
-//!     Err(err) => eprintln!("Error getting token: {}", err),
-//! }
-//! ```
-//!
-//! ## Position Tracking and Error Reporting
-//!
-//! ```
-//! use perl_tokenizer::{TokenStream, TokenKind};
-//!
-//! let code = "my $invalid = ;"; // Syntax error
-//! let mut stream = TokenStream::new(code);
+//! let mut stream = TokenStream::new("my $x = 42;");
+//! assert!(matches!(stream.peek(), Ok(token) if token.kind == TokenKind::My));
 //!
 //! while let Ok(token) = stream.next() {
-//!     if token.kind == TokenKind::Eof { break; }
-//!     // Use position information for precise error reporting
-//!     if token.text.as_ref() == ";" {
-//!         eprintln!("Found semicolon at position {}-{}",
-//!                  token.start, token.end);
+//!     if token.kind == TokenKind::Eof {
+//!         break;
 //!     }
-//! }
-//! ```
-//!
-//! ## LSP Integration Example
-//!
-//! ```ignore
-//! use perl_parser::{Parser, token_stream::TokenStream};
-//! use perl_parser::SemanticTokensProvider;
-//!
-//! let code = "package MyModule; sub new { my $class = shift; bless {}, $class; }";
-//! let mut stream = TokenStream::new(code);
-//! let mut parser = Parser::new(code); // Parser::new instead of from_token_stream
-//!
-//! // Parse for LSP semantic tokens
-//! match parser.parse() {
-//!     Ok(ast) => {
-//!         let provider = SemanticTokensProvider::new(code.to_string());
-//!         let tokens = provider.extract(&ast);
-//!         println!("Generated {} semantic tokens", tokens.len());
-//!     }
-//!     Err(err) => eprintln!("Parse error: {}", err),
 //! }
 //! ```
 
@@ -296,6 +201,9 @@ impl<'a> TokenStream<'a> {
                 "catch" => TokenKind::Catch,
                 "finally" => TokenKind::Finally,
                 "continue" => TokenKind::Continue,
+                "next" => TokenKind::Next,
+                "last" => TokenKind::Last,
+                "redo" => TokenKind::Redo,
                 "class" => TokenKind::Class,
                 "method" => TokenKind::Method,
                 "format" => TokenKind::Format,
@@ -425,12 +333,17 @@ impl<'a> TokenStream<'a> {
             }
 
             // Handle error tokens that might be valid syntax
-            LexerTokenType::Error(_msg) => {
-                // Check if it's a brace that the lexer couldn't recognize
-                match token.text.as_ref() {
-                    "{" => TokenKind::LeftBrace,
-                    "}" => TokenKind::RightBrace,
-                    _ => TokenKind::Unknown,
+            LexerTokenType::Error(msg) => {
+                // Check if it's a specific error we want to handle specially
+                if msg.as_ref() == "Heredoc nesting too deep" {
+                    TokenKind::HeredocDepthLimit
+                } else {
+                    // Check if it's a brace that the lexer couldn't recognize
+                    match token.text.as_ref() {
+                        "{" => TokenKind::LeftBrace,
+                        "}" => TokenKind::RightBrace,
+                        _ => TokenKind::Unknown,
+                    }
                 }
             }
 

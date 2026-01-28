@@ -5,20 +5,10 @@
 
 use std::sync::Arc;
 
-/// Simplified token representation optimized for Perl script parsing within LSP workflow
+/// Token produced by the lexer and consumed by the parser.
 ///
-/// This structure provides an efficient token representation that balances parsing performance
-/// with memory usage during large-scale Perl parsing operations. Each token contains the
-/// essential information needed for AST construction while minimizing overhead for large Perl codebase
-/// file processing scenarios.
-///
-/// # Email Processing Context
-///
-/// Tokens represent various elements commonly found in Perl scripts:
-/// - Email filtering keywords and operators
-/// - Variable references for Perl code manipulation
-/// - Control flow constructs for Perl parsing logic
-/// - String literals containing email addresses and content patterns
+/// Stores the token kind, original source text, and byte span. The text is kept
+/// in an `Arc<str>` so buffering and lookahead can clone tokens cheaply.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     /// Token classification for parser decision making
@@ -34,29 +24,14 @@ pub struct Token {
 impl Token {
     /// Create a new token
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
-        Token {
-            kind,
-            text: text.into(),
-            start,
-            end,
-        }
+        Token { kind, text: text.into(), start, end }
     }
 }
 
-/// Comprehensive token classification for Perl Perl script processing
+/// Token classification for Perl parsing.
 ///
-/// This enum provides simplified but complete token type classification optimized for
-/// parsing performance during Perl parsing workflows. The classification covers
-/// all Perl language constructs commonly found in Perl scripts while maintaining
-/// efficient pattern matching for high-throughput Perl codebase processing operations.
-///
-/// # Email Script Optimization
-///
-/// Token types are ordered and grouped for optimal parsing of email-specific patterns:
-/// - Email filtering keywords (use, require, import)
-/// - Email content manipulation operators (regex, string operations)
-/// - Control flow constructs for Perl parsing logic
-/// - Variable sigils for email data structures
+/// The set is intentionally simplified for fast parser matching while covering
+/// keywords, operators, delimiters, literals, identifiers, and special tokens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     // ===== Keywords =====
@@ -122,6 +97,12 @@ pub enum TokenKind {
     Finally,
     /// Continue block: `continue { }`
     Continue,
+    /// Loop control: `next`
+    Next,
+    /// Loop control: `last`
+    Last,
+    /// Loop control: `redo`
+    Redo,
     /// Class declaration (5.38+): `class Foo`
     Class,
     /// Method declaration (5.38+): `method foo`
@@ -298,6 +279,8 @@ pub enum TokenKind {
     DataBody,
     /// Unparsed remainder (budget exceeded)
     UnknownRest,
+    /// Heredoc depth limit exceeded (special error token)
+    HeredocDepthLimit,
 
     // ===== Identifiers and Variables =====
     /// Bareword identifier or function name

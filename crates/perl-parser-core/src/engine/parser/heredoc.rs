@@ -17,8 +17,39 @@ fn after_line_break(src: &[u8], mut off: usize) -> usize {
     off
 }
 
+/// Unescape a string literal (e.g., convert \n to newline)
+fn unescape_label(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(next) = chars.next() {
+                match next {
+                    'n' => out.push('\n'),
+                    'r' => out.push('\r'),
+                    't' => out.push('\t'),
+                    '\\' => out.push('\\'),
+                    '"' => out.push('"'),
+                    '\'' => out.push('\''),
+                    '$' => out.push('$'),
+                    '@' => out.push('@'),
+                    _ => {
+                        out.push('\\');
+                        out.push(next);
+                    }
+                }
+            } else {
+                out.push('\\');
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// Parse heredoc delimiter from a string like "<<EOF", "<<'EOF'", "<<~EOF", "<<`EOF`"
-fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool, bool) {
+fn parse_heredoc_delimiter(s: &str) -> (String, bool, bool, bool) {
     let mut chars = s.chars();
 
     // Skip <<
@@ -37,29 +68,31 @@ fn parse_heredoc_delimiter(s: &str) -> (&str, bool, bool, bool) {
 
     // Check for empty label (<<; or <<\n)
     if rest.is_empty() || rest.starts_with(';') {
-        return ("", true, indented, false);
+        return (String::new(), true, indented, false);
     }
 
     // Check quoting to determine interpolation and command execution
     let (delimiter, interpolated, command) =
         if rest.starts_with('"') && rest.ends_with('"') && rest.len() >= 2 {
-            // Double-quoted: interpolated
-            (&rest[1..rest.len() - 1], true, false)
+            // Double-quoted: interpolated, unescape label
+            (unescape_label(&rest[1..rest.len() - 1]), true, false)
         } else if rest.starts_with('\'') && rest.ends_with('\'') && rest.len() >= 2 {
-            // Single-quoted: not interpolated
-            (&rest[1..rest.len() - 1], false, false)
+            // Single-quoted: not interpolated, no unescape
+            (rest[1..rest.len() - 1].to_string(), false, false)
         } else if rest.starts_with('`') && rest.ends_with('`') && rest.len() >= 2 {
-            // Backtick: interpolated, command execution
-            (&rest[1..rest.len() - 1], true, true)
+            // Backtick: interpolated, command execution, unescape label
+            (unescape_label(&rest[1..rest.len() - 1]), true, true)
         } else {
-            // Bare word: interpolated
-            (rest, true, false)
+            // Bare word: interpolated, no unescape (except maybe explicit escapes?)
+            // Bare identifiers don't usually have escapes, but can have weird chars?
+            // "EOF" -> EOF.
+            (rest.to_string(), true, false)
         };
 
     (delimiter, interpolated, indented, command)
 }
 
-/// Map heredoc delimiter text to collector QuoteKind (Sprint A Day 4)
+/// Map heredoc delimiter text to collector QuoteKind
 fn map_heredoc_quote_kind(text: &str, _interpolated: bool) -> heredoc_collector::QuoteKind {
     // Skip << and optional ~
     let rest = text.trim_start_matches('<').trim_start_matches('~').trim();
@@ -76,6 +109,9 @@ fn map_heredoc_quote_kind(text: &str, _interpolated: bool) -> heredoc_collector:
     }
 }
 
+const MAX_HEREDOC_DEPTH: usize = 100;
+const HEREDOC_TIMEOUT_MS: u64 = 5000;
+
 impl<'a> Parser<'a> {
     /// Enqueue a heredoc declaration for later content collection
     fn push_heredoc_decl(
@@ -86,6 +122,18 @@ impl<'a> Parser<'a> {
         decl_start: usize,
         decl_end: usize,
     ) {
+        if self.pending_heredocs.len() >= MAX_HEREDOC_DEPTH {
+            self.errors.push(ParseError::syntax(
+                format!("Heredoc depth limit exceeded (max {})", MAX_HEREDOC_DEPTH),
+                decl_start,
+            ));
+            return;
+        }
+
+        if self.pending_heredocs.is_empty() {
+            self.heredoc_start_time = Some(Instant::now());
+        }
+
         self.pending_heredocs.push_back(PendingHeredoc {
             label: Arc::from(label.as_str()),
             allow_indent,
@@ -97,8 +145,24 @@ impl<'a> Parser<'a> {
     /// Drain all pending heredocs after statement completion (FIFO order)
     fn drain_pending_heredocs(&mut self, root: &mut Node) {
         if self.pending_heredocs.is_empty() {
+            self.heredoc_start_time = None;
             return;
         }
+
+        // Check for timeout
+        if let Some(start) = self.heredoc_start_time {
+            if start.elapsed().as_millis() > HEREDOC_TIMEOUT_MS as u128 {
+                self.errors.push(ParseError::syntax(
+                    format!("Heredoc parsing timed out (> {}ms)", HEREDOC_TIMEOUT_MS),
+                    self.byte_cursor,
+                ));
+                // Clear pending to prevent further processing/hanging
+                self.pending_heredocs.clear();
+                self.heredoc_start_time = None;
+                return;
+            }
+        }
+
         // Advance to first content line (handle newline after statement terminator)
         self.byte_cursor = after_line_break(self.src_bytes, self.byte_cursor);
 
@@ -113,6 +177,13 @@ impl<'a> Parser<'a> {
 
         // Zip 1:1 in order (collector preserves input order)
         for (decl, body) in pending.into_iter().zip(out.contents.into_iter()) {
+            if !body.terminated {
+                self.errors.push(ParseError::syntax(
+                    format!("Unterminated heredoc: expected terminator '{}'", decl.label),
+                    decl.decl_span.start,
+                ));
+            }
+
             let _attached = self.try_attach_heredoc_at_node(root, decl.decl_span, &body);
 
             // Defensive guardrail: warn if heredoc node wasn't found at expected span

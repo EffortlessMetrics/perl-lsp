@@ -95,6 +95,9 @@ impl<'a> Parser<'a> {
             TokenKind::Default => self.parse_default_statement(),
             TokenKind::Try => self.parse_try(),
 
+            // Loop control
+            TokenKind::Next | TokenKind::Last | TokenKind::Redo => self.parse_loop_control(),
+
             // Subroutines and modern OOP
             TokenKind::Sub => {
                 let sub_node = self.parse_subroutine()?;
@@ -181,7 +184,7 @@ impl<'a> Parser<'a> {
             self.byte_cursor = semi_token.end;
         }
 
-        // Drain pending heredocs after statement completion (Sprint A Day 5 - with AST attachment)
+        // Drain pending heredocs after statement completion (attach content to AST)
         self.drain_pending_heredocs(&mut stmt);
 
         Ok(stmt)
@@ -451,10 +454,47 @@ impl<'a> Parser<'a> {
             let mut statements = Vec::new();
 
             while s.peek_kind() != Some(TokenKind::RightBrace) && !s.tokens.is_eof() {
-                let stmt = s.parse_statement()?;
-                // Don't add empty blocks (from lone semicolons) to the statement list
-                if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty()) {
-                    statements.push(stmt);
+                // Parse statement with error recovery (AC3: Panic Mode Recovery inside blocks)
+                let stmt_result = s.parse_statement();
+                match stmt_result {
+                    Ok(stmt) => {
+                        // Don't add empty blocks (from lone semicolons) to the statement list
+                        if !matches!(stmt.kind, NodeKind::Block { ref statements } if statements.is_empty()) {
+                            statements.push(stmt);
+                        }
+                    }
+                    Err(e) => {
+                        // Don't recover from recursion/nesting limits - propagate immediately
+                        if matches!(e, ParseError::RecursionLimit | ParseError::NestingTooDeep { .. }) {
+                            return Err(e);
+                        }
+
+                        // Record the actual error
+                        s.errors.push(e.clone());
+
+                        // Create error node for failed statement
+                        let error_location = s.current_position();
+                        let error_msg = format!("{}", e);
+                        // Collect peek_kind before mutable borrow in recover_from_error
+                        let peek_kind = format!("{:?}", s.peek_kind());
+                        let error_node = s.recover_from_error(
+                            error_msg,
+                            "statement".to_string(),
+                            peek_kind,
+                            error_location
+                        );
+                        statements.push(error_node);
+
+                        // Try to synchronize to next statement
+                        if !s.synchronize() {
+                            // If synchronization fails, we check if we're at block end or EOF
+                            if s.peek_kind() == Some(TokenKind::RightBrace) || s.tokens.is_eof() {
+                                break;
+                            }
+                            // Otherwise stop to prevent infinite loop
+                            break; 
+                        }
+                    }
                 }
 
                 // parse_statement already invalidates peek, so we don't need to do it again
@@ -524,6 +564,29 @@ impl<'a> Parser<'a> {
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::LabeledStatement { label, statement },
+            SourceLocation { start, end },
+        ))
+    }
+
+    /// Parse loop control statement (next, last, redo)
+    fn parse_loop_control(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let op_token = self.consume_token()?;
+        let op = op_token.text.to_string();
+
+        self.mark_not_stmt_start();
+
+        // Check for optional label
+        let label = if let Some(TokenKind::Identifier) = self.peek_kind() {
+            let label_token = self.consume_token()?;
+            Some(label_token.text.to_string())
+        } else {
+            None
+        };
+
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::LoopControl { op, label },
             SourceLocation { start, end },
         ))
     }

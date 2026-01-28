@@ -48,32 +48,27 @@ pub use perl_builtins as builtins;
 /// Parser engine components and supporting utilities.
 pub mod engine;
 /// Token stream and trivia utilities for the parser.
-pub mod tokens {
-    pub use perl_tokenizer::token_stream;
-    pub use perl_tokenizer::token_wrapper;
-    pub use perl_tokenizer::trivia;
-    pub use perl_tokenizer::trivia_parser;
-}
+pub mod tokens;
 
 pub use ast_v2::{DiagnosticId, MissingKind};
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub use engine::ast;
 /// Experimental second-generation AST (work in progress).
 pub use engine::ast_v2;
-/// Edit tracking for incremental parsing.
-pub use perl_edit as edit;
-/// Heredoc content collector with FIFO ordering and indent stripping.
-pub use perl_heredoc as heredoc_collector;
 /// Parser context with error recovery support.
 pub use engine::parser_context;
 /// Pragma tracking for `use` and related directives.
 pub use engine::pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub use engine::quote_parser;
-/// Parser utilities and helpers.
-pub use perl_tokenizer::util;
 /// Legacy module aliases for moved engine components.
 pub use engine::{error, parser, position};
+/// Edit tracking for incremental parsing.
+pub use perl_edit as edit;
+/// Heredoc content collector with FIFO ordering and indent stripping.
+pub use perl_heredoc as heredoc_collector;
+/// Parser utilities and helpers.
+pub use perl_tokenizer::util;
 
 /// Parser entrypoint for Perl source.
 pub use engine::parser::Parser;

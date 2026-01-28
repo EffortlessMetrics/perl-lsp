@@ -3,9 +3,9 @@
 //! This module provides the ability to rename symbols across a document,
 //! ensuring all references are updated correctly.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Rename operations integrate with the PSTX (Parse → Index → Navigate → Complete → Analyze) pipeline:
+//! Rename operations integrate with the Parse → Index → Navigate → Complete → Analyze workflow:
 //!
 //! - **Parse**: AST analysis identifies symbol definitions and usage patterns
 //! - **Index**: Symbol tables provide comprehensive reference mapping for rename validation
@@ -25,7 +25,7 @@
 //! - **Conflict detection**: Prevents name collisions and scope violations
 //! - **Atomic operations**: Ensures all-or-nothing rename semantics
 //!
-//! # Client Capability Requirements
+//! # Client capability requirements
 //!
 //! Requires LSP client support for workspace edits and prepare rename:
 //! ```json
@@ -45,12 +45,23 @@
 //! }
 //! ```
 //!
+//! # Protocol compliance
+//!
+//! Implements the LSP rename protocol (`textDocument/rename` and
+//! `textDocument/prepareRename`) with transactional workspace edits.
+//! The protocol requirements map cleanly onto LSP workspace edit behavior.
+//!
 //! # Performance Characteristics
 //!
 //! - **Symbol resolution**: <50ms for typical file analysis
 //! - **Cross-file analysis**: <300ms for workspace-wide rename validation
 //! - **Edit generation**: <100ms for complex multi-file renames
 //! - **Memory usage**: <20MB for large workspace symbol indexing
+//!
+//! # See also
+//!
+//! - [`RenameProvider`] for executing rename operations
+//! - [`crate::ide::lsp_compat::references`] for related navigation workflows
 //!
 //! # Usage Examples
 //!

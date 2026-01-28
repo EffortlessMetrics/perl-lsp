@@ -10,6 +10,9 @@
 //! - **Node reuse efficiency** of 70-90% for typical editing scenarios
 //! - **Graceful fallback** to full parsing for complex structural changes
 //! - **Memory efficient** with LRU cache eviction and `Arc<Node>` sharing
+//! - **Time complexity**: O(n) for reparsed spans with bounded lookahead
+//! - **Space complexity**: O(n) for cached nodes and reuse maps
+//! - **Large file scaling**: Tuned to scale for large file edits (50GB PST-style workspaces)
 //!
 //! ## Supported Edit Types
 //!

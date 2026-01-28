@@ -21,7 +21,7 @@ pub fn check_error_nodes(
     diagnostics: &mut Vec<Diagnostic>,
 ) {
     walk_node(node, &mut |n| {
-        if let NodeKind::Error { message } = &n.kind {
+        if let NodeKind::Error { message, .. } = &n.kind {
             let error_kind = error_classifier.classify(n, source);
             let diagnostic_message = error_classifier.get_diagnostic_message(&error_kind);
             let suggestion = error_classifier.get_suggestion(&error_kind);

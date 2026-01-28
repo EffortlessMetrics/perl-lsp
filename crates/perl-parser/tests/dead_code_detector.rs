@@ -8,13 +8,11 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 fn detects_dead_code() -> TestResult {
     let index = WorkspaceIndex::new();
     index.index_file_str("file:///main.pl", "use A;\nA::bar();\n")?;
-    index
-        .index_file_str("file:///A.pm", "package A;\nsub foo { return 1; }\nsub bar { 1; }\n")?;
-    index
-        .index_file_str(
-            "file:///Unused.pm",
-            "package Unused;\nsub unused { return 1; }\nreturn 1;\nprint 'hi';\n",
-        )?;
+    index.index_file_str("file:///A.pm", "package A;\nsub foo { return 1; }\nsub bar { 1; }\n")?;
+    index.index_file_str(
+        "file:///Unused.pm",
+        "package Unused;\nsub unused { return 1; }\nreturn 1;\nprint 'hi';\n",
+    )?;
 
     let mut detector = DeadCodeDetector::new(index);
     detector.add_entry_point(PathBuf::from("/main.pl"));

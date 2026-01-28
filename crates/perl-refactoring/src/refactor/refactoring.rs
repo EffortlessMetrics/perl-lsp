@@ -167,6 +167,29 @@ pub enum RefactoringScope {
     Directory(PathBuf),
     /// Custom set of files
     FileSet(Vec<PathBuf>),
+    /// Package scope within a file
+    Package {
+        /// File containing the package declaration.
+        file: PathBuf,
+        /// Package name to scope the operation to.
+        name: String,
+    },
+    /// Function scope within a file
+    Function {
+        /// File containing the function definition.
+        file: PathBuf,
+        /// Function name to scope the operation to.
+        name: String,
+    },
+    /// Arbitrary block scope within a file (start, end positions)
+    Block {
+        /// File containing the block.
+        file: PathBuf,
+        /// Start position as (line, column).
+        start: (u32, u32),
+        /// End position as (line, column).
+        end: (u32, u32),
+    },
 }
 
 /// Modernization patterns for legacy code
@@ -388,6 +411,28 @@ impl RefactoringEngine {
         Ok(cleanup_result)
     }
 
+    /// Index a file for workspace-aware refactoring operations
+    pub fn index_file(&mut self, path: &Path, content: &str) -> ParseResult<()> {
+        #[cfg(feature = "workspace_refactor")]
+        {
+            let uri_str = crate::workspace_index::fs_path_to_uri(path).map_err(|e| {
+                ParseError::SyntaxError {
+                    message: format!("URI conversion failed: {}", e),
+                    location: 0,
+                }
+            })?;
+            let url = url::Url::parse(&uri_str).map_err(|e| ParseError::SyntaxError {
+                message: format!("URL parsing failed: {}", e),
+                location: 0,
+            })?;
+            self.workspace_refactor._index.index_file(url, content.to_string()).map_err(|e| {
+                ParseError::SyntaxError { message: format!("Indexing failed: {}", e), location: 0 }
+            })?;
+        }
+        let _ = content; // Acknowledge when feature disabled
+        Ok(())
+    }
+
     // Private implementation methods
 
     fn generate_operation_id(&self) -> String {
@@ -475,6 +520,11 @@ impl RefactoringEngine {
                     }
                     RefactoringScope::Workspace => {
                         // Workspace scope doesn't require specific files
+                    }
+                    RefactoringScope::Package { file, .. }
+                    | RefactoringScope::Function { file, .. }
+                    | RefactoringScope::Block { file, .. } => {
+                        self.validate_file_exists(file)?;
                     }
                 }
             }
@@ -1008,33 +1058,72 @@ impl RefactoringEngine {
         new_name: &str,
         scope: &RefactoringScope,
     ) -> ParseResult<RefactoringResult> {
-        // Delegate to workspace refactor
-        match scope {
-            RefactoringScope::Workspace => {
-                // TODO: Implement workspace-wide rename
-                Ok(RefactoringResult {
-                    success: true,
-                    files_modified: 0,
-                    changes_made: 0,
-                    warnings: vec![format!(
-                        "Symbol rename from '{}' to '{}' not yet implemented",
-                        old_name, new_name
-                    )],
-                    errors: vec![],
-                    operation_id: None,
-                })
-            }
-            _ => {
-                // TODO: Implement scoped rename
-                Ok(RefactoringResult {
+        #[cfg(feature = "workspace_refactor")]
+        {
+            let rename_result = match scope {
+                RefactoringScope::Workspace
+                | RefactoringScope::File(_)
+                | RefactoringScope::Directory(_)
+                | RefactoringScope::FileSet(_)
+                | RefactoringScope::Package { .. }
+                | RefactoringScope::Function { .. }
+                | RefactoringScope::Block { .. } => {
+                    // For workspace scope or any other scope, we use rename_symbol
+                    // The underlying WorkspaceRefactor uses the WorkspaceIndex to find all occurrences
+                    // based on the symbol key (pkg + name + sigil).
+                    let target_file = match scope {
+                        RefactoringScope::File(path) => path,
+                        RefactoringScope::Package { file, .. } => file,
+                        RefactoringScope::Function { file, .. } => file,
+                        RefactoringScope::Block { file, .. } => file,
+                        _ => Path::new(""),
+                    };
+
+                    self.workspace_refactor.rename_symbol(old_name, new_name, target_file, (0, 0))
+                }
+            };
+
+            match rename_result {
+                Ok(result) => {
+                    let files_modified = self.apply_file_edits(&result.file_edits)?;
+                    let changes_made = result.file_edits.iter().map(|e| e.edits.len()).sum();
+                    println!(
+                        "perform_symbol_rename DEBUG: result.success=true, files_modified={}, changes_made={}",
+                        files_modified, changes_made
+                    );
+
+                    let refac_result = RefactoringResult {
+                        success: true,
+                        files_modified,
+                        changes_made,
+                        warnings: vec![],
+                        errors: vec![],
+                        operation_id: None,
+                    };
+                    println!("perform_symbol_rename DEBUG: returning result: {:?}", refac_result);
+                    Ok(refac_result)
+                }
+                Err(e) => Ok(RefactoringResult {
                     success: false,
                     files_modified: 0,
                     changes_made: 0,
                     warnings: vec![],
-                    errors: vec!["Scoped rename not yet implemented".to_string()],
+                    errors: vec![format!("Rename failed: {}", e)],
                     operation_id: None,
-                })
+                }),
             }
+        }
+
+        #[cfg(not(feature = "workspace_refactor"))]
+        {
+            Ok(RefactoringResult {
+                success: false,
+                files_modified: 0,
+                changes_made: 0,
+                warnings: vec!["Workspace refactoring feature disabled".to_string()],
+                errors: vec![],
+                operation_id: None,
+            })
         }
     }
 
@@ -1430,7 +1519,7 @@ impl RefactoringEngine {
     fn perform_inline(
         &mut self,
         symbol_name: &str,
-        _all_occurrences: bool, // TODO: Implement multi-file occurrence inlining
+        all_occurrences: bool, // AC1: Implement multi-file occurrence inlining
         files: &[PathBuf],
     ) -> ParseResult<RefactoringResult> {
         let mut warnings = Vec::new();
@@ -1453,12 +1542,16 @@ impl RefactoringEngine {
                             let edits = refactor_result.file_edits;
                             if !edits.is_empty() {
                                 let mod_count = self.apply_file_edits(&edits)?;
-                                files_modified += mod_count;
-                                changes_made += edits.iter().map(|e| e.edits.len()).sum::<usize>();
-                                applied = true;
-                                // Variable definition found and inlined - stop searching
-                                // Note: _all_occurrences is not yet implemented for cross-file inlining
-                                break;
+                                if mod_count > 0 {
+                                    files_modified += mod_count;
+                                    changes_made +=
+                                        edits.iter().map(|e| e.edits.len()).sum::<usize>();
+                                    applied = true;
+                                    // AC1: If not all_occurrences, stop after first successful inlining
+                                    if !all_occurrences {
+                                        break;
+                                    }
+                                }
                             }
                         }
                         Err(crate::workspace_refactor::RefactorError::SymbolNotFound {
@@ -1587,9 +1680,11 @@ mod temp_stubs {
 
     #[allow(dead_code)]
     #[derive(Debug)]
+    /// Workspace refactor stub used when the `workspace_refactor` feature is disabled.
     pub(super) struct WorkspaceRefactor;
     #[allow(dead_code)]
     impl WorkspaceRefactor {
+        /// Create a new stub workspace refactor instance.
         pub(super) fn new() -> Self {
             Self
         }
@@ -1597,13 +1692,16 @@ mod temp_stubs {
 
     #[allow(dead_code)]
     #[derive(Debug)]
+    /// Modernization engine stub used when the `modernize` feature is disabled.
     pub(super) struct ModernizeEngine;
     #[allow(dead_code)]
     impl ModernizeEngine {
+        /// Create a new stub modernizer instance.
         pub(super) fn new() -> Self {
             Self
         }
 
+        /// Placeholder modernization hook that reports no changes.
         pub(super) fn modernize_file(
             &mut self,
             _file: &Path,
@@ -1876,8 +1974,12 @@ sub test {
         // Lines are 0-indexed.
         // Line 5: "    print $x;\n"
         // Line 8: "    # End extraction\n"
-        let result = must(engine
-            .perform_extract_method("extracted_sub", (5, 0), (8, 0), std::slice::from_ref(&path)));
+        let result = must(engine.perform_extract_method(
+            "extracted_sub",
+            (5, 0),
+            (8, 0),
+            std::slice::from_ref(&path),
+        ));
 
         assert!(result.success);
 
@@ -1923,8 +2025,12 @@ sub existing {
         // selection should include lines 8 and 9 (0-indexed)
         // Line 8: "    print $val;\n"
         // Line 9: "    my $new_val = $val * 2;\n"
-        let result = must(engine
-            .perform_extract_method("helper", (8, 0), (10, 0), std::slice::from_ref(&path)));
+        let result = must(engine.perform_extract_method(
+            "helper",
+            (8, 0),
+            (10, 0),
+            std::slice::from_ref(&path),
+        ));
 
         assert!(result.success);
 
@@ -1966,8 +2072,12 @@ sub complex {
 
         // Line 5: "    foreach my $item (@items) {"
         // Line 10: "    # end"
-        let result = must(engine
-            .perform_extract_method("do_math", (5, 0), (10, 0), std::slice::from_ref(&path)));
+        let result = must(engine.perform_extract_method(
+            "do_math",
+            (5, 0),
+            (10, 0),
+            std::slice::from_ref(&path),
+        ));
 
         assert!(result.success);
         let new_code = must(std::fs::read_to_string(&path));
@@ -2448,14 +2558,13 @@ sub complex {
         #[test]
         fn test_fileset_scope_max_files_limit() {
             // Create temp files for the test
-            let files: Vec<tempfile::NamedTempFile> = (0..5).map(|_| must(tempfile::NamedTempFile::new())).collect();
+            let files: Vec<tempfile::NamedTempFile> =
+                (0..5).map(|_| must(tempfile::NamedTempFile::new())).collect();
             let paths: Vec<_> = files.iter().map(|f| f.path().to_path_buf()).collect();
 
             // Create engine with low max_files limit
-            let config = RefactoringConfig {
-                max_files_per_operation: 3,
-                ..RefactoringConfig::default()
-            };
+            let config =
+                RefactoringConfig { max_files_per_operation: 3, ..RefactoringConfig::default() };
             let engine = RefactoringEngine::with_config(config);
 
             let op = RefactoringType::SymbolRename {

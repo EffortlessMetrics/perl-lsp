@@ -435,7 +435,8 @@ fn test_regression_detection_across_sessions() -> Result<(), Box<dyn std::error:
             }
 
             let current_stats = analyzer.calculate_statistics();
-            let baseline = baseline_stats.get(&**name)
+            let baseline = baseline_stats
+                .get(&**name)
                 .ok_or_else(|| format!("Baseline stats not found for {}", name))?;
 
             // Regression detection

@@ -122,7 +122,7 @@ The audit tool uses bounded iteration limits to prevent hangs:
 | `DEFAULT_TIMEOUT` | 30s | Maximum time per file parse |
 | `MAX_NESTING_DEPTH` | 100 | Maximum nesting depth |
 | `MAX_REGEX_OPERATIONS` | 10,000 | Maximum regex operations |
-| `MAX_HEREDOC_DEPTH` | 10 | Maximum heredoc nesting |
+| `MAX_HEREDOC_DEPTH` | 100 | Maximum heredoc nesting |
 | `MAX_HEREDOC_SIZE` | 1,000,000 | Maximum heredoc size (1MB) |
 
 ## Report Structure

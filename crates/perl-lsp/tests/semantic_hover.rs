@@ -45,8 +45,7 @@ mod semantic_hover_tests {
     }
 
     #[test]
-    fn hover_on_scalar_variable_shows_declaration_info() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn hover_on_scalar_variable_shows_declaration_info() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my $count = 42;
 my $result = $count * 2;
 "#;
@@ -60,8 +59,8 @@ my $result = $count * 2;
         let response = server.get_hover(uri, line, character);
         println!("SCALAR HOVER RESPONSE: {response:#}");
 
-        let content = hover_content(&response)
-            .ok_or("expected hover content for $count reference")?;
+        let content =
+            hover_content(&response).ok_or("expected hover content for $count reference")?;
 
         // Verify hover shows scalar variable information
         assert!(
@@ -106,8 +105,7 @@ my $sum = calculate(10, 20);
     }
 
     #[test]
-    fn hover_on_subroutine_declaration_shows_signature(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn hover_on_subroutine_declaration_shows_signature() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"sub format_name {
     my ($first, $last) = @_;
     return "$first $last";
@@ -123,8 +121,8 @@ my $sum = calculate(10, 20);
         let response = server.get_hover(uri, line, character);
         println!("SUB DECL HOVER RESPONSE: {response:#}");
 
-        let content = hover_content(&response)
-            .ok_or("expected hover content for format_name declaration")?;
+        let content =
+            hover_content(&response).ok_or("expected hover content for format_name declaration")?;
 
         // Verify hover shows subroutine declaration information
         assert!(
@@ -135,8 +133,7 @@ my $sum = calculate(10, 20);
     }
 
     #[test]
-    fn hover_on_package_qualified_call_shows_context() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn hover_on_package_qualified_call_shows_context() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"package Math::Utils {
     sub multiply {
         my ($a, $b) = @_;
@@ -284,8 +281,7 @@ my @doubled = map { $_ * 2 } @items;
     }
 
     #[test]
-    fn hover_on_undefined_symbol_returns_minimal_info() -> Result<(), Box<dyn std::error::Error>>
-    {
+    fn hover_on_undefined_symbol_returns_minimal_info() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"my $defined = 42;
 my $result = $undefined + $defined;
 "#;
@@ -311,8 +307,7 @@ my $result = $undefined + $defined;
     }
 
     #[test]
-    fn hover_on_package_declaration_shows_package_info(
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn hover_on_package_declaration_shows_package_info() -> Result<(), Box<dyn std::error::Error>> {
         let code = r#"package MyApp::Utils;
 
 use strict;
@@ -432,13 +427,8 @@ my $result = $value + process();
         println!("EMPTY SPACE HOVER RESPONSE: {response:#}");
 
         // Should return null result for empty space
-        let result = response
-            .get("result")
-            .ok_or("expected result field in hover response")?;
-        assert!(
-            result.is_null(),
-            "hover on empty space should return null result"
-        );
+        let result = response.get("result").ok_or("expected result field in hover response")?;
+        assert!(result.is_null(), "hover on empty space should return null result");
         Ok(())
     }
 

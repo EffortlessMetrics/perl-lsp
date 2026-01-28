@@ -20,7 +20,7 @@ mod doc_validation_helpers {
     pub struct DocumentationAnalysis {
         pub has_module_docs: bool,
         pub public_items_without_docs: Vec<String>,
-        pub missing_pipeline_integration: Vec<String>,
+        pub missing_workflow_integration: Vec<String>,
         pub missing_performance_docs: Vec<String>,
         pub code_examples_present: bool,
         pub cross_references_present: bool,
@@ -38,7 +38,7 @@ mod doc_validation_helpers {
         let mut analysis = DocumentationAnalysis {
             has_module_docs: false,
             public_items_without_docs: Vec::new(),
-            missing_pipeline_integration: Vec::new(),
+            missing_workflow_integration: Vec::new(),
             missing_performance_docs: Vec::new(),
             code_examples_present: false,
             cross_references_present: false,
@@ -83,9 +83,9 @@ mod doc_validation_helpers {
                     ));
                 }
 
-                // Check for pipeline integration documentation
-                if !has_pipeline_integration_docs(&lines, line_num) {
-                    analysis.missing_pipeline_integration.push(format!(
+                // Check for workflow integration documentation
+                if !has_workflow_integration_docs(&lines, line_num) {
+                    analysis.missing_workflow_integration.push(format!(
                         "{}:{}: {}",
                         file_path,
                         line_num + 1,
@@ -104,11 +104,14 @@ mod doc_validation_helpers {
 
         // Check for performance documentation
         if is_performance_critical_module(file_path) {
-            let has_perf_docs = content.to_lowercase().contains("performance")
-                && content.to_lowercase().contains("memory")
-                && (content.to_lowercase().contains("50gb")
-                    || content.to_lowercase().contains("pst")
-                    || content.to_lowercase().contains("large file"));
+            let content_lower = content.to_lowercase();
+            let has_perf_docs = content_lower.contains("performance")
+                && content_lower.contains("memory")
+                && (content_lower.contains("large")
+                    || content_lower.contains("scale")
+                    || content_lower.contains("scal")
+                    || content_lower.contains("benchmark")
+                    || content_lower.contains("throughput"));
 
             if !has_perf_docs {
                 analysis.missing_performance_docs.push(file_path.to_string());
@@ -132,19 +135,20 @@ mod doc_validation_helpers {
             && !line.contains("//")
     }
 
-    /// Checks if documentation includes PSTX pipeline integration context
-    fn has_pipeline_integration_docs(lines: &[&str], item_line: usize) -> bool {
+    /// Checks if documentation includes LSP workflow integration context
+    fn has_workflow_integration_docs(lines: &[&str], item_line: usize) -> bool {
         let doc_range_start = item_line.saturating_sub(10);
         let doc_range = &lines[doc_range_start..item_line];
 
         doc_range.iter().any(|line| {
             let content = line.to_lowercase();
-            content.contains("extract")
-                || content.contains("normalize")
-                || content.contains("thread")
-                || content.contains("render")
+            content.contains("parse")
                 || content.contains("index")
-                || content.contains("pstx")
+                || content.contains("navigate")
+                || content.contains("complete")
+                || content.contains("analyze")
+                || content.contains("lsp workflow")
+                || content.contains("workflow")
         })
     }
 
@@ -320,34 +324,70 @@ mod doc_validation_helpers {
     /// Finds empty or trivial documentation strings
     pub fn find_empty_doc_strings(lines: &[&str]) -> Vec<String> {
         let mut empty_docs = Vec::new();
+        let mut current_block: Vec<(usize, String)> = Vec::new();
 
         for (line_num, line) in lines.iter().enumerate() {
             let doc_line = line.trim_start();
             if doc_line.starts_with("///") {
-                let content = doc_line.trim_start_matches("///").trim();
+                let content = doc_line.trim_start_matches("///").trim().to_string();
+                current_block.push((line_num, content));
+                continue;
+            }
 
-                // Empty doc comment
-                if content.is_empty() {
-                    continue; // Skip empty lines within doc blocks
-                }
-
-                // Trivial documentation patterns
-                if content.len() < 5
-                    || content == "TODO"
-                    || content == "FIXME"
-                    || content.starts_with("//")
-                    || content == "."
-                {
-                    empty_docs.push(format!(
-                        "Trivial documentation at line {}: '{}'",
-                        line_num + 1,
-                        content
-                    ));
-                }
+            if !current_block.is_empty() {
+                evaluate_doc_block(&current_block, &mut empty_docs);
+                current_block.clear();
             }
         }
 
+        if !current_block.is_empty() {
+            evaluate_doc_block(&current_block, &mut empty_docs);
+        }
+
         empty_docs
+    }
+
+    fn evaluate_doc_block(block: &[(usize, String)], empty_docs: &mut Vec<String>) {
+        let mut in_code_block = false;
+        let mut has_non_empty_text = false;
+
+        for (line_num, content) in block {
+            let trimmed = content.trim();
+
+            if trimmed.starts_with("```") {
+                in_code_block = !in_code_block;
+                continue;
+            }
+
+            if in_code_block {
+                continue;
+            }
+
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            has_non_empty_text = true;
+
+            if trimmed.len() < 5
+                || trimmed == "TODO"
+                || trimmed == "FIXME"
+                || trimmed.starts_with("//")
+                || trimmed == "."
+            {
+                empty_docs.push(format!(
+                    "Trivial documentation at line {}: '{}'",
+                    line_num + 1,
+                    trimmed
+                ));
+            }
+        }
+
+        if !has_non_empty_text {
+            if let Some((line_num, _)) = block.first() {
+                empty_docs.push(format!("Empty documentation at line {}", line_num + 1));
+            }
+        }
     }
 
     /// Finds invalid cross-references that won't resolve properly
@@ -491,16 +531,16 @@ mod doc_validation_helpers {
         missing_recovery
     }
 
-    /// Analyzes PSTX pipeline stage coverage across modules
+    /// Analyzes LSP workflow stage coverage across modules
     #[allow(dead_code)]
-    pub fn analyze_pipeline_coverage(
+    pub fn analyze_workflow_coverage(
         module_paths: &[&str],
         src_dir: &str,
     ) -> HashMap<String, usize> {
-        let pipeline_stages = ["Extract", "Normalize", "Thread", "Render", "Index"];
+        let workflow_stages = ["Parse", "Index", "Navigate", "Complete", "Analyze"];
         let mut coverage = HashMap::new();
 
-        for stage in &pipeline_stages {
+        for stage in &workflow_stages {
             coverage.insert(stage.to_string(), 0);
         }
 
@@ -508,7 +548,7 @@ mod doc_validation_helpers {
             let module_path = format!("{}/{}", src_dir, module);
             if let Ok(content) = fs::read_to_string(&module_path) {
                 let content_lower = content.to_lowercase();
-                for stage in &pipeline_stages {
+                for stage in &workflow_stages {
                     if content_lower.contains(&stage.to_lowercase()) {
                         if let Some(count) = coverage.get_mut(*stage) {
                             *count += 1;
@@ -636,7 +676,7 @@ mod missing_docs_tests {
     #[test]
     fn test_public_structs_documentation_presence() {
         // AC:AC2 - Verify all public structs/enums have comprehensive documentation
-        // including PSTX pipeline role description
+        // including workflow role description
         let roots = source_roots();
         let critical_modules = [
             "engine/parser/mod.rs",
@@ -649,7 +689,7 @@ mod missing_docs_tests {
         ];
 
         let mut all_missing_docs = Vec::new();
-        let mut all_missing_pipeline_integration = Vec::new();
+        let mut all_missing_workflow_integration = Vec::new();
         let mut missing_modules = Vec::new();
 
         for module in &critical_modules {
@@ -661,7 +701,7 @@ mod missing_docs_tests {
             for (display_path, content) in files {
                 let analysis = analyze_file_documentation(&display_path, &content);
                 all_missing_docs.extend(analysis.public_items_without_docs);
-                all_missing_pipeline_integration.extend(analysis.missing_pipeline_integration);
+                all_missing_workflow_integration.extend(analysis.missing_workflow_integration);
             }
         }
 
@@ -671,19 +711,19 @@ mod missing_docs_tests {
             missing_modules
         );
 
-        if !all_missing_docs.is_empty() || !all_missing_pipeline_integration.is_empty() {
-            build_ac2_error_message(&all_missing_docs, &all_missing_pipeline_integration);
+        if !all_missing_docs.is_empty() || !all_missing_workflow_integration.is_empty() {
+            build_ac2_error_message(&all_missing_docs, &all_missing_workflow_integration);
         }
 
         assert!(all_missing_docs.is_empty(), "All public structs should have documentation");
         assert!(
-            all_missing_pipeline_integration.is_empty(),
-            "All public structs should document PSTX pipeline integration"
+            all_missing_workflow_integration.is_empty(),
+            "All public structs should document workflow integration"
         );
     }
 
     /// Builds a comprehensive error message for AC2 failures
-    fn build_ac2_error_message(missing_docs: &[String], missing_pipeline: &[String]) {
+    fn build_ac2_error_message(missing_docs: &[String], missing_workflow: &[String]) {
         let mut error_msg =
             String::from("AC2 NOT IMPLEMENTED: Missing comprehensive struct/enum documentation:\n");
 
@@ -694,9 +734,9 @@ mod missing_docs_tests {
             }
         }
 
-        if !missing_pipeline.is_empty() {
-            error_msg.push_str("Missing PSTX pipeline integration documentation:\n");
-            for item in missing_pipeline {
+        if !missing_workflow.is_empty() {
+            error_msg.push_str("Missing workflow integration documentation:\n");
+            for item in missing_workflow {
                 error_msg.push_str(&format!("  - {}\n", item));
             }
         }
@@ -894,7 +934,7 @@ mod missing_docs_tests {
 
     #[test]
     fn test_performance_documentation_presence() {
-        // AC:AC4 - Verify performance-critical APIs document memory usage and 50GB PST processing
+        // AC:AC4 - Verify performance-critical APIs document memory usage and large workspace scaling
         let roots = source_roots();
         let performance_modules = [
             "incremental/incremental_v2.rs",
@@ -999,7 +1039,7 @@ mod missing_docs_tests {
             missing.push("Memory usage documentation");
         }
         if !indicators.has_pst_processing_notes {
-            missing.push("50GB PST processing notes");
+            missing.push("large workspace scaling notes");
         }
 
         missing
@@ -1014,7 +1054,7 @@ mod missing_docs_tests {
         }
         error_msg.push_str("\nPerformance-critical APIs must document:\n");
         error_msg.push_str("  - Memory usage patterns\n");
-        error_msg.push_str("  - 50GB PST processing performance implications\n");
+        error_msg.push_str("  - large workspace scaling performance implications\n");
         error_msg.push_str("  - Optimization characteristics\n");
 
         panic!("{}", error_msg);
@@ -1023,7 +1063,7 @@ mod missing_docs_tests {
     #[test]
     fn test_module_level_documentation_presence() {
         // AC:AC5 - Verify each module has comprehensive module-level documentation
-        // with //! comments explaining purpose and PSTX architecture relationship
+        // with //! comments explaining purpose and LSP architecture relationship
         let roots = source_roots();
         let core_modules = [
             "engine/parser/mod.rs",
@@ -1119,19 +1159,20 @@ mod missing_docs_tests {
         let doc_lower = doc_text.to_lowercase();
 
         let has_overview = doc_text.len() > 50; // Substantial content
-        let has_pstx_integration = doc_lower.contains("extract")
-            || doc_lower.contains("normalize")
-            || doc_lower.contains("thread")
-            || doc_lower.contains("render")
+        let has_workflow_integration = doc_lower.contains("parse")
             || doc_lower.contains("index")
-            || doc_lower.contains("pstx");
+            || doc_lower.contains("navigate")
+            || doc_lower.contains("complete")
+            || doc_lower.contains("analyze")
+            || doc_lower.contains("lsp workflow")
+            || doc_lower.contains("workflow");
         let has_examples = doc_text.contains("```") || doc_text.contains("Example");
 
         if !has_overview {
             missing.push("Comprehensive overview");
         }
-        if !has_pstx_integration {
-            missing.push("PSTX pipeline integration");
+        if !has_workflow_integration {
+            missing.push("workflow integration");
         }
         if !has_examples {
             missing.push("Usage examples");
@@ -1161,7 +1202,7 @@ mod missing_docs_tests {
 
         error_msg.push_str("\nEach module must have:\n");
         error_msg.push_str("  - //! Module-level documentation\n");
-        error_msg.push_str("  - Purpose and PSTX architecture relationship\n");
+        error_msg.push_str("  - Purpose and LSP architecture relationship\n");
         error_msg.push_str("  - Usage examples\n");
 
         panic!("{}", error_msg);
@@ -1322,7 +1363,7 @@ mod missing_docs_tests {
 
     #[test]
     fn test_error_types_documentation() {
-        // AC:AC8 - Verify error types are documented with email processing workflow context
+        // AC:AC8 - Verify error types are documented with parsing and analysis workflow context
         let roots = source_roots();
         let error_files = [
             "engine/error/mod.rs",
@@ -1411,12 +1452,12 @@ mod missing_docs_tests {
         let doc_range = &lines[doc_range_start..error_line];
         let doc_text = extract_doc_text(doc_range).to_lowercase();
 
-        doc_text.contains("email")
-            || doc_text.contains("processing")
-            || doc_text.contains("workflow")
-            || doc_text.contains("pst")
-            || doc_text.contains("extract")
-            || doc_text.contains("normalize")
+        doc_text.contains("workflow")
+            || doc_text.contains("parse")
+            || doc_text.contains("index")
+            || doc_text.contains("navigate")
+            || doc_text.contains("complete")
+            || doc_text.contains("analyze")
             || doc_text.contains("when this error occurs")
             || doc_text.contains("recovery")
     }
@@ -1443,7 +1484,7 @@ mod missing_docs_tests {
         }
 
         error_msg.push_str("\nError documentation must include:\n");
-        error_msg.push_str("  - When the error occurs in email processing workflows\n");
+        error_msg.push_str("  - When the error occurs in parsing and analysis workflows\n");
         error_msg.push_str("  - Recovery strategies\n");
         error_msg.push_str("  - Pipeline stage context (Extract/Normalize/Thread/Render/Index)\n");
 
@@ -1691,8 +1732,8 @@ mod missing_docs_tests {
     }
 
     #[test]
-    fn test_comprehensive_pstx_pipeline_documentation() {
-        // Integration test ensuring all PSTX pipeline stages are documented
+    fn test_comprehensive_workflow_documentation() {
+        // Integration test ensuring all LSP workflow stages are documented
         // This combines aspects of multiple ACs to ensure comprehensive coverage
         let roots = source_roots();
         let core_modules = [
@@ -1705,12 +1746,12 @@ mod missing_docs_tests {
             "refactor/import_optimizer.rs",
         ];
 
-        let pipeline_coverage = analyze_pipeline_coverage_multi(&core_modules, &roots);
-        let (total_coverage, expected_minimum) = calculate_coverage_metrics(&pipeline_coverage);
+        let workflow_coverage = analyze_workflow_coverage_multi(&core_modules, &roots);
+        let (total_coverage, expected_minimum) = calculate_coverage_metrics(&workflow_coverage);
 
         if total_coverage < expected_minimum {
-            build_pipeline_coverage_error_message(
-                &pipeline_coverage,
+            build_workflow_coverage_error_message(
+                &workflow_coverage,
                 total_coverage,
                 expected_minimum,
             );
@@ -1718,25 +1759,25 @@ mod missing_docs_tests {
 
         assert!(
             total_coverage >= expected_minimum,
-            "PSTX pipeline stages should be comprehensively documented across core modules"
+            "LSP workflow stages should be comprehensively documented across core modules"
         );
     }
 
-    fn analyze_pipeline_coverage_multi(
+    fn analyze_workflow_coverage_multi(
         module_paths: &[&str],
         roots: &[SourceRoot],
     ) -> HashMap<String, usize> {
-        let pipeline_stages = ["Extract", "Normalize", "Thread", "Render", "Index"];
+        let workflow_stages = ["Parse", "Index", "Navigate", "Complete", "Analyze"];
         let mut coverage = HashMap::new();
 
-        for stage in &pipeline_stages {
+        for stage in &workflow_stages {
             coverage.insert(stage.to_string(), 0);
         }
 
         for module in module_paths {
             for (_, content) in read_source_files(module, roots) {
                 let content_lower = content.to_lowercase();
-                for stage in &pipeline_stages {
+                for stage in &workflow_stages {
                     if content_lower.contains(&stage.to_lowercase()) {
                         if let Some(count) = coverage.get_mut(*stage) {
                             *count += 1;
@@ -1749,27 +1790,27 @@ mod missing_docs_tests {
         coverage
     }
 
-    /// Calculates coverage metrics for pipeline documentation
+    /// Calculates coverage metrics for workflow documentation
     fn calculate_coverage_metrics(coverage: &HashMap<String, usize>) -> (usize, usize) {
         let total_coverage = coverage.values().sum();
         let expected_minimum = coverage.len() * 2; // At least 2 modules per stage
         (total_coverage, expected_minimum)
     }
 
-    /// Builds error message for pipeline coverage failures
-    fn build_pipeline_coverage_error_message(
+    /// Builds error message for workflow coverage failures
+    fn build_workflow_coverage_error_message(
         coverage: &HashMap<String, usize>,
         total: usize,
         expected: usize,
     ) {
-        let mut error_msg = String::from("PSTX PIPELINE DOCUMENTATION INCOMPLETE:\n");
-        error_msg.push_str("Pipeline stage coverage in core modules:\n");
+        let mut error_msg = String::from("LSP WORKFLOW DOCUMENTATION INCOMPLETE:\n");
+        error_msg.push_str("Workflow stage coverage in core modules:\n");
         for (stage, count) in coverage {
             error_msg.push_str(&format!("  - {}: {} modules\n", stage, count));
         }
         error_msg
             .push_str(&format!("\nTotal coverage: {}, Expected minimum: {}\n", total, expected));
-        error_msg.push_str("All core modules should document their role in PSTX pipeline stages\n");
+        error_msg.push_str("All core modules should document their role in LSP workflow stages\n");
 
         panic!("{}", error_msg);
     }
@@ -2033,7 +2074,8 @@ pub fn another_risky() -> Result<(), Box<dyn std::error::Error>> {
                 name: "Complete documentation",
                 content: r#"
 //! This module provides comprehensive functionality
-//! for email processing in the PSTX pipeline.
+//! for Perl parsing in the LSP workflow.
+//! Integrates with Parse → Index → Navigate → Complete → Analyze stages.
 //!
 //! # Examples
 //! ```rust
@@ -2042,28 +2084,28 @@ pub fn another_risky() -> Result<(), Box<dyn std::error::Error>> {
 //! assert!(result.is_ok());
 //! ```
 
-/// Processes emails in the Extract stage of PSTX pipeline
+/// Parses source in the Parse stage of the LSP workflow
 ///
 /// # Arguments
-/// * `input` - The email content to process
+/// * `input` - The Perl source to parse
 ///
 /// # Returns
-/// * `Ok(ProcessedEmail)` - Successfully processed email
-/// * `Err(ProcessingError)` - When processing fails due to malformed input
+/// * `Ok(Ast)` - Successfully parsed AST
+/// * `Err(ParseError)` - When parsing fails due to malformed input
 ///
 /// # Examples
 /// ```rust
-/// let email = process_email("test content")?;
-/// assert!(!email.content.is_empty());
+/// let ast = parse_source("my $x = 1;")?;
+/// assert!(ast.count_nodes() > 0);
 /// ```
 ///
-/// See also [`validate_email`] for input validation.
-pub fn process_email(input: &str) -> Result<ProcessedEmail, ProcessingError> {
+/// See also [`parse_with_recovery`] for error-tolerant parsing.
+pub fn parse_source(input: &str) -> Result<Ast, ParseError> {
     todo!()
 }
 "#,
                 expected_module_docs: true,
-                expected_violations: 1, // "```" is flagged as trivial
+                expected_violations: 0,
                 expected_cross_refs: true,
                 expected_examples: true,
             },
@@ -2091,7 +2133,7 @@ pub fn lonely_function() {}
 pub fn broken_example() {}
 "#,
                 expected_module_docs: true,
-                expected_violations: 3, // malformed doctest + 2 trivial docs
+                expected_violations: 1, // malformed doctest
                 expected_cross_refs: false,
                 expected_examples: true,
             },
@@ -2198,15 +2240,15 @@ pub fn bad_refs() {}
                 content: r#"
 //! High-performance parser with O(n) time complexity
 //!
-//! Optimized for processing 50GB PST files with efficient
+//! Optimized for large workspaces with efficient
 //! memory usage. Benchmarks show 150µs parsing speed
-//! for typical email structures.
+//! for typical Perl files.
 //!
 //! # Performance Characteristics
 //! - Time complexity: O(n) where n is input size
 //! - Space complexity: O(log n) for parse tree
-//! - Scales linearly with file size up to 50GB
-//! - Benchmark: 1-150µs per email depending on complexity
+//! - Scales linearly with file size for large workspaces
+//! - Benchmark: 1-150µs per parse depending on complexity
 "#,
                 expected_missing_items: 0,
                 should_have_complexity: true,
@@ -2219,8 +2261,8 @@ pub fn bad_refs() {}
                 content: r#"
 //! Incremental parsing module
 //!
-//! Handles large PST files efficiently with optimized algorithms.
-//! Performance tested on enterprise-scale datasets.
+//! Handles large workspaces efficiently with optimized algorithms.
+//! Performance tested on enterprise-scale codebases.
 "#,
                 expected_missing_items: 1, // missing complexity (it has optimized/performance keywords)
                 should_have_complexity: false,

@@ -119,26 +119,25 @@ pub struct SubroutineDefinition {
 /// - Memory limits are exceeded during parsing of large files
 /// - Unsupported Perl language features are encountered
 ///
-/// Recovery strategy: Use [`validate_pst_entry`] for pre-validation.
+/// Recovery strategy: Use [`Parser::parse_with_recovery`] for partial ASTs.
 ///
 /// # Performance
-/// - Time complexity: O(n) where n is PST entry size
+/// - Time complexity: O(n) where n is input size
 /// - Memory usage: O(log n) for parse tree construction
-/// - Benchmark: 1-150µs per email depending on complexity
-/// - Scales linearly with file size up to 50GB
+/// - Benchmark: 1-150µs per parse depending on complexity
+/// - Scales linearly with file size for large workspaces
 ///
 /// # Examples
 /// ```rust
-/// use perl_parser::{parse_pst_email, ParseOptions, EmailStructure};
+/// use perl_parser::Parser;
 ///
-/// let options = ParseOptions::default().with_memory_limit(1024 * 1024);
-/// let email = parse_pst_email(&pst_data, options)?;
-/// assert!(!email.subject.is_empty());
+/// let mut parser = Parser::new("my $x = 1;");
+/// let ast = parser.parse()?;
+/// assert!(ast.count_nodes() > 0);
 /// ```
 ///
-/// See also [`validate_pst_entry`] for input validation and
-/// [`EmailStructure::normalize`] for post-processing.
-pub fn parse_pst_email(pst_data: &[u8], options: ParseOptions) -> Result<EmailStructure, ParseError> {
+/// See also [`Parser::parse_with_recovery`] for error-tolerant parsing.
+pub fn parse(&mut self) -> Result<Node, ParseError> {
     // Implementation
 }
 ```
@@ -146,48 +145,46 @@ pub fn parse_pst_email(pst_data: &[u8], options: ParseOptions) -> Result<EmailSt
 ### 3. Error Types
 
 **Required Documentation**:
-- **When the error occurs** in email processing workflows
-- **Pipeline stage context** (Extract/Normalize/Thread/Render/Index)
+- **When the error occurs** in parsing and analysis workflows
+- **Workflow stage context** (Parse/Index/Navigate/Complete/Analyze)
 - **Recovery strategies** and error handling guidance
 - **Diagnostic information** available
 
 **Example**:
 ```rust
-/// Error that occurs during PST email extraction in the PSTX Extract stage.
+/// Error that occurs during parsing when an unexpected token is encountered.
 ///
-/// This error indicates failure to parse or extract email content from PST
-/// files during the initial Extract phase of the PSTX pipeline. Common causes
-/// include corrupted PST data, unsupported format versions, or memory limits.
+/// This error indicates failure to match expected syntax. Common causes include
+/// malformed Perl code, incomplete edits, or unsupported constructs.
 ///
-/// # Email Processing Workflow Context
-/// - **Extract Stage**: Primary error source during PST parsing
-/// - **Recovery**: Retry with different parsing options or skip corrupted entries
-/// - **Downstream Impact**: Prevents entry from reaching Normalize stage
+/// # Workflow Context
+/// - **Parse**: Primary error source during syntax analysis
+/// - **Index**: Limits symbol extraction for the affected region
+/// - **Analyze**: Diagnostics rely on this error for recovery strategies
 ///
 /// # Error Recovery
-/// 1. Use [`validate_pst_entry`] to pre-check data integrity
-/// 2. Adjust memory limits with `ParseOptions::with_memory_limit`
-/// 3. Enable partial parsing with `ParseOptions::allow_partial`
-/// 4. Log corruption details for PST repair tools
+/// 1. Use [`Parser::parse_with_recovery`] to collect non-fatal errors
+/// 2. Fix the local syntax region and reparse
+/// 3. Preserve partial ASTs for IDE features
 ///
 /// # Examples
 /// ```rust
-/// match parse_pst_email(&data, options) {
-///     Ok(email) => process_email(email),
-///     Err(ParseError::CorruptedData { offset, .. }) => {
-///         log::warn!("Corrupted PST data at offset {}", offset);
-///         // Skip this entry and continue processing
-///     }
-/// }
+/// use perl_parser::Parser;
+///
+/// let mut parser = Parser::new("my $x = ");
+/// let result = parser.parse();
+/// assert!(result.is_err());
 /// ```
 #[derive(Debug, Clone)]
 pub enum ParseError {
-    /// PST data is corrupted or malformed at the specified offset
-    CorruptedData {
-        /// Byte offset where corruption was detected
-        offset: usize,
-        /// Description of the corruption type
-        details: String,
+    /// Unexpected token encountered at the specified offset
+    UnexpectedToken {
+        /// Token type that was expected
+        expected: String,
+        /// Token that was found instead
+        found: String,
+        /// Byte offset where the error occurred
+        location: usize,
     },
     // Other variants...
 }
@@ -197,56 +194,44 @@ pub enum ParseError {
 
 **Required Content**:
 - **//! Module purpose** and scope
-- **PSTX pipeline integration** explanation
+- **LSP workflow integration** explanation
 - **Architecture relationship** to other modules
 - **Usage examples** for module functionality
 - **Performance characteristics** for critical modules
 
 **Example**:
 ```rust
-//! High-performance PST email parsing and extraction module.
+//! High-performance Perl parsing and AST construction module.
 //!
-//! This module provides the core functionality for the Extract stage of the
-//! PSTX email processing pipeline. It handles parsing of Microsoft PST files
-//! with enterprise-scale performance optimizations for 50GB+ file processing.
+//! This module provides the core parser used throughout the LSP workflow. It
+//! handles recursive descent parsing, quote-like operators, and heredocs with
+//! incremental parsing support for editor feedback.
 //!
-//! # PSTX Pipeline Integration
-//! - **Extract**: Primary module - converts PST binary data to structured email objects
-//! - **Normalize**: Consumes EmailStructure outputs for header standardization
-//! - **Thread**: Uses extracted metadata for conversation analysis
-//! - **Render**: Accesses parsed content for presentation formatting
-//! - **Index**: Indexes extracted text and metadata for search
+//! # LSP Workflow Integration
+//! - **Parse**: Primary module - converts Perl source to AST nodes
+//! - **Index**: Supplies AST nodes for symbol extraction and reference tracking
+//! - **Navigate**: Provides locations for definition and reference features
+//! - **Complete**: Supplies context for completion and hover
+//! - **Analyze**: Feeds semantic analysis and diagnostics
 //!
 //! # Performance Characteristics
 //! - Memory usage: O(log n) for most operations
-//! - Time complexity: O(n) linear parsing with n = file size
-//! - Scaling: Tested up to 50GB PST files
-//! - Throughput: 1-150µs per email depending on complexity
+//! - Time complexity: O(n) with n = input size
+//! - Scaling: Tested on large multi-file workspaces
+//! - Throughput: 1-150µs per parse depending on complexity
 //!
 //! # Architecture Integration
-//! - Uses [`crate::lexer`] for low-level PST tokenization
+//! - Uses [`crate::lexer`] for low-level tokenization
 //! - Integrates with [`crate::ast`] for structured representation
 //! - Provides input to [`crate::semantic`] for analysis
 //!
 //! # Examples
 //! ```rust
-//! use perl_parser::pst::{PstParser, ParseOptions};
+//! use perl_parser::Parser;
 //!
-//! let parser = PstParser::new();
-//! let options = ParseOptions::default().with_memory_limit(1024 * 1024 * 100); // 100MB limit
-//!
-//! for email in parser.parse_pst_file("large_mailbox.pst", options)? {
-//!     match email {
-//!         Ok(email_structure) => {
-//!             println!("Parsed email: {}", email_structure.subject);
-//!             // Continue to Normalize stage
-//!         }
-//!         Err(parse_error) => {
-//!             eprintln!("Failed to parse email: {}", parse_error);
-//!             // Log and continue processing
-//!         }
-//!     }
-//! }
+//! let mut parser = Parser::new("sub hello { print \"hi\"; }");
+//! let ast = parser.parse()?;
+//! println!("{}", ast.to_sexp());
 //! ```
 ```
 
@@ -255,7 +240,7 @@ pub enum ParseError {
 **Additional Requirements** for modules like `incremental_v2.rs`, `workspace_index.rs`, `parser.rs`:
 - **Time and space complexity** (Big O notation)
 - **Memory usage patterns** and optimization strategies
-- **50GB PST processing** performance implications
+- **Large workspace scaling** performance implications
 - **Benchmark data** and performance characteristics
 
 ### 6. Complex APIs
@@ -276,11 +261,11 @@ pub enum ParseError {
 4. **Cross-References**: Use `[`function_name`]` for same-module, `[`module::function`]` for cross-module
 5. **Consistent Formatting**: Follow rustdoc conventions
 
-### PSTX-Specific Standards
+### LSP Workflow Standards
 
-1. **Pipeline Context**: Always explain role in Extract → Normalize → Thread → Render → Index
+1. **Workflow Context**: Explain role in Parse → Index → Navigate → Complete → Analyze
 2. **Performance Context**: Include memory and scaling implications for critical APIs
-3. **Enterprise Context**: Reference 50GB PST processing where relevant
+3. **Large Workspace Context**: Reference large codebases where relevant
 4. **Error Context**: Explain recovery strategies and workflow impact
 
 ## Quality Validation
@@ -290,13 +275,13 @@ pub enum ParseError {
 The comprehensive test suite at `/crates/perl-parser/tests/missing_docs_ac_tests.rs` validates:
 
 - **AC1**: `#![warn(missing_docs)]` enabled and compiles successfully
-- **AC2**: All public structs/enums have comprehensive documentation including PSTX pipeline role
+- **AC2**: All public structs/enums have comprehensive documentation including workflow role
 - **AC3**: All public functions have complete documentation with required sections
-- **AC4**: Performance-critical APIs document memory usage and 50GB PST processing
-- **AC5**: Module-level documentation explains purpose and PSTX architecture relationship
+- **AC4**: Performance-critical APIs document memory usage and large workspace scaling
+- **AC5**: Module-level documentation explains purpose and LSP architecture relationship
 - **AC6**: Complex APIs include working usage examples
 - **AC7**: Doctests are present for critical functionality and pass `cargo test --doc`
-- **AC8**: Error types document email processing workflow context and recovery strategies
+- **AC8**: Error types document parsing and analysis workflow context and recovery strategies
 - **AC9**: Related functions include cross-references using Rust documentation linking
 - **AC10**: Documentation follows Rust best practices with consistent style
 - **AC11**: `cargo doc` generates complete documentation without warnings

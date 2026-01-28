@@ -17,32 +17,30 @@ fn test_window_show_document_capability_gating() -> Result<(), Box<dyn std::erro
     let mut harness = LspHarness::new();
 
     // Initialize WITHOUT showDocument support
-    let _result = harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "window": {
-                    "showDocument": {
-                        "support": false  // Explicitly disable
-                    }
+    let _result = harness.initialize(Some(json!({
+        "capabilities": {
+            "window": {
+                "showDocument": {
+                    "support": false  // Explicitly disable
                 }
             }
-        })))?;
+        }
+    })))?;
 
     // Server should NOT advertise any window/showDocument usage
     // (This is a server->client request, so we can't test sending it)
 
     // Initialize WITH showDocument support
     let mut harness2 = LspHarness::new();
-    let _result = harness2
-        .initialize(Some(json!({
-            "capabilities": {
-                "window": {
-                    "showDocument": {
-                        "support": true
-                    }
+    let _result = harness2.initialize(Some(json!({
+        "capabilities": {
+            "window": {
+                "showDocument": {
+                    "support": true
                 }
             }
-        })))?;
+        }
+    })))?;
 
     // Server may now use window/showDocument
     Ok(())
@@ -109,27 +107,25 @@ fn test_window_log_message_notification() -> Result<(), Box<dyn std::error::Erro
 fn test_work_done_progress_capability_gating() -> Result<(), Box<dyn std::error::Error>> {
     // Test WITHOUT work done progress support
     let mut harness = LspHarness::new();
-    let _result = harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "window": {
-                    "workDoneProgress": false
-                }
+    let _result = harness.initialize(Some(json!({
+        "capabilities": {
+            "window": {
+                "workDoneProgress": false
             }
-        })))?;
+        }
+    })))?;
 
     // Server MUST NOT send window/workDoneProgress/create
 
     // Test WITH work done progress support
     let mut harness2 = LspHarness::new();
-    let _result = harness2
-        .initialize(Some(json!({
-            "capabilities": {
-                "window": {
-                    "workDoneProgress": true
-                }
+    let _result = harness2.initialize(Some(json!({
+        "capabilities": {
+            "window": {
+                "workDoneProgress": true
             }
-        })))?;
+        }
+    })))?;
 
     // Server MAY send window/workDoneProgress/create
     Ok(())
@@ -138,14 +134,13 @@ fn test_work_done_progress_capability_gating() -> Result<(), Box<dyn std::error:
 #[test]
 fn test_progress_notification_sequence() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "window": {
-                    "workDoneProgress": true
-                }
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "window": {
+                "workDoneProgress": true
             }
-        })))?;
+        }
+    })))?;
 
     // Simulate progress sequence (these would come from server normally)
     let token = "index#1";
@@ -283,14 +278,13 @@ fn test_progress_percentage_monotonic() {
 #[test]
 fn test_work_done_progress_cancel() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "window": {
-                    "workDoneProgress": true
-                }
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "window": {
+                "workDoneProgress": true
             }
-        })))?;
+        }
+    })))?;
 
     let token = "long-task#1";
 
@@ -330,14 +324,13 @@ fn test_progress_token_types() {
 #[test]
 fn test_work_done_progress_create_response() -> Result<(), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new();
-    harness
-        .initialize(Some(json!({
-            "capabilities": {
-                "window": {
-                    "workDoneProgress": true
-                }
+    harness.initialize(Some(json!({
+        "capabilities": {
+            "window": {
+                "workDoneProgress": true
             }
-        })))?;
+        }
+    })))?;
 
     // This would be server->client, but we document the contract
     let _create_request = json!({

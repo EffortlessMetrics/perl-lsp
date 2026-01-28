@@ -7,7 +7,9 @@ mod support;
 use support::lsp_harness::LspHarness;
 
 /// Helper to set up LSP server with document
-fn setup_server_with_document(content: &str) -> Result<(LspHarness, String), Box<dyn std::error::Error>> {
+fn setup_server_with_document(
+    content: &str,
+) -> Result<(LspHarness, String), Box<dyn std::error::Error>> {
     let mut harness = LspHarness::new_raw();
 
     // Initialize server
@@ -30,14 +32,13 @@ my $bar = $foo * 2;"#;
     let (mut harness, uri) = setup_server_with_document(content)?;
 
     // Request highlight at position of first $foo
-    let response = harness
-        .request(
-            "textDocument/documentHighlight",
-            json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": 0, "character": 4 } // Position of $foo in "my $foo"
-            }),
-        )?;
+    let response = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 4 } // Position of $foo in "my $foo"
+        }),
+    )?;
 
     assert!(response.is_array(), "Response should be an array");
     let highlights_arr = response.as_array().ok_or("Response is not an array")?;
@@ -72,14 +73,13 @@ print "Result: ", calculate();"#;
     let (mut harness, uri) = setup_server_with_document(content)?;
 
     // Request highlight at position of first 'calculate'
-    let response = harness
-        .request(
-            "textDocument/documentHighlight",
-            json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": 0, "character": 5 } // Position of 'calculate' in "sub calculate"
-            }),
-        )?;
+    let response = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 5 } // Position of 'calculate' in "sub calculate"
+        }),
+    )?;
 
     assert!(response.is_array(), "Response should be an array");
     let highlights_arr = response.as_array().ok_or("Response is not an array")?;
@@ -107,14 +107,13 @@ $other->process();"#;
     let (mut harness, uri) = setup_server_with_document(content)?;
 
     // Request highlight at position of 'process' method
-    let response = harness
-        .request(
-            "textDocument/documentHighlight",
-            json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": 1, "character": 7 } // Position of 'process' in "$obj->process()"
-            }),
-        )?;
+    let response = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 1, "character": 7 } // Position of 'process' in "$obj->process()"
+        }),
+    )?;
 
     assert!(response.is_array(), "Response should be an array");
     let highlights_arr = response.as_array().ok_or("Response is not an array")?;
@@ -141,14 +140,13 @@ my $obj = MyPackage->new();"#;
     let (mut harness, uri) = setup_server_with_document(content)?;
 
     // Request highlight at position of 'MyPackage'
-    let response = harness
-        .request(
-            "textDocument/documentHighlight",
-            json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": 0, "character": 9 } // Position of 'MyPackage' in "package MyPackage"
-            }),
-        )?;
+    let response = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 9 } // Position of 'MyPackage' in "package MyPackage"
+        }),
+    )?;
 
     assert!(response.is_array(), "Response should be an array");
     let highlights_arr = response.as_array().ok_or("Response is not an array")?;
@@ -169,14 +167,13 @@ my $foo = 42;"#;
     let (mut harness, uri) = setup_server_with_document(content)?;
 
     // Request highlight at position within comment
-    let response = harness
-        .request(
-            "textDocument/documentHighlight",
-            json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": 0, "character": 5 } // Position within comment
-            }),
-        )?;
+    let response = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 5 } // Position within comment
+        }),
+    )?;
 
     assert!(response.is_array(), "Response should be an array");
     let highlights_arr = response.as_array().ok_or("Response is not an array")?;
@@ -197,14 +194,13 @@ $counter++;"#;
     let (mut harness, uri) = setup_server_with_document(content)?;
 
     // Request highlight at position of $counter
-    let response = harness
-        .request(
-            "textDocument/documentHighlight",
-            json!({
-                "textDocument": { "uri": uri },
-                "position": { "line": 0, "character": 4 } // Position of $counter
-            }),
-        )?;
+    let response = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": 4 } // Position of $counter
+        }),
+    )?;
 
     assert!(response.is_array(), "Response should be an array");
     let highlights_arr = response.as_array().ok_or("Response is not an array")?;

@@ -80,7 +80,8 @@ print "Hello, World!\n";
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(execute_request).ok_or("No response from execute command")?;
+    let response =
+        server.handle_request(execute_request).ok_or("No response from execute command")?;
     let result = response.result.ok_or("No result in response")?;
 
     // Check that we got a response (even if the command might fail due to perl not installed/env issues)
@@ -141,7 +142,8 @@ is(1 + 1, 2, "Math works");
         id: Some(json!(2)),
     };
 
-    let response = server.handle_request(execute_request).ok_or("No response from execute command")?;
+    let response =
+        server.handle_request(execute_request).ok_or("No response from execute command")?;
     let result = response.result.ok_or("No result in response")?;
 
     // Check response structure
@@ -151,7 +153,11 @@ is(1 + 1, 2, "Math works");
 
     // Check that it recognized this as a test file
     if result.get("command").is_some() {
-        let command = result.get("command").ok_or("No command in result")?.as_str().ok_or("Command is not a string")?;
+        let command = result
+            .get("command")
+            .ok_or("No command in result")?
+            .as_str()
+            .ok_or("Command is not a string")?;
         // If prove is available, it should use prove for .t files
         assert!(command == "prove" || command == "perl");
     }
@@ -203,8 +209,14 @@ fn test_execute_command_capabilities() -> Result<(), Box<dyn std::error::Error>>
     let response = server.handle_request(init_request).ok_or("No response from initialize")?;
     let result = response.result.ok_or("No result in initialize response")?;
     let capabilities = result.get("capabilities").ok_or("No capabilities in result")?;
-    let execute_command = capabilities.get("executeCommandProvider").ok_or("No executeCommandProvider in capabilities")?;
-    let commands = execute_command.get("commands").ok_or("No commands in executeCommandProvider")?.as_array().ok_or("Commands is not an array")?;
+    let execute_command = capabilities
+        .get("executeCommandProvider")
+        .ok_or("No executeCommandProvider in capabilities")?;
+    let commands = execute_command
+        .get("commands")
+        .ok_or("No commands in executeCommandProvider")?
+        .as_array()
+        .ok_or("Commands is not an array")?;
 
     // Check that our new commands are advertised
     let command_strs: Vec<&str> = commands.iter().filter_map(|v| v.as_str()).collect();

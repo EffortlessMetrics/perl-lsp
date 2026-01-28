@@ -20,7 +20,8 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
         })),
     };
 
-    let response = server.handle_request(request).ok_or("Initialize request failed to return response")?;
+    let response =
+        server.handle_request(request).ok_or("Initialize request failed to return response")?;
     assert!(response.error.is_none(), "Initialize should succeed");
     let caps = response.result.ok_or("Initialize response missing result")?["capabilities"].clone();
 
@@ -78,7 +79,10 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "lsp-ga-lock")]
     {
         // CodeLens is disabled in GA lock
-        assert!(caps["codeLensProvider"].is_null(), "codeLensProvider must NOT be advertised in GA lock");
+        assert!(
+            caps["codeLensProvider"].is_null(),
+            "codeLensProvider must NOT be advertised in GA lock"
+        );
     }
     // v0.8.4 NEW features that ARE implemented
     assert!(
@@ -156,12 +160,7 @@ fn test_unsupported_methods_return_error() -> Result<(), Box<dyn std::error::Err
 
         let resp = response.ok_or(format!("Method {} failed to return response", method))?;
         let error = resp.error.ok_or(format!("Method {} should return an error", method))?;
-        assert_eq!(
-            error.code,
-            -32601,
-            "Method {} should return method_not_found error",
-            method
-        );
+        assert_eq!(error.code, -32601, "Method {} should return method_not_found error", method);
     }
 
     Ok(())

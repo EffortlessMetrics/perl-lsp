@@ -21,7 +21,7 @@ use std::collections::HashMap;
 ///
 /// # LSP Workflow Integration
 ///
-/// Integrates with the PSTX (Parse → Index → Navigate → Complete → Analyze) pipeline:
+/// Integrates with the Parse → Index → Navigate → Complete → Analyze workflow:
 /// - **Parse**: AST analysis identifies package and method definitions
 /// - **Index**: Workspace indexing tracks inheritance relationships
 /// - **Navigate**: Provides go-to-implementation functionality

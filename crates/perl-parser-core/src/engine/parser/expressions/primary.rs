@@ -237,11 +237,11 @@ impl<'a> Parser<'a> {
                 // Map interpolation to QuoteKind (check original text for quote style)
                 let quote = map_heredoc_quote_kind(text, interpolated);
 
-                // Enqueue for later content collection (Sprint A Day 4)
+                // Enqueue for later content collection
                 self.push_heredoc_decl(delimiter.to_string(), indented, quote, start, end);
                 self.byte_cursor = end;
 
-                // Return declaration node (content will be attached in Day 5)
+                // Return declaration node (content attaches when draining pending heredocs)
                 Ok(Node::new(
                     NodeKind::Heredoc {
                         delimiter: delimiter.to_string(),
@@ -252,6 +252,14 @@ impl<'a> Parser<'a> {
                         body_span: None, // Populated by drain_pending_heredocs
                     },
                     SourceLocation { start, end },
+                ))
+            }
+
+            TokenKind::HeredocDepthLimit => {
+                let token = self.tokens.next()?;
+                Err(ParseError::syntax(
+                    format!("Heredoc depth limit exceeded (max {})", MAX_HEREDOC_DEPTH),
+                    token.start,
                 ))
             }
 

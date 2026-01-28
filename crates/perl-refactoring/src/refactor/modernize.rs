@@ -1,3 +1,8 @@
+//! Legacy Perl modernization helpers.
+//!
+//! Provides lightweight pattern checks for modernizing Perl code while keeping
+//! refactorings safe and fast in LSP workflows.
+
 /// A suggestion for modernizing legacy Perl code patterns.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModernizationSuggestion {

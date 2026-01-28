@@ -56,8 +56,7 @@ fn test_lsp_workspace_symbol_no_internal_fields() -> Result<(), Box<dyn std::err
     let json_value = serde_json::to_value(&lsp_symbols)?;
     if let Value::Array(symbols) = json_value {
         for symbol in symbols {
-            let obj = symbol.as_object()
-                .ok_or("Expected symbol to be a JSON object")?;
+            let obj = symbol.as_object().ok_or("Expected symbol to be a JSON object")?;
 
             // These fields should exist
             assert!(obj.contains_key("name"));
@@ -214,8 +213,7 @@ fn test_utf16_position_encoding() -> Result<(), Box<dyn std::error::Error>> {
     // In UTF-8 bytes: "my $♥ = 'love'; sub " is 20 bytes (♥ is 3 bytes)
     // In UTF-16 units: "my $♥ = 'love'; sub " is 18 units (♥ is 1 unit)
     // Character position should reflect this
-    let symbol = symbols.first()
-        .ok_or("Expected at least one symbol")?;
+    let symbol = symbols.first().ok_or("Expected at least one symbol")?;
 
     // The exact position depends on the parser, but it should be consistent
     assert!(symbol.range.start.column < 100, "Position seems unreasonably large");

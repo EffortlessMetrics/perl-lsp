@@ -63,10 +63,8 @@ fn test_unused_variable_quick_fix() -> Result<(), Box<dyn std::error::Error>> {
     assert!(actions.len() >= 2, "Should have at least 2 actions");
 
     // Check rename action
-    let rename_action = actions
-        .iter()
-        .find(|a| a.title.contains("$_unused"))
-        .ok_or("Should have rename action")?;
+    let rename_action =
+        actions.iter().find(|a| a.title.contains("$_unused")).ok_or("Should have rename action")?;
     assert_eq!(rename_action.kind, CodeActionKindV2::QuickFix);
 
     Ok(())

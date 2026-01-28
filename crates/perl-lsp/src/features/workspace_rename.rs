@@ -194,7 +194,7 @@ $var;
         assert!(texts.contains(&"new_name".to_string()));
 
         // Apply edits and verify other symbols remain unchanged
-        let mut doc = idx.document_store().get(uri).ok_or("document not found")?;
+        let doc = idx.document_store().get(uri).ok_or("document not found")?;
         let mut replacements: Vec<(usize, usize, &str)> = edits[0]
             .edits
             .iter()

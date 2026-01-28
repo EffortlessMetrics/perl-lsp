@@ -1,26 +1,26 @@
-//! Abstract Syntax Tree definitions for Perl within the Perl parsing workflow pipeline
+//! Abstract Syntax Tree definitions for Perl within the parsing and LSP workflow.
 //!
 //! This module defines the comprehensive AST node types that represent parsed Perl code
-//! during Perl parsing workflows throughout the Parse → Index → Navigate → Complete → Analyze stages.
-//! The design is optimized for both direct use in Rust analysis and for generating
-//! tree-sitter compatible S-expressions during large-scale Perl codebase processing operations.
+//! during the Parse → Index → Navigate → Complete → Analyze stages. The design is optimized
+//! for both direct use in Rust analysis and for generating tree-sitter compatible
+//! S-expressions during large workspace processing operations.
 //!
 //! # LSP Workflow Integration
 //!
-//! The AST structures support Perl parsing workflows by:
-//! - **Extract**: Parsing Perl scripts embedded in Perl code during PST analysis
-//! - **Normalize**: Transforming AST nodes to standardized representations for processing
-//! - **Thread**: Analyzing control flow and function calls within Perl scripts
-//! - **Render**: Converting AST back to source code with formatting during output generation
-//! - **Index**: Building searchable symbol tables from AST structures for fast lookup
+//! The AST structures support Perl tooling workflows by:
+//! - **Parse**: Produced by the parser as the canonical syntax tree
+//! - **Index**: Traversed to build symbol and reference tables
+//! - **Navigate**: Provides locations for definition and reference lookups
+//! - **Complete**: Supplies context for completion, hover, and signature help
+//! - **Analyze**: Feeds semantic analysis, diagnostics, and refactoring
 //!
 //! # Performance Characteristics
 //!
-//! AST structures are optimized for 50GB+ Perl codebase processing with:
+//! AST structures are optimized for large codebases with:
 //! - Memory-efficient node representation using `Box<Node>` for recursive structures
-//! - Fast pattern matching via enum variants for common Perl script constructs
-//! - Location tracking for precise error reporting during large file processing
-//! - Clone optimization for concurrent processing across multiple email threads
+//! - Fast pattern matching via enum variants for common Perl constructs
+//! - Location tracking for precise error reporting in large files
+//! - Cheap cloning for parallel analysis tasks
 //!
 //! # Usage Examples
 //!
@@ -106,28 +106,30 @@
 
 // Re-export SourceLocation from perl-position-tracking for unified span handling
 pub use perl_position_tracking::SourceLocation;
+// Re-export Token and TokenKind from perl-token for AST error nodes
+pub use perl_token::{Token, TokenKind};
 
-/// Core AST node representing any Perl language construct within Perl parsing workflows
+/// Core AST node representing any Perl language construct within parsing workflows.
 ///
-/// This is the fundamental building block for representing parsed Perl code during LSP
-/// Perl parsing operations. Each node contains both the semantic information (kind)
-/// and positional information (location) necessary for comprehensive Perl script analysis.
+/// This is the fundamental building block for representing parsed Perl code. Each node
+/// contains both the semantic information (kind) and positional information (location)
+/// necessary for comprehensive script analysis.
 ///
 /// # LSP Workflow Role
 ///
-/// Nodes flow through the pipeline stages:
-/// - **Extract**: Generated from Perl script content during PST parsing
-/// - **Normalize**: Transformed and standardized for consistent processing
-/// - **Thread**: Analyzed for control flow and dependency relationships
-/// - **Render**: Converted back to formatted source code for output
-/// - **Index**: Processed to build searchable symbol and reference databases
+/// Nodes flow through tooling stages:
+/// - **Parse**: Created by the parser as it builds the syntax tree
+/// - **Index**: Visited to build symbol and reference tables
+/// - **Navigate**: Used to resolve definitions, references, and call hierarchy
+/// - **Complete**: Provides contextual information for completion and hover
+/// - **Analyze**: Drives semantic analysis and diagnostics
 ///
 /// # Memory Optimization
 ///
-/// The structure is designed for efficient memory usage during large-scale Perl parsing:
-/// - `SourceLocation` uses compact position encoding for 50GB+ file support
+/// The structure is designed for efficient memory usage during large-scale parsing:
+/// - `SourceLocation` uses compact position encoding for large files
 /// - `NodeKind` enum variants minimize memory overhead for common constructs
-/// - Clone operations are optimized for concurrent Perl parsing workflows
+/// - Clone operations are optimized for shared analysis workflows
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node {
     /// The specific type and semantic content of this AST node
@@ -255,6 +257,9 @@ impl Node {
 
             NodeKind::Glob { pattern } => {
                 format!("(glob {})", pattern)
+            }
+            NodeKind::Typeglob { name } => {
+                format!("(typeglob {})", name)
             }
 
             NodeKind::Number { value } => {
@@ -532,6 +537,14 @@ impl Node {
                 }
             }
 
+            NodeKind::LoopControl { op, label } => {
+                if let Some(l) = label {
+                    format!("({} {})", op, l)
+                } else {
+                    format!("({})", op)
+                }
+            }
+
             NodeKind::MethodCall { object, method, args } => {
                 let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
@@ -675,9 +688,17 @@ impl Node {
                 format!("(identifier {})", name)
             }
 
-            NodeKind::Error { message } => {
-                format!("(ERROR {})", message)
+            NodeKind::Error { message, partial, .. } => {
+                if let Some(node) = partial {
+                    format!("(ERROR \"{}\" {})", message.escape_default(), node.to_sexp())
+                } else {
+                    format!("(ERROR \"{}\")", message.escape_default())
+                }
             }
+            NodeKind::MissingExpression => "(missing_expression)".to_string(),
+            NodeKind::MissingStatement => "(missing_statement)".to_string(),
+            NodeKind::MissingIdentifier => "(missing_identifier)".to_string(),
+            NodeKind::MissingBlock => "(missing_block)".to_string(),
             NodeKind::UnknownRest => "(UNKNOWN_REST)".to_string(),
         }
     }
@@ -915,6 +936,13 @@ impl Node {
             NodeKind::PhaseBlock { block, .. } => f(block),
             NodeKind::Class { body, .. } => f(body),
 
+            // Error node might have a partial valid tree
+            NodeKind::Error { partial, .. } => {
+                if let Some(node) = partial {
+                    f(node);
+                }
+            }
+
             // Leaf nodes (no children to traverse)
             NodeKind::Variable { .. }
             | NodeKind::Identifier { .. }
@@ -924,6 +952,7 @@ impl Node {
             | NodeKind::Regex { .. }
             | NodeKind::Readline { .. }
             | NodeKind::Glob { .. }
+            | NodeKind::Typeglob { .. }
             | NodeKind::Diamond
             | NodeKind::Ellipsis
             | NodeKind::Undef
@@ -932,7 +961,11 @@ impl Node {
             | NodeKind::Prototype { .. }
             | NodeKind::DataSection { .. }
             | NodeKind::Format { .. }
-            | NodeKind::Error { .. }
+            | NodeKind::LoopControl { .. }
+            | NodeKind::MissingExpression
+            | NodeKind::MissingStatement
+            | NodeKind::MissingIdentifier
+            | NodeKind::MissingBlock
             | NodeKind::UnknownRest => {}
         }
     }
@@ -1147,6 +1180,13 @@ impl Node {
             NodeKind::PhaseBlock { block, .. } => f(block),
             NodeKind::Class { body, .. } => f(body),
 
+            // Error node might have a partial valid tree
+            NodeKind::Error { partial, .. } => {
+                if let Some(node) = partial {
+                    f(node);
+                }
+            }
+
             // Leaf nodes (no children to traverse)
             NodeKind::Variable { .. }
             | NodeKind::Identifier { .. }
@@ -1156,6 +1196,7 @@ impl Node {
             | NodeKind::Regex { .. }
             | NodeKind::Readline { .. }
             | NodeKind::Glob { .. }
+            | NodeKind::Typeglob { .. }
             | NodeKind::Diamond
             | NodeKind::Ellipsis
             | NodeKind::Undef
@@ -1164,7 +1205,11 @@ impl Node {
             | NodeKind::Prototype { .. }
             | NodeKind::DataSection { .. }
             | NodeKind::Format { .. }
-            | NodeKind::Error { .. }
+            | NodeKind::LoopControl { .. }
+            | NodeKind::MissingExpression
+            | NodeKind::MissingStatement
+            | NodeKind::MissingIdentifier
+            | NodeKind::MissingBlock
             | NodeKind::UnknownRest => {}
         }
     }
@@ -1186,29 +1231,29 @@ impl Node {
     }
 }
 
-/// Comprehensive enumeration of all Perl language constructs supported in Perl parsing workflow
+/// Comprehensive enumeration of all Perl language constructs supported by the parser.
 ///
 /// This enum represents every possible AST node type that can be parsed from Perl code
-/// found in Perl code during the Parse → Index → Navigate → Complete → Analyze pipeline.
-/// Each variant captures the semantic meaning and structural relationships needed for
-/// complete Perl script analysis and transformation.
+/// during the Parse → Index → Navigate → Complete → Analyze workflow. Each variant captures
+/// the semantic meaning and structural relationships needed for complete script analysis
+/// and transformation.
 ///
 /// # LSP Workflow Integration
 ///
-/// Node kinds are processed differently across pipeline stages:
-/// - **Extract**: All variants parsed from Perl script content during PST analysis
-/// - **Normalize**: Variants transformed to canonical forms for consistent processing
-/// - **Thread**: Control flow variants analyzed for dependency and call relationships
-/// - **Render**: All variants converted back to formatted source code for output
-/// - **Index**: Symbol-bearing variants processed for searchable metadata extraction
+/// Node kinds are processed differently across workflow stages:
+/// - **Parse**: All variants are produced by the parser
+/// - **Index**: Symbol-bearing variants feed workspace indexing
+/// - **Navigate**: Call and reference variants support navigation features
+/// - **Complete**: Expression variants provide completion context
+/// - **Analyze**: Semantic variants drive diagnostics and refactoring
 ///
 /// # Performance Considerations
 ///
-/// The enum design optimizes for 50GB+ Perl codebase processing:
+/// The enum design optimizes for large codebases:
 /// - Box pointers minimize stack usage for recursive structures
 /// - Vector storage enables efficient bulk operations on child nodes
-/// - Clone operations optimized for concurrent Perl parsing workflows
-/// - Pattern matching performance tuned for common Perl script constructs
+/// - Clone operations optimized for concurrent analysis workflows
+/// - Pattern matching performance tuned for common Perl constructs
 #[derive(Debug, Clone, PartialEq)]
 pub enum NodeKind {
     /// Top-level program containing all statements in an Perl script
@@ -1330,10 +1375,18 @@ pub enum NodeKind {
         filehandle: Option<String>, // <STDIN>, <$fh>, etc.
     },
 
-    /// Glob pattern for LSP email file matching
+    /// Glob pattern for LSP workspace file matching
     Glob {
         /// Pattern string for file matching
         pattern: String, // <*.txt>
+    },
+
+    /// Typeglob expression: `*foo` or `*main::bar`
+    ///
+    /// Provides access to all symbol table entries for a given name.
+    Typeglob {
+        /// Name of the symbol (including package qualification)
+        name: String,
     },
 
     /// Numeric literal in Perl code (integer, float, hex, octal, binary)
@@ -1606,6 +1659,14 @@ pub enum NodeKind {
         value: Option<Box<Node>>,
     },
 
+    /// Loop control statement: `next`, `last`, or `redo`
+    LoopControl {
+        /// Control keyword: "next", "last", or "redo"
+        op: String,
+        /// Optional label: `next LABEL`
+        label: Option<String>,
+    },
+
     /// Method call: `$obj->method(@args)` or `$obj->method`
     MethodCall {
         /// Object or class expression
@@ -1772,11 +1833,26 @@ pub enum NodeKind {
         name: String,
     },
 
-    /// Parse error placeholder with error message
+    /// Parse error placeholder with error message and recovery context
     Error {
         /// Error description
         message: String,
+        /// Expected token types (if any)
+        expected: Vec<TokenKind>,
+        /// The token actually found (if any)
+        found: Option<Token>,
+        /// Partial AST node parsed before error (if any)
+        partial: Option<Box<Node>>,
     },
+
+    /// Missing expression where one was expected
+    MissingExpression,
+    /// Missing statement where one was expected
+    MissingStatement,
+    /// Missing identifier where one was expected
+    MissingIdentifier,
+    /// Missing block where one was expected
+    MissingBlock,
 
     /// Lexer budget exceeded marker preserving partial parse results
     ///
@@ -1803,6 +1879,7 @@ impl NodeKind {
             NodeKind::Undef => "Undef",
             NodeKind::Readline { .. } => "Readline",
             NodeKind::Glob { .. } => "Glob",
+            NodeKind::Typeglob { .. } => "Typeglob",
             NodeKind::Number { .. } => "Number",
             NodeKind::String { .. } => "String",
             NodeKind::Heredoc { .. } => "Heredoc",
@@ -1832,6 +1909,7 @@ impl NodeKind {
             NodeKind::NamedParameter { .. } => "NamedParameter",
             NodeKind::Method { .. } => "Method",
             NodeKind::Return { .. } => "Return",
+            NodeKind::LoopControl { .. } => "LoopControl",
             NodeKind::MethodCall { .. } => "MethodCall",
             NodeKind::FunctionCall { .. } => "FunctionCall",
             NodeKind::IndirectCall { .. } => "IndirectCall",
@@ -1848,6 +1926,10 @@ impl NodeKind {
             NodeKind::Format { .. } => "Format",
             NodeKind::Identifier { .. } => "Identifier",
             NodeKind::Error { .. } => "Error",
+            NodeKind::MissingExpression => "MissingExpression",
+            NodeKind::MissingStatement => "MissingStatement",
+            NodeKind::MissingIdentifier => "MissingIdentifier",
+            NodeKind::MissingBlock => "MissingBlock",
             NodeKind::UnknownRest => "UnknownRest",
         }
     }

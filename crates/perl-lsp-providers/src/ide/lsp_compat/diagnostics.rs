@@ -2,9 +2,9 @@
 //!
 //! This module provides syntax error detection, linting, and code quality checks.
 //!
-//! # PSTX Pipeline Integration
+//! # LSP Workflow Integration
 //!
-//! Diagnostics are generated throughout the PSTX (Parse → Index → Navigate → Complete → Analyze) pipeline:
+//! Diagnostics are generated throughout the Parse → Index → Navigate → Complete → Analyze workflow:
 //!
 //! - **Parse**: Syntax errors and parsing issues are detected during AST construction
 //! - **Index**: Symbol resolution errors identified during workspace symbol indexing
@@ -46,6 +46,12 @@
 //! - **Cancellation support**: Responsive to client cancellation requests
 //! - **Error resilience**: Graceful degradation for malformed documents
 //! - **UTF-16 position mapping**: Correct client position synchronization
+//!
+//! # See also
+//!
+//! - [`DiagnosticsProvider`] for generating diagnostic output
+//! - [`crate::ide::lsp_compat::code_actions`] for quick fixes powered by diagnostics
+//! - [`crate::ide::lsp_compat::references`] for cross-file navigation
 //!
 //! # Performance Characteristics
 //!
@@ -106,7 +112,7 @@ impl DiagnosticsProvider {
     ///
     /// Constructs a diagnostics provider capable of analyzing Perl scripts
     /// for syntax errors, semantic issues, and Perl parsing best practices
-    /// within the LSP workflow workflow.
+    /// within the LSP workflow.
     ///
     /// # Arguments
     ///
@@ -134,6 +140,8 @@ impl DiagnosticsProvider {
     /// # Ok(())
     /// # }
     /// ```
+    /// Arguments: `ast`, `source`.
+    /// Returns: A diagnostics provider configured for the given source.
     pub fn new(ast: &Node, source: String) -> Self {
         let extractor = SymbolExtractor::new_with_source(&source);
         let symbol_table = extractor.extract(ast);
@@ -183,13 +191,17 @@ impl DiagnosticsProvider {
     /// }
     /// ```
     ///
-    /// # Email Processing Context
+    /// # Automation Context
     ///
     /// This analysis is particularly valuable for:
-    /// - Email filtering script validation
-    /// - Message processing automation error detection
+    /// - Batch processing script validation
+    /// - Data pipeline automation error detection
     /// - Configuration script best practice enforcement
     /// - Template processing code quality assurance
+    ///
+    /// Arguments: `ast`, `parse_errors`, `source`.
+    /// Returns: A vector of diagnostics for the provided source.
+    /// Example: `provider.get_diagnostics(&ast, &[], source)`.
     pub fn get_diagnostics(
         &self,
         ast: &Node,
@@ -439,8 +451,13 @@ mod tests {
         let ast = parser.parse().unwrap_or_else(|_| {
             use perl_parser_core::{Node, NodeKind, SourceLocation};
             Node::new(
-                NodeKind::Error { message: "test".to_string() },
-                SourceLocation { start: 0, end: source.len() },
+                NodeKind::Error {
+                    message: "test".to_string(),
+                    expected: vec![],
+                    found: None,
+                    partial: None,
+                },
+                SourceLocation { start: 0, end: 4 },
             )
         });
 

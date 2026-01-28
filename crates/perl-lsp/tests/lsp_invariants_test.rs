@@ -69,9 +69,7 @@ fn test_error_response_structure() -> Result<(), Box<dyn std::error::Error>> {
     assert!(error["message"].is_string(), "Error must have string message");
 
     // Standard JSON-RPC error codes
-    let code = error["code"]
-        .as_i64()
-        .ok_or("Error code must be a valid i64 number")?;
+    let code = error["code"].as_i64().ok_or("Error code must be a valid i64 number")?;
     assert!(
         code == -32700  // Parse error
         || code == -32600  // Invalid request
@@ -184,9 +182,8 @@ fn test_diagnostics_version_invariant() -> Result<(), Box<dyn std::error::Error>
         common::short_timeout(),
     ) {
         assert_eq!(diag["params"]["version"], 2, "Diagnostics must have updated version");
-        let diags = diag["params"]["diagnostics"]
-            .as_array()
-            .ok_or("Diagnostics must be an array")?;
+        let diags =
+            diag["params"]["diagnostics"].as_array().ok_or("Diagnostics must be an array")?;
         // Check that there are no error-level diagnostics (severity 1)
         // Hints and warnings (severity 2-4) may still be present
         let errors: Vec<_> = diags.iter().filter(|d| d["severity"] == 1).collect();

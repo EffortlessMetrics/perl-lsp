@@ -95,7 +95,12 @@ impl IncrementalState {
         let ast = match parser.parse() {
             Ok(ast) => ast,
             Err(e) => Node::new(
-                NodeKind::Error { message: e.to_string() },
+                NodeKind::Error {
+                    message: e.to_string(),
+                    expected: vec![],
+                    found: None,
+                    partial: None,
+                },
                 SourceLocation { start: 0, end: source.len() },
             ),
         };
@@ -502,7 +507,12 @@ fn full_reparse(state: &mut IncrementalState) -> Result<ReparseResult> {
     state.ast = match parser.parse() {
         Ok(ast) => ast,
         Err(e) => Node::new(
-            NodeKind::Error { message: e.to_string() },
+            NodeKind::Error {
+                message: e.to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
             SourceLocation { start: 0, end: state.source.len() },
         ),
     };

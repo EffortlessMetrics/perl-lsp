@@ -6,7 +6,7 @@
 //!
 //! ## LSP Workflow Integration
 //!
-//! The executeCommand implementation follows the PSTX (Parse → Index → Navigate → Complete → Analyze) pipeline:
+//! The executeCommand implementation follows the Parse → Index → Navigate → Complete → Analyze workflow:
 //! - **Parse**: Source files are parsed using the perl-parser for syntax validation
 //! - **Index**: Command metadata is indexed for efficient command resolution
 //! - **Navigate**: Commands provide navigation to test results and diagnostic locations
@@ -219,7 +219,7 @@ pub struct CommandResult {
 ///
 /// This provider handles all supported Perl LSP commands with comprehensive error
 /// handling, dual analyzer strategy for code quality, and performance optimization.
-/// It integrates seamlessly with the PSTX pipeline for enterprise-grade LSP functionality.
+/// It integrates seamlessly with the LSP workflow for enterprise-grade functionality.
 ///
 /// # Performance
 ///
@@ -594,31 +594,33 @@ impl ExecuteCommandProvider {
         let content = std::fs::read_to_string(file_path)
             .map_err(|e| format!("Failed to read file: {}", e))?;
 
-        let mut all_violations = Vec::new();
         let code_text = perl_parser::util::code_slice(&content);
         let mut parser = Parser::new(code_text);
 
-        let _ast = match parser.parse() {
-            Ok(ast) => {
-                // Successfully parsed - run comprehensive analysis
-                let analyzer = BuiltInAnalyzer::new();
-                all_violations.extend(analyzer.analyze(&ast, &content));
-                ast
-            }
-            Err(e) => {
-                // Handle parse errors with detailed location information
-                all_violations.push(self.create_syntax_error_violation(&e, &content, file_path));
-
-                // Create dummy AST for additional analysis
-                let dummy_ast = crate::ast::Node::new(
-                    crate::ast::NodeKind::Error { message: format!("{}", e) },
-                    crate::ast::SourceLocation { start: 0, end: content.len() },
-                );
-                let analyzer = BuiltInAnalyzer::new();
-                all_violations.extend(analyzer.analyze(&dummy_ast, &content));
-                dummy_ast
+        let (ast, parse_error) = match parser.parse() {
+            Ok(ast) => (ast, None),
+            Err(error) => {
+                let message = error.to_string();
+                (
+                    crate::ast::Node::new(
+                        crate::ast::NodeKind::Error {
+                            message,
+                            expected: vec![],
+                            found: None,
+                            partial: None,
+                        },
+                        crate::ast::SourceLocation { start: 0, end: code_text.len() },
+                    ),
+                    Some(error),
+                )
             }
         };
+
+        let analyzer = BuiltInAnalyzer::new();
+        let mut all_violations = analyzer.analyze(&ast, code_text);
+        if let Some(error) = parse_error {
+            all_violations.push(self.create_syntax_error_violation(&error, code_text, file_path));
+        }
 
         let formatted_violations: Vec<_> = all_violations
             .iter()

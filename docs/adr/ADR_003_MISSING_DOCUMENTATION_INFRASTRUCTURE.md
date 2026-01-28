@@ -29,7 +29,7 @@ Prior to SPEC-149 implementation, the perl-parser crate faced:
 Enterprise adoption required documentation infrastructure supporting:
 
 - **API Stability Contracts**: Complete documentation for 5 published crates with semantic versioning
-- **Performance Documentation**: Scaling characteristics for 50GB+ file processing and sub-microsecond parsing
+- **Performance Documentation**: Scaling characteristics for large file processing and sub-microsecond parsing
 - **Security Documentation**: Enterprise security patterns and vulnerability mitigation strategies
 - **LSP Integration**: Comprehensive protocol compliance documentation for editor integration
 - **Developer Experience**: Working examples and troubleshooting guidance for complex parsing workflows

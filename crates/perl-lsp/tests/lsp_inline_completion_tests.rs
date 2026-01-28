@@ -105,7 +105,10 @@ fn test_inline_completion_shebang() -> Result<(), Box<dyn std::error::Error>> {
     let result = inline_completion(&mut server, uri, 0, 2)?;
     let items = result["items"].as_array().ok_or("items array")?;
     assert!(!items.is_empty());
-    assert_eq!(items[0]["insertText"].as_str().ok_or("insertText not a string")?, "/usr/bin/env perl");
+    assert_eq!(
+        items[0]["insertText"].as_str().ok_or("insertText not a string")?,
+        "/usr/bin/env perl"
+    );
     Ok(())
 }
 

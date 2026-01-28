@@ -102,6 +102,27 @@ impl<'a> Parser<'a> {
             }
         }
 
+        // AC1: General indirect method call heuristic: method $object
+        // Lowercase identifier followed by a sigiled variable ($x, @arr, %hash)
+        if name.chars().next().is_some_and(|c| c.is_lowercase()) 
+           && !matches!(name, "tie" | "untie") 
+        {
+            if let Ok(next) = self.tokens.peek_second() {
+                let next_text = &next.text;
+                if next_text.starts_with('$') || next_text.starts_with('@') || next_text.starts_with('%') {
+                    // Check if another typical arg or terminator follows to confirm it's not a regular call
+                    if let Ok(third) = self.tokens.peek_third() {
+                        // Comma means regular call: func $arg, ...
+                        if third.kind == TokenKind::Comma {
+                            return false;
+                        }
+                        return true;
+                    }
+                    return true;
+                }
+            }
+        }
+
         false
     }
 
@@ -128,7 +149,8 @@ impl<'a> Parser<'a> {
         while !Self::is_statement_terminator(self.peek_kind())
             && !self.is_statement_modifier_keyword()
         {
-            args.push(self.parse_expression()?);
+            // Use parse_assignment instead of parse_expression to avoid grouping by comma operator
+            args.push(self.parse_assignment()?);
 
             // Check if we should continue (comma is optional in indirect syntax)
             if self.peek_kind() == Some(TokenKind::Comma) {

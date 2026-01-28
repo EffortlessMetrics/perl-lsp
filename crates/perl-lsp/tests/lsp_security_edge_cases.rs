@@ -7,7 +7,6 @@
 //! TODO(#267): Move to default lane after harness has proper read_response_timeout.
 #![cfg(feature = "stress-tests")]
 
-
 use serde_json::json;
 
 mod common;

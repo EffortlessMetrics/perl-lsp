@@ -116,7 +116,8 @@ if ($condition) {
 }
 
 /// Create enhanced code actions test server
-fn create_enhanced_code_actions_server() -> Result<(LspHarness, TempWorkspace), Box<dyn std::error::Error>> {
+fn create_enhanced_code_actions_server()
+-> Result<(LspHarness, TempWorkspace), Box<dyn std::error::Error>> {
     // Create workspace without initializing the harness
     let workspace = TempWorkspace::new()?;
 
@@ -140,7 +141,10 @@ fn create_enhanced_code_actions_server() -> Result<(LspHarness, TempWorkspace), 
 }
 
 /// Initialize harness and open documents for enhanced code actions tests
-fn initialize_enhanced_harness(harness: &mut LspHarness, workspace: &TempWorkspace) -> Result<(), Box<dyn std::error::Error>> {
+fn initialize_enhanced_harness(
+    harness: &mut LspHarness,
+    workspace: &TempWorkspace,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize the server
     harness.initialize_with_root(&workspace.root_uri, None)?;
 
@@ -158,10 +162,8 @@ fn initialize_enhanced_harness(harness: &mut LspHarness, workspace: &TempWorkspa
     }
 
     // Revolutionary performance: adaptive timeout
-    let thread_count = std::env::var("RUST_TEST_THREADS")
-        .ok()
-        .and_then(|s| s.parse::<usize>().ok())
-        .unwrap_or(8);
+    let thread_count =
+        std::env::var("RUST_TEST_THREADS").ok().and_then(|s| s.parse::<usize>().ok()).unwrap_or(8);
 
     let timeout_ms = match thread_count {
         n if n <= 2 => 500, // High contention
@@ -191,9 +193,8 @@ fn test_enhanced_code_action_server_capabilities() -> Result<(), Box<dyn std::er
         }
     });
 
-    let capabilities = init_result
-        .get("capabilities")
-        .ok_or("Initialize result should contain capabilities")?;
+    let capabilities =
+        init_result.get("capabilities").ok_or("Initialize result should contain capabilities")?;
 
     // AC3: Verify codeActionProvider is advertised with proper structure
     assert!(
@@ -213,8 +214,7 @@ fn test_enhanced_code_action_server_capabilities() -> Result<(), Box<dyn std::er
     if code_action_provider.is_object() {
         // AC3: Check for supported code action kinds per Issue #145
         if let Some(kinds) = code_action_provider.get("codeActionKinds") {
-            let kinds_array = kinds.as_array()
-                .ok_or("codeActionKinds should be array")?;
+            let kinds_array = kinds.as_array().ok_or("codeActionKinds should be array")?;
 
             let expected_kinds =
                 vec!["quickfix", "refactor.extract", "refactor.rewrite", "source.organizeImports"];
@@ -273,8 +273,7 @@ fn test_enhanced_extract_variable_refactoring() -> Result<(), Box<dyn std::error
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array()
-        .ok_or("Should return action array")?;
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
 
     // AC3: Enhanced validation - look for extract variable action
     let extract_var_action = actions.iter().find(|action| {
@@ -339,8 +338,7 @@ fn test_enhanced_organize_imports_refactoring() -> Result<(), Box<dyn std::error
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array()
-        .ok_or("Should return action array")?;
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
 
     // AC3: Look for organize imports action with enhanced validation
     let organize_imports_action = actions.iter().find(|action| {
@@ -412,8 +410,7 @@ fn test_enhanced_quickfix_pragma_actions() -> Result<(), Box<dyn std::error::Err
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array()
-        .ok_or("Should return action array")?;
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
 
     // AC3: Enhanced pragma detection
     let pragma_actions: Vec<_> = actions
@@ -475,26 +472,28 @@ fn test_enhanced_code_actions_performance() -> Result<(), Box<dyn std::error::Er
 
     let start_time = std::time::Instant::now();
 
-    let _actions_result = harness.request_with_timeout(
-        "textDocument/codeAction",
-        json!({
-            "textDocument": {"uri": workspace.uri("refactoring_ops.pl")},
-            "range": {
-                "start": {"line": 0, "character": 0},
-                "end": {"line": 25, "character": 0}  // Large range
-            },
-            "context": {
-                "diagnostics": [],
-                "only": [] // Request all available actions
-            }
-        }),
-        Duration::from_millis(timeout_ms),
-    ).map_err(|e| {
-        format!(
-            "Code actions should respond within {}ms (revolutionary performance): {}",
-            timeout_ms, e
+    let _actions_result = harness
+        .request_with_timeout(
+            "textDocument/codeAction",
+            json!({
+                "textDocument": {"uri": workspace.uri("refactoring_ops.pl")},
+                "range": {
+                    "start": {"line": 0, "character": 0},
+                    "end": {"line": 25, "character": 0}  // Large range
+                },
+                "context": {
+                    "diagnostics": [],
+                    "only": [] // Request all available actions
+                }
+            }),
+            Duration::from_millis(timeout_ms),
         )
-    })?;
+        .map_err(|e| {
+            format!(
+                "Code actions should respond within {}ms (revolutionary performance): {}",
+                timeout_ms, e
+            )
+        })?;
 
     let duration = start_time.elapsed();
 
@@ -535,8 +534,7 @@ fn test_enhanced_code_action_resolve() -> Result<(), Box<dyn std::error::Error>>
         Duration::from_secs(2),
     )?;
 
-    let actions = actions_result.as_array()
-        .ok_or("Should return action array")?;
+    let actions = actions_result.as_array().ok_or("Should return action array")?;
 
     if !actions.is_empty() {
         let first_action = &actions[0];
@@ -588,26 +586,27 @@ fn test_enhanced_code_actions_filtering() -> Result<(), Box<dyn std::error::Erro
     ];
 
     for (only_kinds, expected_prefix) in filter_tests {
-        let actions_result = harness.request_with_timeout(
-            "textDocument/codeAction",
-            json!({
-                "textDocument": {"uri": workspace.uri("missing_pragmas.pl")},
-                "range": {
-                    "start": {"line": 0, "character": 0},
-                    "end": {"line": 10, "character": 0}
-                },
-                "context": {
-                    "diagnostics": [],
-                    "only": only_kinds
-                }
-            }),
-            Duration::from_secs(2),
-        ).map_err(|e| {
-            format!("Request with filter {:?} should succeed: {}", expected_prefix, e)
-        })?;
+        let actions_result = harness
+            .request_with_timeout(
+                "textDocument/codeAction",
+                json!({
+                    "textDocument": {"uri": workspace.uri("missing_pragmas.pl")},
+                    "range": {
+                        "start": {"line": 0, "character": 0},
+                        "end": {"line": 10, "character": 0}
+                    },
+                    "context": {
+                        "diagnostics": [],
+                        "only": only_kinds
+                    }
+                }),
+                Duration::from_secs(2),
+            )
+            .map_err(|e| {
+                format!("Request with filter {:?} should succeed: {}", expected_prefix, e)
+            })?;
 
-        let actions = actions_result.as_array()
-            .ok_or("Should return action array")?;
+        let actions = actions_result.as_array().ok_or("Should return action array")?;
 
         // AC3: Validate filtering works correctly
         for action in actions {

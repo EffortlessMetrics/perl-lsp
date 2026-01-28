@@ -92,10 +92,7 @@ fn test_missing_required_params() -> Result<(), Box<dyn std::error::Error>> {
         // This is also valid behavior
         if let Some(items) = result.get("items") {
             let items_array = items.as_array().ok_or("items should be an array")?;
-            assert!(
-                items_array.is_empty(),
-                "Expected empty items array for missing params"
-            );
+            assert!(items_array.is_empty(), "Expected empty items array for missing params");
         }
     } else {
         panic!("Expected either error or result in response, got: {:?}", response);
@@ -783,12 +780,7 @@ fn test_cancel_request() -> Result<(), Box<dyn std::error::Error>> {
     let request_str = serde_json::to_string(&request_json)?;
     send_raw(
         &mut server,
-        format!(
-            "Content-Length: {}\r\n\r\n{}",
-            request_str.len(),
-            request_str
-        )
-        .as_bytes(),
+        format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str).as_bytes(),
     );
 
     // Immediately send cancellation request
@@ -831,8 +823,7 @@ fn test_cancel_request() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(code) = error.get("code") {
                         let code_i64 = code.as_i64().ok_or("code should be an integer")?;
                         assert_eq!(
-                            code_i64,
-                            -32800,
+                            code_i64, -32800,
                             "Expected cancellation error code -32800, got: {}",
                             code
                         );

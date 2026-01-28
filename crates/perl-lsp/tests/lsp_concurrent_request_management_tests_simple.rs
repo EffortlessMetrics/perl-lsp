@@ -5,8 +5,6 @@
 //! AC3: Enhanced Request Correlation System
 //! AC4: Request Context with LSP Workflow Integration
 
-
-
 use serde_json::json;
 use std::time::{Duration, Instant};
 

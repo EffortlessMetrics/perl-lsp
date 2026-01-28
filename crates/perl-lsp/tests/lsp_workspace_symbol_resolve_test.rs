@@ -91,10 +91,7 @@ our $VERSION = '1.0';
     assert_eq!(resolved["name"], "hello");
     assert!(resolved["detail"].is_string(), "Should have detail field");
     let detail_str = resolved["detail"].as_str().ok_or("detail is not a string")?;
-    assert!(
-        detail_str.contains("sub"),
-        "Detail should indicate it's a subroutine"
-    );
+    assert!(detail_str.contains("sub"), "Detail should indicate it's a subroutine");
 
     // Location should still be present
     assert!(resolved["location"].is_object());
@@ -169,7 +166,8 @@ sub another_method {
     // Should potentially have container information
     // (depending on implementation details)
     if resolved["containerName"].is_string() {
-        let container_str = resolved["containerName"].as_str().ok_or("containerName is not a string")?;
+        let container_str =
+            resolved["containerName"].as_str().ok_or("containerName is not a string")?;
         assert!(!container_str.is_empty());
     }
 

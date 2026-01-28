@@ -146,6 +146,8 @@ pub struct LspServer {
     symbol_index: Arc<Mutex<SymbolIndex>>,
     /// Server configuration
     pub(crate) config: Arc<Mutex<ServerConfig>>,
+    /// Synchronized input reader
+    reader: Arc<Mutex<Box<dyn BufRead + Send>>>,
     /// Synchronized output writer for notifications
     output: Arc<Mutex<Box<dyn Write + Send>>>,
     /// Client capabilities
@@ -202,6 +204,7 @@ impl LspServer {
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
+            reader: Arc::new(Mutex::new(Box::new(BufReader::new(io::stdin())))),
             output: Arc::new(Mutex::new(Box::new(io::stdout()))),
             client_capabilities: ClientCapabilities::default(),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
@@ -266,12 +269,6 @@ impl LspServer {
             flags.to_advertised_features()
         };
 
-        // Note: The reader parameter is accepted but not stored because the current
-        // serve() method takes a BufRead parameter. This design allows backward
-        // compatibility while preparing for future refactoring where the reader
-        // might be stored in the server struct.
-        let _ = reader; // Acknowledge unused parameter for now
-
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
             initialized: false,
@@ -281,6 +278,7 @@ impl LspServer {
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
+            reader: Arc::new(Mutex::new(Box::new(BufReader::new(reader)))),
             output: Arc::new(Mutex::new(writer as Box<dyn Write + Send>)),
             client_capabilities: ClientCapabilities::default(),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
@@ -323,6 +321,7 @@ impl LspServer {
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
+            reader: Arc::new(Mutex::new(Box::new(BufReader::new(io::stdin())))),
             output,
             client_capabilities: ClientCapabilities::default(),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
@@ -473,15 +472,14 @@ impl LspServer {
 
     /// Run the LSP server using stdio
     pub fn run(&mut self) -> io::Result<()> {
-        let stdin = io::stdin();
-        let mut reader = BufReader::new(stdin.lock());
-
         eprintln!("LSP server started (stdio)");
-        self.serve(&mut reader)
+        let reader_arc = Arc::clone(&self.reader);
+        let mut reader = reader_arc.lock();
+        self.serve(&mut **reader)
     }
 
     /// Serve LSP requests from the given reader
-    pub fn serve<R: BufRead>(&mut self, reader: &mut R) -> io::Result<()> {
+    pub fn serve(&mut self, reader: &mut dyn BufRead) -> io::Result<()> {
         loop {
             // Read LSP message using transport module
             match read_message(reader)? {
@@ -524,6 +522,11 @@ impl LspServer {
 
     // Note: request_cancelled_error, server_cancelled_error, enhanced_error, and
     // document_not_found_error are imported from crate::lsp::protocol
+
+    /// Check if the server is initialized
+    pub fn is_initialized(&self) -> bool {
+        self.initialized
+    }
 
     /// Mark a request as cancelled
     fn cancel_mark(&self, id: &Value) {

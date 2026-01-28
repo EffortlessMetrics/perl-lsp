@@ -45,7 +45,8 @@ fn document_links_and_selection() -> Result<(), Box<dyn std::error::Error>> {
         method: "textDocument/documentLink".into(),
         params: Some(json!({"textDocument": {"uri": uri}})),
     };
-    let links_res = srv.handle_request(links_req).ok_or("Failed to handle document link request")?;
+    let links_res =
+        srv.handle_request(links_req).ok_or("Failed to handle document link request")?;
     let links = links_res.result.ok_or("Document link response missing result")?;
     assert!(
         links.as_array().map(|a| !a.is_empty()).unwrap_or(false),

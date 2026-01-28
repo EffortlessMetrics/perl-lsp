@@ -494,8 +494,7 @@ fn test_document_links_windows_path_with_space() -> Result<(), Box<dyn std::erro
 
     let links = resp["result"].as_array().ok_or("Expected links array")?;
     assert!(!links.is_empty(), "should return at least one link");
-    let target = links.first()
-        .ok_or("Expected at least one link")?["target"]
+    let target = links.first().ok_or("Expected at least one link")?["target"]
         .as_str()
         .ok_or("Expected target uri to be a string")?;
 

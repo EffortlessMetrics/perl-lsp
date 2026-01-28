@@ -1,16 +1,16 @@
-//! Error classification and diagnostic generation for Perl parsing workflow pipeline
+//! Error classification and diagnostic generation for Perl parsing workflows
 //!
 //! This module provides intelligent error classification for parsing failures in Perl scripts,
 //! offering specific error types and recovery suggestions for LSP workflow operations.
 //!
 //! # LSP Workflow Integration
 //!
-//! Error classification supports robust Perl parsing across LSP stages:
-//! - **Extract**: Classify parsing errors in embedded Perl scripts
-//! - **Normalize**: Provide specific error types for standardization failures
-//! - **Thread**: Identify control flow parsing issues in Perl parsing logic
-//! - **Render**: Classify syntax errors during output generation
-//! - **Index**: Handle parsing errors during symbol extraction and indexing
+//! Error classification supports robust Perl parsing across LSP workflow stages:
+//! - **Parse**: Classify syntax errors during parser construction
+//! - **Index**: Provide error context for symbol extraction and indexing
+//! - **Navigate**: Surface recovery hints for definition and reference resolution
+//! - **Complete**: Enable error-tolerant completion and quick fixes
+//! - **Analyze**: Drive diagnostics and remediation guidance
 //!
 //! # Usage Examples
 //!
@@ -19,7 +19,7 @@
 //! use perl_parser::{Parser, ast::Node};
 //!
 //! let classifier = ErrorClassifier::new();
-//! let source = "my $email = \"unclosed string...";
+//! let source = "my $value = \"unclosed string...";
 //! let mut parser = Parser::new(source);
 //! let _result = parser.parse(); // This will fail due to unclosed string
 //!
@@ -34,7 +34,7 @@ use perl_ast::Node;
 /// Specific types of parse errors found in Perl script content
 ///
 /// Provides detailed categorization of parsing failures to enable targeted
-/// error recovery strategies during Perl parsing workflow workflows.
+/// error recovery strategies during LSP workflows.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParseErrorKind {
     /// Parser encountered unexpected token during Perl script analysis
@@ -74,7 +74,7 @@ pub enum ParseErrorKind {
     UnexpectedEof,
 }
 
-/// Email script error classification engine for LSP workflow operations
+/// Perl script error classification engine for LSP workflow operations
 ///
 /// Analyzes parsing errors and provides specific error types with recovery suggestions
 /// for robust Perl parsing workflows within enterprise LSP environments.
@@ -344,17 +344,20 @@ mod tests {
     fn test_classify_unclosed_string() {
         let classifier = ErrorClassifier::new();
         let source = r#"my $x = "hello"#;
-        
+
         // Manually construct error node
         // "hello is at index 9 (my  = ) is 0..8
         // m y   $ x   =   "
         // 0123456789
-        
+
         let error_node = Node::new(
-            NodeKind::Error { 
-                message: "Unclosed string".to_string(), 
+            NodeKind::Error {
+                message: "Unclosed string".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
             },
-            SourceLocation { start: 9, end: 15 } // "hello
+            SourceLocation { start: 9, end: 15 }, // "hello
         );
 
         let kind = classifier.classify(&error_node, source);
@@ -368,8 +371,11 @@ mod tests {
 
         // Simulate an error node at the end of first line
         let error = Node::new(
-            NodeKind::Error { 
-                message: "Unexpected token".to_string(), 
+            NodeKind::Error {
+                message: "Unexpected token".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
             },
             SourceLocation { start: 10, end: 11 }, // newline char
         );

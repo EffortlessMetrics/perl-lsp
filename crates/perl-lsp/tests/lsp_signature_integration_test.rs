@@ -150,8 +150,7 @@ fn test_parameter_highlighting() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     for test in test_cases {
-        let ast =
-            Parser::new(test.code).parse().or_else(|_| Parser::new("").parse())?;
+        let ast = Parser::new(test.code).parse().or_else(|_| Parser::new("").parse())?;
         let provider = SignatureHelpProvider::new(&ast);
 
         if let Some(help) = provider.get_signature_help(test.code, test.position) {

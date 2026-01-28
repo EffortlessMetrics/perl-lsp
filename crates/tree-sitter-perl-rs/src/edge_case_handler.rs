@@ -111,9 +111,8 @@ impl EdgeCaseHandler {
 
         // Phase 4: Integrated parsing with understanding
         let mut understanding_parser = UnderstandingParser::new();
-        let parse_result = understanding_parser
-            .parse_with_understanding(code)
-            .unwrap_or_else(|e| ParseResult {
+        let parse_result =
+            understanding_parser.parse_with_understanding(code).unwrap_or_else(|e| ParseResult {
                 ast: ExtendedAstNode::Normal(AstNode::ErrorNode {
                     message: Arc::from(format!("Parse failed: {}", e)),
                     content: Arc::from(""),

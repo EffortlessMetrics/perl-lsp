@@ -344,6 +344,10 @@ pub mod util;
 pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 pub use server::LspServer;
 
+/// DAP bridge adapter re-export
+#[cfg(feature = "dap-phase1")]
+pub use perl_dap::BridgeAdapter;
+
 // =============================================================================
 // Internal compatibility re-exports (crate-internal, not API surface)
 // =============================================================================

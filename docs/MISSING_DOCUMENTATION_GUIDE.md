@@ -53,7 +53,7 @@ src/semantic.rs                 # Semantic analysis - ~25 violations
 
 #### Documentation Requirements
 - **All public functions**: Brief summary, detailed description, parameters, returns, examples
-- **Performance-critical APIs**: Time/space complexity, memory usage patterns, 50GB processing characteristics
+- **Performance-critical APIs**: Time/space complexity, memory usage patterns, large workspace scaling characteristics
 - **Error types**: LSP workflow context, recovery strategies, diagnostic information
 - **Cross-references**: Proper Rust documentation linking with `[`function_name`]` syntax
 
@@ -90,7 +90,7 @@ src/hover.rs                    # Hover information - ~30 violations
 ```bash
 # Validate Phase 2 implementation
 cargo test -p perl-parser --test missing_docs_ac_tests -- test_lsp_provider_documentation_critical_paths
-cargo test -p perl-parser --test missing_docs_ac_tests -- test_comprehensive_pstx_pipeline_documentation
+cargo test -p perl-parser --test missing_docs_ac_tests -- test_comprehensive_workflow_documentation
 ```
 
 ### Phase 3: Advanced Features (Weeks 5-6)
@@ -196,24 +196,24 @@ cargo doc --no-deps --package perl-parser
 cargo doc --no-deps --package perl-parser 2>&1 | grep -c "warning"
 ```
 
-## Enterprise Integration Requirements
+## Workflow Integration Requirements
 
-### PSTX Pipeline Documentation
+### LSP Workflow Documentation
 
-All major components must document integration with the **PSTX pipeline** (Extract → Normalize → Thread → Render → Index):
+All major components must document integration with the **LSP workflow** (Parse → Index → Navigate → Complete → Analyze):
 
-- **Extract Stage**: Document PST parsing and email structure extraction
-- **Normalize Stage**: Document header standardization and cleanup procedures
-- **Thread Stage**: Document conversation threading and relationship analysis
-- **Render Stage**: Document output formatting and presentation
-- **Index Stage**: Document search indexing and retrieval patterns
+- **Parse Stage**: Document parser entry points and AST generation
+- **Index Stage**: Document symbol extraction and workspace indexing
+- **Navigate Stage**: Document definition/reference resolution and cross-file lookup
+- **Complete Stage**: Document completion, hover, and signature help inputs
+- **Analyze Stage**: Document semantic analysis, diagnostics, and refactoring support
 
-### 50GB Processing Documentation
+### Large Workspace Performance Documentation
 
 Performance-critical modules must document:
-- **Memory usage patterns** for large-scale processing
+- **Memory usage patterns** for large workspaces
 - **Scaling characteristics** and optimization strategies
-- **Resource management** for enterprise environments
+- **Resource management** for editor and CI environments
 - **Benchmark data** with real-world performance metrics
 
 ### Unicode Safety and Security
@@ -241,9 +241,9 @@ All text processing functions must document:
 ```rust
 /// Parses Perl source code into an Abstract Syntax Tree with enterprise-grade error recovery.
 ///
-/// This function serves as the primary entry point for the PSTX Extract stage, processing
-/// PST email content and generating structured AST representations. Supports incremental
-/// parsing with <1ms updates and comprehensive Unicode handling for international content.
+/// This function serves as the primary entry point for parsing, generating structured
+/// AST representations. Supports incremental parsing with <1ms updates and comprehensive
+/// Unicode handling for international content.
 ///
 /// # Arguments
 /// * `source` - Perl source code string with UTF-8 encoding
@@ -264,7 +264,7 @@ All text processing functions must document:
 /// # Performance Characteristics
 /// * **Time Complexity**: O(n) where n is source length
 /// * **Memory Usage**: O(n) with 70-99% node reuse in incremental mode
-/// * **50GB Processing**: Maintains sub-microsecond per-token performance
+/// * **Large Workspace Scaling**: Maintains sub-microsecond per-token performance
 ///
 /// # LSP Workflow Integration
 /// * **Parse Stage**: Primary AST generation for subsequent analysis
@@ -339,7 +339,7 @@ cargo clippy -p perl-parser -- -W missing_docs         # Lint-level enforcement
 2. **Test-Driven Approach**: Use failing acceptance criteria tests as implementation guides
 3. **Quality Validation**: Continuously monitor progress with automated test suite
 4. **Performance Preservation**: Ensure documentation additions maintain <1% overhead
-5. **Enterprise Integration**: Document all LSP workflow and PSTX pipeline integration points
+5. **Enterprise Integration**: Document all LSP workflow integration points
 
 ## Related Documentation
 

@@ -21,7 +21,8 @@ fn send_request(
         params: Some(params),
     };
 
-    let response = server.handle_request(request).ok_or_else(|| "Should get response".to_string())?;
+    let response =
+        server.handle_request(request).ok_or_else(|| "Should get response".to_string())?;
     if let Some(error) = response.error {
         return Err(error.message);
     }

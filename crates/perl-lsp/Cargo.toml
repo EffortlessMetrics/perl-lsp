@@ -20,6 +20,7 @@ include = [
 ]
 
 [dependencies]
+perl-dap = { workspace = true, optional = true }
 perl-parser = { workspace = true, features = ["test-performance"] }
 perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-protocol = { workspace = true }
@@ -72,7 +73,7 @@ lsp-advanced = []  # Advanced LSP features (profiling, git integration, etc.)
 expose_lsp_test_api = ["perl-parser/expose_lsp_test_api"]  # Expose test helpers for integration tests
 lsp-extras = []  # Quarantined tests for unimplemented/aspirational LSP features
 strict-jsonrpc = []  # Strict JSON-RPC 2.0 protocol validation tests
-dap-phase1 = []  # DAP Phase 1: Bridge to Perl::LanguageServer (AC1-AC4)
+dap-phase1 = ["perl-dap"]  # DAP Phase 1: Bridge to Perl::LanguageServer (AC1-AC4)
 dap-phase3 = []  # DAP Phase 3: Non-regression tests (AC17)
 utf16-complete = ["perl-parser/utf16-complete"]  # Complete UTF-16 round-trip support
 

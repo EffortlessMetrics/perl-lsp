@@ -1,0 +1,27 @@
+{
+    "Perl: Launch Script": {
+        "prefix": "perl-launch",
+        "body": [
+            "{",
+            "    \"type\": \"perl\",",
+            "    \"request\": \"launch\",",
+            "    \"name\": \"Perl: Launch Script\",",
+            "    \"program\": \"${workspaceFolder}/${1:script.pl}\",",
+            "    \"stopOnEntry\": true",
+            "}"
+        ],
+        "description": "Launch a Perl script in debug mode"
+    },
+    "Perl: Attach to Process": {
+        "prefix": "perl-attach",
+        "body": [
+            "{",
+            "    \"type\": \"perl\",",
+            "    \"request\": \"attach\",",
+            "    \"name\": \"Perl: Attach to Process\",",
+            "    \"port\": ${1:5000}",
+            "}"
+        ],
+        "description": "Attach to a running Perl process"
+    }
+}

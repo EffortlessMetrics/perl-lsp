@@ -1,3 +1,8 @@
+//! Refactored modernization engine with structured pattern definitions.
+//!
+//! Provides deterministic modernization checks with explicit pattern metadata,
+//! suitable for Analyze-stage code actions.
+
 use std::collections::HashMap;
 
 /// A suggestion for modernizing legacy Perl code patterns.
