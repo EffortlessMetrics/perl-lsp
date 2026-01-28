@@ -1438,6 +1438,7 @@ name = "perl-ast"
 version = "0.8.8"
 dependencies = [
  "perl-position-tracking",
+ "perl-token",
 ]
 
 [[package]]
@@ -1456,6 +1457,7 @@ dependencies = [
  "chrono",
  "clap",
  "glob",
+ "lazy_static",
  "once_cell",
  "perl-parser",
  "perl-tdd-support",
@@ -1565,6 +1567,7 @@ dependencies = [
  "md5",
  "nix",
  "parking_lot",
+ "perl-dap",
  "perl-lexer",
  "perl-lsp-protocol",
  "perl-lsp-providers",
@@ -1754,6 +1757,7 @@ dependencies = [
  "regex",
  "serde",
  "tempfile",
+ "url",
 ]
 
 [[package]]

@@ -14,8 +14,8 @@
 //! ```rust
 //! use perl_lsp_diagnostics::DiagnosticsProvider;
 //!
-//! let provider = DiagnosticsProvider::new();
-//! let diagnostics = provider.generate_diagnostics(&ast, source, Some(&workspace_index))?;
+//! let provider = DiagnosticsProvider::new(&ast, source.to_string());
+//! let diagnostics = provider.get_diagnostics(&ast, &parse_errors, source);
 //! ```
 
 #![deny(unsafe_code)]
@@ -23,15 +23,14 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-mod diagnostics;
-mod lints;
+pub mod diagnostics;
 
-pub use diagnostics::{DiagnosticsProvider, Diagnostic, DiagnosticSeverity};
+pub use diagnostics::{DiagnosticsProvider, Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
 
 pub mod lints {
-    pub use super::lints::{
+    pub use super::diagnostics::lints::{
         check_common_mistakes,
-        check_deprecated_features,
+        check_deprecated_syntax,
         check_strict_warnings,
     };
 }
