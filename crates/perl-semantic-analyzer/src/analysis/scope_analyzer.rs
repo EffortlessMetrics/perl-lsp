@@ -807,12 +807,16 @@ impl ScopeAnalyzer {
         scope.for_each_reportable_unused_variable(|var_name, offset| {
             let start = offset.min(code.len());
             let end = (start + var_name.len()).min(code.len());
+
+            // Optimization: Generate description using the string reference before moving it
+            let description = format!("Variable '{}' is declared but never used", var_name);
+
             issues.push(ScopeIssue {
                 kind: IssueKind::UnusedVariable,
-                variable_name: var_name.clone(),
+                variable_name: var_name, // Move: Avoids cloning the string
                 line: self.get_line_number(code, offset),
                 range: (start, end),
-                description: format!("Variable '{}' is declared but never used", var_name),
+                description,
             });
         });
     }
@@ -997,8 +1001,11 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
     // Exception: $a and $b are built-in sort variables
     if !name.is_empty() {
         let first = name.as_bytes()[0];
-        if first.is_ascii_lowercase() && name != "a" && name != "b" {
-            return false;
+        if first.is_ascii_lowercase() {
+            // Optimization: Combine length and byte check to avoid multiple comparisons
+            if name.len() > 1 || (first != b'a' && first != b'b') {
+                return false;
+            }
         }
     }
 
@@ -1031,16 +1038,17 @@ fn is_builtin_global(sigil: &str, name: &str) -> bool {
                 // Check patterns
                 // $^[A-Z] variables
                 if name.starts_with('^') && name.len() == 2 {
-                    if let Some(ch) = name.chars().nth(1) {
-                        if ch.is_ascii_uppercase() {
-                            return true;
-                        }
+                    // Optimization: access byte directly since we know len is 2 and it's ASCII range
+                    let second = name.as_bytes()[1];
+                    if second.is_ascii_uppercase() {
+                        return true;
                     }
                 }
 
                 // Numbered capture variables ($1, $2, etc.)
                 // Note: $0-$9 are already handled in the match above, but this covers $10+
-                if !name.is_empty() && name.chars().all(|c| c.is_ascii_digit()) {
+                // Optimization: use byte check to avoid utf-8 decoding
+                if !name.is_empty() && name.as_bytes().iter().all(|c| c.is_ascii_digit()) {
                     return true;
                 }
 
