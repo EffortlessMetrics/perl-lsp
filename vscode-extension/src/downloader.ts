@@ -7,6 +7,8 @@ import * as crypto from 'crypto';
 import * as os from 'os';
 import { promisify } from 'util';
 import * as child_process from 'child_process';
+import * as tar from 'tar';
+import AdmZip from 'adm-zip';
 
 const execFile = promisify(child_process.execFile);
 
@@ -194,24 +196,29 @@ export class BinaryDownloader {
                 const extractDir = path.join(tempDir, 'extracted');
                 fs.mkdirSync(extractDir);
                 
-                // Choose extraction command based on file extension
-                let cmd: string;
-                let args: string[];
-
-                if (assetName.endsWith('.tar.xz')) {
-                    cmd = 'tar';
-                    args = ['-xJf', archivePath, '-C', extractDir];
-                } else if (assetName.endsWith('.tar.gz')) {
-                    cmd = 'tar';
-                    args = ['-xzf', archivePath, '-C', extractDir];
+                // Choose extraction method based on file extension
+                if (assetName.endsWith('.tar.gz')) {
+                    await tar.x({
+                        file: archivePath,
+                        cwd: extractDir
+                    });
                 } else if (assetName.endsWith('.zip')) {
-                    cmd = 'unzip';
-                    args = ['-q', archivePath, '-d', extractDir];
+                    await new Promise<void>((resolve, reject) => {
+                        const zip = new AdmZip(archivePath);
+                        zip.extractAllToAsync(extractDir, true, true, (error) => {
+                            if (error) {
+                                reject(error);
+                            } else {
+                                resolve();
+                            }
+                        });
+                    });
+                } else if (assetName.endsWith('.tar.xz')) {
+                    // Fallback to system tar for .tar.xz (node-tar doesn't support xz)
+                    await execFile('tar', ['-xJf', archivePath, '-C', extractDir]);
                 } else {
                     throw new Error(`Unsupported archive format: ${assetName}`);
                 }
-                
-                await execFile(cmd, args);
                 
                 // Find the binary
                 const binaryName = process.platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
