@@ -41,7 +41,9 @@ say "done";"#;
     assert!(!sexp.contains("(identifier of)"));
     assert!(!sexp.contains("(identifier first)"));
     assert!(!sexp.contains("(identifier second)"));
-    assert!(sexp.contains(r#"say ((string_interpolated ""done""))"#));
+    // The 'say "done"' statement should be parsed as a function call
+    assert!(sexp.contains("(call say"));
+    assert!(sexp.contains("string_interpolated"));
     Ok(())
 }
 
@@ -344,23 +346,24 @@ fn test_data_end_with_trailing_junk_non_ws() -> TestResult {
 #[test]
 fn test_reject_ruby_style_heredoc() -> TestResult {
     // Ruby uses <<- for indented heredocs, Perl does not
-    // Perl sees <<-END as: << operator followed by unary minus and bareword END
+    // In Perl, <<-END is invalid syntax since << in expression context
+    // without a left operand expects a heredoc label, but -END isn't valid.
     let input = "my $x = <<-END;\n    indented\n    -END\nsay 1;";
 
     let mut parser = Parser::new(input);
     let ast = parser.parse();
 
-    // This should parse, but as bit-shift, not heredoc
+    // The parser should recover and continue parsing subsequent statements
     if let Ok(ast) = ast {
         let sexp = ast.to_sexp();
-        // Should parse as left shift operator, not heredoc
-        assert!(sexp.contains("(my_declaration"));
+        // Should NOT produce a heredoc (verify heredoc body isn't captured)
+        assert!(!sexp.contains("heredoc_interpolated"));
+        assert!(!sexp.contains("heredoc_literal"));
         // The content after should be parsed as regular code
+        // "say 1;" should still be parsed correctly
         assert!(sexp.contains("say"));
-    } else {
-        // Or it might fail to parse due to syntax error
-        // Either way, it's not a valid heredoc - nothing to assert
     }
+    // If parse fails completely, that's also acceptable for invalid syntax
     Ok(())
 }
 

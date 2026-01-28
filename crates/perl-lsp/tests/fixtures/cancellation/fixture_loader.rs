@@ -331,7 +331,8 @@ pub fn get_performance_thresholds() -> Result<HashMap<String, f64>, Box<dyn std:
         for scenario in scenarios {
             if let Some(requirements) = scenario.get("requirements") {
                 if let Some(max_latency) = requirements.get("max_latency_microseconds") {
-                    thresholds.insert("max_cancellation_check_latency_us".to_string(), max_latency.as_f64().unwrap_or(100.0));
+                    let latency_value = max_latency.as_f64().ok_or("max_latency_microseconds should be a number")?;
+                    thresholds.insert("max_cancellation_check_latency_us".to_string(), latency_value);
                 }
             }
         }
@@ -342,7 +343,8 @@ pub fn get_performance_thresholds() -> Result<HashMap<String, f64>, Box<dyn std:
         for scenario in scenarios {
             if let Some(requirements) = scenario.get("requirements") {
                 if let Some(max_response) = requirements.get("max_response_time_ms") {
-                    thresholds.insert("max_e2e_cancellation_response_ms".to_string(), max_response.as_f64().unwrap_or(50.0));
+                    let response_value = max_response.as_f64().ok_or("max_response_time_ms should be a number")?;
+                    thresholds.insert("max_e2e_cancellation_response_ms".to_string(), response_value);
                 }
             }
         }
@@ -353,7 +355,8 @@ pub fn get_performance_thresholds() -> Result<HashMap<String, f64>, Box<dyn std:
         for scenario in scenarios {
             if let Some(requirements) = scenario.get("requirements") {
                 if let Some(max_memory) = requirements.get("max_memory_overhead_kb") {
-                    thresholds.insert("max_memory_overhead_kb".to_string(), max_memory.as_f64().unwrap_or(1024.0));
+                    let memory_value = max_memory.as_f64().ok_or("max_memory_overhead_kb should be a number")?;
+                    thresholds.insert("max_memory_overhead_kb".to_string(), memory_value);
                 }
             }
         }

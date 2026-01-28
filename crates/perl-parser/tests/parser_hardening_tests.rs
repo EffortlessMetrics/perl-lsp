@@ -318,10 +318,10 @@ fn extract_modifiers_from_node(node: &perl_parser::ast::Node) -> Option<String> 
 
 #[test]
 fn test_recursion_depth_limiting() {
-    // Test that deeply nested blocks are rejected with RecursionLimit error
+    // Test that deeply nested blocks are rejected with NestingTooDeep error
 
-    // Create a string with nested blocks at the recursion limit
-    let safe_depth = 100; // Well below the 500 limit
+    // Create a string with nested blocks below the recursion limit
+    let safe_depth = 50; // Well below the 128 limit
     let mut safe_code = String::new();
     for _ in 0..safe_depth {
         safe_code.push('{');
@@ -337,7 +337,7 @@ fn test_recursion_depth_limiting() {
     assert!(result.is_ok(), "Safe depth should parse successfully");
 
     // Create a string with nested blocks that exceeds the limit
-    let unsafe_depth = 600; // Above the 500 limit
+    let unsafe_depth = 200; // Above the 128 limit
     let mut unsafe_code = String::new();
     for _ in 0..unsafe_depth {
         unsafe_code.push('{');
@@ -347,18 +347,18 @@ fn test_recursion_depth_limiting() {
         unsafe_code.push('}');
     }
 
-    // This should fail with RecursionLimit error
+    // This should fail with NestingTooDeep error
     let mut parser = Parser::new(&unsafe_code);
     let result = parser.parse();
-    assert!(result.is_err(), "Unsafe depth should fail with recursion limit error");
+    assert!(result.is_err(), "Unsafe depth should fail with nesting limit error");
 
-    // Check that it's specifically a RecursionLimit error
+    // Check that it's specifically a NestingTooDeep error
     match result {
-        Err(perl_parser::ParseError::RecursionLimit) => {
+        Err(perl_parser::ParseError::NestingTooDeep { .. }) => {
             // Expected error type
         }
         Err(other_error) => {
-            panic!("Expected RecursionLimit error, got: {:?}", other_error);
+            panic!("Expected NestingTooDeep error, got: {:?}", other_error);
         }
         Ok(_) => {
             panic!("Expected error but parsing succeeded");

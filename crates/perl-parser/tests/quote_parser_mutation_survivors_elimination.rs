@@ -360,12 +360,8 @@ fn test_kill_mutations_comprehensive_edge_cases() {
         );
         let (pattern, replacement, _) = extract_substitution_parts(&input);
         assert_eq!(pattern, "test", "Pattern extraction for delimiter {}", open);
-        if open == '(' && close == ')' {
-            // Special case for parentheses
-            assert_eq!(replacement, "", "Parentheses special case replacement");
-        } else {
-            assert_eq!(replacement, "repl", "Replacement extraction for delimiter {}", open);
-        }
+        // All paired delimiters should correctly extract the replacement
+        assert_eq!(replacement, "repl", "Replacement extraction for delimiter {}", open);
     }
 }
 

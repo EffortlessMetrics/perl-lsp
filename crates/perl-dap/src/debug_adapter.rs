@@ -2202,7 +2202,7 @@ mod tests {
                 assert_eq!(command, "initialize");
                 assert!(body.is_some());
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
     }
 
@@ -2219,7 +2219,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Missing attach arguments"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2243,7 +2243,7 @@ mod tests {
                 assert!(msg.contains("localhost:13603"));
                 assert!(msg.contains("5000ms timeout"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2265,7 +2265,7 @@ mod tests {
                 assert!(msg.contains("Process ID attachment"));
                 assert!(msg.contains("12345"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2287,7 +2287,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Host cannot be empty"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2309,7 +2309,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Host cannot be empty"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2331,7 +2331,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Port must be in range"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2354,7 +2354,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Timeout must be greater than 0"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2377,7 +2377,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Timeout cannot exceed"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2398,7 +2398,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("localhost:13603"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2420,7 +2420,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("192.168.1.100:9000"));
             }
-            _ => assert!(false, "Expected response"),
+            _ => panic!("Expected response"),
         }
         Ok(())
     }
@@ -2609,5 +2609,170 @@ mod tests {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
         }
+    }
+
+    /// Helper to create a test stack frame
+    fn make_test_frame(id: i32, name: &str, path: &str, line: i32) -> StackFrame {
+        StackFrame {
+            id,
+            name: name.to_string(),
+            source: Source {
+                name: Some(path.split('/').next_back().unwrap_or(path).to_string()),
+                path: path.to_string(),
+                source_reference: None,
+            },
+            line,
+            column: 1,
+            end_line: None,
+            end_column: None,
+        }
+    }
+
+    /// Test helper: Filter frames using the same logic as handle_stack_trace (AC8.2.1)
+    fn filter_internal_frames(frames: Vec<StackFrame>) -> Vec<StackFrame> {
+        frames
+            .into_iter()
+            .filter(|f| {
+                !f.name.starts_with("Devel::TSPerlDAP::")
+                    && !f.name.starts_with("DB::")
+                    && !f.source.path.contains("perl5db.pl")
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_stack_frame_filtering_removes_db_frames() {
+        // AC8.2.1: Filter internal frames from user-visible stack
+        let frames = vec![
+            make_test_frame(1, "main::hello", "/app/hello.pl", 10),
+            make_test_frame(2, "DB::DB", "/usr/share/perl/5.34/perl5db.pl", 100),
+            make_test_frame(3, "Foo::bar", "/app/lib/Foo.pm", 25),
+        ];
+
+        let filtered = filter_internal_frames(frames);
+
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].name, "main::hello");
+        assert_eq!(filtered[1].name, "Foo::bar");
+    }
+
+    #[test]
+    fn test_stack_frame_filtering_removes_shim_frames() {
+        // AC8.2.1: Filter Devel::TSPerlDAP:: shim infrastructure frames
+        let frames = vec![
+            make_test_frame(1, "Devel::TSPerlDAP::init", "/shim/TSPerlDAP.pm", 50),
+            make_test_frame(2, "main::run", "/app/script.pl", 5),
+            make_test_frame(3, "Devel::TSPerlDAP::handle_break", "/shim/TSPerlDAP.pm", 200),
+            make_test_frame(4, "Utils::process", "/app/lib/Utils.pm", 42),
+        ];
+
+        let filtered = filter_internal_frames(frames);
+
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].name, "main::run");
+        assert_eq!(filtered[1].name, "Utils::process");
+    }
+
+    #[test]
+    fn test_stack_frame_filtering_removes_perl5db_source() {
+        // AC8.2.1: Filter frames from perl5db.pl even with different names
+        let frames = vec![
+            make_test_frame(1, "main::start", "/app/main.pl", 1),
+            make_test_frame(2, "some_internal", "/usr/lib/perl5/perl5db.pl", 999),
+            make_test_frame(3, "App::process", "/app/lib/App.pm", 100),
+        ];
+
+        let filtered = filter_internal_frames(frames);
+
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].name, "main::start");
+        assert_eq!(filtered[1].name, "App::process");
+    }
+
+    #[test]
+    fn test_stack_frame_filtering_mixed_internal_frames() {
+        // AC8.2.1: Comprehensive test with all types of internal frames mixed
+        let frames = vec![
+            // User frame 1
+            make_test_frame(1, "main::hello", "/app/hello.pl", 10),
+            // DB:: frame (internal)
+            make_test_frame(2, "DB::sub", "/usr/share/perl/5.34/perl5db.pl", 2000),
+            // User frame 2
+            make_test_frame(3, "Foo::bar", "/app/lib/Foo.pm", 25),
+            // Shim frame (internal)
+            make_test_frame(4, "Devel::TSPerlDAP::step", "/shim/TSPerlDAP.pm", 150),
+            // DB:: frame without perl5db.pl path (still filtered)
+            make_test_frame(5, "DB::breakpoint", "/some/other/path.pm", 50),
+            // User frame 3
+            make_test_frame(6, "Baz::qux", "/app/lib/Baz.pm", 75),
+            // perl5db.pl source frame (internal)
+            make_test_frame(7, "custom_handler", "/usr/lib/perl5/perl5db.pl", 1500),
+        ];
+
+        let filtered = filter_internal_frames(frames);
+
+        // Should only have user frames: main::hello, Foo::bar, Baz::qux
+        assert_eq!(filtered.len(), 3, "Expected 3 user frames, got {}", filtered.len());
+        assert_eq!(filtered[0].name, "main::hello");
+        assert_eq!(filtered[1].name, "Foo::bar");
+        assert_eq!(filtered[2].name, "Baz::qux");
+    }
+
+    #[test]
+    fn test_stack_frame_filtering_preserves_order() {
+        // Verify frame order is preserved after filtering
+        let frames = vec![
+            make_test_frame(1, "A::first", "/a.pm", 1),
+            make_test_frame(2, "DB::internal", "/perl5db.pl", 100),
+            make_test_frame(3, "B::second", "/b.pm", 2),
+            make_test_frame(4, "Devel::TSPerlDAP::shim", "/shim.pm", 50),
+            make_test_frame(5, "C::third", "/c.pm", 3),
+        ];
+
+        let filtered = filter_internal_frames(frames);
+
+        assert_eq!(filtered.len(), 3);
+        assert_eq!(filtered[0].name, "A::first");
+        assert_eq!(filtered[1].name, "B::second");
+        assert_eq!(filtered[2].name, "C::third");
+    }
+
+    #[test]
+    fn test_stack_frame_filtering_all_internal() {
+        // Edge case: all frames are internal
+        let frames = vec![
+            make_test_frame(1, "DB::main", "/perl5db.pl", 1),
+            make_test_frame(2, "Devel::TSPerlDAP::init", "/shim.pm", 10),
+            make_test_frame(3, "DB::sub", "/perl5db.pl", 50),
+        ];
+
+        let filtered = filter_internal_frames(frames);
+
+        assert!(filtered.is_empty(), "Expected empty stack after filtering all internal frames");
+    }
+
+    #[test]
+    fn test_stack_frame_filtering_no_internal() {
+        // Edge case: no internal frames to filter
+        let frames = vec![
+            make_test_frame(1, "main::start", "/app/main.pl", 1),
+            make_test_frame(2, "Lib::helper", "/app/lib/Lib.pm", 50),
+            make_test_frame(3, "Utils::format", "/app/lib/Utils.pm", 100),
+        ];
+
+        let filtered = filter_internal_frames(frames);
+
+        assert_eq!(filtered.len(), 3);
+        assert_eq!(filtered[0].name, "main::start");
+        assert_eq!(filtered[1].name, "Lib::helper");
+        assert_eq!(filtered[2].name, "Utils::format");
+    }
+
+    #[test]
+    fn test_stack_frame_filtering_empty_input() {
+        // Edge case: empty frame list
+        let frames: Vec<StackFrame> = vec![];
+        let filtered = filter_internal_frames(frames);
+        assert!(filtered.is_empty());
     }
 }

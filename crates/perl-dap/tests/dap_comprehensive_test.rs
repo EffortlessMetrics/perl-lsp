@@ -149,7 +149,7 @@ fn test_dap_breakpoints_no_session() {
 }
 
 #[test]
-fn test_dap_breakpoints_missing_source() {
+fn test_dap_breakpoints_missing_source() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = DebugAdapter::new();
 
     let bp_args = json!({
@@ -161,11 +161,12 @@ fn test_dap_breakpoints_missing_source() {
     match response {
         DapMessage::Response { success, message, .. } => {
             assert!(!success);
-            let msg = message.unwrap();
+            let msg = message.ok_or("Expected error message")?;
             assert!(msg.contains("missing field `source`"));
         }
-        _ => panic!("Expected response"),
+        _ => return Err("Expected response".into()),
     }
+    Ok(())
 }
 
 #[test]

@@ -39,11 +39,8 @@ fn locked_capabilities_are_conservative() -> Result<(), Box<dyn std::error::Erro
         "typeHierarchyProvider",
         "callHierarchyProvider",
     ] {
-        assert!(
-            caps.get(k).is_some() && !caps.get(k).unwrap().is_null(),
-            "locked mode SHOULD advertise {} (now stable)",
-            k
-        );
+        let cap_value = caps.get(k).ok_or_else(|| format!("Missing capability: {}", k))?;
+        assert!(!cap_value.is_null(), "locked mode SHOULD advertise {} (now stable)", k);
     }
 
     // NOT advertised in lock mode (still experimental/risky)

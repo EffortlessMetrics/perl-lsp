@@ -301,7 +301,7 @@ pub mod test_utils {
         value.get(field)
             .and_then(|v| v.as_array())
             .map(|arr| arr.len())
-            .unwrap_or(0)
+            .unwrap_or_default()
     }
 }
 

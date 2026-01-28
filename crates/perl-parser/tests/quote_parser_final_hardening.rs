@@ -41,19 +41,22 @@ mod final_function_return_kills {
     fn test_kill_regex_parts_xyzzy_string_new_mutation() {
         let cases = vec![
             ("qr/test/i", ("/test/", "i")), // Should return pattern and modifier, not "xyzzy" and String::new()
-            ("m/pattern/", ("/pattern/", "")), // Pattern should not be "xyzzy"
+            ("m/pattern/", ("/pattern/", "")), // Pattern should not be "xyzzy", no modifiers expected
         ];
 
         for (input, (expected_pattern, expected_mods)) in cases {
             let (actual_pattern, _body, actual_mods) = extract_regex_parts(input);
 
-            // Kill the specific mutation
+            // Kill the specific mutation - pattern should never be "xyzzy"
             assert_ne!(actual_pattern, "xyzzy", "Pattern should not be 'xyzzy' for '{}'", input);
-            assert_ne!(
-                actual_mods, "",
-                "Modifiers should not be String::new() when there are modifiers for '{}'",
-                input
-            );
+            // Only check that mods aren't empty when we expect non-empty mods
+            if !expected_mods.is_empty() {
+                assert_ne!(
+                    actual_mods, "",
+                    "Modifiers should not be String::new() when there are modifiers for '{}'",
+                    input
+                );
+            }
 
             assert_eq!(actual_pattern, expected_pattern, "Pattern mismatch for '{}'", input);
             assert_eq!(actual_mods, expected_mods, "Modifiers mismatch for '{}'", input);
@@ -68,8 +71,9 @@ mod final_function_return_kills {
         // Kill: (String::new(), String::new(), "xyzzy".into())
 
         let cases = vec![
-            ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // All parts should be non-xyzzy
-            ("y/old/new/m", ("old", "", "new")),    // Should not return any "xyzzy"
+            ("tr{abc}{xyz}d", ("abc", "xyz", "d")), // Paired delimiters with modifiers
+            ("y/old/new/", ("old", "new", "")),     // Symmetric delimiters, no modifiers
+            ("tr/a/b/c", ("a", "b", "c")), // Symmetric delimiters with modifiers after 3rd delimiter
         ];
 
         for (input, (expected_search, expected_replace, expected_mods)) in cases {
@@ -217,16 +221,17 @@ mod final_boolean_logic_kills {
         assert_eq!(search, "abc", "Paired delimiter search should work with !=");
         assert_eq!(replace, "xyz", "Paired delimiter replace should work with !=");
 
-        // Test non-paired to ensure different behavior
+        // Test non-paired (symmetric) delimiter to ensure correct behavior
         let non_paired = "tr/abc/xyz/";
         let (np_search, np_replace, np_mods) = extract_transliteration_parts(non_paired);
 
-        // With !=: '/' != '/' is false (non-paired)
-        // With ==: '/' == '/' is true (would treat as paired, wrong)
-        assert_eq!(np_search, "abc", "Non-paired search extraction");
-        // Note: Based on existing tests, non-paired has different behavior
-        assert_eq!(np_replace, "", "Non-paired replace - actual behavior");
-        assert_eq!(np_mods, "xyz", "Non-paired modifiers - actual behavior");
+        // With !=: '/' != '/' is false (symmetric delimiter, not paired)
+        // With ==: '/' == '/' is true (would incorrectly treat as paired)
+        // For symmetric delimiters like /, the parsing correctly extracts:
+        //   search = "abc", replace = "xyz", mods = ""
+        assert_eq!(np_search, "abc", "Symmetric delimiter search extraction");
+        assert_eq!(np_replace, "xyz", "Symmetric delimiter replace extraction");
+        assert_eq!(np_mods, "", "Symmetric delimiter modifiers extraction");
     }
 }
 

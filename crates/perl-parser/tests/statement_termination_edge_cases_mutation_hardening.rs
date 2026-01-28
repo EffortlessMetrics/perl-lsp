@@ -193,12 +193,19 @@ fn test_parsing_timeout_prevention() {
             perl_code
         );
 
-        // Expect parse errors for malformed code (that's normal)
+        // With error recovery, parser may return Ok with ERROR nodes in AST.
+        // Either an Err result OR an AST with ERROR nodes is acceptable.
+        let has_error = match &parse_result {
+            Err(_) => true,
+            Ok(ast) => {
+                let sexp = ast.to_sexp();
+                sexp.contains("ERROR")
+            }
+        };
         assert!(
-            parse_result.is_err(),
-            "MUTATION KILL: {} - malformed code should produce parse error, not infinite loop: '{}'",
-            description,
-            perl_code
+            has_error,
+            "MUTATION KILL: {} - malformed code should produce error (Err or ERROR node): '{}'",
+            description, perl_code
         );
     }
 }
@@ -257,12 +264,19 @@ fn test_statement_modifier_termination_precedence() {
                 }
             }
         } else {
-            // Some cases are expected to fail, but should fail quickly, not hang
+            // Some cases are expected to fail, but should fail quickly, not hang.
+            // With error recovery, parser may return Ok with ERROR nodes.
+            let has_error = match &parse_result {
+                Err(_) => true,
+                Ok(ast) => {
+                    let sexp = ast.to_sexp();
+                    sexp.contains("ERROR")
+                }
+            };
             assert!(
-                parse_result.is_err(),
-                "MUTATION KILL: {} - invalid code should fail to parse: '{}'",
-                description,
-                perl_code
+                has_error,
+                "MUTATION KILL: {} - invalid code should produce error: '{}'",
+                description, perl_code
             );
         }
     }

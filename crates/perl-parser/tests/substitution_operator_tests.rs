@@ -2,7 +2,10 @@
 //! This test module ensures complete coverage of the substitution operator
 //! including edge cases, modifiers, and special delimiters
 
+mod support;
+
 use perl_parser::{Parser, ast::NodeKind};
+use support::parser_error_helpers::has_parse_error;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -450,29 +453,31 @@ fn find_substitution_node(node: &perl_parser::ast::Node) -> Option<(String, Stri
 #[test]
 // MUT_005 FIXED: Invalid modifier validation now properly rejects invalid modifiers
 fn test_substitution_invalid_modifier_characters() {
-    // These test cases specifically target the invalid modifier validation logic
-    // where only 'g', 'i', 'm', 's', 'x', 'o', 'e', 'r' are allowed.
+    // These test cases specifically target the invalid modifier validation logic.
+    //
+    // Valid Perl substitution modifiers are:
+    //   g, i, m, s, x, o, e, r - basic modifiers
+    //   a, d, l, u - character class modifiers (ASCII, default, locale, Unicode)
+    //   n - non-capturing mode (Perl 5.22+)
+    //   p - preserve match variables
+    //   c - continue matching
+    //
+    // This test only includes ACTUALLY INVALID modifiers:
+    //   b, f, h, j, k, q, t, v, w, y, z and numeric characters
     //
     // Note: Only alphanumeric characters are tested as "modifiers" since Perl's lexer
     // treats special characters (like @, ;, etc.) as separate tokens, not as modifiers.
     // For example, 's/foo/bar/;' is valid Perl - the ';' is a statement terminator.
     let invalid_modifier_cases = vec![
-        // Invalid single letter modifiers
+        // Invalid single letter modifiers (letters not in the valid set)
         "s/foo/bar/z", // Invalid modifier 'z'
-        "s/foo/bar/a", // Invalid modifier 'a'
         "s/foo/bar/b", // Invalid modifier 'b'
-        "s/foo/bar/c", // Invalid modifier 'c'
-        "s/foo/bar/d", // Invalid modifier 'd'
         "s/foo/bar/f", // Invalid modifier 'f'
         "s/foo/bar/h", // Invalid modifier 'h'
         "s/foo/bar/j", // Invalid modifier 'j'
         "s/foo/bar/k", // Invalid modifier 'k'
-        "s/foo/bar/l", // Invalid modifier 'l'
-        "s/foo/bar/n", // Invalid modifier 'n'
-        "s/foo/bar/p", // Invalid modifier 'p'
         "s/foo/bar/q", // Invalid modifier 'q'
         "s/foo/bar/t", // Invalid modifier 't'
-        "s/foo/bar/u", // Invalid modifier 'u'
         "s/foo/bar/v", // Invalid modifier 'v'
         "s/foo/bar/w", // Invalid modifier 'w'
         "s/foo/bar/y", // Invalid modifier 'y'
@@ -482,22 +487,23 @@ fn test_substitution_invalid_modifier_characters() {
         "s/foo/bar/9", // Invalid numeric modifier '9'
         "s/foo/bar/0", // Invalid numeric modifier '0'
         // Combinations with invalid modifiers
-        "s/foo/bar/ga",  // Valid 'g' but invalid 'a' in combination
         "s/foo/bar/iz",  // Valid 'i' but invalid 'z' in combination
         "s/foo/bar/mxy", // Valid 'm', 'x' but invalid 'y' in combination
         "s/foo/bar/gi1", // Valid 'g', 'i' but invalid '1' in combination
         "s/foo/bar/xyz", // Valid 'x' but invalid 'y', 'z' in combination
         "s/foo/bar/123", // All invalid numeric modifiers
-        "s/foo/bar/abc", // Mix of invalid letters
+        "s/foo/bar/gbf", // Valid 'g' but invalid 'b', 'f' in combination
     ];
 
     for code in invalid_modifier_cases {
-        let mut parser = Parser::new(code);
-        let result = parser.parse();
-
-        // All of these should fail to parse due to invalid modifiers
-        // The parser should detect the invalid modifier and return an error
-        assert!(result.is_err(), "Expected parse error for invalid modifier case: {}", code);
+        // All of these should produce an error signal (either Err or ERROR nodes in AST)
+        // The parser uses IDE-friendly error recovery, so it may return Ok with ERROR nodes
+        // instead of Err for some cases
+        assert!(
+            has_parse_error(code),
+            "Expected parse error (Err or ERROR node) for invalid modifier case: {}",
+            code
+        );
     }
 }
 
@@ -713,28 +719,27 @@ fn test_kill_mutation_modifier_character_matching() -> TestResult {
     }
 
     // Test that mutated invalid modifier characters fail (this kills the mutation)
+    // Note: n, p, l are actually VALID Perl modifiers (non-capturing, preserve, locale)
+    // so we only test actually invalid characters: z, q, w, k, v, b, f, h, j, t, y
     let invalid_mutated_cases = vec![
         "s/test/repl/z",   // Tests mutated 'z' character (should fail with original code)
         "s/test/repl/q",   // Tests mutated 'q' character (should fail with original code)
         "s/test/repl/w",   // Tests mutated 'w' character (should fail with original code)
-        "s/test/repl/n",   // Tests mutated 'n' character (should fail with original code)
-        "s/test/repl/p",   // Tests mutated 'p' character (should fail with original code)
         "s/test/repl/k",   // Tests mutated 'k' character (should fail with original code)
-        "s/test/repl/l",   // Tests mutated 'l' character (should fail with original code)
         "s/test/repl/v",   // Tests mutated 'v' character (should fail with original code)
+        "s/test/repl/b",   // Tests mutated 'b' character (should fail with original code)
+        "s/test/repl/f",   // Tests mutated 'f' character (should fail with original code)
         "s/test/repl/zq",  // Tests mutated character combination
-        "s/test/repl/zwn", // Tests multiple mutated characters
+        "s/test/repl/zwb", // Tests multiple mutated characters
     ];
 
     for code in invalid_mutated_cases {
-        let mut parser = Parser::new(code);
-        let result = parser.parse();
-
         // These should fail with the original code (valid modifiers: g,i,m,s,x,o,e,r)
         // but would succeed with the mutation (invalid modifiers: z,q,w,n,p,k,l,v)
         // By asserting they fail, we kill the mutation
+        // Note: Parser uses IDE-friendly error recovery, so check for ERROR nodes too
         assert!(
-            result.is_err(),
+            has_parse_error(code),
             "Invalid mutated modifier '{}' should fail to parse - kills modifier character mutation",
             code
         );
@@ -750,31 +755,33 @@ fn test_kill_mutation_mixed_modifier_validation() {
 
     let mixed_cases = vec![
         // Each case has some valid modifiers mixed with the mutated invalid ones
+        // Note: n, p, l are actually VALID Perl modifiers, so we use truly invalid ones
         ("s/test/repl/gz", true), // 'g' valid, 'z' invalid (mutated char)
         ("s/test/repl/iq", true), // 'i' valid, 'q' invalid (mutated char)
         ("s/test/repl/mw", true), // 'm' valid, 'w' invalid (mutated char)
-        ("s/test/repl/sn", true), // 's' valid, 'n' invalid (mutated char)
-        ("s/test/repl/xp", true), // 'x' valid, 'p' invalid (mutated char)
+        ("s/test/repl/sb", true), // 's' valid, 'b' invalid (mutated char)
+        ("s/test/repl/xf", true), // 'x' valid, 'f' invalid (mutated char)
         ("s/test/repl/ok", true), // 'o' valid, 'k' invalid (mutated char)
-        ("s/test/repl/el", true), // 'e' valid, 'l' invalid (mutated char)
+        ("s/test/repl/eh", true), // 'e' valid, 'h' invalid (mutated char)
         ("s/test/repl/rv", true), // 'r' valid, 'v' invalid (mutated char)
-        // Pure valid modifiers should work
-        ("s/test/repl/gim", false), // All valid
-        ("s/test/repl/sox", false), // All valid
-        ("s/test/repl/er", false),  // All valid
+        // Pure valid modifiers should work (including extended set: a, d, l, u, n, p, c)
+        ("s/test/repl/gim", false),     // All valid - basic
+        ("s/test/repl/sox", false),     // All valid - basic
+        ("s/test/repl/er", false),      // All valid - basic
+        ("s/test/repl/adlunpc", false), // All valid - extended Perl modifiers
     ];
 
     for (code, should_fail) in mixed_cases {
-        let mut parser = Parser::new(code);
-        let result = parser.parse();
-
         if should_fail {
+            // Note: Parser uses IDE-friendly error recovery, so check for ERROR nodes too
             assert!(
-                result.is_err(),
+                has_parse_error(code),
                 "Mixed modifier case '{}' with invalid chars should fail - kills modifier mutation",
                 code
             );
         } else {
+            let mut parser = Parser::new(code);
+            let result = parser.parse();
             assert!(result.is_ok(), "Pure valid modifier case '{}' should succeed", code);
             if let Ok(ast) = result
                 && let NodeKind::Program { statements } = &ast.kind

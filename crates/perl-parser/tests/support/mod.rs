@@ -6,6 +6,7 @@
 
 pub mod client_caps;
 pub mod env_guard;
+pub mod parser_error_helpers;
 
 #[cfg(feature = "incremental")]
 pub mod incremental_test_utils;

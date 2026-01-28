@@ -4,6 +4,39 @@
 //! The parser handles operator precedence, quote-like operators, and heredocs,
 //! while tracking recursion depth to prevent stack overflows on malformed input.
 //!
+//! # IDE-Friendly Error Recovery
+//!
+//! This parser uses an **IDE-friendly error recovery model**:
+//!
+//! - **Returns `Ok(ast)` with ERROR nodes** for most parse failures (recovered errors)
+//! - **Returns `Err`** only for catastrophic failures (recursion limits, etc.)
+//!
+//! This means `result.is_err()` is **not** the correct way to check for parse errors.
+//! Instead, check for ERROR nodes in the AST or use `parser.errors()`:
+//!
+//! ```rust,ignore
+//! let mut parser = Parser::new(code);
+//! match parser.parse() {
+//!     Err(_) => println!("Catastrophic parse failure"),
+//!     Ok(ast) => {
+//!         // Check for recovered errors via ERROR nodes
+//!         if ast.to_sexp().contains("ERROR") {
+//!             println!("Parse errors recovered: {:?}", parser.errors());
+//!         }
+//!     }
+//! }
+//! ```
+//!
+//! ## Why IDE-Friendly?
+//!
+//! Traditional compilers return `Err` on any syntax error. This prevents:
+//! - Code completion in incomplete code
+//! - Go-to-definition while typing
+//! - Hover information in files with errors
+//!
+//! By returning partial ASTs with ERROR nodes, editors can provide useful
+//! features even when code is incomplete or contains errors.
+//!
 //! # Performance
 //!
 //! - **Time complexity**: O(n) for typical token streams
