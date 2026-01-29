@@ -721,7 +721,11 @@ impl ExecuteCommandProvider {
             .canonicalize()
             .map_err(|e| format!("Failed to canonicalize path '{}': {}", normalized_path, e))?;
 
-        // Enforce workspace root boundaries if configured
+        // Enforce workspace root boundaries when configured
+        // Security note: When workspace_roots is empty, path traversal protection is disabled
+        // for backward compatibility. In production, always configure workspace roots via
+        // initialization (root_path or workspaceFolders) to enable security boundaries.
+        // See .jules/sentinel.md for security guidance.
         if !self.workspace_roots.is_empty() {
             let mut allowed = false;
             for workspace_root in &self.workspace_roots {
@@ -938,7 +942,7 @@ impl CommandExecutor {
     /// Create a new command executor with default configuration.
     ///
     /// The executor is initialized with workspace-agnostic configuration.
-    /// For workspace-aware security enforcement, use `with_workspace_root`.
+    /// For workspace-aware security enforcement, use `with_workspace_roots`.
     pub fn new() -> Self {
         Self { provider: ExecuteCommandProvider::new() }
     }
@@ -1881,6 +1885,12 @@ print "Value: $variable\n";
             vec![Value::String(outside_file.to_string_lossy().to_string())],
         );
         assert!(result3.is_err(), "Should fail execution outside both workspaces");
+        let error3 = result3.err().ok_or("expected error")?;
+        assert!(
+            error3.contains("Path traversal") || error3.contains("outside workspace roots"),
+            "Error should indicate security violation: {}",
+            error3
+        );
 
         // Clean up
         fs::remove_dir_all(&workspace_dir1).ok();

@@ -1041,6 +1041,7 @@ impl LspServer {
             eprintln!("Executing command: {}", command);
 
             // Use the new execute command provider for new commands
+            // Collect workspace roots, deduplicating to avoid redundant security checks
             let mut workspace_roots = Vec::new();
 
             // Add legacy root path if available
@@ -1048,13 +1049,15 @@ impl LspServer {
                 workspace_roots.push(root_path);
             }
 
-            // Add workspace folders
+            // Add workspace folders (deduplicate against already added paths)
             {
                 let folders = self.workspace_folders.lock();
                 for uri in folders.iter() {
                     if let Ok(parsed) = url::Url::parse(uri) {
                         if let Ok(path) = parsed.to_file_path() {
-                            workspace_roots.push(path);
+                            if !workspace_roots.contains(&path) {
+                                workspace_roots.push(path);
+                            }
                         }
                     }
                 }
