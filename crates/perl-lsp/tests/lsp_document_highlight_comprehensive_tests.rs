@@ -34,11 +34,11 @@ print $error;
     )?;
 
     let highlights = result.as_array().ok_or("Expected array result")?;
-
+    
     // Should find all 4 occurrences: declaration, catch param, warn, print
     // (Note: Die doesn't use $error)
     assert!(highlights.len() >= 4, "Found {} highlights, expected at least 4", highlights.len());
-
+    
     Ok(())
 }
 
@@ -67,10 +67,10 @@ given ($value) {
     )?;
 
     let highlights = result.as_array().ok_or("Expected array result")?;
-
+    
     // Should find all 4 occurrences: declaration, given, when block, default block
     assert!(highlights.len() >= 4, "Found {} highlights, expected at least 4", highlights.len());
-
+    
     Ok(())
 }
 
@@ -101,10 +101,10 @@ class Point {
     )?;
 
     let highlights = result.as_array().ok_or("Expected array result")?;
-
+    
     // Should find 3 occurrences: parameter, addition, print
     assert!(highlights.len() >= 3, "Found {} highlights, expected at least 3", highlights.len());
-
+    
     Ok(())
 }
 
@@ -132,10 +132,10 @@ greet("World");
     )?;
 
     let highlights = result.as_array().ok_or("Expected array result")?;
-
+    
     // Should find 2 occurrences: parameter and string interpolation
     assert!(highlights.len() >= 2, "Found {} highlights, expected at least 2", highlights.len());
-
+    
     Ok(())
 }
 
@@ -161,9 +161,9 @@ print "Final timeout: $timeout";
     )?;
 
     let highlights = result.as_array().ok_or("Expected array result")?;
-
+    
     // Should find 3 occurrences: declaration, while modifier, print
     assert!(highlights.len() >= 3, "Found {} highlights, expected at least 3", highlights.len());
-
+    
     Ok(())
 }

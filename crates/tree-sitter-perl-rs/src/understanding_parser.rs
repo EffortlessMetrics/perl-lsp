@@ -15,12 +15,6 @@ pub struct UnderstandingParser {
     recovery_enabled: bool,
 }
 
-impl Default for UnderstandingParser {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl UnderstandingParser {
     pub fn new() -> Self {
         Self {
@@ -122,17 +116,19 @@ impl UnderstandingParser {
                     | AntiPattern::SourceFilterHeredoc { location, .. }
                     | AntiPattern::RegexCodeBlockHeredoc { location, .. }
                     | AntiPattern::EvalStringHeredoc { location, .. }
-                    | AntiPattern::TiedHandleHeredoc { location, .. } => location.offset,
+                    | AntiPattern::TiedHandleHeredoc { location, .. } => {
+                        location.offset
+                    }
                 };
 
                 if pattern_offset > 0 {
                     // Parse the clean part before the anti-pattern
                     let clean_chunk = &chunk[..pattern_offset];
-                    if let Ok(pairs) = PerlParser::parse(Rule::statement, clean_chunk)
-                        && let Ok(ast) = PureRustPerlParser::new().build_ast(pairs)
-                    {
-                        parsed_fragments.push(ExtendedAstNode::Normal(ast));
-                        recovery_state.last_good_position = current_pos + pattern_offset;
+                    if let Ok(pairs) = PerlParser::parse(Rule::statement, clean_chunk) {
+                        if let Ok(ast) = PureRustPerlParser::new().build_ast(pairs) {
+                            parsed_fragments.push(ExtendedAstNode::Normal(ast));
+                            recovery_state.last_good_position = current_pos + pattern_offset;
+                        }
                     }
                 }
 
@@ -188,10 +184,7 @@ impl UnderstandingParser {
 
         // Build final AST
         let final_ast = if parsed_fragments.len() == 1 {
-            parsed_fragments
-                .into_iter()
-                .next()
-                .unwrap_or(ExtendedAstNode::Normal(AstNode::EmptyExpression))
+            parsed_fragments.into_iter().next().unwrap()
         } else {
             ExtendedAstNode::PartialParse {
                 pattern: AntiPattern::DynamicHeredocDelimiter {
