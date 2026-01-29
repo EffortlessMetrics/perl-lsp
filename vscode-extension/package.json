@@ -403,10 +403,10 @@
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
     "adm-zip": "^0.5.10",
-    "tar": "^6.2.0"
+    "tar": "^7.5.7"
   },
   "devDependencies": {
-    "@types/node": "^20.11.30",
+    "@types/node": "^25.1.0",
     "@types/vscode": "^1.88.0",
     "@types/adm-zip": "^0.5.5",
     "@types/tar": "^6.1.11",

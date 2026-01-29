@@ -70,14 +70,14 @@ jobs:
           ovsx publish ${{ env.VSIX_FILE }} --pat $OVSX_PAT
       
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: perl-lsp-${{ env.VERSION }}.vsix
           path: vscode-extension/${{ env.VSIX_FILE }}
       
       - name: Create GitHub Release asset
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: vscode-extension/${{ env.VSIX_FILE }}
           fail_on_unmatched_files: true

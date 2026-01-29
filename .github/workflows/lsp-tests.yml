@@ -221,14 +221,14 @@ jobs:
         fi
 
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: perl-lsp-${{ matrix.os }}-${{ matrix.toolchain }}
         path: target/release/perl-lsp*
 
     - name: Upload test logs on failure
       if: failure()
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: test-logs-${{ matrix.os }}-${{ matrix.toolchain }}
         path: |
@@ -272,7 +272,7 @@ jobs:
           --verbose
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v4
+      uses: codecov/codecov-action@v5
       with:
         files: ./cobertura.xml
         fail_ci_if_error: false

@@ -132,7 +132,7 @@ jobs:
       run: cargo bench --locked --verbose
 
     - name: Upload benchmark results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: benchmark-results
         path: target/criterion/
@@ -168,7 +168,7 @@ jobs:
       run: cargo run -p xtask --locked -- compare --report
 
     - name: Upload comparison results
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: comparison-results
         path: benchmark_results/
@@ -234,7 +234,7 @@ jobs:
           --output-dir coverage
 
     - name: Upload coverage report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: coverage-report
         path: coverage/

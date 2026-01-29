@@ -60,3 +60,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The `BinaryDownloader` implemented custom redirect handling that re-evaluated the protocol for the new URL. If an HTTPS URL redirected to an HTTP URL, the downloader would silently downgrade the connection, exposing the download to MITM attacks.
 **Learning:** Manual redirect handling often misses standard security checks (like "Same Protocol" or "Upgrade Only"). Blindly following redirects to any protocol breaks the security promise of the initial HTTPS connection.
 **Prevention:** When handling redirects manually, explicitly check that the new URL's protocol is at least as secure as the original. Reject downgrades from HTTPS to HTTP.
+
+## 2025-05-23 - [Multi-Root Workspace Security Gap]
+**Vulnerability:** The LSP server's `ExecuteCommandProvider` enforced security boundaries using a single `workspace_root`, but the server initialization logic failed to populate this root when multiple `workspaceFolders` were provided by the client. This resulted in the provider being initialized with no root, bypassing the path traversal check entirely.
+**Learning:** Security controls that rely on optional configuration (like `Option<PathBuf>`) can fail open if the configuration is not derived correctly from all available sources (single root vs multi-root).
+**Prevention:** Always default to "fail closed" or "deny all" when configuration is missing, rather than skipping checks. Ensure security contexts support the full range of client capabilities (e.g., multiple roots).
