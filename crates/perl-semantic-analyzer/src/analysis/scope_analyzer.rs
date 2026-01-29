@@ -334,6 +334,43 @@ enum ExtractedName<'a> {
     Full(String),
 }
 
+struct AnalysisContext<'a> {
+    code: &'a str,
+    pragma_map: &'a [(Range<usize>, PragmaState)],
+    line_starts: RefCell<Option<Vec<usize>>>,
+}
+
+impl<'a> AnalysisContext<'a> {
+    fn new(code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
+        Self {
+            code,
+            pragma_map,
+            line_starts: RefCell::new(None),
+        }
+    }
+
+    fn get_line(&self, offset: usize) -> usize {
+        let mut starts = self.line_starts.borrow_mut();
+        if starts.is_none() {
+            let mut indices = Vec::with_capacity(self.code.len() / 40); // Estimate
+            indices.push(0);
+            for (i, b) in self.code.bytes().enumerate() {
+                if b == b'\n' {
+                    indices.push(i + 1);
+                }
+            }
+            *starts = Some(indices);
+        }
+
+        let starts = starts.as_ref().unwrap();
+        // Find the line that contains the offset
+        match starts.binary_search(&offset) {
+            Ok(idx) => idx + 1,
+            Err(idx) => idx,
+        }
+    }
+}
+
 impl<'a> ExtractedName<'a> {
     fn as_string(&self) -> String {
         match self {
@@ -382,10 +419,12 @@ impl ScopeAnalyzer {
         // Use a vector as a stack for ancestors to avoid O(N) HashMap allocation
         let mut ancestors: Vec<&Node> = Vec::new();
 
-        self.analyze_node(ast, &root_scope, &mut ancestors, &mut issues, code, pragma_map);
+        let context = AnalysisContext::new(code, pragma_map);
+
+        self.analyze_node(ast, &root_scope, &mut ancestors, &mut issues, &context);
 
         // Collect all unused variables from all scopes
-        self.collect_unused_variables(&root_scope, &mut issues, code);
+        self.collect_unused_variables(&root_scope, &mut issues, &context);
 
         issues
     }
@@ -396,11 +435,10 @@ impl ScopeAnalyzer {
         scope: &Rc<Scope>,
         ancestors: &mut Vec<&'a Node>,
         issues: &mut Vec<ScopeIssue>,
-        code: &str,
-        pragma_map: &[(Range<usize>, PragmaState)],
+        context: &AnalysisContext<'a>,
     ) {
         // Get effective pragma state at this node's location
-        let pragma_state = PragmaTracker::state_for_offset(pragma_map, node.location.start);
+        let pragma_state = PragmaTracker::state_for_offset(context.pragma_map, node.location.start);
         let strict_mode = pragma_state.strict_subs;
         match &node.kind {
             NodeKind::VariableDeclaration { declarator, variable, initializer, .. } => {
@@ -415,7 +453,7 @@ impl ScopeAnalyzer {
                 // Actually Perl evaluates RHS before LHS assignment, so usages in initializer refer to OUTER scope.
                 // So we analyze initializer first.
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(init, scope, ancestors, issues, context);
                 }
 
                 if let Some(issue_kind) = scope.declare_variable_parts(
@@ -425,7 +463,7 @@ impl ScopeAnalyzer {
                     is_our,
                     is_initialized,
                 ) {
-                    let line = self.get_line_from_node(variable, code);
+                    let line = context.get_line(variable.location.start);
                     // Optimization: Only allocate full name string when we actually have an issue to report
                     let full_name = extracted.as_string();
                     // Build description first (borrows full_name), then move full_name into struct
@@ -454,7 +492,7 @@ impl ScopeAnalyzer {
 
                 // Analyze initializer first
                 if let Some(init) = initializer {
-                    self.analyze_node(init, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(init, scope, ancestors, issues, context);
                 }
 
                 for variable in variables {
@@ -468,7 +506,7 @@ impl ScopeAnalyzer {
                         is_our,
                         is_initialized,
                     ) {
-                        let line = self.get_line_from_node(variable, code);
+                        let line = context.get_line(variable.location.start);
                         // Optimization: Only allocate full name string when we actually have an issue to report
                         let full_name = extracted.as_string();
                         // Build description first (borrows full_name), then move full_name into struct
@@ -590,7 +628,7 @@ impl ScopeAnalyzer {
                         issues.push(ScopeIssue {
                             kind: IssueKind::UndeclaredVariable,
                             variable_name: full_name.clone(),
-                            line: self.get_line_from_node(node, code),
+                            line: context.get_line(node.location.start),
                             range: (node.location.start, node.location.end),
                             description: format!(
                                 "Variable '{}' is used but not declared",
@@ -604,7 +642,7 @@ impl ScopeAnalyzer {
                     issues.push(ScopeIssue {
                         kind: IssueKind::UninitializedVariable,
                         variable_name: full_name.clone(),
-                        line: self.get_line_from_node(node, code),
+                        line: context.get_line(node.location.start),
                         range: (node.location.start, node.location.end),
                         description: format!(
                             "Variable '{}' is used before being initialized",
@@ -616,7 +654,7 @@ impl ScopeAnalyzer {
             NodeKind::Assignment { lhs, rhs, op: _ } => {
                 // Handle assignment: LHS variable becomes initialized
                 // First analyze RHS (usages)
-                self.analyze_node(rhs, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(rhs, scope, ancestors, issues, context);
 
                 // Optimization: Handle simple scalar assignment directly to avoid double lookup
                 // (mark_initialized + analyze_node both perform lookups)
@@ -635,25 +673,25 @@ impl ScopeAnalyzer {
 
                 // Recurse into LHS to trigger UndeclaredVariable checks
                 // Note: 'use_variable' marks as used, which is technically correct for assignment too (write usage)
-                self.analyze_node(lhs, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(lhs, scope, ancestors, issues, context);
             }
 
             NodeKind::Tie { variable, package, args } => {
                 ancestors.push(node);
                 // Analyze arguments first
-                self.analyze_node(package, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(package, scope, ancestors, issues, context);
                 for arg in args {
-                    self.analyze_node(arg, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(arg, scope, ancestors, issues, context);
                 }
 
                 if let NodeKind::VariableDeclaration { .. } = variable.kind {
                     // Must analyze declaration FIRST to declare it, then mark initialized
-                    self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(variable, scope, ancestors, issues, context);
                     self.mark_initialized(variable, scope);
                 } else {
                     // For existing variables, mark initialized then analyze (usage)
                     self.mark_initialized(variable, scope);
-                    self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(variable, scope, ancestors, issues, context);
                 }
 
                 ancestors.pop();
@@ -661,7 +699,7 @@ impl ScopeAnalyzer {
 
             NodeKind::Untie { variable } => {
                 ancestors.push(node);
-                self.analyze_node(variable, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(variable, scope, ancestors, issues, context);
                 ancestors.pop();
             }
 
@@ -676,7 +714,7 @@ impl ScopeAnalyzer {
                     issues.push(ScopeIssue {
                         kind: IssueKind::UnquotedBareword,
                         variable_name: name.clone(),
-                        line: self.get_line_from_node(node, code),
+                        line: context.get_line(node.location.start),
                         range: (node.location.start, node.location.end),
                         description: format!("Bareword '{}' not allowed under 'use strict'", name),
                     });
@@ -688,15 +726,15 @@ impl ScopeAnalyzer {
                 // We don't need special handling for {} and [] here because NodeKind::Variable
                 // will handle the context-sensitive lookup (checking ancestors).
                 ancestors.push(node);
-                self.analyze_node(left, scope, ancestors, issues, code, pragma_map);
-                self.analyze_node(right, scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(left, scope, ancestors, issues, context);
+                self.analyze_node(right, scope, ancestors, issues, context);
                 ancestors.pop();
             }
 
             NodeKind::ArrayLiteral { elements } => {
                 ancestors.push(node);
                 for element in elements {
-                    self.analyze_node(element, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(element, scope, ancestors, issues, context);
                 }
                 ancestors.pop();
             }
@@ -705,10 +743,10 @@ impl ScopeAnalyzer {
                 let block_scope = Rc::new(Scope::with_parent(scope.clone()));
                 ancestors.push(node);
                 for stmt in statements {
-                    self.analyze_node(stmt, &block_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(stmt, &block_scope, ancestors, issues, context);
                 }
                 ancestors.pop();
-                self.collect_unused_variables(&block_scope, issues, code);
+                self.collect_unused_variables(&block_scope, issues, context);
             }
 
             NodeKind::For { init, condition, update, body, .. } => {
@@ -717,19 +755,19 @@ impl ScopeAnalyzer {
                 ancestors.push(node);
 
                 if let Some(init_node) = init {
-                    self.analyze_node(init_node, &loop_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(init_node, &loop_scope, ancestors, issues, context);
                 }
                 if let Some(cond) = condition {
-                    self.analyze_node(cond, &loop_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(cond, &loop_scope, ancestors, issues, context);
                 }
                 if let Some(upd) = update {
-                    self.analyze_node(upd, &loop_scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(upd, &loop_scope, ancestors, issues, context);
                 }
-                self.analyze_node(body, &loop_scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(body, &loop_scope, ancestors, issues, context);
 
                 ancestors.pop();
 
-                self.collect_unused_variables(&loop_scope, issues, code);
+                self.collect_unused_variables(&loop_scope, issues, context);
             }
 
             NodeKind::Foreach { variable, list, body } => {
@@ -738,13 +776,13 @@ impl ScopeAnalyzer {
                 ancestors.push(node);
 
                 // Declare the loop variable
-                self.analyze_node(variable, &loop_scope, ancestors, issues, code, pragma_map);
-                self.analyze_node(list, &loop_scope, ancestors, issues, code, pragma_map);
-                self.analyze_node(body, &loop_scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(variable, &loop_scope, ancestors, issues, context);
+                self.analyze_node(list, &loop_scope, ancestors, issues, context);
+                self.analyze_node(body, &loop_scope, ancestors, issues, context);
 
                 ancestors.pop();
 
-                self.collect_unused_variables(&loop_scope, issues, code);
+                self.collect_unused_variables(&loop_scope, issues, context);
             }
 
             NodeKind::Subroutine { signature, body, .. } => {
@@ -774,7 +812,7 @@ impl ScopeAnalyzer {
                             issues.push(ScopeIssue {
                                 kind: IssueKind::DuplicateParameter,
                                 variable_name: full_name.clone(),
-                                line: self.get_line_from_node(param, code),
+                                line: context.get_line(param.location.start),
                                 range: (param.location.start, param.location.end),
                                 description: format!(
                                     "Duplicate parameter '{}' in subroutine signature",
@@ -788,7 +826,7 @@ impl ScopeAnalyzer {
                             issues.push(ScopeIssue {
                                 kind: IssueKind::ParameterShadowsGlobal,
                                 variable_name: full_name.clone(),
-                                line: self.get_line_from_node(param, code),
+                                line: context.get_line(param.location.start),
                                 range: (param.location.start, param.location.end),
                                 description: format!(
                                     "Parameter '{}' shadows a variable from outer scope",
@@ -810,7 +848,7 @@ impl ScopeAnalyzer {
                 }
 
                 ancestors.push(node);
-                self.analyze_node(body, &sub_scope, ancestors, issues, code, pragma_map);
+                self.analyze_node(body, &sub_scope, ancestors, issues, context);
                 ancestors.pop();
 
                 // Check for unused parameters
@@ -831,7 +869,7 @@ impl ScopeAnalyzer {
                                         issues.push(ScopeIssue {
                                             kind: IssueKind::UnusedParameter,
                                             variable_name: full_name.clone(),
-                                            line: self.get_line_from_node(param, code),
+                                            line: context.get_line(param.location.start),
                                             range: (param.location.start, param.location.end),
                                             description: format!(
                                                 "Parameter '{}' is declared but never used",
@@ -845,14 +883,14 @@ impl ScopeAnalyzer {
                     }
                 }
 
-                self.collect_unused_variables(&sub_scope, issues, code);
+                self.collect_unused_variables(&sub_scope, issues, context);
             }
 
             NodeKind::FunctionCall { args, .. } => {
                 // Handle function arguments, which may contain complex variable patterns
                 ancestors.push(node);
                 for arg in args {
-                    self.analyze_node(arg, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(arg, scope, ancestors, issues, context);
                 }
                 ancestors.pop();
             }
@@ -861,7 +899,7 @@ impl ScopeAnalyzer {
                 // Recursively analyze children
                 ancestors.push(node);
                 for child in node.children() {
-                    self.analyze_node(child, scope, ancestors, issues, code, pragma_map);
+                    self.analyze_node(child, scope, ancestors, issues, context);
                 }
                 ancestors.pop();
             }
@@ -891,11 +929,11 @@ impl ScopeAnalyzer {
         &self,
         scope: &Rc<Scope>,
         issues: &mut Vec<ScopeIssue>,
-        code: &str,
+        context: &AnalysisContext<'_>,
     ) {
         scope.for_each_reportable_unused_variable(|var_name, offset| {
-            let start = offset.min(code.len());
-            let end = (start + var_name.len()).min(code.len());
+            let start = offset.min(context.code.len());
+            let end = (start + var_name.len()).min(context.code.len());
 
             // Optimization: Generate description using the string reference before moving it
             let description = format!("Variable '{}' is declared but never used", var_name);
@@ -903,7 +941,7 @@ impl ScopeAnalyzer {
             issues.push(ScopeIssue {
                 kind: IssueKind::UnusedVariable,
                 variable_name: var_name, // Move: Avoids cloning the string
-                line: self.get_line_number(code, offset),
+                line: context.get_line(offset),
                 range: (start, end),
                 description,
             });
@@ -935,19 +973,6 @@ impl ScopeAnalyzer {
                 }
             }
         }
-    }
-
-    fn get_line_from_node(&self, node: &Node, code: &str) -> usize {
-        self.get_line_number(code, node.location.start)
-    }
-
-    #[allow(dead_code)]
-    fn get_line_from_position(&self, offset: usize, code: &str) -> usize {
-        self.get_line_number(code, offset)
-    }
-
-    fn get_line_number(&self, code: &str, offset: usize) -> usize {
-        code[..offset.min(code.len())].chars().filter(|&c| c == '\n').count() + 1
     }
 
     /// Determines if a node is in a hash key context, where barewords are legitimate.
