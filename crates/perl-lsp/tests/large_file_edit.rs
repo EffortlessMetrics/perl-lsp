@@ -55,10 +55,12 @@ fn large_file_incremental_edits() {
     let edit_duration = start_time.elapsed();
 
     // Performance assertion - edits should complete quickly even on large files
+    let threshold = if cfg!(coverage) { 200 } else { 50 };
     assert!(
-        edit_duration.as_millis() < 50,
-        "Large file edits took {} ms, expected < 50ms",
-        edit_duration.as_millis()
+        edit_duration.as_millis() < threshold,
+        "Large file edits took {} ms, expected < {}ms",
+        edit_duration.as_millis(),
+        threshold
     );
 
     // Verify content changes
@@ -134,9 +136,11 @@ fn rope_vs_string_performance() {
     assert_eq!(rope.to_string(), string_content);
 
     // Performance assertion - Rope should handle large edits efficiently
+    let threshold = if cfg!(coverage) { 100 } else { 10 };
     assert!(
-        rope_duration.as_millis() < 10,
-        "Rope insertion took {} ms, expected < 10ms",
-        rope_duration.as_millis()
+        rope_duration.as_millis() < threshold,
+        "Rope insertion took {} ms, expected < {}ms",
+        rope_duration.as_millis(),
+        threshold
     );
 }

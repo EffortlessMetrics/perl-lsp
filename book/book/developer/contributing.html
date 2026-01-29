@@ -250,7 +250,7 @@ git commit -m "fix: resolve issue #123"
 <ul>
 <li><strong>Pinned runner versions</strong> (<code>ubuntu-22.04</code>, <code>windows-2022</code>)</li>
 <li><strong>Default CI jobs</strong> that run on every PR</li>
-<li><strong>Opt-in CI labels</strong> for heavy jobs (<code>ci:bench</code>, <code>ci:mutation</code>, <code>ci:strict</code>, <code>ci:mac</code>)</li>
+<li><strong>Opt-in CI labels</strong> for heavy jobs (<code>ci:bench</code>, <code>ci:mutation</code>, <code>ci:strict</code>, <code>ci:mac</code>, <code>ci:semver</code>)</li>
 <li><strong>Build optimizations</strong> (lean flags, nextest configuration)</li>
 <li><strong>Troubleshooting tips</strong> for common CI issues</li>
 </ul>
@@ -261,6 +261,7 @@ git commit -m "fix: resolve issue #123"
 <li>Add <code>ci:bench</code> label to run performance benchmarks</li>
 <li>Add <code>ci:strict</code> label for pedantic clippy checks</li>
 <li>Add <code>ci:mac</code> label if your changes affect macOS</li>
+<li>Add <code>ci:semver</code> label to check for breaking API changes</li>
 </ul>
 <h3 id="local-ci-validation-while-github-actions-is-unavailable"><a class="header" href="#local-ci-validation-while-github-actions-is-unavailable">Local CI Validation (While GitHub Actions Is Unavailable)</a></h3>
 <p><strong>⚠️ IMPORTANT</strong>: GitHub Actions is currently unavailable due to billing issues. During this period:</p>
@@ -296,6 +297,123 @@ just ci-gate
 <li>Package-qualified symbol lookups</li>
 </ul>
 <p>Once GitHub Actions is restored, this section will be archived and normal CI workflow will resume.</p>
+<h2 id="semver-breaking-change-detection"><a class="header" href="#semver-breaking-change-detection">SemVer Breaking Change Detection</a></h2>
+<p>Perl LSP follows strict <a href="https://semver.org/">Semantic Versioning 2.0.0</a>. We use automated tools to detect breaking changes in public APIs.</p>
+<h3 id="when-to-check-for-breaking-changes"><a class="header" href="#when-to-check-for-breaking-changes">When to Check for Breaking Changes</a></h3>
+<p><strong>Required for:</strong></p>
+<ul>
+<li>Changes to public API functions, types, or modules</li>
+<li>Changes to <code>pub</code> items in published crates (<code>perl-parser</code>, <code>perl-lexer</code>, <code>perl-parser-core</code>, <code>perl-lsp</code>)</li>
+<li>Signature changes to existing functions</li>
+<li>Removing or renaming public items</li>
+<li>Changes to error types or return values</li>
+</ul>
+<p><strong>Not required for:</strong></p>
+<ul>
+<li>Internal (<code>pub(crate)</code>) changes</li>
+<li>Test-only code changes</li>
+<li>Documentation updates</li>
+<li>Performance improvements that don’t change behavior</li>
+</ul>
+<h3 id="local-semver-checking"><a class="header" href="#local-semver-checking">Local SemVer Checking</a></h3>
+<p>Check for breaking changes locally before submitting a PR:</p>
+<pre><code class="language-bash"># Check all published packages for breaking changes
+just semver-check
+
+# Check a specific package
+just semver-check-package perl-parser
+
+# View detailed diff of API changes
+just semver-diff perl-parser
+
+# List available baseline tags
+just semver-list-baselines
+</code></pre>
+<p><strong>Understanding the output:</strong></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Breaking change (requires major version bump)
+- pub fn parse(&amp;mut self, source: &amp;str) -&gt; Result&lt;Node, ParseError&gt;
++ pub fn parse(&amp;mut self, source: &amp;str, config: &amp;Config) -&gt; Result&lt;Node, Error&gt;
+
+// Non-breaking change (allowed in minor version)
++ pub fn parse_with_config(&amp;mut self, source: &amp;str, config: &amp;Config) -&gt; Result&lt;Node, Error&gt;
+<span class="boring">}</span></code></pre></pre>
+<h3 id="ci-semver-validation"><a class="header" href="#ci-semver-validation">CI SemVer Validation</a></h3>
+<p>Add the <code>ci:semver</code> label to your PR to run automated breaking change detection:</p>
+<ol>
+<li><strong>Add label:</strong> <code>ci:semver</code> to your PR</li>
+<li><strong>CI runs:</strong> GitHub Actions compares your changes against the last release tag</li>
+<li><strong>Review results:</strong> Check the workflow output for breaking changes</li>
+<li><strong>Download report:</strong> Breaking changes report available as artifact</li>
+</ol>
+<p><strong>CI checks:</strong></p>
+<ul>
+<li>Compares against baseline (last release tag, e.g., <code>v0.8.5</code>)</li>
+<li>Checks <code>perl-parser</code>, <code>perl-lexer</code>, <code>perl-parser-core</code>, <code>perl-lsp</code></li>
+<li>Generates JSON report of all breaking changes</li>
+<li>Warns on breaking changes (doesn’t fail the build)</li>
+</ul>
+<h3 id="semver-policy-summary"><a class="header" href="#semver-policy-summary">SemVer Policy Summary</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Change Type</th><th>Example</th><th>Version Bump</th><th>Allowed In</th></tr></thead><tbody>
+<tr><td><strong>Breaking</strong></td><td>Remove public function</td><td>Major (1.0 → 2.0)</td><td>Major releases only</td></tr>
+<tr><td><strong>Breaking</strong></td><td>Change function signature</td><td>Major (1.0 → 2.0)</td><td>Major releases only</td></tr>
+<tr><td><strong>Additive</strong></td><td>Add new public function</td><td>Minor (1.0 → 1.1)</td><td>Minor releases</td></tr>
+<tr><td><strong>Additive</strong></td><td>Add new enum variant</td><td>Minor (1.0 → 1.1)</td><td>Minor releases (with <code>#[non_exhaustive]</code>)</td></tr>
+<tr><td><strong>Patch</strong></td><td>Fix bug, same behavior</td><td>Patch (1.0.0 → 1.0.1)</td><td>Patch releases</td></tr>
+<tr><td><strong>Patch</strong></td><td>Documentation update</td><td>Patch (1.0.0 → 1.0.1)</td><td>Patch releases</td></tr>
+</tbody></table>
+</div>
+<h3 id="breaking-change-workflow"><a class="header" href="#breaking-change-workflow">Breaking Change Workflow</a></h3>
+<p>If you need to make a breaking change:</p>
+<ol>
+<li>
+<p><strong>Document the breaking change:</strong></p>
+<pre><code class="language-markdown">## Breaking Changes
+- `Parser::parse()` signature changed to include `Config` parameter
+- Migration: Use `Parser::parse_with_config()` or pass default config
+</code></pre>
+</li>
+<li>
+<p><strong>Deprecate before removing (when possible):</strong></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[deprecated(since = "1.2.0", note = "use `parse_with_config()` instead")]
+pub fn parse_legacy(source: &amp;str) -&gt; Result&lt;Node, ParseError&gt; {
+    self.parse_with_config(source, &amp;Config::default())
+}
+<span class="boring">}</span></code></pre></pre>
+</li>
+<li>
+<p><strong>Add migration guide</strong> to PR description</p>
+</li>
+<li>
+<p><strong>Label PR with <code>breaking-change</code></strong></p>
+</li>
+<li>
+<p><strong>Coordinate with maintainers</strong> for major version planning</p>
+</li>
+</ol>
+<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
+<p>SemVer checking is configured in <code>.cargo-semver-checks.toml</code>:</p>
+<pre><code class="language-toml"># Published crates checked for breaking changes
+- perl-parser (strict)
+- perl-lexer (strict)
+- perl-parser-core (strict)
+- perl-lsp (strict)
+
+# Internal crates excluded
+- xtask (build tooling)
+- perl-tdd-support (test utilities)
+- perl-parser-pest (deprecated)
+</code></pre>
+<h3 id="resources"><a class="header" href="#resources">Resources</a></h3>
+<ul>
+<li><strong>SemVer spec:</strong> https://semver.org/</li>
+<li><strong>cargo-semver-checks:</strong> https://github.com/obi1kenobi/cargo-semver-checks</li>
+<li><strong>Project stability policy:</strong> <code>docs/STABILITY.md</code></li>
+<li><strong>API stability guarantees:</strong> <code>docs/STABILITY.md#api-surface-stability</code></li>
+</ul>
 <h2 id="coding-standards"><a class="header" href="#coding-standards">Coding Standards</a></h2>
 <ul>
 <li><strong>Formatting:</strong> Use <code>cargo fmt --all</code> before committing</li>
@@ -373,7 +491,18 @@ cargo test -- --nocapture
 # Run determinism checks
 cargo test --test determinism_test
 </code></pre>
-<h2 id="documentation"><a class="header" href="#documentation">Documentation</a></h2>
+<h3 id="dead-code-detection"><a class="header" href="#dead-code-detection">Dead Code Detection</a></h3>
+<p>We use <code>cargo-machete</code> and <code>clippy</code> to identify unused dependencies and code.</p>
+<h4 id="check-for-dead-code-locally"><a class="header" href="#check-for-dead-code-locally">Check for dead code locally</a></h4>
+<pre><code class="language-bash">just dead-code
+</code></pre>
+<h4 id="handling-false-positives"><a class="header" href="#handling-false-positives">Handling False Positives</a></h4>
+<p>If a dependency is detected as unused but is actually required (e.g., used only via macros or in tests), add it to the ignore list in the crate’s <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[package.metadata.cargo-machete]
+ignored = ["crate-name"]
+</code></pre>
+<p>For unreachable code warnings from clippy, use <code>#[allow(dead_code)]</code> with a comment explaining why it should be preserved.</p>
+<h3 id="documentation"><a class="header" href="#documentation">Documentation</a></h3>
 <ul>
 <li><strong>Public APIs</strong> must have documentation comments (<code>///</code>)</li>
 <li><strong>Modules</strong> should have module-level documentation (<code>//!</code>)</li>

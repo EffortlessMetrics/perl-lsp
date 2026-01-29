@@ -30,19 +30,15 @@ members = [
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
-    "crates/perl-dap-breakpoint",
-    "crates/perl-dap-eval",
-    "crates/perl-dap-variables",
-    "crates/perl-dap-stack",
-    "xtask", "crates/perl-ast", "crates/perl-token", "crates/perl-quote", "crates/perl-pragma", "crates/perl-edit", "crates/perl-builtins", "crates/perl-regex", "crates/perl-heredoc",
-    "crates/perl-error", "crates/perl-tokenizer",
+    "crates/tree-sitter-perl-rs",
+    "xtask",
 ]
+
 exclude = [
-    "tree-sitter-perl",
-    "tree-sitter-perl-c",  # Excluded: requires libclang-dev system package for bindgen (legacy C parser)
-    "crates/tree-sitter-perl-rs",  # Excluded: requires libclang-dev system package for bindgen (Rust wrapper for tree-sitter-perl)
-    "fuzz",  # Excluded: fuzz testing with specialized build requirements
-    "archive",  # Excluded: archived legacy components
+    "tree-sitter-perl",           # Legacy C parser
+    "tree-sitter-perl-c",         # Requires libclang-dev (bindgen)
+    "fuzz",                       # cargo-fuzz specialized requirements
+    "archive",                    # Archived legacy components
 ]
 
 # Workspace-level package metadata

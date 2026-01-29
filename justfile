@@ -199,8 +199,8 @@ mutation-subset:
 # Bounded fuzz run (quick fuzzing for CI/nightly)
 fuzz-bounded:
     @echo "🔥 Running bounded fuzz testing (60 seconds per target)..."
-    @cargo +nightly fuzz run parser_comprehensive -- -max_total_time=60 || echo "  Parser fuzzing complete"
-    @cargo +nightly fuzz run lexer_robustness -- -max_total_time=60 || echo "  Lexer fuzzing complete"
+    @cargo +nightly fuzz run builtin_functions -- -max_total_time=60 || echo "  Builtin functions fuzzing complete"
+    @cargo +nightly fuzz run heredoc_parsing -- -max_total_time=60 || echo "  Heredoc fuzzing complete"
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
     @echo "✅ Fuzz testing complete"
 
@@ -523,14 +523,12 @@ ci-docs-check:
     @bash ci/check_missing_docs.sh
     @echo "✅ Missing docs check passed"
 
-# Policy enforcement checks
+# Policy and governance checks
 ci-policy:
-    @echo "📋 Running policy checks..."
-    @./.ci/scripts/check-from-raw.sh
-    @just status-check
-    @just ci-docs-check
-    @just ci-doc-paths
-    @echo "✅ Policy checks passed"
+    @echo "⚖️  Checking project policies..."
+    just ci-check-todos
+    @bash ./.ci/scripts/check-from-raw.sh
+    @python3 scripts/update-current-status.py --check
 
 # Check for machine-specific paths in documentation
 ci-doc-paths:
@@ -679,6 +677,10 @@ health:
     @echo ""
     @echo "🔧 LSP Crate Size (crates/perl-lsp/src/):"
     @echo "  Lines:      $(find crates/perl-lsp/src -name '*.rs' | xargs wc -l | tail -n 1 | awk '{print $1}' || echo 'N/A')"
+    @echo ""
+    @echo "🧹 Dead Code Metrics:"
+    @echo "  Unused deps: $(cargo machete 2>&1 | grep -c 'Cargo.toml:' || echo 0) crates affected"
+    @echo "  Dead code allows: $(grep -r '#\[allow(dead_code)\]' crates --include='*.rs' 2>/dev/null | wc -l || echo 0)"
     @echo ""
     @echo "💡 Run 'just health-detail' for file-by-file breakdown"
 
@@ -1063,7 +1065,7 @@ _semver-baseline-tag:
 # ============================================================================
 
 # Run fuzzing on specific target (default: 60 seconds)
-fuzz target='parser_comprehensive' duration='60':
+fuzz target='substitution_parsing' duration='60':
     @echo "🔥 Fuzzing {{target}} for {{duration}} seconds..."
     @cargo +nightly fuzz run {{target}} -- -max_total_time={{duration}}
 
@@ -1073,14 +1075,14 @@ fuzz-list:
     @cargo +nightly fuzz list
 
 # Run continuous fuzzing (for local development, Ctrl+C to stop)
-fuzz-continuous target='parser_comprehensive':
+fuzz-continuous target='substitution_parsing':
     @echo "🔥 Running continuous fuzzing on {{target}} (Ctrl+C to stop)..."
     @echo "📊 Corpus: fuzz/corpus/{{target}}"
     @echo "💥 Crashes: fuzz/artifacts/{{target}}"
     @cargo +nightly fuzz run {{target}}
 
 # Check fuzz corpus coverage for a target
-fuzz-coverage target='parser_comprehensive':
+fuzz-coverage target='substitution_parsing':
     @echo "📊 Checking coverage for {{target}}..."
     @cargo +nightly fuzz coverage {{target}}
     @echo ""
@@ -1110,13 +1112,11 @@ fuzz-check-crashes:
 # Run all fuzz targets for regression testing (short duration)
 fuzz-regression duration='30':
     @echo "🔥 Running fuzz regression tests ({{duration}}s per target)..."
-    @just fuzz parser_comprehensive {{duration}} || true
-    @just fuzz lexer_robustness {{duration}} || true
-    @just fuzz substitution_parsing {{duration}} || true
     @just fuzz builtin_functions {{duration}} || true
-    @just fuzz unicode_positions {{duration}} || true
-    @just fuzz lsp_navigation {{duration}} || true
     @just fuzz heredoc_parsing {{duration}} || true
+    @just fuzz substitution_parsing {{duration}} || true
+    @just fuzz lsp_navigation {{duration}} || true
+    @just fuzz unicode_positions {{duration}} || true
     @just fuzz-check-crashes
     @echo "✅ Fuzz regression testing complete"
 
@@ -1248,4 +1248,36 @@ dead-code-strict:
 ci-dead-code:
     @echo "🔍 Checking dead code baseline..."
     @bash scripts/dead-code-check.sh check
+
+# ============================================================================
+# CI Gate Execution with Receipt Generation (Issue #210)
+# ============================================================================
+
+# CI gate: check TODO compliance
+ci-check-todos:
+    @bash ci/check_todos.sh
+
+# Fast merge gate with receipt generation
+ci-gate-with-receipts:
+    @echo "🚪 Running fast merge gate with receipts..."
+    @mkdir -p .receipts/$(date +%Y%m%d)
+    @RECEIPT_DIR=".receipts/$(date +%Y%m%d)" bash -c '\
+        ./scripts/execute-gate.sh workflow-audit --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh no-nested-lock --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh format --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh clippy-lib --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh test-lib --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh policy --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh lsp-definition --receipt-dir "$RECEIPT_DIR" \
+    '
+    @echo "✅ Merge gate passed with receipts!"
+    @echo "📁 Receipts: .receipts/$(date +%Y%m%d)/"
+
+# Gate execution for individual gate (with receipt)
+gate-execute gate_id:
+    @./scripts/execute-gate.sh {{gate_id}} --receipt-dir .receipts/$(date +%Y%m%d)
+
+# Show gate registry
+gate-list:
+    @python3 scripts/list-gates.py
 

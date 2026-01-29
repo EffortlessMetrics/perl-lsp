@@ -7,18 +7,23 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
-    // Always build the C parser (required for tree-sitter)
-    build_c_parser();
+    // Only build C components if requested
+    #[cfg(feature = "c-parser")]
+    {
+        // Always build the C parser (required for tree-sitter C interop)
+        build_c_parser();
 
-    // Conditionally build scanner based on features
-    if cfg!(feature = "c-scanner") {
-        build_c_scanner();
-    } else {
-        // Default to rust-scanner
-        build_rust_scanner_stub();
+        // Conditionally build scanner based on features
+        if cfg!(feature = "c-scanner") {
+            build_c_scanner();
+        } else {
+            // Default to rust-scanner stub if C scanner not requested
+            build_rust_scanner_stub();
+        }
     }
 
-    // Generate bindings for the C parser
+    // Generate bindings for the C parser only if requested
+    #[cfg(feature = "bindings")]
     generate_bindings();
 
     // Tell cargo to rerun this script if any of these files change
@@ -36,6 +41,7 @@ fn main() {
     }
 }
 
+#[cfg(feature = "c-parser")]
 fn build_c_parser() {
     let mut build = cc::Build::new();
 
@@ -58,6 +64,7 @@ fn build_c_parser() {
     build.compile("tree-sitter-perl-parser");
 }
 
+#[cfg(feature = "c-parser")]
 fn build_c_scanner() {
     let mut build = cc::Build::new();
 
@@ -79,6 +86,7 @@ fn build_c_scanner() {
     build.compile("tree-sitter-perl-scanner");
 }
 
+#[cfg(feature = "c-parser")]
 fn build_rust_scanner_stub() {
     // Create a minimal stub that redirects to Rust scanner
     // This ensures the C scanner functions exist but delegate to Rust
@@ -160,6 +168,7 @@ fn find_tree_sitter_runtime() -> Option<PathBuf> {
     None
 }
 
+#[cfg(feature = "bindings")]
 fn generate_bindings() {
     // Generate bindings for the C parser
     let bindings = bindgen::Builder::default()

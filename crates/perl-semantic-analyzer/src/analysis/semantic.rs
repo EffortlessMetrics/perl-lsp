@@ -733,9 +733,13 @@ impl SemanticAnalyzer {
             }
 
             // Control flow keywords
-            NodeKind::If { condition, then_branch, elsif_branches: _, else_branch } => {
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
                 self.analyze_node(condition, scope_id);
                 self.analyze_node(then_branch, scope_id);
+                for (elsif_cond, elsif_branch) in elsif_branches {
+                    self.analyze_node(elsif_cond, scope_id);
+                    self.analyze_node(elsif_branch, scope_id);
+                }
                 if let Some(else_node) = else_branch {
                     self.analyze_node(else_node, scope_id);
                 }
@@ -1125,8 +1129,116 @@ impl SemanticAnalyzer {
                 self.analyze_node(variable, scope_id);
             }
 
-            _ => {
-                // Handle other node types as needed
+            NodeKind::Diamond | NodeKind::Ellipsis => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Operator,
+                    modifiers: vec![],
+                });
+            }
+
+            NodeKind::Undef => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Keyword,
+                    modifiers: vec![],
+                });
+            }
+
+            NodeKind::Identifier { .. } => {
+                // Bareword identifiers, usually left to lexical highlighting
+                // but we handle them to avoid the default case.
+            }
+
+            NodeKind::Heredoc { .. } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::String,
+                    modifiers: vec![],
+                });
+            }
+
+            NodeKind::Glob { .. } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Operator,
+                    modifiers: vec![],
+                });
+            }
+
+            NodeKind::DataSection { .. } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Comment,
+                    modifiers: vec![],
+                });
+            }
+
+            NodeKind::Prototype { .. } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Punctuation,
+                    modifiers: vec![],
+                });
+            }
+
+            NodeKind::Typeglob { .. } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Variable,
+                    modifiers: vec![],
+                });
+            }
+
+            NodeKind::Untie { variable } => {
+                self.analyze_node(variable, scope_id);
+            }
+
+            NodeKind::LoopControl { .. } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::KeywordControl,
+                    modifiers: vec![],
+                });
+            }
+
+            NodeKind::MissingExpression
+            | NodeKind::MissingStatement
+            | NodeKind::MissingIdentifier
+            | NodeKind::MissingBlock => {
+                // No tokens for missing constructs
+            }
+
+            NodeKind::Tie { variable, package, args } => {
+                self.analyze_node(variable, scope_id);
+                self.analyze_node(package, scope_id);
+                for arg in args {
+                    self.analyze_node(arg, scope_id);
+                }
+            }
+
+            NodeKind::StatementModifier { statement, condition, .. } => {
+                self.analyze_node(statement, scope_id);
+                self.analyze_node(condition, scope_id);
+            }
+
+            NodeKind::Format { name, .. } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::FunctionDeclaration,
+                    modifiers: vec![SemanticTokenModifier::Declaration],
+                });
+
+                let hover = HoverInfo {
+                    signature: format!("format {} =", name),
+                    documentation: None,
+                    details: vec![],
+                };
+                self.hover_info.insert(node.location, hover);
+            }
+
+            NodeKind::Error { .. } | NodeKind::UnknownRest => {
+                // No semantic tokens for error nodes
             }
         }
     }

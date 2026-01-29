@@ -35,12 +35,6 @@ perl-regex = { workspace = true }
 perl-heredoc = { workspace = true }
 perl-error = { workspace = true }
 perl-tokenizer = { workspace = true }
-thiserror = "2.0.18"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-phf = { version = "0.13.1", features = ["macros"] }
-ropey = "1.6.1"
-tracing = "0.1.44"
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

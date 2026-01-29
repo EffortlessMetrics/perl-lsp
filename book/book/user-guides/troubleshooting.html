@@ -333,6 +333,128 @@ export PATH="$HOME/.cargo/bin:$PATH"
 <p>Check LSP logs for errors - see <a href="EDITOR_SETUP.html#no-diagnostics">EDITOR_SETUP.md</a></p>
 </li>
 </ol>
+<h3 id="completion-not-working"><a class="header" href="#completion-not-working">Completion Not Working</a></h3>
+<p><strong>Problem</strong>: No completions appear when typing.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Ensure you’re in a valid completion context (after <code>$</code>, <code>@</code>, <code>%</code>, or mid-identifier)</p>
+</li>
+<li>
+<p>Check the file is recognized as Perl in your editor</p>
+</li>
+<li>
+<p>Try manually triggering completion:</p>
+<ul>
+<li>VS Code: <code>Ctrl+Space</code></li>
+<li>Neovim: <code>&lt;C-x&gt;&lt;C-o&gt;</code></li>
+<li>Emacs: <code>M-TAB</code> or <code>C-M-i</code></li>
+</ul>
+</li>
+<li>
+<p>Verify completion cap hasn’t been reached:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "completionCap": 200
+    }
+  }
+}
+</code></pre>
+</li>
+</ol>
+<h3 id="go-to-definition-not-working"><a class="header" href="#go-to-definition-not-working">Go-to-Definition Not Working</a></h3>
+<p><strong>Problem</strong>: “Go to Definition” doesn’t find the symbol.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Ensure the definition is in an indexed file:</p>
+<ul>
+<li>File must be in workspace or <code>includePaths</code></li>
+<li>File count must be under <code>maxIndexedFiles</code> limit</li>
+</ul>
+</li>
+<li>
+<p>Check include paths are configured:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "workspace": {
+      "includePaths": ["lib", ".", "local/lib/perl5"]
+    }
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>For CPAN modules, enable system @INC (if safe):</p>
+<pre><code class="language-json">{
+  "perl": {
+    "workspace": {
+      "useSystemInc": true
+    }
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>Verify the symbol is actually defined (not just imported)</p>
+</li>
+</ol>
+<h3 id="references-returning-incomplete-results"><a class="header" href="#references-returning-incomplete-results">References Returning Incomplete Results</a></h3>
+<p><strong>Problem</strong>: “Find References” doesn’t show all occurrences.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Check the references cap:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "referencesCap": 1000
+    }
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>Ensure all relevant files are indexed (check <code>maxIndexedFiles</code>)</p>
+</li>
+<li>
+<p>Wait for workspace indexing to complete (check progress notification)</p>
+</li>
+<li>
+<p>Check the reference search deadline:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "referenceSearchDeadlineMs": 5000
+    }
+  }
+}
+</code></pre>
+</li>
+</ol>
+<h3 id="formatting-not-working"><a class="header" href="#formatting-not-working">Formatting Not Working</a></h3>
+<p><strong>Problem</strong>: Document formatting doesn’t change the file.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Verify Perl::Tidy is installed:</p>
+<pre><code class="language-bash">perl -e 'use Perl::Tidy;'
+</code></pre>
+</li>
+<li>
+<p>Check for <code>.perltidyrc</code> in your project or home directory</p>
+</li>
+<li>
+<p>Verify formatting is enabled in editor settings</p>
+</li>
+<li>
+<p>Check for errors in the LSP log - formatting errors are often reported there</p>
+</li>
+<li>
+<p>Try manual formatting via command palette to see error messages</p>
+</li>
+</ol>
 <h2 id="parser-issues"><a class="header" href="#parser-issues">Parser Issues</a></h2>
 <h3 id="incorrect-syntax-highlighting"><a class="header" href="#incorrect-syntax-highlighting">Incorrect Syntax Highlighting</a></h3>
 <p><strong>Problem</strong>: Code is parsed incorrectly or shows false errors.</p>
@@ -400,6 +522,71 @@ END
 <li><a href="EDITOR_SETUP.html#helix">Helix setup</a></li>
 <li><a href="EDITOR_SETUP.html#troubleshooting">General troubleshooting</a></li>
 </ul>
+<h3 id="vs-code-extension-not-activating"><a class="header" href="#vs-code-extension-not-activating">VS Code: Extension Not Activating</a></h3>
+<p><strong>Problem</strong>: The perl-lsp extension doesn’t activate on Perl files.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Check file association in VS Code bottom status bar (should say “Perl”)</p>
+</li>
+<li>
+<p>Manually set language mode: <code>Ctrl+K M</code> then select “Perl”</p>
+</li>
+<li>
+<p>Verify extension is installed and enabled:</p>
+<pre><code class="language-bash">code --list-extensions | grep perl
+</code></pre>
+</li>
+<li>
+<p>Check VS Code Output panel for errors (View &gt; Output &gt; select “Perl Language Server”)</p>
+</li>
+</ol>
+<h3 id="neovim-lsp-not-attaching"><a class="header" href="#neovim-lsp-not-attaching">Neovim: LSP Not Attaching</a></h3>
+<p><strong>Problem</strong>: <code>:LspInfo</code> shows no client attached.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Verify filetype is recognized:</p>
+<pre><code class="language-vim">:set filetype?
+" Should output: filetype=perl
+</code></pre>
+</li>
+<li>
+<p>Check lspconfig is loaded:</p>
+<pre><code class="language-vim">:lua print(vim.inspect(require('lspconfig').perl_lsp))
+</code></pre>
+</li>
+<li>
+<p>Manually start the client:</p>
+<pre><code class="language-vim">:LspStart perl_lsp
+</code></pre>
+</li>
+<li>
+<p>Check <code>:LspLog</code> for errors</p>
+</li>
+</ol>
+<h3 id="emacs-eglot-fails-to-connect"><a class="header" href="#emacs-eglot-fails-to-connect">Emacs: eglot Fails to Connect</a></h3>
+<p><strong>Problem</strong>: eglot reports connection failure.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Check the <code>*eglot stderr*</code> buffer for errors</p>
+</li>
+<li>
+<p>Verify the command works in shell:</p>
+<pre><code class="language-bash">perl-lsp --stdio
+</code></pre>
+</li>
+<li>
+<p>Try lsp-mode as an alternative:</p>
+<pre><code class="language-elisp">(require 'lsp-mode)
+(add-hook 'perl-mode-hook #'lsp)
+</code></pre>
+</li>
+<li>
+<p>Check <code>*lsp-log*</code> buffer for detailed errors</p>
+</li>
+</ol>
 <h2 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h2>
 <ol>
 <li>
@@ -420,6 +607,14 @@ END
 </ul>
 </li>
 </ol>
+<h2 id="see-also"><a class="header" href="#see-also">See Also</a></h2>
+<ul>
+<li><a href="FAQ.html">FAQ.md</a> - Frequently asked questions</li>
+<li><a href="GETTING_STARTED.html">GETTING_STARTED.md</a> - Installation and setup guide</li>
+<li><a href="EDITOR_SETUP.html">EDITOR_SETUP.md</a> - Detailed editor configurations</li>
+<li><a href="CONFIG.html">CONFIG.md</a> - All configuration options</li>
+<li><a href="KNOWN_LIMITATIONS.html">KNOWN_LIMITATIONS.md</a> - Current parser limitations</li>
+</ul>
 
                     </main>
 

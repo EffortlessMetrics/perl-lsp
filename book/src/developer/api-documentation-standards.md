@@ -390,7 +390,7 @@ The **successfully implemented infrastructure** provides systematic documentatio
 ## Related Documentation
 
 - **[Missing Documentation Guide](MISSING_DOCUMENTATION_GUIDE.md)** - Systematic 4-phase resolution strategy for 605+ violations
-- **[ADR-002: API Documentation Infrastructure](ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation architecture and decisions
+- **[ADR-002: API Documentation Infrastructure](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation architecture and decisions
 - **[Comprehensive Testing Guide](COMPREHENSIVE_TESTING_GUIDE.md)** - Complete test framework documentation
 
 For questions or clarification, refer to the test suite validation criteria and existing well-documented modules as examples.

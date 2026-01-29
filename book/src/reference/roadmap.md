@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-01-27)**: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.
+> **Status (2026-01-28)**: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -295,6 +295,9 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - Performance: zero-allocation lookups + Arc<str> tokens (2026-01-23)
 - Security: DAP/perldoc/perlcritic injection hardening (2026-01-23)
 - VSCode: improved UX + command filtering (2026-01-23)
+- Security: Multi-root workspace path traversal fix (PR #620, 2026-01-28)
+- Performance: Scope analysis Rc cloning optimization (PR #621, 2026-01-28)
+- VSCode: Organize Imports command + Status Menu (PR #609, 2026-01-28)
 
 ---
 
@@ -305,13 +308,13 @@ The LSP compliance table is now auto-generated. Source of truth: `features.toml`
 <!-- BEGIN: COMPLIANCE_TABLE -->
 | Area | Implemented | Total | Coverage |
 |------|-------------|-------|----------|
-| debug | 1 | 2 | 50% |
+| debug | 2 | 2 | 100% |
 | notebook | 2 | 2 | 100% |
 | protocol | 9 | 9 | 100% |
 | text_document | 41 | 41 | 100% |
 | window | 9 | 9 | 100% |
 | workspace | 26 | 26 | 100% |
-| **Overall** | **88** | **89** | **99%** |
+| **Overall** | **89** | **89** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->
 
 **v0.9.0 Metrics**:
@@ -354,4 +357,4 @@ Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - What went wrong and what changed
 
-<!-- Last Updated: 2026-01-27 -->
+<!-- Last Updated: 2026-01-28 -->

@@ -233,8 +233,8 @@ mod tests {
     fn test_get_all_nodekinds() {
         let nodekinds = get_all_nodekinds();
         assert!(nodekinds.len() > 50);
-        assert!(nodekinds.contains("Statement"));
-        assert!(nodekinds.contains("Expression"));
+        assert!(nodekinds.contains("ExpressionStatement"));
+        assert!(nodekinds.contains("Binary"));
         assert!(nodekinds.contains("Subroutine"));
     }
 

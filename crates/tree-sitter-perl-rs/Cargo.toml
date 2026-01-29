@@ -26,6 +26,7 @@ pest_derive = "2.8.4"
 logos = "0.16.0"
 chumsky = "0.12.0"
 regex = "1.12.2"
+anyhow = "1.0.100"
 stacker = "0.1.22"
 encoding_rs = "0.8.35"
 serde_json = "1.0.148"
@@ -55,6 +56,8 @@ ptr_arg = "warn"
 [features]
 default = ["pure-rust"]
 pure-rust = []
+bindings = ["dep:bindgen"]
+c-parser = ["dep:cc"]
 pure-rust-standalone = ["pure-rust"]  # For benchmarking without perl-lexer
 token-parser = []
 test-utils = []
@@ -187,5 +190,5 @@ path = "../../benches/edge_case_benchmarks.rs"
 harness = false
 
 [build-dependencies]
-cc = "1.2.51"
-bindgen = "0.72.1" 
+cc = { version = "1.2.51", optional = true }
+bindgen = { version = "0.72.1", optional = true } 

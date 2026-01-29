@@ -187,7 +187,7 @@
 <strong>Stale roadmaps</strong>: Archived at <code>docs/archive/roadmaps/</code>; retrieve from git history if needed.</p>
 </blockquote>
 <blockquote>
-<p><strong>Status (2026-01-27)</strong>: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.</p>
+<p><strong>Status (2026-01-28)</strong>: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.</p>
 <p><strong>Canonical receipt</strong>: <code>nix develop -c just ci-gate</code> must be green before merging.
 <strong>CI</strong> is intentionally optional/opt-in; the repo is local-first by design.</p>
 </blockquote>
@@ -521,19 +521,22 @@
 <li>Performance: zero-allocation lookups + Arc<str> tokens (2026-01-23)</li>
 <li>Security: DAP/perldoc/perlcritic injection hardening (2026-01-23)</li>
 <li>VSCode: improved UX + command filtering (2026-01-23)</li>
+<li>Security: Multi-root workspace path traversal fix (PR #620, 2026-01-28)</li>
+<li>Performance: Scope analysis Rc cloning optimization (PR #621, 2026-01-28)</li>
+<li>VSCode: Organize Imports command + Status Menu (PR #609, 2026-01-28)</li>
 </ul>
 <hr />
 <h2 id="lsp-feature-implementation"><a class="header" href="#lsp-feature-implementation">LSP Feature Implementation</a></h2>
 <p>The LSP compliance table is now auto-generated. Source of truth: <code>features.toml</code></p>
 <!-- BEGIN: COMPLIANCE_TABLE -->
 <div class="table-wrapper"><table><thead><tr><th>Area</th><th>Implemented</th><th>Total</th><th>Coverage</th></tr></thead><tbody>
-<tr><td>debug</td><td>1</td><td>2</td><td>50%</td></tr>
+<tr><td>debug</td><td>2</td><td>2</td><td>100%</td></tr>
 <tr><td>notebook</td><td>2</td><td>2</td><td>100%</td></tr>
 <tr><td>protocol</td><td>9</td><td>9</td><td>100%</td></tr>
 <tr><td>text_document</td><td>41</td><td>41</td><td>100%</td></tr>
 <tr><td>window</td><td>9</td><td>9</td><td>100%</td></tr>
 <tr><td>workspace</td><td>26</td><td>26</td><td>100%</td></tr>
-<tr><td><strong>Overall</strong></td><td><strong>88</strong></td><td><strong>89</strong></td><td><strong>99%</strong></td></tr>
+<tr><td><strong>Overall</strong></td><td><strong>89</strong></td><td><strong>89</strong></td><td><strong>100%</strong></td></tr>
 </tbody></table>
 </div><!-- END: COMPLIANCE_TABLE -->
 <p><strong>v0.9.0 Metrics</strong>:</p>
@@ -566,7 +569,7 @@
 <li><strong><a href="../features.toml">features.toml</a></strong> - Canonical capability definitions</li>
 <li><strong><a href="LESSONS.html">LESSONS.md</a></strong> - What went wrong and what changed</li>
 </ul>
-<!-- Last Updated: 2026-01-27 -->
+<!-- Last Updated: 2026-01-28 -->
 
                     </main>
 

@@ -117,7 +117,7 @@ impl UnderstandingParser {
                     | AntiPattern::RegexCodeBlockHeredoc { location, .. }
                     | AntiPattern::EvalStringHeredoc { location, .. }
                     | AntiPattern::TiedHandleHeredoc { location, .. } => {
-                        location.offset - current_pos
+                        location.offset
                     }
                 };
 

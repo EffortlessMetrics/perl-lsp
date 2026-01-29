@@ -297,7 +297,34 @@ Run the policy check locally anytime:
 ./.ci/scripts/check-from-raw.sh
 ```
 
-## Project Structure
+## Workspace Architecture
+
+We use a unified Rust workspace for all core and auxiliary crates.
+
+### Core Crates (Build Everywhere)
+These crates have zero system dependencies and work on all platforms:
+- **perl-parser**: Main parser library
+- **perl-lsp**: LSP server binary
+- **perl-lexer**: Tokenizer
+- **tree-sitter-perl**: Pure-Rust tree-sitter bindings (default)
+
+### Advanced Components (Opt-in)
+Some functionality requires system dependencies (like `libclang-dev`) and is gated behind Cargo features:
+
+| Feature | Crate | Dependency | Description |
+|---------|-------|------------|-------------|
+| `bindings` | tree-sitter-perl | `libclang-dev` | Generates C bindings via bindgen |
+| `c-parser` | tree-sitter-perl | C compiler | Builds the native C parser/scanner |
+
+#### Building with Advanced Features
+```bash
+# Ubuntu/Debian
+sudo apt-get install libclang-dev
+cargo build -p tree-sitter-perl --features bindings,c-parser
+```
+
+### Testing
+
 
 - **`crates/perl-parser/`** - Core parser implementation and LSP providers
 - **`crates/perl-lsp/`** - LSP server binary and CLI
@@ -306,6 +333,17 @@ Run the policy check locally anytime:
 - **`crates/perl-corpus/`** - Test corpus and property-based testing
 - **`xtask/`** - Advanced testing and development tools
 - **`docs/`** - Comprehensive project documentation
+
+### SemVer Compliance
+
+All API changes are checked for Semantic Versioning (SemVer) compatibility using `cargo-semver-checks`.
+
+#### Check for breaking changes locally
+```bash
+just semver-check
+```
+
+Breaking changes are allowed in minor version bumps (pre-1.0) but require a migration guide in `CHANGELOG.md`. See [SEMVER_POLICY.md](docs/SEMVER_POLICY.md) for full details.
 
 ## Testing Guidelines
 
@@ -335,7 +373,26 @@ cargo test -- --nocapture
 cargo test --test determinism_test
 ```
 
-## Documentation
+### Dead Code Detection
+
+We use `cargo-machete` and `clippy` to identify unused dependencies and code.
+
+#### Check for dead code locally
+```bash
+just dead-code
+```
+
+#### Handling False Positives
+If a dependency is detected as unused but is actually required (e.g., used only via macros or in tests), add it to the ignore list in the crate's `Cargo.toml`:
+
+```toml
+[package.metadata.cargo-machete]
+ignored = ["crate-name"]
+```
+
+For unreachable code warnings from clippy, use `#[allow(dead_code)]` with a comment explaining why it should be preserved.
+
+### Documentation
 
 - **Public APIs** must have documentation comments (`///`)
 - **Modules** should have module-level documentation (`//!`)
