@@ -18,7 +18,7 @@ include = ["src/**", "src/grammar.pest", "Cargo.toml", "README.md", "LICENSE*"]
 pest = "2.8.4"
 pest_derive = "2.8.4"
 stacker = "0.1.22"
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 serde = { version = "1.0.228", features = ["derive"], optional = true }
 regex = "1.12.2"
 unicode-ident = "1.0.22"
