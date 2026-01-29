@@ -20,6 +20,8 @@ use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
 use regex::Regex;
+use crate::security::validate_path;
+use std::path::PathBuf;
 
 /// Poison-safe mutex lock that recovers from poisoned state
 fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<'a, T> {
@@ -630,6 +632,23 @@ impl DebugAdapter {
                 .unwrap_or_default();
 
             let stop_on_entry = args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
+            let cwd = args.get("cwd").and_then(|c| c.as_str());
+
+            // Security: If cwd is provided, enforce that program is within workspace
+            if let Some(workspace_root) = cwd {
+                let workspace_path = PathBuf::from(workspace_root);
+                let program_path = PathBuf::from(program);
+                if let Err(e) = validate_path(&program_path, &workspace_path) {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "launch".to_string(),
+                        body: None,
+                        message: Some(format!("Security error: {}", e)),
+                    };
+                }
+            }
 
             // Launch Perl debugger
             match self.launch_debugger(program, perl_args, stop_on_entry) {
