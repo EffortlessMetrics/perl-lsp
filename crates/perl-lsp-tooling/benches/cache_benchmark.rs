@@ -1,6 +1,7 @@
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use perl_lsp_tooling::performance::AstCache;
 use perl_parser_core::{Node, NodeKind, SourceLocation};
+use std::hint::black_box;
 use std::sync::Arc;
 
 fn create_test_ast(size: usize) -> Arc<Node> {
