@@ -787,16 +787,17 @@ impl ScopeAnalyzer {
                 let mut param_names = std::collections::HashSet::new();
 
                 // Extract parameters from signature if present
-                let params_to_check = if let Some(sig) = signature {
+                // Optimization: Use slice to avoid cloning the parameters vector (deep copy of AST nodes)
+                let params_to_check: &[Node] = if let Some(sig) = signature {
                     match &sig.kind {
-                        NodeKind::Signature { parameters } => parameters.clone(),
-                        _ => Vec::new(),
+                        NodeKind::Signature { parameters } => parameters.as_slice(),
+                        _ => &[],
                     }
                 } else {
-                    Vec::new()
+                    &[]
                 };
 
-                for param in &params_to_check {
+                for param in params_to_check {
                     let extracted = self.extract_variable_name(param);
                     if !extracted.is_empty() {
                         let full_name = extracted.as_string();
