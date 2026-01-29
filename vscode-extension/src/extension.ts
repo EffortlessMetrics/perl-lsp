@@ -15,6 +15,7 @@ import { BinaryDownloader } from './downloader';
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
+let statusBarItem: vscode.StatusBarItem;
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
@@ -25,86 +26,15 @@ export async function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(showOutputCommand);
     
-    // Get the path to perl-lsp
-    const serverPath = await getServerPath(context);
-    if (!serverPath) {
-        vscode.window.showErrorMessage(
-            'Perl Language Server (perl-lsp) not found. Please install it or set perl.lsp.path in settings.'
-        );
-        return;
-    }
-
-    // Server options
-    const serverOptions: ServerOptions = {
-        run: {
-            command: serverPath,
-            args: ['--stdio'],
-            transport: TransportKind.stdio
-        },
-        debug: {
-            command: serverPath,
-            args: ['--stdio', '--log'],
-            transport: TransportKind.stdio
-        }
-    };
-
-    // Client options
-    const clientOptions: LanguageClientOptions = {
-        documentSelector: [
-            { scheme: 'file', language: 'perl' },
-            { scheme: 'untitled', language: 'perl' }
-        ],
-        synchronize: {
-            // Notify the server about file changes to .perltidyrc files
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/.perltidyrc')
-        },
-        outputChannel
-    };
-
-    // Create and start the language client
-    client = new LanguageClient(
-        'perl-language-server',
-        'Perl Language Server',
-        serverOptions,
-        clientOptions
-    );
-
     // Create status bar item - show immediately with starting state
-    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+    statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'perl-lsp.showStatusMenu';
     statusBarItem.text = '$(sync~spin) Perl LSP';
     statusBarItem.tooltip = 'Perl Language Server is starting... (click for options)';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
-
-    client.onDidChangeState(event => {
-        switch (event.newState) {
-            case State.Running:
-                statusBarItem.text = '$(check) Perl LSP';
-                statusBarItem.tooltip = 'Perl Language Server is running (click for options)';
-                statusBarItem.backgroundColor = undefined;
-                break;
-            case State.Starting:
-                statusBarItem.text = '$(sync~spin) Perl LSP';
-                statusBarItem.tooltip = 'Perl Language Server is starting... (click for options)';
-                statusBarItem.backgroundColor = undefined;
-                break;
-            case State.Stopped:
-                statusBarItem.text = '$(error) Perl LSP';
-                statusBarItem.tooltip = 'Perl Language Server is stopped (click for options)';
-                statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
-                break;
-        }
-    });
-
-    // Start the client
-    await client.start();
     
-    // Initialize test adapter
-    testAdapter = new PerlTestAdapter(client);
-    context.subscriptions.push(testAdapter);
-    
-    // Initialize debug adapter
+    // Initialize debug adapter (one-time setup)
     activateDebugger(context);
 
     // Helper for unimplemented refactoring commands
@@ -178,6 +108,15 @@ export async function activate(context: vscode.ExtensionContext) {
     });
     
     const showVersionCommand = vscode.commands.registerCommand('perl-lsp.showVersion', async () => {
+        // We need serverPath here. Since it's calculated in startLanguageServer,
+        // we should probably store it or re-calculate it.
+        // Re-calculating is safe as it just checks config/paths.
+        const serverPath = await getServerPath(context);
+        if (!serverPath) {
+             vscode.window.showErrorMessage('Perl LSP binary not found.');
+             return;
+        }
+
         const { execFile } = require('child_process');
         execFile(serverPath, ['--version'], (error: any, stdout: string, stderr: string) => {
             if (error) {
@@ -225,7 +164,8 @@ export async function activate(context: vscode.ExtensionContext) {
     
     context.subscriptions.push(restartCommand, organizeImportsCommand, runTestsCommand, showVersionCommand, statusMenuCommand);
     
-    outputChannel.appendLine('Perl Language Server started successfully');
+    // Start the server
+    await startLanguageServer(context);
 }
 
 export async function deactivate() {
@@ -235,6 +175,86 @@ export async function deactivate() {
     if (client) {
         await client.stop();
     }
+}
+
+async function startLanguageServer(context: vscode.ExtensionContext) {
+    // Get the path to perl-lsp
+    const serverPath = await getServerPath(context);
+    if (!serverPath) {
+        statusBarItem.text = '$(error) Perl LSP: Error';
+        statusBarItem.tooltip = 'Perl Language Server binary not found';
+        statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+
+        vscode.window.showErrorMessage(
+            'Perl Language Server (perl-lsp) not found. Please install it or set perl.lsp.path in settings.'
+        );
+        return;
+    }
+
+    // Server options
+    const serverOptions: ServerOptions = {
+        run: {
+            command: serverPath,
+            args: ['--stdio'],
+            transport: TransportKind.stdio
+        },
+        debug: {
+            command: serverPath,
+            args: ['--stdio', '--log'],
+            transport: TransportKind.stdio
+        }
+    };
+
+    // Client options
+    const clientOptions: LanguageClientOptions = {
+        documentSelector: [
+            { scheme: 'file', language: 'perl' },
+            { scheme: 'untitled', language: 'perl' }
+        ],
+        synchronize: {
+            // Notify the server about file changes to .perltidyrc files
+            fileEvents: vscode.workspace.createFileSystemWatcher('**/.perltidyrc')
+        },
+        outputChannel
+    };
+
+    // Create and start the language client
+    client = new LanguageClient(
+        'perl-language-server',
+        'Perl Language Server',
+        serverOptions,
+        clientOptions
+    );
+
+    client.onDidChangeState(event => {
+        switch (event.newState) {
+            case State.Running:
+                statusBarItem.text = '$(check) Perl LSP';
+                statusBarItem.tooltip = 'Perl Language Server is running (click for options)';
+                statusBarItem.backgroundColor = undefined;
+                break;
+            case State.Starting:
+                statusBarItem.text = '$(sync~spin) Perl LSP';
+                statusBarItem.tooltip = 'Perl Language Server is starting... (click for options)';
+                statusBarItem.backgroundColor = undefined;
+                break;
+            case State.Stopped:
+                statusBarItem.text = '$(error) Perl LSP';
+                statusBarItem.tooltip = 'Perl Language Server is stopped (click for options)';
+                statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+                break;
+        }
+    });
+
+    // Start the client
+    await client.start();
+
+    // Initialize test adapter
+    testAdapter = new PerlTestAdapter(client);
+    // Note: We don't push testAdapter to context.subscriptions here to avoid memory leaks on restart.
+    // It is manually disposed in deactivate() and restartServer().
+
+    outputChannel.appendLine('Perl Language Server started successfully');
 }
 
 async function getServerPath(context: vscode.ExtensionContext): Promise<string | null> {
@@ -306,8 +326,15 @@ async function restartServer(context: vscode.ExtensionContext) {
     if (client) {
         await client.stop();
     }
+    if (testAdapter) {
+        testAdapter.dispose();
+    }
+
+    statusBarItem.text = '$(sync~spin) Perl LSP: Restarting...';
+    statusBarItem.tooltip = 'Perl Language Server is restarting...';
+
+    await startLanguageServer(context);
     
-    await activate(context);
     vscode.window.showInformationMessage('Perl Language Server restarted', 'Show Output').then(selection => {
         if (selection === 'Show Output') {
             outputChannel.show();
