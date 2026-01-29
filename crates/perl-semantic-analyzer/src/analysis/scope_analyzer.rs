@@ -185,64 +185,87 @@ impl Scope {
 
     fn lookup_variable_parts(&self, sigil: &str, name: &str) -> Option<Rc<Variable>> {
         let idx = sigil_to_index(sigil);
-        if let Some(map) = &self.variables.borrow()[idx] {
-            if let Some(var) = map.get(name) {
-                return Some(var.clone());
+        let mut current_scope = self;
+
+        loop {
+            if let Some(map) = &current_scope.variables.borrow()[idx] {
+                if let Some(var) = map.get(name) {
+                    return Some(var.clone());
+                }
+            }
+            if let Some(ref parent) = current_scope.parent {
+                current_scope = parent;
+            } else {
+                break;
             }
         }
-        self.parent.as_ref()?.lookup_variable_parts(sigil, name)
+        None
     }
 
     fn has_variable_parts(&self, sigil: &str, name: &str) -> bool {
         let idx = sigil_to_index(sigil);
-        {
-            let vars = self.variables.borrow();
-            if let Some(map) = &vars[idx] {
-                if map.contains_key(name) {
-                    return true;
+        let mut current_scope = self;
+
+        loop {
+            {
+                let vars = current_scope.variables.borrow();
+                if let Some(map) = &vars[idx] {
+                    if map.contains_key(name) {
+                        return true;
+                    }
                 }
             }
-        }
-        if let Some(ref parent) = self.parent {
-            parent.has_variable_parts(sigil, name)
-        } else {
-            false
+            if let Some(ref parent) = current_scope.parent {
+                current_scope = parent;
+            } else {
+                return false;
+            }
         }
     }
 
     fn use_variable_parts(&self, sigil: &str, name: &str) -> (bool, bool) {
         let idx = sigil_to_index(sigil);
-        {
-            let vars = self.variables.borrow();
-            if let Some(map) = &vars[idx] {
-                if let Some(var) = map.get(name) {
-                    *var.is_used.borrow_mut() = true;
-                    return (true, *var.is_initialized.borrow());
+        let mut current_scope = self;
+
+        loop {
+            {
+                let vars = current_scope.variables.borrow();
+                if let Some(map) = &vars[idx] {
+                    if let Some(var) = map.get(name) {
+                        *var.is_used.borrow_mut() = true;
+                        return (true, *var.is_initialized.borrow());
+                    }
                 }
             }
-        }
 
-        if let Some(ref parent) = self.parent {
-            parent.use_variable_parts(sigil, name)
-        } else {
-            (false, false)
+            if let Some(ref parent) = current_scope.parent {
+                current_scope = parent;
+            } else {
+                return (false, false);
+            }
         }
     }
 
     fn initialize_variable_parts(&self, sigil: &str, name: &str) {
         let idx = sigil_to_index(sigil);
-        {
-            let vars = self.variables.borrow();
-            if let Some(map) = &vars[idx] {
-                if let Some(var) = map.get(name) {
-                    *var.is_initialized.borrow_mut() = true;
-                    return;
+        let mut current_scope = self;
+
+        loop {
+            {
+                let vars = current_scope.variables.borrow();
+                if let Some(map) = &vars[idx] {
+                    if let Some(var) = map.get(name) {
+                        *var.is_initialized.borrow_mut() = true;
+                        return;
+                    }
                 }
             }
-        }
 
-        if let Some(ref parent) = self.parent {
-            parent.initialize_variable_parts(sigil, name);
+            if let Some(ref parent) = current_scope.parent {
+                current_scope = parent;
+            } else {
+                return;
+            }
         }
     }
 
@@ -250,21 +273,25 @@ impl Scope {
     /// Returns true if the variable was found and updated.
     fn initialize_and_use_variable_parts(&self, sigil: &str, name: &str) -> bool {
         let idx = sigil_to_index(sigil);
-        {
-            let vars = self.variables.borrow();
-            if let Some(map) = &vars[idx] {
-                if let Some(var) = map.get(name) {
-                    *var.is_used.borrow_mut() = true;
-                    *var.is_initialized.borrow_mut() = true;
-                    return true;
+        let mut current_scope = self;
+
+        loop {
+            {
+                let vars = current_scope.variables.borrow();
+                if let Some(map) = &vars[idx] {
+                    if let Some(var) = map.get(name) {
+                        *var.is_used.borrow_mut() = true;
+                        *var.is_initialized.borrow_mut() = true;
+                        return true;
+                    }
                 }
             }
-        }
 
-        if let Some(ref parent) = self.parent {
-            parent.initialize_and_use_variable_parts(sigil, name)
-        } else {
-            false
+            if let Some(ref parent) = current_scope.parent {
+                current_scope = parent;
+            } else {
+                return false;
+            }
         }
     }
 
