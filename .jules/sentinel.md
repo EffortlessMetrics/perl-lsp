@@ -65,3 +65,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The LSP server's `ExecuteCommandProvider` enforced security boundaries using a single `workspace_root`, but the server initialization logic failed to populate this root when multiple `workspaceFolders` were provided by the client. This resulted in the provider being initialized with no root, bypassing the path traversal check entirely.
 **Learning:** Security controls that rely on optional configuration (like `Option<PathBuf>`) can fail open if the configuration is not derived correctly from all available sources (single root vs multi-root).
 **Prevention:** Always default to "fail closed" or "deny all" when configuration is missing, rather than skipping checks. Ensure security contexts support the full range of client capabilities (e.g., multiple roots).
+
+## 2026-01-29 - Workspace Configuration RCE
+**Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
+**Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
+**Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
