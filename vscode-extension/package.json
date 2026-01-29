@@ -410,7 +410,7 @@
     "@types/vscode": "^1.88.0",
     "@types/adm-zip": "^0.5.5",
     "@types/tar": "^6.1.11",
-    "@vscode/vsce": "^2.24.0",
+    "@vscode/vsce": "^3.7.1",
     "typescript": "^5.4.0"
   }
 }
