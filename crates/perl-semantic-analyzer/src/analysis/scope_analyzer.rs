@@ -531,30 +531,27 @@ impl ScopeAnalyzer {
                 if !variable_used && (sigil == "$" || sigil == "@") {
                     // Check parent for hash/array access context
                     if let Some(parent) = ancestors.last() {
-                        match &parent.kind {
-                            NodeKind::Binary { op, left, .. } => {
-                                // Only check if this node is the LEFT side of the access
-                                if std::ptr::eq(left.as_ref(), node) {
-                                    if op == "{}" {
-                                        // Check if the corresponding hash exists
-                                        let (hash_used, hash_init) =
-                                            scope.use_variable_parts("%", name);
-                                        if hash_used {
-                                            variable_used = true;
-                                            is_initialized = hash_init;
-                                        }
-                                    } else if op == "[]" {
-                                        // Check if the corresponding array exists
-                                        let (array_used, array_init) =
-                                            scope.use_variable_parts("@", name);
-                                        if array_used {
-                                            variable_used = true;
-                                            is_initialized = array_init;
-                                        }
+                        if let NodeKind::Binary { op, left, .. } = &parent.kind {
+                            // Only check if this node is the LEFT side of the access
+                            if std::ptr::eq(left.as_ref(), node) {
+                                if op == "{}" {
+                                    // Check if the corresponding hash exists
+                                    let (hash_used, hash_init) =
+                                        scope.use_variable_parts("%", name);
+                                    if hash_used {
+                                        variable_used = true;
+                                        is_initialized = hash_init;
+                                    }
+                                } else if op == "[]" {
+                                    // Check if the corresponding array exists
+                                    let (array_used, array_init) =
+                                        scope.use_variable_parts("@", name);
+                                    if array_used {
+                                        variable_used = true;
+                                        is_initialized = array_init;
                                     }
                                 }
                             }
-                            _ => {}
                         }
                     }
                 }
