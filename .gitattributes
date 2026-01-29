@@ -57,3 +57,7 @@ archive/legacy-crates/perl-parser-pest/src/lib/*.js linguist-vendored
 *.tar.gz binary
 *.zip    binary
 *.vsix   binary
+*.ttf    binary
+*.eot    binary
+*.woff   binary
+*.woff2  binary
