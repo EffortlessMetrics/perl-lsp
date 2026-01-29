@@ -40,7 +40,7 @@ pub fn add_workspace_symbol_completions(
     for symbol in matching_symbols {
         // Skip symbols that don't match the prefix
         if !symbol.name.starts_with(&context.prefix)
-            && !symbol.qualified_name.as_ref().map_or(false, |qn| qn.contains(&context.prefix))
+            && !symbol.qualified_name.as_ref().is_some_and(|qn| qn.contains(&context.prefix))
         {
             continue;
         }

@@ -216,6 +216,12 @@ pub enum WorkspaceRenameError {
         /// Offending path
         path: Option<PathBuf>,
     },
+
+    /// Feature not yet implemented
+    NotImplemented {
+        /// Description of unimplemented feature
+        feature: String,
+    },
 }
 
 impl std::fmt::Display for WorkspaceRenameError {
@@ -256,6 +262,9 @@ impl std::fmt::Display for WorkspaceRenameError {
                     write!(f, "Security error: {}", message)
                 }
             }
+            WorkspaceRenameError::NotImplemented { feature } => {
+                write!(f, "Feature not yet implemented: {}", feature)
+            }
         }
     }
 }
@@ -280,7 +289,8 @@ pub struct ConflictLocation {
 /// Provides comprehensive symbol renaming across entire workspace with atomic
 /// operations, backup support, and progress reporting.
 pub struct WorkspaceRename {
-    /// Configuration
+    /// Configuration (used when implementation is complete, tracked in #433)
+    #[allow(dead_code)]
     config: WorkspaceRenameConfig,
 }
 
@@ -346,7 +356,10 @@ impl WorkspaceRename {
         // AC:AC7 - Progress reporting
         // AC:AC8 - Dual indexing update
 
-        todo!("Workspace rename implementation - see WORKSPACE_RENAME_SPECIFICATION.md")
+        Err(WorkspaceRenameError::NotImplemented {
+            feature: "Workspace rename implementation - see WORKSPACE_RENAME_SPECIFICATION.md"
+                .to_string(),
+        })
     }
 
     /// Rename a symbol with progress reporting
@@ -370,7 +383,10 @@ impl WorkspaceRename {
         _progress_tx: std::sync::mpsc::Sender<Progress>,
     ) -> Result<WorkspaceRenameResult, WorkspaceRenameError> {
         // Implementation tracked in #433 (AC:AC7)
-        todo!("Workspace rename with progress - see WORKSPACE_RENAME_SPECIFICATION.md")
+        Err(WorkspaceRenameError::NotImplemented {
+            feature: "Workspace rename with progress - see WORKSPACE_RENAME_SPECIFICATION.md"
+                .to_string(),
+        })
     }
 
     /// Validate path security
@@ -379,7 +395,9 @@ impl WorkspaceRename {
         // - Path within workspace root
         // - Symlink policy enforcement
         // - Writable validation
-        todo!("Path security validation")
+        Err(WorkspaceRenameError::NotImplemented {
+            feature: "Path security validation".to_string(),
+        })
     }
 
     /// Check for name conflicts in workspace
@@ -391,7 +409,7 @@ impl WorkspaceRename {
         // - Query workspace index for existing symbols
         // - Check each affected scope
         // - Return conflict locations
-        todo!("Name conflict detection")
+        Err(WorkspaceRenameError::NotImplemented { feature: "Name conflict detection".to_string() })
     }
 }
 
