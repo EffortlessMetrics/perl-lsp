@@ -3,9 +3,7 @@
 //! Tests map to acceptance criteria in WORKSPACE_RENAME_SPECIFICATION.md
 //! Each test is tagged with // AC:ACx for traceability
 
-use perl_refactoring::workspace_rename::{
-    WorkspaceRename, WorkspaceRenameConfig, WorkspaceRenameError,
-};
+use perl_refactoring::workspace_rename::{WorkspaceRename, WorkspaceRenameConfig};
 use tempfile::TempDir;
 
 /// Test helper to set up a temporary workspace
@@ -28,7 +26,7 @@ fn setup_workspace(files: &[(&str, &str)]) -> Result<TempDir, Box<dyn std::error
 #[test]
 #[ignore = "TODO: Requires WorkspaceIndex integration"]
 // AC:AC1
-fn workspace_rename_identifies_all_occurrences() {
+fn workspace_rename_identifies_all_occurrences() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Multi-file corpus with qualified and bare references
     // Expected: All occurrences identified via dual indexing
     //
@@ -43,14 +41,14 @@ fn workspace_rename_identifies_all_occurrences() {
         ("lib/Utils.pm", "package Utils;\nsub process { 1 }\n1;"),
         ("main.pl", "use lib 'lib';\nuse Utils;\nUtils::process();\nprocess();\n"),
         ("test.pl", "use lib 'lib';\nuse Utils qw(process);\nprocess();\n"),
-    ])
-    .expect("workspace setup");
+    ])?;
 
     // TODO: Implement after WorkspaceIndex integration
     // let index = build_workspace_index(&workspace);
     // let rename_engine = WorkspaceRename::new(config);
     // let result = rename_engine.rename_symbol(...);
     // assert_eq!(result.statistics.total_changes, 4);
+    Ok(())
 }
 
 // ============================================================================
@@ -60,7 +58,7 @@ fn workspace_rename_identifies_all_occurrences() {
 #[test]
 #[ignore = "TODO: Requires conflict detection implementation"]
 // AC:AC2
-fn workspace_rename_detects_conflicts() {
+fn workspace_rename_detects_conflicts() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Rename to existing symbol name
     // Expected: NameConflict error
     //
@@ -72,12 +70,12 @@ fn workspace_rename_detects_conflicts() {
     let _workspace = setup_workspace(&[(
         "lib/Utils.pm",
         "package Utils;\nsub old_name { 1 }\nsub new_name { 2 }\n1;",
-    )])
-    .expect("workspace setup");
+    )])?;
 
     // TODO: Implement after conflict detection
     // let result = rename_engine.rename_symbol("old_name", "new_name", ...);
     // assert!(matches!(result, Err(WorkspaceRenameError::NameConflict { .. })));
+    Ok(())
 }
 
 // ============================================================================
@@ -87,7 +85,7 @@ fn workspace_rename_detects_conflicts() {
 #[test]
 #[ignore = "TODO: Requires transaction and rollback implementation"]
 // AC:AC3
-fn workspace_rename_atomic_rollback() {
+fn workspace_rename_atomic_rollback() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Partial failure triggers complete rollback
     // Expected: All changes rolled back on any failure
     //
@@ -102,14 +100,14 @@ fn workspace_rename_atomic_rollback() {
         ("file1.pl", "my $var = 1;\n"),
         ("file2.pl", "my $var = 2;\n"),
         ("readonly.pl", "my $var = 3;\n"),
-    ])
-    .expect("workspace setup");
+    ])?;
 
     // TODO: Implement after transaction support
     // Make readonly.pl read-only
     // let result = rename_engine.rename_symbol("$var", "$renamed", ...);
     // assert!(result.is_err());
     // assert!(read_file("file1.pl").contains("$var")); // Unchanged
+    Ok(())
 }
 
 // ============================================================================
@@ -119,7 +117,7 @@ fn workspace_rename_atomic_rollback() {
 #[test]
 #[ignore = "TODO: Requires scope-aware symbol resolution"]
 // AC:AC4
-fn workspace_rename_respects_scoping() {
+fn workspace_rename_respects_scoping() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Package scope boundaries
     // Expected: Only symbols in matching scope are renamed
     //
@@ -141,14 +139,14 @@ sub name { 'Other::name' }
 
 1;
 "#,
-    )])
-    .expect("workspace setup");
+    )])?;
 
     // TODO: Implement after scope analysis
     // let result = rename_engine.rename_symbol("Package::name", "Package::renamed", ...);
     // let content = read_file("lib/Package.pm");
     // assert!(content.contains("sub renamed"));
     // assert!(content.contains("Other::name")); // Unchanged
+    Ok(())
 }
 
 // ============================================================================
@@ -158,7 +156,7 @@ sub name { 'Other::name' }
 #[test]
 #[ignore = "TODO: Requires backup mechanism implementation"]
 // AC:AC5
-fn workspace_rename_creates_backups() {
+fn workspace_rename_creates_backups() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Backup creation when enabled
     // Expected: Backup directory with original files
     //
@@ -168,7 +166,7 @@ fn workspace_rename_creates_backups() {
     //
     // Expected: Backup created with operation ID, contains original content
 
-    let _workspace = setup_workspace(&[("main.pl", "my $var = 1;\n")]).expect("workspace setup");
+    let _workspace = setup_workspace(&[("main.pl", "my $var = 1;\n")])?;
 
     let config = WorkspaceRenameConfig { create_backups: true, ..Default::default() };
 
@@ -178,6 +176,7 @@ fn workspace_rename_creates_backups() {
     // let result = rename_engine.rename_symbol("$var", "$renamed", ...);
     // let backup_info = result.backup_info.expect("backup created");
     // assert!(backup_info.backup_dir.exists());
+    Ok(())
 }
 
 // ============================================================================
@@ -214,7 +213,7 @@ fn workspace_rename_respects_timeout() {
 #[test]
 #[ignore = "TODO: Requires progress reporting implementation"]
 // AC:AC7
-fn workspace_rename_reports_progress() {
+fn workspace_rename_reports_progress() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Progress events during operation
     // Expected: Scanning, Processing, Complete events
     //
@@ -227,14 +226,14 @@ fn workspace_rename_reports_progress() {
         ("file1.pl", "my $var = 1;\n"),
         ("file2.pl", "print $var;\n"),
         ("file3.pl", "my $other = 2;\n"), // No match
-    ])
-    .expect("workspace setup");
+    ])?;
 
     // TODO: Implement after progress support
     // let (tx, rx) = mpsc::channel();
     // let result = rename_engine.rename_symbol_with_progress(..., tx);
     // let events: Vec<_> = rx.iter().collect();
     // assert!(events.iter().any(|e| matches!(e, Progress::Scanning { .. })));
+    Ok(())
 }
 
 // ============================================================================
@@ -244,7 +243,7 @@ fn workspace_rename_reports_progress() {
 #[test]
 #[ignore = "TODO: Requires index update integration"]
 // AC:AC8
-fn workspace_rename_updates_dual_index() {
+fn workspace_rename_updates_dual_index() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Index updated with qualified and bare forms
     // Expected: Both forms findable post-rename, old forms removed
     //
@@ -258,8 +257,7 @@ fn workspace_rename_updates_dual_index() {
     // - Utils::process not findable
     // - process not findable
 
-    let _workspace = setup_workspace(&[("lib/Utils.pm", "package Utils;\nsub process { 1 }\n1;")])
-        .expect("workspace setup");
+    let _workspace = setup_workspace(&[("lib/Utils.pm", "package Utils;\nsub process { 1 }\n1;")])?;
 
     // TODO: Implement after index integration
     // let result = rename_engine.rename_symbol("process", "enhanced_process", ...);
@@ -268,6 +266,7 @@ fn workspace_rename_updates_dual_index() {
     // assert!(index.find_definition("Utils::enhanced_process").is_some());
     // assert!(index.find_definition("enhanced_process").is_some());
     // assert!(index.find_definition("Utils::process").is_none());
+    Ok(())
 }
 
 // ============================================================================
@@ -276,26 +275,26 @@ fn workspace_rename_updates_dual_index() {
 
 #[test]
 #[ignore = "TODO: Unicode handling"]
-fn workspace_rename_handles_unicode() {
+fn workspace_rename_handles_unicode() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Unicode identifiers
     let _workspace =
-        setup_workspace(&[("unicode.pl", "use utf8;\nmy $数据 = '测试';\nprint $数据;\n")])
-            .expect("workspace setup");
+        setup_workspace(&[("unicode.pl", "use utf8;\nmy $数据 = '测试';\nprint $数据;\n")])?;
 
     // TODO: Test unicode identifier rename
+    Ok(())
 }
 
 #[test]
 #[ignore = "TODO: Circular dependency handling"]
-fn workspace_rename_handles_circular_deps() {
+fn workspace_rename_handles_circular_deps() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Circular module dependencies
     let _workspace = setup_workspace(&[
         ("lib/CircularA.pm", "package CircularA;\nuse CircularB;\nsub function_a { 1 }\n1;"),
         ("lib/CircularB.pm", "package CircularB;\nuse CircularA;\nsub function_b { 2 }\n1;"),
-    ])
-    .expect("workspace setup");
+    ])?;
 
     // TODO: Test rename in circular dependency graph
+    Ok(())
 }
 
 #[test]
