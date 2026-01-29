@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 **Latest Release**: 0.9.0
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
@@ -22,14 +22,21 @@ cargo test --workspace --lib
 
 ## Crate Structure
 
+The workspace contains 40+ crates organized in tiers. Key crates:
+
 | Crate | Path | Purpose |
 |-------|------|---------|
 | **perl-parser** | `/crates/perl-parser/` | Main parser library (v3 recursive descent) |
 | **perl-lsp** | `/crates/perl-lsp/` | Standalone LSP server binary |
 | **perl-dap** | `/crates/perl-dap/` | Debug Adapter Protocol (bridge mode) |
 | **perl-lexer** | `/crates/perl-lexer/` | Context-aware tokenizer |
+| **perl-parser-core** | `/crates/perl-parser-core/` | Core parsing infrastructure |
+| **perl-workspace-index** | `/crates/perl-workspace-index/` | Workspace symbol indexing |
+| **perl-semantic-analyzer** | `/crates/perl-semantic-analyzer/` | Semantic analysis |
 | **perl-corpus** | `/crates/perl-corpus/` | Test corpus |
 | **perl-parser-pest** | `/crates/perl-parser-pest/` | Legacy Pest parser |
+
+Supporting crates: `perl-lsp-*` (providers), `perl-dap-*` (debug components), `perl-token`, `perl-ast`, `perl-quote`, `perl-regex`, `perl-heredoc`, `perl-error`
 
 ## Essential Commands
 
@@ -47,12 +54,23 @@ cargo install --path crates/perl-lsp  # Install from source
 cargo test                            # All tests
 cargo test -p perl-parser             # Parser tests
 cargo test -p perl-lsp                # LSP tests
+cargo test test_name                  # Run single test by name
+cargo test -p perl-parser -- test_name --exact  # Run exact test in crate
 
 # LSP tests with threading constraints
 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 
 # Semantic definition tests (resource-efficient mode)
 just ci-lsp-def
+```
+
+### Benchmarks and Fuzzing
+
+```bash
+just benchmarks                       # Run all benchmarks
+cargo bench -p perl-parser            # Parser benchmarks
+just fuzz-bounded                     # Bounded fuzz run (60s per target)
+just mutation-subset                  # Mutation testing subset
 ```
 
 ### Lint and Format
@@ -119,16 +137,20 @@ CI is optional/opt-in. The repo is local-first by design.
 | What | Where |
 |------|-------|
 | Parser source | `crates/perl-parser/src/` |
-| LSP providers | `crates/perl-parser/src/lsp/` |
+| LSP providers | `crates/perl-lsp-*/src/` |
 | LSP server binary | `crates/perl-lsp/src/` |
+| DAP server | `crates/perl-dap/src/` |
 | Tests | `crates/*/tests/` |
 | Test corpus | `test_corpus/`, `tree-sitter-perl/test/corpus/` |
+| Fuzz targets | `fuzz/fuzz_targets/` |
+| VSCode extension | `vscode-extension/` |
 | Documentation | `docs/` |
 | Features catalog | `features.toml` |
 | CI gate policy | `.ci/gate-policy.yaml` |
 | Technical debt ledger | `.ci/debt-ledger.yaml` |
 | Dependabot config | `.github/dependabot.yml` |
 | Supply chain security | `deny.toml`, `docs/SUPPLY_CHAIN_SECURITY.md` |
+| Build tooling | `xtask/` |
 
 ## Architecture Patterns
 
@@ -153,6 +175,15 @@ RUST_TEST_THREADS=2     # Limit test parallelism
 CARGO_BUILD_JOBS=1      # Limit build parallelism
 RUSTC_WRAPPER=""        # Disable rustc wrapper
 ```
+
+### Crate Dependency Tiers
+
+The workspace uses a tiered dependency structure (see `Cargo.toml`):
+- **Tier 1**: Leaf crates with no internal dependencies (`perl-token`, `perl-quote`, `perl-ast`, etc.)
+- **Tier 2**: Single-level dependencies (`perl-parser-core`, `perl-lsp-transport`, etc.)
+- **Tier 3**: Two-level dependencies (`perl-workspace-index`, `perl-refactoring`)
+- **Tier 4**: Three-level dependencies (`perl-semantic-analyzer`, `perl-lsp-providers`)
+- **Tier 5**: Application crates (`perl-parser`, `perl-lsp`, `perl-dap`)
 
 ## Documentation
 
