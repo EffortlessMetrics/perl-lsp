@@ -157,6 +157,7 @@
         "perl-lsp.serverPath": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "markdownDescription": "Absolute path to `perl-lsp` binary. Leave empty to auto-download latest release."
         },
         "perl-lsp.autoDownload": {
@@ -167,6 +168,7 @@
         "perl-lsp.downloadBaseUrl": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "markdownDescription": "Internal base URL hosting perl-lsp archives and SHA256SUMS (bypasses GitHub releases). Example: `https://internal.example.com/perl-lsp/`"
         },
         "perl-lsp.trace.server": {
