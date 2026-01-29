@@ -364,8 +364,8 @@ impl IgnoredTestGuardian {
             .collect();
 
         let trend_direction = if recent_data.len() >= 2 {
-            let first = recent_data[0].1 as f64;
-            let last = recent_data[recent_data.len() - 1].1 as f64;
+            let first = recent_data.first().unwrap().1 as f64;
+            let last = recent_data.last().unwrap().1 as f64;
             if last > first * 1.1 {
                 TrendDirection::Increasing
             } else if last < first * 0.9 {
@@ -424,7 +424,7 @@ impl IgnoredTestGuardian {
             score += 5.0;
         }
 
-        score.clamp(0.0, 100.0)
+        score.max(0.0).min(100.0)
     }
 
     fn generate_trend_recommendations(
@@ -449,8 +449,9 @@ impl IgnoredTestGuardian {
                 recommendations.push("Maintain current implementation pace".to_string());
             }
             TrendDirection::Stable => {
-                recommendations
-                    .push("Evaluate whether current ignored test count is acceptable".to_string());
+                recommendations.push(
+                    "Evaluate whether current ignored test count is acceptable".to_string(),
+                );
                 recommendations
                     .push("Consider setting more aggressive reduction targets".to_string());
             }
@@ -479,8 +480,10 @@ impl IgnoredTestGuardian {
         }
 
         let mean = data.iter().map(|(_, count)| *count as f64).sum::<f64>() / data.len() as f64;
-        data.iter().map(|(_, count)| (*count as f64 - mean).powi(2)).sum::<f64>()
-            / data.len() as f64
+        let variance = data.iter().map(|(_, count)| (*count as f64 - mean).powi(2)).sum::<f64>()
+            / data.len() as f64;
+
+        variance
     }
 
     /// Set historical data for trend analysis (useful for testing or loading from storage)
