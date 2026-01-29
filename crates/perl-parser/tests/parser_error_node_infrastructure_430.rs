@@ -3,7 +3,7 @@
 //! This test suite validates comprehensive error recovery and partial AST generation
 //! capabilities required for IDE features on incomplete or broken code.
 
-use perl_parser::{Node, NodeKind, Parser, SourceLocation, TokenKind};
+use perl_parser::{Node, NodeKind, Parser, SourceLocation};
 
 /// AC1: NodeKind enum includes Error variant with message, expected tokens, found token, and optional partial node
 #[test]
@@ -20,13 +20,10 @@ fn parser_430_ac1_error_variant_structure() {
     println!("S-expression: {}", ast.to_sexp());
 
     // Find the error node
-    let mut found_error = false;
     if let NodeKind::Program { statements } = &ast.kind {
         for stmt in statements {
             println!("Statement kind: {:?}", stmt.kind.kind_name());
             if let NodeKind::Error { message, expected, found, partial } = &stmt.kind {
-                found_error = true;
-
                 // Verify message is present
                 assert!(!message.is_empty(), "Error message should not be empty");
 
@@ -42,7 +39,7 @@ fn parser_430_ac1_error_variant_structure() {
         }
     }
 
-    assert!(found_error, "Should find at least one Error node with complete structure");
+    panic!("Should find at least one Error node with complete structure");
 }
 
 /// AC2: NodeKind enum includes MissingExpression, MissingStatement, MissingIdentifier, MissingBlock variants
@@ -76,8 +73,7 @@ fn parser_430_ac3_error_nodes_preserve_location() {
     if let NodeKind::Program { statements } = &ast.kind {
         for stmt in statements {
             if let NodeKind::Error { .. } = &stmt.kind {
-                // Verify location is captured
-                assert!(stmt.location.start >= 0, "Start position should be >= 0");
+                // Verify location is captured (start is always >= 0 for usize)
                 assert!(stmt.location.end >= stmt.location.start, "End should be >= start");
 
                 println!(

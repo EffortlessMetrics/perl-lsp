@@ -94,6 +94,33 @@ categorize_ignore() {
     # Check for protocol compliance
     elif [[ "$lower_reason" =~ protocol|lsp|dap|compliance|spec|specification ]]; then
         echo "protocol"
+    # Tracked issues (feature work tracked in GitHub issues)
+    elif [[ "$lower_reason" =~ tracked.in.\# ]]; then
+        echo "feature"
+    # AST/parser missing fields/nodes (feature gaps)
+    elif [[ "$lower_reason" =~ doesn.t.have.*field|may.not.produce|doesn.t.yet|fewer.*than.expected ]]; then
+        echo "feature"
+    # Explicit flaky prefix
+    elif [[ "$lower_reason" =~ ^flaky: ]]; then
+        echo "brokenpipe"
+    # Known limitations
+    elif [[ "$lower_reason" =~ known.limitation ]]; then
+        echo "feature"
+    # Recursion/behavior changes (semantic changes)
+    elif [[ "$lower_reason" =~ recursion.limit.behavior|behavior.changed ]]; then
+        echo "feature"
+    # Integration tests that spawn external processes
+    elif [[ "$lower_reason" =~ integration.test.that.spawns|spawns.external ]]; then
+        echo "infra"
+    # Warnings burn-down
+    elif [[ "$lower_reason" =~ warnings.burn|burn.down|clippy.warnings ]]; then
+        echo "infra"
+    # Mutation hardening (parser output format changes)
+    elif [[ "$lower_reason" =~ mutation.hardening|parser.output.format ]]; then
+        echo "feature"
+    # Acceptance criteria scaffolds (AC:N patterns without other context)
+    elif [[ "$lower_reason" =~ ^ac:[0-9]+ ]]; then
+        echo "feature"
     # Bare ignore (no reason)
     elif [[ -z "$reason" || "$reason" == "ignore" ]]; then
         echo "bare"

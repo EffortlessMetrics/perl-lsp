@@ -1,8 +1,7 @@
 // Test for issue #432: Corpus Coverage - Format Statements Test Fixtures
 // Validates all acceptance criteria for format statement coverage
 
-use perl_ast::ast::{Node, NodeKind};
-use perl_parser::Parser;
+use perl_parser::{Node, NodeKind, Parser};
 use std::fs;
 use std::path::Path;
 
@@ -141,7 +140,7 @@ fn parser_format_corpus_ac3_field_specifiers() -> Result<(), Box<dyn std::error:
     let formats = extract_format_statements(&ast);
 
     // Check for different field specifier types
-    let all_bodies = formats.iter().map(|(_, body)| body).collect::<Vec<_>>();
+    let all_bodies: Vec<&str> = formats.iter().map(|(_, body)| body.as_str()).collect();
     let combined = all_bodies.join("\n");
 
     assert!(combined.contains("@<"), "AC3: Left-justified field specifiers should be recognized");

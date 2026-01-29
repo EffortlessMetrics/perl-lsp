@@ -342,11 +342,7 @@ struct AnalysisContext<'a> {
 
 impl<'a> AnalysisContext<'a> {
     fn new(code: &'a str, pragma_map: &'a [(Range<usize>, PragmaState)]) -> Self {
-        Self {
-            code,
-            pragma_map,
-            line_starts: RefCell::new(None),
-        }
+        Self { code, pragma_map, line_starts: RefCell::new(None) }
     }
 
     fn get_line(&self, offset: usize) -> usize {

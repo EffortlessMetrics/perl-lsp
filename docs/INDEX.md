@@ -44,8 +44,10 @@ bash scripts/ignored-test-count.sh
 
 ### Use the LSP server
 
+- [Getting Started](GETTING_STARTED.md) - Beginner-friendly setup guide
 - [Quick Start](../README.md#quick-start)
 - [Editor Setup](EDITOR_SETUP.md)
+- [FAQ](FAQ.md) - Frequently asked questions
 
 ### Understand the architecture
 
@@ -61,6 +63,7 @@ bash scripts/ignored-test-count.sh
 
 ### Debug issues
 
+- [FAQ](FAQ.md) - Common questions answered
 - [Troubleshooting](TROUBLESHOOTING.md) - Common issues and solutions
 - [Known Limitations](KNOWN_LIMITATIONS.md)
 - [Known Flaky Tests](KNOWN_FLAKY_TESTS.md)
@@ -75,6 +78,8 @@ bash scripts/ignored-test-count.sh
 
 ### Operator Docs (start here)
 
+- `GETTING_STARTED.md` - **New users start here** - Installation and first steps
+- `FAQ.md` - Frequently asked questions
 - `CURRENT_STATUS.md` - Computed project metrics
 - `ROADMAP.md` - Release plans and exit criteria
 - `MILESTONES.md` - GitHub milestone tracking and blockers
