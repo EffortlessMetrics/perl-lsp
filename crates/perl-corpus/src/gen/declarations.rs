@@ -44,7 +44,7 @@ fn decl_keyword() -> impl Strategy<Value = &'static str> {
     prop_oneof![Just("my"), Just("our"), Just("state"), Just("local"),]
 }
 
-fn variable_declaration() -> impl Strategy<Value = String> {
+pub fn variable_declaration() -> impl Strategy<Value = String> {
     prop_oneof![
         (decl_keyword(), identifier(), prop::sample::select(vec!["1", "\"value\"", "undef"]),)
             .prop_map(|(kw, name, value)| format!("{} ${} = {};\n", kw, name, value)),

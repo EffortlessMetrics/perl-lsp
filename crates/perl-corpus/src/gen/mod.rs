@@ -11,6 +11,7 @@ pub mod io;
 pub mod list_ops;
 pub mod object_oriented;
 pub mod phasers;
+pub mod program;
 pub mod quote_like;
 pub mod qw;
 pub mod regex;

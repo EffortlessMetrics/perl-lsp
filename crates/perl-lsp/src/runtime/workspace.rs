@@ -974,7 +974,7 @@ impl LspServer {
                         files.push(entry.path().to_path_buf());
                         let total_files = files.len();
 
-                        if total_files % 64 == 0 {
+                        if total_files.is_multiple_of(64) {
                             coordinator.update_scan_progress(total_files);
                         }
 

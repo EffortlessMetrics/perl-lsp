@@ -3,6 +3,7 @@
 //! This module provides go-to-type-definition functionality,
 //! finding the type/class definition for variables and references.
 
+#[cfg(feature = "lsp-compat")]
 use perl_parser_core::ast::{Node, NodeKind};
 
 #[cfg(feature = "lsp-compat")]

@@ -112,8 +112,12 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for full guidelines.
 
 ## Documentation
 
-**Start here:** [`docs/INDEX.md`](docs/INDEX.md) - Routes you to the right doc.
+**New users:** [`docs/GETTING_STARTED.md`](docs/GETTING_STARTED.md) - Installation and first steps.
 
+**All docs:** [`docs/INDEX.md`](docs/INDEX.md) - Routes you to the right doc.
+
+- **[Getting Started](docs/GETTING_STARTED.md)** - Installation and first steps
+- **[FAQ](docs/FAQ.md)** - Frequently asked questions
 - **[Current Status](docs/CURRENT_STATUS.md)** - Computed metrics (the only place with numbers)
 - **[Roadmap](docs/ROADMAP.md)** - Release plans and exit criteria
 - **[Commands Reference](docs/COMMANDS_REFERENCE.md)** - Build, test, lint commands
