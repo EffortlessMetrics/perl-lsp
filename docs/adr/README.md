@@ -17,11 +17,11 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 |-----|--------|----------|-------|-------------|
 | [ADR-001](ADR_001_AGENT_ARCHITECTURE.md) | Accepted | PR #153 | Agent Architecture | 97 specialized agents for Perl parser ecosystem workflow |
 | [ADR-002](ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) | Accepted | PR #160 | API Documentation (SPEC-149) | Documentation enforcement with acceptance criteria and quality gates |
-| [ADR-003a](ADR_003_EXECUTE_COMMAND_CODE_ACTIONS_ARCHITECTURE.md) | Draft | 2025-01-15 | Execute Command & Code Actions | LSP executeCommand integration with perlcritic |
-| [ADR-003b](ADR_003_HEREDOC_MANUAL_PARSING.md) | Proposed | 2025-11-05 | Manual Heredoc Parsing | Character-by-character state machine parser |
-| [ADR-003c](ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md) | Accepted | PR #159 | Missing Docs Infrastructure | Documentation enforcement validation framework |
-
-> **Note**: ADR-003a/b/c are disambiguated variants pending proper renumbering. File names unchanged for compatibility.
+| [ADR-003](ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md) | Accepted | PR #159 | Missing Docs Infrastructure | Documentation enforcement validation framework |
+| [ADR-004](ADR_004_EXECUTE_COMMAND_CODE_ACTIONS.md) | Draft | 2025-01-15 | Execute Command & Code Actions | LSP executeCommand integration with perlcritic |
+| [ADR-005](ADR_005_HEREDOC_MANUAL_PARSING.md) | Proposed | 2025-11-05 | Manual Heredoc Parsing | Character-by-character state machine parser |
+| [ADR-006](ADR_006_LSP_CANCELLATION_INFRASTRUCTURE.md) | Draft | 2026-01-28 | LSP Cancellation | Cancellation infrastructure for responsive editor interactions |
+| [ADR-007](ADR_007_SUBSTITUTION_OPERATOR_PARSING.md) | Accepted | 2025-01-20 | Substitution Parsing | Comprehensive s/// parsing with all modifiers |
 
 ## About ADRs
 
