@@ -350,8 +350,8 @@ impl<'a> AnalysisContext<'a> {
     }
 
     fn get_line(&self, offset: usize) -> usize {
-        let mut starts = self.line_starts.borrow_mut();
-        if starts.is_none() {
+        let mut line_starts_guard = self.line_starts.borrow_mut();
+        let starts = line_starts_guard.get_or_insert_with(|| {
             let mut indices = Vec::with_capacity(self.code.len() / 40); // Estimate
             indices.push(0);
             for (i, b) in self.code.bytes().enumerate() {
@@ -359,10 +359,9 @@ impl<'a> AnalysisContext<'a> {
                     indices.push(i + 1);
                 }
             }
-            *starts = Some(indices);
-        }
+            indices
+        });
 
-        let starts = starts.as_ref().unwrap();
         // Find the line that contains the offset
         match starts.binary_search(&offset) {
             Ok(idx) => idx + 1,
