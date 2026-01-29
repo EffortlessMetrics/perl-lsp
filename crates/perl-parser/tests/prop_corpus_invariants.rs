@@ -4,20 +4,25 @@
 //! instead of generic regex patterns, providing more realistic and targeted testing.
 
 use perl_corpus::r#gen::{
-    builtins::builtin_in_context, control_flow::loop_with_control,
-    declarations::declaration_in_context, expressions::expression_in_context, qw::qw_in_context,
+    builtins::builtin_in_context,
+    control_flow::loop_with_control,
+    declarations::declaration_in_context,
+    expressions::expression_in_context,
+    qw::qw_in_context,
     tie::tie_in_context,
 };
 use perl_parser::{
-    Parser,
     ast::{Node, NodeKind},
+    Parser,
 };
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 use std::collections::HashSet;
 
-const REGRESS_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_corpus_invariants");
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_corpus_invariants"
+);
 
 /// Helper to visit all children of a node
 fn visit_children<F>(node: &Node, mut f: F) -> Result<(), String>
@@ -31,13 +36,21 @@ where
                 f(stmt)?;
             }
         }
-        VariableDeclaration { variable, initializer, .. } => {
+        VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             f(variable)?;
             if let Some(init) = initializer {
                 f(init)?;
             }
         }
-        VariableListDeclaration { variables, initializer, .. } => {
+        VariableListDeclaration {
+            variables,
+            initializer,
+            ..
+        } => {
             for var in variables {
                 f(var)?;
             }
@@ -56,7 +69,11 @@ where
         Unary { operand, .. } => {
             f(operand)?;
         }
-        Ternary { condition, then_expr, else_expr } => {
+        Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             f(condition)?;
             f(then_expr)?;
             f(else_expr)?;
@@ -66,7 +83,12 @@ where
                 f(stmt)?;
             }
         }
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             f(condition)?;
             f(then_branch)?;
             for (cond, branch) in elsif_branches {
@@ -81,7 +103,11 @@ where
             f(condition)?;
             f(body)?;
         }
-        Foreach { variable, list, body } => {
+        Foreach {
+            variable,
+            list,
+            body,
+        } => {
             f(variable)?;
             f(list)?;
             f(body)?;

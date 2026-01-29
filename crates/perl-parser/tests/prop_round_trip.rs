@@ -6,18 +6,23 @@
 //! 3. Semantic equivalence holds for syntactic variations
 
 use perl_corpus::r#gen::{
-    builtins::builtin_in_context, control_flow::loop_with_control,
-    declarations::declaration_in_context, expressions::expression_in_context, qw::qw_in_context,
+    builtins::builtin_in_context,
+    control_flow::loop_with_control,
+    declarations::declaration_in_context,
+    expressions::expression_in_context,
+    qw::qw_in_context,
 };
 use perl_parser::{
-    Parser,
     ast::{Node, NodeKind},
+    Parser,
 };
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 
-const REGRESS_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_round_trip");
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_round_trip"
+);
 
 /// Extract AST shape (node kinds only) for comparison
 fn extract_shape(node: &Node) -> Vec<String> {
@@ -31,7 +36,10 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
 
     // Get variant name
     let s = format!("{:?}", node.kind);
-    let name = s.split(['(', '{']).next().map_or_else(|| s.clone(), |n| n.to_string());
+    let name = s
+        .split(['(', '{'])
+        .next()
+        .map_or_else(|| s.clone(), |n| n.to_string());
     out.push(name);
 
     match &node.kind {
@@ -40,13 +48,21 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
                 extract_shape_rec(s, out);
             }
         }
-        VariableDeclaration { variable, initializer, .. } => {
+        VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             extract_shape_rec(variable, out);
             if let Some(init) = initializer {
                 extract_shape_rec(init, out);
             }
         }
-        VariableListDeclaration { variables, initializer, .. } => {
+        VariableListDeclaration {
+            variables,
+            initializer,
+            ..
+        } => {
             for v in variables {
                 extract_shape_rec(v, out);
             }
@@ -65,7 +81,11 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
         Unary { operand, .. } => {
             extract_shape_rec(operand, out);
         }
-        Ternary { condition, then_expr, else_expr } => {
+        Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             extract_shape_rec(condition, out);
             extract_shape_rec(then_expr, out);
             extract_shape_rec(else_expr, out);
@@ -75,7 +95,12 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
                 extract_shape_rec(s, out);
             }
         }
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             extract_shape_rec(condition, out);
             extract_shape_rec(then_branch, out);
             for (cond, br) in elsif_branches {
@@ -86,19 +111,34 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
                 extract_shape_rec(else_br, out);
             }
         }
-        While { condition, body, continue_block, .. } => {
+        While {
+            condition,
+            body,
+            continue_block,
+            ..
+        } => {
             extract_shape_rec(condition, out);
             extract_shape_rec(body, out);
             if let Some(cont) = continue_block {
                 extract_shape_rec(cont, out);
             }
         }
-        Foreach { variable, list, body } => {
+        Foreach {
+            variable,
+            list,
+            body,
+        } => {
             extract_shape_rec(variable, out);
             extract_shape_rec(list, out);
             extract_shape_rec(body, out);
         }
-        For { init, condition, update, body, continue_block } => {
+        For {
+            init,
+            condition,
+            update,
+            body,
+            continue_block,
+        } => {
             if let Some(i) = init {
                 extract_shape_rec(i, out);
             }
@@ -162,7 +202,10 @@ fn check_spans_rec(node: &Node, source_len: usize, errors: &mut Vec<String>) {
         // Allow small overruns from trailing newlines
         errors.push(format!(
             "Node {:?} has span end {} beyond source length {}",
-            format!("{:?}", node.kind).split(['(', '{']).next().unwrap_or("Unknown"),
+            format!("{:?}", node.kind)
+                .split(['(', '{'])
+                .next()
+                .unwrap_or("Unknown"),
             node.location.end,
             source_len
         ));
@@ -177,13 +220,21 @@ fn check_spans_rec(node: &Node, source_len: usize, errors: &mut Vec<String>) {
                 check_spans_rec(s, source_len, errors);
             }
         }
-        VariableDeclaration { variable, initializer, .. } => {
+        VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             check_spans_rec(variable, source_len, errors);
             if let Some(init) = initializer {
                 check_spans_rec(init, source_len, errors);
             }
         }
-        VariableListDeclaration { variables, initializer, .. } => {
+        VariableListDeclaration {
+            variables,
+            initializer,
+            ..
+        } => {
             for v in variables {
                 check_spans_rec(v, source_len, errors);
             }
@@ -202,7 +253,11 @@ fn check_spans_rec(node: &Node, source_len: usize, errors: &mut Vec<String>) {
         Unary { operand, .. } => {
             check_spans_rec(operand, source_len, errors);
         }
-        Ternary { condition, then_expr, else_expr } => {
+        Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             check_spans_rec(condition, source_len, errors);
             check_spans_rec(then_expr, source_len, errors);
             check_spans_rec(else_expr, source_len, errors);
@@ -212,7 +267,12 @@ fn check_spans_rec(node: &Node, source_len: usize, errors: &mut Vec<String>) {
                 check_spans_rec(s, source_len, errors);
             }
         }
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             check_spans_rec(condition, source_len, errors);
             check_spans_rec(then_branch, source_len, errors);
             for (cond, br) in elsif_branches {
@@ -223,14 +283,23 @@ fn check_spans_rec(node: &Node, source_len: usize, errors: &mut Vec<String>) {
                 check_spans_rec(else_br, source_len, errors);
             }
         }
-        While { condition, body, continue_block, .. } => {
+        While {
+            condition,
+            body,
+            continue_block,
+            ..
+        } => {
             check_spans_rec(condition, source_len, errors);
             check_spans_rec(body, source_len, errors);
             if let Some(cont) = continue_block {
                 check_spans_rec(cont, source_len, errors);
             }
         }
-        Foreach { variable, list, body } => {
+        Foreach {
+            variable,
+            list,
+            body,
+        } => {
             check_spans_rec(variable, source_len, errors);
             check_spans_rec(list, source_len, errors);
             check_spans_rec(body, source_len, errors);

@@ -8,15 +8,17 @@ use perl_corpus::r#gen::program::{
     program_with_imports, program_with_subs, program_with_tie, simple_program,
 };
 use perl_parser::{
-    Parser,
     ast::{Node, NodeKind},
+    Parser,
 };
 use proptest::prelude::*;
 use proptest::test_runner::{Config as ProptestConfig, FileFailurePersistence};
 use std::collections::HashSet;
 
-const REGRESS_DIR: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/_proptest-regressions/prop_complete_programs");
+const REGRESS_DIR: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/_proptest-regressions/prop_complete_programs"
+);
 
 /// Check for cycles in the AST
 fn check_no_cycles(root: &Node) -> Result<(), String> {
@@ -57,13 +59,21 @@ where
                 f(stmt)?;
             }
         }
-        VariableDeclaration { variable, initializer, .. } => {
+        VariableDeclaration {
+            variable,
+            initializer,
+            ..
+        } => {
             f(variable)?;
             if let Some(init) = initializer {
                 f(init)?;
             }
         }
-        VariableListDeclaration { variables, initializer, .. } => {
+        VariableListDeclaration {
+            variables,
+            initializer,
+            ..
+        } => {
             for var in variables {
                 f(var)?;
             }
@@ -82,7 +92,11 @@ where
         Unary { operand, .. } => {
             f(operand)?;
         }
-        Ternary { condition, then_expr, else_expr } => {
+        Ternary {
+            condition,
+            then_expr,
+            else_expr,
+        } => {
             f(condition)?;
             f(then_expr)?;
             f(else_expr)?;
@@ -92,7 +106,12 @@ where
                 f(stmt)?;
             }
         }
-        If { condition, then_branch, elsif_branches, else_branch } => {
+        If {
+            condition,
+            then_branch,
+            elsif_branches,
+            else_branch,
+        } => {
             f(condition)?;
             f(then_branch)?;
             for (cond, branch) in elsif_branches {
@@ -103,19 +122,34 @@ where
                 f(else_br)?;
             }
         }
-        While { condition, body, continue_block, .. } => {
+        While {
+            condition,
+            body,
+            continue_block,
+            ..
+        } => {
             f(condition)?;
             f(body)?;
             if let Some(cont) = continue_block {
                 f(cont)?;
             }
         }
-        Foreach { variable, list, body } => {
+        Foreach {
+            variable,
+            list,
+            body,
+        } => {
             f(variable)?;
             f(list)?;
             f(body)?;
         }
-        For { init, condition, update, body, continue_block } => {
+        For {
+            init,
+            condition,
+            update,
+            body,
+            continue_block,
+        } => {
             if let Some(i) = init {
                 f(i)?;
             }
