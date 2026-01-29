@@ -38,8 +38,11 @@ fn standalone_statement() -> impl Strategy<Value = String> {
 
 /// Generate a simple program (header + statements)
 pub fn simple_program() -> impl Strategy<Value = String> {
-    (program_header(), prop::collection::vec(standalone_statement(), 1..5)).prop_map(
-        |(header, statements)| {
+    (
+        program_header(),
+        prop::collection::vec(standalone_statement(), 1..5),
+    )
+        .prop_map(|(header, statements)| {
             let mut program = header;
             for stmt in statements {
                 program.push_str(&stmt);
@@ -48,8 +51,7 @@ pub fn simple_program() -> impl Strategy<Value = String> {
                 }
             }
             program
-        },
-    )
+        })
 }
 
 /// Generate a program with subroutines
@@ -119,8 +121,11 @@ pub fn program_with_control_flow() -> impl Strategy<Value = String> {
 
 /// Generate a program with mixed declarations
 pub fn program_with_declarations() -> impl Strategy<Value = String> {
-    (program_header(), prop::collection::vec(declaration_in_context(), 2..5)).prop_map(
-        |(header, decls)| {
+    (
+        program_header(),
+        prop::collection::vec(declaration_in_context(), 2..5),
+    )
+        .prop_map(|(header, decls)| {
             let mut program = header;
             for decl in decls {
                 program.push_str(&decl);
@@ -129,8 +134,7 @@ pub fn program_with_declarations() -> impl Strategy<Value = String> {
                 }
             }
             program
-        },
-    )
+        })
 }
 
 /// Generate a program with use statements and imports
@@ -211,7 +215,11 @@ pub fn complex_program() -> impl Strategy<Value = String> {
         prop::collection::vec(use_require_statement(), 0..3),
         prop::collection::vec(subroutine_declaration(), 0..2),
         prop::collection::vec(
-            prop_oneof![standalone_statement(), loop_with_control(), declaration_in_context(),],
+            prop_oneof![
+                standalone_statement(),
+                loop_with_control(),
+                declaration_in_context(),
+            ],
             2..6,
         ),
     )
