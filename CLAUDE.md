@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this repository.
 
 **Latest Release**: 0.9.0
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
