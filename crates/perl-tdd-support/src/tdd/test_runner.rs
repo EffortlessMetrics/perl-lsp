@@ -427,10 +427,20 @@ impl TestRunner {
     fn run_test_file(&self, file_path: &str) -> Vec<TestResult> {
         let start_time = std::time::Instant::now();
 
+        // SECURITY: For prove, filenames starting with '-' can be interpreted as flags.
+        // prove does not support '--' to separate files from options in all versions/modes.
+        // Prepend ./ to ensure it is treated as a file path if it starts with -.
+        // Absolute paths (starting with /) are safe.
+        let safe_prove_path = if file_path.starts_with('-') {
+            format!("./{}", file_path)
+        } else {
+            file_path.to_string()
+        };
+
         // Try to run with prove first, fall back to perl
         let output = Command::new("prove")
             .arg("-v")
-            .arg(file_path)
+            .arg(&safe_prove_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output();
@@ -439,7 +449,9 @@ impl TestRunner {
             Ok(out) => out,
             Err(_) => {
                 // Fall back to running with perl
+                // SECURITY: Use -- to separate options from script file
                 match Command::new("perl")
+                    .arg("--")
                     .arg(file_path)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
@@ -474,8 +486,10 @@ impl TestRunner {
     fn run_perl_test(&self, file_path: &str) -> Vec<TestResult> {
         let start_time = std::time::Instant::now();
 
+        // SECURITY: Use -- to separate options from script file
         let output = match Command::new("perl")
             .arg("-Ilib")
+            .arg("--")
             .arg(file_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
