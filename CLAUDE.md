@@ -112,6 +112,14 @@ just coverage-summary                 # Show coverage summary in terminal
 just coverage-lcov                    # Generate lcov.info for CI
 ```
 
+### SemVer Checking
+
+```bash
+just semver-check                     # Check all published packages
+just semver-check-package <name>      # Check specific package
+just semver-diff <name>               # Show API diff for package
+```
+
 ## Development Workflow
 
 **Local-first development** - all gates run locally before CI:
@@ -126,11 +134,26 @@ nix develop -c just ci-gate
 
 CI is optional/opt-in. The repo is local-first by design.
 
+### CI Gate Tiers
+
+| Tier | Command | Time | When to Use |
+|------|---------|------|-------------|
+| **A (PR-fast)** | `just pr-fast` | ~1-2 min | Quick iteration during development |
+| **B (Merge gate)** | `just ci-gate` | ~3-5 min | Before pushing (required) |
+| **C (Nightly)** | `just ci-full` | ~15-30 min | Mutation testing, fuzzing, benchmarks |
+
 ## Parser Versions
 
 - **v3 (Native)**: Current - recursive descent parser
 - **v2 (Pest)**: Legacy - kept out of default gate
 - **v1 (C-based)**: Benchmarking only
+
+## Workspace Exclusions
+
+These directories are excluded from the default workspace (require special builds):
+- `tree-sitter-perl-c/` - Requires libclang
+- `fuzz/` - Specialized fuzz testing build
+- `archive/` - Legacy components
 
 ## Key Paths
 
@@ -196,6 +219,13 @@ The workspace uses a tiered dependency structure (see `Cargo.toml`):
 - **[DEPENDENCY_QUICK_REFERENCE.md](docs/DEPENDENCY_QUICK_REFERENCE.md)** - Quick commands for dependency management
 - **[features.toml](features.toml)** - Canonical LSP capability definitions
 
+## Truth Sources
+
+Metrics in this project are **computed, not hand-edited**:
+- `CURRENT_STATUS.md` - Auto-generated via `scripts/update-current-status.py`
+- `features.toml` - Canonical LSP capability definitions
+- Test output and CI receipts are the evidence for all claims
+
 ## Coding Standards
 
 - Run `cargo clippy --workspace` before committing
@@ -224,7 +254,7 @@ The workspace uses a tiered dependency structure (see `Cargo.toml`):
 | Area | Path |
 |------|------|
 | Parser improvements | `/crates/perl-parser/src/` |
-| LSP features | `/crates/perl-parser/src/lsp/` |
+| LSP features | `/crates/perl-lsp-*/src/` |
 | CLI enhancements | `/crates/perl-lsp/src/` |
 | DAP features | `/crates/perl-dap/src/` |
 | Tests | `/crates/*/tests/` |
