@@ -161,7 +161,7 @@ impl Scope {
 
         // Check if it shadows a parent scope variable
         let shadows = if let Some(ref parent) = self.parent {
-            parent.lookup_variable_parts(sigil, name).is_some()
+            parent.has_variable_parts(sigil, name)
         } else {
             false
         };
@@ -193,6 +193,23 @@ impl Scope {
         self.parent.as_ref()?.lookup_variable_parts(sigil, name)
     }
 
+    fn has_variable_parts(&self, sigil: &str, name: &str) -> bool {
+        let idx = sigil_to_index(sigil);
+        {
+            let vars = self.variables.borrow();
+            if let Some(map) = &vars[idx] {
+                if map.contains_key(name) {
+                    return true;
+                }
+            }
+        }
+        if let Some(ref parent) = self.parent {
+            parent.has_variable_parts(sigil, name)
+        } else {
+            false
+        }
+    }
+
     fn use_variable_parts(&self, sigil: &str, name: &str) -> (bool, bool) {
         let idx = sigil_to_index(sigil);
         {
@@ -213,18 +230,39 @@ impl Scope {
     }
 
     fn initialize_variable_parts(&self, sigil: &str, name: &str) {
-        if let Some(var) = self.lookup_variable_parts(sigil, name) {
-            *var.is_initialized.borrow_mut() = true;
+        let idx = sigil_to_index(sigil);
+        {
+            let vars = self.variables.borrow();
+            if let Some(map) = &vars[idx] {
+                if let Some(var) = map.get(name) {
+                    *var.is_initialized.borrow_mut() = true;
+                    return;
+                }
+            }
+        }
+
+        if let Some(ref parent) = self.parent {
+            parent.initialize_variable_parts(sigil, name);
         }
     }
 
     /// Optimized method to mark a variable as initialized AND used in one lookup.
     /// Returns true if the variable was found and updated.
     fn initialize_and_use_variable_parts(&self, sigil: &str, name: &str) -> bool {
-        if let Some(var) = self.lookup_variable_parts(sigil, name) {
-            *var.is_used.borrow_mut() = true;
-            *var.is_initialized.borrow_mut() = true;
-            true
+        let idx = sigil_to_index(sigil);
+        {
+            let vars = self.variables.borrow();
+            if let Some(map) = &vars[idx] {
+                if let Some(var) = map.get(name) {
+                    *var.is_used.borrow_mut() = true;
+                    *var.is_initialized.borrow_mut() = true;
+                    return true;
+                }
+            }
+        }
+
+        if let Some(ref parent) = self.parent {
+            parent.initialize_and_use_variable_parts(sigil, name)
         } else {
             false
         }
@@ -722,7 +760,7 @@ impl ScopeAnalyzer {
                         }
 
                         // Check if parameter shadows a global or parent scope variable
-                        if scope.lookup_variable_parts(sigil, name).is_some() {
+                        if scope.has_variable_parts(sigil, name) {
                             issues.push(ScopeIssue {
                                 kind: IssueKind::ParameterShadowsGlobal,
                                 variable_name: full_name.clone(),
