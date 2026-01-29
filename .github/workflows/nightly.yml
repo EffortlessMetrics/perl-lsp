@@ -33,7 +33,7 @@ jobs:
           
       - name: Upload proptest regressions if any
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: proptest-regressions
           path: |
@@ -53,7 +53,7 @@ jobs:
           done
           
       - name: Upload generated corpus
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: generated-corpus-${{ github.run_number }}
           path: generated_*.pl
@@ -89,7 +89,7 @@ jobs:
           fi
           
       - name: Upload corpus report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: corpus-report-${{ github.run_number }}
           path: |
@@ -124,7 +124,7 @@ jobs:
           
       - name: Upload failed cases
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: failed-edge-cases-${{ github.run_number }}
           path: failed_cases.txt

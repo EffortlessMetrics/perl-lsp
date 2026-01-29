@@ -70,7 +70,7 @@ jobs:
           ovsx publish ${{ env.VSIX_FILE }} --pat $OVSX_PAT
       
       - name: Upload VSIX artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: perl-lsp-${{ env.VERSION }}.vsix
           path: vscode-extension/${{ env.VSIX_FILE }}

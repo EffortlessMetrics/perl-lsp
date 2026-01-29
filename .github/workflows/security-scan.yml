@@ -72,7 +72,7 @@ jobs:
 
       - name: Upload audit results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cargo-audit-results
           path: audit-results.json
@@ -160,7 +160,7 @@ jobs:
 
       - name: Upload Trivy scan results (artifact)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: trivy-repo-scan-results
           path: trivy-results.sarif
@@ -215,7 +215,7 @@ jobs:
 
       - name: Upload Trivy Docker scan results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: trivy-docker-scan-results
           path: trivy-docker-results.sarif
