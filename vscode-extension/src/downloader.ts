@@ -351,6 +351,21 @@ export class BinaryDownloader {
     
     private async downloadFile(url: string, dest: string, timeoutMs = 30000): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Security check: Enforce HTTPS for remote URLs to prevent MITM attacks
+            try {
+                const parsedUrl = new URL(url);
+                // Note: IPv6 addresses may include brackets in hostname depending on Node version
+                const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(parsedUrl.hostname) || parsedUrl.hostname.endsWith('.localhost');
+
+                if (parsedUrl.protocol === 'http:' && !isLocal) {
+                    reject(new Error(`Security violation: Insecure HTTP download prevented for remote host: ${parsedUrl.hostname}. Use HTTPS or a local server.`));
+                    return;
+                }
+            } catch (e) {
+                reject(new Error(`Invalid URL format: ${url}`));
+                return;
+            }
+
             const file = fs.createWriteStream(dest);
             let timedOut = false;
             
