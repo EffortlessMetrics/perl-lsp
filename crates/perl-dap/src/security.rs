@@ -108,11 +108,7 @@ pub fn validate_path(path: &Path, workspace_root: &Path) -> Result<PathBuf, Secu
     })?;
 
     // Resolve the path: join relative paths with workspace, keep absolute as-is
-    let resolved = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        workspace_root.join(path)
-    };
+    let resolved = if path.is_absolute() { path.to_path_buf() } else { workspace_root.join(path) };
 
     // Try to canonicalize the resolved path
     // For existing paths, this resolves symlinks and normalizes .. and .
@@ -312,10 +308,13 @@ mod tests {
         assert!(result.is_err(), "Parent traversal should be rejected");
 
         match result {
-            Err(SecurityError::PathTraversalAttempt(_)) | Err(SecurityError::PathOutsideWorkspace(_)) => {
+            Err(SecurityError::PathTraversalAttempt(_))
+            | Err(SecurityError::PathOutsideWorkspace(_)) => {
                 // Either error is acceptable - both indicate the path was rejected
             }
-            Err(e) => panic!("Expected PathTraversalAttempt or PathOutsideWorkspace error, got: {:?}", e),
+            Err(e) => {
+                panic!("Expected PathTraversalAttempt or PathOutsideWorkspace error, got: {:?}", e)
+            }
             Ok(_) => panic!("Expected error, got Ok"),
         }
     }
@@ -323,22 +322,26 @@ mod tests {
     #[test]
     fn test_validate_path_absolute_outside() {
         // Use a specific subdirectory as workspace to ensure separation
-        let workspace = std::env::current_dir()
-            .expect("Failed to get current dir")
-            .join("test_workspace");
+        let workspace =
+            std::env::current_dir().expect("Failed to get current dir").join("test_workspace");
 
         // Create workspace directory for the test
         fs::create_dir_all(&workspace).ok();
 
         // Use a path that's definitely outside the workspace
-        let unsafe_path = workspace.parent().expect("workspace should have parent").join("etc/passwd");
+        let unsafe_path =
+            workspace.parent().expect("workspace should have parent").join("etc/passwd");
 
         let result = validate_path(&unsafe_path, &workspace);
 
         // Clean up
         fs::remove_dir(&workspace).ok();
 
-        assert!(result.is_err(), "Absolute path outside workspace should be rejected: {:?}", result);
+        assert!(
+            result.is_err(),
+            "Absolute path outside workspace should be rejected: {:?}",
+            result
+        );
     }
 
     #[test]

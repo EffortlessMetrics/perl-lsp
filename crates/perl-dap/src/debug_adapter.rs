@@ -1788,15 +1788,11 @@ impl DebugAdapter {
                 if let Some(caps) = re.captures(line) {
                     let func = caps.name("func").map(|m| m.as_str()).unwrap_or("main");
                     let file = caps.name("file").map(|m| m.as_str()).unwrap_or("<unknown>");
-                    let line_num = caps.name("line")
-                        .and_then(|m| m.as_str().parse::<i32>().ok())
-                        .unwrap_or(1);
+                    let line_num =
+                        caps.name("line").and_then(|m| m.as_str().parse::<i32>().ok()).unwrap_or(1);
 
                     // Extract file name from path for display
-                    let file_name = file
-                        .split(['/', '\\'].as_ref())
-                        .last()
-                        .unwrap_or(file);
+                    let file_name = file.split(['/', '\\'].as_ref()).last().unwrap_or(file);
 
                     frames.push(StackFrame {
                         id: frame_id,

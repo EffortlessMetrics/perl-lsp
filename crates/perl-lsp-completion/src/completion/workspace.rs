@@ -2,7 +2,10 @@
 //!
 //! Provides completion for symbols from other files in the workspace using the workspace index.
 
-use super::{context::CompletionContext, items::{CompletionItem, CompletionItemKind}};
+use super::{
+    context::CompletionContext,
+    items::{CompletionItem, CompletionItemKind},
+};
 use perl_workspace_index::workspace_index::{SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex};
 use std::sync::Arc;
 
@@ -37,7 +40,8 @@ pub fn add_workspace_symbol_completions(
     for symbol in matching_symbols {
         // Skip symbols that don't match the prefix
         if !symbol.name.starts_with(&context.prefix)
-            && !symbol.qualified_name.as_ref().map_or(false, |qn| qn.contains(&context.prefix)) {
+            && !symbol.qualified_name.as_ref().map_or(false, |qn| qn.contains(&context.prefix))
+        {
             continue;
         }
 

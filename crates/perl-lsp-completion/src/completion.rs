@@ -483,7 +483,11 @@ impl CompletionProvider {
             }
 
             // Add workspace symbol completions from other files
-            workspace::add_workspace_symbol_completions(&mut completions, &context, &self.workspace_index);
+            workspace::add_workspace_symbol_completions(
+                &mut completions,
+                &context,
+                &self.workspace_index,
+            );
             if is_cancelled() {
                 return vec![];
             }
