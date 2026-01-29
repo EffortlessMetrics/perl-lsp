@@ -160,13 +160,11 @@ fn quotemeta_op() -> impl Strategy<Value = String> {
 
 fn bless_ref() -> impl Strategy<Value = String> {
     (identifier(), identifier(), identifier(), small_int()).prop_map(|(obj, kind, class, val)| {
+        // Use to_ascii_uppercase() which returns a char, not an iterator
+        let class_name = class.chars().next().unwrap_or('C').to_ascii_uppercase();
         format!(
             "my ${} = bless {{ count => {} }}, \"{}\";\nmy ${} = ref ${};\n",
-            obj,
-            val,
-            class.chars().next().unwrap_or('C').to_uppercase(),
-            kind,
-            obj
+            obj, val, class_name, kind, obj
         )
     })
 }
