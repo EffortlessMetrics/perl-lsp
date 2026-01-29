@@ -183,7 +183,12 @@ export async function activate(context: vscode.ExtensionContext) {
             if (error) {
                 vscode.window.showErrorMessage(`Failed to get version: ${error.message}`);
             } else {
-                vscode.window.showInformationMessage(`Perl LSP Version: ${stdout.trim()}`);
+                const version = stdout.trim();
+                vscode.window.showInformationMessage(`Perl LSP Version: ${version}`, 'Copy').then(selection => {
+                    if (selection === 'Copy') {
+                        vscode.env.clipboard.writeText(version);
+                    }
+                });
             }
         });
     });
@@ -302,5 +307,9 @@ async function restartServer(context: vscode.ExtensionContext) {
     }
     
     await activate(context);
-    vscode.window.showInformationMessage('Perl Language Server restarted');
+    vscode.window.showInformationMessage('Perl Language Server restarted', 'Show Output').then(selection => {
+        if (selection === 'Show Output') {
+            outputChannel.show();
+        }
+    });
 }
