@@ -300,7 +300,7 @@
         },
         {
           "command": "perl-lsp.runTests",
-          "when": "editorLangId == perl"
+          "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/"
         },
         {
           "command": "perl-lsp.extractSubroutine",
