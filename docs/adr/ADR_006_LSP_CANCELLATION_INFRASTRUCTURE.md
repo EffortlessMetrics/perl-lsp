@@ -1,4 +1,4 @@
-# ADR-003: LSP Cancellation Infrastructure
+# ADR-006: LSP Cancellation Infrastructure
 
 **Status**: DRAFT
 **Date**: 2026-01-28

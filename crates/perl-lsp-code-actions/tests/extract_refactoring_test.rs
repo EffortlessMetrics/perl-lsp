@@ -1,5 +1,5 @@
 /// Test extract variable and subroutine refactoring
-use perl_lsp_code_actions::{CodeActionsProvider, CodeActionKind};
+use perl_lsp_code_actions::{CodeActionKind, CodeActionsProvider};
 use perl_parser_core::Parser;
 use perl_tdd_support::must;
 
@@ -19,7 +19,8 @@ my $result = $x + $y;
     let actions = provider.get_code_actions(&ast, (30, 38), &[]);
 
     // Find extract variable action
-    let extract_action = actions.iter()
+    let extract_action = actions
+        .iter()
         .find(|a| matches!(a.kind, CodeActionKind::RefactorExtract) && a.title.contains("Extract"));
 
     assert!(extract_action.is_some(), "Should have extract variable action");
@@ -29,7 +30,10 @@ my $result = $x + $y;
 
     // Verify edits look reasonable
     let edits = &action.edit.changes;
-    assert!(edits.len() >= 2, "Should have at least 2 edits (insert declaration + replace expression)");
+    assert!(
+        edits.len() >= 2,
+        "Should have at least 2 edits (insert declaration + replace expression)"
+    );
 
     // Check that one edit inserts a variable declaration
     let has_declaration = edits.iter().any(|e| e.new_text.contains("my $"));
@@ -55,16 +59,22 @@ my $y = 10;
     let actions = provider.get_code_actions(&ast, (30, 70), &[]);
 
     // Find extract subroutine action
-    let extract_action = actions.iter()
-        .find(|a| matches!(a.kind, CodeActionKind::RefactorExtract) &&
-                   (a.title.contains("Extract") || a.title.contains("function") || a.title.contains("subroutine")));
+    let extract_action = actions.iter().find(|a| {
+        matches!(a.kind, CodeActionKind::RefactorExtract)
+            && (a.title.contains("Extract")
+                || a.title.contains("function")
+                || a.title.contains("subroutine"))
+    });
 
     if let Some(action) = extract_action {
         assert!(!action.edit.changes.is_empty(), "Should have edits");
 
         // Verify edits look reasonable
         let edits = &action.edit.changes;
-        assert!(edits.len() >= 2, "Should have at least 2 edits (insert function + replace with call)");
+        assert!(
+            edits.len() >= 2,
+            "Should have at least 2 edits (insert function + replace with call)"
+        );
 
         // Check that one edit inserts a sub definition
         let has_sub = edits.iter().any(|e| e.new_text.contains("sub "));
@@ -86,8 +96,7 @@ my $result = length("hello world");
     let actions = provider.get_code_actions(&ast, (13, 36), &[]);
 
     // Find extract variable action
-    let extract_action = actions.iter()
-        .find(|a| matches!(a.kind, CodeActionKind::RefactorExtract));
+    let extract_action = actions.iter().find(|a| matches!(a.kind, CodeActionKind::RefactorExtract));
 
     if let Some(action) = extract_action {
         assert!(!action.edit.changes.is_empty(), "Should have edits");

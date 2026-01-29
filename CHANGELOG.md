@@ -11,17 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Roadmap (Now / Next / Later)
 
-**Now (v0.9.1 close-out)**
+#### Now (v0.9.1 close-out)
+
 - Index state machine for workspace indexing (state transitions, early-exit, performance caps)
 - Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
 
-**Next (v1.0.0)**
+#### Next (v1.0.0)
+
 - Stability statement (GA-lock + versioning rules)
 - Packaging stance (what ships; supported platforms)
 - Benchmark publication with receipts under `benchmarks/results/`
 - Upgrade notes from v0.8.x → v1.0
 
-**Later (post v1.0)**
+#### Later (post v1.0)
+
 - Native DAP completeness (attach, variables/evaluate, safe eval)
 - Full LSP 3.18 compliance
 - Package manager distribution (Homebrew/apt/etc.)
@@ -97,6 +100,8 @@ See `docs/ROADMAP.md` for status receipts and exit criteria.
 
 - **O(1) Symbol Lookups** (PR #336): Optimized symbol lookups from linear to constant time
 - **ScopeAnalyzer Optimization** (PR #383): Stack-based ancestor tracking for improved performance
+- **ScopeAnalyzer Rc Cloning** (PR #621): Eliminated unnecessary Rc cloning in scope analysis for significant performance gains
+- **AST Traversal Optimization** (PR #604): Optimized AST traversal in ScopeAnalyzer
 - **Parser AST Construction** (PR #367, #372): Reduced string allocations in AST construction
 - **Semantic Package Lookup** (PR #368): Return `&str` from `find_current_package` to avoid allocations
 
@@ -104,9 +109,19 @@ See `docs/ROADMAP.md` for status receipts and exit criteria.
 
 - **Symbol Handling Refactor**: Improved symbol handling in Perl LSP
 - **Code Formatting**: Improved code formatting and consistency across multiple files
+- **Microcrate Modularization** (PR #601): Production safety improvements with better module organization
+
+### Added - VS Code Extension (2026-01-28)
+
+- **Organize Imports Command** (PR #609): Added to Status Menu for easy access
+- **Keybinding Hints** (PR #602): Status Menu now shows keybinding hints
+- **Status Menu Improvements**: Separators and settings shortcut for better UX
 
 ### Fixed - Security
 
+- **Multi-root Workspace Path Traversal** (PR #620): [HIGH] Fixed path traversal vulnerability in multi-root workspace configurations
+- **HTTPS Downgrade Prevention** (PR #603): Prevent HTTPS to HTTP downgrade in binary downloader
+- **Safe Evaluation Bypass** (commit 00538b48): Fixed safe evaluation bypass and operator false positives
 - **Path Traversal Protection** (PR #388): Complete protection for all execute commands
 - **Command Injection Hardening** (PR #332): Hardened executeCommand against injection attacks
 

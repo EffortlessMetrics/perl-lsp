@@ -226,8 +226,8 @@ cargo doc --no-deps --package perl-parser
 **Related Documentation**:
 - **[Missing Documentation Guide](MISSING_DOCUMENTATION_GUIDE.md)** - Systematic resolution strategy
 - **[API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)** - Enterprise quality requirements
-- **[ADR-002: API Documentation Infrastructure](ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation architecture
-- **[ADR-003: Missing Documentation Infrastructure](ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation details
+- **[ADR-002: API Documentation Infrastructure](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation architecture
+- **[ADR-003: Missing Documentation Infrastructure](adr/ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation details
 
 ## Context-Sensitive Features
 

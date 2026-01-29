@@ -31,7 +31,7 @@ Start with the [Documentation Guide](docs/DOCUMENTATION_GUIDE.md) for a complete
 - **How-to guides** – [Commands Reference](docs/COMMANDS_REFERENCE.md), [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md), and
   [Comprehensive Testing Guide](docs/COMPREHENSIVE_TESTING_GUIDE.md)
 - **Explanations** – [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md), [Modern Architecture](docs/MODERN_ARCHITECTURE.md), and
-  [Documentation Strategy ADR](docs/ADR_002_DOCUMENTATION_STRATEGY_AND_QUALITY_ENFORCEMENT.md)
+  [Documentation Strategy ADR](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)
 - **Reference** – [LSP_ACTUAL_STATUS.md](LSP_ACTUAL_STATUS.md) and the
   [Workspace Refactor API Reference](docs/WORKSPACE_REFACTOR_API_REFERENCE.md)
 

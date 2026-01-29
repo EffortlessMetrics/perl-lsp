@@ -1,4 +1,4 @@
-# ADR-003: Substitution Operator Parsing Architecture
+# ADR-007: Substitution Operator Parsing Architecture
 
 **Status**: Accepted
 **Date**: 2025-01-20

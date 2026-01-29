@@ -3,13 +3,14 @@
 //! This module provides go-to-type-definition functionality,
 //! finding the type/class definition for variables and references.
 
-use std::collections::HashMap;
-use std::str::FromStr;
-
 use perl_parser_core::ast::{Node, NodeKind};
 
 #[cfg(feature = "lsp-compat")]
 use lsp_types::LocationLink;
+#[cfg(feature = "lsp-compat")]
+use std::collections::HashMap;
+#[cfg(feature = "lsp-compat")]
+use std::str::FromStr;
 
 /// Provides go-to-type-definition functionality for Perl code.
 ///
@@ -47,6 +48,7 @@ impl TypeDefinitionProvider {
     }
 
     /// Extract type name from a node
+    #[cfg(feature = "lsp-compat")]
     fn extract_type_name(&self, node: &Node) -> Option<String> {
         match &node.kind {
             // Variable declaration with type: my ClassName $var
@@ -149,6 +151,7 @@ impl TypeDefinitionProvider {
     }
 
     /// Try to infer the type of an object from its declaration or assignment
+    #[cfg(feature = "lsp-compat")]
     fn infer_object_type(&self, object: &Node) -> Option<String> {
         match &object.kind {
             NodeKind::Variable { name, .. } => {
@@ -238,6 +241,7 @@ impl TypeDefinitionProvider {
     }
 
     /// Helper to visit children of a node
+    #[cfg(feature = "lsp-compat")]
     fn visit_children<F>(&self, node: &Node, mut f: F)
     where
         F: FnMut(&Node),
@@ -317,6 +321,7 @@ impl TypeDefinitionProvider {
     }
 
     /// Find node at the given position
+    #[cfg(feature = "lsp-compat")]
     fn find_node_at_position(
         &self,
         node: &Node,
@@ -336,6 +341,7 @@ impl TypeDefinitionProvider {
     }
 
     /// Find the most specific node containing the given offset
+    #[cfg(feature = "lsp-compat")]
     fn find_node_at_offset(&self, node: &Node, offset: usize) -> Option<Node> {
         // Check if offset is within this node's range
         if offset < node.location.start || offset > node.location.end {

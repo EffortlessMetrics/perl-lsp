@@ -7,8 +7,8 @@
 //! - Secure defaults
 
 use perl_dap::security::{
-    validate_condition, validate_expression, validate_path, validate_timeout, SecurityError,
-    DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS,
+    DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS, SecurityError, validate_condition, validate_expression,
+    validate_path, validate_timeout,
 };
 use std::path::PathBuf;
 
@@ -27,11 +27,7 @@ fn test_path_validation_safe_relative_paths() -> TestResult {
     for path_str in safe_paths {
         let path = PathBuf::from(path_str);
         let result = validate_path(&path, &workspace);
-        assert!(
-            result.is_ok(),
-            "Path '{}' should be valid within workspace",
-            path_str
-        );
+        assert!(result.is_ok(), "Path '{}' should be valid within workspace", path_str);
     }
 
     std::fs::remove_dir_all(&workspace).ok();
@@ -44,14 +40,19 @@ fn test_path_validation_parent_traversal_attempts() {
     std::fs::create_dir_all(&workspace).ok();
 
     // Malicious paths with parent directory references
-    let malicious_paths = vec!["../../../etc/passwd", "../../.ssh/id_rsa", "../../../../../../../etc/shadow"];
+    let malicious_paths =
+        vec!["../../../etc/passwd", "../../.ssh/id_rsa", "../../../../../../../etc/shadow"];
 
     for path_str in malicious_paths {
         let path = PathBuf::from(path_str);
         let result = validate_path(&path, &workspace);
 
         if result.is_ok() {
-            eprintln!("DEBUG: Path '{}' was ALLOWED (workspace: {})", path_str, workspace.display());
+            eprintln!(
+                "DEBUG: Path '{}' was ALLOWED (workspace: {})",
+                path_str,
+                workspace.display()
+            );
             eprintln!("DEBUG: Result: {:?}", result);
         }
 
@@ -127,8 +128,7 @@ fn test_expression_validation_valid_expressions() -> TestResult {
 
 #[test]
 fn test_expression_validation_newline_injection() {
-    let malicious_exprs =
-        vec!["1\nprint 'hacked'", "$x\nsystem('rm -rf /')", "valid\rmalicious"];
+    let malicious_exprs = vec!["1\nprint 'hacked'", "$x\nsystem('rm -rf /')", "valid\rmalicious"];
 
     for expr in malicious_exprs {
         let result = validate_expression(expr);
@@ -204,7 +204,8 @@ fn test_security_comprehensive_path_traversal_matrix() {
         ("./.gitignore", false),
     ];
 
-    let workspace = std::env::current_dir().expect("Failed to get cwd").join("test_workspace_comprehensive");
+    let workspace =
+        std::env::current_dir().expect("Failed to get cwd").join("test_workspace_comprehensive");
 
     for (path_str, should_reject) in test_cases {
         // Ensure workspace exists for each test case
@@ -214,11 +215,7 @@ fn test_security_comprehensive_path_traversal_matrix() {
         let result = validate_path(&path, &workspace);
 
         if should_reject {
-            assert!(
-                result.is_err(),
-                "Path '{}' should be rejected but was allowed",
-                path_str
-            );
+            assert!(result.is_err(), "Path '{}' should be rejected but was allowed", path_str);
         } else {
             // For non-rejecting paths, they should pass (we're validating structure, not existence)
             assert!(

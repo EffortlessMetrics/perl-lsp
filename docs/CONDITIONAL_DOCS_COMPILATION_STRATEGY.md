@@ -203,7 +203,7 @@ The strategy requires minimal ongoing maintenance:
 - **Quality Standards**: [API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md) - Enterprise documentation requirements
 - **Performance Context**: [THREADING_CONFIGURATION_GUIDE.md](THREADING_CONFIGURATION_GUIDE.md) - Revolutionary performance achievements
 - **Test Framework**: `/crates/perl-parser/tests/missing_docs_ac_tests.rs` - 25 comprehensive validation tests
-- **Architecture Decision**: [ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md](ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) - Strategic context
+- **Architecture Decision**: [ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) - Strategic context
 
 ## Summary
 
