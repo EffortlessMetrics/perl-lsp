@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 **Latest Release**: 0.9.0
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
@@ -212,12 +212,10 @@ RUSTC_WRAPPER=""        # Disable rustc wrapper
 
 The workspace uses a tiered dependency structure (see `Cargo.toml`):
 - **Tier 1**: Leaf crates with no internal dependencies (`perl-token`, `perl-quote`, `perl-ast`, etc.)
-- **Tier 2**: Single-level dependencies (`perl-parser-core`, `perl-lsp-transport`, `perl-tokenizer`)
+- **Tier 2**: Single-level dependencies (`perl-parser-core`, `perl-lsp-transport`, etc.)
 - **Tier 3**: Two-level dependencies (`perl-workspace-index`, `perl-refactoring`)
 - **Tier 4**: Three-level dependencies (`perl-semantic-analyzer`, `perl-lsp-providers`)
-- **Tier 5**: Task runner crates (`xtask`)
-- **Tier 6**: Application/executable crates (`perl-parser`, `perl-lsp`, `perl-dap`)
-- **Tier 7**: Legacy/testing crates (`perl-parser-pest`, `perl-corpus`, `tree-sitter-perl-*`)
+- **Tier 5**: Application crates (`perl-parser`, `perl-lsp`, `perl-dap`)
 
 ## Documentation
 
