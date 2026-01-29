@@ -248,8 +248,8 @@ pub struct CommandResult {
 /// }
 /// ```
 pub struct ExecuteCommandProvider {
-    /// Workspace root path for security enforcement
-    workspace_root: Option<PathBuf>,
+    /// Workspace root paths for security enforcement
+    workspace_roots: Vec<PathBuf>,
 }
 
 impl Default for ExecuteCommandProvider {
@@ -272,17 +272,17 @@ impl ExecuteCommandProvider {
     /// let provider = ExecuteCommandProvider::new();
     /// ```
     pub fn new() -> Self {
-        Self { workspace_root: None }
+        Self { workspace_roots: Vec::new() }
     }
 
     /// Create a new execute command provider with workspace root enforcement.
     ///
     /// This constructor enables path traversal protection by enforcing that all
-    /// file operations must be within the specified workspace root directory.
+    /// file operations must be within the specified workspace root directories.
     ///
     /// # Arguments
     ///
-    /// * `workspace_root` - The root directory path to enforce for security
+    /// * `workspace_roots` - The root directory paths to enforce for security
     ///
     /// # Examples
     ///
@@ -290,12 +290,12 @@ impl ExecuteCommandProvider {
     /// use perl_lsp::execute_command::ExecuteCommandProvider;
     /// use std::path::PathBuf;
     ///
-    /// let provider = ExecuteCommandProvider::with_workspace_root(
-    ///     Some(PathBuf::from("/home/user/project"))
+    /// let provider = ExecuteCommandProvider::with_workspace_roots(
+    ///     vec![PathBuf::from("/home/user/project")]
     /// );
     /// ```
-    pub fn with_workspace_root(workspace_root: Option<PathBuf>) -> Self {
-        Self { workspace_root }
+    pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
+        Self { workspace_roots }
     }
 
     /// Execute a command with comprehensive error handling and argument validation.
@@ -721,17 +721,27 @@ impl ExecuteCommandProvider {
             .canonicalize()
             .map_err(|e| format!("Failed to canonicalize path '{}': {}", normalized_path, e))?;
 
-        // Enforce workspace root boundaries if configured
-        if let Some(ref workspace_root) = self.workspace_root {
-            let canonical_root = workspace_root
-                .canonicalize()
-                .map_err(|e| format!("Failed to canonicalize workspace root: {}", e))?;
+        // Enforce workspace root boundaries when configured
+        // Security note: When workspace_roots is empty, path traversal protection is disabled
+        // for backward compatibility. In production, always configure workspace roots via
+        // initialization (root_path or workspaceFolders) to enable security boundaries.
+        // See .jules/sentinel.md for security guidance.
+        if !self.workspace_roots.is_empty() {
+            let mut allowed = false;
+            for workspace_root in &self.workspace_roots {
+                // Try to canonicalize root, skip if fails (e.g. missing dir)
+                if let Ok(canonical_root) = workspace_root.canonicalize() {
+                    if canonical_path.starts_with(&canonical_root) {
+                        allowed = true;
+                        break;
+                    }
+                }
+            }
 
-            if !canonical_path.starts_with(&canonical_root) {
+            if !allowed {
                 return Err(format!(
-                    "Path traversal detected: {} is outside workspace root {}",
-                    canonical_path.display(),
-                    canonical_root.display()
+                    "Path traversal detected: {} is outside workspace roots",
+                    canonical_path.display()
                 ));
             }
         }
@@ -932,7 +942,7 @@ impl CommandExecutor {
     /// Create a new command executor with default configuration.
     ///
     /// The executor is initialized with workspace-agnostic configuration.
-    /// For workspace-aware security enforcement, use `with_workspace_root`.
+    /// For workspace-aware security enforcement, use `with_workspace_roots`.
     pub fn new() -> Self {
         Self { provider: ExecuteCommandProvider::new() }
     }
@@ -944,9 +954,9 @@ impl CommandExecutor {
     ///
     /// # Arguments
     ///
-    /// * `workspace_root` - The root directory path to enforce for security
-    pub fn with_workspace_root(workspace_root: Option<PathBuf>) -> Self {
-        Self { provider: ExecuteCommandProvider::with_workspace_root(workspace_root) }
+    /// * `workspace_roots` - The root directory paths to enforce for security
+    pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
+        Self { provider: ExecuteCommandProvider::with_workspace_roots(workspace_roots) }
     }
 
     /// Execute a command with proper JSON-RPC error handling.
@@ -1812,7 +1822,7 @@ print "Value: $variable\n";
         fs::create_dir_all(&workspace_dir)?;
         fs::write(&outside_file, "print 'outside';")?;
 
-        let provider = ExecuteCommandProvider::with_workspace_root(Some(workspace_dir.clone()));
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![workspace_dir.clone()]);
 
         // Try to execute the outside file
         let result = provider.execute_command(
@@ -1828,10 +1838,65 @@ print "Value: $variable\n";
         assert!(result.is_err(), "Should fail execution outside workspace");
         let error = result.err().ok_or("expected error")?;
         assert!(
-            error.contains("Path traversal") || error.contains("outside workspace root"),
+            error.contains("Path traversal") || error.contains("outside workspace roots"),
             "Error should indicate security violation: {}",
             error
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_command_multi_root_security() -> Result<(), Box<dyn std::error::Error>> {
+        // Create two temporary workspaces and a file outside both
+        let workspace_dir1 = std::env::temp_dir().join("perl_lsp_workspace_1");
+        let workspace_dir2 = std::env::temp_dir().join("perl_lsp_workspace_2");
+        let file1 = workspace_dir1.join("test1.pl");
+        let file2 = workspace_dir2.join("test2.pl");
+        let outside_file = std::env::temp_dir().join("perl_lsp_outside_multi.pl");
+
+        fs::create_dir_all(&workspace_dir1)?;
+        fs::create_dir_all(&workspace_dir2)?;
+        fs::write(&file1, "print 'file1';")?;
+        fs::write(&file2, "print 'file2';")?;
+        fs::write(&outside_file, "print 'outside';")?;
+
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![
+            workspace_dir1.clone(),
+            workspace_dir2.clone(),
+        ]);
+
+        // 1. Should succeed for file in workspace 1
+        let result1 = provider.execute_command(
+            "perl.runFile",
+            vec![Value::String(file1.to_string_lossy().to_string())],
+        );
+        assert!(result1.is_ok(), "Should allow execution in workspace 1");
+
+        // 2. Should succeed for file in workspace 2
+        let result2 = provider.execute_command(
+            "perl.runFile",
+            vec![Value::String(file2.to_string_lossy().to_string())],
+        );
+        assert!(result2.is_ok(), "Should allow execution in workspace 2");
+
+        // 3. Should fail for outside file
+        let result3 = provider.execute_command(
+            "perl.runFile",
+            vec![Value::String(outside_file.to_string_lossy().to_string())],
+        );
+        assert!(result3.is_err(), "Should fail execution outside both workspaces");
+        let error3 = result3.err().ok_or("expected error")?;
+        assert!(
+            error3.contains("Path traversal") || error3.contains("outside workspace roots"),
+            "Error should indicate security violation: {}",
+            error3
+        );
+
+        // Clean up
+        fs::remove_dir_all(&workspace_dir1).ok();
+        fs::remove_dir_all(&workspace_dir2).ok();
+        fs::remove_file(&outside_file).ok();
+
         Ok(())
     }
 }
