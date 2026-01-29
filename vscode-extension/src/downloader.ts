@@ -354,15 +354,26 @@ export class BinaryDownloader {
             // Security check: Enforce HTTPS for remote URLs to prevent MITM attacks
             try {
                 const parsedUrl = new URL(url);
-                // Note: IPv6 addresses may include brackets in hostname depending on Node version
-                const isLocal = ['localhost', '127.0.0.1', '::1', '[::1]'].includes(parsedUrl.hostname) || parsedUrl.hostname.endsWith('.localhost');
+
+                // Only allow http: and https: protocols
+                if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+                    reject(new Error(`Unsupported protocol: ${parsedUrl.protocol}. Only HTTP and HTTPS are allowed.`));
+                    return;
+                }
+
+                // Check for local addresses (full IPv4 loopback range 127.0.0.0/8)
+                // Note: URL.hostname normalizes IPv6 addresses and never includes brackets
+                const ipv4LoopbackRegex = /^127(?:\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/;
+                const isLocal = ['localhost', '::1'].includes(parsedUrl.hostname)
+                    || parsedUrl.hostname.endsWith('.localhost')
+                    || ipv4LoopbackRegex.test(parsedUrl.hostname);
 
                 if (parsedUrl.protocol === 'http:' && !isLocal) {
                     reject(new Error(`Security violation: Insecure HTTP download prevented for remote host: ${parsedUrl.hostname}. Use HTTPS or a local server.`));
                     return;
                 }
             } catch (e) {
-                reject(new Error(`Invalid URL format: ${url}`));
+                reject(new Error(`Invalid URL format: ${url}. Error: ${e instanceof Error ? e.message : String(e)}`));
                 return;
             }
 
