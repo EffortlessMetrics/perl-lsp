@@ -8,9 +8,10 @@ use unicode_ident::{is_xid_continue, is_xid_start};
 use unicode_normalization::UnicodeNormalization;
 
 /// Unicode normalization options
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum NormalizationForm {
     /// NFC normalization (default)
+    #[default]
     NFC,
     /// NFD normalization
     NFD,
@@ -18,12 +19,6 @@ pub enum NormalizationForm {
     NFKC,
     /// NFKD normalization
     NFKD,
-}
-
-impl Default for NormalizationForm {
-    fn default() -> Self {
-        Self::NFC
-    }
 }
 
 /// Unicode utilities for Perl parsing

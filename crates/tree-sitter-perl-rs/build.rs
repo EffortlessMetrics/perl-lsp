@@ -3,7 +3,9 @@
 //! This build script handles compilation of the C parser and scanner,
 //! and conditionally includes the Rust scanner based on feature flags.
 
+#[cfg(any(feature = "c-parser", feature = "bindings"))]
 use std::env;
+#[cfg(any(feature = "c-parser", feature = "bindings"))]
 use std::path::PathBuf;
 
 fn main() {
@@ -145,6 +147,7 @@ void tree_sitter_perl_external_scanner_destroy(void *payload) {
     build.compile("tree-sitter-perl-scanner-stub");
 }
 
+#[cfg(feature = "c-parser")]
 fn find_tree_sitter_runtime() -> Option<PathBuf> {
     // Try to find tree-sitter runtime in common locations
     let possible_paths = ["tree-sitter/lib", "../tree-sitter/lib", "../../tree-sitter/lib"];

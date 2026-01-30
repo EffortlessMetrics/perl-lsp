@@ -277,10 +277,10 @@ impl ErrorRecoveryParser {
 
             RecoveryStrategy::ParseAsExpression => {
                 // Try to parse as a simple expression
-                if let Ok(pairs) = PerlParser::parse(Rule::expression, remaining) {
-                    if let Some(pair) = pairs.into_iter().next() {
-                        return Some(position + pair.as_span().end());
-                    }
+                if let Ok(pairs) = PerlParser::parse(Rule::expression, remaining)
+                    && let Some(pair) = pairs.into_iter().next()
+                {
+                    return Some(position + pair.as_span().end());
                 }
                 None
             }

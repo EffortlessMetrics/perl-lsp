@@ -78,11 +78,11 @@ impl<'a> EnhancedHeredocLexer<'a> {
 
         while !self.is_at_end() {
             // Check if we're collecting heredoc content
-            if let Some(ref heredoc) = self.active_heredoc.clone() {
-                if let Some(token) = self.collect_heredoc_content(&heredoc) {
-                    tokens.push(token);
-                    continue;
-                }
+            if let Some(ref heredoc) = self.active_heredoc.clone()
+                && let Some(token) = self.collect_heredoc_content(heredoc)
+            {
+                tokens.push(token);
+                continue;
             }
 
             // Check for end of line to activate pending heredocs
@@ -104,7 +104,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
             }
 
             // Regular character
-            let ch = self.current_char().unwrap();
+            let ch = self.current_char().unwrap_or('\0');
             tokens.push(self.make_token(HeredocTokenKind::Text, &ch.to_string()));
             self.advance();
         }
@@ -272,7 +272,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
     fn read_until(&mut self, delimiter: char) -> String {
         let mut result = String::new();
         while !self.is_at_end() && self.current_char() != Some(delimiter) {
-            result.push(self.current_char().unwrap());
+            result.push(self.current_char().unwrap_or('\0'));
             self.advance();
         }
         result
@@ -280,9 +280,14 @@ impl<'a> EnhancedHeredocLexer<'a> {
 
     fn read_identifier(&mut self) -> String {
         let mut result = String::new();
-        while !self.is_at_end() && self.is_identifier_char(self.current_char().unwrap()) {
-            result.push(self.current_char().unwrap());
-            self.advance();
+        while !self.is_at_end() {
+            let ch = self.current_char().unwrap_or('\0');
+            if self.is_identifier_char(ch) {
+                result.push(ch);
+                self.advance();
+            } else {
+                break;
+            }
         }
         result
     }

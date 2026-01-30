@@ -299,9 +299,17 @@ ci-full-msrv:
 # Check for nested Cargo.lock files (footgun prevention)
 ci-check-no-nested-lock:
     @echo "🔒 Checking for nested Cargo.lock files..."
-    @if find . -name 'Cargo.lock' -type f 2>/dev/null | grep -v '^\./Cargo\.lock$' | grep -q .; then \
+    @if find . -name 'Cargo.lock' -type f \
+        -not -path '*/target/*' \
+        -not -path '*/.runs/*' \
+        -not -path '*/archive/*' \
+        2>/dev/null | grep -v '^\./Cargo\.lock$' | grep -q .; then \
         echo "❌ ERROR: Nested Cargo.lock detected! Run gates from repo root only."; \
-        find . -name 'Cargo.lock' -type f 2>/dev/null | grep -v '^\./Cargo\.lock$'; \
+        find . -name 'Cargo.lock' -type f \
+            -not -path '*/target/*' \
+            -not -path '*/.runs/*' \
+            -not -path '*/archive/*' \
+            2>/dev/null | grep -v '^\./Cargo\.lock$'; \
         exit 1; \
     fi
     @echo "✅ No nested lockfiles"

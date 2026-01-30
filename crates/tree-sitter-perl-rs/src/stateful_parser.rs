@@ -202,33 +202,33 @@ impl StatefulPerlParser {
                 return None;
             }
 
-            let (marker, quote_type) = if trimmed.starts_with('\'') {
+            let (marker, quote_type) = if let Some(stripped) = trimmed.strip_prefix('\'') {
                 // Single quoted
-                if let Some(end) = trimmed[1..].find('\'') {
-                    (trimmed[1..=end].to_string(), HeredocQuoteType::Single)
+                if let Some(end) = stripped.find('\'') {
+                    (stripped[..end].to_string(), HeredocQuoteType::Single)
                 } else {
                     return None;
                 }
-            } else if trimmed.starts_with('"') {
+            } else if let Some(stripped) = trimmed.strip_prefix('"') {
                 // Double quoted
-                if let Some(end) = trimmed[1..].find('"') {
-                    (trimmed[1..=end].to_string(), HeredocQuoteType::Double)
+                if let Some(end) = stripped.find('"') {
+                    (stripped[..end].to_string(), HeredocQuoteType::Double)
                 } else {
                     return None;
                 }
-            } else if trimmed.starts_with('`') {
+            } else if let Some(stripped) = trimmed.strip_prefix('`') {
                 // Backtick
-                if let Some(end) = trimmed[1..].find('`') {
-                    (trimmed[1..=end].to_string(), HeredocQuoteType::Backtick)
+                if let Some(end) = stripped.find('`') {
+                    (stripped[..end].to_string(), HeredocQuoteType::Backtick)
                 } else {
                     return None;
                 }
-            } else if trimmed.starts_with('\\') {
+            } else if let Some(stripped) = trimmed.strip_prefix('\\') {
                 // Escaped
-                let end = trimmed[1..]
+                let end = stripped
                     .find(|c: char| !c.is_alphanumeric() && c != '_')
-                    .unwrap_or(trimmed[1..].len());
-                (trimmed[1..=end].to_string(), HeredocQuoteType::Escaped)
+                    .unwrap_or(stripped.len());
+                (stripped[..end].to_string(), HeredocQuoteType::Escaped)
             } else {
                 // Bare marker
                 let end = trimmed
@@ -351,10 +351,8 @@ impl StatefulPerlParser {
             AstNode::LabeledBlock { block, .. } => {
                 self.update_heredoc_nodes(block, content_map);
             }
-            AstNode::PackageDeclaration { block, .. } => {
-                if let Some(block) = block {
-                    self.update_heredoc_nodes(block, content_map);
-                }
+            AstNode::PackageDeclaration { block: Some(block), .. } => {
+                self.update_heredoc_nodes(block, content_map);
             }
             AstNode::Assignment { target, value, .. } => {
                 self.update_heredoc_nodes(target, content_map);
@@ -390,10 +388,8 @@ impl StatefulPerlParser {
                     self.update_heredoc_nodes(item, content_map);
                 }
             }
-            AstNode::VariableDeclaration { initializer, .. } => {
-                if let Some(init) = initializer {
-                    self.update_heredoc_nodes(init, content_map);
-                }
+            AstNode::VariableDeclaration { initializer: Some(init), .. } => {
+                self.update_heredoc_nodes(init, content_map);
             }
             _ => {
                 // Leaf nodes that don't contain other nodes
@@ -455,10 +451,8 @@ impl StatefulPerlParser {
             AstNode::LabeledBlock { block, .. } => {
                 self.update_format_nodes(block, content_map);
             }
-            AstNode::PackageDeclaration { block, .. } => {
-                if let Some(block) = block {
-                    self.update_format_nodes(block, content_map);
-                }
+            AstNode::PackageDeclaration { block: Some(block), .. } => {
+                self.update_format_nodes(block, content_map);
             }
             _ => {
                 // Other nodes don't contain format declarations

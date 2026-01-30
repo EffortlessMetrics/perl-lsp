@@ -7,7 +7,7 @@ use crate::heredoc_parser::{HeredocDeclaration, HeredocScanner};
 use crate::pure_rust_parser::{AstNode, PureRustPerlParser};
 use regex::Regex;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 /// Parsing context for heredoc processing
 #[derive(Debug, Clone, PartialEq)]
@@ -44,7 +44,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
     /// Parse input with context awareness
     pub fn parse(self) -> (String, Vec<HeredocDeclaration>) {
         // Phase 1: Normal heredoc scanning
-        let (mut processed, mut declarations) = self.scanner.scan();
+        let (processed, mut declarations) = self.scanner.scan();
 
         // Phase 2: Detect special contexts
         let contexts = Self::detect_contexts_static(&processed);
@@ -57,7 +57,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
                     if content.contains("<<") {
                         let eval_declarations = Self::parse_eval_content_static(&content);
                         Self::merge_eval_declarations_static(
-                            &mut processed,
+                            &processed,
                             &mut declarations,
                             start,
                             end,
@@ -75,7 +75,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
                     let replacement = &processed[replacement_start..replacement_end];
                     if replacement.contains("<<") {
                         Self::handle_substitution_heredoc_static(
-                            &mut processed,
+                            &processed,
                             &mut declarations,
                             0,
                             replacement_start,
@@ -94,8 +94,11 @@ impl<'a> ContextAwareHeredocParser<'a> {
         let mut contexts = Vec::new();
 
         // Detect eval contexts - use a more permissive regex without backreferences
-        let eval_regex = Regex::new(r#"eval\s*<<\s*(?:'(\w+)'|"(\w+)"|(\w+))"#).unwrap();
-        for cap in eval_regex.captures_iter(input) {
+        #[allow(clippy::unwrap_used)]
+        static EVAL_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#"eval\s*<<\s*(?:'(\w+)'|"(\w+)"|(\w+))"#).unwrap());
+
+        for cap in EVAL_REGEX.captures_iter(input) {
             if let Some(m) = cap.get(0) {
                 // Get terminator from whichever capture group matched
                 let terminator = cap
@@ -118,24 +121,30 @@ impl<'a> ContextAwareHeredocParser<'a> {
         }
 
         // Detect s///e contexts - handle common delimiters separately to avoid backreferences
-        let subst_slash_regex = Regex::new(r#"s/([^/]*)/([^/]*)/([a-z]*e[a-z]*)"#).unwrap();
-        let subst_pipe_regex = Regex::new(r#"s\|([^|]*)\|([^|]*)\|([a-z]*e[a-z]*)"#).unwrap();
-        let subst_hash_regex = Regex::new(r#"s#([^#]*)#([^#]*)#([a-z]*e[a-z]*)"#).unwrap();
+        #[allow(clippy::unwrap_used)]
+        static SUBST_SLASH_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#"s/([^/]*)/([^/]*)/([a-z]*e[a-z]*)"#).unwrap());
+        #[allow(clippy::unwrap_used)]
+        static SUBST_PIPE_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#"s\|([^|]*)\|([^|]*)\|([a-z]*e[a-z]*)"#).unwrap());
+        #[allow(clippy::unwrap_used)]
+        static SUBST_HASH_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#"s#([^#]*)#([^#]*)#([a-z]*e[a-z]*)"#).unwrap());
 
         // Process all substitution regex patterns
-        for regex in &[subst_slash_regex, subst_pipe_regex, subst_hash_regex] {
+        for regex in &[&*SUBST_SLASH_REGEX, &*SUBST_PIPE_REGEX, &*SUBST_HASH_REGEX] {
             for cap in regex.captures_iter(input) {
                 if let (Some(pattern), Some(replacement), Some(flags)) =
                     (cap.get(1), cap.get(2), cap.get(3))
+                    && flags.as_str().contains('e')
+                    && replacement.as_str().contains("<<")
                 {
-                    if flags.as_str().contains('e') && replacement.as_str().contains("<<") {
-                        contexts.push(ContextInfo::SubstitutionWithE {
-                            pattern_start: pattern.start(),
-                            pattern_end: pattern.end(),
-                            replacement_start: replacement.start(),
-                            replacement_end: replacement.end(),
-                        });
-                    }
+                    contexts.push(ContextInfo::SubstitutionWithE {
+                        pattern_start: pattern.start(),
+                        pattern_end: pattern.end(),
+                        replacement_start: replacement.start(),
+                        replacement_end: replacement.end(),
+                    });
                 }
             }
         }
@@ -182,7 +191,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
 
     /// Merge eval heredoc declarations back into main parse
     fn merge_eval_declarations_static(
-        processed: &mut String,
+        processed: &str,
         main_declarations: &mut Vec<HeredocDeclaration>,
         eval_start: usize,
         _eval_end: usize,
@@ -199,7 +208,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
 
     /// Handle heredocs in s///e replacements
     fn handle_substitution_heredoc_static(
-        processed: &mut String,
+        processed: &str,
         declarations: &mut Vec<HeredocDeclaration>,
         _pattern_start: usize,
         replacement_start: usize,
@@ -251,14 +260,9 @@ struct ContentRange {
 }
 
 /// Enhanced full parser with context awareness
+#[derive(Default)]
 pub struct ContextAwareFullParser {
     base_parser: PureRustPerlParser,
-}
-
-impl Default for ContextAwareFullParser {
-    fn default() -> Self {
-        Self { base_parser: PureRustPerlParser::new() }
-    }
 }
 
 impl ContextAwareFullParser {
@@ -287,12 +291,12 @@ impl ContextAwareFullParser {
         match ast {
             AstNode::EvalString(expression) => {
                 // Mark eval nodes that contain heredocs
-                if let AstNode::String(_content) = expression.as_ref() {
-                    if declarations.iter().any(|d| d.terminator == "EVAL_CONTEXT") {
-                        // Add metadata for runtime handling
-                        // In a real implementation, we'd modify the AST node type
-                        // to include heredoc metadata
-                    }
+                if let AstNode::String(_content) = expression.as_ref()
+                    && declarations.iter().any(|d| d.terminator == "EVAL_CONTEXT")
+                {
+                    // Add metadata for runtime handling
+                    // In a real implementation, we'd modify the AST node type
+                    // to include heredoc metadata
                 }
             }
             AstNode::Substitution { flags, .. } => {

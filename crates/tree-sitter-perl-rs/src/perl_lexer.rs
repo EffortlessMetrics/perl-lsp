@@ -1273,7 +1273,7 @@ impl<'a> PerlLexer<'a> {
         }
 
         // Check for regex-like constructs first
-        if ch == b'/'
+        if (ch == b'/'
             || (self.mode == LexerMode::ExpectTerm
                 && (self.peek_str("s/")
                     || self.peek_str("s{")
@@ -1282,12 +1282,11 @@ impl<'a> PerlLexer<'a> {
                     || self.peek_str("tr/")
                     || self.peek_str("y/")
                     || self.peek_str("qr/")
-                    || self.peek_str("qr{")))
+                    || self.peek_str("qr{"))))
+            && let Some(token) = self.scan_regex_like()
         {
-            if let Some(token) = self.scan_regex_like() {
-                self.update_mode(&token.token_type);
-                return Some(token);
-            }
+            self.update_mode(&token.token_type);
+            return Some(token);
         }
 
         // Check for quote operators
@@ -1823,22 +1822,22 @@ impl<'a> PerlLexer<'a> {
                     let ch = self.input.as_bytes()[self.position] as char;
                     if (matches!(ch, 's' | 'm' | 'y') && self.position + 1 < self.input.len()) {
                         let next = self.input.as_bytes()[self.position + 1] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
-                                self.update_mode(&token.token_type);
-                                return Some(token);
-                            }
+                        if Self::is_regex_delimiter(next)
+                            && let Some(token) = self.scan_regex_like()
+                        {
+                            self.update_mode(&token.token_type);
+                            return Some(token);
                         }
                     } else if (ch == 't' || ch == 'q')
                         && self.position + 2 < self.input.len()
                         && self.input.as_bytes()[self.position + 1] == b'r'
                     {
                         let next = self.input.as_bytes()[self.position + 2] as char;
-                        if Self::is_regex_delimiter(next) {
-                            if let Some(token) = self.scan_regex_like() {
-                                self.update_mode(&token.token_type);
-                                return Some(token);
-                            }
+                        if Self::is_regex_delimiter(next)
+                            && let Some(token) = self.scan_regex_like()
+                        {
+                            self.update_mode(&token.token_type);
+                            return Some(token);
                         }
                     }
                 }

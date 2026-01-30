@@ -4,9 +4,9 @@
 //! delimiter matching across different character encodings.
 
 use encoding_rs::{Encoding, UTF_8, WINDOWS_1252};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
 pub struct EncodingContext {
@@ -55,12 +55,23 @@ pub enum WarningSeverity {
 }
 
 // Patterns for encoding-related pragmas
-static ENCODING_PRAGMA: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"(?m)^\s*use\s+encoding\s+['"]([\w\-]+)['"]"#).unwrap());
+#[allow(clippy::unwrap_used)]
+static ENCODING_PRAGMA: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"(?m)^\s*use\s+encoding\s+['"]([\w\-]+)['"]"#).unwrap());
 
-static UTF8_PRAGMA: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?m)^\s*(use|no)\s+utf8\s*;").unwrap());
+#[allow(clippy::unwrap_used)]
+static UTF8_PRAGMA: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^\s*(use|no)\s+utf8\s*;").unwrap());
 
-static LOCALE_PRAGMA: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?m)^\s*use\s+locale\s*;").unwrap());
+#[allow(clippy::unwrap_used)]
+static LOCALE_PRAGMA: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^\s*use\s+locale\s*;").unwrap());
+
+impl Default for EncodingAwareLexer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl EncodingAwareLexer {
     pub fn new() -> Self {
@@ -82,15 +93,17 @@ impl EncodingAwareLexer {
             line_num += 1;
 
             // Check for 'use encoding'
-            if let Some(caps) = ENCODING_PRAGMA.captures(line) {
-                if let Some(encoding_name) = caps.get(1) {
-                    self.handle_encoding_pragma(encoding_name.as_str(), line_num);
-                }
+            if let Some(caps) = ENCODING_PRAGMA.captures(line)
+                && let Some(encoding_name) = caps.get(1)
+            {
+                self.handle_encoding_pragma(encoding_name.as_str(), line_num);
             }
 
             // Check for use/no utf8
-            if let Some(caps) = UTF8_PRAGMA.captures(line) {
-                let is_use = caps.get(1).unwrap().as_str() == "use";
+            if let Some(caps) = UTF8_PRAGMA.captures(line)
+                && let Some(m) = caps.get(1)
+            {
+                let is_use = m.as_str() == "use";
                 self.handle_utf8_pragma(is_use, line_num);
             }
 

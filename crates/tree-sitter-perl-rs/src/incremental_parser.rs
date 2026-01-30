@@ -83,32 +83,18 @@ impl IncrementalParser {
 
     /// Parse the initial document
     pub fn parse_initial(&mut self, source: &str) -> Result<&ParseTree, ParseError> {
-        let ast = if self.use_enhanced {
-            let mut parser = EnhancedFullParser::new();
-            parser.parse(source)?
-        } else {
-            let pairs =
-                PerlParser::parse(Rule::program, source).map_err(|_| ParseError::ParseFailed)?;
-            let mut parser = PureRustPerlParser::new();
-            let mut result = None;
-            for pair in pairs {
-                if let Ok(Some(node)) = parser.build_node(pair) {
-                    result = Some(node);
-                    break;
-                }
-            }
-            result.ok_or(ParseError::ParseFailed)?
-        };
+        let mut parser = EnhancedFullParser::new();
+        let root = parser.parse(source).map_err(|_| ParseError::ParseFailed)?;
 
         let line_breaks = find_line_breaks(source);
         let mut node_positions = HashMap::new();
         let mut id_counter = 0;
-        collect_node_positions(&ast, &mut node_positions, &mut id_counter, source, &line_breaks);
+        collect_node_positions(&root, &mut node_positions, &mut id_counter, source, &line_breaks);
 
         self.current_tree =
-            Some(ParseTree { root: ast, node_positions, source: Arc::from(source), line_breaks });
+            Some(ParseTree { root, node_positions, source: Arc::from(source), line_breaks });
 
-        Ok(self.current_tree.as_ref().unwrap())
+        self.current_tree.as_ref().ok_or(ParseError::ParseFailed)
     }
 
     /// Apply an edit and re-parse incrementally
@@ -141,7 +127,7 @@ impl IncrementalParser {
         // Splice the new AST into the existing tree
         self.splice_ast(region_ast, &reparse_range, new_source)?;
 
-        Ok(self.current_tree.as_ref().unwrap())
+        self.current_tree.as_ref().ok_or(ParseError::ParseFailed)
     }
 
     /// Find nodes affected by an edit
@@ -165,7 +151,11 @@ impl IncrementalParser {
 
     /// Find the optimal range to re-parse
     fn find_reparse_range(&self, _affected_nodes: &[NodeId], edit: &Edit) -> Range<usize> {
-        let tree = self.current_tree.as_ref().unwrap();
+        let tree = if let Some(t) = self.current_tree.as_ref() {
+            t
+        } else {
+            return edit.start_byte..edit.new_end_byte;
+        };
 
         // Find the smallest enclosing statement or block
         let mut min_start = edit.start_byte;
@@ -313,17 +303,68 @@ fn collect_node_positions(
 
     // Recursively process child nodes
     match node {
-        AstNode::Program(nodes) | AstNode::Block(nodes) => {
+        AstNode::Program(nodes) | AstNode::Block(nodes) | AstNode::List(nodes) => {
             for child in nodes {
                 collect_node_positions(child, positions, id_counter, source, line_breaks);
             }
         }
-        AstNode::Statement(inner) => {
+        AstNode::Statement(inner)
+        | AstNode::BeginBlock(inner)
+        | AstNode::EndBlock(inner)
+        | AstNode::CheckBlock(inner)
+        | AstNode::InitBlock(inner)
+        | AstNode::UnitcheckBlock(inner)
+        | AstNode::DoBlock(inner)
+        | AstNode::EvalBlock(inner)
+        | AstNode::EvalString(inner)
+        | AstNode::DeferStatement(inner) => {
             collect_node_positions(inner, positions, id_counter, source, line_breaks);
+        }
+        AstNode::IfStatement { condition, then_block, elsif_clauses, else_block } => {
+            collect_node_positions(condition, positions, id_counter, source, line_breaks);
+            collect_node_positions(then_block, positions, id_counter, source, line_breaks);
+            for (cond, block) in elsif_clauses {
+                collect_node_positions(cond, positions, id_counter, source, line_breaks);
+                collect_node_positions(block, positions, id_counter, source, line_breaks);
+            }
+            if let Some(else_block) = else_block {
+                collect_node_positions(else_block, positions, id_counter, source, line_breaks);
+            }
+        }
+        AstNode::WhileStatement { condition, block, .. }
+        | AstNode::UntilStatement { condition, block, .. } => {
+            collect_node_positions(condition, positions, id_counter, source, line_breaks);
+            collect_node_positions(block, positions, id_counter, source, line_breaks);
+        }
+        AstNode::ForStatement { init, condition, update, block, .. } => {
+            if let Some(init) = init {
+                collect_node_positions(init, positions, id_counter, source, line_breaks);
+            }
+            if let Some(condition) = condition {
+                collect_node_positions(condition, positions, id_counter, source, line_breaks);
+            }
+            if let Some(update) = update {
+                collect_node_positions(update, positions, id_counter, source, line_breaks);
+            }
+            collect_node_positions(block, positions, id_counter, source, line_breaks);
+        }
+        AstNode::ForeachStatement { variable, list, block, .. } => {
+            if let Some(variable) = variable {
+                collect_node_positions(variable, positions, id_counter, source, line_breaks);
+            }
+            collect_node_positions(list, positions, id_counter, source, line_breaks);
+            collect_node_positions(block, positions, id_counter, source, line_breaks);
         }
         AstNode::BinaryOp { left, right, .. } => {
             collect_node_positions(left, positions, id_counter, source, line_breaks);
             collect_node_positions(right, positions, id_counter, source, line_breaks);
+        }
+        AstNode::UnaryOp { operand, .. } => {
+            collect_node_positions(operand, positions, id_counter, source, line_breaks);
+        }
+        AstNode::Assignment { target, value, .. } => {
+            collect_node_positions(target, positions, id_counter, source, line_breaks);
+            collect_node_positions(value, positions, id_counter, source, line_breaks);
         }
         _ => {} // Other node types
     }

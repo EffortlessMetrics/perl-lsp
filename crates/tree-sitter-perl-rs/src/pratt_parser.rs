@@ -23,6 +23,12 @@ pub struct PrattParser {
     operators: HashMap<&'static str, OpInfo>,
 }
 
+impl Default for PrattParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PrattParser {
     pub fn new() -> Self {
         let mut operators = HashMap::new();
@@ -370,7 +376,7 @@ impl PrattParser {
         if pairs.len() == 1 {
             // Single element, just parse it
             parser
-                .build_node(pairs.into_iter().next().unwrap())?
+                .build_node(pairs.into_iter().next().ok_or(crate::error::ParseError::ParseFailed)?)?
                 .ok_or_else(|| "Failed to parse".into())
         } else if pairs.len() >= 3 {
             // Binary expression - use precedence parsing
@@ -378,7 +384,7 @@ impl PrattParser {
         } else {
             // Fallback
             parser
-                .build_node(pairs.into_iter().next().unwrap())?
+                .build_node(pairs.into_iter().next().ok_or(crate::error::ParseError::ParseFailed)?)?
                 .ok_or_else(|| "Failed to parse".into())
         }
     }

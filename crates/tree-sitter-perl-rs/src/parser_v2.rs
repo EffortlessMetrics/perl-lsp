@@ -512,7 +512,8 @@ impl<'a> ParserV2<'a> {
 
             // If single variable, convert to assignment
             if variables.len() == 1 {
-                let var = variables.into_iter().next().unwrap();
+                let var =
+                    variables.into_iter().next().ok_or(crate::error::ParseError::ParseFailed)?;
                 return Ok(Node::new(
                     NodeKind::Assignment {
                         left: Box::new(var),
