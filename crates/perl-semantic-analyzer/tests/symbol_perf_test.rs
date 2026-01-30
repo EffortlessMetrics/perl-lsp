@@ -123,3 +123,25 @@ sub documented_sub {
     assert_eq!(sub_symbols.len(), 1);
     assert!(sub_symbols[0].documentation.is_some());
 }
+
+#[test]
+#[ignore] // benchmark
+fn benchmark_symbol_extraction_with_interpolation() {
+    // Generate a large perl script with many interpolated strings
+    let mut code = String::from("sub test {\n");
+    for i in 0..10000 {
+        code.push_str(&format!("    my $var_{} = \"Hello $name_{}\";\n", i, i));
+        code.push_str(&format!("    my $msg_{} = \"Value: ${{value_{}}}\";\n", i, i));
+    }
+    code.push_str("}\n");
+
+    let mut parser = Parser::new(&code);
+    let ast = parser.parse().expect("Failed to parse");
+
+    let start = Instant::now();
+    let extractor = SymbolExtractor::new();
+    let _table = extractor.extract(&ast);
+    let duration = start.elapsed();
+
+    println!("Symbol extraction took: {:?}", duration);
+}
