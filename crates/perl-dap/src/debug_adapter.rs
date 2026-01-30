@@ -15,11 +15,13 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 
 use crate::breakpoints::BreakpointStore;
+use crate::security::validate_path;
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
 use regex::Regex;
+use std::path::Path;
 
 /// Poison-safe mutex lock that recovers from poisoned state
 fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<'a, T> {
@@ -620,6 +622,7 @@ impl DebugAdapter {
     ) -> DapMessage {
         if let Some(args) = arguments {
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
+            let cwd = args.get("cwd").and_then(|c| c.as_str());
 
             let perl_args = args
                 .get("args")
@@ -632,7 +635,7 @@ impl DebugAdapter {
             let stop_on_entry = args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
             // Launch Perl debugger
-            match self.launch_debugger(program, perl_args, stop_on_entry) {
+            match self.launch_debugger(program, perl_args, cwd, stop_on_entry) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
                     if stop_on_entry {
@@ -681,6 +684,7 @@ impl DebugAdapter {
         &mut self,
         program: &str,
         args: Vec<String>,
+        cwd: Option<&str>,
         stop_on_entry: bool,
     ) -> Result<i32, String> {
         // Security: Validate program path before any process spawning
@@ -694,12 +698,22 @@ impl DebugAdapter {
             return Err("Program path cannot be empty".to_string());
         }
 
+        // Security: Enforce workspace boundaries if cwd is provided
+        // This prevents path traversal attacks (e.g. "../../../etc/passwd")
+        if let Some(workspace_root) = cwd {
+            let root_path = Path::new(workspace_root);
+            let program_path = Path::new(program);
+
+            if let Err(e) = validate_path(program_path, root_path) {
+                return Err(format!("Security check failed: {}", e));
+            }
+        }
+
         // Validate that the program is a regular file (not a directory, device, etc.)
         // Using metadata().is_file() is more robust than exists() because:
         // - exists() returns true for directories
         // - exists() returns true for symlinks to non-files
         // - is_file() specifically checks for regular files
-        use std::path::Path;
         let path = Path::new(program);
         match std::fs::metadata(path) {
             Ok(metadata) => {
@@ -723,6 +737,11 @@ impl DebugAdapter {
         cmd.arg("--");
         cmd.arg(program);
         cmd.args(&args);
+
+        // Set working directory if provided
+        if let Some(dir) = cwd {
+            cmd.current_dir(dir);
+        }
 
         // Set up pipes
         cmd.stdin(Stdio::piped());
