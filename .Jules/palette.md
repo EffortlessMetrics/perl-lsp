@@ -9,3 +9,7 @@
 ## 2026-01-29 - [Placeholder UI Elements]
 **Learning:** Exposing placeholder or "coming soon" features in main UI menus (like Status Menu) is considered a UX regression if the commands are not fully functional, even if they provide a "roadmap" message.
 **Action:** Only add commands to high-visibility menus (like Status Menu) if they perform a functional action immediately; avoid "dead" or "informational only" interaction points for core tasks.
+
+## 2026-01-30 - [QuickPickItem Disabled State]
+**Learning:** `QuickPickItem` in VS Code API 1.83+ supports a `disabled` property for visual indication, but strictly enforcing it requires logic in the handler (`if (!selection.disabled)`) because the UI might still allow selection in some contexts.
+**Action:** Always pair `disabled` UI state with functional checks in the command handler to prevent execution of unavailable actions.
