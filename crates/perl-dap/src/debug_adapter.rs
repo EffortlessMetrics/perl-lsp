@@ -109,6 +109,9 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "undef",
                 "srand",
                 "bless",
+                "each",
+                "keys",
+                "values",
                 "reset", // Process control
                 "system",
                 "exec",
@@ -136,6 +139,7 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "syswrite",
                 "glob",
                 "readline",
+                "eof",
                 "ioctl",
                 "fcntl",
                 "flock",
@@ -2028,7 +2032,7 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
         }
     }
 
-    // Check for glob operations <*...>
+    // Check for glob operations <*...> (anywhere in expression)
     // This blocks filesystem access via globs
     if let Some(re) = glob_re() {
         if re.is_match(expression) {
@@ -2037,6 +2041,15 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
                     .to_string(),
             );
         }
+    }
+
+    // Check for file handle reads <$fh> or globs at start of expression
+    // This blocks state changes via reads like <STDIN> or <$fh>
+    if expression.trim().starts_with('<') {
+        return Some(
+            "Safe evaluation mode: file handle reads (<...>) and globs not allowed (use allowSideEffects: true)"
+                .to_string(),
+        );
     }
 
     // Check for mutating operations using pre-compiled regex
