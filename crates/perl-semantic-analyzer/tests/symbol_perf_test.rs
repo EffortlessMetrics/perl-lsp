@@ -84,6 +84,51 @@ sub test_{} {{
 }
 
 #[test]
+#[ignore]
+fn benchmark_interpolated_string_extraction() {
+    println!("Generating interpolated string test case...");
+    let mut code = String::from("package TestInterpolation;\n\n");
+    // Generate 1000 lines of interpolated strings
+    // This emphasizes the regex compilation overhead in extract_vars_from_string
+    for i in 0..1000 {
+        // Mix of strings with and without variables
+        // Strings with variables trigger the regex match
+        code.push_str(&format!("my $v{} = \"some text $var{} and more text\";\n", i, i));
+        // Strings without variables also trigger the regex match because they are interpolated
+        code.push_str(&format!("my $s{} = \"just text {}\";\n", i, i));
+    }
+
+    println!("Code size: {} bytes", code.len());
+
+    let mut parser = Parser::new(&code);
+    let ast = parser.parse().expect("Failed to parse benchmark code");
+
+    // Warm up
+    println!("Warming up...");
+    for _ in 0..2 {
+        let extractor = SymbolExtractor::new_with_source(&code);
+        let _ = extractor.extract(&ast);
+    }
+
+    // Benchmark
+    println!("Benchmarking...");
+    let iterations = 10;
+    let mut total_time = std::time::Duration::ZERO;
+
+    for _ in 0..iterations {
+        let start = Instant::now();
+        let extractor = SymbolExtractor::new_with_source(&code);
+        let _ = extractor.extract(&ast);
+        let duration = start.elapsed();
+        total_time += duration;
+    }
+
+    let avg_time = total_time / iterations;
+    println!("\n=== Interpolation Benchmark Results ===");
+    println!("Average extraction time: {:?}", avg_time);
+}
+
+#[test]
 fn test_symbol_extraction_with_comments() {
     let code = r#"
 package Example;
