@@ -427,10 +427,13 @@ impl TestRunner {
     fn run_test_file(&self, file_path: &str) -> Vec<TestResult> {
         let start_time = std::time::Instant::now();
 
+        // Sanitize path to prevent argument injection
+        let safe_path = self.sanitize_path(file_path);
+
         // Try to run with prove first, fall back to perl
         let output = Command::new("prove")
             .arg("-v")
-            .arg(file_path)
+            .arg(&safe_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .output();
@@ -439,7 +442,9 @@ impl TestRunner {
             Ok(out) => out,
             Err(_) => {
                 // Fall back to running with perl
+                // Use -- to separate flags from arguments, preventing injection
                 match Command::new("perl")
+                    .arg("--")
                     .arg(file_path)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped())
@@ -474,8 +479,10 @@ impl TestRunner {
     fn run_perl_test(&self, file_path: &str) -> Vec<TestResult> {
         let start_time = std::time::Instant::now();
 
+        // Use -- to separate flags from arguments, preventing injection
         let output = match Command::new("perl")
             .arg("-Ilib")
+            .arg("--")
             .arg(file_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -508,6 +515,17 @@ impl TestRunner {
             },
             duration: Some(duration),
         }]
+    }
+
+    /// Sanitize path to prevent argument injection
+    fn sanitize_path(&self, path: &str) -> String {
+        // If path starts with - and is not an absolute path or explicitly relative, prepend ./
+        // This prevents tools like 'prove' from interpreting the filename as a flag
+        if path.starts_with('-') && !Path::new(path).is_absolute() {
+            format!("./{}", path)
+        } else {
+            path.to_string()
+        }
     }
 
     /// Parse TAP (Test Anything Protocol) output
@@ -716,4 +734,60 @@ done_testing();
         assert!(!runner.is_test_file("file:///lib/Module.pm"));
         assert!(!runner.is_test_file("file:///script.pl"));
     }
+}
+
+#[test]
+fn test_arg_injection_prevention() {
+    use std::fs;
+    use std::io::Write;
+
+    let filename = "-security_test.pl";
+    let content = r#"print "secure execution\n";"#;
+
+    // Create file in current directory
+    let mut file = fs::File::create(filename).expect("Failed to create test file");
+    file.write_all(content.as_bytes()).expect("Failed to write to test file");
+
+    let runner = TestRunner::new("".to_string(), format!("file:///{}", filename));
+
+    // Run test
+    let results = runner.run_test(filename);
+
+    // Cleanup
+    let _ = fs::remove_file(filename);
+
+    assert!(!results.is_empty(), "Should have run at least one test");
+
+    // Check output
+    let output = results[0].message.as_deref().unwrap_or("");
+
+    // This assertion should FAIL if vulnerability exists
+    assert!(
+        output.contains("secure execution"),
+        "Output did not contain 'secure execution'. Actual output: {}",
+        output
+    );
+}
+
+#[test]
+fn test_arg_injection_prevention_prove() {
+    use std::fs;
+    use std::io::Write;
+
+    let filename = "-security_test.t";
+    let content = r#"print "1..1\nok 1 - secure execution\n";"#;
+
+    let mut file = fs::File::create(filename).expect("Failed to create test file");
+    file.write_all(content.as_bytes()).expect("Failed to write to test file");
+
+    let runner = TestRunner::new("".to_string(), format!("file:///{}", filename));
+
+    let results = runner.run_test(filename);
+
+    let _ = fs::remove_file(filename);
+
+    assert!(!results.is_empty(), "Should have run at least one test");
+
+    // If injection worked, prove would likely fail or not run this test
+    assert_eq!(results[0].status, TestStatus::Passed);
 }
