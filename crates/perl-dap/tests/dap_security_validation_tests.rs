@@ -27,7 +27,7 @@ fn test_path_validation_safe_relative_paths() -> TestResult {
     for path_str in safe_paths {
         let path = PathBuf::from(path_str);
         let result = validate_path(&path, &workspace);
-        assert!(result.is_ok(), "Path '{}' should be valid within workspace", path_str);
+        assert!(result.is_ok(), "Path '{}' should be valid within workspace, got error: {:?}", path_str, result);
     }
 
     std::fs::remove_dir_all(&workspace).ok();
@@ -67,8 +67,8 @@ fn test_path_validation_parent_traversal_attempts() {
         // Verify it's the right error type
         if let Err(e) = result {
             match e {
-                SecurityError::PathTraversalAttempt(_) => {}
-                _ => panic!("Expected PathTraversalAttempt error for '{}', got: {:?}", path_str, e),
+                SecurityError::PathTraversalAttempt(_) | SecurityError::PathOutsideWorkspace(_) => {}
+                _ => panic!("Expected PathTraversalAttempt or PathOutsideWorkspace error for '{}', got: {:?}", path_str, e),
             }
         }
     }

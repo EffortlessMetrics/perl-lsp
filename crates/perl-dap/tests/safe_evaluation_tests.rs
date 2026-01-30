@@ -34,6 +34,74 @@ fn test_evaluate_safe_mode_blocks_assignment() -> Result<(), Box<dyn std::error:
 }
 
 #[test]
+// Sentinel Security Fix: Block iterator state mutation and file handle reads
+fn test_evaluate_safe_mode_blocks_iterator_and_io() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = create_test_adapter();
+    let unsafe_ops = vec![
+        "each %hash",
+        "keys %hash",
+        "values %hash",
+        "<$fh>",
+        "<STDIN>",
+        "<ARGV>",
+        "eof",
+        "eof $fh",
+        "1 + <*.*>", // Glob
+    ];
+
+    for op in unsafe_ops {
+        let args = json!({
+            "expression": op,
+            "allowSideEffects": false,
+            "context": "hover"
+        });
+        let response = adapter.handle_request(1, "evaluate", Some(args));
+
+        if let DapMessage::Response { success, message, .. } = response {
+            assert!(!success, "Operation '{}' should have failed", op);
+            if let Some(msg) = message {
+                 assert!(msg.contains("Safe evaluation mode"), "Operation '{}' failed but not due to safety: {}", op, msg);
+            } else {
+                 panic!("Operation '{}' failed without message", op);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+// Sentinel Security Fix: Ensure safe operations are still allowed
+fn test_evaluate_safe_mode_allows_comparisons_and_lookups() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = create_test_adapter();
+    let safe_ops = vec![
+        "$a < $b",
+        "$a > $b",
+        "$hash{key}",
+        "$keys",
+        "$values",
+        "$each",
+    ];
+
+    for op in safe_ops {
+        let args = json!({
+            "expression": op,
+            "allowSideEffects": false,
+            "context": "hover"
+        });
+        let response = adapter.handle_request(1, "evaluate", Some(args));
+
+        // It should NOT fail with "Safe evaluation mode"
+        // It likely fails with "No debugger session" or succeeds if mocked
+        if let DapMessage::Response { message, .. } = response {
+            if let Some(msg) = message {
+                assert!(!msg.contains("Safe evaluation mode"), "Safe operation '{}' was blocked: {}", op, msg);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 // AC:10.2
 fn test_evaluate_safe_mode_blocks_mutation() -> Result<(), Box<dyn std::error::Error>> {
     let mut adapter = create_test_adapter();
