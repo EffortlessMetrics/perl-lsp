@@ -197,13 +197,25 @@ export async function activate(context: vscode.ExtensionContext) {
         interface MenuAction extends vscode.QuickPickItem {
             command?: string;
             args?: any[];
+            disabled?: boolean;
         }
+
+        const editor = vscode.window.activeTextEditor;
+        const isPerlFile = editor ? editor.document.languageId === 'perl' : false;
+        const fsPath = editor ? editor.document.uri.fsPath : undefined;
+        const isTestFile = isPerlFile && fsPath ? (fsPath.endsWith('.t') || fsPath.endsWith('.pl')) : false;
 
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
             { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
+            {
+                label: '$(beaker) Run Tests in Current File',
+                description: 'Shift+Alt+T',
+                detail: isTestFile ? 'Run tests for the active file' : 'Only available for .t and .pl files',
+                command: 'perl-lsp.runTests',
+                disabled: !isTestFile
+            },
             { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
