@@ -199,12 +199,73 @@ export async function activate(context: vscode.ExtensionContext) {
             args?: any[];
         }
 
+        const editor = vscode.window.activeTextEditor;
+        const isPerl = editor?.document.languageId === 'perl';
+        const isTestFile = isPerl && (editor?.document.uri.fsPath.endsWith('.t') || editor?.document.uri.fsPath.endsWith('.pl'));
+
+        // Prepare items with context-aware state
+        const restartItem: MenuAction = {
+            label: '$(refresh) Restart Server',
+            description: 'Shift+Alt+R',
+            detail: 'Restart the language server',
+            command: 'perl-lsp.restart'
+        };
+
+        const organizeImportsItem: MenuAction = {
+            label: '$(organization) Organize Imports',
+            description: 'Shift+Alt+O',
+            detail: 'Sort and organize use statements',
+            command: 'perl-lsp.organizeImports'
+        };
+        if (!isPerl) {
+            organizeImportsItem.label += ' (Unavailable)';
+            organizeImportsItem.detail = 'Open a Perl file to organize imports';
+            // @ts-ignore - disabled property exists in VS Code 1.84+ but types might be older
+            organizeImportsItem.disabled = true;
+        }
+
+        const runTestsItem: MenuAction = {
+            label: '$(beaker) Run Tests in Current File',
+            description: 'Shift+Alt+T',
+            detail: 'Run tests for the active file',
+            command: 'perl-lsp.runTests'
+        };
+        if (!isPerl) {
+            runTestsItem.label += ' (Unavailable)';
+            runTestsItem.detail = 'Open a Perl file to run tests';
+            // @ts-ignore
+            runTestsItem.disabled = true;
+        } else if (!isTestFile) {
+            runTestsItem.label += ' (Unavailable)';
+            runTestsItem.detail = 'Current file is not a test script (.t, .pl)';
+            // @ts-ignore
+            runTestsItem.disabled = true;
+        } else if (!testAdapter) {
+            runTestsItem.label += ' (Unavailable)';
+            runTestsItem.detail = 'Test adapter is initializing...';
+            // @ts-ignore
+            runTestsItem.disabled = true;
+        }
+
+        const formatItem: MenuAction = {
+            label: '$(list-flat) Format Document',
+            description: 'Shift+Alt+F',
+            detail: 'Format using perltidy',
+            command: 'editor.action.formatDocument'
+        };
+        if (!isPerl) {
+            formatItem.label += ' (Unavailable)';
+            formatItem.detail = 'Open a Perl file to format';
+            // @ts-ignore
+            formatItem.disabled = true;
+        }
+
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
-            { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
-            { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
-            { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
+            restartItem,
+            organizeImportsItem,
+            runTestsItem,
+            formatItem,
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
