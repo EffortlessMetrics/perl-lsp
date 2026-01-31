@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-05-27 - Regex Mutation Bypass in Safe Evaluation
+**Vulnerability:** The regex used to detect mutating operators (`s///`, `tr///`, `y///`) in `perl-dap` failed to account for optional whitespace between the operator and the delimiter (e.g., `s /foo/bar/` was allowed while `s/foo/bar/` was blocked). This allowed users to inadvertently modify state in "safe" evaluation mode.
+**Learning:** Regex-based parsing of flexible languages like Perl is error-prone. Heuristics must account for all syntactic variations allowed by the language parser, especially whitespace which is often permitted but easily overlooked in simple regex patterns.
+**Prevention:** When using regex for security checks, verify against the language's formal grammar or comprehensive documentation to identify valid whitespace or delimiter variations. Use robust parser-based validation where possible, or extensive regression testing for regex patterns.
