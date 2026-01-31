@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-05-27 - Legacy Command Path Traversal
+**Vulnerability:** The legacy LSP commands `perl.runTest` and `perl.runTestFile` accepted a file URI from the client and executed it using `TestRunner` without validating that the file resided within the workspace. This allowed executing arbitrary Perl scripts (or files masked as such) outside the project via path traversal.
+**Learning:** Retaining legacy command handlers for backward compatibility can leave security gaps if they don't implement the same rigorous validation as modern replacements (like `ExecuteCommandProvider`).
+**Prevention:** Centralize security validation logic (like path checking) and enforce it across ALL entry points, including legacy ones. Avoid duplicating execution logic where one path might miss checks.

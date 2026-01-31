@@ -1063,17 +1063,36 @@ impl LspServer {
                 }
             }
 
-            let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots);
+            let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots.clone());
 
             match command {
                 // Keep existing test commands for backward compatibility
                 "perl.runTest" => {
                     if let Some(test_id) = arguments.first().and_then(|v| v.as_str()) {
+                        // Validate path against workspace roots
+                        let parts: Vec<&str> = test_id.split("::").collect();
+                        if let Some(uri) = parts.first() {
+                            if let Err(e) = self.validate_uri_in_workspace(uri, &workspace_roots) {
+                                return Err(JsonRpcError {
+                                    code: -32603, // InternalError
+                                    message: e,
+                                    data: None,
+                                });
+                            }
+                        }
                         return self.run_test(test_id);
                     }
                 }
                 "perl.runTestFile" => {
                     if let Some(file_uri) = arguments.first().and_then(|v| v.as_str()) {
+                        // Validate path against workspace roots
+                        if let Err(e) = self.validate_uri_in_workspace(file_uri, &workspace_roots) {
+                            return Err(JsonRpcError {
+                                code: -32603, // InternalError
+                                message: e,
+                                data: None,
+                            });
+                        }
                         return self.run_test_file(file_uri);
                     }
                 }
@@ -1202,5 +1221,40 @@ impl LspServer {
         // In a real implementation, store these from initialize params
         // For now, return empty vec
         vec![]
+    }
+
+    /// Validate that a URI/path is within the workspace roots
+    fn validate_uri_in_workspace(
+        &self,
+        uri_or_path: &str,
+        roots: &[PathBuf],
+    ) -> Result<(), String> {
+        // If no roots are configured, we disable security check for backward compatibility.
+        // This matches ExecuteCommandProvider behavior.
+        if roots.is_empty() {
+            return Ok(());
+        }
+
+        // Strip file:// prefix if present
+        let path_str = uri_or_path.strip_prefix("file://").unwrap_or(uri_or_path);
+        let path = Path::new(path_str);
+
+        // Canonicalize the path to resolve .. and symlinks
+        let canonical_path = path
+            .canonicalize()
+            .map_err(|e| format!("Failed to canonicalize path: {}", e))?;
+
+        for root in roots {
+            if let Ok(canonical_root) = root.canonicalize() {
+                if canonical_path.starts_with(&canonical_root) {
+                    return Ok(());
+                }
+            }
+        }
+
+        Err(format!(
+            "Path traversal detected: {} is outside workspace roots",
+            canonical_path.display()
+        ))
     }
 }
