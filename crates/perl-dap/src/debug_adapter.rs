@@ -109,7 +109,9 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "undef",
                 "srand",
                 "bless",
-                "reset", // Process control
+                "reset",
+                "chomp",
+                "chop", // Process control
                 "system",
                 "exec",
                 "fork",
@@ -2111,6 +2113,25 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
         );
     }
 
+    // Check for readline/glob operations <$fh>, <file>, <*...>, <>
+    // Blocks < followed immediately by $, word char, *, or >
+    // Allows comparison operators ($a < $b) if followed by space
+    // Regex: <[\$\w\*>]
+    static READLINE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+    let readline_re = READLINE_RE
+        .get_or_init(|| Regex::new(r"<[\$\w\*>]"))
+        .as_ref()
+        .ok();
+
+    if let Some(re) = readline_re {
+        if let Some(mat) = re.find(expression) {
+            return Some(format!(
+                "Safe evaluation mode: potential readline/glob '{}' not allowed (use space for comparison or allowSideEffects: true)",
+                mat.as_str()
+            ));
+        }
+    }
+
     None
 }
 
@@ -3152,6 +3173,53 @@ DB<1>"#;
         ];
 
         for expr in bypasses {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "Expression '{}' should be blocked but was allowed", expr);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_readline_bypass() {
+        // These are readline/glob operations (UNSAFE)
+        // <$fh> reads from filehandle (mutating it)
+        // <file> globs file system (I/O)
+        // <> reads from ARGV
+        let blocked = [
+            "<$fh>",
+            "<STDIN>",
+            "<file.txt>",
+            "<>",
+            // "< $fh >", // This is allowed as it matches space (comparison-like) but users should be careful
+            // We only block < followed immediately by $, word, *, >
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "Expression '{}' should be blocked but was allowed", expr);
+        }
+
+        // These are valid comparisons (SAFE) if spaced correctly
+        let allowed = [
+            "$a < $b",
+            "1 < 2",
+            "$x < 10",
+        ];
+
+        for expr in allowed {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_none(), "Expression '{}' should be allowed but was blocked: {:?}", expr, err);
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_chomp_chop() {
+        let blocked = [
+            "chomp($var)",
+            "chop $var",
+            "chomp <$fh>",
+        ];
+
+        for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "Expression '{}' should be blocked but was allowed", expr);
         }
