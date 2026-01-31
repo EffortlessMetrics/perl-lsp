@@ -7,9 +7,7 @@
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
-use regex::Regex;
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Semantic token types for syntax highlighting in the Parse/Complete workflow.
@@ -1133,40 +1131,110 @@ impl SemanticAnalyzer {
 
     /// Extract documentation (POD or comments) preceding a position
     fn extract_documentation(&self, start: usize) -> Option<String> {
-        static POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-        static COMMENT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-
         if self.source.is_empty() {
             return None;
         }
-        let before = &self.source[..start];
 
-        // Check for POD blocks ending with =cut
-        let pod_re = POD_RE
-            .get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$"))
-            .as_ref()
-            .ok()?;
-        if let Some(caps) = pod_re.captures(before) {
-            if let Some(pod_text) = caps.get(1) {
-                return Some(pod_text.as_str().trim().to_string());
+        let bytes = self.source.as_bytes();
+        let mut current = start;
+
+        // Skip whitespace backwards
+        while current > 0 {
+            if !bytes[current - 1].is_ascii_whitespace() {
+                break;
+            }
+            current -= 1;
+        }
+
+        if current == 0 {
+            return None;
+        }
+
+        // Check for POD ending with =cut
+        // Look at the line ending at current
+        let line_end = current;
+        let mut line_start = current;
+        while line_start > 0 && bytes[line_start - 1] != b'\n' {
+            line_start -= 1;
+        }
+
+        let last_line = &self.source[line_start..line_end];
+        if last_line == "=cut" || last_line.trim_end() == "=cut" {
+            // Found end of POD. Scan backwards for start of POD.
+            let mut pod_start = line_start;
+            let mut found_start_command = false;
+
+            // Scan backwards line by line
+            let mut cursor = line_start;
+            while cursor > 0 {
+                let mut prev_line_end = cursor;
+                if bytes[prev_line_end - 1] == b'\n' {
+                    prev_line_end -= 1;
+                }
+                let mut prev_line_start = prev_line_end;
+                while prev_line_start > 0 && bytes[prev_line_start - 1] != b'\n' {
+                    prev_line_start -= 1;
+                }
+
+                let line_str = &self.source[prev_line_start..prev_line_end];
+                let trimmed = line_str.trim();
+
+                if line_str.starts_with('=') && line_str.len() > 1 && line_str.chars().nth(1).unwrap().is_ascii_alphanumeric() {
+                     // Found a POD command (e.g., =head1). This is a start or part of the block.
+                     pod_start = prev_line_start;
+                     found_start_command = true;
+                } else if line_str.starts_with('=') && trimmed == "=cut" {
+                    // Hit end of previous POD block. Stop.
+                    break;
+                }
+                // If empty line, just continue scanning back.
+
+                cursor = prev_line_start;
+            }
+
+            if found_start_command {
+                return Some(self.source[pod_start..line_end].trim().to_string());
+            } else {
+                 return None;
             }
         }
 
-        // Check for consecutive comment lines
-        let comment_re =
-            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$")).as_ref().ok()?;
-        if let Some(caps) = comment_re.captures(before) {
-            if let Some(comment_match) = caps.get(0) {
-                // Strip the # prefix from each comment line
-                let doc = comment_match
-                    .as_str()
-                    .lines()
-                    .map(|line| line.trim_start_matches('#').trim())
-                    .filter(|line| !line.is_empty())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                return Some(doc);
+        // Check for comments
+        // Scan backwards for lines containing '#'
+        let mut comment_lines = Vec::new();
+        let mut cursor = line_end; // Start at the end of the last non-empty line
+
+        // We know the line ending at `current` (which is `line_end`) is not empty/whitespace (we skipped trailing whitespace).
+        // Check this line first.
+        loop {
+            // Find start of current line
+            let mut l_start = cursor;
+            while l_start > 0 && bytes[l_start - 1] != b'\n' {
+                l_start -= 1;
             }
+
+            let line = &self.source[l_start..cursor];
+            if let Some(idx) = line.find('#') {
+                // Found comment
+                let comment_content = line[idx + 1..].trim();
+                comment_lines.push(comment_content.to_string());
+            } else {
+                // No # in this line. Stop.
+                break;
+            }
+
+            // Move to previous line
+            if l_start == 0 {
+                break;
+            }
+            cursor = l_start - 1; // Skip the newline
+            // But handle empty lines? The regex `(#.*\n)+` does NOT allow empty lines in between.
+            // It matches contiguous block of lines containing #.
+        }
+
+        if !comment_lines.is_empty() {
+            comment_lines.reverse();
+            return Some(comment_lines.join(" "));
         }
 
         None
@@ -1689,6 +1757,39 @@ my $y = $x;
     }
 
     #[test]
+    fn test_real_pod_extraction() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+=head1 NAME
+
+MySub - Does something useful
+
+=head1 SYNOPSIS
+
+    my_sub();
+
+=cut
+sub my_sub { 1 }
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols = analyzer.symbol_table().find_symbol(
+            "my_sub",
+            0,
+            crate::symbol::SymbolKind::Subroutine,
+        );
+        assert!(!sub_symbols.is_empty());
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let doc = hover.documentation.as_ref().ok_or("doc not found")?;
+
+        assert!(doc.contains("=head1 NAME"));
+        assert!(doc.contains("MySub - Does something useful"));
+        assert!(doc.contains("=head1 SYNOPSIS"));
+        Ok(())
+    }
+
+    #[test]
     fn test_pod_documentation_extraction() -> Result<(), Box<dyn std::error::Error>> {
         // Test with a simple case that parses correctly
         let code = r#"# Simple comment before sub
@@ -2061,4 +2162,5 @@ my $adder = sub {
         }
         Ok(())
     }
+
 }
