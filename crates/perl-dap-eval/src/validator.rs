@@ -3,7 +3,7 @@
 //! This module provides the core validation logic for detecting dangerous
 //! operations in Perl expressions during debug evaluation.
 
-use crate::patterns::{ASSIGNMENT_OPERATORS, DANGEROUS_OPS_RE, REGEX_MUTATION_RE};
+use crate::patterns::{ASSIGNMENT_OPERATORS, dangerous_ops_re, regex_mutation_re};
 
 /// Error type for unsafe expression detection
 #[derive(Debug, Clone, thiserror::Error)]
@@ -104,10 +104,7 @@ impl SafeEvaluator {
 
     /// Check for dangerous operations in the expression
     fn check_dangerous_operations(&self, expression: &str) -> ValidationResult {
-        let Some(re) = DANGEROUS_OPS_RE.as_ref().ok() else {
-            // If regex failed to compile, be conservative and allow
-            return Ok(());
-        };
+        let re = dangerous_ops_re();
 
         for mat in re.find_iter(expression) {
             let op = mat.as_str();
@@ -143,9 +140,7 @@ impl SafeEvaluator {
 
     /// Check for regex mutation operators (s///, tr///, y///)
     fn check_regex_mutation(&self, expression: &str) -> ValidationResult {
-        let Some(re) = REGEX_MUTATION_RE.as_ref().ok() else {
-            return Ok(());
-        };
+        let re = regex_mutation_re();
 
         if let Some(mat) = re.find(expression) {
             let op = mat.as_str();

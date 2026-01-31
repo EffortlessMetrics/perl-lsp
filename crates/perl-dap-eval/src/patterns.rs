@@ -3,8 +3,8 @@
 //! This module defines the patterns used to detect dangerous Perl operations
 //! that should be blocked during safe expression evaluation.
 
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::OnceLock;
 
 /// List of dangerous Perl operations that can mutate state, perform I/O, or execute code
 ///
@@ -129,18 +129,26 @@ pub const ASSIGNMENT_OPERATORS: &[&str] = &[
 /// Compiled regex for dangerous operations
 ///
 /// Pattern matches word boundaries around operation names.
-pub static DANGEROUS_OPS_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
-    let pattern = format!(r"\b(?:{})\b", DANGEROUS_OPERATIONS.join("|"));
-    Regex::new(&pattern)
-});
+pub fn dangerous_ops_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        let pattern = format!(r"\b(?:{})\b", DANGEROUS_OPERATIONS.join("|"));
+        #[allow(clippy::expect_used)]
+        Regex::new(&pattern).expect("Dangerous ops regex compilation failed")
+    })
+}
 
 /// Compiled regex for regex mutation operators (s///, tr///, y///)
 ///
 /// Matches s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace).
-pub static REGEX_MUTATION_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
-    // Match s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace)
-    Regex::new(r"\b(?:s|tr|y)[^\w\s]")
-});
+pub fn regex_mutation_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        // Match s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace)
+        #[allow(clippy::expect_used)]
+        Regex::new(r"\b(?:s|tr|y)[^\w\s]").expect("Mutation regex compilation failed")
+    })
+}
 
 #[cfg(test)]
 mod tests {
@@ -148,9 +156,7 @@ mod tests {
 
     #[test]
     fn test_dangerous_ops_regex() {
-        let Some(re) = DANGEROUS_OPS_RE.as_ref().ok() else {
-            panic!("regex should compile");
-        };
+        let re = dangerous_ops_re();
 
         // Should match dangerous ops
         assert!(re.is_match("system('ls')"));
@@ -163,9 +169,7 @@ mod tests {
 
     #[test]
     fn test_regex_mutation_regex() {
-        let Some(re) = REGEX_MUTATION_RE.as_ref().ok() else {
-            panic!("regex should compile");
-        };
+        let re = regex_mutation_re();
 
         // Should match s///, tr///, y///
         assert!(re.is_match("s/foo/bar/"));

@@ -1503,7 +1503,6 @@ dependencies = [
 name = "perl-dap-eval"
 version = "0.1.0"
 dependencies = [
- "once_cell",
  "perl-tdd-support",
  "regex",
  "thiserror",
