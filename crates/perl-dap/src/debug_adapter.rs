@@ -210,7 +210,7 @@ fn regex_mutation_re() -> Option<&'static Regex> {
             // Match s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace)
             // Common delimiters: / # | ! { [ ( ' "
             // Note: We filter out escape sequences like \s manually after matching
-            Regex::new(r"\b(?:s|tr|y)[^\w\s]")
+            Regex::new(r"\b(?:s|tr|y)\s*[^\w\s]")
         })
         .as_ref()
         .ok()
@@ -3213,6 +3213,22 @@ DB<1>"#;
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_bypass_whitespace() {
+        // These patterns use whitespace to bypass the regex check
+        let blocked = [
+            "s /foo/bar/",
+            "tr /a/b/",
+            "y /a/b/",
+            "$x =~ s /foo/bar/",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expression '{}' should be blocked", expr);
         }
     }
 }
