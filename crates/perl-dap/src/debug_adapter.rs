@@ -193,6 +193,19 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "shmat",
                 "shmdt",
                 "shmctl",
+                // List/Hash mutation/iteration (side effects)
+                "each",
+                "keys",
+                "values",
+                "map",
+                "grep",
+                "sort",
+                // Variable mutation
+                "chomp",
+                "chop",
+                // Input consumption
+                "getc",
+                "read",
             ];
             // Build pattern: \b(op1|op2|...)\b
             let pattern = format!(r"\b(?:{})\b", ops.join("|"));
@@ -1844,6 +1857,86 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
     in_sq
 }
 
+/// Check if the match is a method call ($obj->method)
+fn is_method_call(s: &str, op_start: usize) -> bool {
+    let bytes = s.as_bytes();
+    if op_start < 2 {
+        return false;
+    }
+    // Scan backwards from op_start skipping whitespace
+    let mut i = op_start;
+    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+    if i < 2 {
+        return false;
+    }
+    bytes[i - 1] == b'>' && bytes[i - 2] == b'-'
+}
+
+/// Check if the match is a safe hash key or fat comma key
+/// e.g. $hash{key} or key => value
+fn is_safe_hash_key_or_fat_comma(s: &str, op_start: usize, op_end: usize) -> bool {
+    let bytes = s.as_bytes();
+
+    // Check for fat comma => after the word (ignoring whitespace)
+    let mut i = op_end;
+    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+        i += 1;
+    }
+    if i + 1 < bytes.len() && bytes[i] == b'=' && bytes[i + 1] == b'>' {
+        return true;
+    }
+
+    // Check for hash key braces { word }
+    // 1. Must be followed by } (ignoring whitespace)
+    let mut j = op_end;
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    if j >= bytes.len() || bytes[j] != b'}' {
+        return false;
+    }
+
+    // 2. Must be preceded by { (ignoring whitespace)
+    let mut k = op_start;
+    while k > 0 && bytes[k - 1].is_ascii_whitespace() {
+        k -= 1;
+    }
+    if k == 0 || bytes[k - 1] != b'{' {
+        return false;
+    }
+
+    // 3. Check what is before { to distinguish $hash{key} (safe) from block { key } (unsafe)
+    // Scan back from { (k-1)
+    let mut m = k - 1;
+    while m > 0 && bytes[m - 1].is_ascii_whitespace() {
+        m -= 1;
+    }
+    if m == 0 {
+        // Starts with {. Likely a block { system } -> unsafe
+        return false;
+    }
+
+    let prev = bytes[m - 1];
+    // If preceded by sigil or deref indicator, it's a lookup
+    if matches!(prev, b'$' | b'@' | b'%' | b']' | b'}' | b'>' | b'\'' | b'"' | b')') {
+        return true;
+    }
+
+    // If preceded by identifier char:
+    // $hash{key} (no space usually) -> Safe
+    // map { key } (space usually) -> Unsafe block
+    if prev.is_ascii_alphanumeric() || prev == b'_' {
+        // If there was NO whitespace between identifier and {, assume hash lookup
+        if k - 1 == m {
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Check if the match is CORE:: or CORE::GLOBAL:: qualified (must block these)
 fn is_core_qualified(s: &str, op_start: usize) -> bool {
     let bytes = s.as_bytes();
@@ -2066,7 +2159,23 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
                 continue;
             }
 
-            // Block: either bare op or CORE:: qualified
+            // Allow if it's a safe hash key ($hash{key}) or fat comma key (key => val)
+            if is_safe_hash_key_or_fat_comma(expression, start, end) {
+                continue;
+            }
+
+            // Contextual check: Some ops are safe as method calls, others are always dangerous
+            let is_contextual_op = matches!(
+                op,
+                "map" | "grep" | "sort" | "keys" | "values" | "each" | "chomp" | "chop" | "getc"
+                    | "read"
+            );
+
+            if is_contextual_op && is_method_call(expression, start) {
+                continue;
+            }
+
+            // Block: either bare op, CORE:: qualified, or unsafe usage
             return Some(format!(
                 "Safe evaluation mode: potentially mutating operation '{}' not allowed (use allowSideEffects: true)",
                 op
