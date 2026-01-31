@@ -9,3 +9,7 @@
 ## 2026-01-29 - [Placeholder UI Elements]
 **Learning:** Exposing placeholder or "coming soon" features in main UI menus (like Status Menu) is considered a UX regression if the commands are not fully functional, even if they provide a "roadmap" message.
 **Action:** Only add commands to high-visibility menus (like Status Menu) if they perform a functional action immediately; avoid "dead" or "informational only" interaction points for core tasks.
+
+## 2026-01-31 - [Context-Aware QuickPick Menus]
+**Learning:** Users often invoke global menus (like Status Bar actions) in invalid contexts. Statically listing all commands leads to runtime errors or confusion.
+**Action:** Dynamically construct `QuickPickItem` arrays at runtime, using `disabled: boolean` and updating `detail` text to explain why an action is unavailable, rather than hiding it completely (which aids discoverability).
