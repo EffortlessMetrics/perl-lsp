@@ -410,6 +410,62 @@ fn did_change_configuration_updates_workspace_settings() -> Result<(), Box<dyn s
     Ok(())
 }
 
+#[test]
+fn did_change_configuration_sanitizes_include_paths() -> Result<(), Box<dyn std::error::Error>> {
+    let (mut server, _buffer) = create_test_server();
+
+    // Initialize and mark ready
+    initialize_server(&mut server);
+
+    // Send didChangeConfiguration notification with unsafe paths
+    let req = JsonRpcRequest {
+        _jsonrpc: "2.0".into(),
+        id: None, // No ID for notifications
+        method: "workspace/didChangeConfiguration".into(),
+        params: Some(json!({
+            "settings": {
+                "perl": {
+                    "workspace": {
+                        "includePaths": [
+                            "valid/lib",
+                            "../parent",
+                            "/absolute/path",
+                            "lib/../secret"
+                        ]
+                    }
+                }
+            }
+        })),
+    };
+
+    // Process the notification
+    let _ = server.handle_request(req);
+
+    // Verify configuration was updated by requesting it
+    let result = send_request(
+        &mut server,
+        "workspace/configuration",
+        Some(json!(2)),
+        json!({
+            "items": [
+                { "section": "perl.workspace.includePaths" }
+            ]
+        }),
+    );
+
+    let items = result.ok_or("Expected configuration result")?;
+    let array = items.as_array().ok_or("Expected array")?;
+    let paths = array[0].as_array().ok_or("Expected paths array")?;
+
+    // Should only contain the valid path
+    assert!(paths.contains(&json!("valid/lib")));
+    assert!(!paths.contains(&json!("../parent")));
+    assert!(!paths.contains(&json!("/absolute/path")));
+    assert!(!paths.contains(&json!("lib/../secret")));
+    assert_eq!(paths.len(), 1);
+    Ok(())
+}
+
 // =============================================================================
 // Resolution Precedence Documentation Tests
 // =============================================================================

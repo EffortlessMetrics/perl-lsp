@@ -156,8 +156,30 @@ impl WorkspaceConfig {
     pub fn update_from_value(&mut self, settings: &serde_json::Value) {
         if let Some(workspace) = settings.get("workspace") {
             if let Some(paths) = workspace.get("includePaths").and_then(|v| v.as_array()) {
-                self.include_paths =
-                    paths.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect();
+                self.include_paths = paths
+                    .iter()
+                    .filter_map(|v| {
+                        let s = v.as_str()?;
+                        // Security sanitization: prevent path traversal and absolute paths
+                        // 1. Check for parent directory traversal
+                        if s.contains("..") {
+                            eprintln!(
+                                "Security Warning: Ignoring unsafe include path containing '..': {}",
+                                s
+                            );
+                            return None;
+                        }
+                        // 2. Check for absolute paths (Unix and Windows)
+                        if s.starts_with('/')
+                            || s.starts_with('\\')
+                            || (s.len() > 1 && s.chars().nth(1) == Some(':'))
+                        {
+                            eprintln!("Security Warning: Ignoring absolute include path: {}", s);
+                            return None;
+                        }
+                        Some(s.to_string())
+                    })
+                    .collect();
             }
             if let Some(use_inc) = workspace.get("useSystemInc").and_then(|v| v.as_bool()) {
                 // Clear cache if setting changed
