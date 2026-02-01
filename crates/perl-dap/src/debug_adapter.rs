@@ -109,7 +109,12 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "undef",
                 "srand",
                 "bless",
-                "reset", // Process control
+                "reset",
+                "chomp",
+                "chop",
+                "keys",
+                "values",
+                "each", // Process control
                 "system",
                 "exec",
                 "fork",
@@ -120,6 +125,9 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "sleep",
                 "wait",
                 "waitpid",
+                "map",
+                "grep",
+                "sort",
                 "setpgrp",
                 "setpriority",
                 "umask",
@@ -128,14 +136,17 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "readpipe",
                 "syscall",
                 "open",
+                "sysopen",
                 "close",
                 "print",
                 "say",
                 "printf",
+                "read",
                 "sysread",
                 "syswrite",
                 "glob",
                 "readline",
+                "getc",
                 "ioctl",
                 "fcntl",
                 "flock",
@@ -1977,6 +1988,64 @@ fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
     !is_core_qualified(s, op_start)
 }
 
+/// Check if the match is a safe hash key usage (e.g. $hash{map})
+/// This is true only if the operation requires arguments (so Perl interprets it as a string)
+/// operations like `chomp` or `time` which have optional args are NOT safe in hash keys.
+fn is_safe_hash_key(s: &str, op_start: usize, op_end: usize, op_name: &str) -> bool {
+    // Operations that require arguments, so using them as barewords in hash keys
+    // is interpreted as a string literal (auto-quoting) rather than a function call.
+    let safe_ops = [
+        "map",
+        "grep",
+        "sort",
+        "keys",
+        "values",
+        "each",
+        "read",
+        "sysopen",
+        "sysread",
+        "syswrite",
+        "opendir",
+        "closedir",
+        "readdir",
+        "rewinddir",
+        "seekdir",
+        "telldir",
+        "seek",
+        "sysseek",
+        "vec",
+        "index",
+        "rindex",
+        "substr",
+    ];
+
+    if !safe_ops.contains(&op_name) {
+        return false;
+    }
+
+    let bytes = s.as_bytes();
+
+    // Check preceding '{'
+    let mut i = op_start;
+    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+    if i == 0 || bytes[i - 1] != b'{' {
+        return false;
+    }
+
+    // Check following '}'
+    let mut j = op_end;
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    if j >= bytes.len() || bytes[j] != b'}' {
+        return false;
+    }
+
+    true
+}
+
 /// Validate that an expression is safe for evaluation (non-mutating)
 ///
 /// AC10.2: Safe evaluation mode validates expressions don't have side effects
@@ -2063,6 +2132,11 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
 
             // Allow package-qualified names unless it's CORE::
             if is_package_qualified_not_core(expression, start) {
+                continue;
+            }
+
+            // Allow safe hash keys ($hash{map})
+            if is_safe_hash_key(expression, start, end, op) {
                 continue;
             }
 
@@ -2209,8 +2283,14 @@ impl DebugAdapter {
             }
 
             // AC10.2: Safe evaluation mode (non-mutating) by default
-            let allow_side_effects =
-                args.get("allowSideEffects").and_then(|v| v.as_bool()).unwrap_or(false);
+            // If allowSideEffects is not explicitly provided, we infer from context:
+            // - "repl": allow side effects (user typed it)
+            // - "hover", "watch", etc.: deny side effects
+            let context = args.get("context").and_then(|c| c.as_str()).unwrap_or("hover");
+            let allow_side_effects = args
+                .get("allowSideEffects")
+                .and_then(|v| v.as_bool())
+                .unwrap_or_else(|| context == "repl");
 
             // Validate expression safety if side effects are not allowed
             if !allow_side_effects {
