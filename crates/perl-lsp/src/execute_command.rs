@@ -250,6 +250,9 @@ pub struct CommandResult {
 pub struct ExecuteCommandProvider {
     /// Workspace root paths for security enforcement
     workspace_roots: Vec<PathBuf>,
+    /// Trusted files that can be executed even if outside workspace roots
+    /// (e.g. open documents in single-file mode)
+    trusted_files: Vec<PathBuf>,
 }
 
 impl Default for ExecuteCommandProvider {
@@ -264,6 +267,11 @@ impl ExecuteCommandProvider {
     /// Initializes the provider with default configuration optimized for
     /// performance and reliability in LSP environments.
     ///
+    /// # Security Note
+    ///
+    /// Creates a provider with NO trusted context. All file operations will be
+    /// denied by default unless configured with `with_security_context`.
+    ///
     /// # Examples
     ///
     /// ```
@@ -272,7 +280,10 @@ impl ExecuteCommandProvider {
     /// let provider = ExecuteCommandProvider::new();
     /// ```
     pub fn new() -> Self {
-        Self { workspace_roots: Vec::new() }
+        Self {
+            workspace_roots: Vec::new(),
+            trusted_files: Vec::new(),
+        }
     }
 
     /// Create a new execute command provider with workspace root enforcement.
@@ -295,7 +306,29 @@ impl ExecuteCommandProvider {
     /// );
     /// ```
     pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
-        Self { workspace_roots }
+        Self {
+            workspace_roots,
+            trusted_files: Vec::new(),
+        }
+    }
+
+    /// Create a new execute command provider with full security context.
+    ///
+    /// This constructor enables granular security control by defining both
+    /// workspace roots (directory allowlist) and trusted files (file allowlist).
+    ///
+    /// # Arguments
+    ///
+    /// * `workspace_roots` - Allowed directory trees
+    /// * `trusted_files` - Specific allowed files (e.g. open documents)
+    pub fn with_security_context(
+        workspace_roots: Vec<PathBuf>,
+        trusted_files: Vec<PathBuf>,
+    ) -> Self {
+        Self {
+            workspace_roots,
+            trusted_files,
+        }
     }
 
     /// Execute a command with comprehensive error handling and argument validation.
@@ -721,11 +754,11 @@ impl ExecuteCommandProvider {
             .canonicalize()
             .map_err(|e| format!("Failed to canonicalize path '{}': {}", normalized_path, e))?;
 
-        // Enforce workspace root boundaries when configured
-        // Security note: When workspace_roots is empty, path traversal protection is disabled
-        // for backward compatibility. In production, always configure workspace roots via
-        // initialization (root_path or workspaceFolders) to enable security boundaries.
-        // See .jules/sentinel.md for security guidance.
+        // Enforce workspace root boundaries and security context
+        // Security logic (Fail Closed):
+        // 1. If workspace_roots are defined, file MUST be within a root.
+        // 2. If workspace_roots are empty, file MUST be in trusted_files.
+        // 3. If neither are defined, execution is DENIED.
         if !self.workspace_roots.is_empty() {
             let mut allowed = false;
             for workspace_root in &self.workspace_roots {
@@ -744,6 +777,18 @@ impl ExecuteCommandProvider {
                     canonical_path.display()
                 ));
             }
+        } else if !self.trusted_files.is_empty() {
+            // Single-file mode: Check if file is explicitly trusted (e.g. open in editor)
+            // Note: trusted_files should already be canonicalized by caller
+            if !self.trusted_files.contains(&canonical_path) {
+                return Err(format!(
+                    "Security violation: {} is not a trusted file (must be open in editor)",
+                    canonical_path.display()
+                ));
+            }
+        } else {
+            // Fail closed: No context provided
+            return Err("Security violation: No workspace roots or trusted files configured.".to_string());
         }
 
         // Validate file existence and readability
@@ -1045,7 +1090,11 @@ print "Value: $variable\n";
         let temp_file = "/tmp/test_violations_unit.pl";
         fs::write(temp_file, test_content)?;
 
-        let provider = ExecuteCommandProvider::new();
+        // Provide file as trusted context
+        let provider = ExecuteCommandProvider::with_security_context(
+            vec![],
+            vec![PathBuf::from(temp_file).canonicalize()?],
+        );
         let result =
             provider.execute_command("perl.runCritic", vec![Value::String(temp_file.to_string())]);
 
@@ -1122,12 +1171,15 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a test file to ensure we get a specific result
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test';\n";
         let temp_file = "/tmp/test_run_tests.pl";
         fs::write(temp_file, test_content)?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            vec![],
+            vec![PathBuf::from(temp_file).canonicalize()?],
+        );
 
         let result =
             provider.execute_command("perl.runTests", vec![Value::String(temp_file.to_string())]);
@@ -1146,12 +1198,15 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_file() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a test file
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'hello world';\n";
         let temp_file = "/tmp/test_run_file.pl";
         fs::write(temp_file, test_content)?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            vec![],
+            vec![PathBuf::from(temp_file).canonicalize()?],
+        );
 
         let result =
             provider.execute_command("perl.runFile", vec![Value::String(temp_file.to_string())]);
@@ -1170,12 +1225,15 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_test_sub() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a test file with a subroutine
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_sub { print 'test executed'; }\n";
         let temp_file = "/tmp/test_run_test_sub.pl";
         fs::write(temp_file, test_content)?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            vec![],
+            vec![PathBuf::from(temp_file).canonicalize()?],
+        );
 
         let result = provider.execute_command(
             "perl.runTestSub",
@@ -1196,11 +1254,14 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_debug_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a dummy file
         let temp_file = "/tmp/test_debug.pl";
         fs::write(temp_file, "print 'debug';")?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            vec![],
+            vec![PathBuf::from(temp_file).canonicalize()?],
+        );
 
         let result =
             provider.execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
@@ -1241,11 +1302,14 @@ print "Value: $variable\n";
     #[test]
     fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std::error::Error>>
     {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a dummy file
         let temp_file = "/tmp/test_missing_sub.pl";
         fs::write(temp_file, "sub test {}")?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            vec![],
+            vec![PathBuf::from(temp_file).canonicalize()?],
+        );
 
         // Test runTestSub with only file path, missing subroutine name
         let result =
@@ -1498,11 +1562,14 @@ print "Value: $variable\n";
 
     #[test]
     fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a dummy file
         let temp_file = "/tmp/test_mutations.pl";
         fs::write(temp_file, "print 'test';")?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            vec![],
+            vec![PathBuf::from(temp_file).canonicalize()?],
+        );
 
         // This test ensures that execute_command cannot return Ok(Default::default())
         // when it should return meaningful data
@@ -1897,6 +1964,80 @@ print "Value: $variable\n";
         fs::remove_dir_all(&workspace_dir2).ok();
         fs::remove_file(&outside_file).ok();
 
+        Ok(())
+    }
+
+    // ============= SECURITY TESTS =============
+
+    #[test]
+    fn test_execute_command_fail_closed() -> Result<(), Box<dyn std::error::Error>> {
+        // Create a dummy file
+        let temp_file = "/tmp/test_fail_closed.pl";
+        fs::write(temp_file, "print 'test';")?;
+
+        // Provider with NO roots and NO trusted files
+        let provider = ExecuteCommandProvider::new();
+
+        let result =
+            provider.execute_command("perl.runFile", vec![Value::String(temp_file.to_string())]);
+
+        // Clean up
+        fs::remove_file(temp_file).ok();
+
+        // Verify denial
+        assert!(result.is_err(), "Should deny execution with no context");
+        let error = result.unwrap_err();
+        assert!(error.contains("Security violation"), "Should report security violation");
+        assert!(error.contains("No workspace roots or trusted files"), "Should explain why");
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_command_single_file_trusted() -> Result<(), Box<dyn std::error::Error>> {
+        // Create a dummy file
+        let temp_file = "/tmp/test_single_trusted.pl";
+        fs::write(temp_file, "print 'test';")?;
+
+        // Provider with trusted file
+        let trusted = vec![PathBuf::from(temp_file).canonicalize()?];
+        let provider = ExecuteCommandProvider::with_security_context(vec![], trusted);
+
+        let result =
+            provider.execute_command("perl.runFile", vec![Value::String(temp_file.to_string())]);
+
+        // Clean up
+        fs::remove_file(temp_file).ok();
+
+        // Verify success
+        assert!(result.is_ok(), "Should allow execution of trusted file");
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_command_single_file_untrusted() -> Result<(), Box<dyn std::error::Error>> {
+        // Create two dummy files
+        let trusted_file = "/tmp/test_trusted.pl";
+        let untrusted_file = "/tmp/test_untrusted.pl";
+        fs::write(trusted_file, "print 'trusted';")?;
+        fs::write(untrusted_file, "print 'untrusted';")?;
+
+        // Provider trusting only one file
+        let trusted = vec![PathBuf::from(trusted_file).canonicalize()?];
+        let provider = ExecuteCommandProvider::with_security_context(vec![], trusted);
+
+        // Try to execute the untrusted file
+        let result = provider
+            .execute_command("perl.runFile", vec![Value::String(untrusted_file.to_string())]);
+
+        // Clean up
+        fs::remove_file(trusted_file).ok();
+        fs::remove_file(untrusted_file).ok();
+
+        // Verify denial
+        assert!(result.is_err(), "Should deny execution of untrusted file");
+        let error = result.unwrap_err();
+        assert!(error.contains("Security violation"), "Should report security violation");
+        assert!(error.contains("not a trusted file"), "Should explain why");
         Ok(())
     }
 }

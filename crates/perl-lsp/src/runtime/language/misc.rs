@@ -1063,7 +1063,25 @@ impl LspServer {
                 }
             }
 
-            let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots);
+            // Collect open documents as trusted files for single-file mode
+            let mut trusted_files = Vec::new();
+            {
+                let documents = self.documents_guard();
+                for uri in documents.keys() {
+                    if let Ok(parsed) = url::Url::parse(uri) {
+                        if let Ok(path) = parsed.to_file_path() {
+                            // Try to canonicalize if possible to match resolve_path_from_args
+                            if let Ok(canonical) = path.canonicalize() {
+                                trusted_files.push(canonical);
+                            } else {
+                                trusted_files.push(path);
+                            }
+                        }
+                    }
+                }
+            }
+
+            let provider = ExecuteCommandProvider::with_security_context(workspace_roots, trusted_files);
 
             match command {
                 // Keep existing test commands for backward compatibility
