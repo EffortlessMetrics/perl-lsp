@@ -51,6 +51,7 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use perl_parser_core::builtins::builtin_signatures_phf::is_builtin;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::ops::Range;
@@ -1190,39 +1191,30 @@ fn is_known_function(name: &str) -> bool {
         return false;
     }
 
-    match name {
-        // I/O functions
-        "print" | "printf" | "say" | "open" | "close" | "read" | "write" | "seek" | "tell"
-        | "eof" | "fileno" | "binmode" | "sysopen" | "sysread" | "syswrite" | "sysclose"
-        | "select" |
-        // String functions
-        "chomp" | "chop" | "chr" | "crypt" | "fc" | "hex" | "index" | "lc" | "lcfirst" | "length"
-        | "oct" | "ord" | "pack" | "q" | "qq" | "qr" | "quotemeta" | "qw" | "qx" | "reverse"
-        | "rindex" | "sprintf" | "substr" | "tr" | "uc" | "ucfirst" | "unpack" |
-        // Array/List functions
-        "pop" | "push" | "shift" | "unshift" | "splice" | "split" | "join" | "grep" | "map"
-        | "sort" |
-        // Hash functions
-        "delete" | "each" | "exists" | "keys" | "values" |
-        // Control flow
-        "die" | "exit" | "return" | "goto" | "last" | "next" | "redo" | "continue" | "break"
-        | "given" | "when" | "default" |
-        // File test operators
-        "stat" | "lstat" | "-r" | "-w" | "-x" | "-o" | "-R" | "-W" | "-X" | "-O" | "-e" | "-z"
-        | "-s" | "-f" | "-d" | "-l" | "-p" | "-S" | "-b" | "-c" | "-t" | "-u" | "-g" | "-k"
-        | "-T" | "-B" | "-M" | "-A" | "-C" |
-        // System functions
-        "system" | "exec" | "fork" | "wait" | "waitpid" | "kill" | "sleep" | "alarm"
-        | "getpgrp" | "getppid" | "getpriority" | "setpgrp" | "setpriority" | "time" | "times"
-        | "localtime" | "gmtime" |
-        // Math functions
-        "abs" | "atan2" | "cos" | "exp" | "int" | "log" | "rand" | "sin" | "sqrt" | "srand" |
-        // Misc functions
-        "defined" | "undef" | "ref" | "bless" | "tie" | "tied" | "untie" | "eval" | "caller"
-        | "import" | "require" | "use" | "do" | "package" | "sub" | "my" | "our" | "local"
-        | "state" | "scalar" | "wantarray" | "warn" => true,
-        _ => false,
+    // Fast path: use PHF for O(1) lookup of standard builtins
+    if is_builtin(name) {
+        return true;
     }
+
+    // Fallback for keywords and operators not in the builtins list
+    matches!(
+        name,
+        "sysclose"
+            | "q"
+            | "qq"
+            | "qr"
+            | "qw"
+            | "qx"
+            | "tr"
+            | "continue"
+            | "break"
+            | "given"
+            | "when"
+            | "default"
+            | "import"
+            | "package"
+            | "sub"
+    )
 }
 
 /// Check if an identifier is a known filehandle
@@ -1235,5 +1227,43 @@ fn is_filehandle(name: &str) -> bool {
             // Check if it's all uppercase (common convention for filehandles)
             name.chars().all(|c| c.is_ascii_uppercase() || c == '_') && !name.is_empty()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_known_function() {
+        // Standard builtins from PHF
+        assert!(is_known_function("print"));
+        assert!(is_known_function("open"));
+        assert!(is_known_function("shift"));
+        assert!(is_known_function("defined"));
+        assert!(is_known_function("abs"));
+
+        // Fallback keywords
+        assert!(is_known_function("given"));
+        assert!(is_known_function("when"));
+        assert!(is_known_function("default"));
+        assert!(is_known_function("continue"));
+        assert!(is_known_function("break"));
+        assert!(is_known_function("package"));
+        assert!(is_known_function("sub"));
+        assert!(is_known_function("import"));
+        assert!(is_known_function("sysclose"));
+        assert!(is_known_function("q"));
+        assert!(is_known_function("qq"));
+        assert!(is_known_function("tr"));
+
+        // Uppercase/Invalid
+        assert!(!is_known_function("MyClass"));
+        assert!(!is_known_function("Foo"));
+        assert!(!is_known_function(""));
+
+        // Unknown
+        assert!(!is_known_function("unknown_func"));
+        assert!(!is_known_function("my_variable"));
     }
 }
