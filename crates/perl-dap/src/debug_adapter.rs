@@ -169,7 +169,12 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "link", // Code loading/execution
                 "eval",
                 "require",
-                "do", // Tie mechanism (can execute arbitrary code)
+                "do",
+                "use",
+                "no",
+                "goto",
+                "package",
+                // Tie mechanism (can execute arbitrary code)
                 "tie",
                 "untie", // Network
                 "socket",

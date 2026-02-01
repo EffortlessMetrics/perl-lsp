@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-10-26 - Missing Safe Evaluation Blocks for Compile-Time Directives
+**Vulnerability:** The `perl-dap` safe evaluation mode failed to block `use`, `no`, `goto`, and `package`. While `require` was blocked, `use` (which runs at compile-time but can be triggered in eval) allows arbitrary module loading and execution of `import` methods. `goto` allows control flow manipulation.
+**Learning:** Security blocklists for "safe" execution must account for language constructs that operate at different phases (compile-time vs run-time) if the evaluation context (like `eval`) flattens them. Blocking `require` is insufficient if `use` is allowed.
+**Prevention:** Audit all keywords in the language, not just functions. Explicitly block compile-time directives and control flow keywords in safe evaluation contexts.
