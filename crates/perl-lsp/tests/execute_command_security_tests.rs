@@ -77,29 +77,16 @@ fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
     // Clean up
     std::fs::remove_file(test_file).ok();
 
-    assert!(result.is_ok(), "Command should not fail to spawn");
-    let val = result?;
-    let output = val["output"].as_str().ok_or("Missing 'output' field")?;
+    // With enhanced validation, this should be rejected BEFORE execution
+    assert!(result.is_err(), "Malicious sub_name should be rejected by validation");
 
-    // Key assertions:
-    // 1. The injected print statement should NOT have executed
+    let err = result.unwrap_err();
     assert!(
-        !output.contains("INJECTED_CODE_RAN"),
-        "Vulnerability: code injection via sub_name succeeded! Output: {}",
-        output
+        err.contains("Invalid subroutine name"),
+        "Error should be about validation: {}",
+        err
     );
 
-    // 2. The safe_sub should NOT have been called either (the malicious name
-    //    includes "safe_sub()" but that should be treated literally, not executed)
-    assert!(
-        !output.contains("SAFE_SUB_EXECUTED"),
-        "Unexpected: safe_sub was called despite malicious sub_name. Output: {}",
-        output
-    );
-
-    // 3. The command should have failed because no subroutine with that literal name exists
-    let success = val["success"].as_bool().ok_or("Missing 'success' field")?;
-    assert!(!success, "Command should have failed (subroutine not found)");
     Ok(())
 }
 
