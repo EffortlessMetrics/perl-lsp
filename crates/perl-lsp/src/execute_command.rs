@@ -93,10 +93,14 @@
 
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 use crate::protocol::JsonRpcError;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
+
+static VALID_SUB_NAME_RE: OnceLock<Regex> = OnceLock::new();
 
 // Cross-platform helpers for synthesizing `ExitStatus` in tests/mocks.
 #[cfg(any(test, doctest))]
@@ -406,6 +410,9 @@ impl ExecuteCommandProvider {
 
     /// Run a specific test subroutine with enhanced error handling
     fn run_test_sub(&self, file_path: &Path, sub_name: &str) -> Result<Value, String> {
+        // Validate subroutine name to prevent execution of unintended functions (e.g. CORE::system)
+        self.validate_subroutine_name(sub_name)?;
+
         // Enhanced subroutine invocation with better error detection
         // Use @ARGV to safely pass file path and subroutine name preventing code injection
         let perl_code = r#"
@@ -838,6 +845,36 @@ impl ExecuteCommandProvider {
             .output()
             .map(|output| output.status.success())
             .unwrap_or(false)
+    }
+
+    /// Validate subroutine name to prevent code injection and ensure valid identifier.
+    ///
+    /// This ensures the subroutine name is a valid Perl identifier and blocks
+    /// potentially dangerous built-ins or special characters.
+    fn validate_subroutine_name(&self, name: &str) -> Result<(), String> {
+        if name.trim().is_empty() {
+            return Err("Subroutine name cannot be empty".to_string());
+        }
+
+        // Explicitly block CORE:: and CORE::GLOBAL:: prefixes to prevent execution of built-ins
+        if name.starts_with("CORE::") {
+            return Err("CORE:: subroutines are not allowed".to_string());
+        }
+
+        // Regex for valid Perl subroutine name (package qualified)
+        // Matches: Start with alpha/underscore, then word chars.
+        // Can be followed by :: and more word chars (must start with alpha/underscore).
+        // Example: main::sub, My::Module::test_func
+        let re = VALID_SUB_NAME_RE.get_or_init(|| {
+            #[allow(clippy::expect_used)]
+            Regex::new(r"^[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*$").expect("Invalid regex")
+        });
+
+        if !re.is_match(name) {
+            return Err(format!("Invalid subroutine name format: '{}'", name));
+        }
+
+        Ok(())
     }
 }
 
@@ -1898,5 +1935,32 @@ print "Value: $variable\n";
         fs::remove_file(&outside_file).ok();
 
         Ok(())
+    }
+
+    #[test]
+    fn test_validate_subroutine_name() {
+        let provider = ExecuteCommandProvider::new();
+
+        // Valid names
+        assert!(provider.validate_subroutine_name("test").is_ok());
+        assert!(provider.validate_subroutine_name("test_sub").is_ok());
+        assert!(provider.validate_subroutine_name("My::Module::test").is_ok());
+        assert!(provider.validate_subroutine_name("main::sub").is_ok());
+        assert!(provider.validate_subroutine_name("A").is_ok());
+        assert!(provider.validate_subroutine_name("_internal").is_ok());
+
+        // Invalid names
+        assert!(provider.validate_subroutine_name("").is_err());
+        assert!(provider.validate_subroutine_name("   ").is_err());
+        assert!(provider.validate_subroutine_name("123test").is_err()); // Starts with digit
+        assert!(provider.validate_subroutine_name("-flag").is_err()); // Starts with hyphen
+        assert!(provider.validate_subroutine_name("test; rm -rf /").is_err()); // Special chars
+        assert!(provider.validate_subroutine_name("system('calc')").is_err()); // Function call syntax
+        assert!(provider.validate_subroutine_name("Foo'Bar").is_err()); // Old separator
+        assert!(provider.validate_subroutine_name("CORE::system").is_err()); // CORE:: prefix
+        assert!(provider.validate_subroutine_name("CORE::GLOBAL::exit").is_err()); // CORE:: prefix
+        assert!(provider.validate_subroutine_name("::Foo").is_err()); // Leading separator
+        assert!(provider.validate_subroutine_name("Foo::").is_err()); // Trailing separator
+        assert!(provider.validate_subroutine_name("Foo::::Bar").is_err()); // Double separator
     }
 }
