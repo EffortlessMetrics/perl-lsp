@@ -108,7 +108,7 @@ slow_tests = []  # Enable slow stress tests (deep nesting, etc.)
 
 [dev-dependencies]
 assert_cmd = "2.1.2"
-insta = { version = "1.46.1", features = ["yaml"] }
+insta = { version = "1.46.2", features = ["yaml"] }
 criterion = "0.8.1"
 parking_lot = "0.12.5"
 predicates = "3.1.3"

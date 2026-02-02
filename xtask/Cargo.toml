@@ -11,7 +11,7 @@ keywords = ["perl", "parser", "lsp", "tasks"]
 categories = ["development-tools"]
 
 [dependencies]
-clap = { version = "4.5.55", features = ["derive"] }
+clap = { version = "4.5.56", features = ["derive"] }
 color-eyre = "0.6.5"
 cargo_metadata = "0.23.1"
 difference = "2.0.0"
