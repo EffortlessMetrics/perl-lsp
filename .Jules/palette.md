@@ -9,3 +9,7 @@
 ## 2026-01-29 - [Placeholder UI Elements]
 **Learning:** Exposing placeholder or "coming soon" features in main UI menus (like Status Menu) is considered a UX regression if the commands are not fully functional, even if they provide a "roadmap" message.
 **Action:** Only add commands to high-visibility menus (like Status Menu) if they perform a functional action immediately; avoid "dead" or "informational only" interaction points for core tasks.
+
+## 2026-02-18 - [Context-Aware QuickPick Menus]
+**Learning:** Standard VS Code `QuickPickItem` lacks a native `disabled` state in some API versions. A reusable pattern is to append `(Not available)` to the label, provide a descriptive `detail` explaining why, and strip the command to prevent execution, effectively creating a "disabled" state that educates the user.
+**Action:** Use the `createAction` helper pattern to dynamically enable/disable menu items based on `activeTextEditor` context instead of showing error messages after the fact.
