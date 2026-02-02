@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-05-27 - Safe Evaluation Bypass via Package Separator
+**Vulnerability:** The `perl-dap` safe evaluation mode checks failed to detect dangerous operations when they were prefixed with a package name using the archaic `'` separator (e.g., `main'system('ls')`). The parser treated the `'` as the start of a string literal, causing the dangerous operation `system` to be ignored as "string content".
+**Learning:** Parsing logic that attempts to identify safe constructs (like string literals) using simple state machines must account for all syntactic ambiguities in the language. In Perl, `'` can be a package separator if preceded by an identifier, not just a quote delimiter.
+**Prevention:** Enhanced the string detection logic to check the preceding character. If `'` is preceded by a word character, it is treated as a package separator, ensuring the subsequent code is analyzed for dangerous operations.
