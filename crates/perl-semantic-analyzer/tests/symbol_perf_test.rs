@@ -123,3 +123,30 @@ sub documented_sub {
     assert_eq!(sub_symbols.len(), 1);
     assert!(sub_symbols[0].documentation.is_some());
 }
+
+#[test]
+#[ignore]
+fn benchmark_interpolated_string_extraction() {
+    // Generate code with many interpolated strings
+    let count = 5000;
+    let mut code = String::from("sub test {\n");
+    for i in 0..count {
+        code.push_str(&format!("    my $v{} = \"Hello $name{}\";\n", i, i));
+    }
+    code.push_str("}\n");
+
+    let mut parser = Parser::new(&code);
+    let ast = parser.parse().expect("parse");
+
+    // Warm up
+    let extractor = SymbolExtractor::new_with_source(&code);
+    let _ = extractor.extract(&ast);
+
+    let start = Instant::now();
+    let extractor = SymbolExtractor::new_with_source(&code);
+    let table = extractor.extract(&ast);
+    let duration = start.elapsed();
+
+    println!("Interpolated string extraction ({} strings): {:?}", count, duration);
+    println!("References extracted: {}", table.references.len());
+}
