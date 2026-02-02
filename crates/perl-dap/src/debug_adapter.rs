@@ -1823,6 +1823,7 @@ impl DebugAdapter {
 fn is_in_single_quotes(s: &str, idx: usize) -> bool {
     let mut in_sq = false;
     let mut escaped = false;
+    let mut prev_char: Option<char> = None;
 
     for (i, ch) in s.char_indices() {
         if i >= idx {
@@ -1837,8 +1838,17 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
                 in_sq = false;
             }
         } else if ch == '\'' {
-            in_sq = true;
+            // Check if this is likely a package separator (preceded by word char)
+            // If so, do NOT treat as quote start to prevent bypassing security checks
+            // e.g. "main'system" -> ' is separator, system is unquoted and blocked
+            let is_package_separator =
+                prev_char.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+
+            if !is_package_separator {
+                in_sq = true;
+            }
         }
+        prev_char = Some(ch);
     }
 
     in_sq
@@ -3213,6 +3223,26 @@ DB<1>"#;
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_bypass_package_separator() {
+        // These patterns try to use the ' package separator to trick the safe eval logic
+        // into thinking the dangerous op is inside a string
+        let blocked = [
+            "main'system('ls')",
+            "CORE'system('ls')",
+            "$x = main'exec",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(
+                err.is_some(),
+                "Package separator bypass allowed dangerous op: {}",
+                expr
+            );
         }
     }
 }
