@@ -26,3 +26,7 @@ A simple swap to prioritize `is_known_function` (string match) over `is_in_hash_
 ## 2026-06-01 - [Cross-Crate Closure Inlining Regression]
 **Learning:** Replacing `node.children()` (allocates `Vec`) with `node.for_each_child(|child| recursive_fn(child))` caused a 45% regression in recursive AST traversal. This is likely due to the overhead of passing a large closure (capturing recursive state) to a non-inlined method in another crate. Adding `#[inline]` helped slightly but did not fully recover performance.
 **Action:** Use specialized helpers like `first_child()` to avoid vector allocation for simple queries, but stick to vector iteration (which is cache-friendly and well-optimized) for full traversals unless the traversal method is guaranteed to be inlined and specialized.
+
+## 2026-06-03 - [PHF vs Optimized Match]
+**Learning:** Replacing a large `match` statement (200+ arms) with a Perfect Hash Function (`phf`) call resulted in a neutral or slightly slower performance (~5-10% regression in micro-benchmark). While `phf` is O(1), LLVM optimizes large `match` blocks on strings into efficient decision trees/tries that can be faster than computing a full hash for short strings.
+**Action:** Use `phf` for code deduplication and maintainability (single source of truth), but do not assume it is faster than a hardcoded `match` for static sets of short strings.
