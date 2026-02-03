@@ -26,3 +26,7 @@ A simple swap to prioritize `is_known_function` (string match) over `is_in_hash_
 ## 2026-06-01 - [Cross-Crate Closure Inlining Regression]
 **Learning:** Replacing `node.children()` (allocates `Vec`) with `node.for_each_child(|child| recursive_fn(child))` caused a 45% regression in recursive AST traversal. This is likely due to the overhead of passing a large closure (capturing recursive state) to a non-inlined method in another crate. Adding `#[inline]` helped slightly but did not fully recover performance.
 **Action:** Use specialized helpers like `first_child()` to avoid vector allocation for simple queries, but stick to vector iteration (which is cache-friendly and well-optimized) for full traversals unless the traversal method is guaranteed to be inlined and specialized.
+
+## 2026-01-26 - [Regex Compilation in Loop]
+**Learning:** Repeatedly compiling regexes in functions called frequently (e.g. `extract_vars_from_string` for every interpolated string) is a major bottleneck. Replacing with `OnceLock<Regex>` yielded a ~1000x improvement (14s -> 13ms) for heavy interpolation workloads.
+**Action:** Always use `static OnceLock<Regex>` for regexes that are constant and used in loops or frequently called functions. Verify with benchmarks.

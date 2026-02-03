@@ -84,6 +84,42 @@ sub test_{} {{
 }
 
 #[test]
+#[ignore]
+fn benchmark_interpolated_string_extraction() {
+    // Generate code with many interpolated strings
+    let mut code = String::from("sub test_interpolation {\n");
+    for i in 0..5000 {
+        code.push_str(&format!("    my $v{} = \"Value $x_{} and ${{y_{}}}\";\n", i, i, i));
+    }
+    code.push_str("}\n");
+
+    println!("Code size: {} bytes", code.len());
+
+    // Parse once
+    let mut parser = Parser::new(&code);
+    let ast = parser.parse().expect("parse");
+
+    // Warm up
+    for _ in 0..5 {
+        let extractor = SymbolExtractor::new();
+        let _ = extractor.extract(&ast);
+    }
+
+    // Benchmark
+    let start = Instant::now();
+    let extractor = SymbolExtractor::new();
+    let table = extractor.extract(&ast);
+    let duration = start.elapsed();
+
+    println!("Interpolated string extraction time: {:?}", duration);
+    println!("Symbols extracted: {}", table.symbols.len());
+    println!("References extracted: {}", table.references.len());
+
+    // With repeated Regex compilation, this is slow.
+    // With OnceLock, it should be much faster.
+}
+
+#[test]
 fn test_symbol_extraction_with_comments() {
     let code = r#"
 package Example;
