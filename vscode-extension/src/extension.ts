@@ -197,14 +197,43 @@ export async function activate(context: vscode.ExtensionContext) {
         interface MenuAction extends vscode.QuickPickItem {
             command?: string;
             args?: any[];
+            disabled?: boolean;
         }
+
+        const editor = vscode.window.activeTextEditor;
+        const isPerl = editor?.document.languageId === 'perl';
+        const filename = editor?.document.uri.fsPath || '';
+        const isTestFile = isPerl && (filename.endsWith('.t') || filename.endsWith('.pl'));
 
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
-            { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
-            { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
-            { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
+            {
+                label: '$(refresh) Restart Server',
+                description: 'Shift+Alt+R',
+                detail: 'Restart the language server',
+                command: 'perl-lsp.restart'
+            },
+            {
+                label: isPerl ? '$(organization) Organize Imports' : '$(organization) Organize Imports (Not available)',
+                description: 'Shift+Alt+O',
+                detail: isPerl ? 'Sort and organize use statements' : 'Active file is not Perl',
+                command: 'perl-lsp.organizeImports',
+                disabled: !isPerl
+            },
+            {
+                label: isTestFile ? '$(beaker) Run Tests in Current File' : '$(beaker) Run Tests (Not available)',
+                description: 'Shift+Alt+T',
+                detail: isTestFile ? 'Run tests for the active file' : (isPerl ? 'Only for .t or .pl files' : 'Active file is not Perl'),
+                command: 'perl-lsp.runTests',
+                disabled: !isTestFile
+            },
+            {
+                label: isPerl ? '$(list-flat) Format Document' : '$(list-flat) Format Document (Not available)',
+                description: 'Shift+Alt+F',
+                detail: isPerl ? 'Format using perltidy' : 'Active file is not Perl',
+                command: 'editor.action.formatDocument',
+                disabled: !isPerl
+            },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
