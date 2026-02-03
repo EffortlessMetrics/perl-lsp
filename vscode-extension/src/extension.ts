@@ -199,12 +199,43 @@ export async function activate(context: vscode.ExtensionContext) {
             args?: any[];
         }
 
+        const editor = vscode.window.activeTextEditor;
+        const isPerl = editor?.document.languageId === 'perl';
+        const docUri = editor?.document.uri;
+        const isTestFile = isPerl && docUri && (docUri.fsPath.endsWith('.t') || docUri.fsPath.endsWith('.pl'));
+
+        const createAction = (
+            label: string,
+            icon: string,
+            command: string,
+            description: string,
+            detail: string,
+            enabled: boolean
+        ): MenuAction => {
+            if (enabled) {
+                return {
+                    label: `$(${icon}) ${label}`,
+                    description,
+                    detail,
+                    command
+                };
+            } else {
+                return {
+                    label: `$(${icon}) ${label} (Not available)`,
+                    description: '',
+                    detail: 'Not available in current context',
+                    // No command property, so it won't execute
+                };
+            }
+        };
+
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
-            { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
-            { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
+
+            createAction('Organize Imports', 'organization', 'perl-lsp.organizeImports', 'Shift+Alt+O', 'Sort and organize use statements', !!isPerl),
+            createAction('Run Tests in Current File', 'beaker', 'perl-lsp.runTests', 'Shift+Alt+T', 'Run tests for the active file', !!isTestFile),
+            createAction('Format Document', 'list-flat', 'editor.action.formatDocument', 'Shift+Alt+F', 'Format using perltidy', !!isPerl),
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
