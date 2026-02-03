@@ -109,7 +109,10 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "undef",
                 "srand",
                 "bless",
-                "reset", // Process control
+                "reset",
+                "chop",
+                "chomp",
+                "each", // Process control
                 "system",
                 "exec",
                 "fork",
@@ -123,7 +126,8 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "setpgrp",
                 "setpriority",
                 "umask",
-                "lock", // I/O
+                "lock",
+                "goto", // I/O
                 "qx",
                 "readpipe",
                 "syscall",
@@ -134,6 +138,8 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "printf",
                 "sysread",
                 "syswrite",
+                "read",
+                "getc",
                 "glob",
                 "readline",
                 "ioctl",
@@ -162,14 +168,19 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "chdir",
                 "chmod",
                 "chown",
+                "lchown",
                 "chroot",
                 "truncate",
                 "utime",
+                "lutime",
                 "symlink",
                 "link", // Code loading/execution
                 "eval",
                 "require",
-                "do", // Tie mechanism (can execute arbitrary code)
+                "do",
+                "use",
+                "no",
+                "package", // Tie mechanism (can execute arbitrary code)
                 "tie",
                 "untie", // Network
                 "socket",
@@ -190,6 +201,8 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "semop",
                 "semctl",
                 "shmget",
+                "shmread",
+                "shmwrite",
                 "shmat",
                 "shmdt",
                 "shmctl",
@@ -3208,6 +3221,30 @@ DB<1>"#;
             "$a ||= 1",
             "$a //= 1",
             "$a x= 3", // Repetition assignment
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn safe_eval_blocks_missing_ops() {
+        let blocked = [
+            "chop $x",
+            "chomp $x",
+            "each %h",
+            "read $fh, $var, 10",
+            "getc $fh",
+            "lchown 1, 1, 'link'",
+            "lutime 1, 1, 'link'",
+            "shmread $id, $var, 0, 10",
+            "shmwrite $id, 'data', 0, 10",
+            "goto LABEL",
+            "package Foo",
+            "use Strict",
+            "no Strict",
         ];
 
         for expr in blocked {
