@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-10-25 - Safe Evaluation Bypass via Package Qualification
+**Vulnerability:** The `perl-dap` safe evaluation mode explicitly allowed any package-qualified operation (e.g., `IO::File::open`) unless it was in the `CORE::` namespace. This allowed users to bypass the dangerous operations blocklist by invoking built-ins via standard modules or other packages (e.g., `IO::File::open` executes the blocked `open` operation).
+**Learning:** Allow-listing namespace patterns is dangerous when the underlying language allows aliasing or wrapping dangerous functionality. Assuming that "non-CORE" packages are safe ignores the reality that standard and user modules often wrap dangerous system primitives.
+**Prevention:** In security blocklists, apply checks based on the operation name (e.g., `open`) regardless of its namespace or qualification. Do not assume any namespace is "safe" by default.
