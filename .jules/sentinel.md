@@ -70,3 +70,14 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-10-26 - Incomplete Safe Evaluation Blocklist (Phase 2)
+**Vulnerability:** The `perl-dap` safe evaluation mode was still missing several state-mutating and dangerous operations:
+- State mutation: `chop`, `chomp`, `each` (advances iterator)
+- I/O: `read`, `getc` (consume filehandle)
+- IPC: `shmread`, `shmwrite`
+- Filesystem: `lchown`, `lutime`
+- Control flow/Scope: `goto`, `package`, `use`, `no`
+
+**Learning:** "Safe" evaluation in stateful languages like Perl is extremely difficult because side effects are pervasive (e.g., `each` modifies the hash iterator state). Blocking just "system calls" is not enough; one must also block iterator consumption and in-place variable modification.
+**Prevention:** Systematically review *all* perl builtins for side effects, not just OS interactions. Treat iterator advancement (`each`) and in-place string modification (`chop`) as side effects that must be blocked in safe mode.
