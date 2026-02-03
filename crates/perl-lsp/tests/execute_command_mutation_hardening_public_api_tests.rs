@@ -22,6 +22,7 @@ use perl_lsp::execute_command::{ExecuteCommandProvider, get_supported_commands};
 use serde_json::Value;
 use std::fs;
 use std::io::Write;
+use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -31,8 +32,6 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn test_execute_command_not_default_comprehensive() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create test files for comprehensive testing
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test execution';\n";
     let temp_file = "/tmp/test_execute_not_default.pl";
@@ -41,6 +40,11 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
     let sub_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_function { print 'executed'; return 42; }\n";
     let sub_file = "/tmp/test_sub_not_default.pl";
     fs::write(sub_file, sub_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![PathBuf::from(temp_file), PathBuf::from(sub_file)]
+    );
 
     // Test each command to ensure no Ok(Default::default()) returns
     let test_cases = vec![
@@ -161,12 +165,15 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
 
 #[test]
 fn test_command_routing_specificity_comprehensive() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create test file
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'routing test';\n";
     let temp_file = "/tmp/test_routing_comprehensive.pl";
     fs::write(temp_file, test_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![PathBuf::from(temp_file)]
+    );
 
     // Execute all commands and verify they produce DIFFERENT results
     let run_tests_result = provider
@@ -327,6 +334,12 @@ fn test_parameter_validation_comprehensive() -> TestResult {
     temp_file.write_all(b"")?;
     let temp_path = temp_file.path().to_string_lossy().to_string();
 
+    // Security: Must trust the temp file
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![temp_file.path().to_path_buf()]
+    );
+
     let result =
         provider.execute_command("perl.runTestSub", vec![Value::String(temp_path.clone())]);
     assert!(result.is_err(), "runTestSub should fail with missing subroutine name");
@@ -358,6 +371,11 @@ fn test_parameter_validation_comprehensive() -> TestResult {
 
 #[test]
 fn test_file_path_extraction_validation() -> TestResult {
+    // For this test, we need to bypass file existence check or handle it.
+    // The previous implementation relied on runCritic returning "File not found" for invalid paths.
+    // With security check, "File not found" happens gracefully for non-existent files.
+    // So we can still use empty provider if we expect "File not found" error structure (which is Ok).
+
     let provider = ExecuteCommandProvider::new();
 
     // Test that extract_file_path_argument returns actual values, not hardcoded ones
@@ -392,6 +410,7 @@ fn test_file_path_extraction_validation() -> TestResult {
             }
             Err(error) => {
                 // Should have meaningful error related to the path
+                // Security error is also acceptable here
                 assert!(!error.is_empty(), "Error should not be empty for path: {}", path);
             }
         }
@@ -404,13 +423,16 @@ fn test_file_path_extraction_validation() -> TestResult {
 
 #[test]
 fn test_response_structure_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create test file with known content
     let test_content =
         "#!/usr/bin/perl\n# Missing pragmas for violations\nmy $var = 42;\nprint $var;\n";
     let temp_file = "/tmp/test_response_structure.pl";
     fs::write(temp_file, test_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![PathBuf::from(temp_file)]
+    );
 
     // Test runCritic response structure in detail
     let result =
@@ -500,7 +522,11 @@ fn test_file_not_found_error_structure() -> TestResult {
 
     // Verify error message content
     let error_msg = result_value["error"].as_str().ok_or("error should be a string")?;
-    assert!(error_msg.contains("File not found"), "Should indicate file not found");
+    // It will contain either "File not found" or "Failed to canonicalize"
+    assert!(
+        error_msg.contains("File not found") || error_msg.contains("Failed to canonicalize"),
+        "Should indicate file not found"
+    );
     assert!(
         error_msg.contains("definitely_nonexistent_file_12345.pl"),
         "Should mention the specific file name"
@@ -518,12 +544,20 @@ fn test_file_not_found_error_structure() -> TestResult {
 
 #[test]
 fn test_command_execution_success_failure_logic() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create files for testing different execution scenarios
     let valid_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint \"success\";\n";
     let valid_file = "/tmp/test_valid_execution.pl";
     fs::write(valid_file, valid_content)?;
+
+    // Test with subroutine execution
+    let sub_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_execution { print \"sub executed\"; return 1; }\n";
+    let sub_file = "/tmp/test_sub_execution.pl";
+    fs::write(sub_file, sub_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![PathBuf::from(valid_file), PathBuf::from(sub_file)]
+    );
 
     // Test successful execution
     let success_result =
@@ -534,11 +568,6 @@ fn test_command_execution_success_failure_logic() -> TestResult {
     // MUTATION KILLER: Verify success logic is not negated (! deletion mutations)
     assert!(success_value["success"].is_boolean(), "Should have boolean success field");
     // Note: We can't assert the exact value since it depends on execution, but we verify structure
-
-    // Test with subroutine execution
-    let sub_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_execution { print \"sub executed\"; return 1; }\n";
-    let sub_file = "/tmp/test_sub_execution.pl";
-    fs::write(sub_file, sub_content)?;
 
     let sub_result = provider.execute_command(
         "perl.runTestSub",
@@ -560,12 +589,15 @@ fn test_command_execution_success_failure_logic() -> TestResult {
 
 #[test]
 fn test_comprehensive_edge_cases() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Test empty file handling
     let empty_content = "";
     let empty_file = "/tmp/test_empty_file.pl";
     fs::write(empty_file, empty_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![PathBuf::from(empty_file)]
+    );
 
     let empty_result =
         provider.execute_command("perl.runCritic", vec![Value::String(empty_file.to_string())]);
@@ -575,6 +607,7 @@ fn test_comprehensive_edge_cases() -> TestResult {
     assert_eq!(empty_value["status"], "success", "Empty file should be success");
 
     // Test very large file path
+    // For this, we can't create the file, so it will trigger File Not Found, which is handled gracefully by runCritic
     let long_path = format!("/tmp/{}.pl", "x".repeat(100));
     let long_result =
         provider.execute_command("perl.runCritic", vec![Value::String(long_path.clone())]);
@@ -648,8 +681,6 @@ fn test_supported_commands_structure() -> TestResult {
 
 #[test]
 fn test_comprehensive_workflow_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create comprehensive test file
     let comprehensive_content = r#"#!/usr/bin/perl
 use strict;
@@ -670,6 +701,11 @@ print "Result: $result\n";
 
     let temp_file = "/tmp/comprehensive_workflow_test.pl";
     fs::write(temp_file, comprehensive_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![PathBuf::from(temp_file)]
+    );
 
     // Execute all commands and verify end-to-end behavior
     let all_commands = vec![

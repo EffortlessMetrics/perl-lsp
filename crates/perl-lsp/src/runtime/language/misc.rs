@@ -1063,7 +1063,17 @@ impl LspServer {
                 }
             }
 
-            let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots);
+            // Collect trusted files from open documents (single file security)
+            // This ensures that when no workspace is open, we can still securely operate on open files
+            let trusted_files: Vec<PathBuf> = {
+                let documents = self.documents_guard();
+                documents.keys()
+                    .filter_map(|uri| url::Url::parse(uri).ok())
+                    .filter_map(|u| u.to_file_path().ok())
+                    .collect()
+            };
+
+            let provider = ExecuteCommandProvider::with_security_context(workspace_roots, trusted_files);
 
             match command {
                 // Keep existing test commands for backward compatibility
