@@ -93,10 +93,12 @@
 
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 use crate::protocol::JsonRpcError;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 
 // Cross-platform helpers for synthesizing `ExitStatus` in tests/mocks.
 #[cfg(any(test, doctest))]
@@ -406,6 +408,21 @@ impl ExecuteCommandProvider {
 
     /// Run a specific test subroutine with enhanced error handling
     fn run_test_sub(&self, file_path: &Path, sub_name: &str) -> Result<Value, String> {
+        // validate subroutine name to prevent security issues
+        static SUBROUTINE_NAME_RE: OnceLock<Regex> = OnceLock::new();
+        let re = SUBROUTINE_NAME_RE.get_or_init(|| {
+            Regex::new(r"^[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*$").expect("Invalid regex")
+        });
+
+        if !re.is_match(sub_name) {
+            return Err(format!("Invalid subroutine name: {}", sub_name));
+        }
+
+        // Explicitly block CORE:: prefix to prevent execution of builtins
+        if sub_name.starts_with("CORE::") {
+            return Err(format!("Unsafe subroutine name: {}", sub_name));
+        }
+
         // Enhanced subroutine invocation with better error detection
         // Use @ARGV to safely pass file path and subroutine name preventing code injection
         let perl_code = r#"
