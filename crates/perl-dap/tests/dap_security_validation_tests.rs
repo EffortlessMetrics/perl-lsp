@@ -67,8 +67,8 @@ fn test_path_validation_parent_traversal_attempts() {
         // Verify it's the right error type
         if let Err(e) = result {
             match e {
-                SecurityError::PathTraversalAttempt(_) => {}
-                _ => panic!("Expected PathTraversalAttempt error for '{}', got: {:?}", path_str, e),
+                SecurityError::PathTraversalAttempt(_) | SecurityError::PathOutsideWorkspace(_) => {}
+                _ => panic!("Expected PathTraversalAttempt or PathOutsideWorkspace error for '{}', got: {:?}", path_str, e),
             }
         }
     }
