@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 
 use crate::breakpoints::BreakpointStore;
+use crate::security::{validate_expression, validate_path};
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
@@ -630,9 +631,10 @@ impl DebugAdapter {
                 .unwrap_or_default();
 
             let stop_on_entry = args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
+            let cwd = args.get("cwd").and_then(|c| c.as_str()).map(|s| s.to_string());
 
             // Launch Perl debugger
-            match self.launch_debugger(program, perl_args, stop_on_entry) {
+            match self.launch_debugger(program, perl_args, cwd, stop_on_entry) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
                     if stop_on_entry {
@@ -681,6 +683,7 @@ impl DebugAdapter {
         &mut self,
         program: &str,
         args: Vec<String>,
+        cwd: Option<String>,
         stop_on_entry: bool,
     ) -> Result<i32, String> {
         // Security: Validate program path before any process spawning
@@ -712,7 +715,21 @@ impl DebugAdapter {
             }
         }
 
+        // Security: If CWD is provided, validate program path is within workspace (path traversal prevention)
+        if let Some(ref working_dir) = cwd {
+            let workspace_root = Path::new(working_dir);
+            if let Err(e) = validate_path(path, workspace_root) {
+                return Err(format!("Security Error: {}", e));
+            }
+        }
+
         let mut cmd = Command::new("perl");
+
+        // Set working directory if provided
+        if let Some(ref dir) = cwd {
+            cmd.current_dir(dir);
+        }
+
         cmd.arg("-d");
 
         // Perl debugger stops on the first line by default
@@ -2196,15 +2213,15 @@ impl DebugAdapter {
                 };
             }
 
-            // Security: Reject expressions with newlines to prevent command injection
-            if expression.contains('\n') || expression.contains('\r') {
+            // Security: Validate expression to prevent protocol injection
+            if let Err(e) = validate_expression(expression) {
                 return DapMessage::Response {
                     seq,
                     request_seq,
                     success: false,
                     command: "evaluate".to_string(),
                     body: None,
-                    message: Some("Expression cannot contain newlines".to_string()),
+                    message: Some(e.to_string()),
                 };
             }
 
