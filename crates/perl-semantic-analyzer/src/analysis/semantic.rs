@@ -7,9 +7,7 @@
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
-use regex::Regex;
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Semantic token types for syntax highlighting in the Parse/Complete workflow.
@@ -1133,39 +1131,74 @@ impl SemanticAnalyzer {
 
     /// Extract documentation (POD or comments) preceding a position
     fn extract_documentation(&self, start: usize) -> Option<String> {
-        static POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-        static COMMENT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-
-        if self.source.is_empty() {
+        if self.source.is_empty() || start == 0 {
             return None;
         }
-        let before = &self.source[..start];
 
-        // Check for POD blocks ending with =cut
-        let pod_re = POD_RE
-            .get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$"))
-            .as_ref()
-            .ok()?;
-        if let Some(caps) = pod_re.captures(before) {
-            if let Some(pod_text) = caps.get(1) {
-                return Some(pod_text.as_str().trim().to_string());
-            }
+        let before = &self.source[..start];
+        let end_idx = before.trim_end().len();
+
+        if end_idx == 0 {
+            return None;
         }
 
-        // Check for consecutive comment lines
-        let comment_re =
-            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$")).as_ref().ok()?;
-        if let Some(caps) = comment_re.captures(before) {
-            if let Some(comment_match) = caps.get(0) {
-                // Strip the # prefix from each comment line
-                let doc = comment_match
-                    .as_str()
-                    .lines()
-                    .map(|line| line.trim_start_matches('#').trim())
-                    .filter(|line| !line.is_empty())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                return Some(doc);
+        let text = &before[..end_idx];
+        let mut lines = text.lines().rev();
+
+        let last_line = lines.next()?;
+
+        if last_line.trim_start().starts_with('#') {
+            // Comment block
+            let mut comments = vec![last_line];
+            for line in lines {
+                if line.trim_start().starts_with('#') {
+                    comments.push(line);
+                } else {
+                    break;
+                }
+            }
+            comments.reverse();
+
+            let doc = comments
+                .into_iter()
+                .map(|line| line.trim_start().trim_start_matches('#').trim())
+                .filter(|line| !line.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            return Some(doc);
+        } else if last_line.trim_start() == "=cut" {
+            // POD block
+            let mut pod_lines = vec![last_line];
+            let mut temp_lines = Vec::new();
+
+            for line in lines {
+                if line.trim_start() == "=cut" {
+                    break;
+                }
+                temp_lines.push(line);
+            }
+
+            // Find the start of the POD block (earliest line starting with =...)
+            let mut found_start = false;
+            let mut start_index_in_temp = 0;
+
+            for (i, line) in temp_lines.iter().enumerate() {
+                // Check for POD command (starts with =, and is valid command)
+                let trimmed = line.trim_start();
+                if trimmed.starts_with('=')
+                    && trimmed.chars().nth(1).is_some_and(|c| c.is_alphanumeric())
+                {
+                    found_start = true;
+                    start_index_in_temp = i;
+                }
+            }
+
+            if found_start {
+                temp_lines.truncate(start_index_in_temp + 1);
+                pod_lines.extend(temp_lines);
+                pod_lines.reverse();
+                return Some(pod_lines.join("\n").trim().to_string());
             }
         }
 
