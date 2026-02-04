@@ -31,8 +31,6 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn test_execute_command_not_default_comprehensive() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create test files for comprehensive testing
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test execution';\n";
     let temp_file = "/tmp/test_execute_not_default.pl";
@@ -41,6 +39,11 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
     let sub_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_function { print 'executed'; return 42; }\n";
     let sub_file = "/tmp/test_sub_not_default.pl";
     fs::write(sub_file, sub_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![std::path::PathBuf::from(temp_file), std::path::PathBuf::from(sub_file)],
+    );
 
     // Test each command to ensure no Ok(Default::default()) returns
     let test_cases = vec![
@@ -161,12 +164,15 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
 
 #[test]
 fn test_command_routing_specificity_comprehensive() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create test file
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'routing test';\n";
     let temp_file = "/tmp/test_routing_comprehensive.pl";
     fs::write(temp_file, test_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![std::path::PathBuf::from(temp_file)],
+    );
 
     // Execute all commands and verify they produce DIFFERENT results
     let run_tests_result = provider
@@ -327,6 +333,11 @@ fn test_parameter_validation_comprehensive() -> TestResult {
     temp_file.write_all(b"")?;
     let temp_path = temp_file.path().to_string_lossy().to_string();
 
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![temp_file.path().to_path_buf()],
+    );
+
     let result =
         provider.execute_command("perl.runTestSub", vec![Value::String(temp_path.clone())]);
     assert!(result.is_err(), "runTestSub should fail with missing subroutine name");
@@ -404,13 +415,16 @@ fn test_file_path_extraction_validation() -> TestResult {
 
 #[test]
 fn test_response_structure_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create test file with known content
     let test_content =
         "#!/usr/bin/perl\n# Missing pragmas for violations\nmy $var = 42;\nprint $var;\n";
     let temp_file = "/tmp/test_response_structure.pl";
     fs::write(temp_file, test_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![std::path::PathBuf::from(temp_file)],
+    );
 
     // Test runCritic response structure in detail
     let result =
@@ -518,12 +532,17 @@ fn test_file_not_found_error_structure() -> TestResult {
 
 #[test]
 fn test_command_execution_success_failure_logic() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create files for testing different execution scenarios
     let valid_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint \"success\";\n";
     let valid_file = "/tmp/test_valid_execution.pl";
     fs::write(valid_file, valid_content)?;
+
+    let sub_file = "/tmp/test_sub_execution.pl";
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![std::path::PathBuf::from(valid_file), std::path::PathBuf::from(sub_file)],
+    );
 
     // Test successful execution
     let success_result =
@@ -537,7 +556,7 @@ fn test_command_execution_success_failure_logic() -> TestResult {
 
     // Test with subroutine execution
     let sub_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_execution { print \"sub executed\"; return 1; }\n";
-    let sub_file = "/tmp/test_sub_execution.pl";
+    // sub_file defined above
     fs::write(sub_file, sub_content)?;
 
     let sub_result = provider.execute_command(
@@ -560,12 +579,15 @@ fn test_command_execution_success_failure_logic() -> TestResult {
 
 #[test]
 fn test_comprehensive_edge_cases() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Test empty file handling
     let empty_content = "";
     let empty_file = "/tmp/test_empty_file.pl";
     fs::write(empty_file, empty_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![std::path::PathBuf::from(empty_file)],
+    );
 
     let empty_result =
         provider.execute_command("perl.runCritic", vec![Value::String(empty_file.to_string())]);
@@ -648,8 +670,6 @@ fn test_supported_commands_structure() -> TestResult {
 
 #[test]
 fn test_comprehensive_workflow_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
-
     // Create comprehensive test file
     let comprehensive_content = r#"#!/usr/bin/perl
 use strict;
@@ -670,6 +690,11 @@ print "Result: $result\n";
 
     let temp_file = "/tmp/comprehensive_workflow_test.pl";
     fs::write(temp_file, comprehensive_content)?;
+
+    let provider = ExecuteCommandProvider::with_security_context(
+        vec![],
+        vec![std::path::PathBuf::from(temp_file)],
+    );
 
     // Execute all commands and verify end-to-end behavior
     let all_commands = vec![

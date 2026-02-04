@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-10-25 - Arbitrary File Execution in Single-File Mode
+**Vulnerability:** The LSP `ExecuteCommandProvider` defaulted to a "fail-open" state when no workspace roots were configured (`workspace_roots` was empty), allowing arbitrary file execution via commands like `perl.runFile`. This exposed users who opened a single file (without a workspace) to execution of files outside their intended context.
+**Learning:** Security controls that rely on workspace context must have a secure fallback for "single-file" or "no-workspace" scenarios. Assuming "no workspace" means "no restrictions" is dangerous.
+**Prevention:** Implement a "fail-closed" default: if no workspace context is available, explicitly restrict operations to a trusted allowlist (e.g., currently open documents) or deny them entirely.
