@@ -25,6 +25,7 @@ use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
+use std::sync::OnceLock;
 
 // Re-export the unified symbol types from perl-symbol-types
 /// Symbol kind enums used during Index/Analyze workflows.
@@ -862,11 +863,12 @@ impl SymbolExtractor {
 
     /// Extract variable references from an interpolated string
     fn extract_vars_from_string(&mut self, value: &str, string_location: SourceLocation) {
+        static SCALAR_RE: OnceLock<Regex> = OnceLock::new();
         // Simple regex to find scalar variables in strings
         // This handles $var, ${var}, but not arrays/hashes for now
-        let Ok(scalar_re) = Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})") else {
-            return; // Skip variable extraction if regex fails
-        };
+        let scalar_re = SCALAR_RE.get_or_init(|| {
+            Regex::new(r"\$([a-zA-Z_]\w*|\{[a-zA-Z_]\w*\})").expect("Invalid regex")
+        });
 
         // The value includes quotes, so strip them
         let content = if value.len() >= 2 { &value[1..value.len() - 1] } else { value };
