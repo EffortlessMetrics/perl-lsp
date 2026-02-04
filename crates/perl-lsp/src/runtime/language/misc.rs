@@ -1063,7 +1063,27 @@ impl LspServer {
                 }
             }
 
-            let provider = ExecuteCommandProvider::with_workspace_roots(workspace_roots);
+            // Collect trusted files from open documents (fail-closed fallback)
+            let mut trusted_files = Vec::new();
+            {
+                let documents = self.documents.lock();
+                for uri in documents.keys() {
+                    if let Ok(parsed) = url::Url::parse(uri) {
+                        if let Ok(path) = parsed.to_file_path() {
+                            // Canonicalize if possible to match resolve_path_from_args logic
+                            // If file doesn't exist yet (unsaved), it won't be executed anyway
+                            if let Ok(canon) = path.canonicalize() {
+                                trusted_files.push(canon);
+                            } else {
+                                trusted_files.push(path);
+                            }
+                        }
+                    }
+                }
+            }
+
+            let provider =
+                ExecuteCommandProvider::with_security_context(workspace_roots, trusted_files);
 
             match command {
                 // Keep existing test commands for backward compatibility

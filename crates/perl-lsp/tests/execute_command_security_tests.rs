@@ -59,11 +59,15 @@ fn test_run_test_sub_file_path_injection() -> Result<(), Box<dyn Error>> {
 /// code will NOT be executed.
 #[test]
 fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
-    let provider = ExecuteCommandProvider::new();
-
     // Create a minimal test file with a marker subroutine
     let test_file = "/tmp/security_test_sub.pl";
     std::fs::write(test_file, "sub safe_sub { print 'SAFE_SUB_EXECUTED'; }").ok();
+
+    // Trust the test file for execution
+    let provider = ExecuteCommandProvider::with_security_context(
+        Vec::new(),
+        vec![std::path::PathBuf::from(test_file)],
+    );
 
     // This payload would execute code if string interpolation was used.
     // With the fix (using @ARGV), it's treated as a literal subroutine name.
@@ -201,7 +205,11 @@ fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
     let file_path = temp_dir.path().join("test_valid.pl");
     fs::write(&file_path, "print 'VALID_OUTPUT';")?;
 
-    let provider = ExecuteCommandProvider::new();
+    // Trust the test file for execution
+    let provider = ExecuteCommandProvider::with_security_context(
+        Vec::new(),
+        vec![file_path.clone()],
+    );
 
     let result = provider.execute_command(
         "perl.runFile",

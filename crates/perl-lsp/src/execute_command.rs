@@ -250,6 +250,8 @@ pub struct CommandResult {
 pub struct ExecuteCommandProvider {
     /// Workspace root paths for security enforcement
     workspace_roots: Vec<PathBuf>,
+    /// Trusted files that can be executed even without workspace roots
+    trusted_files: Vec<PathBuf>,
 }
 
 impl Default for ExecuteCommandProvider {
@@ -272,7 +274,10 @@ impl ExecuteCommandProvider {
     /// let provider = ExecuteCommandProvider::new();
     /// ```
     pub fn new() -> Self {
-        Self { workspace_roots: Vec::new() }
+        Self {
+            workspace_roots: Vec::new(),
+            trusted_files: Vec::new(),
+        }
     }
 
     /// Create a new execute command provider with workspace root enforcement.
@@ -295,7 +300,29 @@ impl ExecuteCommandProvider {
     /// );
     /// ```
     pub fn with_workspace_roots(workspace_roots: Vec<PathBuf>) -> Self {
-        Self { workspace_roots }
+        Self {
+            workspace_roots,
+            trusted_files: Vec::new(),
+        }
+    }
+
+    /// Create a new execute command provider with full security context.
+    ///
+    /// This constructor enables comprehensive security by enforcing both
+    /// workspace boundaries and explicit file trust.
+    ///
+    /// # Arguments
+    ///
+    /// * `workspace_roots` - The root directory paths to enforce for security
+    /// * `trusted_files` - Specific files that are allowed to execute
+    pub fn with_security_context(
+        workspace_roots: Vec<PathBuf>,
+        trusted_files: Vec<PathBuf>,
+    ) -> Self {
+        Self {
+            workspace_roots,
+            trusted_files,
+        }
     }
 
     /// Execute a command with comprehensive error handling and argument validation.
@@ -722,10 +749,11 @@ impl ExecuteCommandProvider {
             .map_err(|e| format!("Failed to canonicalize path '{}': {}", normalized_path, e))?;
 
         // Enforce workspace root boundaries when configured
-        // Security note: When workspace_roots is empty, path traversal protection is disabled
-        // for backward compatibility. In production, always configure workspace roots via
-        // initialization (root_path or workspaceFolders) to enable security boundaries.
-        // See .jules/sentinel.md for security guidance.
+        // Security note: We enforce a fail-closed security model.
+        // - If workspace_roots are configured, execution is restricted to those roots.
+        // - If no workspace_roots are configured (single-file mode), execution is
+        //   restricted to explicitly trusted files (open documents).
+        // - If neither are matched, execution is blocked.
         if !self.workspace_roots.is_empty() {
             let mut allowed = false;
             for workspace_root in &self.workspace_roots {
@@ -741,6 +769,16 @@ impl ExecuteCommandProvider {
             if !allowed {
                 return Err(format!(
                     "Path traversal detected: {} is outside workspace roots",
+                    canonical_path.display()
+                ));
+            }
+        } else {
+            // No workspace roots - fail closed unless file is explicitly trusted
+            let allowed = self.trusted_files.iter().any(|trusted| trusted == &canonical_path);
+
+            if !allowed {
+                return Err(format!(
+                    "Path traversal detected: File is not in trusted files list: {}",
                     canonical_path.display()
                 ));
             }
@@ -1045,7 +1083,11 @@ print "Value: $variable\n";
         let temp_file = "/tmp/test_violations_unit.pl";
         fs::write(temp_file, test_content)?;
 
-        let provider = ExecuteCommandProvider::new();
+        // Initialize with security context trusting the test file
+        let provider = ExecuteCommandProvider::with_security_context(
+            Vec::new(),
+            vec![PathBuf::from(temp_file)],
+        );
         let result =
             provider.execute_command("perl.runCritic", vec![Value::String(temp_file.to_string())]);
 
@@ -1122,12 +1164,15 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a test file to ensure we get a specific result
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test';\n";
         let temp_file = "/tmp/test_run_tests.pl";
         fs::write(temp_file, test_content)?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            Vec::new(),
+            vec![PathBuf::from(temp_file)],
+        );
 
         let result =
             provider.execute_command("perl.runTests", vec![Value::String(temp_file.to_string())]);
@@ -1146,12 +1191,15 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_file() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a test file
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'hello world';\n";
         let temp_file = "/tmp/test_run_file.pl";
         fs::write(temp_file, test_content)?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            Vec::new(),
+            vec![PathBuf::from(temp_file)],
+        );
 
         let result =
             provider.execute_command("perl.runFile", vec![Value::String(temp_file.to_string())]);
@@ -1170,12 +1218,15 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_test_sub() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a test file with a subroutine
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_sub { print 'test executed'; }\n";
         let temp_file = "/tmp/test_run_test_sub.pl";
         fs::write(temp_file, test_content)?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            Vec::new(),
+            vec![PathBuf::from(temp_file)],
+        );
 
         let result = provider.execute_command(
             "perl.runTestSub",
@@ -1196,11 +1247,14 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_debug_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a dummy file
         let temp_file = "/tmp/test_debug.pl";
         fs::write(temp_file, "print 'debug';")?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            Vec::new(),
+            vec![PathBuf::from(temp_file)],
+        );
 
         let result =
             provider.execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
@@ -1241,11 +1295,14 @@ print "Value: $variable\n";
     #[test]
     fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std::error::Error>>
     {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a dummy file
         let temp_file = "/tmp/test_missing_sub.pl";
         fs::write(temp_file, "sub test {}")?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            Vec::new(),
+            vec![PathBuf::from(temp_file)],
+        );
 
         // Test runTestSub with only file path, missing subroutine name
         let result =
@@ -1418,6 +1475,9 @@ print "Value: $variable\n";
     #[test]
     fn test_run_builtin_critic_with_valid_file() -> Result<(), Box<dyn std::error::Error>> {
         let provider = ExecuteCommandProvider::new();
+        // Note: run_builtin_critic is a low-level function that doesn't check path resolution
+        // itself (it takes a Path argument), but we should ensure it works on valid files.
+        // It bypasses resolve_path_from_args, so it doesn't need security context.
 
         // Create a temporary file with content
         let test_content = "#!/usr/bin/perl\nmy $var = 42;\nprint $var;\n";
@@ -1456,7 +1516,14 @@ print "Value: $variable\n";
 
     #[test]
     fn test_all_command_routing_paths() {
-        let provider = ExecuteCommandProvider::new();
+        let temp_file = "/tmp/test.pl";
+        // Ensure file exists for validation
+        std::fs::write(temp_file, "").ok();
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            Vec::new(),
+            vec![PathBuf::from(temp_file)],
+        );
 
         // Test each command path individually to ensure routing logic is tested
         let commands_to_test = vec![
@@ -1470,11 +1537,11 @@ print "Value: $variable\n";
         for command in commands_to_test {
             let args = if command == "perl.runTestSub" {
                 vec![
-                    Value::String("/tmp/test.pl".to_string()),
+                    Value::String(temp_file.to_string()),
                     Value::String("test_sub".to_string()),
                 ]
             } else {
-                vec![Value::String("/tmp/test.pl".to_string())]
+                vec![Value::String(temp_file.to_string())]
             };
 
             let result = provider.execute_command(command, args);
@@ -1491,6 +1558,7 @@ print "Value: $variable\n";
                 }
             }
         }
+        std::fs::remove_file(temp_file).ok();
     }
 
     // ============= ADDITIONAL MUTATION KILLER TESTS =============
@@ -1498,11 +1566,14 @@ print "Value: $variable\n";
 
     #[test]
     fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
-
         // Create a dummy file
         let temp_file = "/tmp/test_mutations.pl";
         fs::write(temp_file, "print 'test';")?;
+
+        let provider = ExecuteCommandProvider::with_security_context(
+            Vec::new(),
+            vec![PathBuf::from(temp_file)],
+        );
 
         // This test ensures that execute_command cannot return Ok(Default::default())
         // when it should return meaningful data
