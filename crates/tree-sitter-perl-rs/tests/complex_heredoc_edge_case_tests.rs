@@ -115,11 +115,7 @@ mod heredoc_advanced {
         // Allow some parsing errors for edge cases, but validate structure
         if !root_node.has_error() {
             // For successful parses, validate heredoc structure
-            assert!(
-                find_heredoc_node(&root_node).is_some(),
-                "Should find heredoc node in: {}",
-                code
-            );
+            assert!(find_heredoc_node(&root_node).is_some(), "Should find heredoc node in: {}", code);
         }
 
         Ok(tree)
