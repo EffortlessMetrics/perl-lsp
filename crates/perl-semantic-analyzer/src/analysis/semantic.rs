@@ -7,6 +7,7 @@
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
+use perl_parser_core::builtin_signatures_phf;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -1336,51 +1337,8 @@ fn is_control_keyword(name: &str) -> bool {
 }
 
 fn is_builtin_function(name: &str) -> bool {
-    matches!(
-        name,
-        "print"
-            | "say"
-            | "printf"
-            | "sprintf"
-            | "open"
-            | "close"
-            | "read"
-            | "write"
-            | "chomp"
-            | "chop"
-            | "split"
-            | "join"
-            | "push"
-            | "pop"
-            | "shift"
-            | "unshift"
-            | "sort"
-            | "reverse"
-            | "map"
-            | "grep"
-            | "length"
-            | "substr"
-            | "index"
-            | "rindex"
-            | "lc"
-            | "uc"
-            | "lcfirst"
-            | "ucfirst"
-            | "defined"
-            | "undef"
-            | "ref"
-            | "blessed"
-            | "die"
-            | "warn"
-            | "eval"
-            | "require"
-            | "use"
-            | "return"
-            | "next"
-            | "last"
-            | "redo"
-            | "goto" // ... many more
-    )
+    // Optimizing lookup using perfect hash map from perl-parser-core
+    builtin_signatures_phf::is_builtin(name) || matches!(name, "sysclose" | "blessed")
 }
 
 /// Get documentation for a Perl built-in function.
@@ -2059,6 +2017,52 @@ my $adder = sub {
                 "Hover should extract documentation comment"
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_builtin_recognition() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+sysclose($fh);
+blessed($obj);
+print "hello";
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+        let tokens = analyzer.semantic_tokens();
+
+        // Helper to check if a function call is tokenized as Function and has DefaultLibrary modifier
+        let check_token = |name: &str| {
+            let found = tokens.iter().any(|t| {
+                if t.token_type == SemanticTokenType::Function {
+                    // Find the token location in source to verify the name
+                    let token_text = &code[t.location.start..t.location.end];
+                    // Note: Parser might include parens/args in the location for some calls
+                    if token_text.starts_with(name) {
+                        // Check for DefaultLibrary modifier
+                        t.modifiers.contains(&SemanticTokenModifier::DefaultLibrary)
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            });
+            if !found {
+                 println!("Tokens found:");
+                 for t in tokens {
+                     let text = &code[t.location.start..t.location.end];
+                     println!("  {:?} '{}' modifiers: {:?}", t.token_type, text, t.modifiers);
+                 }
+            }
+            assert!(found, "Built-in function '{}' should be recognized as DefaultLibrary", name);
+        };
+
+        check_token("sysclose");
+        check_token("blessed");
+        check_token("print");
+
         Ok(())
     }
 }
