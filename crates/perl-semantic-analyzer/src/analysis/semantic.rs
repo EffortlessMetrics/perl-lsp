@@ -1133,43 +1133,81 @@ impl SemanticAnalyzer {
 
     /// Extract documentation (POD or comments) preceding a position
     fn extract_documentation(&self, start: usize) -> Option<String> {
-        static POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-        static COMMENT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-
-        if self.source.is_empty() {
+        // Optimized implementation that avoids scanning the entire file
+        // 1. Scan back from `start` to find the end of potential documentation
+        if self.source.is_empty() || start == 0 {
             return None;
         }
-        let before = &self.source[..start];
 
-        // Check for POD blocks ending with =cut
-        let pod_re = POD_RE
-            .get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$"))
-            .as_ref()
-            .ok()?;
-        if let Some(caps) = pod_re.captures(before) {
-            if let Some(pod_text) = caps.get(1) {
-                return Some(pod_text.as_str().trim().to_string());
+        let mut end = start.min(self.source.len());
+        let bytes = self.source.as_bytes();
+
+        // Skip preceding whitespace to find the real end of documentation
+        while end > 0 && bytes[end - 1].is_ascii_whitespace() {
+            end -= 1;
+        }
+
+        if end == 0 {
+            return None;
+        }
+
+        // 2. Check the last line to determine strategy (POD or Comment)
+        let mut line_start = end;
+        while line_start > 0 && bytes[line_start - 1] != b'\n' {
+            line_start -= 1;
+        }
+
+        let last_line = &self.source[line_start..end];
+
+        // Strategy A: POD (ends with =cut)
+        if last_line.trim() == "=cut" {
+            static POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+
+            // Limit lookback to avoid O(N) scan on huge files.
+            // 4KB should be enough for most POD blocks above declarations.
+            let lookback = 4096;
+            let search_start = end.saturating_sub(lookback);
+            let text = &self.source[search_start..end];
+
+            // Use the same regex as before but on a limited slice
+            let pod_re = POD_RE
+                .get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$"))
+                .as_ref()
+                .ok()?;
+
+            if let Some(caps) = pod_re.captures(text) {
+                if let Some(pod_text) = caps.get(1) {
+                    return Some(pod_text.as_str().trim().to_string());
+                }
+            }
+            return None;
+        }
+
+        // Strategy B: Comments (last line starts with #)
+        // Use efficient manual backward scan (similar to SymbolExtractor)
+        let prefix = &self.source[..end];
+        let mut lines = prefix.lines().rev();
+        let mut docs = Vec::new();
+
+        for line in &mut lines {
+            let trimmed = line.trim_start();
+            if trimmed.starts_with('#') {
+                let content = trimmed.trim_start_matches('#').trim();
+                if !content.is_empty() {
+                    docs.push(content);
+                }
+            } else {
+                // Stop at any non-comment line
+                break;
             }
         }
 
-        // Check for consecutive comment lines
-        let comment_re =
-            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$")).as_ref().ok()?;
-        if let Some(caps) = comment_re.captures(before) {
-            if let Some(comment_match) = caps.get(0) {
-                // Strip the # prefix from each comment line
-                let doc = comment_match
-                    .as_str()
-                    .lines()
-                    .map(|line| line.trim_start_matches('#').trim())
-                    .filter(|line| !line.is_empty())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                return Some(doc);
-            }
+        if docs.is_empty() {
+            None
+        } else {
+            docs.reverse();
+            Some(docs.join(" "))
         }
-
-        None
     }
 
     /// Get scope id for a node by consulting the symbol table
