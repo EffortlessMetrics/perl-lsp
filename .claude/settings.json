@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cargo check --quiet --message-format=short 2>&1 | head -20 || true"
+          }
+        ]
+      }
+    ]
+  }
+}

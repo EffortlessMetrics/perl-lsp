@@ -6,13 +6,9 @@
 //! context-aware parsing, and recovery from malformed heredoc scenarios.
 //!
 //! AC10: Enhanced Heredoc Parser
-
-use anyhow::{Context, Result};
-use tree_sitter::{Language, Parser, Tree};
-
-extern "C" {
-    fn tree_sitter_perl() -> Language;
-}
+//!
+//! Note: These tests require the `heredoc-advanced` feature and tree-sitter linkage.
+//! Run with: cargo test -p tree-sitter-perl-rs --features heredoc-advanced
 
 /// Enhanced heredoc parser with comprehensive support
 #[derive(Debug, Clone)]
@@ -80,49 +76,6 @@ pub struct InterpolationHandler {
     pub max_interpolation_depth: usize,
 }
 
-/// Test helper to create parser
-fn create_parser() -> Result<Parser> {
-    let mut parser = Parser::new();
-    let language = unsafe { tree_sitter_perl() };
-    parser.set_language(language).context("Failed to set Perl language for parser")?;
-    Ok(parser)
-}
-
-/// Test helper to parse and validate heredoc
-fn parse_and_validate_heredoc(
-    parser: &mut Parser,
-    code: &str,
-    expected_delim: &str,
-) -> Result<Tree> {
-    let tree = parser.parse(code, None).context("Failed to parse heredoc code")?;
-
-    let root_node = tree.root_node();
-
-    // Allow some parsing errors for edge cases, but validate structure
-    if !root_node.has_error() {
-        // For successful parses, validate heredoc structure
-        assert!(find_heredoc_node(&root_node).is_some(), "Should find heredoc node in: {}", code);
-    }
-
-    Ok(tree)
-}
-
-fn find_heredoc_node(node: &tree_sitter::Node) -> Option<tree_sitter::Node> {
-    if node.kind() == "heredoc" || node.kind() == "here_document" {
-        return Some(*node);
-    }
-
-    for i in 0..node.child_count() {
-        if let Some(child) = node.child(i) {
-            if let Some(found) = find_heredoc_node(&child) {
-                return Some(found);
-            }
-        }
-    }
-
-    None
-}
-
 // ============================================================================
 // Enhanced Heredoc Tests - Compile-time Feature Gated
 // ============================================================================
@@ -133,6 +86,214 @@ fn find_heredoc_node(node: &tree_sitter::Node) -> Option<tree_sitter::Node> {
 #[cfg(feature = "heredoc-advanced")]
 mod heredoc_advanced {
     use super::*;
+    use anyhow::{Context, Result};
+    use tree_sitter::{Language, Parser, Tree};
+
+    // Safety: tree_sitter_perl() returns a valid Language pointer from the compiled grammar
+    unsafe extern "C" {
+        fn tree_sitter_perl() -> Language;
+    }
+
+    /// Test helper to create parser
+    fn create_parser() -> Result<Parser> {
+        let mut parser = Parser::new();
+        let language = unsafe { tree_sitter_perl() };
+        parser.set_language(&language).context("Failed to set Perl language for parser")?;
+        Ok(parser)
+    }
+
+    /// Test helper to parse and validate heredoc
+    fn parse_and_validate_heredoc(
+        parser: &mut Parser,
+        code: &str,
+        _expected_delim: &str,
+    ) -> Result<Tree> {
+        let tree = parser.parse(code, None).context("Failed to parse heredoc code")?;
+
+        let root_node = tree.root_node();
+
+        // Allow some parsing errors for edge cases, but validate structure
+        if !root_node.has_error() {
+            // For successful parses, validate heredoc structure
+            assert!(find_heredoc_node(&root_node).is_some(), "Should find heredoc node in: {}", code);
+        }
+
+        Ok(tree)
+    }
+
+    fn find_heredoc_node<'a>(node: &'a tree_sitter::Node<'a>) -> Option<tree_sitter::Node<'a>> {
+        if node.kind() == "heredoc" || node.kind() == "here_document" {
+            return Some(*node);
+        }
+
+        let child_count = node.child_count();
+        for i in 0..child_count {
+            if let Some(child) = node.child(i) {
+                if let Some(found) = find_heredoc_node(&child) {
+                    return Some(found);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn count_heredoc_nodes(node: &tree_sitter::Node) -> usize {
+        let mut count = 0;
+
+        if node.kind() == "heredoc" || node.kind() == "here_document" {
+            count += 1;
+        }
+
+        let child_count = node.child_count();
+        for i in 0..child_count {
+            if let Some(child) = node.child(i) {
+                count += count_heredoc_nodes(&child);
+            }
+        }
+
+        count
+    }
+
+    fn count_all_nodes(node: &tree_sitter::Node) -> usize {
+        let mut count = 1; // Count this node
+
+        let child_count = node.child_count();
+        for i in 0..child_count {
+            if let Some(child) = node.child(i) {
+                count += count_all_nodes(&child);
+            }
+        }
+
+        count
+    }
+
+    fn validate_heredoc_delimiter(
+        _node: &tree_sitter::Node,
+        _expected: &str,
+        _code: &str,
+    ) -> Result<()> {
+        // Validate that delimiter is correctly parsed and recognized
+        Ok(())
+    }
+
+    fn validate_heredoc_interpolation(
+        _node: &tree_sitter::Node,
+        _should_interpolate: bool,
+        _code: &str,
+    ) -> Result<()> {
+        // Validate interpolation behavior based on delimiter quoting
+        Ok(())
+    }
+
+    fn validate_array_context_heredocs(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate heredocs are properly parsed in array context
+        Ok(())
+    }
+
+    fn validate_heredoc_error_recovery(
+        _node: &tree_sitter::Node,
+        _code: &str,
+        _description: &str,
+    ) -> Result<()> {
+        // Validate error recovery for malformed heredocs
+        Ok(())
+    }
+
+    fn validate_complex_interpolation(
+        _node: &tree_sitter::Node,
+        _expected_types: &[&str],
+        _code: &str,
+    ) -> Result<()> {
+        // Validate complex interpolation expressions
+        Ok(())
+    }
+
+    fn validate_heredoc_indentation(
+        _node: &tree_sitter::Node,
+        _expected_indent: usize,
+        _code: &str,
+    ) -> Result<()> {
+        // Validate indented heredoc processing
+        Ok(())
+    }
+
+    fn validate_heredoc_security(
+        _node: &tree_sitter::Node,
+        _expected_issues: &[&str],
+        _code: &str,
+    ) -> Result<()> {
+        // Validate security analysis of heredoc content
+        Ok(())
+    }
+
+    fn generate_performance_test_case(test_type: &str, scale: usize) -> String {
+        match test_type {
+            "large_content" => {
+                format!(
+                    r#"my $large = <<EOF;
+{}
+EOF"#,
+                    "This is a line of content that will be repeated many times.\n".repeat(scale)
+                )
+            }
+            "many_small" => {
+                let heredocs = (0..scale)
+                    .map(|i| {
+                        format!(
+                            r#"<<EOF{};
+Content {}
+EOF{}"#,
+                            i, i, i
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!("my @many = ({});", heredocs)
+            }
+            "deep_interpolation" => {
+                let nested =
+                    (0..scale).map(|i| format!("${{var{}}}", i)).collect::<Vec<_>>().join("_");
+                format!(
+                    r#"my $deep = <<"EOF";
+Deep interpolation: {}
+EOF"#,
+                    nested
+                )
+            }
+            "complex_delimiters" => {
+                let heredocs = (0..scale)
+                    .map(|i| {
+                        format!(
+                            r#"<<COMPLEX_DELIMITER_NAME_{};
+Content {}
+COMPLEX_DELIMITER_NAME_{}"#,
+                            i, i, i
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!("my @complex = (\n{}\n);", heredocs)
+            }
+            "mixed_encoding" => {
+                let content = (0..scale)
+                    .map(|i| format!("Line {} with ünicöde and 日本語 content", i))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                format!(
+                    r#"my $mixed = <<"EOF";
+{}
+EOF"#,
+                    content
+                )
+            }
+            _ => String::from(
+                r#"my $default = <<EOF;
+Default test case
+EOF"#,
+            ),
+        }
+    }
 
     #[test]
     fn test_complex_heredoc_delimiters() -> Result<()> {
@@ -478,7 +639,7 @@ Content but file ends"#,
     <span>@{[scalar localtime]}</span>
 </div>
 HTML"#,
-                &["variable_interpolation", "function_call", "array_interpolation"],
+                &["variable_interpolation", "function_call", "array_interpolation"][..],
             ),
             // Complex expressions in interpolation
             (
@@ -532,7 +693,7 @@ UNICODE"#,
 
         for (code, expected_interpolation_types) in complex_interpolation_cases {
             let tree = parse_and_validate_heredoc(&mut parser, code, "INTERPOLATION")
-                .context(format!("Failed to parse complex interpolation heredoc"))?;
+                .context("Failed to parse complex interpolation heredoc")?;
 
             // Validate interpolation parsing
             if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
@@ -639,7 +800,7 @@ TEMPLATE"#,
                 r#"print <<"HTML";
 <script>alert('${user_input}')</script>
 HTML"#,
-                &["script_injection_risk"],
+                &["script_injection_risk"][..],
             ),
             // SQL injection patterns
             (
@@ -681,7 +842,7 @@ LARGE"#,
 
         for (code, expected_security_issues) in security_test_cases {
             let tree = parse_and_validate_heredoc(&mut parser, code, "SECURITY")
-                .context(format!("Failed to parse heredoc for security validation"))?;
+                .context("Failed to parse heredoc for security validation")?;
 
             // Validate security analysis
             if let Some(heredoc_node) = find_heredoc_node(&tree.root_node()) {
@@ -766,157 +927,5 @@ LARGE"#,
         }
 
         Ok(())
-    }
-} // end mod heredoc_advanced
-
-// Helper functions
-
-fn count_heredoc_nodes(node: &tree_sitter::Node) -> usize {
-    let mut count = 0;
-
-    if node.kind() == "heredoc" || node.kind() == "here_document" {
-        count += 1;
-    }
-
-    for i in 0..node.child_count() {
-        if let Some(child) = node.child(i) {
-            count += count_heredoc_nodes(&child);
-        }
-    }
-
-    count
-}
-
-fn count_all_nodes(node: &tree_sitter::Node) -> usize {
-    let mut count = 1; // Count this node
-
-    for i in 0..node.child_count() {
-        if let Some(child) = node.child(i) {
-            count += count_all_nodes(&child);
-        }
-    }
-
-    count
-}
-
-fn validate_heredoc_delimiter(node: &tree_sitter::Node, expected: &str, code: &str) -> Result<()> {
-    // Validate that delimiter is correctly parsed and recognized
-    Ok(())
-}
-
-fn validate_heredoc_interpolation(
-    node: &tree_sitter::Node,
-    should_interpolate: bool,
-    code: &str,
-) -> Result<()> {
-    // Validate interpolation behavior based on delimiter quoting
-    Ok(())
-}
-
-fn validate_array_context_heredocs(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate heredocs are properly parsed in array context
-    Ok(())
-}
-
-fn validate_heredoc_error_recovery(
-    node: &tree_sitter::Node,
-    code: &str,
-    description: &str,
-) -> Result<()> {
-    // Validate error recovery for malformed heredocs
-    Ok(())
-}
-
-fn validate_complex_interpolation(
-    node: &tree_sitter::Node,
-    expected_types: &[&str],
-    code: &str,
-) -> Result<()> {
-    // Validate complex interpolation expressions
-    Ok(())
-}
-
-fn validate_heredoc_indentation(
-    node: &tree_sitter::Node,
-    expected_indent: usize,
-    code: &str,
-) -> Result<()> {
-    // Validate indented heredoc processing
-    Ok(())
-}
-
-fn validate_heredoc_security(
-    node: &tree_sitter::Node,
-    expected_issues: &[&str],
-    code: &str,
-) -> Result<()> {
-    // Validate security analysis of heredoc content
-    Ok(())
-}
-
-fn generate_performance_test_case(test_type: &str, scale: usize) -> String {
-    match test_type {
-        "large_content" => {
-            format!(
-                r#"my $large = <<EOF;
-{}
-EOF"#,
-                "This is a line of content that will be repeated many times.\n".repeat(scale)
-            )
-        }
-        "many_small" => {
-            let heredocs = (0..scale)
-                .map(|i| {
-                    format!(
-                        r#"<<EOF{};
-Content {}
-EOF{}"#,
-                        i, i, i
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            format!("my @many = ({});", heredocs)
-        }
-        "deep_interpolation" => {
-            let nested = (0..scale).map(|i| format!("${{var{}}}", i)).collect::<Vec<_>>().join("_");
-            format!(
-                r#"my $deep = <<"EOF";
-Deep interpolation: {}
-EOF"#,
-                nested
-            )
-        }
-        "complex_delimiters" => {
-            let heredocs = (0..scale)
-                .map(|i| {
-                    format!(
-                        r#"<<COMPLEX_DELIMITER_NAME_{};
-Content {}
-COMPLEX_DELIMITER_NAME_{}"#,
-                        i, i, i
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            format!("my @complex = (\n{}\n);", heredocs)
-        }
-        "mixed_encoding" => {
-            let content = (0..scale)
-                .map(|i| format!("Line {} with ünicöde and 日本語 content", i))
-                .collect::<Vec<_>>()
-                .join("\n");
-            format!(
-                r#"my $mixed = <<"EOF";
-{}
-EOF"#,
-                content
-            )
-        }
-        _ => String::from(
-            r#"my $default = <<EOF;
-Default test case
-EOF"#,
-        ),
     }
 }

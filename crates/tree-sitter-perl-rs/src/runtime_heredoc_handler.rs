@@ -262,7 +262,7 @@ mod tests {
 
     #[test]
     fn test_substitution_with_heredoc() {
-        let mut handler = RuntimeHeredocHandler::new();
+        let _handler = RuntimeHeredocHandler::new();
         let _text = "foo bar foo";
         // Test logic for substitution with heredocs
     }

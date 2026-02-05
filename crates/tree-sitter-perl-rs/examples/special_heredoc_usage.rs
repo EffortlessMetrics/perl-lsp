@@ -149,16 +149,18 @@ EOF"#;
         Err(e) => println!("Interpolation error: {:?}", e),
     }
 
-    // Example 3: Substitution with heredoc
-    let text = "Replace THIS with heredoc";
-    let pattern = "THIS";
-    let replacement = "<<'REPLACEMENT'\nNew Content\nREPLACEMENT";
-    let flags = "e";
+    // Example 3: Substitution with heredoc (placeholder - method not yet implemented)
+    let _text = "Replace THIS with heredoc";
+    let _pattern = "THIS";
+    let _replacement = "<<'REPLACEMENT'\nNew Content\nREPLACEMENT";
+    let _flags = "e";
 
-    match runtime.substitute_with_heredoc(text, pattern, replacement, flags) {
-        Ok(_result) => println!("Substitution: processed successfully"),
-        Err(e) => println!("Substitution error: {:?}", e),
-    }
+    // TODO: Implement substitute_with_heredoc method
+    // match runtime.substitute_with_heredoc(text, pattern, replacement, flags) {
+    //     Ok(_result) => println!("Substitution: processed successfully"),
+    //     Err(e) => println!("Substitution error: {:?}", e),
+    // }
+    println!("Substitution with heredoc: not yet implemented");
 
     println!();
 }

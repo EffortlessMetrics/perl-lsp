@@ -9,8 +9,9 @@
 //! AC8: Postfix Dereferencing Parser
 //! AC9: State Variable Parser
 //! AC11: Unicode Identifier Parser
-
-use std::collections::HashMap;
+//!
+//! Note: These tests require the `modern-perl-syntax` feature and tree-sitter linkage.
+//! Run with: cargo test -p tree-sitter-perl-rs --features modern-perl-syntax
 
 /// Modern Perl syntax support definition
 #[derive(Debug, Clone)]
@@ -99,55 +100,6 @@ pub struct AdvancedOperatorSupport {
     pub isa_operator: bool,
 }
 
-/// Test helper to create parser
-fn create_parser() -> Result<Parser> {
-    let mut parser = Parser::new();
-    let language = unsafe { tree_sitter_perl() };
-    parser.set_language(language).context("Failed to set Perl language for parser")?;
-    Ok(parser)
-}
-
-/// Test helper to parse code and validate AST
-fn parse_and_validate(
-    parser: &mut Parser,
-    code: &str,
-    expected_node_types: &[&str],
-) -> Result<Tree> {
-    let tree = parser.parse(code, None).context("Failed to parse Perl code")?;
-
-    let root_node = tree.root_node();
-    assert!(!root_node.has_error(), "Parse tree should not have errors for: {}", code);
-
-    // Validate expected node types are present
-    for expected_type in expected_node_types {
-        let found = find_node_type(&root_node, expected_type);
-        assert!(
-            found,
-            "Expected node type '{}' not found in parse tree for: {}",
-            expected_type, code
-        );
-    }
-
-    Ok(tree)
-}
-
-/// Helper to recursively find node type in tree
-fn find_node_type(node: &tree_sitter::Node, target_type: &str) -> bool {
-    if node.kind() == target_type {
-        return true;
-    }
-
-    for i in 0..node.child_count() {
-        if let Some(child) = node.child(i) {
-            if find_node_type(&child, target_type) {
-                return true;
-            }
-        }
-    }
-
-    false
-}
-
 // ============================================================================
 // Modern Perl Syntax Comprehensive Tests - Compile-time Feature Gated
 // ============================================================================
@@ -158,6 +110,178 @@ fn find_node_type(node: &tree_sitter::Node, target_type: &str) -> bool {
 #[cfg(feature = "modern-perl-syntax")]
 mod modern_perl_syntax {
     use super::*;
+    use anyhow::{Context, Result};
+    use tree_sitter::{Language, Parser, Tree};
+
+    // Safety: tree_sitter_perl() returns a valid Language pointer from the compiled grammar
+    unsafe extern "C" {
+        fn tree_sitter_perl() -> Language;
+    }
+
+    /// Test helper to create parser
+    fn create_parser() -> Result<Parser> {
+        let mut parser = Parser::new();
+        let language = unsafe { tree_sitter_perl() };
+        parser.set_language(&language).context("Failed to set Perl language for parser")?;
+        Ok(parser)
+    }
+
+    /// Test helper to parse code and validate AST
+    fn parse_and_validate(
+        parser: &mut Parser,
+        code: &str,
+        expected_node_types: &[&str],
+    ) -> Result<Tree> {
+        let tree = parser.parse(code, None).context("Failed to parse Perl code")?;
+
+        let root_node = tree.root_node();
+        assert!(!root_node.has_error(), "Parse tree should not have errors for: {}", code);
+
+        // Validate expected node types are present
+        for expected_type in expected_node_types {
+            let found = find_node_type(&root_node, expected_type);
+            assert!(
+                found,
+                "Expected node type '{}' not found in parse tree for: {}",
+                expected_type, code
+            );
+        }
+
+        Ok(tree)
+    }
+
+    /// Helper to recursively find node type in tree
+    fn find_node_type(node: &tree_sitter::Node, target_type: &str) -> bool {
+        if node.kind() == target_type {
+            return true;
+        }
+
+        let child_count = node.child_count();
+        for i in 0..child_count {
+            if let Some(child) = node.child(i) {
+                if find_node_type(&child, target_type) {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    fn find_subroutine_node<'a>(node: &'a tree_sitter::Node<'a>) -> Option<tree_sitter::Node<'a>> {
+        if node.kind() == "subroutine_declaration" {
+            return Some(*node);
+        }
+
+        let child_count = node.child_count();
+        for i in 0..child_count {
+            if let Some(child) = node.child(i) {
+                if let Some(found) = find_subroutine_node(&child) {
+                    return Some(found);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn has_signature(node: &tree_sitter::Node) -> bool {
+        find_node_type(node, "signature") || find_node_type(node, "parameter_list")
+    }
+
+    fn count_parameters(node: &tree_sitter::Node) -> usize {
+        count_nodes_of_type(node, "parameter")
+    }
+
+    fn count_parameters_with_defaults(node: &tree_sitter::Node) -> usize {
+        count_nodes_of_type(node, "default_value")
+    }
+
+    fn count_slurpy_parameters(node: &tree_sitter::Node) -> usize {
+        count_nodes_of_type(node, "slurpy_parameter")
+    }
+
+    fn count_named_parameters(node: &tree_sitter::Node) -> usize {
+        count_nodes_of_type(node, "named_parameter")
+    }
+
+    fn count_nodes_of_type(node: &tree_sitter::Node, target_type: &str) -> usize {
+        let mut count = 0;
+
+        if node.kind() == target_type {
+            count += 1;
+        }
+
+        let child_count = node.child_count();
+        for i in 0..child_count {
+            if let Some(child) = node.child(i) {
+                count += count_nodes_of_type(&child, target_type);
+            }
+        }
+
+        count
+    }
+
+    fn validate_parameter_structure(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate that parameters have proper structure (name, optional type, optional default)
+        // This would be implemented based on the actual tree-sitter grammar
+        Ok(())
+    }
+
+    fn validate_default_value_expressions(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate that default value expressions are properly parsed
+        Ok(())
+    }
+
+    fn validate_slurpy_parameter_order(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate that slurpy parameters come after regular parameters
+        Ok(())
+    }
+
+    fn validate_named_parameter_syntax(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate that named parameters use correct :$name syntax
+        Ok(())
+    }
+
+    fn validate_postfix_deref_structure(
+        _node: &tree_sitter::Node,
+        _deref_type: &str,
+        _code: &str,
+    ) -> Result<()> {
+        // Validate postfix dereferencing structure
+        Ok(())
+    }
+
+    fn validate_chained_deref_structure(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate chained dereferencing operations
+        Ok(())
+    }
+
+    fn validate_state_variable_structure(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate state variable declaration structure
+        Ok(())
+    }
+
+    fn validate_state_variable_scoping(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate state variable scoping rules
+        Ok(())
+    }
+
+    fn validate_unicode_identifier_structure(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate Unicode identifier parsing
+        Ok(())
+    }
+
+    fn validate_unicode_security(_node: &tree_sitter::Node, _code: &str) -> Result<()> {
+        // Validate Unicode security (homograph detection, normalization, etc.)
+        Ok(())
+    }
+
+    fn detect_unicode_security_issues(_node: &tree_sitter::Node, _code: &str) -> Vec<String> {
+        // Detect potential Unicode security issues
+        // This would implement homograph detection, normalization checks, etc.
+        vec![]
+    }
 
     #[test]
     fn test_basic_subroutine_signatures() -> Result<()> {
@@ -171,7 +295,7 @@ mod modern_perl_syntax {
             // Basic signatures
             (
                 "sub foo ($x) { return $x + 1; }",
-                &["subroutine_declaration", "signature", "parameter"],
+                &["subroutine_declaration", "signature", "parameter"][..],
             ),
             (
                 "sub bar ($x, $y) { return $x + $y; }",
@@ -232,7 +356,7 @@ mod modern_perl_syntax {
             // Simple defaults
             (
                 "sub foo ($x, $y = 10) { return $x + $y; }",
-                &["parameter", "default_value", "number"],
+                &["parameter", "default_value", "number"][..],
             ),
             (
                 "sub bar ($name = 'anonymous') { return $name; }",
@@ -298,7 +422,7 @@ mod modern_perl_syntax {
             // Array slurpy
             (
                 "sub slurp ($first, @rest) { return @rest; }",
-                &["parameter", "slurpy_parameter", "array_sigil"],
+                &["parameter", "slurpy_parameter", "array_sigil"][..],
             ),
             ("sub all_args (@args) { return scalar @args; }", &["slurpy_parameter", "array_sigil"]),
             // Hash slurpy
@@ -351,7 +475,7 @@ mod modern_perl_syntax {
             // Basic named parameters
             (
                 "sub named (:$name, :$age) { return \"$name is $age\"; }",
-                &["named_parameter", "parameter_name"],
+                &["named_parameter", "parameter_name"][..],
             ),
             (
                 "sub with_defaults (:$name = 'John', :$age = 25) { }",
@@ -404,7 +528,7 @@ mod modern_perl_syntax {
 
         let array_deref_cases = vec![
             // Basic array postfix deref
-            ("my @array = $ref->@*;", &["postfix_deref", "array_deref", "deref_operator"]),
+            ("my @array = $ref->@*;", &["postfix_deref", "array_deref", "deref_operator"][..]),
             ("my $count = $ref->@*;", &["postfix_deref", "array_deref"]),
             // Array slice postfix deref
             ("my @slice = $ref->@[0..5];", &["postfix_deref", "array_slice", "range"]),
@@ -443,7 +567,7 @@ mod modern_perl_syntax {
 
         let hash_deref_cases = vec![
             // Basic hash postfix deref
-            ("my %hash = $ref->%*;", &["postfix_deref", "hash_deref", "deref_operator"]),
+            ("my %hash = $ref->%*;", &["postfix_deref", "hash_deref", "deref_operator"][..]),
             ("my @keys = keys $ref->%*;", &["function_call", "postfix_deref", "hash_deref"]),
             // Hash slice postfix deref
             ("my @values = $ref->@{qw(a b c)};", &["postfix_deref", "hash_slice", "word_list"]),
@@ -479,7 +603,7 @@ mod modern_perl_syntax {
 
         let chained_deref_cases = vec![
             // Simple chaining
-            ("my $value = $ref->$*->method();", &["postfix_deref", "method_call", "chained_call"]),
+            ("my $value = $ref->$*->method();", &["postfix_deref", "method_call", "chained_call"][..]),
             ("my @items = $ref->@*->@*;", &["postfix_deref", "array_deref", "chained_deref"]),
             // Complex chaining
             ("my %result = $ref->@*->[0]->%*;", &["postfix_deref", "array_access", "hash_deref"]),
@@ -526,7 +650,7 @@ mod modern_perl_syntax {
 
         let state_variable_cases = vec![
             // Basic state declarations
-            ("state $counter = 0;", &["state_declaration", "scalar_variable", "assignment"]),
+            ("state $counter = 0;", &["state_declaration", "scalar_variable", "assignment"][..]),
             (
                 "state @items = (1, 2, 3);",
                 &["state_declaration", "array_variable", "array_constructor"],
@@ -583,7 +707,7 @@ mod modern_perl_syntax {
                 return $x++;
             }
             "#,
-                &["subroutine_declaration", "state_declaration", "nested_subroutine"],
+                &["subroutine_declaration", "state_declaration", "nested_subroutine"][..],
             ),
             // State in loops
             (
@@ -642,7 +766,7 @@ mod modern_perl_syntax {
 
         let unicode_cases = vec![
             // Basic Unicode identifiers
-            ("my $测试 = 42;", &["scalar_variable", "unicode_identifier"]),
+            ("my $测试 = 42;", &["scalar_variable", "unicode_identifier"][..]),
             ("sub функция { return 1; }", &["subroutine_declaration", "unicode_identifier"]),
             ("package ΠάκαγΚλασσ;", &["package_declaration", "unicode_identifier"]),
             // Emoji identifiers
@@ -731,128 +855,11 @@ mod modern_perl_syntax {
                         );
                     }
                 }
-            } else {
-                if should_be_valid {
-                    panic!("Valid Unicode code failed to parse: {}", code);
-                }
+            } else if should_be_valid {
+                panic!("Valid Unicode code failed to parse: {}", code);
             }
         }
 
         Ok(())
     }
-}
-
-// Helper functions for validation
-
-fn find_subroutine_node(node: &tree_sitter::Node) -> Option<tree_sitter::Node> {
-    if node.kind() == "subroutine_declaration" {
-        return Some(*node);
-    }
-
-    for i in 0..node.child_count() {
-        if let Some(child) = node.child(i) {
-            if let Some(found) = find_subroutine_node(&child) {
-                return Some(found);
-            }
-        }
-    }
-
-    None
-}
-
-fn has_signature(node: &tree_sitter::Node) -> bool {
-    find_node_type(node, "signature") || find_node_type(node, "parameter_list")
-}
-
-fn count_parameters(node: &tree_sitter::Node) -> usize {
-    count_nodes_of_type(node, "parameter")
-}
-
-fn count_parameters_with_defaults(node: &tree_sitter::Node) -> usize {
-    count_nodes_of_type(node, "default_value")
-}
-
-fn count_slurpy_parameters(node: &tree_sitter::Node) -> usize {
-    count_nodes_of_type(node, "slurpy_parameter")
-}
-
-fn count_named_parameters(node: &tree_sitter::Node) -> usize {
-    count_nodes_of_type(node, "named_parameter")
-}
-
-fn count_nodes_of_type(node: &tree_sitter::Node, target_type: &str) -> usize {
-    let mut count = 0;
-
-    if node.kind() == target_type {
-        count += 1;
-    }
-
-    for i in 0..node.child_count() {
-        if let Some(child) = node.child(i) {
-            count += count_nodes_of_type(&child, target_type);
-        }
-    }
-
-    count
-}
-
-fn validate_parameter_structure(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate that parameters have proper structure (name, optional type, optional default)
-    // This would be implemented based on the actual tree-sitter grammar
-    Ok(())
-}
-
-fn validate_default_value_expressions(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate that default value expressions are properly parsed
-    Ok(())
-}
-
-fn validate_slurpy_parameter_order(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate that slurpy parameters come after regular parameters
-    Ok(())
-}
-
-fn validate_named_parameter_syntax(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate that named parameters use correct :$name syntax
-    Ok(())
-}
-
-fn validate_postfix_deref_structure(
-    node: &tree_sitter::Node,
-    deref_type: &str,
-    code: &str,
-) -> Result<()> {
-    // Validate postfix dereferencing structure
-    Ok(())
-}
-
-fn validate_chained_deref_structure(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate chained dereferencing operations
-    Ok(())
-}
-
-fn validate_state_variable_structure(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate state variable declaration structure
-    Ok(())
-}
-
-fn validate_state_variable_scoping(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate state variable scoping rules
-    Ok(())
-}
-
-fn validate_unicode_identifier_structure(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate Unicode identifier parsing
-    Ok(())
-}
-
-fn validate_unicode_security(node: &tree_sitter::Node, code: &str) -> Result<()> {
-    // Validate Unicode security (homograph detection, normalization, etc.)
-    Ok(())
-}
-
-fn detect_unicode_security_issues(node: &tree_sitter::Node, code: &str) -> Vec<String> {
-    // Detect potential Unicode security issues
-    // This would implement homograph detection, normalization checks, etc.
-    vec![]
 }
