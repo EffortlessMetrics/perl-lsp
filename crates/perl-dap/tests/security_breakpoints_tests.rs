@@ -50,7 +50,7 @@ fn test_set_breakpoints_rejects_newlines_in_condition() -> TestResult {
             // Strictly assert that the security validation caught the newline
             // This ensures that if the validation is removed, the test will fail (regression test)
             assert_eq!(
-                message, "Breakpoint condition cannot contain newlines",
+                message, "Expression cannot contain newlines",
                 "Condition with newline was not rejected by validation logic (Risk of protocol injection)"
             );
         }
@@ -94,7 +94,7 @@ fn test_set_breakpoints_rejects_carriage_returns_in_condition() -> TestResult {
 
             assert!(!verified, "Breakpoint with carriage return should not be verified");
             assert_eq!(
-                message, "Breakpoint condition cannot contain newlines",
+                message, "Expression cannot contain newlines",
                 "Condition with carriage return was not rejected"
             );
         }

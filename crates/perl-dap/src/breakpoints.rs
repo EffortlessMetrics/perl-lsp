@@ -16,6 +16,7 @@
 //! - [DAP Implementation Spec](../../docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management)
 
 use crate::protocol::{Breakpoint, SetBreakpointsArguments};
+use crate::security;
 use perl_parser::Parser;
 use perl_parser::ast::{Node, NodeKind};
 use ropey::Rope;
@@ -272,14 +273,14 @@ impl BreakpointStore {
             // The Perl debugger protocol is line-based, so a newline in a condition
             // allows injecting arbitrary debugger commands.
             if let Some(ref condition) = bp.condition {
-                if condition.contains('\n') || condition.contains('\r') {
+                if let Err(e) = security::validate_condition(condition) {
                     let record = BreakpointRecord {
                         id,
                         line: bp.line,
                         column: bp.column,
                         condition: bp.condition.clone(),
                         verified: false,
-                        message: Some("Breakpoint condition cannot contain newlines".to_string()),
+                        message: Some(format!("{}", e)),
                     };
                     records.push(record);
                     continue;
