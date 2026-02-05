@@ -9,3 +9,7 @@
 ## 2026-01-29 - [Placeholder UI Elements]
 **Learning:** Exposing placeholder or "coming soon" features in main UI menus (like Status Menu) is considered a UX regression if the commands are not fully functional, even if they provide a "roadmap" message.
 **Action:** Only add commands to high-visibility menus (like Status Menu) if they perform a functional action immediately; avoid "dead" or "informational only" interaction points for core tasks.
+
+## 2026-02-05 - [Disabled vs Hidden UI]
+**Learning:** Prefer disabling menu items with an explanatory label (e.g. "(Not available)") over hiding them completely. This improves discoverability by showing users what *is* possible in the right context, rather than leaving them wondering if the feature exists.
+**Action:** When implementing context-sensitive menus, use `disabled: true` and modify the label/detail to explain availability, rather than filtering the item out of the list.
