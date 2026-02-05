@@ -15,6 +15,7 @@ use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use tempfile::NamedTempFile;
 
 /// Helper to create a test adapter with message capture
 fn create_test_adapter() -> (DebugAdapter, Receiver<DapMessage>) {
@@ -358,6 +359,125 @@ fn test_session_lifecycle_variables_request() {
 
             let body_val = must_some(body);
             assert!(body_val.get("variables").is_some());
+        }
+        _ => panic!("Expected Response message"),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_session_lifecycle_inline_values_missing_arguments() {
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(1, "inlineValues", None);
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "inlineValues should fail without arguments");
+            assert_eq!(command, "inlineValues");
+            assert!(message.is_some());
+            assert!(must_some(message).contains("Missing arguments"));
+        }
+        _ => panic!("Expected Response message"),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_session_lifecycle_inline_values_missing_source_path() {
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let args = json!({
+        "source": {},
+        "startLine": 1,
+        "endLine": 2
+    });
+
+    let response = adapter.handle_request(1, "inlineValues", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "inlineValues should fail without source.path");
+            assert_eq!(command, "inlineValues");
+            assert!(message.is_some());
+            assert!(must_some(message).contains("source.path"));
+        }
+        _ => panic!("Expected Response message"),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_session_lifecycle_inline_values_invalid_line_range() {
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let args = json!({
+        "source": { "path": "/tmp/inline_values.pl" },
+        "startLine": 0,
+        "endLine": 2
+    });
+
+    let response = adapter.handle_request(1, "inlineValues", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "inlineValues should reject non-positive line numbers");
+            assert_eq!(command, "inlineValues");
+            assert!(message.is_some());
+            assert!(must_some(message).contains("startLine/endLine"));
+        }
+        _ => panic!("Expected Response message"),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_session_lifecycle_inline_values_missing_file() {
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let args = json!({
+        "source": { "path": "/tmp/missing_inline_values.pl" },
+        "startLine": 1,
+        "endLine": 1
+    });
+
+    let response = adapter.handle_request(1, "inlineValues", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "inlineValues should fail when file cannot be read");
+            assert_eq!(command, "inlineValues");
+            assert!(message.is_some());
+            assert!(must_some(message).contains("Failed to read source file"));
+        }
+        _ => panic!("Expected Response message"),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_session_lifecycle_inline_values_swapped_line_order() {
+    let (mut adapter, _rx) = create_test_adapter();
+    let mut temp_file = must(NamedTempFile::new());
+    let source = "my $x = 1;\nmy $y = $x + 2;\n";
+    must(std::io::Write::write_all(temp_file.as_file_mut(), source.as_bytes()));
+
+    let path = temp_file.path().to_string_lossy().to_string();
+    let args = json!({
+        "source": { "path": path },
+        "startLine": 2,
+        "endLine": 1
+    });
+
+    let response = adapter.handle_request(1, "inlineValues", Some(args));
+
+    match response {
+        DapMessage::Response { success, command, body, .. } => {
+            assert!(success, "inlineValues should normalize line ordering");
+            assert_eq!(command, "inlineValues");
+            let body = must_some(body);
+            let inline_values = must_some(body.get("inlineValues").and_then(|v| v.as_array()));
+            assert!(!inline_values.is_empty(), "Expected inline values in response");
         }
         _ => panic!("Expected Response message"),
     }
