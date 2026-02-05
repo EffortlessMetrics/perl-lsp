@@ -1190,39 +1190,25 @@ fn is_known_function(name: &str) -> bool {
         return false;
     }
 
-    match name {
-        // I/O functions
-        "print" | "printf" | "say" | "open" | "close" | "read" | "write" | "seek" | "tell"
-        | "eof" | "fileno" | "binmode" | "sysopen" | "sysread" | "syswrite" | "sysclose"
-        | "select" |
-        // String functions
-        "chomp" | "chop" | "chr" | "crypt" | "fc" | "hex" | "index" | "lc" | "lcfirst" | "length"
-        | "oct" | "ord" | "pack" | "q" | "qq" | "qr" | "quotemeta" | "qw" | "qx" | "reverse"
-        | "rindex" | "sprintf" | "substr" | "tr" | "uc" | "ucfirst" | "unpack" |
-        // Array/List functions
-        "pop" | "push" | "shift" | "unshift" | "splice" | "split" | "join" | "grep" | "map"
-        | "sort" |
-        // Hash functions
-        "delete" | "each" | "exists" | "keys" | "values" |
-        // Control flow
-        "die" | "exit" | "return" | "goto" | "last" | "next" | "redo" | "continue" | "break"
-        | "given" | "when" | "default" |
-        // File test operators
-        "stat" | "lstat" | "-r" | "-w" | "-x" | "-o" | "-R" | "-W" | "-X" | "-O" | "-e" | "-z"
-        | "-s" | "-f" | "-d" | "-l" | "-p" | "-S" | "-b" | "-c" | "-t" | "-u" | "-g" | "-k"
-        | "-T" | "-B" | "-M" | "-A" | "-C" |
-        // System functions
-        "system" | "exec" | "fork" | "wait" | "waitpid" | "kill" | "sleep" | "alarm"
-        | "getpgrp" | "getppid" | "getpriority" | "setpgrp" | "setpriority" | "time" | "times"
-        | "localtime" | "gmtime" |
-        // Math functions
-        "abs" | "atan2" | "cos" | "exp" | "int" | "log" | "rand" | "sin" | "sqrt" | "srand" |
-        // Misc functions
-        "defined" | "undef" | "ref" | "bless" | "tie" | "tied" | "untie" | "eval" | "caller"
-        | "import" | "require" | "use" | "do" | "package" | "sub" | "my" | "our" | "local"
-        | "state" | "scalar" | "wantarray" | "warn" => true,
-        _ => false,
+    // Optimization: Use perfect hash function for standard builtins
+    if perl_parser_core::builtin_signatures_phf::is_builtin(name) {
+        return true;
     }
+
+    // Fallback for syntax keywords, operators, and functions missing from builtins list
+    matches!(
+        name,
+        // Control flow/Switch
+        "break" | "continue" | "default" | "given" | "when" |
+        // Keywords
+        "package" | "sub" | "import" |
+        // Quote operators
+        "q" | "qq" | "qr" | "qw" | "qx" |
+        // Transliteration
+        "tr" | "y" |
+        // Missing functions
+        "sysclose"
+    )
 }
 
 /// Check if an identifier is a known filehandle
@@ -1235,5 +1221,35 @@ fn is_filehandle(name: &str) -> bool {
             // Check if it's all uppercase (common convention for filehandles)
             name.chars().all(|c| c.is_ascii_uppercase() || c == '_') && !name.is_empty()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_known_function() {
+        // Standard builtins (handled by PHF)
+        assert!(is_known_function("print"));
+        assert!(is_known_function("map"));
+        assert!(is_known_function("defined"));
+        assert!(is_known_function("use"));
+
+        // Fallback keywords/operators
+        assert!(is_known_function("package"));
+        assert!(is_known_function("sub"));
+        assert!(is_known_function("qw"));
+        assert!(is_known_function("y")); // synonym for tr
+        assert!(is_known_function("sysclose"));
+
+        // Unknown functions
+        assert!(!is_known_function("unknown_function_name"));
+        assert!(!is_known_function("MyModule::Function"));
+        assert!(!is_known_function("Bareword"));
+
+        // Edge cases
+        assert!(!is_known_function(""));
+        assert!(!is_known_function("Print")); // Uppercase
     }
 }
