@@ -5,6 +5,7 @@
 
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
+use crate::security::validate_path;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -629,10 +630,11 @@ impl DebugAdapter {
                 })
                 .unwrap_or_default();
 
+            let cwd = args.get("cwd").and_then(|c| c.as_str());
             let stop_on_entry = args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
             // Launch Perl debugger
-            match self.launch_debugger(program, perl_args, stop_on_entry) {
+            match self.launch_debugger(program, perl_args, cwd, stop_on_entry) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
                     if stop_on_entry {
@@ -681,6 +683,7 @@ impl DebugAdapter {
         &mut self,
         program: &str,
         args: Vec<String>,
+        cwd: Option<&str>,
         stop_on_entry: bool,
     ) -> Result<i32, String> {
         // Security: Validate program path before any process spawning
@@ -694,21 +697,39 @@ impl DebugAdapter {
             return Err("Program path cannot be empty".to_string());
         }
 
+        // Security: Validate path against workspace root if provided (AC16)
+        // This prevents path traversal attacks by ensuring the script is within
+        // the allowed workspace boundary.
+        let final_program_path = if let Some(root) = cwd {
+            let root_path = std::path::Path::new(root);
+            let program_path = std::path::Path::new(program);
+
+            validate_path(program_path, root_path)
+                .map_err(|e| format!("Security Error: {}", e))?
+        } else {
+            std::path::PathBuf::from(program)
+        };
+
         // Validate that the program is a regular file (not a directory, device, etc.)
         // Using metadata().is_file() is more robust than exists() because:
         // - exists() returns true for directories
         // - exists() returns true for symlinks to non-files
         // - is_file() specifically checks for regular files
-        use std::path::Path;
-        let path = Path::new(program);
-        match std::fs::metadata(path) {
+        match std::fs::metadata(&final_program_path) {
             Ok(metadata) => {
                 if !metadata.is_file() {
-                    return Err(format!("Program path is not a regular file: {}", program));
+                    return Err(format!(
+                        "Program path is not a regular file: {}",
+                        final_program_path.display()
+                    ));
                 }
             }
             Err(e) => {
-                return Err(format!("Could not access program file '{}': {}", program, e));
+                return Err(format!(
+                    "Could not access program file '{}': {}",
+                    final_program_path.display(),
+                    e
+                ));
             }
         }
 
@@ -721,7 +742,7 @@ impl DebugAdapter {
         // Use -- to separate flags from script name, preventing argument injection
         // if program starts with -
         cmd.arg("--");
-        cmd.arg(program);
+        cmd.arg(&final_program_path);
         cmd.args(&args);
 
         // Set up pipes
