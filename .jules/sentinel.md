@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-05-23 - Relative Redirect DoS in Binary Downloader
+**Vulnerability:** The `BinaryDownloader` in `vscode-extension` crashed when receiving a relative `Location` header during an HTTP redirect because it used `new URL(newUrl)` without a base URL.
+**Learning:** `new URL()` in Node.js throws on relative paths if no base is provided. HTTP clients handling redirects manually must resolve relative redirects against the request URL. This also bypassed protocol downgrade checks if the relative path didn't start with `http`.
+**Prevention:** Use `new URL(newUrl, currentUrl).toString()` to properly resolve relative paths before processing them. Always check the resolved URL against security policies (e.g. protocol) rather than the raw header.
