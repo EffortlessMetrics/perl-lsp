@@ -20,9 +20,11 @@ mod provider_version_guard {
         DeclarationProvider::build_parent_map(&ast, &mut pm, None);
 
         // Construct provider with version 1…
-        let prov = DeclarationProvider::new(ast.clone(), code.to_string(), "file:///x".into())
-            .with_parent_map(&pm)
-            .with_doc_version(1);
+        let prov = unsafe {
+            DeclarationProvider::new(ast.clone(), code.to_string(), "file:///x".into())
+                .with_parent_map(&pm)
+                .with_doc_version(1)
+        };
 
         // …but call it with a newer doc version => should panic in debug.
         let off = match code.find("FOO") {

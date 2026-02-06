@@ -3,6 +3,8 @@
 //! Handles textDocument/declaration, textDocument/definition, textDocument/typeDefinition,
 //! and textDocument/implementation requests.
 
+#![allow(unsafe_code)]
+
 use super::super::*;
 use crate::cancellation::RequestCleanupGuard;
 use crate::protocol::{req_position, req_uri};
@@ -107,13 +109,16 @@ impl LspServer {
                     let offset = self.pos16_to_offset(doc, line, character);
 
                     // Use the Declaration provider - ast is already an Arc
-                    let provider = crate::declaration::DeclarationProvider::new(
-                        Arc::clone(ast),
-                        doc.text.clone(),
-                        uri.to_string(),
-                    )
-                    .with_parent_map(&doc.parent_map)
-                    .with_doc_version(doc.version);
+                    // SAFETY: parent_map is owned by the same DocumentState as the AST, ensuring pointer validity
+                    let provider = unsafe {
+                        crate::declaration::DeclarationProvider::new(
+                            Arc::clone(ast),
+                            doc.text.clone(),
+                            uri.to_string(),
+                        )
+                        .with_parent_map(&doc.parent_map)
+                        .with_doc_version(doc.version)
+                    };
 
                     // Find declaration at the position
                     if let Some(location_links) = provider.find_declaration(offset, doc.version) {
@@ -358,13 +363,16 @@ impl LspServer {
                     let offset = self.pos16_to_offset(doc, line, character);
 
                     // Try DeclarationProvider first (it handles function calls properly)
-                    let provider = crate::declaration::DeclarationProvider::new(
-                        Arc::clone(ast),
-                        doc.text.clone(),
-                        uri.to_string(),
-                    )
-                    .with_parent_map(&doc.parent_map)
-                    .with_doc_version(doc.version);
+                    // SAFETY: parent_map is owned by the same DocumentState as the AST, ensuring pointer validity
+                    let provider = unsafe {
+                        crate::declaration::DeclarationProvider::new(
+                            Arc::clone(ast),
+                            doc.text.clone(),
+                            uri.to_string(),
+                        )
+                        .with_parent_map(&doc.parent_map)
+                        .with_doc_version(doc.version)
+                    };
 
                     if let Some(location_links) = provider.find_declaration(offset, doc.version) {
                         // Convert to Location format for definition

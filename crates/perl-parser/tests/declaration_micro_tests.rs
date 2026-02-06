@@ -35,10 +35,11 @@ mod declaration_micro_tests {
 
         // Create provider - we need to leak to satisfy lifetime
         let leaked_map = Box::leak(Box::new(parent_map));
-        let provider =
+        let provider = unsafe {
             DeclarationProvider::new(ast_arc.clone(), code.to_string(), "test.pl".to_string())
                 .with_parent_map(leaked_map)
-                .with_doc_version(0);
+                .with_doc_version(0)
+        };
 
         Ok((provider, leaked_map.clone(), ast_arc))
     }
@@ -189,10 +190,11 @@ mod constant_advanced_tests {
         DeclarationProvider::build_parent_map(&ast_arc, &mut parent_map, None);
 
         let leaked_map = Box::leak(Box::new(parent_map));
-        let provider =
+        let provider = unsafe {
             DeclarationProvider::new(ast_arc.clone(), code.to_string(), "test.pl".to_string())
                 .with_parent_map(leaked_map)
-                .with_doc_version(0);
+                .with_doc_version(0)
+        };
 
         Ok((provider, leaked_map.clone(), ast_arc))
     }
@@ -326,10 +328,11 @@ mod qw_variants_tests {
         DeclarationProvider::build_parent_map(&ast_arc, &mut parent_map, None);
 
         let leaked_map = Box::leak(Box::new(parent_map));
-        let provider =
+        let provider = unsafe {
             DeclarationProvider::new(ast_arc.clone(), code.to_string(), "test.pl".to_string())
                 .with_parent_map(leaked_map)
-                .with_doc_version(0);
+                .with_doc_version(0)
+        };
 
         Ok((provider, leaked_map.clone(), ast_arc))
     }
@@ -392,10 +395,11 @@ mod parser_extras_tests {
         DeclarationProvider::build_parent_map(&ast_arc, &mut parent_map, None);
 
         let leaked_map = Box::leak(Box::new(parent_map));
-        let provider =
+        let provider = unsafe {
             DeclarationProvider::new(ast_arc.clone(), code.to_string(), "test.pl".to_string())
                 .with_parent_map(leaked_map)
-                .with_doc_version(0);
+                .with_doc_version(0)
+        };
 
         Ok((provider, leaked_map.clone(), ast_arc))
     }
