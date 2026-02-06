@@ -106,6 +106,11 @@ impl<'a> DeclarationProvider<'a> {
     /// - Root node has a parent (cycle detection)
     /// - Cycles detected in parent relationships
     ///
+    /// # Safety
+    /// The `parent_map` must contain valid pointers to nodes within the `ast` provided
+    /// to this provider. Using pointers to dropped nodes or nodes from a different AST
+    /// will result in Undefined Behavior (use-after-free or invalid memory access).
+    ///
     /// # Examples
     /// ```rust
     /// use perl_parser::declaration::{DeclarationProvider, ParentMap};
@@ -118,9 +123,12 @@ impl<'a> DeclarationProvider<'a> {
     ///
     /// let provider = DeclarationProvider::new(
     ///     ast, "content".to_string(), "uri".to_string()
-    /// ).with_parent_map(&parent_map);
+    /// );
+    /// unsafe {
+    ///     provider.with_parent_map(&parent_map);
+    /// }
     /// ```
-    pub fn with_parent_map(mut self, parent_map: &'a ParentMap) -> Self {
+    pub unsafe fn with_parent_map(mut self, parent_map: &'a ParentMap) -> Self {
         #[cfg(debug_assertions)]
         {
             // If the AST has more than the root node, an empty map is suspicious.

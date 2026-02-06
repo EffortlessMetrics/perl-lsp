@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-05-27 - Unsound Raw Pointer Exposure in Public API
+**Vulnerability:** The `DeclarationProvider::with_parent_map` function in `perl-parser` was a safe public function that accepted a map containing raw pointers (`*const Node`) and dereferenced them internally using `unsafe`. This allowed safe Rust code to trigger Undefined Behavior (segfaults, UAF) by passing invalid pointers.
+**Learning:** Functions that accept raw pointers and dereference them MUST be marked `unsafe`, or the pointers must be encapsulated in a safe abstraction that guarantees validity. Raw pointers have no lifetime guarantees, so the compiler cannot prevent use-after-free or invalid access.
+**Prevention:** If an API requires raw pointers for performance, mark the function as `unsafe` and document the safety contracts clearly. Better yet, use safe abstractions (like indices or `Rc`) if the performance cost is acceptable.
