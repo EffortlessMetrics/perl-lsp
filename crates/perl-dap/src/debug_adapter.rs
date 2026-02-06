@@ -169,7 +169,12 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "link", // Code loading/execution
                 "eval",
                 "require",
-                "do", // Tie mechanism (can execute arbitrary code)
+                "do",
+                "use",
+                "no",
+                "package",
+                "goto",
+                // Tie mechanism (can execute arbitrary code)
                 "tie",
                 "untie", // Network
                 "socket",
@@ -3213,6 +3218,22 @@ DB<1>"#;
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_blocks_control_flow_and_packages() {
+        // These are currently allowed but SHOULD be blocked
+        let blocked = [
+            "use Socket",
+            "no strict",
+            "package Evil",
+            "goto LABEL",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "Expression '{}' should be blocked but was allowed", expr);
         }
     }
 }
