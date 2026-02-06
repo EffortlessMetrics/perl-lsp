@@ -349,7 +349,11 @@ export class BinaryDownloader {
         };
     }
     
-    private async downloadFile(url: string, dest: string, timeoutMs = 30000): Promise<void> {
+    private async downloadFile(url: string, dest: string, timeoutMs = 30000, redirectCount = 0): Promise<void> {
+        if (redirectCount > 5) {
+            throw new Error('Too many redirects');
+        }
+
         return new Promise((resolve, reject) => {
             // Security check: Enforce HTTPS for remote URLs to prevent MITM attacks
             try {
@@ -407,12 +411,25 @@ export class BinaryDownloader {
                     file.destroy();
                     const newUrl = response.headers.location;
                     if (newUrl) {
+                        // Resolve relative URLs against the current URL
+                        // This fixes crashes when servers return relative Location headers (e.g. /foo)
+                        // and prevents potential open redirect confusion
+                        let resolvedUrl: string;
+                        try {
+                            resolvedUrl = new URL(newUrl, url).toString();
+                        } catch (e) {
+                            reject(new Error(`Failed to resolve redirect URL: ${newUrl}`));
+                            return;
+                        }
+
                         // Security check: Prevent downgrade from HTTPS to HTTP
-                        if (isHttps && newUrl.toLowerCase().startsWith('http:') && !newUrl.toLowerCase().startsWith('https:')) {
+                        // Check resolvedUrl which is always absolute
+                        if (isHttps && resolvedUrl.toLowerCase().startsWith('http:') && !resolvedUrl.toLowerCase().startsWith('https:')) {
                             reject(new Error('Security violation: Redirect from HTTPS to HTTP prevented'));
                             return;
                         }
-                        this.downloadFile(newUrl, dest, timeoutMs).then(resolve).catch(reject);
+
+                        this.downloadFile(resolvedUrl, dest, timeoutMs, redirectCount + 1).then(resolve).catch(reject);
                         return;
                     }
                 }
