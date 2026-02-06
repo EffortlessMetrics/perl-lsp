@@ -197,13 +197,30 @@ export async function activate(context: vscode.ExtensionContext) {
         interface MenuAction extends vscode.QuickPickItem {
             command?: string;
             args?: any[];
+            disabled?: boolean;
+        }
+
+        // Determine if tests can be run
+        const editor = vscode.window.activeTextEditor;
+        let canRunTests = false;
+        if (editor && editor.document.languageId === 'perl') {
+            const filePath = editor.document.uri.fsPath;
+            if (filePath.endsWith('.t') || filePath.endsWith('.pl')) {
+                canRunTests = true;
+            }
         }
 
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
             { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
+            {
+                label: canRunTests ? '$(beaker) Run Tests in Current File' : '$(beaker) Run Tests (Not available)',
+                description: canRunTests ? 'Shift+Alt+T' : 'Only available for .t and .pl files',
+                detail: 'Run tests for the active file',
+                command: 'perl-lsp.runTests',
+                disabled: !canRunTests
+            },
             { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
@@ -218,7 +235,7 @@ export async function activate(context: vscode.ExtensionContext) {
             placeHolder: 'Perl Language Server Actions'
         });
 
-        if (selection && selection.command) {
+        if (selection && selection.command && !selection.disabled) {
             vscode.commands.executeCommand(selection.command, ...(selection.args || []));
         }
     });
