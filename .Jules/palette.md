@@ -9,3 +9,7 @@
 ## 2026-01-29 - [Placeholder UI Elements]
 **Learning:** Exposing placeholder or "coming soon" features in main UI menus (like Status Menu) is considered a UX regression if the commands are not fully functional, even if they provide a "roadmap" message.
 **Action:** Only add commands to high-visibility menus (like Status Menu) if they perform a functional action immediately; avoid "dead" or "informational only" interaction points for core tasks.
+
+## 2026-02-18 - [Unavailable Actions in QuickPick Menus]
+**Learning:** For `QuickPick` menus (like Status Menu), explicitly showing unavailable actions with a disabled state (e.g., "(Not available)" suffix) is better than hiding them, as it aids discoverability and explains *why* an action isn't available via description text.
+**Action:** When implementing context-aware menus, calculate availability upfront and modify the item's label/description to reflect its state, rather than filtering it out.
