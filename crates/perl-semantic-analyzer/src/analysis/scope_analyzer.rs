@@ -51,6 +51,7 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use perl_parser_core::builtin_signatures_phf::is_builtin;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::ops::Range;
@@ -1190,37 +1191,19 @@ fn is_known_function(name: &str) -> bool {
         return false;
     }
 
+    // Check PHF map first (O(1))
+    if is_builtin(name) {
+        return true;
+    }
+
+    // Fallback for keywords and functions not in the PHF map
     match name {
-        // I/O functions
-        "print" | "printf" | "say" | "open" | "close" | "read" | "write" | "seek" | "tell"
-        | "eof" | "fileno" | "binmode" | "sysopen" | "sysread" | "syswrite" | "sysclose"
-        | "select" |
-        // String functions
-        "chomp" | "chop" | "chr" | "crypt" | "fc" | "hex" | "index" | "lc" | "lcfirst" | "length"
-        | "oct" | "ord" | "pack" | "q" | "qq" | "qr" | "quotemeta" | "qw" | "qx" | "reverse"
-        | "rindex" | "sprintf" | "substr" | "tr" | "uc" | "ucfirst" | "unpack" |
-        // Array/List functions
-        "pop" | "push" | "shift" | "unshift" | "splice" | "split" | "join" | "grep" | "map"
-        | "sort" |
-        // Hash functions
-        "delete" | "each" | "exists" | "keys" | "values" |
-        // Control flow
-        "die" | "exit" | "return" | "goto" | "last" | "next" | "redo" | "continue" | "break"
-        | "given" | "when" | "default" |
-        // File test operators
-        "stat" | "lstat" | "-r" | "-w" | "-x" | "-o" | "-R" | "-W" | "-X" | "-O" | "-e" | "-z"
-        | "-s" | "-f" | "-d" | "-l" | "-p" | "-S" | "-b" | "-c" | "-t" | "-u" | "-g" | "-k"
-        | "-T" | "-B" | "-M" | "-A" | "-C" |
-        // System functions
-        "system" | "exec" | "fork" | "wait" | "waitpid" | "kill" | "sleep" | "alarm"
-        | "getpgrp" | "getppid" | "getpriority" | "setpgrp" | "setpriority" | "time" | "times"
-        | "localtime" | "gmtime" |
-        // Math functions
-        "abs" | "atan2" | "cos" | "exp" | "int" | "log" | "rand" | "sin" | "sqrt" | "srand" |
-        // Misc functions
-        "defined" | "undef" | "ref" | "bless" | "tie" | "tied" | "untie" | "eval" | "caller"
-        | "import" | "require" | "use" | "do" | "package" | "sub" | "my" | "our" | "local"
-        | "state" | "scalar" | "wantarray" | "warn" => true,
+        // Missing in BUILTIN_SIGS but valid for scope analysis
+        "break" | "continue" | "default" | "given" | "when" | // Flow control
+        "import" | "package" | "sub" | // Syntax
+        "q" | "qq" | "qr" | "qw" | "qx" | "tr" | "y" | // Quote-like
+        "sysclose" // Omitted from builtin_signatures_phf
+            => true,
         _ => false,
     }
 }
