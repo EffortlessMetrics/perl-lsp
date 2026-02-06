@@ -10,6 +10,7 @@ use perl_lsp::execute_command::ExecuteCommandProvider;
 use serde_json::Value;
 use std::error::Error;
 use std::fs;
+use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// Test that run_test_sub is protected against code injection via file_path.
@@ -22,7 +23,7 @@ use tempfile::TempDir;
 /// The key security property is that the malicious code never reaches Perl.
 #[test]
 fn test_run_test_sub_file_path_injection() -> Result<(), Box<dyn Error>> {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
     // Payload that would inject code if string interpolation is used
     let malicious_file_path = "nonexistent.pl'; print 'INJECTED_VIA_FILE'; '";
@@ -59,7 +60,7 @@ fn test_run_test_sub_file_path_injection() -> Result<(), Box<dyn Error>> {
 /// code will NOT be executed.
 #[test]
 fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
     // Create a minimal test file with a marker subroutine
     let test_file = "/tmp/security_test_sub.pl";
@@ -109,7 +110,7 @@ fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
 /// With secure path resolution, non-existent files are rejected before execution.
 #[test]
 fn test_run_file_argument_injection() -> Result<(), Box<dyn Error>> {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
     // Payload that would be interpreted as a flag without `--` separator
     // `-e print 'INJECTED'` would execute arbitrary code
@@ -135,7 +136,7 @@ fn test_run_file_argument_injection() -> Result<(), Box<dyn Error>> {
 /// With secure path resolution, non-existent files are rejected before execution.
 #[test]
 fn test_run_tests_argument_injection() -> Result<(), Box<dyn Error>> {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
     // Similar test for run_tests
     let malicious_file_path = "-e";
@@ -162,7 +163,7 @@ fn test_run_tests_argument_injection() -> Result<(), Box<dyn Error>> {
 /// any shell command is executed, preventing shell metacharacter expansion.
 #[test]
 fn test_shell_metacharacter_safety() -> Result<(), Box<dyn Error>> {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
     // File paths with shell metacharacters that could cause issues
     // if shell expansion occurred. These non-existent paths should be
@@ -201,7 +202,7 @@ fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
     let file_path = temp_dir.path().join("test_valid.pl");
     fs::write(&file_path, "print 'VALID_OUTPUT';")?;
 
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
 
     let result = provider.execute_command(
         "perl.runFile",
@@ -213,5 +214,38 @@ fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
     let output = val["output"].as_str().ok_or("Missing 'output' field")?;
 
     assert!(output.contains("VALID_OUTPUT"), "Output should contain expected result: {}", output);
+    Ok(())
+}
+
+/// Test that execution fails closed when no workspace roots are configured.
+///
+/// This regression test ensures that if the server fails to configure workspace roots
+/// (or none are provided), the provider denies execution rather than allowing it
+/// (which was the previous "fail open" behavior).
+#[test]
+fn test_fail_closed_empty_workspace_roots() -> Result<(), Box<dyn Error>> {
+    let temp_dir = TempDir::new()?;
+    let file_path = temp_dir.path().join("test_fail_closed.pl");
+    fs::write(&file_path, "print 'SHOULD_NOT_RUN';")?;
+
+    // Initialize with empty roots (default)
+    let provider = ExecuteCommandProvider::new();
+
+    let result = provider.execute_command(
+        "perl.runFile",
+        vec![Value::String(file_path.to_string_lossy().to_string())],
+    );
+
+    // Should return error due to fail-closed policy
+    assert!(result.is_err(), "Should fail execution when no workspace roots are configured");
+    let err = result.err().ok_or("Expected error but got Ok")?;
+
+    // Error should explicitly mention "Fail-closed" or similar security message
+    assert!(
+        err.contains("Fail-closed") || err.contains("Path traversal protection enabled"),
+        "Error should indicate security failure due to empty roots: {}",
+        err
+    );
+
     Ok(())
 }
