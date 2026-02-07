@@ -24,15 +24,30 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // Known builtins that commonly use indirect object syntax
-        let indirect_builtins = [
-            "print", "printf", "say", "open", "close", "pipe", "sysopen", "sysread", "syswrite",
-            "truncate", "fcntl", "ioctl", "flock", "seek", "tell", "select", "binmode", "exec",
-            "system",
-        ];
-
-        // Check if it's a known builtin
-        if indirect_builtins.contains(&name) {
+        // Check if it's a known builtin that commonly uses indirect object syntax
+        // Use a match expression for O(1) lookup instead of iterating over an array
+        if matches!(
+            name,
+            "print"
+                | "printf"
+                | "say"
+                | "open"
+                | "close"
+                | "pipe"
+                | "sysopen"
+                | "sysread"
+                | "syswrite"
+                | "truncate"
+                | "fcntl"
+                | "ioctl"
+                | "flock"
+                | "seek"
+                | "tell"
+                | "select"
+                | "binmode"
+                | "exec"
+                | "system"
+        ) {
             // Peek at the token AFTER the function name (use peek_second since peek is the function name)
             let next_token = if let Ok(next) = self.tokens.peek_second() {
                 next
