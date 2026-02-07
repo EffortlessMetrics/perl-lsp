@@ -70,3 +70,7 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+## 2026-01-29 - Missing Path Validation in Debug Adapter
+**Vulnerability:** The `launch_debugger` function in `crates/perl-dap` failed to use the existing `validate_path` function, allowing path traversal outside the workspace if a malicious `program` path was provided in the launch request.
+**Learning:** Security functions (like `validate_path`) must be explicitly integrated into the control flow. Their mere existence in the codebase offers no protection. "Dead security code" is a dangerous anti-pattern.
+**Prevention:** Always verify that security controls are active by writing integration tests (like `security_repro_test.rs`) that attempt to bypass them, rather than just unit testing the controls in isolation.

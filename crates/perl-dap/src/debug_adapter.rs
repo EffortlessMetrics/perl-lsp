@@ -5,6 +5,7 @@
 
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
+use crate::security::validate_path;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -631,8 +632,12 @@ impl DebugAdapter {
 
             let stop_on_entry = args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
+            // Extract cwd for security validation
+            use std::path::PathBuf;
+            let cwd = args.get("cwd").and_then(|c| c.as_str()).map(PathBuf::from);
+
             // Launch Perl debugger
-            match self.launch_debugger(program, perl_args, stop_on_entry) {
+            match self.launch_debugger(program, perl_args, stop_on_entry, cwd.as_deref()) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
                     if stop_on_entry {
@@ -682,6 +687,7 @@ impl DebugAdapter {
         program: &str,
         args: Vec<String>,
         stop_on_entry: bool,
+        workspace_root: Option<&std::path::Path>,
     ) -> Result<i32, String> {
         // Security: Validate program path before any process spawning
         // This prevents command injection via flag arguments (e.g., "-e malicious_code")
@@ -692,6 +698,15 @@ impl DebugAdapter {
         // Reject empty or whitespace-only paths
         if program.is_empty() {
             return Err("Program path cannot be empty".to_string());
+        }
+
+        // Security: Validate path against workspace boundary if workspace_root is provided
+        // This prevents path traversal attacks (e.g. "../../../etc/passwd")
+        if let Some(root) = workspace_root {
+            use std::path::Path;
+            if let Err(e) = validate_path(Path::new(program), root) {
+                return Err(format!("Security Error: {}", e));
+            }
         }
 
         // Validate that the program is a regular file (not a directory, device, etc.)
