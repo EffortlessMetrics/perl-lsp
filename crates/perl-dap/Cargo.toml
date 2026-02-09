@@ -34,11 +34,11 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 
 # Error handling
-anyhow = "1.0.100"
+anyhow = "1.0.101"
 thiserror = "2.0.18"
 
 # Regex for parsing debugger output
-regex = "1.12.2"
+regex = "1.12.3"
 once_cell = "1.21.3"
 
 # Async runtime
@@ -49,7 +49,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 # Command-line argument parsing
-clap = { version = "4.5.55", features = ["derive"] }
+clap = { version = "4.5.57", features = ["derive"] }
 
 # Rope for position mapping (reuse from perl-parser)
 ropey = "1.6.1"
