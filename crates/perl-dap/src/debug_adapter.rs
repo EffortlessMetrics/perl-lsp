@@ -1823,6 +1823,7 @@ impl DebugAdapter {
 fn is_in_single_quotes(s: &str, idx: usize) -> bool {
     let mut in_sq = false;
     let mut escaped = false;
+    let mut prev_char: Option<char> = None;
 
     for (i, ch) in s.char_indices() {
         if i >= idx {
@@ -1837,8 +1838,15 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
                 in_sq = false;
             }
         } else if ch == '\'' {
-            in_sq = true;
+            // Only start a string if NOT preceded by a word character
+            // This prevents treating package separators (e.g., CORE'system) as string starts
+            let is_package_separator =
+                prev_char.is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+            if !is_package_separator {
+                in_sq = true;
+            }
         }
+        prev_char = Some(ch);
     }
 
     in_sq
