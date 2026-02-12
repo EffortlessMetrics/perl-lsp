@@ -3,9 +3,10 @@
 //! This module attempts to resolve heredoc delimiters that are computed
 //! at runtime, using various heuristics and recovery strategies.
 
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone)]
 pub struct DynamicDelimiterRecovery {
@@ -55,20 +56,40 @@ pub struct DelimiterAnalysis {
 }
 
 // Enhanced patterns for delimiter variables
-static DELIMITER_ASSIGNMENT: Lazy<Regex> = Lazy::new(|| {
+#[allow(clippy::unwrap_used)]
+static SCALAR_ASSIGN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?m)^\s*(?:my|our|local|state)\s+[\$@%](\w+)\s*=\s*["']([^"']+)["']"#).unwrap()
 });
 
-static ARRAY_ASSIGNMENT: Lazy<Regex> = Lazy::new(|| {
+#[allow(clippy::unwrap_used)]
+static ARRAY_ASSIGN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?m)^\s*(?:my|our|local|state)\s+@(\w+)\s*=\s*\(([^)]+)\)"#).unwrap()
 });
 
-static HASH_ASSIGNMENT: Lazy<Regex> = Lazy::new(|| {
+#[allow(clippy::unwrap_used)]
+static HASH_ASSIGN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?m)^\s*(?:my|our|local|state)\s+%(\w+)\s*=\s*\(([^)]+)\)"#).unwrap()
 });
 
-static COMMON_DELIMITER_NAMES: Lazy<Vec<&'static str>> =
-    Lazy::new(|| vec!["delimiter", "delim", "end", "eof", "marker", "tag", "term", "terminator"]);
+static COMMON_DELIMITER_NAMES: LazyLock<Vec<&'static str>> =
+    LazyLock::new(|| vec!["delimiter", "delim", "end", "eof", "marker", "tag", "label"]);
+
+#[allow(clippy::unwrap_used)]
+static STRING_FUNC_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"^(uc|lc|ucfirst|lcfirst|reverse|chomp|chop)\s*\(\s*(.+?)\s*\)$").unwrap()
+});
+
+#[allow(clippy::unwrap_used)]
+static STR_CONV_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(.+?)->(?:to_string|as_string|stringify)\(\s*\)$").unwrap());
+
+#[allow(clippy::unwrap_used)]
+static VAR_INTERP_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\$\{?([a-zA-Z_]\w*)\}?").unwrap());
+
+#[allow(clippy::unwrap_used)]
+static HASH_PAIR_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"(\w+)\s*=>\s*["']([^"']+)["']"#).unwrap());
 
 impl DynamicDelimiterRecovery {
     pub fn new(mode: RecoveryMode) -> Self {
@@ -85,7 +106,7 @@ impl DynamicDelimiterRecovery {
     /// Scan code for variable assignments that might be delimiters
     pub fn scan_for_assignments(&mut self, code: &str) {
         // Scan for scalar variable assignments
-        for cap in DELIMITER_ASSIGNMENT.captures_iter(code) {
+        for cap in SCALAR_ASSIGN_PATTERN.captures_iter(code) {
             if let (Some(var), Some(val)) = (cap.get(1), cap.get(2)) {
                 let var_name = var.as_str();
                 let value = val.as_str();
@@ -109,7 +130,7 @@ impl DynamicDelimiterRecovery {
         }
 
         // Scan for array assignments
-        for cap in ARRAY_ASSIGNMENT.captures_iter(code) {
+        for cap in ARRAY_ASSIGN_PATTERN.captures_iter(code) {
             if let (Some(var), Some(val)) = (cap.get(1), cap.get(2)) {
                 let var_name = var.as_str();
                 let values_str = val.as_str();
@@ -119,9 +140,9 @@ impl DynamicDelimiterRecovery {
                     .split(',')
                     .filter_map(|elem| {
                         let elem = elem.trim();
-                        if elem.starts_with('"') && elem.ends_with('"') && elem.len() >= 2 {
-                            Some(elem[1..elem.len() - 1].to_string())
-                        } else if elem.starts_with('\'') && elem.ends_with('\'') && elem.len() >= 2
+                        if ((elem.starts_with('"') && elem.ends_with('"'))
+                            || (elem.starts_with('\'') && elem.ends_with('\'')))
+                            && elem.len() >= 2
                         {
                             Some(elem[1..elem.len() - 1].to_string())
                         } else {
@@ -153,17 +174,14 @@ impl DynamicDelimiterRecovery {
         }
 
         // Scan for hash assignments
-        for cap in HASH_ASSIGNMENT.captures_iter(code) {
+        for cap in HASH_ASSIGN_PATTERN.captures_iter(code) {
             if let (Some(var), Some(val)) = (cap.get(1), cap.get(2)) {
                 let var_name = var.as_str();
                 let pairs_str = val.as_str();
 
                 // Parse hash pairs (simplified - handles key => "value" patterns)
-                static HASH_PAIR: Lazy<Regex> =
-                    Lazy::new(|| Regex::new(r#"(\w+)\s*=>\s*["']([^"']+)["']"#).unwrap());
-
-                for pair_cap in HASH_PAIR.captures_iter(pairs_str) {
-                    if let (Some(_key), Some(val)) = (pair_cap.get(1), pair_cap.get(2)) {
+                for cap in HASH_PAIR_PATTERN.captures_iter(pairs_str) {
+                    if let (Some(_key), Some(val)) = (cap.get(1), cap.get(2)) {
                         let value = val.as_str();
 
                         let confidence = if COMMON_DELIMITER_NAMES
@@ -265,19 +283,17 @@ impl DynamicDelimiterRecovery {
         let expr = expr.trim();
 
         // Simple variable like $delimiter
-        if let Some(var_name) = expr.strip_prefix('$') {
-            if !expr.contains('.')
-                && !expr.contains('{')
-                && !expr.contains('[')
-                && !expr.contains('(')
-            {
-                if let Some(values) = self.variable_values.get(var_name) {
-                    return values
-                        .iter()
-                        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())
-                        .cloned();
-                }
-            }
+        if let Some(var_name) = expr.strip_prefix('$')
+            && !expr.contains('.')
+            && !expr.contains('{')
+            && !expr.contains('[')
+            && !expr.contains('(')
+            && let Some(values) = self.variable_values.get(var_name)
+        {
+            return values
+                .iter()
+                .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(Ordering::Equal))
+                .cloned();
         }
 
         // Braced variable ${var} or ${var[index]}
@@ -285,70 +301,76 @@ impl DynamicDelimiterRecovery {
             let inner = &expr[2..expr.len() - 1];
 
             // Simple braced variable ${var}
-            if !inner.contains('[') && !inner.contains('{') {
-                if let Some(values) = self.variable_values.get(inner) {
-                    return values
-                        .iter()
-                        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())
-                        .cloned();
-                }
+            if !inner.contains('[')
+                && !inner.contains('{')
+                && let Some(values) = self.variable_values.get(inner)
+            {
+                return values
+                    .iter()
+                    .max_by(|a, b| {
+                        a.confidence.partial_cmp(&b.confidence).unwrap_or(Ordering::Equal)
+                    })
+                    .cloned();
             }
 
             // Array/hash subscript ${var[0]} or ${var{key}}
-            if let Some(base_var) = self.extract_subscript_base(inner) {
-                if let Some(values) = self.variable_values.get(&base_var) {
-                    // For subscripts, return lower confidence since we can't resolve the index
-                    let mut best_value = values
-                        .iter()
-                        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())?
-                        .clone();
-                    best_value.confidence *= 0.6; // Reduce confidence for subscripts
-                    best_value.source = ValueSource::Heuristic;
-                    return Some(best_value);
-                }
+            if let Some(base_var) = self.extract_subscript_base(inner)
+                && let Some(values) = self.variable_values.get(&base_var)
+            {
+                // For subscripts, return lower confidence since we can't resolve the index
+                let mut best_value = values
+                    .iter()
+                    .max_by(|a, b| {
+                        a.confidence.partial_cmp(&b.confidence).unwrap_or(Ordering::Equal)
+                    })?
+                    .clone();
+                best_value.confidence *= 0.6; // Reduce confidence for subscripts
+                best_value.source = ValueSource::Heuristic;
+                return Some(best_value);
             }
         }
 
         // Array access like $arr[0]
-        if expr.contains('[') && expr.contains(']') {
-            if let Some(base_var) = self.extract_array_base(expr) {
-                if let Some(values) = self.variable_values.get(&base_var) {
-                    let mut best_value = values
-                        .iter()
-                        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())?
-                        .clone();
-                    best_value.confidence *= 0.5; // Lower confidence for array access
-                    best_value.source = ValueSource::Heuristic;
-                    return Some(best_value);
-                }
-            }
+        if expr.contains('[')
+            && expr.contains(']')
+            && let Some(base_var) = self.extract_array_base(expr)
+            && let Some(values) = self.variable_values.get(&base_var)
+        {
+            let mut best_value = values
+                .iter()
+                .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(Ordering::Equal))?
+                .clone();
+            best_value.confidence *= 0.5; // Lower confidence for array access
+            best_value.source = ValueSource::Heuristic;
+            return Some(best_value);
         }
 
         // Hash access like $hash{key}
-        if expr.contains('{') && expr.contains('}') && !expr.starts_with("${") {
-            if let Some(base_var) = self.extract_hash_base(expr) {
-                if let Some(values) = self.variable_values.get(&base_var) {
-                    let mut best_value = values
-                        .iter()
-                        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())?
-                        .clone();
-                    best_value.confidence *= 0.5; // Lower confidence for hash access
-                    best_value.source = ValueSource::Heuristic;
-                    return Some(best_value);
-                }
-            }
+        if expr.contains('{')
+            && expr.contains('}')
+            && !expr.starts_with("${")
+            && let Some(base_var) = self.extract_hash_base(expr)
+            && let Some(values) = self.variable_values.get(&base_var)
+        {
+            let mut best_value = values
+                .iter()
+                .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(Ordering::Equal))?
+                .clone();
+            best_value.confidence *= 0.5; // Lower confidence for hash access
+            best_value.source = ValueSource::Heuristic;
+            return Some(best_value);
         }
 
         // Function calls like uc($var) or lc($delimiter)
-        if let Some(resolved_func) = self.try_resolve_function_call(expr) {
+        if let Some(resolved_func) = self.try_resolve_string_function(expr) {
             return Some(resolved_func);
         }
 
         // Method calls like $obj->method() or $class->new()
-        if expr.contains("->") {
-            if let Some(resolved_method) = self.try_resolve_method_call(expr) {
-                return Some(resolved_method);
-            }
+        if expr.contains("->")
+            && let Some(resolved_method) = self.try_resolve_method_call(expr)
+        {
+            return Some(resolved_method);
         }
 
         // Concatenation: $var . "END" (supports multiple parts and new operators)
@@ -375,42 +397,36 @@ impl DynamicDelimiterRecovery {
     fn extract_subscript_base(&self, expr: &str) -> Option<String> {
         if let Some(bracket_pos) = expr.find('[') {
             Some(expr[..bracket_pos].to_string())
-        } else if let Some(brace_pos) = expr.find('{') {
-            Some(expr[..brace_pos].to_string())
         } else {
-            None
+            expr.find('{').map(|brace_pos| expr[..brace_pos].to_string())
         }
     }
 
     /// Extract base variable name from array access like '$arr[0]'
     fn extract_array_base(&self, expr: &str) -> Option<String> {
-        if let Some(var_name) = expr.strip_prefix('$') {
-            if let Some(bracket_pos) = var_name.find('[') {
-                return Some(format!("@{}", &var_name[..bracket_pos]));
-            }
+        if let Some(var_name) = expr.strip_prefix('$')
+            && let Some(bracket_pos) = var_name.find('[')
+        {
+            return Some(format!("@{}", &var_name[..bracket_pos]));
         }
         None
     }
 
     /// Extract base variable name from hash access like '$hash{key}'
     fn extract_hash_base(&self, expr: &str) -> Option<String> {
-        if let Some(var_name) = expr.strip_prefix('$') {
-            if let Some(brace_pos) = var_name.find('{') {
-                return Some(format!("%{}", &var_name[..brace_pos]));
-            }
+        if let Some(var_name) = expr.strip_prefix('$')
+            && let Some(brace_pos) = var_name.find('{')
+        {
+            return Some(format!("%{}", &var_name[..brace_pos]));
         }
         None
     }
 
     /// Try to resolve function calls like uc($var), lc($delimiter), etc.
-    fn try_resolve_function_call(&self, expr: &str) -> Option<PossibleValue> {
-        static FUNCTION_CALL: Lazy<Regex> = Lazy::new(|| {
-            Regex::new(r"^(uc|lc|ucfirst|lcfirst|reverse|chomp|chop)\s*\(\s*(.+?)\s*\)$").unwrap()
-        });
-
-        if let Some(captures) = FUNCTION_CALL.captures(expr) {
-            let func_name = captures.get(1)?.as_str();
-            let arg_expr = captures.get(2)?.as_str();
+    fn try_resolve_string_function(&self, expr: &str) -> Option<PossibleValue> {
+        if let Some(cap) = STRING_FUNC_PATTERN.captures(expr) {
+            let func_name = cap.get(1)?.as_str();
+            let arg_expr = cap.get(2)?.as_str();
 
             // Recursively resolve the argument
             if let Some(arg_value) = self.try_resolve_variable(
@@ -465,10 +481,7 @@ impl DynamicDelimiterRecovery {
     /// Try to resolve method calls (limited scope for delimiter resolution)
     fn try_resolve_method_call(&self, expr: &str) -> Option<PossibleValue> {
         // For now, just handle simple cases like $obj->to_string()
-        static METHOD_CALL: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"^(.+?)->(?:to_string|as_string|stringify)\(\s*\)$").unwrap());
-
-        if let Some(captures) = METHOD_CALL.captures(expr) {
+        if let Some(captures) = STR_CONV_PATTERN.captures(expr) {
             let obj_expr = captures.get(1)?.as_str();
 
             // Try to resolve the object
@@ -520,26 +533,27 @@ impl DynamicDelimiterRecovery {
             }
 
             // Handle string repetition like "AB" x 3
-            if i > 0 && part.chars().all(|c| c.is_ascii_digit()) {
-                if let Ok(repeat_count) = part.parse::<usize>() {
-                    if repeat_count <= 100 && repeat_count > 0 {
-                        // Sanity limit
-                        // Get the last resolved part to repeat
-                        if !resolved.is_empty() {
-                            let last_part = resolved.clone();
-                            resolved.clear();
-                            resolved.push_str(&last_part.repeat(repeat_count));
-                            confidences.push(0.7);
-                            continue;
-                        }
-                    }
+            if i > 0
+                && part.chars().all(|c| c.is_ascii_digit())
+                && let Ok(repeat_count) = part.parse::<usize>()
+                && repeat_count <= 100
+                && repeat_count > 0
+            {
+                // Sanity limit
+                // Get the last resolved part to repeat
+                if !resolved.is_empty() {
+                    let last_part = resolved.clone();
+                    resolved.clear();
+                    resolved.push_str(&last_part.repeat(repeat_count));
+                    confidences.push(0.7);
+                    continue;
                 }
             }
 
-            if part.starts_with('"') && part.ends_with('"') && part.len() >= 2 {
-                resolved.push_str(&part[1..part.len() - 1]);
-                confidences.push(1.0);
-            } else if part.starts_with('\'') && part.ends_with('\'') && part.len() >= 2 {
+            if ((part.starts_with('"') && part.ends_with('"'))
+                || (part.starts_with('\'') && part.ends_with('\'')))
+                && part.len() >= 2
+            {
                 resolved.push_str(&part[1..part.len() - 1]);
                 confidences.push(1.0);
             } else if part.starts_with("${") && part.ends_with('}') {
@@ -547,7 +561,9 @@ impl DynamicDelimiterRecovery {
                 if let Some(values) = self.variable_values.get(var_name) {
                     let val = values
                         .iter()
-                        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())?
+                        .max_by(|a, b| {
+                            a.confidence.partial_cmp(&b.confidence).unwrap_or(Ordering::Equal)
+                        })?
                         .clone();
                     resolved.push_str(&val.value);
                     confidences.push(val.confidence);
@@ -558,7 +574,9 @@ impl DynamicDelimiterRecovery {
                 if let Some(values) = self.variable_values.get(var_name) {
                     let val = values
                         .iter()
-                        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())?
+                        .max_by(|a, b| {
+                            a.confidence.partial_cmp(&b.confidence).unwrap_or(Ordering::Equal)
+                        })?
                         .clone();
                     resolved.push_str(&val.value);
                     confidences.push(val.confidence);
@@ -605,25 +623,24 @@ impl DynamicDelimiterRecovery {
         }
 
         // Complex interpolation - try to resolve all variables
-        static VAR_INTERPOLATION: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"\$\{?([a-zA-Z_]\w*)\}?").unwrap());
-
         let mut resolved = content.to_string();
         let mut total_confidence: f32 = 1.0;
         let mut any_resolved = false;
 
-        for captures in VAR_INTERPOLATION.captures_iter(content) {
+        for captures in VAR_INTERP_PATTERN.captures_iter(content) {
             if let Some(var_match) = captures.get(0) {
                 let var_name = captures.get(1)?.as_str();
 
                 if let Some(values) = self.variable_values.get(var_name) {
                     let val = values
                         .iter()
-                        .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap())?
+                        .max_by(|a, b| {
+                            a.confidence.partial_cmp(&b.confidence).unwrap_or(Ordering::Equal)
+                        })?
                         .clone();
 
                     resolved = resolved.replace(var_match.as_str(), &val.value);
-                    total_confidence = total_confidence.min(val.confidence as f32);
+                    total_confidence = total_confidence.min(val.confidence);
                     any_resolved = true;
                 }
             }

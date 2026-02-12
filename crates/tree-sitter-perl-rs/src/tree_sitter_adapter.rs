@@ -240,7 +240,7 @@ impl TreeSitterAdapter {
 
     fn convert_normal_node(
         ast_node: &crate::pure_rust_parser::AstNode,
-        source: &str,
+        _source: &str,
     ) -> TreeSitterNode {
         // Convert our pure Rust AST nodes to tree-sitter format
         // This would map to the actual tree-sitter node types from grammar.js
@@ -252,7 +252,7 @@ impl TreeSitterAdapter {
             end_point: (0, 0),
             children: Self::get_children(ast_node)
                 .into_iter()
-                .map(|child| Self::convert_normal_node(child, source))
+                .map(|child| Self::convert_normal_node(child, _source))
                 .collect(),
             is_error: false,
             is_missing: false,

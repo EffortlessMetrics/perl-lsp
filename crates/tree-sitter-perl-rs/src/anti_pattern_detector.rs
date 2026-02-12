@@ -3,8 +3,8 @@
 //! This module provides detection and analysis of problematic Perl patterns
 //! that make static parsing difficult or impossible, particularly around heredocs.
 
-use once_cell::sync::Lazy;
 use regex::Regex;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Location {
@@ -20,44 +20,18 @@ pub enum Severity {
     Info,    // Code could be improved
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AntiPattern {
-    FormatHeredoc {
-        location: Location,
-        format_name: String,
-        heredoc_delimiter: String,
-    },
-    BeginTimeHeredoc {
-        location: Location,
-        side_effects: Vec<String>,
-        heredoc_content: String,
-    },
-    SourceFilterHeredoc {
-        location: Location,
-        filter_module: String,
-        affected_lines: Vec<usize>,
-    },
-    DynamicHeredocDelimiter {
-        location: Location,
-        expression: String,
-    },
-    RegexCodeBlockHeredoc {
-        location: Location,
-        pattern: String,
-        flags: String,
-    },
-    EvalStringHeredoc {
-        location: Location,
-        eval_type: String, // "string" or "block"
-        contains_heredoc: bool,
-    },
-    TiedHandleHeredoc {
-        location: Location,
-        handle_name: String,
-    },
+    FormatHeredoc { location: Location, format_name: String, heredoc_delimiter: String },
+    BeginTimeHeredoc { location: Location, heredoc_content: String, side_effects: Vec<String> },
+    DynamicHeredocDelimiter { location: Location, expression: String },
+    SourceFilterHeredoc { location: Location, module: String },
+    RegexCodeBlockHeredoc { location: Location },
+    EvalStringHeredoc { location: Location },
+    TiedHandleHeredoc { location: Location, handle_name: String },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Diagnostic {
     pub severity: Severity,
     pub pattern: AntiPattern,
@@ -79,51 +53,39 @@ trait PatternDetector: Send + Sync {
 // Format heredoc detector
 struct FormatHeredocDetector;
 
-static FORMAT_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?m)^\s*format\s+(\w+)\s*=\s*$").unwrap());
+/// Pattern for identifying format declarations
+#[allow(clippy::unwrap_used)]
+static FORMAT_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^\s*format\s+(\w+)\s*=\s*$").unwrap());
 
 impl PatternDetector for FormatHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
         for cap in FORMAT_PATTERN.captures_iter(code) {
-            let match_pos = cap.get(0).unwrap();
-            let format_name = cap.get(1).unwrap().as_str().to_string();
+            if let (Some(match_pos), Some(name_match)) = (cap.get(0), cap.get(1)) {
+                let format_name = name_match.as_str().to_string();
+                let location = Location {
+                    line: code[..match_pos.start()].lines().count(),
+                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                    offset: offset + match_pos.start(),
+                };
 
-            // Check if next non-empty line is a heredoc
-            let after_format = &code[match_pos.end()..];
-            for line in after_format.lines() {
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
+                // Look for heredoc marker inside format body (simplified)
+                let body_start = match_pos.end();
+                let body_end = code[body_start..].find("\n.").unwrap_or(code.len() - body_start);
+                let body = &code[body_start..body_start + body_end];
 
-                if trimmed.starts_with("<<") {
-                    let location = Location {
-                        line: code[..match_pos.start()].lines().count(),
-                        column: match_pos.start()
-                            - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                        offset: offset + match_pos.start(),
-                    };
-
-                    let delimiter = trimmed
-                        .trim_start_matches("<<")
-                        .trim_start_matches(['\'', '"', '`'])
-                        .split([' ', '\t', ';', '\n'])
-                        .next()
-                        .unwrap_or("")
-                        .to_string();
-
+                if body.contains("<<") {
                     results.push((
                         AntiPattern::FormatHeredoc {
                             location: location.clone(),
                             format_name,
-                            heredoc_delimiter: delimiter,
+                            heredoc_delimiter: "UNKNOWN".to_string(), // Would need better extraction
                         },
                         location,
                     ));
                 }
-                break; // Only check the first non-empty line
             }
         }
 
@@ -138,13 +100,10 @@ impl PatternDetector for FormatHeredocDetector {
         Some(Diagnostic {
             severity: Severity::Warning,
             pattern: pattern.clone(),
-            message: format!("Format '{}' uses heredoc syntax", format_name),
-            explanation: "Perl formats are deprecated since Perl 5.8. Their interaction with heredocs can cause parsing ambiguities and maintenance issues.".to_string(),
-            suggested_fix: Some("Consider using sprintf, printf, or a templating module like Template::Toolkit instead:\n\nmy $report = sprintf(\"%-20s %10s\\n\", $name, $value);".to_string()),
-            references: vec![
-                "perldoc perlform".to_string(),
-                "https://perldoc.perl.org/perldiag#Use-of-uninitialized-value-in-format".to_string(),
-            ],
+            message: format!("Heredoc declared inside format '{}'", format_name),
+            explanation: "Heredocs inside format declarations are often handled specially by the Perl interpreter and can be difficult to parse statically.".to_string(),
+            suggested_fix: Some("Consider moving the heredoc outside the format or using a simple string if possible.".to_string()),
+            references: vec!["perldoc perlform".to_string()],
         })
     }
 }
@@ -152,100 +111,80 @@ impl PatternDetector for FormatHeredocDetector {
 // BEGIN-time heredoc detector
 struct BeginTimeHeredocDetector;
 
-static BEGIN_BLOCK_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?s)\bBEGIN\s*\{([^}]*<<[^}]*)\}").unwrap());
+/// Pattern for identifying BEGIN blocks with heredocs
+#[allow(clippy::unwrap_used)]
+static BEGIN_BLOCK_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?s)\bBEGIN\s*\{([^}]*<<[^}]*)\}").unwrap());
 
 impl PatternDetector for BeginTimeHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
         for cap in BEGIN_BLOCK_PATTERN.captures_iter(code) {
-            let match_pos = cap.get(0).unwrap();
-            let block_content = cap.get(1).unwrap().as_str();
+            if let (Some(match_pos), Some(content_match)) = (cap.get(0), cap.get(1)) {
+                let block_content = content_match.as_str();
+                let location = Location {
+                    line: code[..match_pos.start()].lines().count(),
+                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                    offset: offset + match_pos.start(),
+                };
 
-            // Detect side effects in BEGIN block
-            let mut side_effects = Vec::new();
-
-            if block_content.contains('$') && block_content.contains('=') {
-                side_effects.push("Global variable modification".to_string());
+                results.push((
+                    AntiPattern::BeginTimeHeredoc {
+                        location: location.clone(),
+                        heredoc_content: block_content.to_string(),
+                        side_effects: vec!["Phase-dependent parsing".to_string()],
+                    },
+                    location,
+                ));
             }
-            if block_content.contains("sub ") {
-                side_effects.push("Subroutine definition".to_string());
-            }
-            if block_content.contains("require ") || block_content.contains("use ") {
-                side_effects.push("Module loading".to_string());
-            }
-            if block_content.contains("open ") {
-                side_effects.push("File operations".to_string());
-            }
-
-            let location = Location {
-                line: code[..match_pos.start()].lines().count(),
-                column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                offset: offset + match_pos.start(),
-            };
-
-            results.push((
-                AntiPattern::BeginTimeHeredoc {
-                    location: location.clone(),
-                    side_effects,
-                    heredoc_content: block_content.to_string(),
-                },
-                location,
-            ));
         }
 
         results
     }
 
     fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
-        let AntiPattern::BeginTimeHeredoc { side_effects, .. } = pattern else {
-            return None;
-        };
-
-        let effects_str = if side_effects.is_empty() {
-            "No obvious side effects detected".to_string()
+        if let AntiPattern::BeginTimeHeredoc { .. } = pattern {
+            Some(Diagnostic {
+                severity: Severity::Error,
+                pattern: pattern.clone(),
+                message: "Heredoc declared during BEGIN-time".to_string(),
+                explanation: "Heredocs declared inside BEGIN blocks are evaluated during the compilation phase. This can lead to complex side effects that are difficult to track statically.".to_string(),
+                suggested_fix: Some("Move the heredoc declaration out of the BEGIN block if it doesn't need to be evaluated during compilation.".to_string()),
+                references: vec!["perldoc perlmod".to_string()],
+            })
         } else {
-            format!("Detected side effects: {}", side_effects.join(", "))
-        };
-
-        Some(Diagnostic {
-            severity: Severity::Warning,
-            pattern: pattern.clone(),
-            message: "Heredoc in BEGIN block detected".to_string(),
-            explanation: format!("BEGIN blocks execute at compile time, making heredocs difficult to parse statically. {}", effects_str),
-            suggested_fix: Some("Move heredoc initialization to INIT block or runtime:\n\nour $config;\nINIT {\n    $config = <<'END';\n    ...\nEND\n}".to_string()),
-            references: vec![
-                "perldoc perlmod#BEGIN,-UNITCHECK,-CHECK,-INIT-and-END".to_string(),
-            ],
-        })
+            None
+        }
     }
 }
 
-// Dynamic heredoc delimiter detector
+// Dynamic delimiter detector
 struct DynamicDelimiterDetector;
 
-static DYNAMIC_DELIMITER_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"<<\s*\$\{[^}]+\}|<<\s*\$\w+|<<\s*`[^`]+`").unwrap());
+/// Pattern for identifying dynamic heredoc delimiters
+#[allow(clippy::unwrap_used)]
+static DYNAMIC_DELIMITER_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"<<\s*\$\{[^}]+\}|<<\s*\$\w+|<<\s*`[^`]+`").unwrap());
 
 impl PatternDetector for DynamicDelimiterDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
-        for match_pos in DYNAMIC_DELIMITER_PATTERN.find_iter(code) {
-            let location = Location {
-                line: code[..match_pos.start()].lines().count(),
-                column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                offset: offset + match_pos.start(),
-            };
+        for cap in DYNAMIC_DELIMITER_PATTERN.captures_iter(code) {
+            if let Some(match_pos) = cap.get(0) {
+                let expression = match_pos.as_str().to_string();
+                let location = Location {
+                    line: code[..match_pos.start()].lines().count(),
+                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                    offset: offset + match_pos.start(),
+                };
 
-            results.push((
-                AntiPattern::DynamicHeredocDelimiter {
-                    location: location.clone(),
-                    expression: match_pos.as_str().to_string(),
-                },
-                location,
-            ));
+                results.push((
+                    AntiPattern::DynamicHeredocDelimiter { location: location.clone(), expression },
+                    location,
+                ));
+            }
         }
 
         results
@@ -257,14 +196,12 @@ impl PatternDetector for DynamicDelimiterDetector {
         };
 
         Some(Diagnostic {
-            severity: Severity::Error,
+            severity: Severity::Warning,
             pattern: pattern.clone(),
             message: format!("Dynamic heredoc delimiter: {}", expression),
-            explanation: "Heredoc delimiters computed at runtime cannot be parsed statically. This makes the code unpredictable and potentially insecure.".to_string(),
-            suggested_fix: Some("Use a static delimiter with variable interpolation inside the heredoc:\n\nmy $content = <<\"END\";\nDynamic value: $variable\nEND".to_string()),
-            references: vec![
-                "perldoc perlop#'<<EOF'".to_string(),
-            ],
+            explanation: "Using variables or expressions as heredoc delimiters makes it impossible to know the terminator without executing the code.".to_string(),
+            suggested_fix: Some("Use a literal string as the heredoc terminator.".to_string()),
+            references: vec!["perldoc perlop".to_string()],
         })
     }
 }
@@ -272,186 +209,189 @@ impl PatternDetector for DynamicDelimiterDetector {
 // Source filter detector
 struct SourceFilterDetector;
 
-static SOURCE_FILTER_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"use\s+Filter::(Simple|Util::Call|cpp|exec|sh|decrypt|tee)").unwrap());
+/// Pattern for identifying common source filter modules
+#[allow(clippy::unwrap_used)]
+static SOURCE_FILTER_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"use\s+Filter::(Simple|Util::Call|cpp|exec|sh|decrypt|tee)").unwrap()
+});
 
 impl PatternDetector for SourceFilterDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
         for cap in SOURCE_FILTER_PATTERN.captures_iter(code) {
-            let match_pos = cap.get(0).unwrap();
-            let filter_module = cap.get(1).unwrap().as_str().to_string();
+            if let (Some(match_pos), Some(module_match)) = (cap.get(0), cap.get(1)) {
+                let filter_module = module_match.as_str().to_string();
+                let location = Location {
+                    line: code[..match_pos.start()].lines().count(),
+                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                    offset: offset + match_pos.start(),
+                };
 
-            let location = Location {
-                line: code[..match_pos.start()].lines().count(),
-                column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                offset: offset + match_pos.start(),
-            };
-
-            results.push((
-                AntiPattern::SourceFilterHeredoc {
-                    location: location.clone(),
-                    filter_module,
-                    affected_lines: vec![], // Placeholder as determining exact affected lines is hard
-                },
-                location,
-            ));
+                results.push((
+                    AntiPattern::SourceFilterHeredoc {
+                        location: location.clone(),
+                        module: filter_module,
+                    },
+                    location,
+                ));
+            }
         }
 
         results
     }
 
     fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
-        let AntiPattern::SourceFilterHeredoc { filter_module, .. } = pattern else {
+        let AntiPattern::SourceFilterHeredoc { module, .. } = pattern else {
             return None;
         };
 
         Some(Diagnostic {
             severity: Severity::Error,
             pattern: pattern.clone(),
-            message: format!("Source filter 'Filter::{}' detected", filter_module),
-            explanation: "Source filters can transform code before parsing, making static analysis unreliable or impossible.".to_string(),
-            suggested_fix: Some("Avoid source filters if possible, or expect limited IDE functionality.".to_string()),
+            message: format!("Source filter detected: Filter::{}", module),
+            explanation: "Source filters rewrite the source code before it's parsed. Static analysis cannot reliably predict the state of the code after filtering.".to_string(),
+            suggested_fix: Some("Avoid using source filters. They are considered problematic and often replaced by better alternatives like Devel::Declare or modern Perl features.".to_string()),
             references: vec!["perldoc Filter::Simple".to_string()],
         })
     }
 }
 
-// Regex code block heredoc detector
+// Regex heredoc detector
 struct RegexHeredocDetector;
 
-// Heuristic: (?{ ... << ... })
-static REGEX_HEREDOC_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\(\?\{[^}]*<<[^}]*\}").unwrap());
+/// Pattern for identifying heredocs inside regex code blocks
+#[allow(clippy::unwrap_used)]
+static REGEX_HEREDOC_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\(\?\{[^}]*<<[^}]*\}").unwrap());
 
 impl PatternDetector for RegexHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
-        for match_pos in REGEX_HEREDOC_PATTERN.find_iter(code) {
-            let location = Location {
-                line: code[..match_pos.start()].lines().count(),
-                column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                offset: offset + match_pos.start(),
-            };
+        for cap in REGEX_HEREDOC_PATTERN.captures_iter(code) {
+            if let Some(match_pos) = cap.get(0) {
+                let location = Location {
+                    line: code[..match_pos.start()].lines().count(),
+                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                    offset: offset + match_pos.start(),
+                };
 
-            results.push((
-                AntiPattern::RegexCodeBlockHeredoc {
-                    location: location.clone(),
-                    pattern: match_pos.as_str().to_string(),
-                    flags: "".to_string(), // Detection of flags is complex without full parse
-                },
-                location,
-            ));
+                results.push((
+                    AntiPattern::RegexCodeBlockHeredoc { location: location.clone() },
+                    location,
+                ));
+            }
         }
 
         results
     }
 
     fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
-        let AntiPattern::RegexCodeBlockHeredoc { .. } = pattern else {
-            return None;
-        };
-
-        Some(Diagnostic {
-            severity: Severity::Error,
-            pattern: pattern.clone(),
-            message: "Heredoc detected inside regex code block (?{...})".to_string(),
-            explanation: "Code blocks inside regexes are executed during pattern matching. Containing heredocs within them is highly problematic for static analysis and parsing.".to_string(),
-            suggested_fix: Some("Refactor the code to construct the string outside the regex.".to_string()),
-            references: vec!["perldoc perlre".to_string()],
-        })
+        if let AntiPattern::RegexCodeBlockHeredoc { .. } = pattern {
+            Some(Diagnostic {
+                severity: Severity::Warning,
+                pattern: pattern.clone(),
+                message: "Heredoc inside regex code block".to_string(),
+                explanation: "Declaring heredocs inside (?{ ... }) or (??{ ... }) blocks is extremely rare and difficult to parse correctly.".to_string(),
+                suggested_fix: None,
+                references: vec!["perldoc perlre".to_string()],
+            })
+        } else {
+            None
+        }
     }
 }
 
-// Eval string heredoc detector
+// Eval heredoc detector
 struct EvalHeredocDetector;
 
-// Heuristic: eval '...<<...' or eval "...<<..."
-// Rust regex doesn't support backreferences (\1) or lookarounds.
-// We match simple cases of single or double quoted strings containing <<.
-static EVAL_HEREDOC_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"eval\s+(?:'[^']*<<[^']*'|"[^"]*<<[^"]*")"#).unwrap());
+/// Pattern for identifying heredocs inside eval strings
+#[allow(clippy::unwrap_used)]
+static EVAL_HEREDOC_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"eval\s+(?:'[^']*<<'[^']*'|"[^"]*<<"[^"]*")"#).unwrap());
 
 impl PatternDetector for EvalHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
-        for match_pos in EVAL_HEREDOC_PATTERN.find_iter(code) {
-            let location = Location {
-                line: code[..match_pos.start()].lines().count(),
-                column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
-                offset: offset + match_pos.start(),
-            };
+        for cap in EVAL_HEREDOC_PATTERN.captures_iter(code) {
+            if let Some(match_pos) = cap.get(0) {
+                let location = Location {
+                    line: code[..match_pos.start()].lines().count(),
+                    column: match_pos.start() - code[..match_pos.start()].rfind('\n').unwrap_or(0),
+                    offset: offset + match_pos.start(),
+                };
 
-            results.push((
-                AntiPattern::EvalStringHeredoc {
-                    location: location.clone(),
-                    eval_type: "string".to_string(),
-                    contains_heredoc: true,
-                },
-                location,
-            ));
+                results.push((
+                    AntiPattern::EvalStringHeredoc { location: location.clone() },
+                    location,
+                ));
+            }
         }
 
         results
     }
 
     fn diagnose(&self, pattern: &AntiPattern) -> Option<Diagnostic> {
-        let AntiPattern::EvalStringHeredoc { .. } = pattern else {
-            return None;
-        };
-
-        Some(Diagnostic {
-            severity: Severity::Warning,
-            pattern: pattern.clone(),
-            message: "Heredoc detected inside eval string".to_string(),
-            explanation: "Code inside string eval is parsed at runtime. Static analysis cannot reliably determine the behavior of heredocs within it.".to_string(),
-            suggested_fix: Some("Use block eval or avoid heredocs inside eval strings.".to_string()),
-            references: vec!["perldoc -f eval".to_string()],
-        })
+        if let AntiPattern::EvalStringHeredoc { .. } = pattern {
+            Some(Diagnostic {
+                severity: Severity::Warning,
+                pattern: pattern.clone(),
+                message: "Heredoc inside eval string".to_string(),
+                explanation: "Heredocs declared inside strings passed to eval require double parsing and can hide malicious or complex code.".to_string(),
+                suggested_fix: Some("Consider using a block eval or moving the heredoc outside the eval string.".to_string()),
+                references: vec!["perldoc -f eval".to_string()],
+            })
+        } else {
+            None
+        }
     }
 }
 
 // Tied handle detector
 struct TiedHandleDetector;
 
-// Heuristic: tie *FH... then print FH <<...
-static TIE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"tie\s+([*\$]?\w+)").unwrap());
+/// Pattern for identifying tie statements
+#[allow(clippy::unwrap_used)]
+static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"tie\s+([*\$\w+])").unwrap());
 
 impl PatternDetector for TiedHandleDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
         let mut results = Vec::new();
 
-        // Find all tied handles
+        // First find tied handles
+        let mut tied_handles = Vec::new();
         for cap in TIE_PATTERN.captures_iter(code) {
-            let raw_handle = cap.get(1).unwrap().as_str();
+            if let Some(handle_match) = cap.get(1) {
+                tied_handles.push(handle_match.as_str());
+            }
+        }
 
+        for raw_handle in tied_handles {
             // If it's a glob (*FH), we typically print to the bare handle (FH).
             // If it's a scalar ($fh), we print to the scalar ($fh).
-            let handle_to_search =
-                if raw_handle.starts_with('*') { &raw_handle[1..] } else { raw_handle };
+            let handle_to_search = raw_handle.strip_prefix('*').unwrap_or(raw_handle);
 
             // Look for usage of this handle with heredoc
             let usage_pattern = format!(r"print\s+{}\s+<<", regex::escape(handle_to_search));
-            if let Ok(re) = Regex::new(&usage_pattern) {
-                if let Some(usage_match) = re.find(code) {
-                    let location = Location {
-                        line: code[..usage_match.start()].lines().count(),
-                        column: usage_match.start()
-                            - code[..usage_match.start()].rfind('\n').unwrap_or(0),
-                        offset: offset + usage_match.start(),
-                    };
+            if let Ok(re) = Regex::new(&usage_pattern)
+                && let Some(usage_match) = re.find(code)
+            {
+                let location = Location {
+                    line: code[..usage_match.start()].lines().count(),
+                    column: usage_match.start()
+                        - code[..usage_match.start()].rfind('\n').unwrap_or(0),
+                    offset: offset + usage_match.start(),
+                };
 
-                    results.push((
-                        AntiPattern::TiedHandleHeredoc {
-                            location: location.clone(),
-                            handle_name: handle_to_search.to_string(),
-                        },
-                        location,
-                    ));
-                }
+                results.push((
+                    AntiPattern::TiedHandleHeredoc {
+                        location: location.clone(),
+                        handle_name: handle_to_search.to_string(),
+                    },
+                    location,
+                ));
             }
         }
 
@@ -471,6 +411,12 @@ impl PatternDetector for TiedHandleDetector {
             suggested_fix: None,
             references: vec!["perldoc -f tie".to_string()],
         })
+    }
+}
+
+impl Default for AntiPatternDetector {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -564,7 +510,7 @@ impl AntiPatternDetector {
                 report.push_str(&format!("   References: {}\n", diag.references.join(", ")));
             }
 
-            report.push_str("\n");
+            report.push('\n');
         }
 
         report
@@ -578,7 +524,7 @@ mod tests {
     #[test]
     fn test_format_heredoc_detection() {
         let detector = AntiPatternDetector::new();
-        let code = r#"
+        let code = r#" 
 format REPORT =
 <<'END'
 Name: @<<<<<<<<<<<<
@@ -598,13 +544,13 @@ END
     #[test]
     fn test_begin_heredoc_detection() {
         let detector = AntiPatternDetector::new();
-        let code = r#"
+        let code = r###" 
 BEGIN {
     $config = <<'END';
     server = localhost
 END
 }
-"#;
+"###;
 
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
@@ -614,12 +560,12 @@ END
     #[test]
     fn test_dynamic_delimiter_detection() {
         let detector = AntiPatternDetector::new();
-        let code = r#"
+        let code = r###" 
 my $delimiter = "EOF";
 my $content = <<$delimiter;
 This is dynamic
 EOF
-"#;
+"###;
 
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
@@ -629,12 +575,12 @@ EOF
     #[test]
     fn test_source_filter_detection() {
         let detector = AntiPatternDetector::new();
-        let code = r#"
+        let code = r###" 
 use Filter::Simple;
 print <<EOF;
 Filtered content
 EOF
-"#;
+"###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(diagnostics[0].pattern, AntiPattern::SourceFilterHeredoc { .. }));
@@ -643,13 +589,13 @@ EOF
     #[test]
     fn test_regex_heredoc_detection() {
         let detector = AntiPatternDetector::new();
-        let code = r#"
+        let code = r###" 
 m/pattern(?{
     print <<'MATCH';
     Match text
 MATCH
-})/;
-"#;
+})/
+"###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(diagnostics[0].pattern, AntiPattern::RegexCodeBlockHeredoc { .. }));
@@ -658,11 +604,11 @@ MATCH
     #[test]
     fn test_eval_heredoc_detection() {
         let detector = AntiPatternDetector::new();
-        let code = r#"
+        let code = r###" 
 eval 'print <<"EVAL";
 Eval content
 EVAL';
-"#;
+"###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(diagnostics[0].pattern, AntiPattern::EvalStringHeredoc { .. }));
@@ -671,12 +617,12 @@ EVAL';
     #[test]
     fn test_tied_handle_detection() {
         let detector = AntiPatternDetector::new();
-        let code = r#"
+        let code = r###" 
 tie *FH, 'Tie::Handle';
 print FH <<'DATA';
 Tied output
 DATA
-"#;
+"###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(diagnostics[0].pattern, AntiPattern::TiedHandleHeredoc { .. }));
@@ -685,12 +631,12 @@ DATA
     #[test]
     fn test_tied_scalar_handle_detection() {
         let detector = AntiPatternDetector::new();
-        let code = r#"
+        let code = r###" 
 tie $fh, 'Tie::Handle';
 print $fh <<'DATA';
 Tied output
 DATA
-"#;
+"###;
         let diagnostics = detector.detect_all(code);
         assert_eq!(diagnostics.len(), 1);
         assert!(matches!(diagnostics[0].pattern, AntiPattern::TiedHandleHeredoc { .. }));

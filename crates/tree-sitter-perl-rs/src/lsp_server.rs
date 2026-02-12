@@ -228,7 +228,7 @@ impl PerlLanguageServer {
             diagnostics,
         };
 
-        let mut docs = self.documents.lock().unwrap();
+        let mut docs = self.documents.lock().unwrap_or_else(|e| e.into_inner());
         docs.insert(uri, state);
     }
 
@@ -239,7 +239,7 @@ impl PerlLanguageServer {
         changes: Vec<TextDocumentContentChangeEvent>,
         version: i32,
     ) {
-        let mut docs = self.documents.lock().unwrap();
+        let mut docs = self.documents.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(state) = docs.get_mut(&uri) {
             // Apply changes
             for change in changes {
@@ -292,7 +292,7 @@ impl PerlLanguageServer {
 
     /// Get diagnostics for a document
     pub fn get_diagnostics(&self, uri: &str) -> Vec<Diagnostic> {
-        let docs = self.documents.lock().unwrap();
+        let docs = self.documents.lock().unwrap_or_else(|e| e.into_inner());
         docs.get(uri).map(|state| state.diagnostics.clone()).unwrap_or_default()
     }
 
@@ -323,7 +323,7 @@ impl PerlLanguageServer {
         }
 
         // Add symbols from current document
-        let docs = self.documents.lock().unwrap();
+        let docs = self.documents.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(state) = docs.get(uri) {
             for symbol in &state.symbols {
                 completions.push(CompletionItem {
@@ -346,7 +346,7 @@ impl PerlLanguageServer {
 
     /// Get document symbols
     pub fn get_document_symbols(&self, uri: &str) -> Vec<SymbolInformation> {
-        let docs = self.documents.lock().unwrap();
+        let docs = self.documents.lock().unwrap_or_else(|e| e.into_inner());
         docs.get(uri).map(|state| state.symbols.clone()).unwrap_or_default()
     }
 

@@ -81,3 +81,13 @@ jobs:
         with:
           files: vscode-extension/${{ env.VSIX_FILE }}
           fail_on_unmatched_files: true
+          body: |
+            ## VS Code Extension Release
+            
+            Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp) or download the VSIX file below.
+            
+            ### Features
+            - Auto-downloads the latest perl-lsp binary
+            - Supports all 30+ LSP features
+            - Platform detection for Linux/macOS/Windows
+            - Automatic checksum verification

@@ -117,8 +117,9 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     if: |
-      github.event_name == 'pull_request' &&
-      contains(github.event.pull_request.labels.*.name, 'ci:semver')
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request'
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:

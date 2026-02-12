@@ -24,8 +24,8 @@ pub enum BlockType {
     For,
     Foreach,
     Sub,
-    BEGIN,
-    END,
+    Begin,
+    End,
     Package,
     Anonymous, // Anonymous sub or do block
 }

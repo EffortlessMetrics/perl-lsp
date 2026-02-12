@@ -497,10 +497,11 @@ impl Drop for RequestCleanupGuard {
     }
 }
 
-lazy_static::lazy_static! {
-    /// Default global cancellation registry instance for thread-safe cancellation coordination
-    pub static ref GLOBAL_CANCELLATION_REGISTRY: CancellationRegistry = CancellationRegistry::new();
-}
+use std::sync::LazyLock;
+
+/// Default global cancellation registry instance for thread-safe cancellation coordination
+pub static GLOBAL_CANCELLATION_REGISTRY: LazyLock<CancellationRegistry> =
+    LazyLock::new(CancellationRegistry::new);
 
 #[cfg(test)]
 mod tests {

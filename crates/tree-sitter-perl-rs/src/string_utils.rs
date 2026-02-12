@@ -1,7 +1,7 @@
 //! String utility functions for common patterns
 
 /// Strip enclosing delimiters from a string
-pub fn strip_enclosing<'a>(s: &'a str, left: char, right: char) -> Option<&'a str> {
+pub fn strip_enclosing(s: &str, left: char, right: char) -> Option<&str> {
     s.strip_prefix(left).and_then(|t| t.strip_suffix(right))
 }
 

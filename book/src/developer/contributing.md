@@ -66,7 +66,7 @@ See **[CI & Automation](./docs/CI.md)** for comprehensive details about our GitH
 
 - **Pinned runner versions** (`ubuntu-22.04`, `windows-2022`)
 - **Default CI jobs** that run on every PR
-- **Opt-in CI labels** for heavy jobs (`ci:bench`, `ci:mutation`, `ci:strict`, `ci:mac`)
+- **Opt-in CI labels** for heavy jobs (`ci:bench`, `ci:mutation`, `ci:strict`, `ci:mac`, `ci:semver`)
 - **Build optimizations** (lean flags, nextest configuration)
 - **Troubleshooting tips** for common CI issues
 
@@ -77,6 +77,7 @@ See **[CI & Automation](./docs/CI.md)** for comprehensive details about our GitH
 - Add `ci:bench` label to run performance benchmarks
 - Add `ci:strict` label for pedantic clippy checks
 - Add `ci:mac` label if your changes affect macOS
+- Add `ci:semver` label to check for breaking API changes
 
 ### Local CI Validation (While GitHub Actions Is Unavailable)
 
@@ -120,6 +121,127 @@ The semantic tests validate that LSP definition resolution works correctly for:
 - Package-qualified symbol lookups
 
 Once GitHub Actions is restored, this section will be archived and normal CI workflow will resume.
+
+## SemVer Breaking Change Detection
+
+Perl LSP follows strict [Semantic Versioning 2.0.0](https://semver.org/). We use automated tools to detect breaking changes in public APIs.
+
+### When to Check for Breaking Changes
+
+**Required for:**
+- Changes to public API functions, types, or modules
+- Changes to `pub` items in published crates (`perl-parser`, `perl-lexer`, `perl-parser-core`, `perl-lsp`)
+- Signature changes to existing functions
+- Removing or renaming public items
+- Changes to error types or return values
+
+**Not required for:**
+- Internal (`pub(crate)`) changes
+- Test-only code changes
+- Documentation updates
+- Performance improvements that don't change behavior
+
+### Local SemVer Checking
+
+Check for breaking changes locally before submitting a PR:
+
+```bash
+# Check all published packages for breaking changes
+just semver-check
+
+# Check a specific package
+just semver-check-package perl-parser
+
+# View detailed diff of API changes
+just semver-diff perl-parser
+
+# List available baseline tags
+just semver-list-baselines
+```
+
+**Understanding the output:**
+
+```rust
+// Breaking change (requires major version bump)
+- pub fn parse(&mut self, source: &str) -> Result<Node, ParseError>
++ pub fn parse(&mut self, source: &str, config: &Config) -> Result<Node, Error>
+
+// Non-breaking change (allowed in minor version)
++ pub fn parse_with_config(&mut self, source: &str, config: &Config) -> Result<Node, Error>
+```
+
+### CI SemVer Validation
+
+Add the `ci:semver` label to your PR to run automated breaking change detection:
+
+1. **Add label:** `ci:semver` to your PR
+2. **CI runs:** GitHub Actions compares your changes against the last release tag
+3. **Review results:** Check the workflow output for breaking changes
+4. **Download report:** Breaking changes report available as artifact
+
+**CI checks:**
+- Compares against baseline (last release tag, e.g., `v0.8.5`)
+- Checks `perl-parser`, `perl-lexer`, `perl-parser-core`, `perl-lsp`
+- Generates JSON report of all breaking changes
+- Warns on breaking changes (doesn't fail the build)
+
+### SemVer Policy Summary
+
+| Change Type | Example | Version Bump | Allowed In |
+|-------------|---------|--------------|------------|
+| **Breaking** | Remove public function | Major (1.0 → 2.0) | Major releases only |
+| **Breaking** | Change function signature | Major (1.0 → 2.0) | Major releases only |
+| **Additive** | Add new public function | Minor (1.0 → 1.1) | Minor releases |
+| **Additive** | Add new enum variant | Minor (1.0 → 1.1) | Minor releases (with `#[non_exhaustive]`) |
+| **Patch** | Fix bug, same behavior | Patch (1.0.0 → 1.0.1) | Patch releases |
+| **Patch** | Documentation update | Patch (1.0.0 → 1.0.1) | Patch releases |
+
+### Breaking Change Workflow
+
+If you need to make a breaking change:
+
+1. **Document the breaking change:**
+   ```markdown
+   ## Breaking Changes
+   - `Parser::parse()` signature changed to include `Config` parameter
+   - Migration: Use `Parser::parse_with_config()` or pass default config
+   ```
+
+2. **Deprecate before removing (when possible):**
+   ```rust
+   #[deprecated(since = "1.2.0", note = "use `parse_with_config()` instead")]
+   pub fn parse_legacy(source: &str) -> Result<Node, ParseError> {
+       self.parse_with_config(source, &Config::default())
+   }
+   ```
+
+3. **Add migration guide** to PR description
+4. **Label PR with `breaking-change`**
+5. **Coordinate with maintainers** for major version planning
+
+### Configuration
+
+SemVer checking is configured in `.cargo-semver-checks.toml`:
+
+```toml
+# Published crates checked for breaking changes
+- perl-parser (strict)
+- perl-lexer (strict)
+- perl-parser-core (strict)
+- perl-lsp (strict)
+
+# Internal crates excluded
+- xtask (build tooling)
+- perl-tdd-support (test utilities)
+- perl-parser-pest (deprecated)
+```
+
+### Resources
+
+- **SemVer spec:** https://semver.org/
+- **cargo-semver-checks:** https://github.com/obi1kenobi/cargo-semver-checks
+- **Project stability policy:** `docs/STABILITY.md`
+- **API stability guarantees:** `docs/STABILITY.md#api-surface-stability`
 
 ## Coding Standards
 
@@ -213,7 +335,26 @@ cargo test -- --nocapture
 cargo test --test determinism_test
 ```
 
-## Documentation
+### Dead Code Detection
+
+We use `cargo-machete` and `clippy` to identify unused dependencies and code.
+
+#### Check for dead code locally
+```bash
+just dead-code
+```
+
+#### Handling False Positives
+If a dependency is detected as unused but is actually required (e.g., used only via macros or in tests), add it to the ignore list in the crate's `Cargo.toml`:
+
+```toml
+[package.metadata.cargo-machete]
+ignored = ["crate-name"]
+```
+
+For unreachable code warnings from clippy, use `#[allow(dead_code)]` with a comment explaining why it should be preserved.
+
+### Documentation
 
 - **Public APIs** must have documentation comments (`///`)
 - **Modules** should have module-level documentation (`//!`)

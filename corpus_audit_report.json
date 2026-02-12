@@ -1,27 +1,27 @@
 {
   "metadata": {
-    "generated_at": "2026-01-27T11:25:48.732544600+00:00",
+    "generated_at": "2026-02-12T14:20:37.390602001+00:00",
     "version": "0.1.0",
     "duration_secs": 0
   },
   "inventory": {
-    "total_files": 36,
+    "total_files": 42,
     "files_by_layer": [
       {
         "layer": "TestCorpus",
-        "count": 15
+        "count": 20
       },
       {
         "layer": "PerlCorpus",
-        "count": 21
+        "count": 22
       }
     ],
-    "total_size_bytes": 110745,
-    "total_line_count": 3863
+    "total_size_bytes": 145925,
+    "total_line_count": 5145
   },
   "parse_outcomes": {
-    "total": 36,
-    "ok": 36,
+    "total": 42,
+    "ok": 42,
     "error": 0,
     "timeout": 0,
     "panic": 0,
@@ -30,90 +30,19 @@
   },
   "nodekind_coverage": {
     "total_count": 68,
-    "covered_count": 56,
-    "coverage_percentage": 82.35294117647058,
+    "covered_count": 62,
+    "coverage_percentage": 91.17647058823529,
     "never_seen": [
       "MissingStatement",
-      "Eval",
-      "Ellipsis",
-      "NamedParameter",
       "MissingBlock",
-      "Ternary",
-      "VariableWithAttributes",
-      "UnknownRest",
-      "For",
-      "HeredocDepthLimit",
       "MissingExpression",
+      "HeredocDepthLimit",
+      "UnknownRest",
       "MissingIdentifier"
     ],
     "at_risk": [
       {
-        "name": "Substitution",
-        "count": 3,
-        "risk_level": "Medium"
-      },
-      {
-        "name": "Prototype",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "OptionalParameter",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "Typeglob",
-        "count": 3,
-        "risk_level": "Medium"
-      },
-      {
-        "name": "Glob",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "MandatoryParameter",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "LoopControl",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "Method",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "Class",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "Given",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "Readline",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "Signature",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "SlurpyParameter",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "No",
+        "name": "Foreach",
         "count": 2,
         "risk_level": "High"
       },
@@ -123,14 +52,19 @@
         "risk_level": "High"
       },
       {
-        "name": "If",
-        "count": 4,
+        "name": "Format",
+        "count": 3,
         "risk_level": "Medium"
       },
       {
-        "name": "While",
-        "count": 3,
-        "risk_level": "Medium"
+        "name": "Ellipsis",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "Prototype",
+        "count": 1,
+        "risk_level": "High"
       },
       {
         "name": "LabeledStatement",
@@ -138,19 +72,34 @@
         "risk_level": "High"
       },
       {
-        "name": "IndirectCall",
+        "name": "Ternary",
         "count": 1,
         "risk_level": "High"
       },
       {
-        "name": "PhaseBlock",
+        "name": "Given",
         "count": 1,
         "risk_level": "High"
       },
       {
-        "name": "Heredoc",
-        "count": 4,
-        "risk_level": "Medium"
+        "name": "NamedParameter",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "Match",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "MandatoryParameter",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "SlurpyParameter",
+        "count": 1,
+        "risk_level": "High"
       },
       {
         "name": "Tie",
@@ -158,8 +107,98 @@
         "risk_level": "High"
       },
       {
+        "name": "When",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "Transliteration",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "LoopControl",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "Typeglob",
+        "count": 4,
+        "risk_level": "Medium"
+      },
+      {
+        "name": "IndirectCall",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "Eval",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "VariableWithAttributes",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "No",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "Signature",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "Substitution",
+        "count": 3,
+        "risk_level": "Medium"
+      },
+      {
+        "name": "Try",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
         "name": "Do",
         "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "Method",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "OptionalParameter",
+        "count": 1,
+        "risk_level": "High"
+      },
+      {
+        "name": "Class",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "While",
+        "count": 3,
+        "risk_level": "Medium"
+      },
+      {
+        "name": "If",
+        "count": 4,
+        "risk_level": "Medium"
+      },
+      {
+        "name": "Glob",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "PhaseBlock",
+        "count": 1,
         "risk_level": "High"
       },
       {
@@ -173,93 +212,79 @@
         "risk_level": "High"
       },
       {
-        "name": "Match",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "Try",
+        "name": "For",
         "count": 1,
         "risk_level": "High"
       },
       {
-        "name": "Format",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "Transliteration",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "When",
-        "count": 1,
-        "risk_level": "High"
-      },
-      {
-        "name": "Foreach",
+        "name": "Readline",
         "count": 2,
         "risk_level": "High"
       }
     ],
     "frequency": {
-      "Substitution": 3,
-      "ArrayLiteral": 19,
-      "DataSection": 5,
-      "Prototype": 1,
-      "OptionalParameter": 1,
-      "VariableDeclaration": 15,
-      "Typeglob": 3,
-      "Glob": 2,
-      "String": 26,
-      "Return": 10,
-      "MandatoryParameter": 1,
-      "LoopControl": 2,
-      "Use": 34,
-      "Method": 1,
-      "Class": 1,
-      "Given": 1,
-      "Undef": 24,
-      "Identifier": 32,
-      "FunctionCall": 30,
-      "MethodCall": 16,
-      "HashLiteral": 8,
-      "Readline": 2,
-      "StatementModifier": 5,
-      "Signature": 1,
-      "SlurpyParameter": 1,
-      "Subroutine": 10,
-      "Regex": 14,
-      "Assignment": 15,
-      "No": 2,
+      "DataSection": 6,
+      "ArrayLiteral": 21,
+      "String": 29,
+      "Foreach": 2,
       "Default": 1,
-      "Binary": 28,
-      "If": 4,
-      "While": 3,
-      "ExpressionStatement": 36,
-      "Program": 36,
-      "Variable": 16,
-      "Block": 23,
-      "LabeledStatement": 2,
-      "IndirectCall": 1,
-      "PhaseBlock": 1,
-      "VariableListDeclaration": 5,
+      "Format": 3,
+      "Identifier": 33,
       "Package": 8,
-      "Heredoc": 4,
-      "Tie": 2,
-      "Do": 2,
-      "Number": 16,
-      "Unary": 27,
-      "Diamond": 1,
-      "Untie": 1,
+      "Ellipsis": 1,
+      "Prototype": 1,
+      "LabeledStatement": 2,
+      "Block": 26,
+      "Ternary": 1,
+      "Given": 1,
+      "Number": 23,
+      "NamedParameter": 1,
+      "Regex": 16,
       "Match": 2,
-      "Try": 1,
-      "Error": 31,
-      "Format": 2,
-      "Transliteration": 1,
+      "HashLiteral": 8,
+      "Program": 42,
+      "MandatoryParameter": 1,
+      "SlurpyParameter": 1,
+      "Tie": 2,
       "When": 1,
-      "Foreach": 2
+      "Transliteration": 1,
+      "LoopControl": 2,
+      "VariableDeclaration": 20,
+      "Unary": 30,
+      "FunctionCall": 35,
+      "Typeglob": 4,
+      "IndirectCall": 1,
+      "Eval": 1,
+      "Subroutine": 12,
+      "VariableWithAttributes": 1,
+      "No": 2,
+      "Signature": 2,
+      "MethodCall": 18,
+      "Substitution": 3,
+      "ExpressionStatement": 42,
+      "Return": 10,
+      "Try": 1,
+      "Do": 2,
+      "Error": 34,
+      "Method": 1,
+      "OptionalParameter": 1,
+      "VariableListDeclaration": 7,
+      "Class": 2,
+      "Assignment": 17,
+      "While": 3,
+      "If": 4,
+      "Glob": 2,
+      "PhaseBlock": 1,
+      "Diamond": 1,
+      "Use": 37,
+      "Untie": 1,
+      "Variable": 21,
+      "Binary": 31,
+      "StatementModifier": 7,
+      "Heredoc": 6,
+      "Undef": 24,
+      "For": 1,
+      "Readline": 2
     }
   },
   "ga_coverage": {
@@ -283,9 +308,11 @@
           "./test_corpus/continue_redo_statements.pl",
           "./test_corpus/modern_perl_features.pl",
           "./test_corpus/parser_stress_cases.pl",
+          "./test_corpus/error_recovery.pl",
           "./test_corpus/legacy_syntax.pl",
           "./test_corpus/xs_inline_ffi.pl",
           "./test_corpus/source_filters.pl",
+          "./test_corpus/basic_constructs.pl",
           "./test_corpus/data_end_sections.pl",
           "./crates/perl-corpus/src/gen/control_flow.rs",
           "./crates/perl-corpus/src/gen/regex.rs",
@@ -295,11 +322,13 @@
           "./crates/perl-corpus/src/gen/heredoc.rs",
           "./crates/perl-corpus/src/gen/qw.rs",
           "./crates/perl-corpus/src/gen/quote_like.rs",
+          "./crates/perl-corpus/src/gen/tie.rs",
           "./crates/perl-corpus/src/gen/whitespace.rs",
           "./crates/perl-corpus/src/gen/declarations.rs",
           "./crates/perl-corpus/src/gen/builtins.rs",
           "./crates/perl-corpus/src/gen/object_oriented.rs",
           "./crates/perl-corpus/src/gen/expressions.rs",
+          "./crates/perl-corpus/src/gen/program.rs",
           "./crates/perl-corpus/src/gen/filetest.rs"
         ],
         "coverage_percentage": 100.0
@@ -319,10 +348,13 @@
         "covered": true,
         "covering_files": [
           "./test_corpus/continue_redo_statements.pl",
+          "./test_corpus/glob_assignments.pl",
           "./test_corpus/advanced_regex.pl",
           "./test_corpus/legacy_syntax.pl",
           "./test_corpus/xs_inline_ffi.pl",
+          "./test_corpus/basic_constructs.pl",
           "./test_corpus/glob_expressions.pl",
+          "./test_corpus/format_comprehensive.pl",
           "./test_corpus/end_section.pl",
           "./crates/perl-corpus/src/gen/control_flow.rs",
           "./crates/perl-corpus/src/gen/heredoc.rs",
@@ -331,7 +363,8 @@
           "./crates/perl-corpus/src/gen/io.rs",
           "./crates/perl-corpus/src/gen/whitespace.rs",
           "./crates/perl-corpus/src/gen/glob.rs",
-          "./crates/perl-corpus/src/gen/expressions.rs"
+          "./crates/perl-corpus/src/gen/expressions.rs",
+          "./crates/perl-corpus/src/gen/program.rs"
         ],
         "coverage_percentage": 100.0
       },
@@ -350,9 +383,11 @@
           "./test_corpus/modern_perl_features.pl",
           "./test_corpus/packages_versions.pl",
           "./test_corpus/parser_stress_cases.pl",
+          "./test_corpus/error_recovery.pl",
           "./test_corpus/legacy_syntax.pl",
           "./test_corpus/xs_inline_ffi.pl",
           "./test_corpus/source_filters.pl",
+          "./test_corpus/basic_constructs.pl",
           "./test_corpus/real_world/medium_module.pl",
           "./test_corpus/end_section.pl",
           "./test_corpus/tie_interface.pl",
@@ -363,7 +398,8 @@
           "./crates/perl-corpus/src/gen/ambiguity.rs",
           "./crates/perl-corpus/src/gen/special_vars.rs",
           "./crates/perl-corpus/src/gen/declarations.rs",
-          "./crates/perl-corpus/src/gen/object_oriented.rs"
+          "./crates/perl-corpus/src/gen/object_oriented.rs",
+          "./crates/perl-corpus/src/gen/program.rs"
         ],
         "coverage_percentage": 100.0
       },
@@ -446,7 +482,10 @@
           "./test_corpus/parser_stress_cases.pl",
           "./test_corpus/format_statements.pl",
           "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/heredoc_depth.pl",
           "./test_corpus/xs_inline_ffi.pl",
+          "./test_corpus/basic_constructs.pl",
+          "./test_corpus/format_comprehensive.pl",
           "./crates/perl-corpus/src/gen/ambiguity.rs",
           "./crates/perl-corpus/src/gen/special_vars.rs",
           "./crates/perl-corpus/src/gen/heredoc.rs",
@@ -472,6 +511,7 @@
           "./test_corpus/packages_versions.pl",
           "./test_corpus/format_statements.pl",
           "./test_corpus/legacy_syntax.pl",
+          "./test_corpus/format_comprehensive.pl",
           "./test_corpus/tie_interface.pl",
           "./test_corpus/data_end_sections.pl",
           "./crates/perl-corpus/src/gen/sigils.rs",
@@ -501,11 +541,14 @@
           "./test_corpus/continue_redo_statements.pl",
           "./test_corpus/modern_perl_features.pl",
           "./test_corpus/packages_versions.pl",
+          "./test_corpus/glob_assignments.pl",
           "./test_corpus/format_statements.pl",
           "./test_corpus/legacy_syntax.pl",
           "./test_corpus/xs_inline_ffi.pl",
           "./test_corpus/source_filters.pl",
+          "./test_corpus/basic_constructs.pl",
           "./test_corpus/glob_expressions.pl",
+          "./test_corpus/format_comprehensive.pl",
           "./test_corpus/real_world/medium_module.pl",
           "./test_corpus/end_section.pl",
           "./test_corpus/tie_interface.pl",
@@ -548,7 +591,9 @@
           "./test_corpus/legacy_syntax.pl",
           "./test_corpus/xs_inline_ffi.pl",
           "./test_corpus/source_filters.pl",
+          "./test_corpus/basic_constructs.pl",
           "./test_corpus/glob_expressions.pl",
+          "./test_corpus/format_comprehensive.pl",
           "./test_corpus/real_world/medium_module.pl",
           "./test_corpus/end_section.pl",
           "./test_corpus/data_end_sections.pl",
@@ -558,6 +603,7 @@
           "./crates/perl-corpus/src/gen/ambiguity.rs",
           "./crates/perl-corpus/src/gen/heredoc.rs",
           "./crates/perl-corpus/src/gen/qw.rs",
+          "./crates/perl-corpus/src/gen/tie.rs",
           "./crates/perl-corpus/src/gen/io.rs",
           "./crates/perl-corpus/src/gen/whitespace.rs",
           "./crates/perl-corpus/src/gen/declarations.rs",
@@ -584,8 +630,8 @@
         "covered": true,
         "covering_files": [
           "./test_corpus/given_when_default.pl",
-          "./crates/perl-corpus/src/gen/control_flow.rs",
-          "./crates/perl-corpus/src/gen/builtins.rs"
+          "./test_corpus/basic_constructs.pl",
+          "./crates/perl-corpus/src/gen/control_flow.rs"
         ],
         "coverage_percentage": 100.0
       },
@@ -611,7 +657,9 @@
           "./test_corpus/legacy_syntax.pl",
           "./test_corpus/xs_inline_ffi.pl",
           "./test_corpus/source_filters.pl",
+          "./test_corpus/basic_constructs.pl",
           "./test_corpus/glob_expressions.pl",
+          "./test_corpus/format_comprehensive.pl",
           "./test_corpus/real_world/medium_module.pl",
           "./test_corpus/end_section.pl",
           "./test_corpus/data_end_sections.pl",
@@ -621,6 +669,7 @@
           "./crates/perl-corpus/src/gen/ambiguity.rs",
           "./crates/perl-corpus/src/gen/heredoc.rs",
           "./crates/perl-corpus/src/gen/qw.rs",
+          "./crates/perl-corpus/src/gen/tie.rs",
           "./crates/perl-corpus/src/gen/io.rs",
           "./crates/perl-corpus/src/gen/whitespace.rs",
           "./crates/perl-corpus/src/gen/declarations.rs",
@@ -637,5 +686,13 @@
     "uncovered_critical": [],
     "uncovered_partial": []
   },
-  "timeout_risks": []
+  "timeout_risks": [
+    {
+      "priority": "P2",
+      "description": "High interpolation count overall (110 occurrences)",
+      "file_path": "./crates/perl-corpus/src/gen/builtins.rs",
+      "line_number": null,
+      "mitigation": "Consider reducing string interpolation complexity"
+    }
+  ]
 }

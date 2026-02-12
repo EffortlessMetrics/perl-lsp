@@ -73,6 +73,15 @@ just fuzz-bounded                     # Bounded fuzz run (60s per target)
 just mutation-subset                  # Mutation testing subset
 ```
 
+### Dead Code Detection
+
+```bash
+just dead-code                        # Full dead code report
+just dead-code-report                 # Generate JSON report
+just dead-code-strict                 # Run in strict mode (fail on any dead code)
+cargo machete                         # Check unused dependencies (fast)
+```
+
 ### Lint and Format
 
 ```bash

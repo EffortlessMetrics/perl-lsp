@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(DEFAULT_TIMEOUT.as_secs(), 30);
         assert_eq!(MAX_NESTING_DEPTH, 100);
         assert_eq!(MAX_REGEX_OPERATIONS, 10_000);
-        assert_eq!(MAX_HEREDOC_DEPTH, 10);
+        assert_eq!(MAX_HEREDOC_DEPTH, 100);
         assert_eq!(MAX_HEREDOC_SIZE, 1_000_000);
     }
 }

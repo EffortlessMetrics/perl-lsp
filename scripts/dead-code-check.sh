@@ -68,8 +68,31 @@ install_udeps() {
     fi
 }
 
-# Run cargo-udeps to detect unused dependencies
-check_unused_deps() {
+# Run cargo-machete to detect unused dependencies (fast)
+check_unused_deps_machete() {
+    log_info "Checking for unused dependencies with cargo-machete..."
+
+    local output_file="target/dead-code/machete-output.txt"
+    mkdir -p "$(dirname "$output_file")"
+
+    if cargo machete 2>&1 | tee "$output_file"; then
+        if grep -q "unused dependencies" "$output_file"; then
+            local unused_count
+            unused_count=$(grep -c "Cargo.toml:" "$output_file" || echo 0)
+            log_warn "Found $unused_count crates with unused dependencies"
+            return 0
+        else
+            log_success "No unused dependencies detected by machete"
+            return 0
+        fi
+    else
+        log_error "cargo-machete failed to run"
+        return 1
+    fi
+}
+
+# Run cargo-udeps to detect unused dependencies (deep)
+check_unused_deps_udeps() {
     log_info "Checking for unused dependencies with cargo-udeps..."
 
     local output_file="target/dead-code/udeps-output.txt"
@@ -415,12 +438,11 @@ main() {
             generate_report
             ;;
         check)
-            install_udeps
             if [ -f "$BASELINE_FILE" ]; then
                 check_against_baseline
             else
                 log_info "No baseline file, running basic checks..."
-                check_unused_deps
+                check_unused_deps_machete
                 check_dead_code_clippy
             fi
             ;;

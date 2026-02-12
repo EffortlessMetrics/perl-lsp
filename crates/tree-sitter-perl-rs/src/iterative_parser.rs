@@ -68,10 +68,10 @@ impl PureRustPerlParser {
                     original_str,
                 } => {
                     // Handle WaitingForChildren state directly in main loop
-                    if let Some(completed_child) = results.pop() {
-                        if let Some(node) = completed_child {
-                            processed_children.push(node);
-                        }
+                    if let Some(completed_child) = results.pop()
+                        && let Some(node) = completed_child
+                    {
+                        processed_children.push(node);
                     }
 
                     // Process next child or build final node
@@ -201,16 +201,15 @@ impl PureRustPerlParser {
                         mut remaining_children,
                         original_str,
                     }) = states.pop()
+                        && let Some(first_child) = remaining_children.pop()
                     {
-                        if let Some(first_child) = remaining_children.pop() {
-                            states.push(BuildState::WaitingForChildren {
-                                rule,
-                                processed_children,
-                                remaining_children,
-                                original_str,
-                            });
-                            states.push(BuildState::Process(first_child));
-                        }
+                        states.push(BuildState::WaitingForChildren {
+                            rule,
+                            processed_children,
+                            remaining_children,
+                            original_str,
+                        });
+                        states.push(BuildState::Process(first_child));
                     }
 
                     Ok(ProcessResult::PushStates(states))

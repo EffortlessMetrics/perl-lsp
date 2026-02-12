@@ -1,0 +1,68 @@
+name: Fuzz Testing
+
+on:
+  schedule:
+    # Run nightly at 2am UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Duration to run each target (seconds)'
+        required: true
+        default: '600'
+        type: string
+
+# Cancel in-flight runs on new pushes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fuzz:
+    name: Fuzz Target
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [
+          builtin_functions,
+          heredoc_parsing,
+          lsp_navigation,
+          substitution_parsing,
+          unicode_positions
+        ]
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Rust toolchain (nightly)
+      uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rust-src
+
+    - name: Install cargo-fuzz
+      run: cargo install cargo-fuzz
+
+    - name: Cache cargo dependencies
+      uses: Swatinem/rust-cache@v2
+      with:
+        key: ${{ runner.os }}-fuzz-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
+
+    - name: Run fuzzer
+      run: |
+        DURATION=${{ github.event.inputs.duration || '600' }}
+        cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=$DURATION -max_len=1000 -timeout=25
+
+    - name: Upload crash artifacts
+      if: failure()
+      uses: actions/upload-artifact@v6
+      with:
+        name: fuzz-artifacts-${{ matrix.target }}-${{ github.sha }}
+        path: |
+          fuzz/artifacts/
+          fuzz/corpus/
+        retention-days: 30

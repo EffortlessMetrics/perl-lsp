@@ -224,8 +224,8 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <hr />
 <h2 id="at-a-glance"><a class="header" href="#at-a-glance">At a Glance</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Metric</th><th>Value</th><th>Target</th><th>Status</th></tr></thead><tbody>
-<tr><td><strong>Tier A Tests</strong></td><td>757 lib tests (discovered), 10 ignores (tracked)</td><td>100% pass</td><td>PASS</td></tr>
-<tr><td><strong>Tracked Test Debt</strong></td><td>1 (0 bug, 1 manual)</td><td>0</td><td>Near-zero</td></tr>
+<tr><td><strong>Tier A Tests</strong></td><td>1002 lib tests (discovered), 163 ignores (tracked)</td><td>100% pass</td><td>PASS</td></tr>
+<tr><td><strong>Tracked Test Debt</strong></td><td>2 (1 bug, 1 manual)</td><td>0</td><td>Near-zero</td></tr>
 </tbody></table>
 </div><!-- BEGIN: STATUS_METRICS_TABLE -->
 <p>| <strong>LSP Coverage</strong> | 100% (53/53 advertised features, <code>features.toml</code>) | 93%+ | In progress |</p>
@@ -250,9 +250,9 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
 <ul>
 <li><strong>LSP Coverage</strong>: 100% user-visible feature coverage (53/53 advertised features from <code>features.toml</code>)</li>
-<li><strong>Protocol Compliance</strong>: 100% overall LSP protocol support (88/88 including plumbing)</li>
-<li><strong>Parser Coverage</strong>: ~100% Perl 5 syntax via <code>tree-sitter-perl/test/corpus</code> (~611 sections) + <code>test_corpus/</code> (15 <code>.pl</code> files)</li>
-<li><strong>Test Status</strong>: 757 lib tests (Tier A), 10 ignores tracked (1 total tracked debt: 0 bug, 1 manual)</li>
+<li><strong>Protocol Compliance</strong>: 100% overall LSP protocol support (89/89 including plumbing)</li>
+<li><strong>Parser Coverage</strong>: ~100% Perl 5 syntax via <code>tree-sitter-perl/test/corpus</code> (~611 sections) + <code>test_corpus/</code> (21 <code>.pl</code> files)</li>
+<li><strong>Test Status</strong>: 1002 lib tests (Tier A), 163 ignores tracked (2 total tracked debt: 1 bug, 1 manual)</li>
 <li><strong>Docs (perl-parser)</strong>: missing_docs warnings = 0 (baseline 0)</li>
 <li><strong>Quality Metrics</strong>: 87% mutation score, &lt;50ms LSP response times, 931ns incremental parsing</li>
 <li><strong>Production Status</strong>: LSP server production-ready (<code>just ci-gate</code> passing)</li>
@@ -308,7 +308,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 </ol>
 <p><strong>Historical archives</strong>: See <code>docs/archive/status_snapshots/</code> for sprint logs and completion history.</p>
 <hr />
-<p><em>Last Updated: 2026-01-27 (narrative sections only; run <code>just status-update</code> to refresh metrics)</em>
+<p><em>Last Updated: 2026-01-28 (narrative sections only; run <code>just status-update</code> to refresh metrics)</em>
 <em>Canonical docs: <a href="ROADMAP.html">ROADMAP.md</a>, <a href="../features.toml">features.toml</a></em></p>
 
                     </main>

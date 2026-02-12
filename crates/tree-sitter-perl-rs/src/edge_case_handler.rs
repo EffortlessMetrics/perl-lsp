@@ -340,4 +340,53 @@ END
         assert!(!analysis.phase_warnings.is_empty());
         assert!(!analysis.recommended_actions.is_empty());
     }
+
+    #[test]
+    fn test_manual_review_triggers() {
+        let mut handler = EdgeCaseHandler::new(EdgeCaseConfig::default());
+
+        // Case 1: Source Filter
+        let code_filter = "use Filter::Simple;";
+        let analysis = handler.analyze(code_filter);
+        assert!(
+            analysis
+                .recommended_actions
+                .iter()
+                .any(|a| matches!(a, RecommendedAction::ManualReview { .. })),
+            "Should flag source filter"
+        );
+
+        // Case 2: Regex Code Block
+        let code_regex = "qr/(?{ print <<EOF; })/;\ncontent\nEOF\n";
+        let analysis = handler.analyze(code_regex);
+        assert!(
+            analysis
+                .recommended_actions
+                .iter()
+                .any(|a| matches!(a, RecommendedAction::ManualReview { .. })),
+            "Should flag regex code block"
+        );
+
+        // Case 3: Eval String
+        let code_eval = "eval 'print <<EOF;';\ncontent\nEOF\n";
+        let analysis = handler.analyze(code_eval);
+        assert!(
+            analysis
+                .recommended_actions
+                .iter()
+                .any(|a| matches!(a, RecommendedAction::ManualReview { .. })),
+            "Should flag eval string"
+        );
+
+        // Case 4: Tied Handle
+        let code_tie = "tie *FH, 'MyClass';\nprint FH <<EOF;\ncontent\nEOF\n";
+        let analysis = handler.analyze(code_tie);
+        assert!(
+            analysis
+                .recommended_actions
+                .iter()
+                .any(|a| matches!(a, RecommendedAction::ManualReview { .. })),
+            "Should flag tied handle"
+        );
+    }
 }

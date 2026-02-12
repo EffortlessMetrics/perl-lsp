@@ -426,7 +426,7 @@ impl PureRustPerlParser {
             }
         }
         if nodes.len() == 1 {
-            Ok(nodes.into_iter().next().unwrap())
+            nodes.pop().ok_or_else(|| "Empty nodes".into())
         } else {
             Ok(AstNode::Program(nodes))
         }
@@ -454,8 +454,10 @@ impl PureRustPerlParser {
             // Fast-path rules
             Rule::simple_assignment => {
                 let mut inner = pair.into_inner();
-                let var = self.build_node(inner.next().unwrap())?.unwrap();
-                let value = self.build_node(inner.next().unwrap())?.unwrap();
+                let var_pair = inner.next().ok_or("Missing variable in simple assignment")?;
+                let var = self.build_node(var_pair)?.ok_or("Failed to build variable node")?;
+                let val_pair = inner.next().ok_or("Missing value in simple assignment")?;
+                let value = self.build_node(val_pair)?.ok_or("Failed to build value node")?;
                 Ok(Some(AstNode::Assignment {
                     target: Box::new(var),
                     op: Arc::from("="),
@@ -544,13 +546,14 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::Program(statements)))
             }
             Rule::statement => {
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty statement")?;
                 self.build_node(inner)
             }
             Rule::modified_statement => {
                 let mut inner = pair.into_inner();
-                let expr = self.build_node(inner.next().unwrap())?;
-                let modifier = inner.next().unwrap();
+                let expr_pair = inner.next().ok_or("Missing expression in modified statement")?;
+                let expr = self.build_node(expr_pair)?;
+                let modifier = inner.next().ok_or("Missing modifier in modified statement")?;
 
                 // Extract modifier type and condition from the statement_modifier
                 let modifier_str = modifier.as_str();
@@ -612,7 +615,7 @@ impl PureRustPerlParser {
                 }
             }
             Rule::expression_statement => {
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty expression statement")?;
                 if let Some(expr) = self.build_node(inner)? {
                     Ok(Some(AstNode::Statement(Box::new(expr))))
                 } else {
@@ -620,12 +623,13 @@ impl PureRustPerlParser {
                 }
             }
             Rule::declaration_statement => {
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty declaration statement")?;
                 self.build_node(inner)
             }
             Rule::variable_declaration => {
                 let mut inner = pair.into_inner();
-                let scope = Arc::from(inner.next().unwrap().as_str());
+                let scope_pair = inner.next().ok_or("Missing scope in variable declaration")?;
+                let scope = Arc::from(scope_pair.as_str());
                 let mut variables = Vec::new();
                 let mut initializer = None;
 
@@ -689,7 +693,7 @@ impl PureRustPerlParser {
                 }))
             }
             Rule::glob => {
-                let inner = pair.into_inner().next().unwrap(); // glob_pattern
+                let inner = pair.into_inner().next().ok_or("Empty glob")?; // glob_pattern
                 Ok(Some(AstNode::Glob(Arc::from(inner.as_str()))))
             }
             Rule::readline => {
@@ -727,9 +731,13 @@ impl PureRustPerlParser {
             Rule::if_statement => {
                 let mut inner = pair.into_inner();
                 // The first item should be the expression (condition)
-                let condition = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let cond_pair = inner.next().ok_or("Missing condition in if statement")?;
+                let condition =
+                    Box::new(self.build_node(cond_pair)?.ok_or("Failed to build condition node")?);
                 // The second item should be the block
-                let then_block = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let block_pair = inner.next().ok_or("Missing block in if statement")?;
+                let then_block =
+                    Box::new(self.build_node(block_pair)?.ok_or("Failed to build block node")?);
                 let mut elsif_clauses = Vec::new();
                 let mut else_block = None;
 
@@ -738,15 +746,23 @@ impl PureRustPerlParser {
                         Rule::elsif_clause => {
                             let mut elsif_inner = p.into_inner();
                             // First is the condition expression
-                            let cond = self.build_node(elsif_inner.next().unwrap())?.unwrap();
+                            let cond_pair =
+                                elsif_inner.next().ok_or("Missing condition in elsif")?;
+                            let cond = self
+                                .build_node(cond_pair)?
+                                .ok_or("Failed to build elsif condition")?;
                             // Second is the block
-                            let block = self.build_node(elsif_inner.next().unwrap())?.unwrap();
+                            let block_pair = elsif_inner.next().ok_or("Missing block in elsif")?;
+                            let block = self
+                                .build_node(block_pair)?
+                                .ok_or("Failed to build elsif block")?;
                             elsif_clauses.push((cond, block));
                         }
                         Rule::else_clause => {
                             let mut else_inner = p.into_inner();
                             // The only item should be the block
-                            else_block = self.build_node(else_inner.next().unwrap())?.map(Box::new);
+                            let else_pair = else_inner.next().ok_or("Missing block in else")?;
+                            else_block = self.build_node(else_pair)?.map(Box::new);
                         }
                         _ => {}
                     }
@@ -756,8 +772,12 @@ impl PureRustPerlParser {
             }
             Rule::tie_statement => {
                 let mut inner = pair.into_inner();
-                let variable = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
-                let class = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let var_pair = inner.next().ok_or("Missing variable in tie statement")?;
+                let variable =
+                    Box::new(self.build_node(var_pair)?.ok_or("Failed to build variable node")?);
+                let class_pair = inner.next().ok_or("Missing class in tie statement")?;
+                let class =
+                    Box::new(self.build_node(class_pair)?.ok_or("Failed to build class node")?);
                 let mut args = Vec::new();
 
                 for arg in inner {
@@ -770,20 +790,26 @@ impl PureRustPerlParser {
             }
             Rule::untie_statement => {
                 let mut inner = pair.into_inner();
-                let variable = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let var_pair = inner.next().ok_or("Missing variable in untie statement")?;
+                let variable =
+                    Box::new(self.build_node(var_pair)?.ok_or("Failed to build variable node")?);
 
                 Ok(Some(AstNode::UntieStatement { variable }))
             }
             Rule::tied_statement => {
                 let mut inner = pair.into_inner();
-                let variable = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let var_pair = inner.next().ok_or("Missing variable in tied statement")?;
+                let variable =
+                    Box::new(self.build_node(var_pair)?.ok_or("Failed to build variable node")?);
 
                 Ok(Some(AstNode::TiedExpression { variable }))
             }
             Rule::given_statement => {
                 let mut inner = pair.into_inner();
-                let expression = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
-                let given_block = inner.next().unwrap();
+                let expr_pair = inner.next().ok_or("Missing expression in given statement")?;
+                let expression =
+                    Box::new(self.build_node(expr_pair)?.ok_or("Failed to build expression node")?);
+                let given_block = inner.next().ok_or("Missing block in given statement")?;
 
                 let mut when_clauses = Vec::new();
                 let mut default_block = None;
@@ -792,16 +818,26 @@ impl PureRustPerlParser {
                     match p.as_rule() {
                         Rule::when_clause => {
                             let mut when_inner = p.into_inner();
-                            let when_cond = when_inner.next().unwrap();
-                            let cond =
-                                self.build_node(when_cond.into_inner().next().unwrap())?.unwrap();
-                            let block = self.build_node(when_inner.next().unwrap())?.unwrap();
+                            let when_cond_pair =
+                                when_inner.next().ok_or("Missing condition in when clause")?;
+                            let cond_inner_pair =
+                                when_cond_pair.into_inner().next().ok_or("Empty when condition")?;
+                            let cond = self
+                                .build_node(cond_inner_pair)?
+                                .ok_or("Failed to build when condition")?;
+                            let block_pair =
+                                when_inner.next().ok_or("Missing block in when clause")?;
+                            let block =
+                                self.build_node(block_pair)?.ok_or("Failed to build when block")?;
                             when_clauses.push((cond, block));
                         }
                         Rule::default_clause => {
                             let mut default_inner = p.into_inner();
+                            let default_pair =
+                                default_inner.next().ok_or("Missing block in default clause")?;
                             default_block = Some(Box::new(
-                                self.build_node(default_inner.next().unwrap())?.unwrap(),
+                                self.build_node(default_pair)?
+                                    .ok_or("Failed to build default block")?,
                             ));
                         }
                         _ => {}
@@ -911,7 +947,7 @@ impl PureRustPerlParser {
             }
             Rule::unary_expression => {
                 let mut inner = pair.into_inner();
-                let first = inner.next().unwrap();
+                let first = inner.next().ok_or("Empty unary expression")?;
 
                 // Check if it's an operator or operand
                 match first.as_rule() {
@@ -951,12 +987,14 @@ impl PureRustPerlParser {
             }
             Rule::postfix_expression => {
                 let mut inner = pair.into_inner();
-                let mut expr = self.build_node(inner.next().unwrap())?.unwrap();
+                let expr_pair = inner.next().ok_or("Empty postfix expression")?;
+                let mut expr =
+                    self.build_node(expr_pair)?.ok_or("Failed to build base expression")?;
 
-                // Apply postfix operators
                 for postfix_op in inner {
-                    if postfix_op.as_rule() == Rule::postfix_operator {
-                        let op_inner = postfix_op.into_inner().next().unwrap();
+                    if postfix_op.as_rule() == Rule::postfix_dereference {
+                        let op_inner =
+                            postfix_op.into_inner().next().ok_or("Empty postfix dereference")?;
                         match op_inner.as_rule() {
                             Rule::postfix_dereference => {
                                 let deref_str = op_inner.as_str();
@@ -989,24 +1027,31 @@ impl PureRustPerlParser {
                                 expr = AstNode::MethodCall { object: Box::new(expr), method, args };
                             }
                             Rule::typeglob_slot_access => {
-                                let slot =
-                                    Arc::from(op_inner.into_inner().next().unwrap().as_str());
+                                let slot_pair = op_inner
+                                    .into_inner()
+                                    .next()
+                                    .ok_or("Empty typeglob slot access")?;
+                                let slot = Arc::from(slot_pair.as_str());
                                 expr =
                                     AstNode::TypeglobSlotAccess { typeglob: Box::new(expr), slot };
                             }
                             Rule::array_access => {
+                                let index_pair =
+                                    op_inner.into_inner().next().ok_or("Empty array access")?;
                                 let index_expr = self
-                                    .build_node(op_inner.into_inner().next().unwrap())?
-                                    .unwrap();
+                                    .build_node(index_pair)?
+                                    .ok_or("Failed to build array index node")?;
                                 expr = AstNode::ArrayAccess {
                                     array: Box::new(expr),
                                     index: Box::new(index_expr),
                                 };
                             }
                             Rule::hash_access => {
+                                let key_pair =
+                                    op_inner.into_inner().next().ok_or("Empty hash access")?;
                                 let key_expr = self
-                                    .build_node(op_inner.into_inner().next().unwrap())?
-                                    .unwrap();
+                                    .build_node(key_pair)?
+                                    .ok_or("Failed to build hash key node")?;
                                 expr = AstNode::HashAccess {
                                     hash: Box::new(expr),
                                     key: Box::new(key_expr),
@@ -1067,7 +1112,7 @@ impl PureRustPerlParser {
 
                 // Build qualified name from parts except the last one which is the method
                 if parts.len() >= 2 {
-                    let method_name = Arc::from(parts.pop().unwrap());
+                    let method_name = Arc::from(parts.pop().ok_or("Empty parts list")?);
                     let class_name = parts.join("::");
                     let class_node = AstNode::Identifier(Arc::from(class_name));
 
@@ -1175,7 +1220,7 @@ impl PureRustPerlParser {
                     if parts.is_empty() {
                         Ok(Some(AstNode::String(Arc::from(""))))
                     } else if parts.len() == 1 && matches!(parts[0], AstNode::String(_)) {
-                        Ok(Some(parts.into_iter().next().unwrap()))
+                        Ok(Some(parts.into_iter().next().ok_or("Empty parts list")?))
                     } else {
                         Ok(Some(AstNode::InterpolatedString(parts)))
                     }
@@ -1190,11 +1235,11 @@ impl PureRustPerlParser {
                 let content = pair.as_str();
                 if content.contains("__HEREDOC__") {
                     // Extract actual heredoc content from q{__HEREDOC__content__HEREDOC__}
-                    if let Some(start_idx) = content.find("{__HEREDOC__") {
-                        if let Some(end_idx) = content.rfind("__HEREDOC__}") {
-                            let heredoc_content = &content[start_idx + 12..end_idx];
-                            return Ok(Some(AstNode::String(Arc::from(heredoc_content))));
-                        }
+                    if let Some(start_idx) = content.find("{__HEREDOC__")
+                        && let Some(end_idx) = content.rfind("__HEREDOC__}")
+                    {
+                        let heredoc_content = &content[start_idx + 12..end_idx];
+                        return Ok(Some(AstNode::String(Arc::from(heredoc_content))));
                     }
                 }
                 Ok(Some(AstNode::String(Arc::from(content))))
@@ -1205,11 +1250,11 @@ impl PureRustPerlParser {
                 let content = pair.as_str();
                 if content.contains("__HEREDOC__") {
                     // Extract actual heredoc content from qq{__HEREDOC__content__HEREDOC__}
-                    if let Some(start_idx) = content.find("{__HEREDOC__") {
-                        if let Some(end_idx) = content.rfind("__HEREDOC__}") {
-                            let heredoc_content = &content[start_idx + 12..end_idx];
-                            return Ok(Some(AstNode::QqString(Arc::from(heredoc_content))));
-                        }
+                    if let Some(start_idx) = content.find("{__HEREDOC__")
+                        && let Some(end_idx) = content.rfind("__HEREDOC__}")
+                    {
+                        let heredoc_content = &content[start_idx + 12..end_idx];
+                        return Ok(Some(AstNode::QqString(Arc::from(heredoc_content))));
                     }
                 }
                 Ok(Some(AstNode::QqString(Arc::from(content))))
@@ -1318,27 +1363,27 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::HashRef(elements)))
             }
             Rule::begin_block => {
-                let inner = pair.into_inner().next().unwrap(); // get the block
+                let inner = pair.into_inner().next().ok_or("Empty begin block")?; // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(AstNode::BeginBlock))
             }
             Rule::end_block => {
-                let inner = pair.into_inner().next().unwrap(); // get the block
+                let inner = pair.into_inner().next().ok_or("Empty end block")?; // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(AstNode::EndBlock))
             }
             Rule::check_block => {
-                let inner = pair.into_inner().next().unwrap(); // get the block
+                let inner = pair.into_inner().next().ok_or("Empty check block")?; // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(AstNode::CheckBlock))
             }
             Rule::init_block => {
-                let inner = pair.into_inner().next().unwrap(); // get the block
+                let inner = pair.into_inner().next().ok_or("Empty init block")?; // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(AstNode::InitBlock))
             }
             Rule::unitcheck_block => {
-                let inner = pair.into_inner().next().unwrap(); // get the block
+                let inner = pair.into_inner().next().ok_or("Empty unitcheck block")?; // get the block
                 let block = self.build_node(inner)?.map(Box::new);
                 Ok(block.map(AstNode::UnitcheckBlock))
             }
@@ -1361,12 +1406,12 @@ impl PureRustPerlParser {
                 Ok(Some(AstNode::QwList(words)))
             }
             Rule::do_block => {
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty do block")?;
                 let expr = self.build_node(inner)?.map(Box::new);
                 Ok(expr.map(AstNode::DoBlock))
             }
             Rule::eval_statement => {
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty eval statement")?;
                 let expr = self.build_node(inner)?;
                 Ok(expr.map(|e| match e {
                     AstNode::Block(_) => AstNode::EvalBlock(Box::new(e)),
@@ -1374,7 +1419,7 @@ impl PureRustPerlParser {
                 }))
             }
             Rule::goto_statement => {
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty goto statement")?;
                 let target = match inner.as_rule() {
                     Rule::goto_target => Arc::from(inner.as_str()),
                     _ => {
@@ -1390,7 +1435,9 @@ impl PureRustPerlParser {
             }
             Rule::try_catch_statement => {
                 let mut inner = pair.into_inner();
-                let try_block = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let try_pair = inner.next().ok_or("Missing try block")?;
+                let try_block =
+                    Box::new(self.build_node(try_pair)?.ok_or("Failed to build try block")?);
                 let mut catch_clauses = Vec::new();
                 let mut finally_block = None;
 
@@ -1407,7 +1454,10 @@ impl PureRustPerlParser {
                                         param = Some(Arc::from(cp.as_str()));
                                     }
                                     Rule::block => {
-                                        block = Some(self.build_node(cp)?.unwrap());
+                                        block = Some(
+                                            self.build_node(cp)?
+                                                .ok_or("Failed to build catch block")?,
+                                        );
                                     }
                                     _ => {}
                                 }
@@ -1419,8 +1469,11 @@ impl PureRustPerlParser {
                         }
                         Rule::finally_clause => {
                             let mut finally_inner = p.into_inner();
-                            if let Some(block) = finally_inner.next() {
-                                finally_block = Some(Box::new(self.build_node(block)?.unwrap()));
+                            if let Some(block_pair) = finally_inner.next() {
+                                finally_block = Some(Box::new(
+                                    self.build_node(block_pair)?
+                                        .ok_or("Failed to build finally block")?,
+                                ));
                             }
                         }
                         _ => {}
@@ -1431,12 +1484,15 @@ impl PureRustPerlParser {
             }
             Rule::defer_statement => {
                 let mut inner = pair.into_inner();
-                let block = Box::new(self.build_node(inner.next().unwrap())?.unwrap());
+                let block_pair = inner.next().ok_or("Missing block in defer statement")?;
+                let block =
+                    Box::new(self.build_node(block_pair)?.ok_or("Failed to build defer block")?);
                 Ok(Some(AstNode::DeferStatement(block)))
             }
             Rule::class_declaration => {
                 let mut inner = pair.into_inner();
-                let name = Arc::from(inner.next().unwrap().as_str());
+                let name_pair = inner.next().ok_or("Missing class name")?;
+                let name = Arc::from(name_pair.as_str());
                 let mut version = None;
                 let mut superclass = None;
                 let mut body = Vec::new();
@@ -1447,7 +1503,9 @@ impl PureRustPerlParser {
                             version = Some(Arc::from(p.as_str()));
                         }
                         Rule::superclass => {
-                            superclass = Some(Arc::from(p.into_inner().next().unwrap().as_str()));
+                            let super_pair =
+                                p.into_inner().next().ok_or("Missing superclass name")?;
+                            superclass = Some(Arc::from(super_pair.as_str()));
                         }
                         Rule::class_body => {
                             for member in p.into_inner() {
@@ -1464,7 +1522,8 @@ impl PureRustPerlParser {
             }
             Rule::method_declaration => {
                 let mut inner = pair.into_inner();
-                let name = Arc::from(inner.next().unwrap().as_str());
+                let name_pair = inner.next().ok_or("Missing method name")?;
+                let name = Arc::from(name_pair.as_str());
                 let mut signature = None;
                 let mut attributes = Vec::new();
                 let mut body = None;
@@ -1480,7 +1539,9 @@ impl PureRustPerlParser {
                             }
                         }
                         Rule::block => {
-                            body = Some(Box::new(self.build_node(p)?.unwrap()));
+                            body = Some(Box::new(
+                                self.build_node(p)?.ok_or("Failed to build method body")?,
+                            ));
                         }
                         _ => {}
                     }
@@ -1495,7 +1556,8 @@ impl PureRustPerlParser {
             }
             Rule::field_declaration => {
                 let mut inner = pair.into_inner();
-                let name = Arc::from(inner.next().unwrap().as_str());
+                let name_pair = inner.next().ok_or("Missing field name")?;
+                let name = Arc::from(name_pair.as_str());
                 let mut attributes = Vec::new();
                 let mut default = None;
 
@@ -1508,7 +1570,10 @@ impl PureRustPerlParser {
                         }
                         Rule::default_value => {
                             if let Some(expr) = p.into_inner().next() {
-                                default = Some(Box::new(self.build_node(expr)?.unwrap()));
+                                default = Some(Box::new(
+                                    self.build_node(expr)?
+                                        .ok_or("Failed to build field default value")?,
+                                ));
                             }
                         }
                         _ => {}
@@ -1536,15 +1601,16 @@ impl PureRustPerlParser {
             Rule::end_section => Ok(Some(AstNode::EndSection(Arc::from(pair.as_str())))),
             Rule::labeled_block => {
                 let mut inner = pair.into_inner();
-                let label_pair = inner.next().unwrap();
+                let label_pair = inner.next().ok_or("Missing label in labeled block")?;
                 let label = Arc::from(label_pair.as_str().trim_end_matches(':'));
-                let block = self.build_node(inner.next().unwrap())?.map(Box::new);
+                let block_pair = inner.next().ok_or("Missing block in labeled block")?;
+                let block = self.build_node(block_pair)?.map(Box::new);
                 Ok(block.map(|b| AstNode::LabeledBlock { label, block: b }))
             }
             Rule::comment => Ok(Some(AstNode::Comment(Arc::from(pair.as_str())))),
             Rule::semicolon | Rule::WHITESPACE => Ok(None),
             Rule::standalone_expression => {
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty standalone expression")?;
                 self.build_node(inner)
             }
             Rule::regex => {
@@ -1695,24 +1761,23 @@ impl PureRustPerlParser {
             }
             Rule::unless_statement => {
                 let mut inner = pair.into_inner();
-                let condition = Box::new(
-                    self.build_node(inner.next().unwrap())?.unwrap_or(AstNode::EmptyExpression),
-                );
-                let block = Box::new(
-                    self.build_node(inner.next().unwrap())?.unwrap_or(AstNode::EmptyExpression),
-                );
+                let cond_pair = inner.next().ok_or("Missing condition in unless statement")?;
+                let condition =
+                    Box::new(self.build_node(cond_pair)?.unwrap_or(AstNode::EmptyExpression));
+                let block_pair = inner.next().ok_or("Missing block in unless statement")?;
+                let block =
+                    Box::new(self.build_node(block_pair)?.unwrap_or(AstNode::EmptyExpression));
                 let mut else_block = None;
 
                 // Check for else clause
-                if let Some(else_clause) = inner.next() {
-                    if else_clause.as_rule() == Rule::else_clause {
-                        let mut else_inner = else_clause.into_inner();
-                        if let Some(else_block_pair) = else_inner.next() {
-                            else_block = Some(Box::new(
-                                self.build_node(else_block_pair)?
-                                    .unwrap_or(AstNode::EmptyExpression),
-                            ));
-                        }
+                if let Some(else_clause) = inner.next()
+                    && else_clause.as_rule() == Rule::else_clause
+                {
+                    let mut else_inner = else_clause.into_inner();
+                    if let Some(else_block_pair) = else_inner.next() {
+                        else_block = Some(Box::new(
+                            self.build_node(else_block_pair)?.unwrap_or(AstNode::EmptyExpression),
+                        ));
                     }
                 }
 
@@ -1917,22 +1982,22 @@ impl PureRustPerlParser {
             }
             Rule::interpolation => {
                 // Handle interpolation within strings
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty interpolation")?;
                 self.build_node(inner)
             }
             Rule::complex_scalar_interpolation => {
                 // ${expr} form
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty complex scalar interpolation")?;
                 self.build_node(inner)
             }
             Rule::complex_array_interpolation => {
                 // @{[expr]} form
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty complex array interpolation")?;
                 self.build_node(inner)
             }
             Rule::reference => {
                 // Handle variable references
-                let inner = pair.into_inner().next().unwrap();
+                let inner = pair.into_inner().next().ok_or("Empty reference")?;
                 self.build_node(inner)
             }
             Rule::scalar_reference => {
@@ -1961,7 +2026,7 @@ impl PureRustPerlParser {
                 if inner.is_empty() {
                     Ok(None)
                 } else if inner.len() == 1 {
-                    let first = inner.into_iter().next().unwrap();
+                    let first = inner.into_iter().next().ok_or("Expected exactly one element")?;
                     // Check if it's a parenthesized expression
                     match first.as_rule() {
                         Rule::expression => {
@@ -1991,7 +2056,8 @@ impl PureRustPerlParser {
                 if inner.is_empty() {
                     Ok(None)
                 } else if inner.len() == 1 {
-                    self.build_node(inner.into_iter().next().unwrap())
+                    let first = inner.into_iter().next().ok_or("Expected exactly one element")?;
+                    self.build_node(first)
                 } else {
                     let mut nodes = Vec::new();
                     for p in inner {
@@ -2015,7 +2081,7 @@ impl PureRustPerlParser {
         &mut self,
         pair: Pair<Rule>,
     ) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
-        let inner = pair.into_inner().next().unwrap();
+        let inner = pair.into_inner().next().ok_or("Empty expression")?;
         match inner.as_rule() {
             Rule::assignment_expression => self.build_node(inner),
             Rule::ternary_expression => self.build_ternary_expression(inner),
@@ -2031,14 +2097,24 @@ impl PureRustPerlParser {
         let inner: Vec<_> = pair.into_inner().collect();
         if inner.len() == 1 {
             // No ternary, just pass through
-            self.build_node(inner.into_iter().next().unwrap())
+            let first = inner.into_iter().next().ok_or("Expected exactly one element")?;
+            self.build_node(first)
         } else if inner.len() == 3 {
-            let condition = Box::new(self.build_node(inner[0].clone())?.unwrap());
-            let then_expr = Box::new(self.build_node(inner[1].clone())?.unwrap());
-            let else_expr = Box::new(self.build_node(inner[2].clone())?.unwrap());
+            let condition = Box::new(
+                self.build_node(inner[0].clone())?.ok_or("Failed to build ternary condition")?,
+            );
+            let then_expr = Box::new(
+                self.build_node(inner[1].clone())?
+                    .ok_or("Failed to build ternary then expression")?,
+            );
+            let else_expr = Box::new(
+                self.build_node(inner[2].clone())?
+                    .ok_or("Failed to build ternary else expression")?,
+            );
             Ok(Some(AstNode::TernaryOp { condition, true_expr: then_expr, false_expr: else_expr }))
         } else {
-            self.build_node(inner.into_iter().next().unwrap())
+            let first = inner.into_iter().next().ok_or("Expected exactly one element")?;
+            self.build_node(first)
         }
     }
 
@@ -2050,12 +2126,14 @@ impl PureRustPerlParser {
     ) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
         let inner: Vec<_> = pair.into_inner().collect();
         if inner.len() == 1 {
-            self.build_node(inner.into_iter().next().unwrap())
+            let first = inner.into_iter().next().ok_or("Expected exactly one element")?;
+            self.build_node(first)
         } else if inner.len() >= 3 {
             // Build with proper precedence
             self.build_binary_expr_with_precedence(inner)
         } else {
-            self.build_node(inner.into_iter().next().unwrap())
+            let first = inner.into_iter().next().ok_or("Expected exactly one element")?;
+            self.build_node(first)
         }
     }
 

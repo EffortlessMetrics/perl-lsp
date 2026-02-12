@@ -245,15 +245,15 @@ pub fn language() -> Language {
 }
 
 /// Create a new tree-sitter parser instance
-pub fn create_ts_parser() -> tree_sitter::Parser {
+pub fn create_ts_parser() -> Result<tree_sitter::Parser, error::ParseError> {
     let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&language()).expect("Failed to set language");
-    parser
+    parser.set_language(&language()).map_err(|_| error::ParseError::LanguageLoadFailed)?;
+    Ok(parser)
 }
 
 /// Parse Perl source code
 pub fn parse(source: &str) -> Result<tree_sitter::Tree, error::ParseError> {
-    let mut parser = create_ts_parser();
+    let mut parser = create_ts_parser()?;
     parser.parse(source, None).ok_or(error::ParseError::ParseFailed)
 }
 
@@ -262,7 +262,7 @@ pub fn parse_with_tree(
     source: &str,
     old_tree: Option<&tree_sitter::Tree>,
 ) -> Result<tree_sitter::Tree, error::ParseError> {
-    let mut parser = create_ts_parser();
+    let mut parser = create_ts_parser()?;
     parser.parse(source, old_tree).ok_or(error::ParseError::ParseFailed)
 }
 

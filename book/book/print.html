@@ -2804,6 +2804,128 @@ export PATH="$HOME/.cargo/bin:$PATH"
 <p>Check LSP logs for errors - see <a href="user-guides/EDITOR_SETUP.html#no-diagnostics">EDITOR_SETUP.md</a></p>
 </li>
 </ol>
+<h3 id="completion-not-working"><a class="header" href="#completion-not-working">Completion Not Working</a></h3>
+<p><strong>Problem</strong>: No completions appear when typing.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Ensure you’re in a valid completion context (after <code>$</code>, <code>@</code>, <code>%</code>, or mid-identifier)</p>
+</li>
+<li>
+<p>Check the file is recognized as Perl in your editor</p>
+</li>
+<li>
+<p>Try manually triggering completion:</p>
+<ul>
+<li>VS Code: <code>Ctrl+Space</code></li>
+<li>Neovim: <code>&lt;C-x&gt;&lt;C-o&gt;</code></li>
+<li>Emacs: <code>M-TAB</code> or <code>C-M-i</code></li>
+</ul>
+</li>
+<li>
+<p>Verify completion cap hasn’t been reached:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "completionCap": 200
+    }
+  }
+}
+</code></pre>
+</li>
+</ol>
+<h3 id="go-to-definition-not-working"><a class="header" href="#go-to-definition-not-working">Go-to-Definition Not Working</a></h3>
+<p><strong>Problem</strong>: “Go to Definition” doesn’t find the symbol.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Ensure the definition is in an indexed file:</p>
+<ul>
+<li>File must be in workspace or <code>includePaths</code></li>
+<li>File count must be under <code>maxIndexedFiles</code> limit</li>
+</ul>
+</li>
+<li>
+<p>Check include paths are configured:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "workspace": {
+      "includePaths": ["lib", ".", "local/lib/perl5"]
+    }
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>For CPAN modules, enable system @INC (if safe):</p>
+<pre><code class="language-json">{
+  "perl": {
+    "workspace": {
+      "useSystemInc": true
+    }
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>Verify the symbol is actually defined (not just imported)</p>
+</li>
+</ol>
+<h3 id="references-returning-incomplete-results"><a class="header" href="#references-returning-incomplete-results">References Returning Incomplete Results</a></h3>
+<p><strong>Problem</strong>: “Find References” doesn’t show all occurrences.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Check the references cap:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "referencesCap": 1000
+    }
+  }
+}
+</code></pre>
+</li>
+<li>
+<p>Ensure all relevant files are indexed (check <code>maxIndexedFiles</code>)</p>
+</li>
+<li>
+<p>Wait for workspace indexing to complete (check progress notification)</p>
+</li>
+<li>
+<p>Check the reference search deadline:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "referenceSearchDeadlineMs": 5000
+    }
+  }
+}
+</code></pre>
+</li>
+</ol>
+<h3 id="formatting-not-working"><a class="header" href="#formatting-not-working">Formatting Not Working</a></h3>
+<p><strong>Problem</strong>: Document formatting doesn’t change the file.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Verify Perl::Tidy is installed:</p>
+<pre><code class="language-bash">perl -e 'use Perl::Tidy;'
+</code></pre>
+</li>
+<li>
+<p>Check for <code>.perltidyrc</code> in your project or home directory</p>
+</li>
+<li>
+<p>Verify formatting is enabled in editor settings</p>
+</li>
+<li>
+<p>Check for errors in the LSP log - formatting errors are often reported there</p>
+</li>
+<li>
+<p>Try manual formatting via command palette to see error messages</p>
+</li>
+</ol>
 <h2 id="parser-issues"><a class="header" href="#parser-issues">Parser Issues</a></h2>
 <h3 id="incorrect-syntax-highlighting"><a class="header" href="#incorrect-syntax-highlighting">Incorrect Syntax Highlighting</a></h3>
 <p><strong>Problem</strong>: Code is parsed incorrectly or shows false errors.</p>
@@ -2871,6 +2993,71 @@ END
 <li><a href="user-guides/EDITOR_SETUP.html#helix">Helix setup</a></li>
 <li><a href="user-guides/EDITOR_SETUP.html#troubleshooting">General troubleshooting</a></li>
 </ul>
+<h3 id="vs-code-extension-not-activating"><a class="header" href="#vs-code-extension-not-activating">VS Code: Extension Not Activating</a></h3>
+<p><strong>Problem</strong>: The perl-lsp extension doesn’t activate on Perl files.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Check file association in VS Code bottom status bar (should say “Perl”)</p>
+</li>
+<li>
+<p>Manually set language mode: <code>Ctrl+K M</code> then select “Perl”</p>
+</li>
+<li>
+<p>Verify extension is installed and enabled:</p>
+<pre><code class="language-bash">code --list-extensions | grep perl
+</code></pre>
+</li>
+<li>
+<p>Check VS Code Output panel for errors (View &gt; Output &gt; select “Perl Language Server”)</p>
+</li>
+</ol>
+<h3 id="neovim-lsp-not-attaching"><a class="header" href="#neovim-lsp-not-attaching">Neovim: LSP Not Attaching</a></h3>
+<p><strong>Problem</strong>: <code>:LspInfo</code> shows no client attached.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Verify filetype is recognized:</p>
+<pre><code class="language-vim">:set filetype?
+" Should output: filetype=perl
+</code></pre>
+</li>
+<li>
+<p>Check lspconfig is loaded:</p>
+<pre><code class="language-vim">:lua print(vim.inspect(require('lspconfig').perl_lsp))
+</code></pre>
+</li>
+<li>
+<p>Manually start the client:</p>
+<pre><code class="language-vim">:LspStart perl_lsp
+</code></pre>
+</li>
+<li>
+<p>Check <code>:LspLog</code> for errors</p>
+</li>
+</ol>
+<h3 id="emacs-eglot-fails-to-connect"><a class="header" href="#emacs-eglot-fails-to-connect">Emacs: eglot Fails to Connect</a></h3>
+<p><strong>Problem</strong>: eglot reports connection failure.</p>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p>Check the <code>*eglot stderr*</code> buffer for errors</p>
+</li>
+<li>
+<p>Verify the command works in shell:</p>
+<pre><code class="language-bash">perl-lsp --stdio
+</code></pre>
+</li>
+<li>
+<p>Try lsp-mode as an alternative:</p>
+<pre><code class="language-elisp">(require 'lsp-mode)
+(add-hook 'perl-mode-hook #'lsp)
+</code></pre>
+</li>
+<li>
+<p>Check <code>*lsp-log*</code> buffer for detailed errors</p>
+</li>
+</ol>
 <h2 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h2>
 <ol>
 <li>
@@ -2891,6 +3078,14 @@ END
 </ul>
 </li>
 </ol>
+<h2 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h2>
+<ul>
+<li><a href="user-guides/FAQ.html">FAQ.md</a> - Frequently asked questions</li>
+<li><a href="user-guides/GETTING_STARTED.html">GETTING_STARTED.md</a> - Installation and setup guide</li>
+<li><a href="user-guides/EDITOR_SETUP.html">EDITOR_SETUP.md</a> - Detailed editor configurations</li>
+<li><a href="user-guides/CONFIG.html">CONFIG.md</a> - All configuration options</li>
+<li><a href="user-guides/KNOWN_LIMITATIONS.html">KNOWN_LIMITATIONS.md</a> - Current parser limitations</li>
+</ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="tree-sitter-perl-parsers---known-limitations"><a class="header" href="#tree-sitter-perl-parsers---known-limitations">Tree-sitter Perl Parsers - Known Limitations</a></h1>
 <p>This document provides a comprehensive list of parsing limitations across all three parser implementations.</p>
 <h2 id="summary"><a class="header" href="#summary">Summary</a></h2>
@@ -3403,8 +3598,8 @@ cargo doc --no-deps --package perl-parser
 <ul>
 <li><strong><a href="architecture/MISSING_DOCUMENTATION_GUIDE.html">Missing Documentation Guide</a></strong> - Systematic resolution strategy</li>
 <li><strong><a href="architecture/API_DOCUMENTATION_STANDARDS.html">API Documentation Standards</a></strong> - Enterprise quality requirements</li>
-<li><strong><a href="architecture/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.html">ADR-002: API Documentation Infrastructure</a></strong> - Implementation architecture</li>
-<li><strong><a href="architecture/ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.html">ADR-003: Missing Documentation Infrastructure</a></strong> - Implementation details</li>
+<li><strong><a href="architecture/adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.html">ADR-002: API Documentation Infrastructure</a></strong> - Implementation architecture</li>
+<li><strong><a href="architecture/adr/ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.html">ADR-003: Missing Documentation Infrastructure</a></strong> - Implementation details</li>
 </ul>
 <h2 id="context-sensitive-features"><a class="header" href="#context-sensitive-features">Context-Sensitive Features</a></h2>
 <p>The parser includes sophisticated solutions for Perl’s context-sensitive features:</p>
@@ -11486,7 +11681,7 @@ git commit -m "fix: resolve issue #123"
 <ul>
 <li><strong>Pinned runner versions</strong> (<code>ubuntu-22.04</code>, <code>windows-2022</code>)</li>
 <li><strong>Default CI jobs</strong> that run on every PR</li>
-<li><strong>Opt-in CI labels</strong> for heavy jobs (<code>ci:bench</code>, <code>ci:mutation</code>, <code>ci:strict</code>, <code>ci:mac</code>)</li>
+<li><strong>Opt-in CI labels</strong> for heavy jobs (<code>ci:bench</code>, <code>ci:mutation</code>, <code>ci:strict</code>, <code>ci:mac</code>, <code>ci:semver</code>)</li>
 <li><strong>Build optimizations</strong> (lean flags, nextest configuration)</li>
 <li><strong>Troubleshooting tips</strong> for common CI issues</li>
 </ul>
@@ -11497,6 +11692,7 @@ git commit -m "fix: resolve issue #123"
 <li>Add <code>ci:bench</code> label to run performance benchmarks</li>
 <li>Add <code>ci:strict</code> label for pedantic clippy checks</li>
 <li>Add <code>ci:mac</code> label if your changes affect macOS</li>
+<li>Add <code>ci:semver</code> label to check for breaking API changes</li>
 </ul>
 <h3 id="local-ci-validation-while-github-actions-is-unavailable"><a class="header" href="#local-ci-validation-while-github-actions-is-unavailable">Local CI Validation (While GitHub Actions Is Unavailable)</a></h3>
 <p><strong>⚠️ IMPORTANT</strong>: GitHub Actions is currently unavailable due to billing issues. During this period:</p>
@@ -11532,6 +11728,123 @@ just ci-gate
 <li>Package-qualified symbol lookups</li>
 </ul>
 <p>Once GitHub Actions is restored, this section will be archived and normal CI workflow will resume.</p>
+<h2 id="semver-breaking-change-detection"><a class="header" href="#semver-breaking-change-detection">SemVer Breaking Change Detection</a></h2>
+<p>Perl LSP follows strict <a href="https://semver.org/">Semantic Versioning 2.0.0</a>. We use automated tools to detect breaking changes in public APIs.</p>
+<h3 id="when-to-check-for-breaking-changes"><a class="header" href="#when-to-check-for-breaking-changes">When to Check for Breaking Changes</a></h3>
+<p><strong>Required for:</strong></p>
+<ul>
+<li>Changes to public API functions, types, or modules</li>
+<li>Changes to <code>pub</code> items in published crates (<code>perl-parser</code>, <code>perl-lexer</code>, <code>perl-parser-core</code>, <code>perl-lsp</code>)</li>
+<li>Signature changes to existing functions</li>
+<li>Removing or renaming public items</li>
+<li>Changes to error types or return values</li>
+</ul>
+<p><strong>Not required for:</strong></p>
+<ul>
+<li>Internal (<code>pub(crate)</code>) changes</li>
+<li>Test-only code changes</li>
+<li>Documentation updates</li>
+<li>Performance improvements that don’t change behavior</li>
+</ul>
+<h3 id="local-semver-checking"><a class="header" href="#local-semver-checking">Local SemVer Checking</a></h3>
+<p>Check for breaking changes locally before submitting a PR:</p>
+<pre><code class="language-bash"># Check all published packages for breaking changes
+just semver-check
+
+# Check a specific package
+just semver-check-package perl-parser
+
+# View detailed diff of API changes
+just semver-diff perl-parser
+
+# List available baseline tags
+just semver-list-baselines
+</code></pre>
+<p><strong>Understanding the output:</strong></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Breaking change (requires major version bump)
+- pub fn parse(&amp;mut self, source: &amp;str) -&gt; Result&lt;Node, ParseError&gt;
++ pub fn parse(&amp;mut self, source: &amp;str, config: &amp;Config) -&gt; Result&lt;Node, Error&gt;
+
+// Non-breaking change (allowed in minor version)
++ pub fn parse_with_config(&amp;mut self, source: &amp;str, config: &amp;Config) -&gt; Result&lt;Node, Error&gt;
+<span class="boring">}</span></code></pre></pre>
+<h3 id="ci-semver-validation"><a class="header" href="#ci-semver-validation">CI SemVer Validation</a></h3>
+<p>Add the <code>ci:semver</code> label to your PR to run automated breaking change detection:</p>
+<ol>
+<li><strong>Add label:</strong> <code>ci:semver</code> to your PR</li>
+<li><strong>CI runs:</strong> GitHub Actions compares your changes against the last release tag</li>
+<li><strong>Review results:</strong> Check the workflow output for breaking changes</li>
+<li><strong>Download report:</strong> Breaking changes report available as artifact</li>
+</ol>
+<p><strong>CI checks:</strong></p>
+<ul>
+<li>Compares against baseline (last release tag, e.g., <code>v0.8.5</code>)</li>
+<li>Checks <code>perl-parser</code>, <code>perl-lexer</code>, <code>perl-parser-core</code>, <code>perl-lsp</code></li>
+<li>Generates JSON report of all breaking changes</li>
+<li>Warns on breaking changes (doesn’t fail the build)</li>
+</ul>
+<h3 id="semver-policy-summary"><a class="header" href="#semver-policy-summary">SemVer Policy Summary</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Change Type</th><th>Example</th><th>Version Bump</th><th>Allowed In</th></tr></thead><tbody>
+<tr><td><strong>Breaking</strong></td><td>Remove public function</td><td>Major (1.0 → 2.0)</td><td>Major releases only</td></tr>
+<tr><td><strong>Breaking</strong></td><td>Change function signature</td><td>Major (1.0 → 2.0)</td><td>Major releases only</td></tr>
+<tr><td><strong>Additive</strong></td><td>Add new public function</td><td>Minor (1.0 → 1.1)</td><td>Minor releases</td></tr>
+<tr><td><strong>Additive</strong></td><td>Add new enum variant</td><td>Minor (1.0 → 1.1)</td><td>Minor releases (with <code>#[non_exhaustive]</code>)</td></tr>
+<tr><td><strong>Patch</strong></td><td>Fix bug, same behavior</td><td>Patch (1.0.0 → 1.0.1)</td><td>Patch releases</td></tr>
+<tr><td><strong>Patch</strong></td><td>Documentation update</td><td>Patch (1.0.0 → 1.0.1)</td><td>Patch releases</td></tr>
+</tbody></table>
+</div>
+<h3 id="breaking-change-workflow"><a class="header" href="#breaking-change-workflow">Breaking Change Workflow</a></h3>
+<p>If you need to make a breaking change:</p>
+<ol>
+<li>
+<p><strong>Document the breaking change:</strong></p>
+<pre><code class="language-markdown">## Breaking Changes
+- `Parser::parse()` signature changed to include `Config` parameter
+- Migration: Use `Parser::parse_with_config()` or pass default config
+</code></pre>
+</li>
+<li>
+<p><strong>Deprecate before removing (when possible):</strong></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[deprecated(since = "1.2.0", note = "use `parse_with_config()` instead")]
+pub fn parse_legacy(source: &amp;str) -&gt; Result&lt;Node, ParseError&gt; {
+    self.parse_with_config(source, &amp;Config::default())
+}
+<span class="boring">}</span></code></pre></pre>
+</li>
+<li>
+<p><strong>Add migration guide</strong> to PR description</p>
+</li>
+<li>
+<p><strong>Label PR with <code>breaking-change</code></strong></p>
+</li>
+<li>
+<p><strong>Coordinate with maintainers</strong> for major version planning</p>
+</li>
+</ol>
+<h3 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h3>
+<p>SemVer checking is configured in <code>.cargo-semver-checks.toml</code>:</p>
+<pre><code class="language-toml"># Published crates checked for breaking changes
+- perl-parser (strict)
+- perl-lexer (strict)
+- perl-parser-core (strict)
+- perl-lsp (strict)
+
+# Internal crates excluded
+- xtask (build tooling)
+- perl-tdd-support (test utilities)
+- perl-parser-pest (deprecated)
+</code></pre>
+<h3 id="resources"><a class="header" href="#resources">Resources</a></h3>
+<ul>
+<li><strong>SemVer spec:</strong> https://semver.org/</li>
+<li><strong>cargo-semver-checks:</strong> https://github.com/obi1kenobi/cargo-semver-checks</li>
+<li><strong>Project stability policy:</strong> <code>docs/STABILITY.md</code></li>
+<li><strong>API stability guarantees:</strong> <code>docs/STABILITY.md#api-surface-stability</code></li>
+</ul>
 <h2 id="coding-standards"><a class="header" href="#coding-standards">Coding Standards</a></h2>
 <ul>
 <li><strong>Formatting:</strong> Use <code>cargo fmt --all</code> before committing</li>
@@ -11609,7 +11922,18 @@ cargo test -- --nocapture
 # Run determinism checks
 cargo test --test determinism_test
 </code></pre>
-<h2 id="documentation-1"><a class="header" href="#documentation-1">Documentation</a></h2>
+<h3 id="dead-code-detection"><a class="header" href="#dead-code-detection">Dead Code Detection</a></h3>
+<p>We use <code>cargo-machete</code> and <code>clippy</code> to identify unused dependencies and code.</p>
+<h4 id="check-for-dead-code-locally"><a class="header" href="#check-for-dead-code-locally">Check for dead code locally</a></h4>
+<pre><code class="language-bash">just dead-code
+</code></pre>
+<h4 id="handling-false-positives"><a class="header" href="#handling-false-positives">Handling False Positives</a></h4>
+<p>If a dependency is detected as unused but is actually required (e.g., used only via macros or in tests), add it to the ignore list in the crate’s <code>Cargo.toml</code>:</p>
+<pre><code class="language-toml">[package.metadata.cargo-machete]
+ignored = ["crate-name"]
+</code></pre>
+<p>For unreachable code warnings from clippy, use <code>#[allow(dead_code)]</code> with a comment explaining why it should be preserved.</p>
+<h3 id="documentation-1"><a class="header" href="#documentation-1">Documentation</a></h3>
 <ul>
 <li><strong>Public APIs</strong> must have documentation comments (<code>///</code>)</li>
 <li><strong>Modules</strong> should have module-level documentation (<code>//!</code>)</li>
@@ -14455,7 +14779,7 @@ cargo build -p perl-parser 2&gt;&amp;1 | grep "warning: missing documentation" |
 <h2 id="related-documentation-1"><a class="header" href="#related-documentation-1">Related Documentation</a></h2>
 <ul>
 <li><strong><a href="developer/MISSING_DOCUMENTATION_GUIDE.html">Missing Documentation Guide</a></strong> - Systematic 4-phase resolution strategy for 605+ violations</li>
-<li><strong><a href="developer/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.html">ADR-002: API Documentation Infrastructure</a></strong> - Implementation architecture and decisions</li>
+<li><strong><a href="developer/adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.html">ADR-002: API Documentation Infrastructure</a></strong> - Implementation architecture and decisions</li>
 <li><strong><a href="developer/COMPREHENSIVE_TESTING_GUIDE.html">Comprehensive Testing Guide</a></strong> - Complete test framework documentation</li>
 </ul>
 <p>For questions or clarification, refer to the test suite validation criteria and existing well-documented modules as examples.</p>
@@ -19582,7 +19906,7 @@ impl BuiltInFormatter {
 <li><strong>Complete</strong>: No direct integration</li>
 <li><strong>Analyze</strong>: No direct integration</li>
 </ul>
-<h3 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h3>
+<h3 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h3>
 <p>The provider requires workspace root URLs for proper module path resolution:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -19694,7 +20018,7 @@ let links = compute_links(uri, source, &amp;roots);
 <li><strong>Complete</strong>: No direct integration</li>
 <li><strong>Analyze</strong>: Test function detection uses naming convention heuristics</li>
 </ul>
-<h3 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h3>
+<h3 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h3>
 <p>No external configuration required. Integrates with workspace index for reference counting:</p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -19846,7 +20170,7 @@ for lens in &amp;mut lenses {
 <li><strong>Complete</strong>: No direct integration</li>
 <li><strong>Analyze</strong>: Type inference for Perl expressions (arrays, hashes, function return types)</li>
 </ul>
-<h3 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h3>
+<h3 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h3>
 <h4 id="inlayhintconfig"><a class="header" href="#inlayhintconfig"><code>InlayHintConfig</code></a></h4>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -20919,7 +21243,7 @@ let hints = provider.extract_range(ast, range);  // ~50% reduction
 <li><strong>Type Definition</strong>: Basic migration complete, position calculation improvements planned</li>
 <li><strong>Implementation</strong>: Fully migrated, workspace index integration ready</li>
 </ul>
-<h2 id="see-also-2"><a class="header" href="#see-also-2">See Also</a></h2>
+<h2 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h2>
 <ul>
 <li><a href="lsp/LSP_IMPLEMENTATION_GUIDE.html">LSP Implementation Guide</a> - Server architecture and request handling</li>
 <li><a href="lsp/WORKSPACE_NAVIGATION_GUIDE.html">Workspace Navigation Guide</a> - Cross-file navigation features</li>
@@ -24092,8 +24416,8 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <hr />
 <h2 id="at-a-glance"><a class="header" href="#at-a-glance">At a Glance</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Metric</th><th>Value</th><th>Target</th><th>Status</th></tr></thead><tbody>
-<tr><td><strong>Tier A Tests</strong></td><td>757 lib tests (discovered), 10 ignores (tracked)</td><td>100% pass</td><td>PASS</td></tr>
-<tr><td><strong>Tracked Test Debt</strong></td><td>1 (0 bug, 1 manual)</td><td>0</td><td>Near-zero</td></tr>
+<tr><td><strong>Tier A Tests</strong></td><td>1002 lib tests (discovered), 163 ignores (tracked)</td><td>100% pass</td><td>PASS</td></tr>
+<tr><td><strong>Tracked Test Debt</strong></td><td>2 (1 bug, 1 manual)</td><td>0</td><td>Near-zero</td></tr>
 </tbody></table>
 </div><!-- BEGIN: STATUS_METRICS_TABLE -->
 <p>| <strong>LSP Coverage</strong> | 100% (53/53 advertised features, <code>features.toml</code>) | 93%+ | In progress |</p>
@@ -24118,9 +24442,9 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
 <ul>
 <li><strong>LSP Coverage</strong>: 100% user-visible feature coverage (53/53 advertised features from <code>features.toml</code>)</li>
-<li><strong>Protocol Compliance</strong>: 100% overall LSP protocol support (88/88 including plumbing)</li>
-<li><strong>Parser Coverage</strong>: ~100% Perl 5 syntax via <code>tree-sitter-perl/test/corpus</code> (~611 sections) + <code>test_corpus/</code> (15 <code>.pl</code> files)</li>
-<li><strong>Test Status</strong>: 757 lib tests (Tier A), 10 ignores tracked (1 total tracked debt: 0 bug, 1 manual)</li>
+<li><strong>Protocol Compliance</strong>: 100% overall LSP protocol support (89/89 including plumbing)</li>
+<li><strong>Parser Coverage</strong>: ~100% Perl 5 syntax via <code>tree-sitter-perl/test/corpus</code> (~611 sections) + <code>test_corpus/</code> (21 <code>.pl</code> files)</li>
+<li><strong>Test Status</strong>: 1002 lib tests (Tier A), 163 ignores tracked (2 total tracked debt: 1 bug, 1 manual)</li>
 <li><strong>Docs (perl-parser)</strong>: missing_docs warnings = 0 (baseline 0)</li>
 <li><strong>Quality Metrics</strong>: 87% mutation score, &lt;50ms LSP response times, 931ns incremental parsing</li>
 <li><strong>Production Status</strong>: LSP server production-ready (<code>just ci-gate</code> passing)</li>
@@ -24176,7 +24500,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 </ol>
 <p><strong>Historical archives</strong>: See <code>docs/archive/status_snapshots/</code> for sprint logs and completion history.</p>
 <hr />
-<p><em>Last Updated: 2026-01-27 (narrative sections only; run <code>just status-update</code> to refresh metrics)</em>
+<p><em>Last Updated: 2026-01-28 (narrative sections only; run <code>just status-update</code> to refresh metrics)</em>
 <em>Canonical docs: <a href="reference/ROADMAP.html">ROADMAP.md</a>, <a href="reference/../features.toml">features.toml</a></em></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="perl-parser-project---roadmap"><a class="header" href="#perl-parser-project---roadmap">Perl Parser Project - Roadmap</a></h1>
 <blockquote>
@@ -24184,7 +24508,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <strong>Stale roadmaps</strong>: Archived at <code>docs/archive/roadmaps/</code>; retrieve from git history if needed.</p>
 </blockquote>
 <blockquote>
-<p><strong>Status (2026-01-27)</strong>: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.</p>
+<p><strong>Status (2026-01-28)</strong>: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.</p>
 <p><strong>Canonical receipt</strong>: <code>nix develop -c just ci-gate</code> must be green before merging.
 <strong>CI</strong> is intentionally optional/opt-in; the repo is local-first by design.</p>
 </blockquote>
@@ -24518,19 +24842,22 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <li>Performance: zero-allocation lookups + Arc<str> tokens (2026-01-23)</li>
 <li>Security: DAP/perldoc/perlcritic injection hardening (2026-01-23)</li>
 <li>VSCode: improved UX + command filtering (2026-01-23)</li>
+<li>Security: Multi-root workspace path traversal fix (PR #620, 2026-01-28)</li>
+<li>Performance: Scope analysis Rc cloning optimization (PR #621, 2026-01-28)</li>
+<li>VSCode: Organize Imports command + Status Menu (PR #609, 2026-01-28)</li>
 </ul>
 <hr />
 <h2 id="lsp-feature-implementation"><a class="header" href="#lsp-feature-implementation">LSP Feature Implementation</a></h2>
 <p>The LSP compliance table is now auto-generated. Source of truth: <code>features.toml</code></p>
 <!-- BEGIN: COMPLIANCE_TABLE -->
 <div class="table-wrapper"><table><thead><tr><th>Area</th><th>Implemented</th><th>Total</th><th>Coverage</th></tr></thead><tbody>
-<tr><td>debug</td><td>1</td><td>2</td><td>50%</td></tr>
+<tr><td>debug</td><td>2</td><td>2</td><td>100%</td></tr>
 <tr><td>notebook</td><td>2</td><td>2</td><td>100%</td></tr>
 <tr><td>protocol</td><td>9</td><td>9</td><td>100%</td></tr>
 <tr><td>text_document</td><td>41</td><td>41</td><td>100%</td></tr>
 <tr><td>window</td><td>9</td><td>9</td><td>100%</td></tr>
 <tr><td>workspace</td><td>26</td><td>26</td><td>100%</td></tr>
-<tr><td><strong>Overall</strong></td><td><strong>88</strong></td><td><strong>89</strong></td><td><strong>99%</strong></td></tr>
+<tr><td><strong>Overall</strong></td><td><strong>89</strong></td><td><strong>89</strong></td><td><strong>100%</strong></td></tr>
 </tbody></table>
 </div><!-- END: COMPLIANCE_TABLE -->
 <p><strong>v0.9.0 Metrics</strong>:</p>
@@ -24556,14 +24883,14 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <p>See <code>docs/archive/roadmaps/</code> for historical roadmap versions.</p>
 <p>Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.9/v1.0 milestones above.</p>
 <hr />
-<h2 id="resources"><a class="header" href="#resources">Resources</a></h2>
+<h2 id="resources-1"><a class="header" href="#resources-1">Resources</a></h2>
 <p><strong>Start here:</strong> <a href="reference/INDEX.html"><code>INDEX.md</code></a> - Routes you to the right doc.</p>
 <ul>
 <li><strong><a href="reference/CURRENT_STATUS.html">Current Status</a></strong> - Computed metrics (the only place with numbers)</li>
 <li><strong><a href="reference/../features.toml">features.toml</a></strong> - Canonical capability definitions</li>
 <li><strong><a href="reference/LESSONS.html">LESSONS.md</a></strong> - What went wrong and what changed</li>
 </ul>
-<!-- Last Updated: 2026-01-27 -->
+<!-- Last Updated: 2026-01-28 -->
 <div style="break-before: page; page-break-before: always;"></div><h1 id="milestones"><a class="header" href="#milestones">Milestones</a></h1>
 <blockquote>
 <p><strong>Source of Truth</strong>: GitHub Milestones at https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestones</p>
@@ -30594,7 +30921,7 @@ cargo audit -p perl-dap
 cpanm Perl::LanguageServer
 </code></pre>
 <p>Ensure the <code>perl</code> executable used by VS Code has access to this module.</p>
-<h2 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h2>
+<h2 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h2>
 <p>You can configure debugging in VS Code using <code>launch.json</code>.</p>
 <h3 id="launch-configuration-1"><a class="header" href="#launch-configuration-1">Launch Configuration</a></h3>
 <p>To launch a Perl script in debug mode:</p>
@@ -33631,7 +33958,7 @@ technical_debt:
 <li>Claims without receipts</li>
 <li>Hiding problems (log them instead)</li>
 </ul>
-<h2 id="see-also-3"><a class="header" href="#see-also-3">See Also</a></h2>
+<h2 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h2>
 <ul>
 <li><a href="process/INDEX.html"><code>INDEX.md</code></a> - Documentation front door</li>
 <li><a href="process/LESSONS.html"><code>LESSONS.md</code></a> - Wrongness log</li>
@@ -33746,7 +34073,7 @@ Each entry follows the format: <strong>wrong → evidence → fix → prevention
 <li>Link to relevant PRs/commits</li>
 </ol>
 <p>Keep entries short and falsifiable. The point is system improvement, not blame.</p>
-<h2 id="see-also-4"><a class="header" href="#see-also-4">See Also</a></h2>
+<h2 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h2>
 <ul>
 <li><a href="process/AGENTIC_DEV.html"><code>AGENTIC_DEV.md</code></a> - Development model and budget definitions</li>
 <li><a href="process/FORENSICS_SCHEMA.html"><code>FORENSICS_SCHEMA.md</code></a> - PR archaeology dossier template</li>
@@ -34481,7 +34808,7 @@ git commit -m "sync: regenerate docs from receipts"
 Efficiency tells you how much it cost to achieve that quality.
 </code></pre>
 <p>A PR with excellent quality and high DevLT is preferable to a PR with poor quality and low DevLT.</p>
-<h2 id="see-also-5"><a class="header" href="#see-also-5">See Also</a></h2>
+<h2 id="see-also-6"><a class="header" href="#see-also-6">See Also</a></h2>
 <ul>
 <li><a href="process/DEVLT_ESTIMATION.html"><code>DEVLT_ESTIMATION.md</code></a> - Budget estimation</li>
 <li><a href="process/METRICS_PROVENANCE.html"><code>METRICS_PROVENANCE.md</code></a> - Provenance schema</li>

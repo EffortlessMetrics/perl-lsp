@@ -169,6 +169,117 @@ chmod +x ~/.cargo/bin/perl-lsp
 
 4. Check LSP logs for errors - see [EDITOR_SETUP.md](EDITOR_SETUP.md#no-diagnostics)
 
+### Completion Not Working
+
+**Problem**: No completions appear when typing.
+
+**Solutions**:
+
+1. Ensure you're in a valid completion context (after `$`, `@`, `%`, or mid-identifier)
+
+2. Check the file is recognized as Perl in your editor
+
+3. Try manually triggering completion:
+   - VS Code: `Ctrl+Space`
+   - Neovim: `<C-x><C-o>`
+   - Emacs: `M-TAB` or `C-M-i`
+
+4. Verify completion cap hasn't been reached:
+   ```json
+   {
+     "perl": {
+       "limits": {
+         "completionCap": 200
+       }
+     }
+   }
+   ```
+
+### Go-to-Definition Not Working
+
+**Problem**: "Go to Definition" doesn't find the symbol.
+
+**Solutions**:
+
+1. Ensure the definition is in an indexed file:
+   - File must be in workspace or `includePaths`
+   - File count must be under `maxIndexedFiles` limit
+
+2. Check include paths are configured:
+   ```json
+   {
+     "perl": {
+       "workspace": {
+         "includePaths": ["lib", ".", "local/lib/perl5"]
+       }
+     }
+   }
+   ```
+
+3. For CPAN modules, enable system @INC (if safe):
+   ```json
+   {
+     "perl": {
+       "workspace": {
+         "useSystemInc": true
+       }
+     }
+   }
+   ```
+
+4. Verify the symbol is actually defined (not just imported)
+
+### References Returning Incomplete Results
+
+**Problem**: "Find References" doesn't show all occurrences.
+
+**Solutions**:
+
+1. Check the references cap:
+   ```json
+   {
+     "perl": {
+       "limits": {
+         "referencesCap": 1000
+       }
+     }
+   }
+   ```
+
+2. Ensure all relevant files are indexed (check `maxIndexedFiles`)
+
+3. Wait for workspace indexing to complete (check progress notification)
+
+4. Check the reference search deadline:
+   ```json
+   {
+     "perl": {
+       "limits": {
+         "referenceSearchDeadlineMs": 5000
+       }
+     }
+   }
+   ```
+
+### Formatting Not Working
+
+**Problem**: Document formatting doesn't change the file.
+
+**Solutions**:
+
+1. Verify Perl::Tidy is installed:
+   ```bash
+   perl -e 'use Perl::Tidy;'
+   ```
+
+2. Check for `.perltidyrc` in your project or home directory
+
+3. Verify formatting is enabled in editor settings
+
+4. Check for errors in the LSP log - formatting errors are often reported there
+
+5. Try manual formatting via command palette to see error messages
+
 ## Parser Issues
 
 ### Incorrect Syntax Highlighting
@@ -244,6 +355,68 @@ For detailed editor configuration and troubleshooting:
 - [Helix setup](EDITOR_SETUP.md#helix)
 - [General troubleshooting](EDITOR_SETUP.md#troubleshooting)
 
+### VS Code: Extension Not Activating
+
+**Problem**: The perl-lsp extension doesn't activate on Perl files.
+
+**Solutions**:
+
+1. Check file association in VS Code bottom status bar (should say "Perl")
+
+2. Manually set language mode: `Ctrl+K M` then select "Perl"
+
+3. Verify extension is installed and enabled:
+   ```bash
+   code --list-extensions | grep perl
+   ```
+
+4. Check VS Code Output panel for errors (View > Output > select "Perl Language Server")
+
+### Neovim: LSP Not Attaching
+
+**Problem**: `:LspInfo` shows no client attached.
+
+**Solutions**:
+
+1. Verify filetype is recognized:
+   ```vim
+   :set filetype?
+   " Should output: filetype=perl
+   ```
+
+2. Check lspconfig is loaded:
+   ```vim
+   :lua print(vim.inspect(require('lspconfig').perl_lsp))
+   ```
+
+3. Manually start the client:
+   ```vim
+   :LspStart perl_lsp
+   ```
+
+4. Check `:LspLog` for errors
+
+### Emacs: eglot Fails to Connect
+
+**Problem**: eglot reports connection failure.
+
+**Solutions**:
+
+1. Check the `*eglot stderr*` buffer for errors
+
+2. Verify the command works in shell:
+   ```bash
+   perl-lsp --stdio
+   ```
+
+3. Try lsp-mode as an alternative:
+   ```elisp
+   (require 'lsp-mode)
+   (add-hook 'perl-mode-hook #'lsp)
+   ```
+
+4. Check `*lsp-log*` buffer for detailed errors
+
 ## Getting Help
 
 1. Check existing issues: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues
@@ -258,3 +431,11 @@ For detailed editor configuration and troubleshooting:
    - Rust version (`rustc --version`)
    - OS and editor
    - Minimal code reproduction
+
+## See Also
+
+- [FAQ.md](FAQ.md) - Frequently asked questions
+- [GETTING_STARTED.md](GETTING_STARTED.md) - Installation and setup guide
+- [EDITOR_SETUP.md](EDITOR_SETUP.md) - Detailed editor configurations
+- [CONFIG.md](CONFIG.md) - All configuration options
+- [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) - Current parser limitations

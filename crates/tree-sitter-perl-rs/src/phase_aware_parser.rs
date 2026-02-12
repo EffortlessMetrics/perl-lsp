@@ -6,9 +6,9 @@
 
 use crate::anti_pattern_detector::{AntiPattern, Diagnostic, Location, Severity};
 use crate::partial_parse_ast::{ExtendedAstNode, RuntimeContext};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PerlPhase {
@@ -61,12 +61,21 @@ pub enum PhaseAction {
     PartialParse { warning: String },             // Parse with warnings
 }
 
-static PHASE_BLOCK_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?m)^\s*(BEGIN|CHECK|INIT|END)\s*\{").unwrap());
+#[allow(clippy::unwrap_used)]
+static PHASE_BLOCK_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?m)^\s*(BEGIN|CHECK|INIT|END)\s*\{").unwrap());
 
-static EVAL_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\beval\s*["'{]"#).unwrap());
+#[allow(clippy::unwrap_used)]
+static EVAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"\beval\s*["'{]"#).unwrap());
 
-static USE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?m)^\s*use\s+").unwrap());
+#[allow(clippy::unwrap_used)]
+static USE_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^\s*use\s+").unwrap());
+
+impl Default for PhaseAwareParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl PhaseAwareParser {
     pub fn new() -> Self {
@@ -81,29 +90,28 @@ impl PhaseAwareParser {
     /// Analyze code and identify phase transitions
     pub fn analyze_phases(&mut self, code: &str) -> Vec<PhaseTransition> {
         let mut transitions = Vec::new();
-        let mut line_num = 0;
 
-        for line in code.lines() {
-            line_num += 1;
+        for (line_idx, line) in code.lines().enumerate() {
+            let line_num = line_idx + 1;
 
             // Check for phase blocks
-            if let Some(cap) = PHASE_BLOCK_PATTERN.captures(line) {
-                if let Some(phase_name) = cap.get(1) {
-                    let phase = match phase_name.as_str() {
-                        "BEGIN" => PerlPhase::Begin,
-                        "CHECK" => PerlPhase::Check,
-                        "INIT" => PerlPhase::Init,
-                        "END" => PerlPhase::End,
-                        _ => continue,
-                    };
+            if let Some(cap) = PHASE_BLOCK_PATTERN.captures(line)
+                && let Some(phase_name) = cap.get(1)
+            {
+                let phase = match phase_name.as_str() {
+                    "BEGIN" => PerlPhase::Begin,
+                    "CHECK" => PerlPhase::Check,
+                    "INIT" => PerlPhase::Init,
+                    "END" => PerlPhase::End,
+                    _ => continue,
+                };
 
-                    transitions.push(PhaseTransition {
-                        from: self.current_phase.clone(),
-                        to: phase.clone(),
-                        line: line_num,
-                        reason: format!("{} block", phase_name.as_str()),
-                    });
-                }
+                transitions.push(PhaseTransition {
+                    from: self.current_phase.clone(),
+                    to: phase.clone(),
+                    line: line_num,
+                    reason: format!("{} block", phase_name.as_str()),
+                });
             }
 
             // Check for eval

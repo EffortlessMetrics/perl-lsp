@@ -165,11 +165,7 @@ impl ContextSensitiveLexer {
                 return Some(content);
             }
 
-            if allow_escape && ch == '\\' && !escaped {
-                escaped = true;
-            } else {
-                escaped = false;
-            }
+            escaped = allow_escape && ch == '\\' && !escaped;
 
             content.push(ch);
             self.next_char();

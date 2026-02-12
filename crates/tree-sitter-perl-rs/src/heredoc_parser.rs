@@ -338,7 +338,7 @@ impl<'a> HeredocCollector<'a> {
     }
 
     /// Collect content for all heredoc declarations
-    pub fn collect(&self, declarations: &mut Vec<HeredocDeclaration>) {
+    pub fn collect(&self, declarations: &mut [HeredocDeclaration]) {
         let start_time = Instant::now();
         // Map declaration line to heredocs declared on that line
         let mut line_to_heredocs: HashMap<usize, Vec<usize>> = HashMap::new();
@@ -355,7 +355,7 @@ impl<'a> HeredocCollector<'a> {
             }
 
             // Find where the statement containing the heredoc actually ends
-            let statement_end_line = find_statement_end_line(&self._input, line_num);
+            let statement_end_line = find_statement_end_line(self._input, line_num);
             // Heredoc content starts on the line after the statement ends
             // Note: statement_end_line is 1-based, but lines array is 0-based
             // So we use statement_end_line as-is because:

@@ -92,7 +92,7 @@ impl ExtendedAstNode {
                 format!(
                     "(unparseable ({:?}) {:?} ; reason: {})",
                     pattern_type(pattern),
-                    truncate_string(&raw_text, 50),
+                    truncate_string(raw_text, 50),
                     reason
                 )
             }
@@ -183,6 +183,12 @@ fn truncate_string(s: &str, max_len: usize) -> String {
 /// Builder for creating ExtendedAstNode with proper diagnostics
 pub struct ExtendedAstBuilder {
     diagnostics: Vec<Diagnostic>,
+}
+
+impl Default for ExtendedAstBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExtendedAstBuilder {

@@ -61,6 +61,10 @@ pub enum ParseError {
     /// Scanner error occurred
     #[error("Scanner error: {0}")]
     ScannerError(String),
+
+    /// Language loading failed
+    #[error("Failed to load language")]
+    LanguageLoadFailed,
 }
 
 /// Result type for parsing operations

@@ -41,18 +41,11 @@ perl-lsp-navigation = { workspace = true }
 perl-lsp-rename = { workspace = true }
 perl-lsp-semantic-tokens = { workspace = true }
 perl-lsp-tooling = { workspace = true }
-thiserror = "2.0.18"
-serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 regex = "1.12.2"
-lazy_static = "1.5.0"
 lsp-types = { version = "0.97.0", optional = true }
-tracing = "0.1.44"
 url = "2.5.8"
 rustc-hash = "2.1.1"
-md5 = "0.8.0"
-phf = { version = "0.13.1", features = ["macros"] }
-parking_lot = "0.12.5"
 # Core dependencies for position mapping (unconditional, all targets)
 ropey = "1.6.1"
 

@@ -1,57 +1,51 @@
 //! Performance optimizations for large projects
 
+use moka::sync::Cache;
 use perl_parser_core::Node;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Cache for parsed ASTs with TTL.
 ///
 /// Stores parsed ASTs with content hashing to avoid re-parsing unchanged files.
+/// Uses a high-performance concurrent cache with automatic eviction.
 pub struct AstCache {
-    /// Thread-safe cache storage
-    cache: Arc<Mutex<HashMap<String, CachedAst>>>,
-    /// Maximum number of entries before eviction
-    max_size: usize,
-    /// Time-to-live for cache entries
-    ttl: Duration,
+    /// Concurrent cache storage with TTL and LRU eviction
+    cache: Cache<String, CachedAst>,
 }
 
 /// A cached AST entry with metadata
+#[derive(Clone)]
 struct CachedAst {
     /// The cached AST node
     ast: Arc<Node>,
     /// Hash of the source content for validation
     content_hash: u64,
-    /// Timestamp of last access for LRU eviction
-    last_accessed: Instant,
 }
 
 impl AstCache {
     /// Create a new AST cache with the given size limit and TTL
     pub fn new(max_size: usize, ttl_seconds: u64) -> Self {
-        Self {
-            cache: Arc::new(Mutex::new(HashMap::new())),
-            max_size,
-            ttl: Duration::from_secs(ttl_seconds),
-        }
+        let cache = Cache::builder()
+            .max_capacity(max_size as u64)
+            .time_to_live(Duration::from_secs(ttl_seconds))
+            .build();
+
+        Self { cache }
     }
 
     /// Get cached AST if still valid
     pub fn get(&self, uri: &str, content: &str) -> Option<Arc<Node>> {
         let content_hash = Self::hash_content(content);
 
-        let mut cache = self.cache.lock().ok()?;
-        if let Some(cached) = cache.get_mut(uri) {
-            let age = cached.last_accessed.elapsed();
-
-            // Check if cache is still valid
-            if age < self.ttl && cached.content_hash == content_hash {
-                cached.last_accessed = Instant::now();
+        if let Some(cached) = self.cache.get(uri) {
+            // Check if content hash matches (skip if content changed)
+            if cached.content_hash == content_hash {
                 return Some(Arc::clone(&cached.ast));
             } else {
                 // Remove stale entry
-                cache.remove(uri);
+                self.cache.remove(uri);
             }
         }
         None
@@ -59,37 +53,17 @@ impl AstCache {
 
     /// Store AST in cache.
     ///
-    /// Evicts the oldest entry if the cache is full.
+    /// Moka handles eviction automatically when capacity is reached.
     pub fn put(&self, uri: String, content: &str, ast: Arc<Node>) {
         let content_hash = Self::hash_content(content);
-
-        let Ok(mut cache) = self.cache.lock() else {
-            return; // Skip caching if lock is poisoned
-        };
-
-        // Evict oldest entries if cache is full
-        if cache.len() >= self.max_size {
-            let oldest_key =
-                cache.iter().min_by_key(|(_, v)| v.last_accessed).map(|(k, _)| k.clone());
-
-            if let Some(key) = oldest_key {
-                cache.remove(&key);
-            }
-        }
-
-        cache.insert(uri, CachedAst { ast, content_hash, last_accessed: Instant::now() });
+        self.cache.insert(uri, CachedAst { ast, content_hash });
     }
 
     /// Clear expired entries.
     ///
-    /// Removes entries older than the TTL.
+    /// Moka handles expiration automatically, but this method is kept for API compatibility.
     pub fn cleanup(&self) {
-        let Ok(mut cache) = self.cache.lock() else {
-            return; // Skip cleanup if lock is poisoned
-        };
-        let now = Instant::now();
-
-        cache.retain(|_, cached| now.duration_since(cached.last_accessed) < self.ttl);
+        self.cache.run_pending_tasks();
     }
 
     fn hash_content(content: &str) -> u64 {
@@ -456,42 +430,6 @@ mod tests {
         // Fuzzy search
         let results = index.search_fuzzy("user name");
         assert!(results.contains(&"get_user_name".to_string()));
-    }
-
-    #[test]
-    fn test_cache_mutex_poisoning_recovery() {
-        use std::panic;
-
-        // Create a cache and verify it works normally
-        let cache = Arc::new(AstCache::new(10, 60));
-        let ast = Arc::new(Node::new(
-            perl_parser_core::NodeKind::Program { statements: vec![] },
-            perl_parser_core::SourceLocation { start: 0, end: 0 },
-        ));
-
-        // Normal operation should work
-        cache.put("test.pl".to_string(), "content", ast.clone());
-        assert!(cache.get("test.pl", "content").is_some());
-
-        // Simulate mutex poisoning by panicking while holding the lock
-        let cache_clone = Arc::clone(&cache);
-        let handle = std::thread::spawn(move || {
-            panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                let _lock = cache_clone.cache.lock();
-                panic!("Simulated panic while holding lock");
-            }))
-        });
-        let _ = handle.join();
-
-        // After poisoning, operations should gracefully degrade (return None/skip)
-        // get() should return None instead of panicking
-        assert!(cache.get("test.pl", "content").is_none());
-
-        // put() should skip caching instead of panicking
-        cache.put("test2.pl".to_string(), "content2", ast.clone());
-
-        // cleanup() should skip instead of panicking
-        cache.cleanup();
     }
 
     #[test]
