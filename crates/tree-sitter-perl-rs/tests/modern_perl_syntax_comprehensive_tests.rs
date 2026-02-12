@@ -603,7 +603,10 @@ mod modern_perl_syntax {
 
         let chained_deref_cases = vec![
             // Simple chaining
-            ("my $value = $ref->$*->method();", &["postfix_deref", "method_call", "chained_call"][..]),
+            (
+                "my $value = $ref->$*->method();",
+                &["postfix_deref", "method_call", "chained_call"][..],
+            ),
             ("my @items = $ref->@*->@*;", &["postfix_deref", "array_deref", "chained_deref"]),
             // Complex chaining
             ("my %result = $ref->@*->[0]->%*;", &["postfix_deref", "array_access", "hash_deref"]),
