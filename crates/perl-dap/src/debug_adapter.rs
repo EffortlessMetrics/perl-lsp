@@ -128,6 +128,7 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "readpipe",
                 "syscall",
                 "open",
+                "sysopen",
                 "close",
                 "print",
                 "say",
@@ -2676,6 +2677,22 @@ mod tests {
             "CORE::GLOBAL::exit",
             "$obj->print",
             "$obj->system('ls')",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn safe_eval_blocks_sysopen() {
+        // Verify sysopen is blocked as it can truncate files (O_TRUNC) or overwrite them
+        // This is a reproduction test case for a missing security check
+        let blocked = [
+            "sysopen $fh, 'file', 1",
+            "sysopen($fh, 'file', 1)",
+            "CORE::sysopen $fh, 'file', 1",
         ];
 
         for expr in blocked {
