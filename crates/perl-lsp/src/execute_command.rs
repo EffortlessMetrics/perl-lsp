@@ -93,10 +93,12 @@
 
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 use crate::protocol::JsonRpcError;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 
 // Cross-platform helpers for synthesizing `ExitStatus` in tests/mocks.
 #[cfg(any(test, doctest))]
@@ -133,6 +135,8 @@ compile_error!("Add raw_exit() mapping for this platform.");
 fn mock_status(code: i32) -> std::process::ExitStatus {
     std::process::ExitStatus::from_raw(raw_exit(code))
 }
+
+static SUBROUTINE_NAME_RE: OnceLock<Regex> = OnceLock::new();
 
 /// Commands supported by the Perl LSP server for test execution and code analysis.
 ///
@@ -404,8 +408,34 @@ impl ExecuteCommandProvider {
         Ok(self.format_command_result(result, Some(("command", command_name.into()))))
     }
 
+    /// Validate subroutine name for security
+    fn validate_subroutine_name(&self, sub_name: &str) -> Result<(), String> {
+        // Explicitly block CORE:: namespace to prevent execution of built-in functions
+        // This covers CORE::GLOBAL:: as well
+        if sub_name.starts_with("CORE::") {
+            return Err(format!("Security error: Access to CORE namespace denied: {}", sub_name));
+        }
+
+        let re = SUBROUTINE_NAME_RE.get_or_init(|| {
+            // Regex to match valid Perl identifiers:
+            // - Must start with a letter or underscore
+            // - Can contain letters, numbers, and underscores
+            // - Can be package-qualified with :: separator
+            Regex::new(r"^[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*$").expect("Failed to compile regex")
+        });
+
+        if !re.is_match(sub_name) {
+            return Err(format!("Invalid subroutine name: {}", sub_name));
+        }
+
+        Ok(())
+    }
+
     /// Run a specific test subroutine with enhanced error handling
     fn run_test_sub(&self, file_path: &Path, sub_name: &str) -> Result<Value, String> {
+        // Security check: validate subroutine name before execution
+        self.validate_subroutine_name(sub_name)?;
+
         // Enhanced subroutine invocation with better error detection
         // Use @ARGV to safely pass file path and subroutine name preventing code injection
         let perl_code = r#"

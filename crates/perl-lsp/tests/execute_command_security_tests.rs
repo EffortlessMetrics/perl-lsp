@@ -53,10 +53,8 @@ fn test_run_test_sub_file_path_injection() -> Result<(), Box<dyn Error>> {
 
 /// Test that run_test_sub is protected against code injection via sub_name.
 ///
-/// Note: The sub_name is passed via @ARGV, so the malicious string is treated
-/// as a literal subroutine name to look up, not as code to execute. The error
-/// message will contain the literal name (safe behavior), but the injected
-/// code will NOT be executed.
+/// Note: The sub_name is now strictly validated to be a valid Perl identifier.
+/// Attempts to inject code or use invalid characters are rejected before execution.
 #[test]
 fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
     let provider = ExecuteCommandProvider::new();
@@ -66,7 +64,7 @@ fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
     std::fs::write(test_file, "sub safe_sub { print 'SAFE_SUB_EXECUTED'; }").ok();
 
     // This payload would execute code if string interpolation was used.
-    // With the fix (using @ARGV), it's treated as a literal subroutine name.
+    // It is now rejected by the strict subroutine name validation regex.
     let malicious_sub_name = "safe_sub(); print 'INJECTED_CODE_RAN'";
 
     let result = provider.execute_command(
@@ -77,29 +75,104 @@ fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
     // Clean up
     std::fs::remove_file(test_file).ok();
 
-    assert!(result.is_ok(), "Command should not fail to spawn");
-    let val = result?;
-    let output = val["output"].as_str().ok_or("Missing 'output' field")?;
-
-    // Key assertions:
-    // 1. The injected print statement should NOT have executed
+    // With stricter validation, this is now rejected as an invalid subroutine name
+    assert!(result.is_err(), "Malicious subroutine name should be rejected by validation");
+    let err = result.err().ok_or("Expected error")?;
     assert!(
-        !output.contains("INJECTED_CODE_RAN"),
-        "Vulnerability: code injection via sub_name succeeded! Output: {}",
-        output
+        err.contains("Invalid subroutine name"),
+        "Error should indicate invalid name validation failure: {}",
+        err
     );
 
-    // 2. The safe_sub should NOT have been called either (the malicious name
-    //    includes "safe_sub()" but that should be treated literally, not executed)
-    assert!(
-        !output.contains("SAFE_SUB_EXECUTED"),
-        "Unexpected: safe_sub was called despite malicious sub_name. Output: {}",
-        output
+    Ok(())
+}
+
+/// Test that run_test_sub blocks access to CORE:: namespace.
+///
+/// This prevents arbitrary execution of internal Perl built-ins via the test runner.
+#[test]
+fn test_run_test_sub_blocks_core_functions() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+    let temp_dir = TempDir::new()?;
+    let test_file = temp_dir.path().join("test_core.pl");
+    std::fs::write(&test_file, "1;")?;
+
+    // Try to call CORE::time
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![
+            Value::String(test_file.to_string_lossy().to_string()),
+            Value::String("CORE::time".to_string())
+        ],
     );
 
-    // 3. The command should have failed because no subroutine with that literal name exists
-    let success = val["success"].as_bool().ok_or("Missing 'success' field")?;
-    assert!(!success, "Command should have failed (subroutine not found)");
+    assert!(result.is_err(), "CORE::time should be rejected");
+    let err = result.err().ok_or("Expected error")?;
+    assert!(
+        err.contains("Security error") && err.contains("CORE namespace denied"),
+        "Error should indicate CORE namespace denial: {}",
+        err
+    );
+
+    // Try to call CORE::GLOBAL::exit
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![
+            Value::String(test_file.to_string_lossy().to_string()),
+            Value::String("CORE::GLOBAL::exit".to_string())
+        ],
+    );
+
+    assert!(result.is_err(), "CORE::GLOBAL::exit should be rejected");
+    let err = result.err().ok_or("Expected error")?;
+    assert!(
+        err.contains("Security error") && err.contains("CORE namespace denied"),
+        "Error should indicate CORE namespace denial: {}",
+        err
+    );
+
+    Ok(())
+}
+
+/// Test that run_test_sub accepts valid subroutine names.
+#[test]
+fn test_run_test_sub_valid_names() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+    let temp_dir = TempDir::new()?;
+    let test_file = temp_dir.path().join("test_valid.pl");
+    // We don't actually need the sub to run successfully, just pass validation
+    std::fs::write(&test_file, "sub My::Test::run { 1 }")?;
+
+    let valid_names = vec![
+        "simple_name",
+        "My::Package::sub_name",
+        "Test::More::ok",
+        "UPPER_CASE",
+        "mixed_Case_123",
+    ];
+
+    for name in valid_names {
+        // We expect it to try to run. Since the file doesn't define most of these,
+        // it might return success=false (runtime error) or success=true (if we defined it),
+        // but it should NOT return a validation error (Err).
+        let result = provider.execute_command(
+            "perl.runTestSub",
+            vec![
+                Value::String(test_file.to_string_lossy().to_string()),
+                Value::String(name.to_string())
+            ],
+        );
+
+        if let Err(e) = &result {
+             // If we get an error, make sure it's NOT a validation error
+             if e.contains("Invalid subroutine name") || e.contains("Security error") {
+                 panic!("Valid name '{}' was rejected: {}", name, e);
+             }
+             // Other errors (like perl command failing) are acceptable for this test context
+        }
+        // If it's Ok, then validation passed.
+    }
+
     Ok(())
 }
 
