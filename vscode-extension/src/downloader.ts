@@ -349,8 +349,14 @@ export class BinaryDownloader {
         };
     }
     
-    private async downloadFile(url: string, dest: string, timeoutMs = 30000): Promise<void> {
+    private async downloadFile(url: string, dest: string, timeoutMs = 30000, redirectCount = 0): Promise<void> {
         return new Promise((resolve, reject) => {
+            // Security check: Limit redirects to prevent infinite loops
+            if (redirectCount >= 5) {
+                reject(new Error('Too many redirects'));
+                return;
+            }
+
             // Security check: Enforce HTTPS for remote URLs to prevent MITM attacks
             try {
                 const parsedUrl = new URL(url);
@@ -407,12 +413,20 @@ export class BinaryDownloader {
                     file.destroy();
                     const newUrl = response.headers.location;
                     if (newUrl) {
-                        // Security check: Prevent downgrade from HTTPS to HTTP
-                        if (isHttps && newUrl.toLowerCase().startsWith('http:') && !newUrl.toLowerCase().startsWith('https:')) {
-                            reject(new Error('Security violation: Redirect from HTTPS to HTTP prevented'));
-                            return;
+                        try {
+                            // Resolve relative URLs and update redirect count
+                            const resolvedUrl = new URL(newUrl, url).toString();
+
+                            // Security check: Prevent downgrade from HTTPS to HTTP
+                            if (isHttps && resolvedUrl.toLowerCase().startsWith('http:') && !resolvedUrl.toLowerCase().startsWith('https:')) {
+                                reject(new Error('Security violation: Redirect from HTTPS to HTTP prevented'));
+                                return;
+                            }
+
+                            this.downloadFile(resolvedUrl, dest, timeoutMs, redirectCount + 1).then(resolve).catch(reject);
+                        } catch (e) {
+                            reject(new Error(`Invalid redirect URL: ${newUrl}`));
                         }
-                        this.downloadFile(newUrl, dest, timeoutMs).then(resolve).catch(reject);
                         return;
                     }
                 }
