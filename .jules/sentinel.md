@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-01-29 - [Perl Package Separator Bypass]
+**Vulnerability:** The Perl Debug Adapter's `validate_safe_expression` function relied on a simple single-quote check (`is_in_single_quotes`) to ignore string literals, failing to account for Perl's archaic package separator `'` (e.g., `CORE'system`). This allowed bypassing security checks by disguising dangerous built-ins as package-qualified calls that looked like strings to the validator.
+**Learning:** Security validators must account for obscure or legacy syntax features of the target language. Perl's `'` package separator is a classic example of syntactic ambiguity that can confuse security parsers.
+**Prevention:** Implement context-aware parsing or robust heuristics to distinguish between delimiters and separators. When in doubt, fail closed (treat ambiguous cases as unsafe). Also, explicitly test for known obscure syntax variations.
