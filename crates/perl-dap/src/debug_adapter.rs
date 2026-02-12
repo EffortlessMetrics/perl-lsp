@@ -169,7 +169,12 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "link", // Code loading/execution
                 "eval",
                 "require",
-                "do", // Tie mechanism (can execute arbitrary code)
+                "do",
+                "use",
+                "no",
+                "package",
+                "goto",
+                // Tie mechanism (can execute arbitrary code)
                 "tie",
                 "untie", // Network
                 "socket",
@@ -1824,10 +1829,15 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
     let mut in_sq = false;
     let mut escaped = false;
 
+    // Track previous word logic to differentiate package separator from quote
+    let mut prev_is_word = false;
+    let mut current_word_start: Option<usize> = None;
+
     for (i, ch) in s.char_indices() {
         if i >= idx {
             break;
         }
+
         if in_sq {
             if escaped {
                 escaped = false;
@@ -1836,8 +1846,42 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
             } else if ch == '\'' {
                 in_sq = false;
             }
-        } else if ch == '\'' {
-            in_sq = true;
+        } else {
+            // Not in single quotes
+            if ch == '\'' {
+                // Check if it's a package separator or a quote
+                let is_separator = if prev_is_word {
+                    // Check the word that just ended
+                    if let Some(start) = current_word_start {
+                        let word = &s[start..i];
+                        // List of quote-like operators that can use ' as delimiter
+                        match word {
+                            "q" | "qq" | "qx" | "qw" | "m" | "qr" | "s" | "tr" | "y" => false, // It's a quote
+                            _ => true, // It's a separator (e.g. CORE'system, Foo'bar)
+                        }
+                    } else {
+                        // Should be unreachable if prev_is_word is true
+                        true
+                    }
+                } else {
+                    // Not preceded by word char -> Quote (e.g. "print 'foo'")
+                    false
+                };
+
+                if !is_separator {
+                    in_sq = true;
+                }
+            }
+
+            // Update word tracking
+            if ch.is_alphanumeric() || ch == '_' {
+                if !prev_is_word {
+                    current_word_start = Some(i);
+                }
+                prev_is_word = true;
+            } else {
+                prev_is_word = false;
+            }
         }
     }
 
@@ -3214,5 +3258,25 @@ DB<1>"#;
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
         }
+    }
+
+    #[test]
+    fn test_security_repro_core_system_bypass() {
+        // This test case demonstrates the vulnerability where CORE'system bypasses checks
+        // because ' is treated as a quote delimiter instead of a package separator.
+
+        let bypass_expr = "CORE'system('ls')";
+        let result = validate_safe_expression(bypass_expr);
+
+        // If the vulnerability exists, result will be None (allowed).
+        // If fixed, it should be Some(error).
+        assert!(result.is_some(), "CORE'system should be blocked, but was allowed!");
+    }
+
+    #[test]
+    fn test_security_repro_use_bypass() {
+        let bypass_expr = "use Socket; Socket::connect(...)";
+        let result = validate_safe_expression(bypass_expr);
+        assert!(result.is_some(), "use statement should be blocked!");
     }
 }
