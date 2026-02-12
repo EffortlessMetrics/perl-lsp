@@ -102,14 +102,14 @@ slow_tests = []  # Enable slow stress tests (deep nesting, etc.)
 [dev-dependencies]
 assert_cmd = "2.1.2"
 insta = { version = "1.46.1", features = ["yaml"] }
-criterion = "0.8.1"
+criterion = "0.8.2"
 parking_lot = "0.12.5"
 predicates = "3.1.3"
 pretty_assertions = "1.4.1"
 regex = "1.12.2"
 serial_test = "3.3.1"
 tempfile = "3.24.0"
-proptest = "1.9.0"
+proptest = "1.10.0"
 rstest = "0.26.1"
 perl-corpus = { workspace = true }
 which = "8.0.0"

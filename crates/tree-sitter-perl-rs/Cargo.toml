@@ -16,7 +16,7 @@ perl-parser = { path = "../perl-parser" }
 tree-sitter = "0.26.3"
 serde = { version = "1.0.228", features = ["derive"] }
 bincode = { version = "2.0.0-rc.3", features = ["serde"] }
-proptest = "1.9.0"
+proptest = "1.10.0"
 walkdir = "2.5.0"
 thiserror = "2.0.17"
 unicode-ident = "1.0.22"
@@ -36,7 +36,7 @@ clap = { version = "4.5.53", features = ["derive"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 
 [dev-dependencies]
-criterion = "0.8.1"
+criterion = "0.8.2"
 test-case = "3.3.1"
 
 [lints.rust]

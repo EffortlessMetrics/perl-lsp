@@ -62,10 +62,10 @@ perl-parser = { path = "../perl-parser" }
 
 [dev-dependencies]
 # Property-based testing (AC13)
-proptest = "1.9.0"
+proptest = "1.10.0"
 
 # Performance benchmarking (AC14, AC15)
-criterion = "0.8.1"
+criterion = "0.8.2"
 
 # Test fixtures
 tempfile = "3.24.0"
