@@ -169,9 +169,16 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "link", // Code loading/execution
                 "eval",
                 "require",
-                "do", // Tie mechanism (can execute arbitrary code)
+                "do",
+                "use",
+                "no",
+                "package",
+                "goto", // Tie mechanism (can execute arbitrary code)
                 "tie",
-                "untie", // Network
+                "untie", // State mutation (in-place modification)
+                "chop",
+                "chomp", // Iterator consumption
+                "each", // Network
                 "socket",
                 "connect",
                 "bind",
@@ -2818,6 +2825,28 @@ mod tests {
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_repro_missing_keywords() {
+        // These keywords bypass the safe evaluation check but should be blocked
+        // because they mutate state or execute arbitrary code.
+        let missing = [
+            "use Socket",
+            "use warnings",
+            "no strict",
+            "package Foo",
+            "goto LABEL",
+            "chop $var",
+            "chomp $var",
+            "each %hash",
+        ];
+
+        // Verify they are now blocked
+        for expr in missing {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "Expected expression '{}' to be blocked", expr);
         }
     }
 
