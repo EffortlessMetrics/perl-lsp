@@ -412,6 +412,19 @@ impl SemanticAnalyzer {
         symbol.scope_id == 0
     }
 
+    /// Check if an operator is a file test operator.
+    ///
+    /// File test operators in Perl are unary operators that test file properties:
+    /// -e (exists), -d (directory), -f (file), -r (readable), -w (writable), etc.
+    fn is_file_test_operator(op: &str) -> bool {
+        matches!(
+            op,
+            "-e" | "-d" | "-f" | "-r" | "-w" | "-x" | "-s" | "-z" | "-T" | "-B" |
+            "-M" | "-A" | "-C" | "-l" | "-p" | "-S" | "-u" | "-g" | "-k" | "-t" |
+            "-O" | "-G" | "-R" | "-b" | "-c"
+        )
+    }
+
     /// Analyze a node and generate semantic information
     fn analyze_node(&mut self, node: &Node, scope_id: ScopeId) {
         match &node.kind {
@@ -714,9 +727,21 @@ impl SemanticAnalyzer {
                 self.analyze_node(expr, scope_id);
             }
             NodeKind::Substitution { expr, .. } => {
+                // Substitution operator: s/// - add semantic token for the operator
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Operator,
+                    modifiers: vec![],
+                });
                 self.analyze_node(expr, scope_id);
             }
             NodeKind::Transliteration { expr, .. } => {
+                // Transliteration operator: tr/// or y/// - add semantic token for the operator
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::Operator,
+                    modifiers: vec![],
+                });
                 self.analyze_node(expr, scope_id);
             }
 
@@ -921,6 +946,15 @@ impl SemanticAnalyzer {
                 // Handle unary operators: -$x, !$x, ++$x, $x++
                 // Add token for the operator itself (if needed for highlighting)
                 if matches!(op.as_str(), "++" | "--" | "!" | "-" | "~" | "\\") {
+                    self.semantic_tokens.push(SemanticToken {
+                        location: node.location,
+                        token_type: SemanticTokenType::Operator,
+                        modifiers: vec![],
+                    });
+                }
+
+                // Handle file test operators: -e, -d, -f, -r, -w, -x, -s, -z, -T, -B, etc.
+                if Self::is_file_test_operator(op) {
                     self.semantic_tokens.push(SemanticToken {
                         location: node.location,
                         token_type: SemanticTokenType::Operator,
@@ -1217,7 +1251,16 @@ impl SemanticAnalyzer {
                 }
             }
 
-            NodeKind::StatementModifier { statement, condition, .. } => {
+            NodeKind::StatementModifier { statement, condition, modifier } => {
+                // Handle postfix loop modifiers: for, while, until, foreach
+                // e.g., print $_ for @list; or $x++ while $x < 10;
+                if matches!(modifier.as_str(), "for" | "foreach" | "while" | "until") {
+                    self.semantic_tokens.push(SemanticToken {
+                        location: node.location,
+                        token_type: SemanticTokenType::KeywordControl,
+                        modifiers: vec![],
+                    });
+                }
                 self.analyze_node(statement, scope_id);
                 self.analyze_node(condition, scope_id);
             }
@@ -2171,6 +2214,219 @@ my $adder = sub {
                 "Hover should extract documentation comment"
             );
         }
+        Ok(())
+    }
+
+    // Phase 2/3 Handler Tests
+    #[test]
+    fn test_substitution_operator_semantic_token() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my $str = "hello world";
+$str =~ s/world/Perl/;
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze(&ast);
+
+        let tokens = analyzer.semantic_tokens();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
+
+        assert!(!operator_tokens.is_empty(), "Should have operator tokens for substitution");
+        Ok(())
+    }
+
+    #[test]
+    fn test_transliteration_operator_semantic_token() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my $str = "hello";
+$str =~ tr/el/ol/;
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze(&ast);
+
+        let tokens = analyzer.semantic_tokens();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
+
+        assert!(!operator_tokens.is_empty(), "Should have operator tokens for transliteration");
+        Ok(())
+    }
+
+    #[test]
+    fn test_reference_operator_semantic_token() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my $x = 42;
+my $ref = \$x;
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze(&ast);
+
+        let tokens = analyzer.semantic_tokens();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
+
+        assert!(!operator_tokens.is_empty(), "Should have operator tokens for reference operator");
+        Ok(())
+    }
+
+    #[test]
+    fn test_postfix_loop_semantic_token() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my @list = (1, 2, 3);
+print $_ for @list;
+my $x = 0;
+$x++ while $x < 10;
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze(&ast);
+
+        let tokens = analyzer.semantic_tokens();
+        let control_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::KeywordControl))
+            .collect();
+
+        assert!(!control_tokens.is_empty(), "Should have control keyword tokens for postfix loops");
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_test_operator_semantic_token() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my $file = "test.txt";
+if (-e $file) {
+    print "exists";
+}
+if (-d $file) {
+    print "directory";
+}
+if (-f $file) {
+    print "file";
+}
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze(&ast);
+
+        let tokens = analyzer.semantic_tokens();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
+
+        assert!(!operator_tokens.is_empty(), "Should have operator tokens for file test operators");
+        Ok(())
+    }
+
+    #[test]
+    fn test_all_file_test_operators_recognized() -> Result<(), Box<dyn std::error::Error>> {
+        // Test that the is_file_test_operator helper recognizes all file test operators
+        let file_test_ops = vec![
+            "-e", "-d", "-f", "-r", "-w", "-x", "-s", "-z", "-T", "-B",
+            "-M", "-A", "-C", "-l", "-p", "-S", "-u", "-g", "-k", "-t",
+            "-O", "-G", "-R", "-b", "-c",
+        ];
+
+        for op in file_test_ops {
+            assert!(
+                SemanticAnalyzer::is_file_test_operator(op),
+                "Operator {} should be recognized as file test operator",
+                op
+            );
+        }
+
+        // Test that non-file-test operators are not recognized
+        assert!(
+            !SemanticAnalyzer::is_file_test_operator("+"),
+            "Operator '+' should not be recognized as file test operator"
+        );
+        assert!(
+            !SemanticAnalyzer::is_file_test_operator("-"),
+            "Operator '-' should not be recognized as file test operator"
+        );
+        assert!(
+            !SemanticAnalyzer::is_file_test_operator("++"),
+            "Operator '++' should not be recognized as file test operator"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_postfix_loop_modifiers() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my @items = (1, 2, 3);
+print $_ for @items;
+print $_ foreach @items;
+my $x = 0;
+$x++ while $x < 10;
+$x-- until $x < 0;
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze(&ast);
+
+        let tokens = analyzer.semantic_tokens();
+        let control_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::KeywordControl))
+            .collect();
+
+        // Should have at least 4 control keyword tokens (for, foreach, while, until)
+        assert!(
+            control_tokens.len() >= 4,
+            "Should have at least 4 control keyword tokens for postfix loop modifiers"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_substitution_with_modifiers() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my $str = "hello world";
+$str =~ s/world/Perl/gi;
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze(&ast);
+
+        let tokens = analyzer.semantic_tokens();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
+
+        assert!(!operator_tokens.is_empty(), "Should have operator tokens for substitution with modifiers");
+        Ok(())
+    }
+
+    #[test]
+    fn test_transliteration_y_operator() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+my $str = "hello";
+$str =~ y/hello/world/;
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze(&ast);
+
+        let tokens = analyzer.semantic_tokens();
+        let operator_tokens: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
+            .collect();
+
+        assert!(!operator_tokens.is_empty(), "Should have operator tokens for y/// transliteration");
         Ok(())
     }
 }

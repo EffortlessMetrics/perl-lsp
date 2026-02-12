@@ -13,7 +13,7 @@ categories = ["development-tools"]
 [dependencies]
 clap = { version = "4.5.55", features = ["derive"] }
 color-eyre = "0.6.5"
-difference = "2.0.0"
+similar = "2.7.0"
 duct = "1.1.1"
 walkdir = "2.5.0"
 serde = { version = "1.0.228", features = ["derive"] }

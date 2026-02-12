@@ -1,0 +1,225 @@
+name: CI (Security)
+
+# Consolidated workflow for security scanning
+# Combines: security-scan.yml (cargo-audit, cargo-deny, trivy)
+# Cost: ~$0.08 per run
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '**/Cargo.toml'
+      - '.github/workflows/ci-security.yml'
+      - '.docker/**'
+      - 'Dockerfile*'
+  push:
+    branches: [main, master]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+# Cancel in-flight runs on new pushes (saves minutes)
+concurrency:
+  group: ci-security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ============================================================================
+  # Rust Security Audits
+  # ============================================================================
+
+  cargo-audit:
+    name: Cargo Audit (RustSec)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: audit-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Run cargo-audit (JSON output for processing)
+        id: audit
+        run: |
+          set +e
+          cargo audit --json > audit-results.json 2>&1
+          AUDIT_EXIT=$?
+          echo "exit_code=$AUDIT_EXIT" >> $GITHUB_OUTPUT
+
+          if [ $AUDIT_EXIT -ne 0 ]; then
+            echo "::warning::Security vulnerabilities detected by cargo-audit"
+            cat audit-results.json
+          else
+            echo "::notice::No security vulnerabilities found"
+          fi
+
+          exit $AUDIT_EXIT
+
+      - name: Upload audit results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cargo-audit-results
+          path: audit-results.json
+          retention-days: 30
+
+  cargo-deny:
+    name: Cargo Deny (Policy Enforcement)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: deny-${{ hashFiles('Cargo.lock') }}
+          cache-on-failure: true
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Run cargo-deny (advisories)
+        run: cargo deny --locked check advisories
+
+      - name: Run cargo-deny (licenses)
+        run: cargo deny --locked check licenses
+
+      - name: Run cargo-deny (bans)
+        run: cargo deny --locked check bans
+
+      - name: Run cargo-deny (sources)
+        run: cargo deny --locked check sources
+
+  # ============================================================================
+  # Trivy Comprehensive Scanning
+  # ============================================================================
+
+  trivy-repo-scan:
+    name: Trivy Repository Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (filesystem mode)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'  # Don't fail on findings, just report
+          ignore-unfixed: true
+          # Scan Rust dependencies and configuration files
+          scanners: 'vuln,config,secret'
+          # Skip directories that don't need scanning
+          skip-dirs: 'target,archive,.runs,.git'
+          # Timeout for long scans
+          timeout: '10m'
+
+      - name: Upload Trivy results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+          category: 'trivy-repository'
+
+      - name: Run Trivy vulnerability scanner (table format for PR comments)
+        if: github.event_name == 'pull_request'
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'  # Fail on CRITICAL/HIGH findings
+          ignore-unfixed: true
+          scanners: 'vuln,config,secret'
+          skip-dirs: 'target,archive,.runs,.git'
+
+      - name: Upload Trivy scan results (artifact)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: trivy-repo-scan-results
+          path: trivy-results.sarif
+          retention-days: 30
+
+  trivy-docker-scan:
+    name: Trivy Docker Image Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t perl-lsp:${{ github.sha }} -f .docker/rust/Dockerfile .
+
+      - name: Run Trivy vulnerability scanner (Docker image)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          image-ref: 'perl-lsp:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-docker-results.sarif'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+          exit-code: '0'
+          ignore-unfixed: true
+          scanners: 'vuln'
+          timeout: '15m'
+
+      - name: Upload Trivy Docker results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-docker-results.sarif'
+          category: 'trivy-docker'
+
+      - name: Upload Trivy Docker results (artifact)
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: trivy-docker-scan-results
+          path: trivy-docker-results.sarif
+          retention-days: 30

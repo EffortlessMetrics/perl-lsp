@@ -151,6 +151,37 @@ security-audit:
         echo "SKIP: cargo-audit not installed (run: cargo install cargo-audit)"; \
     fi
 
+# Production hardening security scan
+security-hardening:
+    @echo "Running production hardening security scan..."
+    @./scripts/security-hardening.sh
+
+# Production hardening performance scan
+performance-hardening:
+    @echo "Running production hardening performance scan..."
+    @./scripts/performance-hardening.sh
+
+# Production hardening E2E validation
+e2e-validation:
+    @echo "Running production hardening E2E validation..."
+    @./scripts/e2e-validation.sh
+
+# Complete production hardening validation
+production-hardening: security-hardening performance-hardening e2e-validation
+    @echo "✅ Production hardening validation completed"
+    @echo "📊 Check generated reports for detailed results"
+
+# Production gates validation
+production-gates-validation:
+    @echo "Running production gates validation..."
+    @./scripts/production-gates-validation.sh
+
+# Complete Phase 6 production readiness validation
+phase6-production-readiness: production-hardening production-gates-validation
+    @echo "🎉 Phase 6 Production Hardening completed!"
+    @echo "📋 All security, performance, and validation checks complete"
+    @echo "🚀 Ready for v1.0 release validation"
+
 # Generate SBOM in SPDX format
 sbom-spdx:
     #!/usr/bin/env bash

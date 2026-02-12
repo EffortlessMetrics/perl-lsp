@@ -97,6 +97,11 @@ path = "tests/dap_adapter_tests.rs"
 # AC5-AC12: Native Rust adapter implementation
 
 [[test]]
+name = "tcp_attach_tests"
+path = "tests/tcp_attach_tests.rs"
+# Phase5: TCP attach functionality tests
+
+[[test]]
 name = "dap_golden_transcript_tests"
 path = "tests/dap_golden_transcript_tests.rs"
 # AC13: Comprehensive integration tests with golden transcripts
@@ -130,6 +135,12 @@ path = "tests/dap_packaging_tests.rs"
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
 harness = false
+
+[[bench]]
+name = "dap_native_benchmarks"
+path = "benches/dap_native_benchmarks.rs"
+harness = false
+# Phase5: Native DAP performance benchmarks
 
 [lints]
 workspace = true

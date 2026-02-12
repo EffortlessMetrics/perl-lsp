@@ -1,5 +1,9 @@
 name: CI
 
+# Main merge-blocking gate for all PRs
+# Runs comprehensive checks required before merge
+# Cost: ~$0.05 per PR
+
 on:
   pull_request:
     branches: [ main, master ]
@@ -12,6 +16,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -19,33 +24,46 @@ env:
 
 jobs:
   ci-gate:
-    name: CI Gate
+    name: CI Gate (Merge-Blocking)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.89.0
           components: rustfmt, clippy
-      - uses: taiki-e/install-action@v2
+
+      - name: Install just
+        uses: taiki-e/install-action@v2
         with:
           tool: just
-      - uses: Swatinem/rust-cache@v2
+
+      # Aggressive caching for dependencies and build artifacts
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+          cache-all-crates: true
+          shared-key: ci-gate-${{ hashFiles('Cargo.lock') }}
+
       - name: Run ci-gate with receipts
         run: just gates
+
       - name: Upload gate receipt
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: gate-receipt
+          name: gate-receipt-${{ github.sha }}
           path: |
             target/receipts/receipt.json
             target/receipts/logs/*.log
             target/receipts/artifacts/*
           if-no-files-found: warn
+          retention-days: 7
+
       - name: Gate summary
         if: always()
         shell: bash
@@ -61,7 +79,7 @@ jobs:
           if not summary_path:
               raise SystemExit(0)
 
-          lines = ["### Gate Receipt", ""]
+          lines = ["### CI Gate Receipt", ""]
           if not receipt_path.exists():
               lines.append("Receipt not found.")
               Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -81,3 +99,27 @@ jobs:
 
           Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
+
+      - name: Set PR status (check)
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let status = 'success';
+            let description = 'All checks passed';
+
+            if (!fs.existsSync('target/receipts/receipt.json')) {
+              status = 'failure';
+              description = 'Gate receipt not found';
+            } else {
+              const data = JSON.parse(fs.readFileSync('target/receipts/receipt.json', 'utf8'));
+              const failedGates = data.gates.filter(g => g.status !== 'passed');
+              if (failedGates.length > 0) {
+                status = 'failure';
+                description = `${failedGates.length} gate(s) failed: ${failedGates.map(g => g.name).join(', ')}`;
+              }
+            }
+
+            console.log(`Setting PR status to: ${status}`);
+            console.log(`Description: ${description}`);

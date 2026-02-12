@@ -2,7 +2,7 @@
 
 use crate::types::ScannerType;
 use color_eyre::eyre::{Context, Result};
-use difference::Changeset;
+use similar::{ChangeTag, TextDiff};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs;
 use std::path::PathBuf;
@@ -190,8 +190,16 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             }
 
             println!("\n❌ Test failed: {}", test_case.name);
-            let diff = Changeset::new(&c_raw, &v3_raw, "\n");
-            println!("Diff between C and V3:\n{}", diff);
+            let diff = TextDiff::from_lines(&c_raw, &v3_raw);
+            println!("Diff between C and V3:");
+            for change in diff.iter_all_changes() {
+                match change.tag() {
+                    ChangeTag::Equal => print!("{}", change),
+                    ChangeTag::Delete => print!("\x1b[91m-{}\x1b[0m", change),
+                    ChangeTag::Insert => print!("\x1b[92m+{}\x1b[0m", change),
+                }
+            }
+            println!();
             return Ok(false);
         }
         None => {

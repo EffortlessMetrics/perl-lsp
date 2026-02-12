@@ -1,0 +1,32 @@
+{
+  "version": "0.8.8",
+  "description": "High-performance Perl Language Server with 100% syntax coverage",
+  "homepage": "https://github.com/EffortlessMetrics/tree-sitter-perl-rs",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.8.8/perl-lsp-0.8.8-x86_64-pc-windows-msvc.zip",
+      "hash": "REPLACE_WITH_ACTUAL_SHA256"
+    }
+  },
+  "bin": "perl-lsp.exe",
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v$version/perl-lsp-$version-x86_64-pc-windows-msvc.zip"
+      }
+    },
+    "hash": {
+      "url": "https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v$version/perl-lsp-$version-x86_64-pc-windows-msvc.zip.sha256"
+    }
+  },
+  "notes": [
+    "perl-lsp is a high-performance Language Server Protocol implementation for Perl.",
+    "",
+    "Usage:",
+    "  perl-lsp --stdio",
+    "",
+    "For more information, visit: https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+  ]
+}

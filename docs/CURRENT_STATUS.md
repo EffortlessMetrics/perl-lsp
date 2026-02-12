@@ -58,7 +58,7 @@ Key terms:
 | **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 93%+ | In progress |
 <!-- END: STATUS_METRICS_TABLE -->
 | **Parser Coverage** | ~100% | 100% | Complete |
-| **Semantic Analyzer** | Phase 2-6 Complete | Phase 3 | All NodeKind handlers |
+| **Semantic Analyzer** | Phase 1, 2, 3 Complete (100%) | Complete | All NodeKind handlers |
 | **Mutation Score** | 87% | 87%+ | Target met |
 | **Documentation** | perl-parser missing_docs = 0 (baseline 0) | 0 | Ratchet |
 
@@ -68,7 +68,7 @@ Key terms:
 
 - **Parser**: Production-ready Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
 - **LSP Server**: Capability catalog is `features.toml`; Tier A gate is `just ci-gate`; TCP socket mode available
-- **Semantic Analyzer**: Phase 2-6 complete with all NodeKind handlers, `textDocument/definition` integrated, uninitialized variable detection
+- **Semantic Analyzer**: Phase 1, 2, 3 complete with all NodeKind handlers (100% AST node coverage), `textDocument/definition` integrated, uninitialized variable detection
 - **Refactoring Engine**: `perform_inline` and `perform_move_code` implemented
 - **Test Infrastructure**: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)
 - **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups

@@ -5,6 +5,7 @@
 
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
+use crate::tcp_attach::{TcpAttachConfig, TcpAttachSession, DapEvent};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -249,8 +250,10 @@ fn is_escape_sequence(s: &str, match_start: usize) -> bool {
 pub struct DebugAdapter {
     /// Sequence number for messages
     seq: Arc<Mutex<i64>>,
-    /// Active debug session
+    /// Active debug session (process-based)
     session: Arc<Mutex<Option<DebugSession>>>,
+    /// TCP attach session (for connecting to running debugger)
+    tcp_session: Arc<Mutex<Option<TcpAttachSession>>>,
     /// Breakpoints store
     breakpoints: BreakpointStore,
     /// Thread ID counter
@@ -378,6 +381,7 @@ impl DebugAdapter {
         Self {
             seq: Arc::new(Mutex::new(0)),
             session: Arc::new(Mutex::new(None)),
+            tcp_session: Arc::new(Mutex::new(None)),
             breakpoints: BreakpointStore::new(),
             thread_counter: Arc::new(Mutex::new(0)),
             event_sender: None,
@@ -1090,12 +1094,8 @@ impl DebugAdapter {
     ///
     /// # Current Implementation
     ///
-    /// TCP attachment is not yet fully implemented. This is a placeholder that:
-    /// - Validates attach arguments
-    /// - Returns appropriate error messages
-    /// - Provides foundation for future TCP socket implementation
-    ///
-    /// Process ID attachment will be added in Phase 2.
+    /// TCP attachment is now fully implemented with socket support.
+    /// Process ID attachment will be added in a future phase.
     fn handle_attach(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         // Parse attach arguments
         if let Some(args) = arguments {
@@ -1173,34 +1173,144 @@ impl DebugAdapter {
                     )),
                 }
             } else {
-                // TCP attachment mode (future implementation)
-                let timeout_msg = if let Some(t) = timeout {
-                    format!(" with {}ms timeout", t)
-                } else {
-                    String::new()
-                };
-                eprintln!("Attach request: TCP attachment to {}:{}{}", host, port, timeout_msg);
+                // TCP attachment mode (IMPLEMENTED)
+                let mut config = TcpAttachConfig::new(host.to_string(), port);
+                if let Some(t) = timeout {
+                    config = config.with_timeout(t);
+                }
 
-                // TCP socket connection not yet implemented - See #449
-                // This will require:
-                // 1. Establishing TCP connection to host:port
-                // 2. Setting up bidirectional message proxying
-                // 3. Handling connection errors gracefully
-                // 4. Managing timeout during connection attempt
-                // 5. Sending appropriate DAP events (attached, initialized)
+                // Validate configuration
+                if let Err(e) = config.validate() {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some(format!("Invalid attach configuration: {}", e)),
+                    };
+                }
 
-                DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "attach".to_string(),
-                    body: None,
-                    message: Some(format!(
-                        "TCP attachment not yet fully implemented. \
-                         Would connect to {}:{}{} for Perl::LanguageServer DAP. \
-                         Use BridgeAdapter for current Perl::LanguageServer integration.",
-                        host, port, timeout_msg
-                    )),
+                // Create TCP attach session
+                let mut session = TcpAttachSession::new();
+                
+                // Set up event channel for TCP events
+                let (tx, rx) = channel::<DapEvent>();
+                session.set_event_sender(tx);
+
+                // Attempt to connect
+                match session.connect(&config) {
+                    Ok(()) => {
+                        // Store session
+                        if let Ok(mut guard) = self.tcp_session.lock() {
+                            *guard = Some(session);
+                        }
+
+                        // Start reader thread
+                        if let Ok(mut guard) = self.tcp_session.lock() {
+                            if let Some(ref mut s) = *guard {
+                                if let Err(e) = s.start_reader() {
+                                    eprintln!("Failed to start TCP reader: {}", e);
+                                    return DapMessage::Response {
+                                        seq,
+                                        request_seq,
+                                        success: false,
+                                        command: "attach".to_string(),
+                                        body: None,
+                                        message: Some(format!("Failed to start TCP reader: {}", e)),
+                                    };
+                                }
+                            }
+                        }
+
+                        // Start event handler thread for TCP events
+                        let seq = self.seq.clone();
+                        let event_sender = self.event_sender.clone();
+                        thread::spawn(move || {
+                            while let Ok(event) = rx.recv() {
+                                match event {
+                                    DapEvent::Output { category, output } => {
+                                        if let Some(ref sender) = event_sender {
+                                            let mut seq_lock = seq.lock().unwrap_or_else(|e| e.into_inner());
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "output".to_string(),
+                                                body: Some(json!({
+                                                    "category": category,
+                                                    "output": output
+                                                })),
+                                            });
+                                        }
+                                    }
+                                    DapEvent::Stopped { reason, thread_id } => {
+                                        if let Some(ref sender) = event_sender {
+                                            let mut seq_lock = seq.lock().unwrap_or_else(|e| e.into_inner());
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "stopped".to_string(),
+                                                body: Some(json!({
+                                                    "reason": reason,
+                                                    "threadId": thread_id,
+                                                    "allThreadsStopped": true
+                                                })),
+                                            });
+                                        }
+                                    }
+                                    DapEvent::Continued { thread_id } => {
+                                        if let Some(ref sender) = event_sender {
+                                            let mut seq_lock = seq.lock().unwrap_or_else(|e| e.into_inner());
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "continued".to_string(),
+                                                body: Some(json!({
+                                                    "threadId": thread_id,
+                                                    "allThreadsContinued": true
+                                                })),
+                                            });
+                                        }
+                                    }
+                                    DapEvent::Terminated { reason } => {
+                                        if let Some(ref sender) = event_sender {
+                                            let mut seq_lock = seq.lock().unwrap_or_else(|e| e.into_inner());
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "terminated".to_string(),
+                                                body: Some(json!({
+                                                    "reason": reason
+                                                })),
+                                            });
+                                        }
+                                    }
+                                    DapEvent::Error { message } => {
+                                        eprintln!("TCP attach error: {}", message);
+                                    }
+                                }
+                            }
+                        });
+
+                        DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: true,
+                            command: "attach".to_string(),
+                            body: None,
+                            message: None,
+                        }
+                    }
+                    Err(e) => {
+                        DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "attach".to_string(),
+                            body: None,
+                            message: Some(format!("Failed to connect to debugger: {}", e)),
+                        }
+                    }
                 }
             }
         } else {
@@ -1233,6 +1343,13 @@ impl DebugAdapter {
         {
             let _ = session.process.kill();
             session.state = DebugState::Terminated;
+        }
+
+        // Disconnect TCP session if active
+        if let Ok(mut guard) = self.tcp_session.lock()
+            && let Some(ref mut tcp_session) = *guard
+        {
+            let _ = tcp_session.disconnect();
         }
 
         // Send terminated event
