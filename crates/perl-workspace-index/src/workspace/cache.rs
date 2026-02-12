@@ -79,11 +79,7 @@ impl CacheStats {
     /// Calculate hit rate from hits and misses.
     pub fn calculate_hit_rate(hits: u64, misses: u64) -> f64 {
         let total = hits + misses;
-        if total == 0 {
-            0.0
-        } else {
-            hits as f64 / total as f64
-        }
+        if total == 0 { 0.0 } else { hits as f64 / total as f64 }
     }
 }
 
@@ -95,7 +91,7 @@ struct CacheEntry<V> {
     /// When this entry was last accessed
     last_accessed: Instant,
     /// When this entry was inserted
-    inserted_at: Instant,
+    _inserted_at: Instant,
     /// Size of the entry in bytes
     size_bytes: usize,
 }
@@ -104,12 +100,7 @@ impl<V> CacheEntry<V> {
     /// Create a new cache entry.
     fn new(value: V, size_bytes: usize) -> Self {
         let now = Instant::now();
-        Self {
-            value,
-            last_accessed: now,
-            inserted_at: now,
-            size_bytes,
-        }
+        Self { value, last_accessed: now, _inserted_at: now, size_bytes }
     }
 
     /// Check if this entry has expired based on TTL.
@@ -232,9 +223,8 @@ where
         let mut stats = self.stats.lock();
 
         // Check if this key already exists
-        if entries.contains_key(&key) {
+        if let Some(entry) = entries.get_mut(&key) {
             // Update existing entry
-            let entry = entries.get_mut(&key).unwrap();
             entry.value = value;
             entry.size_bytes = size_bytes;
             entry.touch();
@@ -525,9 +515,7 @@ where
     V: EstimateSize,
 {
     fn estimate_size(&self) -> usize {
-        self.iter()
-            .map(|(k, v)| k.estimate_size() + v.estimate_size())
-            .sum()
+        self.iter().map(|(k, v)| k.estimate_size() + v.estimate_size()).sum()
     }
 }
 
@@ -537,7 +525,13 @@ impl EstimateSize for str {
     }
 }
 
-impl EstimateSize for &[u8] {
+impl<T: EstimateSize + ?Sized> EstimateSize for &T {
+    fn estimate_size(&self) -> usize {
+        (**self).estimate_size()
+    }
+}
+
+impl EstimateSize for [u8] {
     fn estimate_size(&self) -> usize {
         self.len()
     }
@@ -632,7 +626,7 @@ impl Default for WorkspaceCacheConfig {
 }
 
 /// Combined cache configuration for all workspace caches.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct CombinedWorkspaceCacheConfig {
     /// AST node cache configuration
     pub ast: AstCacheConfig,
@@ -640,16 +634,6 @@ pub struct CombinedWorkspaceCacheConfig {
     pub symbol: SymbolCacheConfig,
     /// Workspace cache configuration
     pub workspace: WorkspaceCacheConfig,
-}
-
-impl Default for CombinedWorkspaceCacheConfig {
-    fn default() -> Self {
-        Self {
-            ast: AstCacheConfig::default(),
-            symbol: SymbolCacheConfig::default(),
-            workspace: WorkspaceCacheConfig::default(),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -671,11 +655,7 @@ mod tests {
 
     #[test]
     fn test_cache_eviction() {
-        let config = CacheConfig {
-            max_items: 2,
-            max_bytes: 100,
-            ttl: None,
-        };
+        let config = CacheConfig { max_items: 2, max_bytes: 100, ttl: None };
         let cache = BoundedLruCache::<String, String>::new(config);
 
         cache.insert("key1".to_string(), "value1".to_string());

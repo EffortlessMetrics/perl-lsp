@@ -19,9 +19,9 @@
 
 use anyhow::{Context, Result};
 use serde_json::Value;
-use std::io::{BufRead, BufReader, Write};
-use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc::{Sender, channel};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::TcpStream;
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -46,11 +46,7 @@ pub struct TcpAttachConfig {
 impl TcpAttachConfig {
     /// Create a new TCP attach configuration
     pub fn new(host: String, port: u16) -> Self {
-        Self {
-            host,
-            port,
-            timeout_ms: None,
-        }
+        Self { host, port, timeout_ms: None }
     }
 
     /// Set the connection timeout
@@ -72,10 +68,7 @@ impl TcpAttachConfig {
                 anyhow::bail!("Timeout must be greater than 0 milliseconds");
             }
             if timeout > MAX_TIMEOUT_MS {
-                anyhow::bail!(
-                    "Timeout cannot exceed {} milliseconds (5 minutes)",
-                    MAX_TIMEOUT_MS
-                );
+                anyhow::bail!("Timeout cannot exceed {} milliseconds (5 minutes)", MAX_TIMEOUT_MS);
             }
         }
         Ok(())
@@ -117,11 +110,7 @@ pub enum DapEvent {
 impl TcpAttachSession {
     /// Create a new TCP attach session
     pub fn new() -> Self {
-        Self {
-            stream: None,
-            connected: Arc::new(Mutex::new(false)),
-            event_sender: None,
-        }
+        Self { stream: None, connected: Arc::new(Mutex::new(false)), event_sender: None }
     }
 
     /// Set the event sender
@@ -154,12 +143,12 @@ impl TcpAttachSession {
 
     /// Check if connected
     pub fn is_connected(&self) -> bool {
-        *self.connected.lock().unwrap_or(false)
+        self.connected.lock().map(|g| *g).unwrap_or(false)
     }
 
     /// Disconnect from the debugger
     pub fn disconnect(&mut self) -> Result<()> {
-        if let Some(mut stream) = self.stream.take() {
+        if let Some(stream) = self.stream.take() {
             stream.shutdown(std::net::Shutdown::Both)?;
             *self.connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
             eprintln!("Disconnected from Perl debugger");
@@ -169,17 +158,12 @@ impl TcpAttachSession {
 
     /// Send a DAP message to the debugger
     pub fn send_message(&mut self, message: &str) -> Result<()> {
-        let stream = self
-            .stream
-            .as_mut()
-            .context("Not connected to debugger")?;
+        let stream = self.stream.as_mut().context("Not connected to debugger")?;
 
         let content_length = message.len();
         let frame = format!("Content-Length: {}\r\n\r\n{}", content_length, message);
 
-        stream
-            .write_all(frame.as_bytes())
-            .context("Failed to write to debugger")?;
+        stream.write_all(frame.as_bytes()).context("Failed to write to debugger")?;
 
         stream.flush().context("Failed to flush stream")?;
         Ok(())
@@ -187,10 +171,7 @@ impl TcpAttachSession {
 
     /// Start reading messages from the debugger
     pub fn start_reader(&mut self) -> Result<()> {
-        let stream = self
-            .stream
-            .take()
-            .context("No stream available")?;
+        let stream = self.stream.take().context("No stream available")?;
 
         let connected = Arc::clone(&self.connected);
         let event_sender = self.event_sender.clone();
@@ -251,7 +232,9 @@ impl TcpAttachSession {
                                 // Parse DAP message and emit event
                                 if let Some(ref sender) = event_sender {
                                     if let Ok(value) = serde_json::from_str::<Value>(&text) {
-                                        if let Some(event_type) = value.get("type").and_then(|t| t.as_str()) {
+                                        if let Some(event_type) =
+                                            value.get("type").and_then(|t| t.as_str())
+                                        {
                                             if event_type == "event" {
                                                 let event_name = value
                                                     .get("event")
@@ -272,7 +255,10 @@ impl TcpAttachSession {
                                                             .unwrap_or("")
                                                             .to_string();
 
-                                                        let _ = sender.send(DapEvent::Output { category, output });
+                                                        let _ = sender.send(DapEvent::Output {
+                                                            category,
+                                                            output,
+                                                        });
                                                     }
                                                     "stopped" => {
                                                         let body = value.get("body");
@@ -284,18 +270,25 @@ impl TcpAttachSession {
                                                         let thread_id = body
                                                             .and_then(|b| b.get("threadId"))
                                                             .and_then(|t| t.as_i64())
-                                                            .unwrap_or(1) as i32;
+                                                            .unwrap_or(1)
+                                                            as i32;
 
-                                                        let _ = sender.send(DapEvent::Stopped { reason, thread_id });
+                                                        let _ = sender.send(DapEvent::Stopped {
+                                                            reason,
+                                                            thread_id,
+                                                        });
                                                     }
                                                     "continued" => {
                                                         let body = value.get("body");
                                                         let thread_id = body
                                                             .and_then(|b| b.get("threadId"))
                                                             .and_then(|t| t.as_i64())
-                                                            .unwrap_or(1) as i32;
+                                                            .unwrap_or(1)
+                                                            as i32;
 
-                                                        let _ = sender.send(DapEvent::Continued { thread_id });
+                                                        let _ = sender.send(DapEvent::Continued {
+                                                            thread_id,
+                                                        });
                                                     }
                                                     "terminated" => {
                                                         let reason = value
@@ -305,10 +298,14 @@ impl TcpAttachSession {
                                                             .unwrap_or("unknown")
                                                             .to_string();
 
-                                                        let _ = sender.send(DapEvent::Terminated { reason });
+                                                        let _ = sender
+                                                            .send(DapEvent::Terminated { reason });
                                                     }
                                                     _ => {
-                                                        eprintln!("Unhandled DAP event: {}", event_name);
+                                                        eprintln!(
+                                                            "Unhandled DAP event: {}",
+                                                            event_name
+                                                        );
                                                     }
                                                 }
                                             }
@@ -379,15 +376,9 @@ mod tests {
     #[test]
     fn test_tcp_attach_timeout_duration() {
         let config = TcpAttachConfig::new("localhost".to_string(), 13603);
-        assert_eq!(
-            config.timeout_duration(),
-            Duration::from_millis(DEFAULT_TIMEOUT_MS as u64)
-        );
+        assert_eq!(config.timeout_duration(), Duration::from_millis(DEFAULT_TIMEOUT_MS as u64));
 
         let config = TcpAttachConfig::new("localhost".to_string(), 13603).with_timeout(10000);
-        assert_eq!(
-            config.timeout_duration(),
-            Duration::from_millis(10000)
-        );
+        assert_eq!(config.timeout_duration(), Duration::from_millis(10000));
     }
 }

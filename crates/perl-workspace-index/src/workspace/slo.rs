@@ -61,12 +61,12 @@ pub struct SloConfig {
 impl Default for SloConfig {
     fn default() -> Self {
         Self {
-            index_init_p95_ms: 5000,  // 5 seconds
+            index_init_p95_ms: 5000,        // 5 seconds
             incremental_update_p95_ms: 100, // 100ms
-            definition_lookup_p95_ms: 50, // 50ms
-            completion_p95_ms: 100, // 100ms
-            hover_p95_ms: 50, // 50ms
-            max_error_rate: 0.01, // 1% error rate
+            definition_lookup_p95_ms: 50,   // 50ms
+            completion_p95_ms: 100,         // 100ms
+            hover_p95_ms: 50,               // 50ms
+            max_error_rate: 0.01,           // 1% error rate
             sample_window_size: 1000,
         }
     }
@@ -159,7 +159,7 @@ struct LatencySample {
     /// Whether the operation succeeded
     success: bool,
     /// When the sample was recorded
-    timestamp: Instant,
+    _timestamp: Instant,
 }
 
 /// SLO statistics for a specific operation type.
@@ -205,7 +205,7 @@ impl Default for SloStatistics {
 #[derive(Debug)]
 struct OperationSloTracker {
     /// Operation type being tracked
-    operation_type: OperationType,
+    _operation_type: OperationType,
     /// Latency samples (most recent first)
     samples: VecDeque<LatencySample>,
     /// SLO target for this operation
@@ -220,7 +220,7 @@ impl OperationSloTracker {
     /// Create a new operation SLO tracker.
     fn new(operation_type: OperationType, config: &SloConfig) -> Self {
         Self {
-            operation_type,
+            _operation_type: operation_type,
             samples: VecDeque::with_capacity(config.sample_window_size),
             slo_target_ms: operation_type.slo_target_ms(config),
             max_error_rate: config.max_error_rate,
@@ -231,11 +231,7 @@ impl OperationSloTracker {
     /// Record an operation result.
     fn record(&mut self, duration: Duration, result: OperationResult) {
         let success = result.is_success();
-        let sample = LatencySample {
-            duration,
-            success,
-            timestamp: Instant::now(),
-        };
+        let sample = LatencySample { duration, success, _timestamp: Instant::now() };
 
         // Add sample
         if self.samples.len() >= self.max_samples {
@@ -253,11 +249,8 @@ impl OperationSloTracker {
         let total_count = self.samples.len() as u64;
         let success_count = self.samples.iter().filter(|s| s.success).count() as u64;
         let failure_count = total_count - success_count;
-        let error_rate = if total_count > 0 {
-            failure_count as f64 / total_count as f64
-        } else {
-            0.0
-        };
+        let error_rate =
+            if total_count > 0 { failure_count as f64 / total_count as f64 } else { 0.0 };
 
         // Calculate percentiles
         let mut durations_ms: Vec<u64> =
@@ -268,7 +261,8 @@ impl OperationSloTracker {
         let p95_ms = percentile(&durations_ms, 95);
         let p99_ms = percentile(&durations_ms, 99);
 
-        let avg_ms = durations_ms.iter().map(|&d| d as f64).sum::<f64>() / durations_ms.len() as f64;
+        let avg_ms =
+            durations_ms.iter().map(|&d| d as f64).sum::<f64>() / durations_ms.len() as f64;
 
         // Check if SLO is met
         let slo_met = p95_ms <= self.slo_target_ms && error_rate <= self.max_error_rate;
@@ -288,13 +282,14 @@ impl OperationSloTracker {
 }
 
 /// Calculate a percentile from a sorted slice of values.
-fn percentile(sorted_values: &[u64], percentile: u64) -> u64 {
+fn percentile(sorted_values: &[u64], pct: u64) -> u64 {
     if sorted_values.is_empty() {
         return 0;
     }
 
-    let index = (percentile as f64 / 100.0 * (sorted_values.len() - 1) as f64) as usize;
-    sorted_values[index.min(sorted_values.len() - 1)]
+    // Nearest-rank method: ceil(pct/100 * n) gives 1-based rank
+    let rank = ((pct as f64 / 100.0) * sorted_values.len() as f64).ceil() as usize;
+    sorted_values[rank.min(sorted_values.len()).saturating_sub(1)]
 }
 
 /// SLO tracker for workspace index operations.
@@ -344,10 +339,7 @@ impl SloTracker {
             trackers.insert(op_type, OperationSloTracker::new(op_type, &config));
         }
 
-        Self {
-            config,
-            trackers: Arc::new(Mutex::new(trackers)),
-        }
+        Self { config, trackers: Arc::new(Mutex::new(trackers)) }
     }
 
     /// Create a new SLO tracker with default configuration.
@@ -470,10 +462,7 @@ impl SloTracker {
     /// ```
     pub fn statistics(&self, operation_type: OperationType) -> SloStatistics {
         let trackers = self.trackers.lock();
-        trackers
-            .get(&operation_type)
-            .map(|t| t.statistics())
-            .unwrap_or_default()
+        trackers.get(&operation_type).map(|t| t.statistics()).unwrap_or_default()
     }
 
     /// Get SLO statistics for all operation types.
@@ -492,10 +481,7 @@ impl SloTracker {
     /// ```
     pub fn all_statistics(&self) -> std::collections::HashMap<OperationType, SloStatistics> {
         let trackers = self.trackers.lock();
-        trackers
-            .iter()
-            .map(|(op_type, tracker)| (*op_type, tracker.statistics()))
-            .collect()
+        trackers.iter().map(|(op_type, tracker)| (*op_type, tracker.statistics())).collect()
     }
 
     /// Check if all SLOs are being met.
@@ -612,20 +598,14 @@ mod tests {
 
     #[test]
     fn test_operation_type_name() {
-        assert_eq!(
-            OperationType::DefinitionLookup.name(),
-            "definition_lookup"
-        );
+        assert_eq!(OperationType::DefinitionLookup.name(), "definition_lookup");
         assert_eq!(OperationType::Completion.name(), "completion");
     }
 
     #[test]
     fn test_slo_target_ms() {
         let config = SloConfig::default();
-        assert_eq!(
-            OperationType::DefinitionLookup.slo_target_ms(&config),
-            50
-        );
+        assert_eq!(OperationType::DefinitionLookup.slo_target_ms(&config), 50);
         assert_eq!(OperationType::Completion.slo_target_ms(&config), 100);
     }
 

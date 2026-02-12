@@ -5,7 +5,7 @@
 
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
-use crate::tcp_attach::{TcpAttachConfig, TcpAttachSession, DapEvent};
+use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -1193,7 +1193,7 @@ impl DebugAdapter {
 
                 // Create TCP attach session
                 let mut session = TcpAttachSession::new();
-                
+
                 // Set up event channel for TCP events
                 let (tx, rx) = channel::<DapEvent>();
                 session.set_event_sender(tx);
@@ -1224,14 +1224,16 @@ impl DebugAdapter {
                         }
 
                         // Start event handler thread for TCP events
-                        let seq = self.seq.clone();
+                        let seq_counter = self.seq.clone();
                         let event_sender = self.event_sender.clone();
                         thread::spawn(move || {
                             while let Ok(event) = rx.recv() {
                                 match event {
                                     DapEvent::Output { category, output } => {
                                         if let Some(ref sender) = event_sender {
-                                            let mut seq_lock = seq.lock().unwrap_or_else(|e| e.into_inner());
+                                            let mut seq_lock = seq_counter
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
                                             *seq_lock += 1;
                                             let _ = sender.send(DapMessage::Event {
                                                 seq: *seq_lock,
@@ -1245,7 +1247,9 @@ impl DebugAdapter {
                                     }
                                     DapEvent::Stopped { reason, thread_id } => {
                                         if let Some(ref sender) = event_sender {
-                                            let mut seq_lock = seq.lock().unwrap_or_else(|e| e.into_inner());
+                                            let mut seq_lock = seq_counter
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
                                             *seq_lock += 1;
                                             let _ = sender.send(DapMessage::Event {
                                                 seq: *seq_lock,
@@ -1260,7 +1264,9 @@ impl DebugAdapter {
                                     }
                                     DapEvent::Continued { thread_id } => {
                                         if let Some(ref sender) = event_sender {
-                                            let mut seq_lock = seq.lock().unwrap_or_else(|e| e.into_inner());
+                                            let mut seq_lock = seq_counter
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
                                             *seq_lock += 1;
                                             let _ = sender.send(DapMessage::Event {
                                                 seq: *seq_lock,
@@ -1274,7 +1280,9 @@ impl DebugAdapter {
                                     }
                                     DapEvent::Terminated { reason } => {
                                         if let Some(ref sender) = event_sender {
-                                            let mut seq_lock = seq.lock().unwrap_or_else(|e| e.into_inner());
+                                            let mut seq_lock = seq_counter
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
                                             *seq_lock += 1;
                                             let _ = sender.send(DapMessage::Event {
                                                 seq: *seq_lock,
@@ -1301,16 +1309,14 @@ impl DebugAdapter {
                             message: None,
                         }
                     }
-                    Err(e) => {
-                        DapMessage::Response {
-                            seq,
-                            request_seq,
-                            success: false,
-                            command: "attach".to_string(),
-                            body: None,
-                            message: Some(format!("Failed to connect to debugger: {}", e)),
-                        }
-                    }
+                    Err(e) => DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some(format!("Failed to connect to debugger: {}", e)),
+                    },
                 }
             }
         } else {
@@ -2552,6 +2558,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Requires TCP listener on localhost:13603"]
     fn test_attach_tcp_valid_arguments() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
@@ -2710,6 +2717,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "Requires TCP listener on localhost:13603"]
     fn test_attach_default_values() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         // Empty args should use defaults and fail with missing arguments message

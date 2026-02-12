@@ -166,12 +166,12 @@ impl IndexState {
     pub fn state_started_at(&self) -> Instant {
         match self {
             IndexState::Idle { since } => *since,
-            IndexState::Initializing { started_at } => *started_at,
-            IndexState::Building { started_at } => *started_at,
-            IndexState::Updating { started_at } => *started_at,
-            IndexState::Invalidating { started_at } => *started_at,
-            IndexState::Ready { completed_at } => *completed_at,
-            IndexState::Degraded { since } => *since,
+            IndexState::Initializing { started_at, .. } => *started_at,
+            IndexState::Building { started_at, .. } => *started_at,
+            IndexState::Updating { started_at, .. } => *started_at,
+            IndexState::Invalidating { started_at, .. } => *started_at,
+            IndexState::Ready { completed_at, .. } => *completed_at,
+            IndexState::Degraded { since, .. } => *since,
             IndexState::Error { since, .. } => *since,
         }
     }
@@ -180,13 +180,21 @@ impl IndexState {
 /// Coarse index state kinds for instrumentation and transition tracking.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IndexStateKind {
+    /// Index is idle
     Idle,
+    /// Index is initializing
     Initializing,
+    /// Index is building
     Building,
+    /// Index is updating
     Updating,
+    /// Index is invalidating
     Invalidating,
+    /// Index is ready
     Ready,
+    /// Index is degraded
     Degraded,
+    /// Index is in error state
     Error,
 }
 
@@ -316,9 +324,7 @@ impl IndexStateMachine {
     /// let machine = IndexStateMachine::new();
     /// ```
     pub fn new() -> Self {
-        Self {
-            state: Arc::new(RwLock::new(IndexState::Idle { since: Instant::now() })),
-        }
+        Self { state: Arc::new(RwLock::new(IndexState::Idle { since: Instant::now() })) }
     }
 
     /// Get current state (lock-free read via clone).
@@ -371,10 +377,7 @@ impl IndexStateMachine {
 
         match &*state {
             IndexState::Idle { .. } | IndexState::Error { .. } => {
-                *state = IndexState::Initializing {
-                    progress: 0,
-                    started_at: Instant::now(),
-                };
+                *state = IndexState::Initializing { progress: 0, started_at: Instant::now() };
                 TransitionResult::Success
             }
             _ => TransitionResult::InvalidTransition {
@@ -415,7 +418,9 @@ impl IndexStateMachine {
         let from_kind = state.kind();
 
         match &*state {
-            IndexState::Initializing { .. } | IndexState::Ready { .. } | IndexState::Degraded { .. } => {
+            IndexState::Initializing { .. }
+            | IndexState::Ready { .. }
+            | IndexState::Degraded { .. } => {
                 *state = IndexState::Building {
                     phase: BuildPhase::Idle,
                     indexed_count: 0,
@@ -463,10 +468,7 @@ impl IndexStateMachine {
 
         match &*state {
             IndexState::Ready { .. } | IndexState::Degraded { .. } => {
-                *state = IndexState::Updating {
-                    updating_count,
-                    started_at: Instant::now(),
-                };
+                *state = IndexState::Updating { updating_count, started_at: Instant::now() };
                 TransitionResult::Success
             }
             _ => TransitionResult::InvalidTransition {
@@ -510,17 +512,12 @@ impl IndexStateMachine {
             IndexState::Initializing { .. }
             | IndexState::Building { .. }
             | IndexState::Updating { .. }
-            | IndexState::Invalidating { .. } => {
-                return TransitionResult::InvalidTransition {
-                    from: from_kind,
-                    to: IndexStateKind::Invalidating,
-                };
-            }
+            | IndexState::Invalidating { .. } => TransitionResult::InvalidTransition {
+                from: from_kind,
+                to: IndexStateKind::Invalidating,
+            },
             _ => {
-                *state = IndexState::Invalidating {
-                    reason,
-                    started_at: Instant::now(),
-                };
+                *state = IndexState::Invalidating { reason, started_at: Instant::now() };
                 TransitionResult::Success
             }
         }
@@ -563,26 +560,17 @@ impl IndexStateMachine {
             | IndexState::Updating { .. }
             | IndexState::Invalidating { .. }
             | IndexState::Degraded { .. } => {
-                *state = IndexState::Ready {
-                    symbol_count,
-                    file_count,
-                    completed_at: Instant::now(),
-                };
+                *state =
+                    IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
                 TransitionResult::Success
             }
             IndexState::Ready { .. } => {
                 // Already Ready - update metrics but don't log as transition
-                *state = IndexState::Ready {
-                    symbol_count,
-                    file_count,
-                    completed_at: Instant::now(),
-                };
+                *state =
+                    IndexState::Ready { symbol_count, file_count, completed_at: Instant::now() };
                 TransitionResult::Success
             }
-            _ => TransitionResult::InvalidTransition {
-                from: from_kind,
-                to: IndexStateKind::Ready,
-            },
+            _ => TransitionResult::InvalidTransition { from: from_kind, to: IndexStateKind::Ready },
         }
     }
 
@@ -631,11 +619,7 @@ impl IndexStateMachine {
                 to: IndexStateKind::Degraded,
             },
             _ => {
-                *state = IndexState::Degraded {
-                    reason,
-                    available_symbols,
-                    since: Instant::now(),
-                };
+                *state = IndexState::Degraded { reason, available_symbols, since: Instant::now() };
                 TransitionResult::Success
             }
         }
@@ -670,10 +654,7 @@ impl IndexStateMachine {
         let mut state = self.state.write();
         let _from_kind = state.kind();
 
-        *state = IndexState::Error {
-            message,
-            since: Instant::now(),
-        };
+        *state = IndexState::Error { message, since: Instant::now() };
         TransitionResult::Success
     }
 
@@ -807,10 +788,7 @@ mod tests {
     #[test]
     fn test_idle_to_initializing() {
         let machine = IndexStateMachine::new();
-        assert!(matches!(
-            machine.transition_to_initializing(),
-            TransitionResult::Success
-        ));
+        assert!(matches!(machine.transition_to_initializing(), TransitionResult::Success));
         assert!(matches!(machine.state(), IndexState::Initializing { .. }));
     }
 
@@ -818,10 +796,7 @@ mod tests {
     fn test_initializing_to_building() {
         let machine = IndexStateMachine::new();
         machine.transition_to_initializing();
-        assert!(matches!(
-            machine.transition_to_building(100),
-            TransitionResult::Success
-        ));
+        assert!(matches!(machine.transition_to_building(100), TransitionResult::Success));
         assert!(matches!(machine.state(), IndexState::Building { .. }));
     }
 
@@ -830,10 +805,7 @@ mod tests {
         let machine = IndexStateMachine::new();
         machine.transition_to_initializing();
         machine.transition_to_building(100);
-        assert!(matches!(
-            machine.transition_to_ready(100, 5000),
-            TransitionResult::Success
-        ));
+        assert!(matches!(machine.transition_to_ready(100, 5000), TransitionResult::Success));
         assert!(matches!(machine.state(), IndexState::Ready { .. }));
     }
 
@@ -843,10 +815,7 @@ mod tests {
         machine.transition_to_initializing();
         machine.transition_to_building(100);
         machine.transition_to_ready(100, 5000);
-        assert!(matches!(
-            machine.transition_to_updating(5),
-            TransitionResult::Success
-        ));
+        assert!(matches!(machine.transition_to_updating(5), TransitionResult::Success));
         assert!(matches!(machine.state(), IndexState::Updating { .. }));
     }
 
@@ -900,9 +869,6 @@ mod tests {
     fn test_update_initialization_progress() {
         let machine = IndexStateMachine::new();
         machine.transition_to_initializing();
-        assert!(matches!(
-            machine.update_initialization_progress(50),
-            TransitionResult::Success
-        ));
+        assert!(matches!(machine.update_initialization_progress(50), TransitionResult::Success));
     }
 }

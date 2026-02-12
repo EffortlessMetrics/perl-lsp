@@ -1,6 +1,6 @@
 [package]
 name = "perl-position-tracking"
-version = "0.8.8"
+version = "0.9.0"
 edition = "2021"
 description = "UTF-8/UTF-16 position tracking and conversion for Perl LSP"
 readme = "README.md"

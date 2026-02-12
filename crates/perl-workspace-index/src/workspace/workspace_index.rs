@@ -1944,6 +1944,12 @@ impl WorkspaceIndex {
         symbols
     }
 
+    /// Clear all indexed files and symbols from the workspace.
+    pub fn clear(&self) {
+        self.files.write().clear();
+        self.symbols.write().clear();
+    }
+
     /// Return the number of indexed files in the workspace
     pub fn file_count(&self) -> usize {
         let files = self.files.read();

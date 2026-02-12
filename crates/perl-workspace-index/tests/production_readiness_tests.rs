@@ -6,20 +6,19 @@
 //! - Service Level Objectives (SLOs)
 //! - Performance optimization for large workspaces
 //! - Production coordinator integration
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use perl_workspace_index::workspace::cache::{
-    AstCacheConfig, BoundedLruCache, CacheConfig, EstimateSize, SymbolCacheConfig,
-    WorkspaceCacheConfig, CombinedWorkspaceCacheConfig,
-};
-use perl_workspace_index::workspace::slo::{
-    OperationResult, OperationType, SloConfig, SloStatistics, SloTracker,
-};
-use perl_workspace_index::workspace::state_machine::{
-    BuildPhase, DegradationReason, IndexState, IndexStateMachine, IndexStateKind,
-    InvalidationReason, ResourceKind, TransitionResult,
+    AstCacheConfig, BoundedLruCache, CacheConfig, CombinedWorkspaceCacheConfig, SymbolCacheConfig,
+    WorkspaceCacheConfig,
 };
 use perl_workspace_index::workspace::production_coordinator::{
-    ProductionIndexCoordinator, ProductionCoordinatorConfig, CoordinatorStatistics,
+    ProductionCoordinatorConfig, ProductionIndexCoordinator,
+};
+use perl_workspace_index::workspace::slo::{OperationResult, OperationType, SloConfig, SloTracker};
+use perl_workspace_index::workspace::state_machine::{
+    BuildPhase, DegradationReason, IndexState, IndexStateMachine, InvalidationReason,
+    TransitionResult,
 };
 use std::thread;
 use std::time::Duration;
@@ -45,24 +44,15 @@ fn test_state_machine_full_lifecycle() {
     let machine = IndexStateMachine::new();
 
     // Idle → Initializing
-    assert!(matches!(
-        machine.transition_to_initializing(),
-        TransitionResult::Success
-    ));
+    assert!(matches!(machine.transition_to_initializing(), TransitionResult::Success));
     assert!(matches!(machine.state(), IndexState::Initializing { .. }));
     assert!(machine.state().is_transitional());
 
     // Update initialization progress
-    assert!(matches!(
-        machine.update_initialization_progress(50),
-        TransitionResult::Success
-    ));
+    assert!(matches!(machine.update_initialization_progress(50), TransitionResult::Success));
 
     // Initializing → Building
-    assert!(matches!(
-        machine.transition_to_building(100),
-        TransitionResult::Success
-    ));
+    assert!(matches!(machine.transition_to_building(100), TransitionResult::Success));
     assert!(matches!(machine.state(), IndexState::Building { .. }));
 
     // Update building progress
@@ -72,10 +62,7 @@ fn test_state_machine_full_lifecycle() {
     ));
 
     // Building → Ready
-    assert!(matches!(
-        machine.transition_to_ready(100, 5000),
-        TransitionResult::Success
-    ));
+    assert!(matches!(machine.transition_to_ready(100, 5000), TransitionResult::Success));
     assert!(matches!(machine.state(), IndexState::Ready { .. }));
     assert!(machine.state().is_ready());
     assert!(!machine.state().is_transitional());
@@ -92,18 +79,14 @@ fn test_state_machine_degradation() {
 
     // Ready → Degraded
     assert!(matches!(
-        machine.transition_to_degraded(DegradationReason::IoError {
-            message: "IO error".to_string()
-        }),
+        machine
+            .transition_to_degraded(DegradationReason::IoError { message: "IO error".to_string() }),
         TransitionResult::Success
     ));
     assert!(matches!(machine.state(), IndexState::Degraded { .. }));
 
     // Degraded → Ready (recovery)
-    assert!(matches!(
-        machine.transition_to_ready(100, 5000),
-        TransitionResult::Success
-    ));
+    assert!(matches!(machine.transition_to_ready(100, 5000), TransitionResult::Success));
     assert!(matches!(machine.state(), IndexState::Ready { .. }));
 }
 
@@ -120,10 +103,7 @@ fn test_state_machine_error_recovery() {
     assert!(machine.state().is_error());
 
     // Error → Initializing (recovery)
-    assert!(matches!(
-        machine.transition_to_initializing(),
-        TransitionResult::Success
-    ));
+    assert!(matches!(machine.transition_to_initializing(), TransitionResult::Success));
     assert!(matches!(machine.state(), IndexState::Initializing { .. }));
 }
 
@@ -183,17 +163,11 @@ fn test_state_machine_update_state() {
 
     // Ready → Updating
     machine.transition_to_ready(100, 5000);
-    assert!(matches!(
-        machine.transition_to_updating(5),
-        TransitionResult::Success
-    ));
+    assert!(matches!(machine.transition_to_updating(5), TransitionResult::Success));
     assert!(matches!(machine.state(), IndexState::Updating { .. }));
 
     // Updating → Ready
-    assert!(matches!(
-        machine.transition_to_ready(100, 5000),
-        TransitionResult::Success
-    ));
+    assert!(matches!(machine.transition_to_ready(100, 5000), TransitionResult::Success));
     assert!(matches!(machine.state(), IndexState::Ready { .. }));
 }
 
@@ -212,10 +186,7 @@ fn test_state_machine_invalidation() {
     assert!(matches!(machine.state(), IndexState::Invalidating { .. }));
 
     // Invalidating → Ready
-    assert!(matches!(
-        machine.transition_to_ready(100, 5000),
-        TransitionResult::Success
-    ));
+    assert!(matches!(machine.transition_to_ready(100, 5000), TransitionResult::Success));
     assert!(matches!(machine.state(), IndexState::Ready { .. }));
 }
 
@@ -237,11 +208,7 @@ fn test_cache_basic_operations() {
 
 #[test]
 fn test_cache_lru_eviction() {
-    let config = CacheConfig {
-        max_items: 2,
-        max_bytes: 100,
-        ttl: None,
-    };
+    let config = CacheConfig { max_items: 2, max_bytes: 100, ttl: None };
     let cache = BoundedLruCache::<String, String>::new(config);
 
     cache.insert("key1".to_string(), "value1".to_string());
@@ -322,8 +289,9 @@ fn test_cache_concurrent_access() {
         let handle = thread::spawn(move || {
             let key = format!("key{}", i);
             let value = format!("value{}", i);
+            let key_clone = key.clone();
             cache_clone.insert(key, value);
-            cache_clone.get(&key);
+            cache_clone.get(&key_clone);
         });
         handles.push(handle);
     }
@@ -387,11 +355,7 @@ fn test_slo_tracker_basic() {
 
     let start = tracker.start_operation(OperationType::DefinitionLookup);
     thread::sleep(Duration::from_millis(1));
-    tracker.record_operation_type(
-        OperationType::DefinitionLookup,
-        start,
-        OperationResult::Success,
-    );
+    tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
 
     let stats = tracker.statistics(OperationType::DefinitionLookup);
     assert_eq!(stats.total_count, 1);
@@ -419,7 +383,7 @@ fn test_slo_tracker_statistics() {
     assert_eq!(stats.success_count, 10);
     assert!(stats.p50_ms > 0);
     assert!(stats.p95_ms > 0);
-    assert!(stats.avg_ms > 0);
+    assert!(stats.avg_ms > 0.0);
 }
 
 #[test]
@@ -491,11 +455,7 @@ fn test_slo_tracker_reset() {
     let tracker = SloTracker::default();
 
     let start = tracker.start_operation(OperationType::DefinitionLookup);
-    tracker.record_operation_type(
-        OperationType::DefinitionLookup,
-        start,
-        OperationResult::Success,
-    );
+    tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
 
     tracker.reset();
 
@@ -559,28 +519,16 @@ fn test_slo_all_slos_met() {
 fn test_operation_type_targets() {
     let config = SloConfig::default();
 
-    assert_eq!(
-        OperationType::IndexInitialization.slo_target_ms(&config),
-        5000
-    );
-    assert_eq!(
-        OperationType::IncrementalUpdate.slo_target_ms(&config),
-        100
-    );
-    assert_eq!(
-        OperationType::DefinitionLookup.slo_target_ms(&config),
-        50
-    );
+    assert_eq!(OperationType::IndexInitialization.slo_target_ms(&config), 5000);
+    assert_eq!(OperationType::IncrementalUpdate.slo_target_ms(&config), 100);
+    assert_eq!(OperationType::DefinitionLookup.slo_target_ms(&config), 50);
     assert_eq!(OperationType::Completion.slo_target_ms(&config), 100);
     assert_eq!(OperationType::Hover.slo_target_ms(&config), 50);
 }
 
 #[test]
 fn test_operation_type_names() {
-    assert_eq!(
-        OperationType::IndexInitialization.name(),
-        "index_initialization"
-    );
+    assert_eq!(OperationType::IndexInitialization.name(), "index_initialization");
     assert_eq!(OperationType::IncrementalUpdate.name(), "incremental_update");
     assert_eq!(OperationType::DefinitionLookup.name(), "definition_lookup");
     assert_eq!(OperationType::Completion.name(), "completion");
@@ -642,11 +590,7 @@ fn test_state_machine_slo_integration() {
     // Track definition lookup
     let start = tracker.start_operation(OperationType::DefinitionLookup);
     thread::sleep(Duration::from_millis(1));
-    tracker.record_operation_type(
-        OperationType::DefinitionLookup,
-        start,
-        OperationResult::Success,
-    );
+    tracker.record_operation_type(OperationType::DefinitionLookup, start, OperationResult::Success);
 
     assert!(machine.state().is_ready());
     assert!(tracker.all_slos_met());
@@ -675,11 +619,7 @@ fn test_full_production_readiness_workflow() {
         cache.insert(format!("file{}", i), format!("content{}", i));
         machine.update_building_progress(i + 1, BuildPhase::Indexing);
     }
-    tracker.record_operation_type(
-        OperationType::FileIndexing,
-        start,
-        OperationResult::Success,
-    );
+    tracker.record_operation_type(OperationType::FileIndexing, start, OperationResult::Success);
 
     // 3. Ready state
     machine.transition_to_ready(10, 100);
@@ -720,7 +660,7 @@ fn test_full_production_readiness_workflow() {
 fn test_production_coordinator_creation() {
     let coordinator = ProductionIndexCoordinator::new();
     assert!(matches!(coordinator.state(), IndexState::Idle { .. }));
-    
+
     let stats = coordinator.statistics();
     assert_eq!(stats.cache_stats.len(), 3);
     assert_eq!(stats.slo_stats.len(), 8);
@@ -776,13 +716,13 @@ fn test_production_coordinator_caching() {
 
     let uri = Url::parse("file:///example.pl").unwrap();
     let code = "sub hello { return 42; }";
-    
+
     // First indexing - should cache
     assert!(coordinator.index_file(uri.clone(), code.to_string()).is_ok());
-    
+
     // Second indexing - should hit cache
     assert!(coordinator.index_file(uri, code.to_string()).is_ok());
-    
+
     // Check cache stats
     let stats = coordinator.statistics();
     let ast_stats = stats.cache_stats.get("ast").unwrap();
@@ -804,11 +744,11 @@ fn test_production_coordinator_slo_tracking() {
     // Check SLO stats
     let stats = coordinator.statistics();
     assert!(stats.all_slos_met);
-    
+
     let file_stats = stats.slo_stats.get(&OperationType::FileIndexing).unwrap();
     assert_eq!(file_stats.total_count, 1);
     assert_eq!(file_stats.success_count, 1);
-    
+
     let def_stats = stats.slo_stats.get(&OperationType::DefinitionLookup).unwrap();
     assert_eq!(def_stats.total_count, 1);
     assert_eq!(def_stats.success_count, 1);
@@ -824,7 +764,7 @@ fn test_production_coordinator_invalidation() {
 
     coordinator.invalidate(InvalidationReason::ManualRequest);
     assert!(matches!(coordinator.state(), IndexState::Idle { .. }));
-    
+
     // Cache should be cleared
     let stats = coordinator.statistics();
     let ast_stats = stats.cache_stats.get("ast").unwrap();
@@ -835,16 +775,16 @@ fn test_production_coordinator_invalidation() {
 fn test_production_coordinator_memory_limits() {
     let mut config = ProductionCoordinatorConfig::default();
     config.cache_config.ast.max_bytes = 100; // Very small limit
-    
+
     let coordinator = ProductionIndexCoordinator::with_config(config);
     coordinator.initialize().unwrap();
 
     let uri = Url::parse("file:///example.pl").unwrap();
     let large_code = "x".repeat(200); // Larger than cache limit
-    
+
     // Should still work, but cache eviction will occur
     assert!(coordinator.index_file(uri, large_code).is_ok());
-    
+
     let stats = coordinator.statistics();
     assert!(stats.total_memory_usage <= 100); // Should respect limit
 }
@@ -862,7 +802,7 @@ fn test_production_coordinator_concurrent_operations() {
             let uri = Url::parse(&format!("file:///example{}.pl", i)).unwrap();
             let code = format!("sub hello{} {{ return {}; }}", i, i);
             coord_clone.index_file(uri, code).unwrap();
-            
+
             let def = coord_clone.find_definition(&format!("hello{}", i));
             assert!(def.is_some());
         });
@@ -882,43 +822,43 @@ fn test_production_coordinator_concurrent_operations() {
 #[test]
 fn test_production_coordinator_full_workflow() {
     let coordinator = ProductionIndexCoordinator::new();
-    
+
     // 1. Initialize
     assert!(coordinator.initialize().is_ok());
     assert!(coordinator.state().is_ready());
-    
+
     // 2. Index multiple files
     let files = vec![
         ("file:///main.pl", "sub main { hello(); }"),
         ("file:///utils.pl", "sub hello { return 42; }"),
         ("file:///config.pl", "our $CONFIG = 1;"),
     ];
-    
+
     for (uri_str, code) in &files {
         let uri = Url::parse(uri_str).unwrap();
         assert!(coordinator.index_file(uri, code.to_string()).is_ok());
     }
-    
+
     // 3. Perform lookups
     let main_def = coordinator.find_definition("main");
     assert!(main_def.is_some());
-    
+
     let hello_def = coordinator.find_definition("hello");
     assert!(hello_def.is_some());
-    
+
     let hello_refs = coordinator.find_references("hello");
     assert_eq!(hello_refs.len(), 2); // definition + call
-    
+
     // 4. Check statistics
     let stats = coordinator.statistics();
     assert!(stats.all_slos_met);
     assert_eq!(stats.cache_stats.get("ast").unwrap().current_items, 3);
     assert_eq!(stats.cache_stats.get("symbol").unwrap().current_items, 3);
-    
+
     // 5. Invalidate and reinitialize
     coordinator.invalidate(InvalidationReason::ConfigurationChanged);
     assert!(matches!(coordinator.state(), IndexState::Idle { .. }));
-    
+
     assert!(coordinator.initialize().is_ok());
     assert!(coordinator.state().is_ready());
 }

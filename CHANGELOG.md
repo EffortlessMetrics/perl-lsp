@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- Next release changes go here -->
 
+## [v0.9.0] - 2026-02-12
+
 ### Roadmap (Now / Next / Later)
 
 #### Now (v0.9.1 close-out)

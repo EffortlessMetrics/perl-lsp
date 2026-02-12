@@ -38,16 +38,11 @@
 
 use super::cache::{BoundedLruCache, CombinedWorkspaceCacheConfig};
 use super::slo::{OperationResult, OperationType, SloConfig, SloTracker};
-use super::state_machine::{
-    BuildPhase, DegradationReason, IndexState, IndexStateMachine, IndexStateKind,
-    InvalidationReason, ResourceKind, TransitionResult,
-};
+use super::state_machine::{IndexState, IndexStateMachine, InvalidationReason, TransitionResult};
 use super::workspace_index::{IndexResourceLimits, WorkspaceIndex};
 use crate::position::{Position, Range};
-use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Instant;
 use url::Url;
 
 /// Cache manager for workspace index components.
@@ -99,7 +94,8 @@ impl WorkspaceCacheManager {
 
     /// Insert AST node into cache.
     pub fn insert_ast(&self, key: String, value: Vec<u8>) {
-        self.ast_cache.insert_with_size(key, value, value.len());
+        let size = value.len();
+        self.ast_cache.insert_with_size(key, value, size);
     }
 
     /// Get symbol from cache.
@@ -109,7 +105,8 @@ impl WorkspaceCacheManager {
 
     /// Insert symbol into cache.
     pub fn insert_symbol(&self, key: String, value: Vec<u8>) {
-        self.symbol_cache.insert_with_size(key, value, value.len());
+        let size = value.len();
+        self.symbol_cache.insert_with_size(key, value, size);
     }
 
     /// Get workspace data from cache.
@@ -119,7 +116,8 @@ impl WorkspaceCacheManager {
 
     /// Insert workspace data into cache.
     pub fn insert_workspace(&self, key: String, value: Vec<u8>) {
-        self.workspace_cache.insert_with_size(key, value, value.len());
+        let size = value.len();
+        self.workspace_cache.insert_with_size(key, value, size);
     }
 
     /// Clear all caches.
@@ -147,7 +145,7 @@ impl WorkspaceCacheManager {
 }
 
 /// Configuration for the production index coordinator.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ProductionCoordinatorConfig {
     /// Cache configuration
     pub cache_config: CombinedWorkspaceCacheConfig,
@@ -155,16 +153,6 @@ pub struct ProductionCoordinatorConfig {
     pub slo_config: SloConfig,
     /// Resource limits
     pub resource_limits: IndexResourceLimits,
-}
-
-impl Default for ProductionCoordinatorConfig {
-    fn default() -> Self {
-        Self {
-            cache_config: CombinedWorkspaceCacheConfig::default(),
-            slo_config: SloConfig::default(),
-            resource_limits: IndexResourceLimits::default(),
-        }
-    }
 }
 
 /// Production-ready workspace index coordinator.
@@ -180,8 +168,6 @@ pub struct ProductionIndexCoordinator {
     cache: Arc<WorkspaceCacheManager>,
     /// SLO tracker for performance monitoring
     slo_tracker: Arc<SloTracker>,
-    /// Resource limits configuration
-    limits: IndexResourceLimits,
     /// Configuration
     config: ProductionCoordinatorConfig,
 }
@@ -233,7 +219,6 @@ impl ProductionIndexCoordinator {
             index: Arc::new(WorkspaceIndex::new()),
             cache,
             slo_tracker,
-            limits: config.resource_limits,
             config,
         }
     }
@@ -347,10 +332,9 @@ impl ProductionIndexCoordinator {
         if matches!(self.state(), IndexState::Ready { .. }) {
             // Transition to Updating
             let _ = self.state_machine.transition_to_updating(1);
-            self.state_machine.transition_to_ready(
-                self.index.files.read().len(),
-                self.get_symbol_count(),
-            );
+            let _ = self
+                .state_machine
+                .transition_to_ready(self.index.file_count(), self.index.symbol_count());
         }
 
         self.slo_tracker.record_operation_type(
@@ -459,8 +443,7 @@ impl ProductionIndexCoordinator {
         // Clear index
         // Note: This is a simplified version - in production you'd want
         // more sophisticated invalidation logic
-        self.index.files.write().clear();
-        self.index.symbols.write().clear();
+        self.index.clear();
 
         // Transition back to Idle
         let _ = self.state_machine.transition_to_idle();
@@ -484,8 +467,14 @@ impl ProductionIndexCoordinator {
     /// Serialize a location for caching.
     fn serialize_location(&self, location: &super::workspace_index::Location) -> Vec<u8> {
         // Simple serialization - in production use a proper serialization format
-        format!("{}:{}:{}:{}", location.uri, location.range.start.line,
-            location.range.start.column, location.range.end.line).into_bytes()
+        format!(
+            "{}:{}:{}:{}",
+            location.uri,
+            location.range.start.line,
+            location.range.start.column,
+            location.range.end.line
+        )
+        .into_bytes()
     }
 
     /// Deserialize a location from cache.
@@ -498,13 +487,11 @@ impl ProductionIndexCoordinator {
                 uri: parts[0].to_string(),
                 range: Range {
                     start: Position {
+                        byte: 0,
                         line: parts[1].parse().ok()?,
                         column: parts[2].parse().ok()?,
                     },
-                    end: Position {
-                        line: parts[3].parse().ok()?,
-                        column: 0,
-                    },
+                    end: Position { byte: 0, line: parts[3].parse().ok()?, column: 0 },
                 },
             })
         } else {
@@ -515,10 +502,7 @@ impl ProductionIndexCoordinator {
     /// Serialize locations for caching.
     fn serialize_locations(&self, locations: &[super::workspace_index::Location]) -> Vec<u8> {
         // Simple serialization
-        locations
-            .iter()
-            .flat_map(|loc| self.serialize_location(loc))
-            .collect()
+        locations.iter().flat_map(|loc| self.serialize_location(loc)).collect()
     }
 
     /// Deserialize locations from cache.
@@ -535,11 +519,6 @@ impl ProductionIndexCoordinator {
     fn serialize_file_index(&self, _uri: &Url) -> Result<Vec<u8>, String> {
         // Placeholder - in production, serialize the actual file index
         Ok(Vec::new())
-    }
-
-    /// Get the total symbol count.
-    fn get_symbol_count(&self) -> usize {
-        self.index.files.read().values().map(|fi| fi.symbols.len()).sum()
     }
 }
 
@@ -575,33 +554,36 @@ mod tests {
     }
 
     #[test]
-    fn test_coordinator_initialize() {
+    fn test_coordinator_initialize() -> Result<(), String> {
         let coordinator = ProductionIndexCoordinator::new();
-        assert!(coordinator.initialize().is_ok());
+        coordinator.initialize()?;
         assert!(coordinator.state().is_ready());
+        Ok(())
     }
 
     #[test]
-    fn test_coordinator_index_file() {
+    fn test_coordinator_index_file() -> Result<(), String> {
         let coordinator = ProductionIndexCoordinator::new();
-        coordinator.initialize().unwrap();
+        coordinator.initialize()?;
 
-        let uri = Url::parse("file:///example.pl").unwrap();
+        let uri = Url::parse("file:///example.pl").map_err(|e| e.to_string())?;
         let code = "sub hello { return 42; }";
-        assert!(coordinator.index_file(uri, code.to_string()).is_ok());
+        coordinator.index_file(uri, code.to_string())?;
+        Ok(())
     }
 
     #[test]
-    fn test_coordinator_find_definition() {
+    fn test_coordinator_find_definition() -> Result<(), String> {
         let coordinator = ProductionIndexCoordinator::new();
-        coordinator.initialize().unwrap();
+        coordinator.initialize()?;
 
-        let uri = Url::parse("file:///example.pl").unwrap();
+        let uri = Url::parse("file:///example.pl").map_err(|e| e.to_string())?;
         let code = "sub hello { return 42; }";
-        coordinator.index_file(uri, code.to_string()).unwrap();
+        coordinator.index_file(uri, code.to_string())?;
 
         let def = coordinator.find_definition("hello");
         assert!(def.is_some());
+        Ok(())
     }
 
     #[test]
@@ -615,14 +597,15 @@ mod tests {
     }
 
     #[test]
-    fn test_coordinator_invalidate() {
+    fn test_coordinator_invalidate() -> Result<(), String> {
         let coordinator = ProductionIndexCoordinator::new();
-        coordinator.initialize().unwrap();
+        coordinator.initialize()?;
 
-        let uri = Url::parse("file:///example.pl").unwrap();
-        coordinator.index_file(uri, "sub hello {}".to_string()).unwrap();
+        let uri = Url::parse("file:///example.pl").map_err(|e| e.to_string())?;
+        coordinator.index_file(uri, "sub hello {}".to_string())?;
 
         coordinator.invalidate(InvalidationReason::ManualRequest);
         assert!(matches!(coordinator.state(), IndexState::Idle { .. }));
+        Ok(())
     }
 }
