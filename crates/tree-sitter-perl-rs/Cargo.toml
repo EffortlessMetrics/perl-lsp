@@ -13,7 +13,7 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 perl-lexer = { path = "../perl-lexer" }
 perl-parser = { path = "../perl-parser" }
-tree-sitter = "0.26.3"
+tree-sitter = "0.26.5"
 serde = { version = "1.0.228", features = ["derive"] }
 bincode = { version = "2.0.0-rc.3", features = ["serde"] }
 proptest = "1.9.0"

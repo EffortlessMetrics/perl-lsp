@@ -110,7 +110,7 @@ perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.8.8" }
 # External dependencies
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
-tree-sitter = "0.26.3"
+tree-sitter = "0.26.5"
 ropey = "1.6.1"
 
 [patch.crates-io]
