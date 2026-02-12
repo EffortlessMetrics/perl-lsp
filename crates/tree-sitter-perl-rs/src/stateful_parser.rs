@@ -298,6 +298,7 @@ impl StatefulPerlParser {
     }
 
     /// Recursively update heredoc nodes with their content
+    #[allow(clippy::only_used_in_recursion)]
     fn update_heredoc_nodes(
         &self,
         node: &mut AstNode,
@@ -398,6 +399,7 @@ impl StatefulPerlParser {
     }
 
     /// Recursively update format nodes with their content
+    #[allow(clippy::only_used_in_recursion)]
     fn update_format_nodes(
         &self,
         node: &mut AstNode,
