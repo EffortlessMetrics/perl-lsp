@@ -99,6 +99,11 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
             //   - IPC: msg*, sem*, shm*
             // Note: s/tr/y regex mutation operators handled separately via regex_mutation_re()
             let ops = [
+                // Keywords
+                "use",
+                "no",
+                "package",
+                "goto",
                 // State mutation
                 "push",
                 "pop",
@@ -1837,7 +1842,41 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
                 in_sq = false;
             }
         } else if ch == '\'' {
-            in_sq = true;
+            // Check if it's a package separator
+            // Logic: If preceded by a word char, it's a separator UNLESS the word is a quote-like operator
+            let is_separator = if i > 0 {
+                let prefix = &s[..i];
+                if let Some(prev) = prefix.chars().last() {
+                    if prev.is_alphanumeric() || prev == '_' {
+                        // Find the word ending at prev
+                        let mut word_start = i;
+                        // Scan backwards to find start of word
+                        for (j, c) in prefix.char_indices().rev() {
+                            if !(c.is_alphanumeric() || c == '_') {
+                                word_start = j + c.len_utf8();
+                                break;
+                            }
+                            word_start = j;
+                        }
+
+                        let word = &s[word_start..i];
+                        // These operators allow ' as a delimiter (e.g. q'foo', s'foo'bar')
+                        // If the word is one of these, then ' is a quote delimiter.
+                        // Otherwise (e.g. CORE'system), it is a package separator.
+                        !matches!(word, "q" | "qq" | "qx" | "qw" | "m" | "qr" | "s" | "tr" | "y")
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if !is_separator {
+                in_sq = true;
+            }
         }
     }
 
@@ -3214,5 +3253,25 @@ DB<1>"#;
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
         }
+    }
+
+    #[test]
+    fn test_security_repro_core_system_bypass() {
+        // This test case demonstrates the vulnerability where CORE'system bypasses checks
+        // because ' is treated as a quote delimiter instead of a package separator.
+
+        let bypass_expr = "CORE'system('ls')";
+        let result = validate_safe_expression(bypass_expr);
+
+        // If the vulnerability exists, result will be None (allowed).
+        // If fixed, it should be Some(error).
+        assert!(result.is_some(), "CORE'system should be blocked, but was allowed!");
+    }
+
+    #[test]
+    fn test_security_repro_use_bypass() {
+        let bypass_expr = "use Socket; Socket::connect(...)";
+        let result = validate_safe_expression(bypass_expr);
+        assert!(result.is_some(), "use statement should be blocked!");
     }
 }
