@@ -199,12 +199,32 @@ export async function activate(context: vscode.ExtensionContext) {
             args?: any[];
         }
 
+        const editor = vscode.window.activeTextEditor;
+        const isPerl = editor ? editor.document.languageId === 'perl' : false;
+        const isTestFile = isPerl && (editor?.document.fileName.endsWith('.t') || editor?.document.fileName.endsWith('.pl'));
+
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
-            { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
-            { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
+
+            {
+                label: '$(organization) Organize Imports',
+                description: isPerl ? 'Shift+Alt+O' : '(Perl file required)',
+                detail: isPerl ? 'Sort and organize use statements' : 'Open a Perl file to enable this action',
+                command: 'perl-lsp.organizeImports'
+            },
+            {
+                label: '$(beaker) Run Tests in Current File',
+                description: isTestFile ? 'Shift+Alt+T' : '(.t or .pl file required)',
+                detail: isTestFile ? 'Run tests for the active file' : 'Open a test script to enable this action',
+                command: 'perl-lsp.runTests'
+            },
+            {
+                label: '$(list-flat) Format Document',
+                description: isPerl ? 'Shift+Alt+F' : '(Perl file required)',
+                detail: isPerl ? 'Format using perltidy' : 'Open a Perl file to enable this action',
+                command: 'editor.action.formatDocument'
+            },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
