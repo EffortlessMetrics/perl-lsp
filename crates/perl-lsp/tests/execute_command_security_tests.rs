@@ -77,29 +77,15 @@ fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
     // Clean up
     std::fs::remove_file(test_file).ok();
 
-    assert!(result.is_ok(), "Command should not fail to spawn");
-    let val = result?;
-    let output = val["output"].as_str().ok_or("Missing 'output' field")?;
+    // With enhanced validation, invalid identifier characters are rejected early
+    assert!(result.is_err(), "Malicious subroutine name should be rejected by validation");
+    let err = result.err().ok_or("Expected error but got Ok")?;
 
-    // Key assertions:
-    // 1. The injected print statement should NOT have executed
     assert!(
-        !output.contains("INJECTED_CODE_RAN"),
-        "Vulnerability: code injection via sub_name succeeded! Output: {}",
-        output
+        err.contains("Invalid subroutine name"),
+        "Error should be about invalid identifier: {}",
+        err
     );
-
-    // 2. The safe_sub should NOT have been called either (the malicious name
-    //    includes "safe_sub()" but that should be treated literally, not executed)
-    assert!(
-        !output.contains("SAFE_SUB_EXECUTED"),
-        "Unexpected: safe_sub was called despite malicious sub_name. Output: {}",
-        output
-    );
-
-    // 3. The command should have failed because no subroutine with that literal name exists
-    let success = val["success"].as_bool().ok_or("Missing 'success' field")?;
-    assert!(!success, "Command should have failed (subroutine not found)");
     Ok(())
 }
 
@@ -213,5 +199,98 @@ fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
     let output = val["output"].as_str().ok_or("Missing 'output' field")?;
 
     assert!(output.contains("VALID_OUTPUT"), "Output should contain expected result: {}", output);
+    Ok(())
+}
+
+/// Test that run_test_sub blocks attempts to call CORE::exit directly.
+#[test]
+fn test_block_core_exit() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+
+    // Create a dummy file
+    let temp_dir = TempDir::new()?;
+    let temp_file = temp_dir.path().join("repro_core_exit.pl");
+    fs::write(&temp_file, "sub normal_sub { print 'normal'; }")?;
+
+    // Try to call CORE::exit via sub_name
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![
+            Value::String(temp_file.to_string_lossy().to_string()),
+            Value::String("CORE::exit".to_string())
+        ]
+    );
+
+    // Should FAIL with security error
+    assert!(result.is_err(), "Should block CORE::exit");
+    let err = result.err().ok_or("Expected error")?;
+    assert!(err.contains("Security: Calling CORE:: functions directly is not allowed"), "Unexpected error: {}", err);
+    Ok(())
+}
+
+/// Test that run_test_sub blocks attempts to call CORE::dump directly.
+#[test]
+fn test_block_core_dump() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+
+    // Create a dummy file
+    let temp_dir = TempDir::new()?;
+    let temp_file = temp_dir.path().join("repro_core_dump.pl");
+    fs::write(&temp_file, "sub normal_sub { print 'normal'; }")?;
+
+    // Try to call CORE::dump
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![
+            Value::String(temp_file.to_string_lossy().to_string()),
+            Value::String("CORE::dump".to_string())
+        ]
+    );
+
+    assert!(result.is_err(), "Should block CORE::dump");
+    let err = result.err().ok_or("Expected error")?;
+    assert!(err.contains("Security: Calling CORE:: functions directly is not allowed"), "Unexpected error: {}", err);
+    Ok(())
+}
+
+/// Test that run_test_sub blocks invalid identifiers.
+#[test]
+fn test_block_invalid_identifier() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+    let temp_dir = TempDir::new()?;
+    let temp_file = temp_dir.path().join("repro_invalid.pl");
+    fs::write(&temp_file, "sub normal { }")?;
+
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![
+            Value::String(temp_file.to_string_lossy().to_string()),
+            Value::String("invalid-name!".to_string())
+        ]
+    );
+
+    assert!(result.is_err(), "Should block invalid identifier");
+    let err = result.err().ok_or("Expected error")?;
+    assert!(err.contains("Invalid subroutine name"), "Unexpected error: {}", err);
+    Ok(())
+}
+
+/// Test that run_test_sub allows valid package-qualified identifiers.
+#[test]
+fn test_allow_valid_identifiers() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+    let temp_dir = TempDir::new()?;
+    let temp_file = temp_dir.path().join("test_valid.pl");
+    fs::write(&temp_file, "package Foo; sub bar { print 'ok'; }")?;
+
+    let result = provider.execute_command(
+        "perl.runTestSub",
+        vec![
+            Value::String(temp_file.to_string_lossy().to_string()),
+            Value::String("Foo::bar".to_string())
+        ]
+    );
+
+    assert!(result.is_ok(), "Valid package-qualified sub should work");
     Ok(())
 }

@@ -97,6 +97,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
+use regex::Regex;
+
+static SUBROUTINE_NAME_RE: OnceLock<Regex> = OnceLock::new();
 
 // Cross-platform helpers for synthesizing `ExitStatus` in tests/mocks.
 #[cfg(any(test, doctest))]
@@ -406,6 +410,28 @@ impl ExecuteCommandProvider {
 
     /// Run a specific test subroutine with enhanced error handling
     fn run_test_sub(&self, file_path: &Path, sub_name: &str) -> Result<Value, String> {
+        // Validate sub_name format to prevent calling internal builtins or arbitrary code execution
+        // We only allow standard Perl identifiers (optional leading ::, followed by segments separated by ::)
+        let re = SUBROUTINE_NAME_RE.get_or_init(|| {
+            #[allow(clippy::unwrap_used)]
+            Regex::new(r"^(:{0,2}[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*)$").unwrap()
+        });
+
+        if !re.is_match(sub_name) {
+            return Err(format!(
+                "Invalid subroutine name: '{}'. Must be a valid Perl identifier.",
+                sub_name
+            ));
+        }
+
+        // Security: Prevent calling internal CORE:: functions directly
+        if sub_name.starts_with("CORE::") || sub_name.starts_with("::CORE::") {
+            return Err(format!(
+                "Security: Calling CORE:: functions directly is not allowed: '{}'",
+                sub_name
+            ));
+        }
+
         // Enhanced subroutine invocation with better error detection
         // Use @ARGV to safely pass file path and subroutine name preventing code injection
         let perl_code = r#"
