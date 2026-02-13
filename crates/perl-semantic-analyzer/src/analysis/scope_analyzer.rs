@@ -1190,39 +1190,30 @@ fn is_known_function(name: &str) -> bool {
         return false;
     }
 
-    match name {
-        // I/O functions
-        "print" | "printf" | "say" | "open" | "close" | "read" | "write" | "seek" | "tell"
-        | "eof" | "fileno" | "binmode" | "sysopen" | "sysread" | "syswrite" | "sysclose"
-        | "select" |
-        // String functions
-        "chomp" | "chop" | "chr" | "crypt" | "fc" | "hex" | "index" | "lc" | "lcfirst" | "length"
-        | "oct" | "ord" | "pack" | "q" | "qq" | "qr" | "quotemeta" | "qw" | "qx" | "reverse"
-        | "rindex" | "sprintf" | "substr" | "tr" | "uc" | "ucfirst" | "unpack" |
-        // Array/List functions
-        "pop" | "push" | "shift" | "unshift" | "splice" | "split" | "join" | "grep" | "map"
-        | "sort" |
-        // Hash functions
-        "delete" | "each" | "exists" | "keys" | "values" |
-        // Control flow
-        "die" | "exit" | "return" | "goto" | "last" | "next" | "redo" | "continue" | "break"
-        | "given" | "when" | "default" |
-        // File test operators
-        "stat" | "lstat" | "-r" | "-w" | "-x" | "-o" | "-R" | "-W" | "-X" | "-O" | "-e" | "-z"
-        | "-s" | "-f" | "-d" | "-l" | "-p" | "-S" | "-b" | "-c" | "-t" | "-u" | "-g" | "-k"
-        | "-T" | "-B" | "-M" | "-A" | "-C" |
-        // System functions
-        "system" | "exec" | "fork" | "wait" | "waitpid" | "kill" | "sleep" | "alarm"
-        | "getpgrp" | "getppid" | "getpriority" | "setpgrp" | "setpriority" | "time" | "times"
-        | "localtime" | "gmtime" |
-        // Math functions
-        "abs" | "atan2" | "cos" | "exp" | "int" | "log" | "rand" | "sin" | "sqrt" | "srand" |
-        // Misc functions
-        "defined" | "undef" | "ref" | "bless" | "tie" | "tied" | "untie" | "eval" | "caller"
-        | "import" | "require" | "use" | "do" | "package" | "sub" | "my" | "our" | "local"
-        | "state" | "scalar" | "wantarray" | "warn" => true,
-        _ => false,
+    // Use perfect hash map for O(1) lookup of standard builtins
+    if perl_parser_core::builtin_signatures_phf::is_builtin(name) {
+        return true;
     }
+
+    // Fallback for syntax keywords and operators missing from PHF (builtin_signatures_phf)
+    matches!(
+        name,
+        "sysclose"
+            | "q"
+            | "qq"
+            | "qr"
+            | "qw"
+            | "qx"
+            | "tr"
+            | "continue"
+            | "break"
+            | "given"
+            | "when"
+            | "default"
+            | "import"
+            | "package"
+            | "sub"
+    )
 }
 
 /// Check if an identifier is a known filehandle
@@ -1235,5 +1226,49 @@ fn is_filehandle(name: &str) -> bool {
             // Check if it's all uppercase (common convention for filehandles)
             name.chars().all(|c| c.is_ascii_uppercase() || c == '_') && !name.is_empty()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_known_function_coverage() {
+        // Test built-ins present in PHF
+        assert!(is_known_function("print"));
+        assert!(is_known_function("say"));
+        assert!(is_known_function("open"));
+        assert!(is_known_function("sysopen"));
+        assert!(is_known_function("-r")); // File test operator
+
+        // Test syntax keywords present in PHF
+        assert!(is_known_function("my"));
+        assert!(is_known_function("our"));
+        assert!(is_known_function("local"));
+        assert!(is_known_function("state"));
+        assert!(is_known_function("return"));
+        assert!(is_known_function("last"));
+        assert!(is_known_function("next"));
+        assert!(is_known_function("redo"));
+        assert!(is_known_function("die"));
+        assert!(is_known_function("exit"));
+
+        // Test items missing from PHF but covered by fallback
+        assert!(is_known_function("sysclose"));
+        assert!(is_known_function("sub"));
+        assert!(is_known_function("package"));
+        assert!(is_known_function("import"));
+        assert!(is_known_function("q"));
+        assert!(is_known_function("qq"));
+        assert!(is_known_function("qr"));
+        assert!(is_known_function("qw"));
+        assert!(is_known_function("qx"));
+        assert!(is_known_function("tr"));
+
+        // Test non-functions
+        assert!(!is_known_function("foo"));
+        assert!(!is_known_function("Bar"));
+        assert!(!is_known_function(""));
     }
 }
