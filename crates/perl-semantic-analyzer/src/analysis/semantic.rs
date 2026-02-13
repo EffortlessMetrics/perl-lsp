@@ -419,9 +419,30 @@ impl SemanticAnalyzer {
     fn is_file_test_operator(op: &str) -> bool {
         matches!(
             op,
-            "-e" | "-d" | "-f" | "-r" | "-w" | "-x" | "-s" | "-z" | "-T" | "-B" |
-            "-M" | "-A" | "-C" | "-l" | "-p" | "-S" | "-u" | "-g" | "-k" | "-t" |
-            "-O" | "-G" | "-R" | "-b" | "-c"
+            "-e" | "-d"
+                | "-f"
+                | "-r"
+                | "-w"
+                | "-x"
+                | "-s"
+                | "-z"
+                | "-T"
+                | "-B"
+                | "-M"
+                | "-A"
+                | "-C"
+                | "-l"
+                | "-p"
+                | "-S"
+                | "-u"
+                | "-g"
+                | "-k"
+                | "-t"
+                | "-O"
+                | "-G"
+                | "-R"
+                | "-b"
+                | "-c"
         )
     }
 
@@ -2229,10 +2250,8 @@ $str =~ s/world/Perl/;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> = tokens
-            .iter()
-            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
-            .collect();
+        let operator_tokens: Vec<_> =
+            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
 
         assert!(!operator_tokens.is_empty(), "Should have operator tokens for substitution");
         Ok(())
@@ -2249,10 +2268,8 @@ $str =~ tr/el/ol/;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> = tokens
-            .iter()
-            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
-            .collect();
+        let operator_tokens: Vec<_> =
+            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
 
         assert!(!operator_tokens.is_empty(), "Should have operator tokens for transliteration");
         Ok(())
@@ -2269,10 +2286,8 @@ my $ref = \$x;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> = tokens
-            .iter()
-            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
-            .collect();
+        let operator_tokens: Vec<_> =
+            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
 
         assert!(!operator_tokens.is_empty(), "Should have operator tokens for reference operator");
         Ok(())
@@ -2319,10 +2334,8 @@ if (-f $file) {
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> = tokens
-            .iter()
-            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
-            .collect();
+        let operator_tokens: Vec<_> =
+            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
 
         assert!(!operator_tokens.is_empty(), "Should have operator tokens for file test operators");
         Ok(())
@@ -2332,9 +2345,8 @@ if (-f $file) {
     fn test_all_file_test_operators_recognized() -> Result<(), Box<dyn std::error::Error>> {
         // Test that the is_file_test_operator helper recognizes all file test operators
         let file_test_ops = vec![
-            "-e", "-d", "-f", "-r", "-w", "-x", "-s", "-z", "-T", "-B",
-            "-M", "-A", "-C", "-l", "-p", "-S", "-u", "-g", "-k", "-t",
-            "-O", "-G", "-R", "-b", "-c",
+            "-e", "-d", "-f", "-r", "-w", "-x", "-s", "-z", "-T", "-B", "-M", "-A", "-C", "-l",
+            "-p", "-S", "-u", "-g", "-k", "-t", "-O", "-G", "-R", "-b", "-c",
         ];
 
         for op in file_test_ops {
@@ -2401,12 +2413,13 @@ $str =~ s/world/Perl/gi;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> = tokens
-            .iter()
-            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
-            .collect();
+        let operator_tokens: Vec<_> =
+            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
 
-        assert!(!operator_tokens.is_empty(), "Should have operator tokens for substitution with modifiers");
+        assert!(
+            !operator_tokens.is_empty(),
+            "Should have operator tokens for substitution with modifiers"
+        );
         Ok(())
     }
 
@@ -2421,12 +2434,13 @@ $str =~ y/hello/world/;
         let analyzer = SemanticAnalyzer::analyze(&ast);
 
         let tokens = analyzer.semantic_tokens();
-        let operator_tokens: Vec<_> = tokens
-            .iter()
-            .filter(|t| matches!(t.token_type, SemanticTokenType::Operator))
-            .collect();
+        let operator_tokens: Vec<_> =
+            tokens.iter().filter(|t| matches!(t.token_type, SemanticTokenType::Operator)).collect();
 
-        assert!(!operator_tokens.is_empty(), "Should have operator tokens for y/// transliteration");
+        assert!(
+            !operator_tokens.is_empty(),
+            "Should have operator tokens for y/// transliteration"
+        );
         Ok(())
     }
 }

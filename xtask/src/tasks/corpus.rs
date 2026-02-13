@@ -2,8 +2,8 @@
 
 use crate::types::ScannerType;
 use color_eyre::eyre::{Context, Result};
-use similar::{ChangeTag, TextDiff};
 use indicatif::{ProgressBar, ProgressStyle};
+use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::PathBuf;
 use walkdir::WalkDir;

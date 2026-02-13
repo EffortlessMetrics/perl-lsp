@@ -9,7 +9,7 @@
 //! - Error recovery and timeout handling
 //! - Cross-platform compatibility
 
-use perl_dap::tcp_attach::{TcpAttachConfig, TcpAttachSession, DapEvent};
+use perl_dap::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use std::sync::mpsc::{Sender, channel};
 use std::time::Duration;
 
@@ -69,10 +69,8 @@ fn test_tcp_attach_session_event_sender() {
     session.set_event_sender(tx);
 
     // Send an event and verify it's received
-    let event = DapEvent::Output {
-        category: "stdout".to_string(),
-        output: "test output".to_string(),
-    };
+    let event =
+        DapEvent::Output { category: "stdout".to_string(), output: "test output".to_string() };
     tx.send(event).unwrap();
 
     let received = rx.recv_timeout(Duration::from_millis(100)).unwrap();
@@ -91,10 +89,8 @@ fn test_tcp_attach_event_variants() {
     let (tx, rx) = channel::<DapEvent>();
 
     // Test Output event
-    tx.send(DapEvent::Output {
-        category: "stdout".to_string(),
-        output: "test".to_string(),
-    }).unwrap();
+    tx.send(DapEvent::Output { category: "stdout".to_string(), output: "test".to_string() })
+        .unwrap();
     if let DapEvent::Output { .. } = rx.recv_timeout(Duration::from_millis(100)).unwrap() {
         // Success
     } else {
@@ -102,10 +98,7 @@ fn test_tcp_attach_event_variants() {
     }
 
     // Test Stopped event
-    tx.send(DapEvent::Stopped {
-        reason: "breakpoint".to_string(),
-        thread_id: 1,
-    }).unwrap();
+    tx.send(DapEvent::Stopped { reason: "breakpoint".to_string(), thread_id: 1 }).unwrap();
     if let DapEvent::Stopped { .. } = rx.recv_timeout(Duration::from_millis(100)).unwrap() {
         // Success
     } else {
@@ -121,9 +114,7 @@ fn test_tcp_attach_event_variants() {
     }
 
     // Test Terminated event
-    tx.send(DapEvent::Terminated {
-        reason: "normal".to_string(),
-    }).unwrap();
+    tx.send(DapEvent::Terminated { reason: "normal".to_string() }).unwrap();
     if let DapEvent::Terminated { .. } = rx.recv_timeout(Duration::from_millis(100)).unwrap() {
         // Success
     } else {
@@ -131,9 +122,7 @@ fn test_tcp_attach_event_variants() {
     }
 
     // Test Error event
-    tx.send(DapEvent::Error {
-        message: "test error".to_string(),
-    }).unwrap();
+    tx.send(DapEvent::Error { message: "test error".to_string() }).unwrap();
     if let DapEvent::Error { .. } = rx.recv_timeout(Duration::from_millis(100)).unwrap() {
         // Success
     } else {
@@ -210,10 +199,8 @@ fn test_tcp_attach_event_serialization() {
     // Test that events can be cloned and sent through channels
     let (tx, rx) = channel::<DapEvent>();
 
-    let original = DapEvent::Output {
-        category: "stderr".to_string(),
-        output: "error message".to_string(),
-    };
+    let original =
+        DapEvent::Output { category: "stderr".to_string(), output: "error message".to_string() };
 
     // Clone and send
     tx.send(original.clone()).unwrap();

@@ -14,7 +14,7 @@
 //! cargo bench --bench dap_native_benchmarks
 //! ```
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use perl_dap::tcp_attach::{TcpAttachConfig, TcpAttachSession};
 use std::sync::mpsc::{Sender, channel};
 use std::time::{Duration, Instant};
@@ -110,12 +110,12 @@ fn bench_event_channel_throughput(c: &mut Criterion) {
                 category: "stdout".to_string(),
                 output: "benchmark".to_string(),
             };
-            
+
             // Send 100 events
             for _ in 0..100 {
                 let _ = tx.send(event.clone());
             }
-            
+
             // Receive 100 events
             for _ in 0..100 {
                 let _ = rx.recv_timeout(Duration::from_millis(1));
