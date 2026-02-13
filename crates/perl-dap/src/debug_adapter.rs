@@ -128,6 +128,7 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "readpipe",
                 "syscall",
                 "open",
+                "sysopen",
                 "close",
                 "print",
                 "say",
@@ -2775,6 +2776,7 @@ mod tests {
             "opendir $dh, '.'",
             "closedir $dh",
             "seek $fh, 0, 0",
+            "sysopen $fh, 'file', 1",
             "sysseek $fh, 0, 0",
             "setpgrp",
             "setpriority 0, 0, 10",
@@ -3215,4 +3217,5 @@ DB<1>"#;
             assert!(err.is_some(), "expected block for {expr:?}");
         }
     }
+
 }
