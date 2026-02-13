@@ -51,6 +51,7 @@
 
 use crate::ast::{Node, NodeKind};
 use crate::pragma_tracker::{PragmaState, PragmaTracker};
+use perl_parser_core::builtin_signatures_phf::is_builtin;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::ops::Range;
@@ -1190,37 +1191,21 @@ fn is_known_function(name: &str) -> bool {
         return false;
     }
 
+    // Use PHF for O(1) lookup of standard builtins
+    if is_builtin(name) {
+        return true;
+    }
+
+    // Check remaining keywords and operators not in PHF
     match name {
-        // I/O functions
-        "print" | "printf" | "say" | "open" | "close" | "read" | "write" | "seek" | "tell"
-        | "eof" | "fileno" | "binmode" | "sysopen" | "sysread" | "syswrite" | "sysclose"
-        | "select" |
-        // String functions
-        "chomp" | "chop" | "chr" | "crypt" | "fc" | "hex" | "index" | "lc" | "lcfirst" | "length"
-        | "oct" | "ord" | "pack" | "q" | "qq" | "qr" | "quotemeta" | "qw" | "qx" | "reverse"
-        | "rindex" | "sprintf" | "substr" | "tr" | "uc" | "ucfirst" | "unpack" |
-        // Array/List functions
-        "pop" | "push" | "shift" | "unshift" | "splice" | "split" | "join" | "grep" | "map"
-        | "sort" |
-        // Hash functions
-        "delete" | "each" | "exists" | "keys" | "values" |
-        // Control flow
-        "die" | "exit" | "return" | "goto" | "last" | "next" | "redo" | "continue" | "break"
-        | "given" | "when" | "default" |
-        // File test operators
-        "stat" | "lstat" | "-r" | "-w" | "-x" | "-o" | "-R" | "-W" | "-X" | "-O" | "-e" | "-z"
-        | "-s" | "-f" | "-d" | "-l" | "-p" | "-S" | "-b" | "-c" | "-t" | "-u" | "-g" | "-k"
-        | "-T" | "-B" | "-M" | "-A" | "-C" |
-        // System functions
-        "system" | "exec" | "fork" | "wait" | "waitpid" | "kill" | "sleep" | "alarm"
-        | "getpgrp" | "getppid" | "getpriority" | "setpgrp" | "setpriority" | "time" | "times"
-        | "localtime" | "gmtime" |
-        // Math functions
-        "abs" | "atan2" | "cos" | "exp" | "int" | "log" | "rand" | "sin" | "sqrt" | "srand" |
-        // Misc functions
-        "defined" | "undef" | "ref" | "bless" | "tie" | "tied" | "untie" | "eval" | "caller"
-        | "import" | "require" | "use" | "do" | "package" | "sub" | "my" | "our" | "local"
-        | "state" | "scalar" | "wantarray" | "warn" => true,
+        // Builtins missing from PHF
+        "sysclose" |
+        // Quote-like operators
+        "q" | "qq" | "qr" | "qw" | "qx" | "tr" | "y" |
+        // Control flow keywords
+        "continue" | "break" | "given" | "when" | "default" |
+        // Declarations / Pragma-like
+        "import" | "package" | "sub" => true,
         _ => false,
     }
 }
@@ -1235,5 +1220,32 @@ fn is_filehandle(name: &str) -> bool {
             // Check if it's all uppercase (common convention for filehandles)
             name.chars().all(|c| c.is_ascii_uppercase() || c == '_') && !name.is_empty()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_known_function() {
+        // Builtins in PHF
+        assert!(is_known_function("print"));
+        assert!(is_known_function("say"));
+        assert!(is_known_function("map"));
+
+        // Builtins previously missing, now in PHF
+        assert!(is_known_function("accept"));
+        assert!(is_known_function("bind"));
+        assert!(is_known_function("connect"));
+
+        // Fallback list
+        assert!(is_known_function("sysclose"));
+        assert!(is_known_function("q"));
+        assert!(is_known_function("sub"));
+
+        // Not a function
+        assert!(!is_known_function("UnknownFunction"));
+        assert!(!is_known_function("Foo::Bar"));
     }
 }
