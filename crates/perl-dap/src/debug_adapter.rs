@@ -128,12 +128,15 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "readpipe",
                 "syscall",
                 "open",
+                "sysopen",
                 "close",
                 "print",
                 "say",
                 "printf",
                 "sysread",
                 "syswrite",
+                "chop",
+                "chomp",
                 "glob",
                 "readline",
                 "ioctl",
@@ -169,7 +172,8 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "link", // Code loading/execution
                 "eval",
                 "require",
-                "do", // Tie mechanism (can execute arbitrary code)
+                "do",
+                "package", // Tie mechanism (can execute arbitrary code)
                 "tie",
                 "untie", // Network
                 "socket",

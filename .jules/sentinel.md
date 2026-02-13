@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-05-28 - Incomplete Dangerous Operations Blacklist
+**Vulnerability:** The `perl-dap` safe evaluation mode failed to block `sysopen`, `chop`, `chomp`, and `package`. `sysopen` allows file creation/overwriting, `chop`/`chomp` allow in-place string mutation, and `package` changes the namespace state.
+**Learning:** Blacklists are prone to omissions, especially for aliases (`sysopen` vs `open`) and mutating operations that don't look like "system" calls.
+**Prevention:** Regularly audit language keywords and built-ins. Consider grouping aliases (IO, FileSystem) and ensure all variants are covered.
