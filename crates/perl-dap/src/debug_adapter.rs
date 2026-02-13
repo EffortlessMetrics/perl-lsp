@@ -109,6 +109,11 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "undef",
                 "srand",
                 "bless",
+                "chomp",
+                "chop",
+                "each",
+                "keys",
+                "values",
                 "reset", // Process control
                 "system",
                 "exec",
@@ -123,11 +128,13 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "setpgrp",
                 "setpriority",
                 "umask",
+                "goto",
                 "lock", // I/O
                 "qx",
                 "readpipe",
                 "syscall",
                 "open",
+                "sysopen",
                 "close",
                 "print",
                 "say",
@@ -169,6 +176,9 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "link", // Code loading/execution
                 "eval",
                 "require",
+                "use",
+                "no",
+                "package",
                 "do", // Tie mechanism (can execute arbitrary code)
                 "tie",
                 "untie", // Network
@@ -3213,6 +3223,29 @@ DB<1>"#;
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_blocks_missing_ops() {
+        // These operations were previously allowed but are dangerous
+        // (state mutation, control flow, code loading, I/O)
+        let blocked = [
+            "sysopen $fh, 'file', 0666",
+            "use Socket",
+            "no warnings",
+            "goto LABEL",
+            "package Hack",
+            "chomp $var",
+            "chop $var",
+            "each %hash",
+            "keys %hash",
+            "values %hash",
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "expression '{}' should be blocked", expr);
         }
     }
 }
