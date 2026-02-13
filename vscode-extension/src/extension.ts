@@ -199,11 +199,20 @@ export async function activate(context: vscode.ExtensionContext) {
             args?: any[];
         }
 
+        const editor = vscode.window.activeTextEditor;
+        const isPerl = editor?.document.languageId === 'perl';
+        const fsPath = editor?.document.uri.fsPath;
+        const isTestFile = isPerl && fsPath && (fsPath.endsWith('.t') || fsPath.endsWith('.pl'));
+
+        const runTestsItem: MenuAction = isTestFile
+            ? { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' }
+            : { label: '$(circle-slash) Run Tests (Not available)', detail: 'Only available for .t and .pl files' };
+
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
             { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
+            runTestsItem,
             { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
@@ -218,8 +227,12 @@ export async function activate(context: vscode.ExtensionContext) {
             placeHolder: 'Perl Language Server Actions'
         });
 
-        if (selection && selection.command) {
-            vscode.commands.executeCommand(selection.command, ...(selection.args || []));
+        if (selection) {
+            if (selection.command) {
+                vscode.commands.executeCommand(selection.command, ...(selection.args || []));
+            } else if (selection === runTestsItem && !isTestFile) {
+                vscode.window.showInformationMessage('Run Tests is only available for Perl test files (.t) and scripts (.pl).');
+            }
         }
     });
     
