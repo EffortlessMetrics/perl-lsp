@@ -7,9 +7,7 @@
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
-use regex::Regex;
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Semantic token types for syntax highlighting in the Parse/Complete workflow.
@@ -1245,40 +1243,101 @@ impl SemanticAnalyzer {
 
     /// Extract documentation (POD or comments) preceding a position
     fn extract_documentation(&self, start: usize) -> Option<String> {
-        static POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-        static COMMENT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-
-        if self.source.is_empty() {
+        if self.source.is_empty() || start == 0 {
             return None;
         }
-        let before = &self.source[..start];
 
-        // Check for POD blocks ending with =cut
-        let pod_re = POD_RE
-            .get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$"))
-            .as_ref()
-            .ok()?;
-        if let Some(caps) = pod_re.captures(before) {
-            if let Some(pod_text) = caps.get(1) {
-                return Some(pod_text.as_str().trim().to_string());
+        // Optimization: Manually scan backwards for comments to avoid regex on large string
+        // We limit the scan to avoid performance issues on massive files without relevant docs
+        let limit = 100; // Look back at most 100 lines for documentation
+
+        let before = &self.source[..start];
+        let mut lines = before.lines().rev();
+
+        let mut doc_lines = Vec::new();
+        let mut found_comment = false;
+
+        // Scan for comments first
+        for (_i, line) in lines.by_ref().take(limit).enumerate() {
+            let trimmed = line.trim();
+
+            if trimmed.is_empty() {
+                if found_comment {
+                    // Blank line ends the comment block
+                    break;
+                }
+                continue;
+            }
+
+            if trimmed.starts_with('#') {
+                found_comment = true;
+                doc_lines.push(trimmed.trim_start_matches('#').trim());
+            } else if trimmed == "=cut" {
+                if found_comment {
+                    break; // Met =cut while parsing comments, stop comment block
+                }
+                // Enter POD mode
+                return self.extract_pod_documentation(start);
+            } else {
+                // Code or other text
+                break;
             }
         }
 
-        // Check for consecutive comment lines
-        let comment_re =
-            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$")).as_ref().ok()?;
-        if let Some(caps) = comment_re.captures(before) {
-            if let Some(comment_match) = caps.get(0) {
-                // Strip the # prefix from each comment line
-                let doc = comment_match
-                    .as_str()
-                    .lines()
-                    .map(|line| line.trim_start_matches('#').trim())
-                    .filter(|line| !line.is_empty())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                return Some(doc);
+        if !doc_lines.is_empty() {
+            doc_lines.reverse();
+            return Some(doc_lines.join(" "));
+        }
+
+        None
+    }
+
+    fn extract_pod_documentation(&self, start: usize) -> Option<String> {
+        let before = &self.source[..start];
+        let lines = before.lines().rev();
+
+        let mut earliest_command_idx = None;
+        let mut potential_lines = Vec::new();
+        let mut seen_initial_cut = false;
+
+        // 500 lines lookback for POD seems safe (POD can be verbose)
+        let limit = 500;
+
+        for (_i, line) in lines.take(limit).enumerate() {
+            let trimmed = line.trim();
+
+            if trimmed.is_empty() {
+                potential_lines.push(line);
+                continue;
             }
+
+            if trimmed == "=cut" {
+                if !seen_initial_cut {
+                    seen_initial_cut = true;
+                    continue;
+                }
+                // We hit the end of a PREVIOUS block. Stop.
+                break;
+            }
+
+            // Check for POD command
+            if trimmed.starts_with('=') {
+                earliest_command_idx = Some(potential_lines.len());
+            }
+
+            potential_lines.push(line);
+        }
+
+        if let Some(idx) = earliest_command_idx {
+            // idx is index in potential_lines (which matches the loop order: backwards, excluding first =cut)
+            // We want lines from 0 to idx.
+
+            let mut valid_lines = potential_lines[0..=idx].to_vec();
+            valid_lines.reverse();
+
+            // Join and trim the block
+            let doc = valid_lines.join("\n");
+            return Some(doc.trim().to_string());
         }
 
         None
@@ -2171,6 +2230,61 @@ my $adder = sub {
                 "Hover should extract documentation comment"
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_real_pod_extraction() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+=head1 NAME
+
+MySub - Does something
+
+=cut
+
+sub my_sub { 1 }
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols = analyzer.symbol_table().find_symbol(
+            "my_sub",
+            0,
+            crate::symbol::SymbolKind::Subroutine,
+        );
+        assert!(!sub_symbols.is_empty());
+
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        let doc = hover.documentation.as_ref().ok_or("doc not found")?;
+
+        assert!(doc.contains("MySub - Does something"));
+        assert!(doc.contains("=head1 NAME"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_pod_separated_by_code() -> Result<(), Box<dyn std::error::Error>> {
+        let code = r#"
+=head1 NAME
+Docs
+=cut
+
+$x = 1;
+
+sub my_sub { 1 }
+"#;
+        let mut parser = Parser::new(code);
+        let ast = parser.parse()?;
+        let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+
+        let sub_symbols = analyzer.symbol_table().find_symbol(
+            "my_sub",
+            0,
+            crate::symbol::SymbolKind::Subroutine,
+        );
+        let hover = analyzer.hover_at(sub_symbols[0].location).ok_or("hover not found")?;
+        assert!(hover.documentation.is_none());
         Ok(())
     }
 }
