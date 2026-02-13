@@ -26,3 +26,7 @@ A simple swap to prioritize `is_known_function` (string match) over `is_in_hash_
 ## 2026-06-01 - [Cross-Crate Closure Inlining Regression]
 **Learning:** Replacing `node.children()` (allocates `Vec`) with `node.for_each_child(|child| recursive_fn(child))` caused a 45% regression in recursive AST traversal. This is likely due to the overhead of passing a large closure (capturing recursive state) to a non-inlined method in another crate. Adding `#[inline]` helped slightly but did not fully recover performance.
 **Action:** Use specialized helpers like `first_child()` to avoid vector allocation for simple queries, but stick to vector iteration (which is cache-friendly and well-optimized) for full traversals unless the traversal method is guaranteed to be inlined and specialized.
+
+## 2026-06-03 - [Perfect Hashing for Built-in Function Lookup]
+**Learning:** Using a massive `match` statement for hundreds of built-in functions (O(N) in source, likely O(log N) or O(1) jump table) is slower than a perfect hash map (PHF) lookup (O(1)). More importantly, manual `match` lists are prone to drift and missing entries (e.g., `mkdir` was missing), causing false positives in static analysis.
+**Action:** Use `phf` crate for static string sets (like built-ins) to ensure O(1) performance and leverage shared, authoritative lists (`perl_parser_core::builtin_signatures_phf`) to prevent drift and bugs.
