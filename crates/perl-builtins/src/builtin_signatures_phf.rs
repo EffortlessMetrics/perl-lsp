@@ -247,6 +247,7 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
 
     // ===== Miscellaneous Functions =====
     "bless" => &["REF", "CLASSNAME"],
+    "blessed" => &["REF"],
     "caller" => &["EXPR"],
     "die" => &["LIST"],
     "do" => &["BLOCK"],
