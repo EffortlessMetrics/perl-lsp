@@ -924,7 +924,7 @@ where
 }
 
 /// Recursive helper to find nodes matching predicate
-fn find_nodes_recursive<F>(node: &Node, predicate: &F, results: &mut Vec<&Node>)
+fn find_nodes_recursive<'a, F>(node: &'a Node, predicate: &F, results: &mut Vec<&'a Node>)
 where
     F: Fn(&NodeKind) -> bool,
 {
@@ -1039,10 +1039,10 @@ where
         NodeKind::Method { body, .. } => {
             find_nodes_recursive(body, predicate, results);
         }
-        NodeKind::Class { body } => {
+        NodeKind::Class { body, name: _ } => {
             find_nodes_recursive(body, predicate, results);
         }
-        NodeKind::FunctionCall { args } => {
+        NodeKind::FunctionCall { args, name: _ } => {
             for arg in args {
                 find_nodes_recursive(arg, predicate, results);
             }

@@ -261,7 +261,7 @@ print "Result: $result\n";
     let mut total_time = Duration::new(0, 0);
     let mut success_count = 0;
     
-    for (thread_id, modification, success, parse_time, code_size) in results.iter() {
+    for (thread_id, modification, success, parse_time, _code_size) in results.iter() {
         total_time += *parse_time;
         if *success {
             success_count += 1;
@@ -372,7 +372,7 @@ fn test_concurrent_workspace_indexing() {
     
     // Analyze results
     let mut total_time = Duration::new(0, 0);
-    let mut _total_symbols = 0;
+    let mut total_symbols = 0;
     let mut success_count = 0;
     
     for (thread_id, file_index, success, parse_time, symbol_count) in results.iter() {
@@ -635,7 +635,6 @@ fn test_concurrent_memory_safety() {
             thread::spawn(move || {
                 for iteration in 0..iterations_per_thread {
                     // Create and destroy many parsers to test memory safety
-                    let mut parsers = Vec::new();
                     
                     for i in 0..10 {
                         let code = generate_test_code(thread_id * 1000 + iteration * 10 + i);
@@ -648,9 +647,6 @@ fn test_concurrent_memory_safety() {
                         }
                         // Both parser and code are dropped here
                     }
-                    
-                    // Explicitly drop parsers to test cleanup
-                    drop(parsers);
                     
                     results_clone.lock().unwrap().push((thread_id, iteration, true));
                 }

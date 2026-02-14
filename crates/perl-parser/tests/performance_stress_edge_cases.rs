@@ -72,53 +72,53 @@ fn test_pathological_regex_patterns() {
     
     let test_cases = vec![
         // Catastrophic backtracking patterns
-        ("Catastrophic backtracking 1", 
+        ("Catastrophic backtracking 1".to_string(), 
          r#"my $text = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; 
            my $pattern = /^(a+)+b$/; 
-           if ($text =~ $pattern) { print "Match\n"; }"#),
+           if ($text =~ $pattern) { print "Match\n"; }"#.to_string()),
         
-        ("Catastrophic backtracking 2", 
+        ("Catastrophic backtracking 2".to_string(), 
          r#"my $text = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; 
            my $pattern = /^(a+)*a$/; 
-           if ($text =~ $pattern) { print "Match\n"; }"#),
+           if ($text =~ $pattern) { print "Match\n"; }"#.to_string()),
         
-        ("Nested quantifiers", 
+        ("Nested quantifiers".to_string(), 
          r#"my $text = "abcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabc"; 
            my $pattern = /^(a.*)+b$/; 
-           if ($text =~ $pattern) { print "Match\n"; }"#),
+           if ($text =~ $pattern) { print "Match\n"; }"#.to_string()),
         
         // Excessive alternation
-        ("1000 alternatives", generate_regex_alternations(1000)),
-        ("5000 alternatives", generate_regex_alternations(5000)),
-        ("10000 alternatives", generate_regex_alternations(10000)),
+        ("1000 alternatives".to_string(), generate_regex_alternations(1000)),
+        ("5000 alternatives".to_string(), generate_regex_alternations(5000)),
+        ("10000 alternatives".to_string(), generate_regex_alternations(10000)),
         
         // Complex character classes
-        ("Huge character class", generate_huge_character_class()),
-        ("Nested character classes", generate_nested_character_classes()),
+        ("Huge character class".to_string(), generate_huge_character_class()),
+        ("Nested character classes".to_string(), generate_nested_character_classes()),
         
         // Complex lookarounds
-        ("Complex lookaheads", generate_complex_lookaheads()),
-        ("Complex lookbehinds", generate_complex_lookbehinds()),
-        ("Nested lookarounds", generate_nested_lookarounds()),
+        ("Complex lookaheads".to_string(), generate_complex_lookaheads()),
+        ("Complex lookbehinds".to_string(), generate_complex_lookbehinds()),
+        ("Nested lookarounds".to_string(), generate_nested_lookarounds()),
         
         // Recursive patterns
-        ("Deep recursion", generate_recursive_regex(100)),
-        ("Mutual recursion", generate_mutual_recursive_regex()),
+        ("Deep recursion".to_string(), generate_recursive_regex(100)),
+        ("Mutual recursion".to_string(), generate_mutual_recursive_regex()),
         
         // Unicode complexity
-        ("Massive Unicode class", generate_massive_unicode_class()),
-        ("Complex Unicode properties", generate_complex_unicode_properties()),
+        ("Massive Unicode class".to_string(), generate_massive_unicode_class()),
+        ("Complex Unicode properties".to_string(), generate_complex_unicode_properties()),
         
         // Backreference hell
-        ("Many backreferences", generate_many_backreferences(100)),
-        ("Nested backreferences", generate_nested_backreferences()),
+        ("Many backreferences".to_string(), generate_many_backreferences(100)),
+        ("Nested backreferences".to_string(), generate_nested_backreferences()),
     ];
     
-    for (name, code) in test_cases {
+    for (name, code) in &test_cases {
         println!("Testing: {}", name);
         
         let start_time = Instant::now();
-        let mut parser = Parser::new(&code);
+        let mut parser = Parser::new(code);
         let result = parser.parse();
         let parse_time = start_time.elapsed();
         
@@ -338,7 +338,7 @@ fn test_concurrent_parsing_stress() {
     println!("Completed {} concurrent parses with {} errors", results.len(), error_count);
     
     // Verify no parse took too long
-    for (thread_id, iteration, case_index, parse_time, success) in results.iter() {
+    for (thread_id, iteration, case_index, parse_time, _success) in results.iter() {
         assert!(
             *parse_time < MAX_PERFORMANCE_PARSE_TIME,
             "Thread {} iteration {} case {} took too long: {:?}",
@@ -575,7 +575,7 @@ fn generate_massive_method_chain(length: usize) -> String {
 fn generate_complex_dereference(depth: usize) -> String {
     let mut result = String::from("my $result = $ref");
     for i in 0..depth {
-        result.push_str(&format!("->{nested}{{key{}}}{{subkey{}}}[{}]", i, i, i, i));
+        result.push_str(&format!("->{{nested}}{{key{}}}{{subkey{}}}[{}]", i, i, i));
     }
     result.push_str(";");
     result

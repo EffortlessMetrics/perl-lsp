@@ -124,9 +124,11 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
             stats.subroutines += 1;
             count_nodes(body, stats);
         }
-        NodeKind::Package { body, .. } => {
+        NodeKind::Package { block, .. } => {
             stats.packages += 1;
-            count_nodes(body, stats);
+            if let Some(b) = block {
+                count_nodes(b, stats);
+            }
         }
         NodeKind::Use { .. } => stats.uses += 1,
         NodeKind::For { body, init, condition, update, continue_block, .. } => {
@@ -143,8 +145,8 @@ fn count_nodes(node: &perl_parser::Node, stats: &mut AstStats) {
         }
         NodeKind::Heredoc { .. } => stats.has_heredocs = true,
         NodeKind::Regex { .. } => stats.has_regex = true,
-        NodeKind::Reference { .. } => stats.has_references = true,
-        NodeKind::Hash { .. } | NodeKind::Array { .. } => stats.has_complex_data = true,
+        NodeKind::Unary { op, .. } if op == "\\" => stats.has_references = true,
+        NodeKind::HashLiteral { .. } | NodeKind::ArrayLiteral { .. } => stats.has_complex_data = true,
         
         // Check for Unicode in variable names
         NodeKind::VariableDeclaration { variable, .. } => {

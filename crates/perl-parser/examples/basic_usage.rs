@@ -40,7 +40,7 @@ print "\n;
     };
 
     // Create a parser and parse the code
-    let mut parser = Parser::new(code);
+    let mut parser = Parser::new(&code);
 
     match parser.parse() {
         Ok(ast) => {

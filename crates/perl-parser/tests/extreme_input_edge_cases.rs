@@ -32,7 +32,7 @@ fn test_extremely_large_identifiers() {
     for (name, identifier) in test_cases {
         println!("Testing: {}", name);
         
-        let code = format!("my ${} = 42;\nprint \"${{}}\\n\";", identifier, identifier);
+        let code = format!("my ${} = 42;\nprint \"${{{}}}\\n\"", identifier, identifier);
         
         let start_time = Instant::now();
         let mut parser = Parser::new(&code);
@@ -196,17 +196,17 @@ fn test_extremely_complex_regex() {
     println!("Testing extremely complex regular expressions...");
     
     let test_cases = vec![
-        ("Catastrophic backtracking", r"/^(a+)+b$/"),
-        ("Nested quantifiers", r"/^(a*)*b$/"),
-        ("Excessive alternation", generate_excessive_alternation(1000)),
-        ("Deeply nested groups", generate_nested_regex_groups(100)),
-        ("Unicode character classes", r"/[\p{L}\p{N}\p{P}\p{S}\p{Z}\p{C}\p{M}]+/"),
-        ("Complex lookarounds", r"/(?=(?<!a)b)(?<!c)(?!d)/"),
-        ("Recursive patterns", r"/(?R)/"),
-        ("Backreference hell", generate_backreference_hell(50)),
+        ("Catastrophic backtracking".to_string(), r"/^(a+)+b$/".to_string()),
+        ("Nested quantifiers".to_string(), r"/^(a*)*b$/".to_string()),
+        ("Excessive alternation".to_string(), generate_excessive_alternation(1000)),
+        ("Deeply nested groups".to_string(), generate_nested_regex_groups(100)),
+        ("Unicode character classes".to_string(), r"/[\p{L}\p{N}\p{P}\p{S}\p{Z}\p{C}\p{M}]+/".to_string()),
+        ("Complex lookarounds".to_string(), r"/(?=(?<!a)b)(?<!c)(?!d)/".to_string()),
+        ("Recursive patterns".to_string(), r"/(?R)/".to_string()),
+        ("Backreference hell".to_string(), generate_backreference_hell(50)),
     ];
     
-    for (name, pattern) in test_cases {
+    for (name, pattern) in &test_cases {
         println!("Testing: {}", name);
         
         let code = format!("my $result = 'test' =~ {};", pattern);
@@ -366,7 +366,7 @@ fn test_concurrent_extreme_inputs() {
     println!("Completed {} concurrent parses with {} errors", results.len(), error_count);
     
     // Verify no parse took too long
-    for (thread_id, iteration, case_index, parse_time, success) in results.iter() {
+    for (thread_id, iteration, case_index, parse_time, _success) in results.iter() {
         assert!(
             *parse_time < MAX_PARSE_TIME,
             "Thread {} iteration {} case {} took too long: {:?}",
@@ -556,7 +556,7 @@ fn generate_massive_method_chain(length: usize) -> String {
 fn generate_complex_dereference(depth: usize) -> String {
     let mut result = String::from("my $result = $ref");
     for i in 0..depth {
-        result.push_str(&format!("->{nested}{{key{}}}{{subkey{}}}[{}]", i, i, i, i));
+        result.push_str(&format!("->{{nested}}{{key{}}}{{subkey{}}}[{}]", i, i, i));
     }
     result.push_str(";");
     result
@@ -572,9 +572,9 @@ fn generate_operator_precedence_mess(count: usize) -> String {
     result
 }
 
-fn calculate_ast_depth(ast: &perl_parser::AST) -> usize {
+fn calculate_ast_depth(node: &perl_parser::Node) -> usize {
     // Simple depth calculation - count the maximum nesting level
-    let sexp = ast.to_sexp();
+    let sexp = node.to_sexp();
     let mut max_depth = 0;
     let mut current_depth = 0;
     

@@ -592,7 +592,7 @@ fn test_boundary_edge_cases() {
         
         // Should handle edge cases without crashing
         match result {
-            Ok(ast) => {
+            Ok(_ast) => {
                 println!("  ✓ {}: parsed successfully in {:?}", case_name, parse_time);
             }
             Err(e) => {

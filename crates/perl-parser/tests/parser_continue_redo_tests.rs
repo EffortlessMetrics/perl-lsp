@@ -380,7 +380,7 @@ for my $i (1..3) {
     assert_eq!(for_nodes.len(), 1, "Should have exactly one For/Foreach node");
 
     match &for_nodes[0].kind {
-        NodeKind::Foreach { variable, list, body, continue_block } => {
+        NodeKind::Foreach { variable, list, body, continue_block: _ } => {
             // Verify iterator variable exists
             assert!(
                 matches!(

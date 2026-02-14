@@ -197,7 +197,7 @@ fn test_heredoc_exhaustion_scenarios() {
         
         // Should either parse successfully or fail gracefully
         match result {
-            Ok(ast) => {
+            Ok(_ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
             }
             Err(e) => {
@@ -786,7 +786,7 @@ fn generate_massive_function_calls(count: usize) -> String {
     for i in 0..count {
         code.push_str(&format!("test_{}(", i));
         if i > 0 {
-            code.push_str("test_{}(", i - 1);
+            code.push_str(&format!("test_{}(", i - 1));
         } else {
             code.push_str("42");
         }
@@ -996,17 +996,13 @@ fn generate_massive_import_statements(count: usize) -> String {
 }
 
 // Helper function for AST analysis
-fn calculate_ast_depth(ast: &perl_parser::ast::Node) -> usize {
-    use perl_parser::ast::NodeKind;
-    
-    match &ast.kind {
-        NodeKind::SOURCE { children } => {
-            1 + children.iter().map(calculate_ast_depth).max().unwrap_or(0)
+fn calculate_ast_depth(node: &perl_parser::Node) -> usize {
+    let mut max_child_depth = 0;
+    node.for_each_child(|child| {
+        let child_depth = calculate_ast_depth(child);
+        if child_depth > max_child_depth {
+            max_child_depth = child_depth;
         }
-        NodeKind::STATEMENT { children } => {
-            1 + children.iter().map(calculate_ast_depth).max().unwrap_or(0)
-        }
-        // Add more cases as needed based on actual NodeKind variants
-        _ => 1,
-    }
+    });
+    1 + max_child_depth
 }

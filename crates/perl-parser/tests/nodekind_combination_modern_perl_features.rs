@@ -60,7 +60,7 @@ my $result = $obj->process_data("  hello world  ", {trim => 1, uppercase => 1});
         assert_eq!(class_nodes.len(), 1, "Should have exactly one class");
         
         // Verify class has methods
-        if let NodeKind::Class { body } = &class_nodes[0].kind {
+        if let NodeKind::Class { body, .. } = &class_nodes[0].kind {
             if let NodeKind::Block { statements: class_statements } = &body.kind {
                 let method_nodes: Vec<_> = class_statements.iter()
                     .filter(|s| matches!(s.kind, NodeKind::Method { .. }))
@@ -411,7 +411,7 @@ where
 }
 
 /// Recursive helper to find nodes matching predicate
-fn find_nodes_recursive<F>(node: &Node, predicate: &F, results: &mut Vec<&Node>)
+fn find_nodes_recursive<'a, F>(node: &'a Node, predicate: &F, results: &mut Vec<&'a Node>)
 where
     F: Fn(&NodeKind) -> bool,
 {
@@ -526,10 +526,10 @@ where
         NodeKind::Method { body, .. } => {
             find_nodes_recursive(body, predicate, results);
         }
-        NodeKind::Class { body } => {
+        NodeKind::Class { body, .. } => {
             find_nodes_recursive(body, predicate, results);
         }
-        NodeKind::FunctionCall { args } => {
+        NodeKind::FunctionCall { args, .. } => {
             for arg in args {
                 find_nodes_recursive(arg, predicate, results);
             }

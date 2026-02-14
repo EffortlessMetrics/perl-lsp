@@ -27,7 +27,7 @@ fn test_low_memory_conditions() {
         println!("Testing memory pressure level: {} bytes", pressure_level);
         
         // Generate code that will use significant memory
-        let code = generate_memory_intensive_code(pressure_level);
+        let code = generate_memory_intensive_code(*pressure_level);
         
         // Measure memory before parsing
         let memory_before = estimate_memory_usage();
@@ -45,7 +45,7 @@ fn test_low_memory_conditions() {
         assert!(result.is_ok(), "Parser should handle {} byte code under memory pressure", pressure_level);
         
         // Check memory usage is reasonable
-        let memory_ratio = memory_used as f64 / pressure_level as f64;
+        let memory_ratio = memory_used as f64 / *pressure_level as f64;
         
         assert!(
             memory_ratio <= MAX_MEMORY_RATIO,
@@ -311,7 +311,7 @@ fn test_concurrent_memory_pressure() {
     let mut success_count = 0;
     let mut total_time = Duration::new(0, 0);
     
-    for (thread_id, pressure, pressure_level, success, parse_time, memory_used) in results.iter() {
+    for (thread_id, pressure, _pressure_level, success, parse_time, memory_used) in results.iter() {
         total_memory += *memory_used;
         total_time += *parse_time;
         if *success {
@@ -426,7 +426,7 @@ fn test_memory_pressure_recovery() {
             let start_time = Instant::now();
             let mut parser = Parser::new(&phase_code);
             let result = parser.parse();
-            let parse_time = start_time.elapsed();
+            let _parse_time = start_time.elapsed();
             
             let memory_after = estimate_memory_usage();
             let memory_used = memory_after.saturating_sub(memory_before);
@@ -492,7 +492,7 @@ fn test_extreme_memory_pressure() {
         
         // Should handle extreme pressure without crashing
         match result {
-            Ok(ast) => {
+            Ok(_ast) => {
                 println!("  ✓ {}: parsed successfully", scenario_name);
                 
                 // Memory usage should be reasonable even for extreme cases
@@ -1058,11 +1058,11 @@ fn generate_deep_recursive_structures() -> String {
     
     // Generate deeply nested recursive structures
     code.push_str("my $recursive_structure = ");
-    for i in 0..200 {
-        code.push_str(&format!("{{ level{} => ", i));
+    for _i in 0..200 {
+        code.push_str(&format!("{{ level{} => ", _i));
     }
     code.push_str("'deep_value'");
-    for i in 0..200 {
+    for _i in 0..200 {
         code.push_str("}");
     }
     code.push_str(";\n");

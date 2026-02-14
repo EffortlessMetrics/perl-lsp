@@ -620,35 +620,23 @@ fn generate_huge_hash_code() -> String {
 
 // Helper functions for analysis
 
-fn count_ast_tokens(ast: &perl_parser::ast::Node) -> usize {
-    use perl_parser::ast::NodeKind;
-    
-    match &ast.kind {
-        NodeKind::ERROR { .. } => 1,
-        NodeKind::SOURCE { children } => {
-            1 + children.iter().map(count_ast_tokens).sum::<usize>()
-        }
-        NodeKind::STATEMENT { children } => {
-            1 + children.iter().map(count_ast_tokens).sum::<usize>()
-        }
-        // Add more cases as needed based on actual NodeKind variants
-        _ => 1, // Default count
-    }
+fn count_ast_tokens(node: &perl_parser::Node) -> usize {
+    let mut count = 1;
+    node.for_each_child(|child| {
+        count += count_ast_tokens(child);
+    });
+    count
 }
 
-fn calculate_ast_depth(ast: &perl_parser::ast::Node) -> usize {
-    use perl_parser::ast::NodeKind;
-    
-    match &ast.kind {
-        NodeKind::SOURCE { children } => {
-            1 + children.iter().map(calculate_ast_depth).max().unwrap_or(0)
+fn calculate_ast_depth(node: &perl_parser::Node) -> usize {
+    let mut max_child_depth = 0;
+    node.for_each_child(|child| {
+        let child_depth = calculate_ast_depth(child);
+        if child_depth > max_child_depth {
+            max_child_depth = child_depth;
         }
-        NodeKind::STATEMENT { children } => {
-            1 + children.iter().map(calculate_ast_depth).max().unwrap_or(0)
-        }
-        // Add more cases as needed
-        _ => 1,
-    }
+    });
+    1 + max_child_depth
 }
 
 fn get_memory_usage() -> usize {
