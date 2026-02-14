@@ -199,11 +199,24 @@ export async function activate(context: vscode.ExtensionContext) {
             args?: any[];
         }
 
+        const editor = vscode.window.activeTextEditor;
+        const isPerlTest = editor &&
+                          editor.document.languageId === 'perl' &&
+                          (editor.document.uri.fsPath.endsWith('.t') || editor.document.uri.fsPath.endsWith('.pl'));
+
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
             { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
+        ];
+
+        if (isPerlTest) {
+            items.push({ label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' });
+        } else {
+            items.push({ label: '$(circle-slash) Run Tests in Current File', description: '(Only available for .t/.pl files)', detail: 'Active file is not a supported Perl test script' });
+        }
+
+        items.push(
             { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
@@ -212,7 +225,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:effortlesssteven.perl-lsp'] }
-        ];
+        );
 
         const selection = await vscode.window.showQuickPick(items, {
             placeHolder: 'Perl Language Server Actions'
