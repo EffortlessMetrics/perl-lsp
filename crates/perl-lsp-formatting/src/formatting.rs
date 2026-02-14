@@ -125,17 +125,25 @@ pub struct FormattingProvider<R> {
     runtime: R,
     /// Optional custom perltidy path
     perltidy_path: Option<String>,
+    /// Optional custom perltidy configuration file path
+    config_path: Option<String>,
 }
 
 impl<R> FormattingProvider<R> {
     /// Create a new formatting provider with the given runtime
     pub fn new(runtime: R) -> Self {
-        Self { runtime, perltidy_path: None }
+        Self { runtime, perltidy_path: None, config_path: None }
     }
 
     /// Set a custom perltidy path
     pub fn with_perltidy_path(mut self, path: String) -> Self {
         self.perltidy_path = Some(path);
+        self
+    }
+
+    /// Set a custom perltidy configuration file path
+    pub fn with_config_path(mut self, path: String) -> Self {
+        self.config_path = Some(path);
         self
     }
 }
@@ -274,6 +282,11 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
             args.push(format!("-i={}", options.tab_size)); // Tab size
         }
 
+        // Add config path if set
+        if let Some(config) = &self.config_path {
+            args.push(format!("-pro={}", config));
+        }
+
         // Get perltidy command
         let default_cmd = "perltidy";
         let perltidy_cmd = self.perltidy_path.as_deref().unwrap_or(default_cmd);
@@ -289,9 +302,29 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
             .map_err(|e| FormattingError::PerltidyNotFound(e.message))?;
 
         if !output.success() {
-            return Err(FormattingError::PerltidyError(
-                String::from_utf8_lossy(&output.stderr).to_string(),
-            ));
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+            // Security: Sanitize error message to prevent Information Disclosure (LFI).
+            // If perltidy fails to read a config file (e.g. syntax error), it might print the content.
+            // We replace detailed config errors with a generic message.
+            let sanitized_error = if stderr.contains("Error reading configuration file")
+                || stderr.contains("syntax error at")
+                || stderr.contains("Unknown option:")
+            {
+                if let Some(config) = &self.config_path {
+                    if stderr.contains(config) {
+                        "Error: Invalid configuration file. Details hidden for security.".to_string()
+                    } else {
+                        stderr
+                    }
+                } else {
+                    stderr
+                }
+            } else {
+                stderr
+            };
+
+            return Err(FormattingError::PerltidyError(sanitized_error));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -337,5 +370,64 @@ mod tests {
         let range = FormatRange::new(start, end);
         assert_eq!(range.start.line, 0);
         assert_eq!(range.end.line, 10);
+    }
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::*;
+    use perl_lsp_tooling::{SubprocessRuntime, SubprocessOutput, SubprocessError};
+
+    struct MockRuntime {
+        expected_stderr: String,
+        exit_code: i32,
+    }
+
+    impl SubprocessRuntime for MockRuntime {
+        fn run_command(
+            &self,
+            _program: &str,
+            _args: &[&str],
+            _stdin: Option<&[u8]>,
+        ) -> Result<SubprocessOutput, SubprocessError> {
+            Ok(SubprocessOutput {
+                stdout: Vec::new(),
+                stderr: self.expected_stderr.as_bytes().to_vec(),
+                status_code: self.exit_code,
+            })
+        }
+    }
+
+    #[test]
+    fn test_perltidy_error_sanitization() {
+        let sensitive_content = "root:x:0:0:root:/root:/bin/bash";
+        let stderr = format!("Error reading configuration file '/etc/passwd': syntax error at line 1: {}", sensitive_content);
+
+        let runtime = MockRuntime {
+            expected_stderr: stderr,
+            exit_code: 2,
+        };
+
+        let provider = FormattingProvider::new(runtime)
+            .with_config_path("/etc/passwd".to_string());
+
+        let options = FormattingOptions {
+            tab_size: 4,
+            insert_spaces: true,
+            trim_trailing_whitespace: None,
+            insert_final_newline: None,
+            trim_final_newlines: None,
+        };
+
+        let result = provider.format_document("my $code;", &options);
+
+        assert!(result.is_err());
+        match result {
+            Err(FormattingError::PerltidyError(msg)) => {
+                assert!(msg.contains("Invalid configuration file"));
+                assert!(!msg.contains(sensitive_content));
+            },
+            _ => panic!("Expected PerltidyError, got {:?}", result),
+        }
     }
 }

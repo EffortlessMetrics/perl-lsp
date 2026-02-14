@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-10-26 - Information Disclosure via External Tool Errors
+**Vulnerability:** The `perltidy` formatter prints the content of the configuration file in its error message if it encounters a syntax error (e.g., "Error reading configuration file ... syntax error at line 1: ..."). If a user-supplied configuration path (via `perl-lsp.perltidyConfig`) points to a sensitive file (e.g., `/etc/passwd`), an attacker could trigger a syntax error to leak its content.
+**Learning:** External tools often leak file content in error messages when configuration files are invalid. Blindly passing user-supplied configuration paths to these tools can lead to Local File Inclusion (LFI) or Information Disclosure vulnerabilities.
+**Prevention:** Sanitize stderr from external tools. Specifically, detect error patterns related to configuration parsing and replace detailed error messages (which might contain file snippets) with generic failure messages.

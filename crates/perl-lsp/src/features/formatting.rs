@@ -24,6 +24,12 @@ impl CodeFormatter {
         Self { inner: FormattingProvider::new(OsSubprocessRuntime::new()) }
     }
 
+    /// Configure the formatter with a perltidy configuration file path
+    pub fn with_config_path(mut self, path: String) -> Self {
+        self.inner = self.inner.with_config_path(path);
+        self
+    }
+
     /// Format an entire document, returning just the edits for backwards compatibility
     pub fn format_document(
         &self,
