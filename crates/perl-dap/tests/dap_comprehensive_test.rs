@@ -91,7 +91,9 @@ fn test_dap_launch_with_invalid_program() {
             assert!(!success);
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            assert!(must_some(message).contains("Failed to launch debugger"));
+            let msg = must_some(message);
+            // Now returns Security Error because path is absolute and outside workspace
+            assert!(msg.contains("Security Error") || msg.contains("Failed to launch debugger"));
         }
         _ => panic!("Expected response message"),
     }
