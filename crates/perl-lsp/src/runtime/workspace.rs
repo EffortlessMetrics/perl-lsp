@@ -419,19 +419,22 @@ impl LspServer {
                 eprintln!("Configuration changed, updating server settings");
 
                 // Read perl settings once and update both configs
-                if let Some(perl) = settings.get("perl") {
-                    // Update server config (inlay hints, test runner)
+                // Support both "perl" (legacy/manual) and "perl-lsp" (extension default) sections
+                let perl_settings = settings.get("perl").or_else(|| settings.get("perl-lsp"));
+
+                if let Some(perl) = perl_settings {
+                    // Update server config (inlay hints, test runner, perltidy)
                     {
                         let mut config = self.config.lock();
                         config.update_from_value(perl);
-                        eprintln!("Updated server config from perl settings");
+                        eprintln!("Updated server config from settings");
                     }
 
                     // Update workspace config (include paths, @INC)
                     {
                         let mut workspace_config = self.workspace_config.lock();
                         workspace_config.update_from_value(perl);
-                        eprintln!("Updated workspace config from perl settings");
+                        eprintln!("Updated workspace config from settings");
                     }
 
                     // Trigger client refresh for configuration-dependent features

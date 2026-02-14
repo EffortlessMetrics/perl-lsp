@@ -35,6 +35,9 @@ pub struct ServerConfig {
 
     /// Whether telemetry events are enabled.
     pub telemetry_enabled: bool,
+
+    /// Path to perltidy configuration file.
+    pub perltidy_config: Option<String>,
 }
 
 impl Default for ServerConfig {
@@ -50,6 +53,7 @@ impl Default for ServerConfig {
             test_runner_args: vec![],
             test_runner_timeout: 60000,
             telemetry_enabled: false,
+            perltidy_config: None,
         }
     }
 }
@@ -57,6 +61,15 @@ impl Default for ServerConfig {
 impl ServerConfig {
     /// Update configuration from LSP settings
     pub fn update_from_value(&mut self, settings: &serde_json::Value) {
+        if let Some(config) = settings.get("perltidyConfig").and_then(|v| v.as_str()) {
+            // Treat empty string as None
+            self.perltidy_config = if config.is_empty() {
+                None
+            } else {
+                Some(config.to_string())
+            };
+        }
+
         if let Some(inlay) = settings.get("inlayHints") {
             if let Some(enabled) = inlay.get("enabled").and_then(|v| v.as_bool()) {
                 self.inlay_hints_enabled = enabled;

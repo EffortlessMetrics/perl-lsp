@@ -61,7 +61,16 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let formatter = CodeFormatter::new();
+                let config_path = {
+                    let config = self.config.lock();
+                    config.perltidy_config.clone()
+                };
+
+                let mut formatter = CodeFormatter::new();
+                if let Some(path) = config_path {
+                    formatter = formatter.with_config_path(path);
+                }
+
                 match formatter.format_document(&doc.text, &options) {
                     Ok(edits) => {
                         let lsp_edits: Vec<Value> = edits
@@ -126,7 +135,16 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let formatter = CodeFormatter::new();
+                let config_path = {
+                    let config = self.config.lock();
+                    config.perltidy_config.clone()
+                };
+
+                let mut formatter = CodeFormatter::new();
+                if let Some(path) = config_path {
+                    formatter = formatter.with_config_path(path);
+                }
+
                 match formatter.format_range(&doc.text, &range, &options) {
                     Ok(edits) => {
                         let lsp_edits: Vec<Value> = edits
@@ -195,7 +213,16 @@ impl LspServer {
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                let formatter = CodeFormatter::new();
+                let config_path = {
+                    let config = self.config.lock();
+                    config.perltidy_config.clone()
+                };
+
+                let mut formatter = CodeFormatter::new();
+                if let Some(path) = config_path {
+                    formatter = formatter.with_config_path(path);
+                }
+
                 let mut all_edits = Vec::new();
 
                 // Process each range
