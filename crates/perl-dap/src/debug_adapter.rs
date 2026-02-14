@@ -134,6 +134,7 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "printf",
                 "sysread",
                 "syswrite",
+                "sysopen",
                 "glob",
                 "readline",
                 "ioctl",
@@ -169,7 +170,9 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "link", // Code loading/execution
                 "eval",
                 "require",
-                "do", // Tie mechanism (can execute arbitrary code)
+                "do",
+                "use",
+                "package", // Tie mechanism (can execute arbitrary code)
                 "tie",
                 "untie", // Network
                 "socket",
@@ -1844,50 +1847,6 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
     in_sq
 }
 
-/// Check if the match is CORE:: or CORE::GLOBAL:: qualified (must block these)
-fn is_core_qualified(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-
-    // Must have :: immediately before op
-    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
-        return false;
-    }
-
-    // Extract the identifier right before that ::
-    let end = op_start - 2;
-    let mut start = end;
-    while start > 0 {
-        let b = bytes[start - 1];
-        if b.is_ascii_alphanumeric() || b == b'_' {
-            start -= 1;
-        } else {
-            break;
-        }
-    }
-    let seg = &s[start..end];
-    if seg == "CORE" {
-        return true;
-    }
-    if seg != "GLOBAL" {
-        return false;
-    }
-
-    // If GLOBAL, require CORE::GLOBAL::op
-    if start < 2 || bytes[start - 1] != b':' || bytes[start - 2] != b':' {
-        return false;
-    }
-    let end2 = start - 2;
-    let mut start2 = end2;
-    while start2 > 0 {
-        let b = bytes[start2 - 1];
-        if b.is_ascii_alphanumeric() || b == b'_' {
-            start2 -= 1;
-        } else {
-            break;
-        }
-    }
-    &s[start2..end2] == "CORE"
-}
 
 /// Check if the match is a sigil-prefixed identifier ($print, @say, %exit, *dump)
 /// BUT NOT if it's a dereference call (&$print) or method call (->$print)
@@ -1967,15 +1926,6 @@ fn is_simple_braced_scalar_var(s: &str, op_start: usize, op_end: usize) -> bool 
     j < bytes.len() && bytes[j] == b'}'
 }
 
-/// Check if the match is package-qualified (Foo::print) but not CORE::
-fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
-        return false;
-    }
-    // It's qualified, but we need to check it's not CORE::
-    !is_core_qualified(s, op_start)
-}
 
 /// Validate that an expression is safe for evaluation (non-mutating)
 ///
@@ -2058,11 +2008,6 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
 
             // Allow ${print} (simple scalar braced variable form)
             if is_simple_braced_scalar_var(expression, start, end) {
-                continue;
-            }
-
-            // Allow package-qualified names unless it's CORE::
-            if is_package_qualified_not_core(expression, start) {
                 continue;
             }
 
@@ -2647,8 +2592,6 @@ mod tests {
             "${print}",         // braced scalar variable
             "${ print }",       // braced with spaces
             "'print'",          // single-quoted string
-            "Foo::print",       // package-qualified
-            "My::Module::exit", // deeply qualified
         ];
 
         for expr in allowed {
@@ -2676,6 +2619,8 @@ mod tests {
             "CORE::GLOBAL::exit",
             "$obj->print",
             "$obj->system('ls')",
+            "Foo::print",
+            "My::Module::exit",
         ];
 
         for expr in blocked {
@@ -3213,6 +3158,23 @@ DB<1>"#;
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_blocks_bypass_methods() {
+        // These are currently allowed but should be blocked
+        let blocked = [
+            "sysopen $fh, 'file', O_RDWR", // Currently missing from list
+            "use Socket",                   // Currently missing from list
+            "package DB",                   // Currently missing from list
+            "POSIX::system('ls')",         // Currently allowed due to package qualification
+            "IO::File::open($fh, 'file')", // Currently allowed due to package qualification
+        ];
+
+        for expr in blocked {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "Expression '{}' should be blocked but was allowed", expr);
         }
     }
 }
