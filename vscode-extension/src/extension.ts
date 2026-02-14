@@ -199,11 +199,18 @@ export async function activate(context: vscode.ExtensionContext) {
             args?: any[];
         }
 
+        const editor = vscode.window.activeTextEditor;
+        const isTestFile = editor && editor.document.languageId === 'perl' && /\.(t|pl)$/.test(editor.document.fileName);
+
+        const runTestsItem: MenuAction = isTestFile
+            ? { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' }
+            : { label: '$(circle-slash) Run Tests in Current File', description: 'Only available for .t and .pl files', detail: 'Open a test file to enable' };
+
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
             { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
+            runTestsItem,
             { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
