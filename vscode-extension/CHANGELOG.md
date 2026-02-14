@@ -97,6 +97,8 @@ All notable changes to the Perl Language Server extension will be documented in 
 ### Changed
 - **Performance**: O(1) symbol lookups, optimized scope analysis
 - **Code Quality**: Unified position/range types, improved code formatting
+- **UX**: "Run Tests" in Status Menu now visually indicates when it's unavailable (non-test files) instead of just failing.
+- **UX**: "Run Tests" context menu item is now hidden for non-test files.
 
 ## [0.9.0] - 2026-01-18
 
