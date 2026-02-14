@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$Repo = "EffortlessSteven/tree-sitter-perl"
+$Repo = "EffortlessMetrics/tree-sitter-perl-rs"
 $Name = "perl-lsp"
 
 function Write-Info {

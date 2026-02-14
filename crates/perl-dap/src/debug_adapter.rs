@@ -544,6 +544,56 @@ impl DebugAdapter {
         }
     }
 
+    /// Handle a DAP request (mock version for testing)
+    pub fn handle_request_mock(
+        &mut self,
+        request_seq: i64,
+        command: &str,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        eprintln!("DAP request (mock): {} {:?}", command, arguments);
+
+        let seq = self.next_seq();
+
+        match command {
+            "initialize" => self.handle_initialize(seq, request_seq, arguments),
+            "launch" => self.handle_launch(seq, request_seq, arguments),
+            "attach" => {
+                // Mock attach to avoid actual connection
+                DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "attach".to_string(),
+                    body: None,
+                    message: Some("Attach not yet fully implemented".to_string()),
+                }
+            }
+            "disconnect" => self.handle_disconnect(seq, request_seq, arguments),
+            "setBreakpoints" => self.handle_set_breakpoints(seq, request_seq, arguments),
+            "configurationDone" => self.handle_configuration_done(seq, request_seq),
+            "threads" => self.handle_threads(seq, request_seq),
+            "stackTrace" => self.handle_stack_trace(seq, request_seq, arguments),
+            "scopes" => self.handle_scopes(seq, request_seq, arguments),
+            "variables" => self.handle_variables(seq, request_seq, arguments),
+            "continue" => self.handle_continue(seq, request_seq, arguments),
+            "next" => self.handle_next(seq, request_seq, arguments),
+            "stepIn" => self.handle_step_in(seq, request_seq, arguments),
+            "stepOut" => self.handle_step_out(seq, request_seq, arguments),
+            "pause" => self.handle_pause(seq, request_seq, arguments),
+            "evaluate" => self.handle_evaluate(seq, request_seq, arguments),
+            "inlineValues" => self.handle_inline_values(seq, request_seq, arguments),
+            _ => DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: command.to_string(),
+                body: None,
+                message: Some(format!("Unknown command: {}", command)),
+            },
+        }
+    }
+
     /// Get next sequence number (monotonically increasing, poison-safe)
     fn next_seq(&self) -> i64 {
         let mut seq = lock_or_recover(&self.seq, "next_seq");

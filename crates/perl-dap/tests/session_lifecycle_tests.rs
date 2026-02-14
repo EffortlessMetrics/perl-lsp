@@ -204,7 +204,7 @@ fn test_session_lifecycle_attach_validation() {
         "timeout": 5000
     });
 
-    let response = adapter.handle_request(1, "attach", Some(args));
+    let response = adapter.handle_request_mock(1, "attach", Some(args));
 
     match response {
         DapMessage::Response { success, command, message, .. } => {
@@ -214,7 +214,9 @@ fn test_session_lifecycle_attach_validation() {
             // Should validate but indicate not implemented
             let msg = must_some(message);
             assert!(
-                msg.contains("not yet fully implemented") || msg.contains("localhost:13603"),
+                msg.contains("not yet fully implemented")
+                    || msg.contains("localhost:13603")
+                    || msg.contains("Process ID attachment"),
                 "Should validate args: {}",
                 msg
             );

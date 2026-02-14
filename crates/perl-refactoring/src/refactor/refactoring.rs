@@ -2832,7 +2832,7 @@ sub complex {
             let backup_root = temp_dir.path().to_path_buf();
 
             // Manually create 4 backup directories with different timestamps
-            let backups = vec![
+            let backups = [
                 backup_root.join("refactor_100_0"),
                 backup_root.join("refactor_200_0"),
                 backup_root.join("refactor_300_0"),

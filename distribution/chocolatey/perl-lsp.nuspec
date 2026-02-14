@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>perl-lsp</id>
-    <version>0.8.8</version>
+    <version>1.0.0</version>
     <title>Perl Language Server</title>
     <authors>EffortlessMetrics</authors>
     <owners>EffortlessMetrics</owners>

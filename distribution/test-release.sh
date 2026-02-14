@@ -3,7 +3,7 @@
 
 set -e
 
-VERSION="${1:-0.8.8}"
+VERSION="${1:-1.0.0}"
 PACKAGE_NAME="perl-lsp"
 
 # Colors for output

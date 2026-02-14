@@ -76,6 +76,16 @@ bash scripts/ignored-test-count.sh
 
 ## Document Categories
 
+### v1.0 Core Documentation
+
+- **[docs/README.md](README.md)** - **v1.0 Documentation Index** - Complete documentation hub
+- `GETTING_STARTED.md` - **New users start here** - Installation and first steps
+- `FAQ.md` - Frequently asked questions
+- `CURRENT_STATUS.md` - Computed project metrics for v1.0
+- `ROADMAP.md` - Release plans and exit criteria
+- `RELEASE_NOTES.md` - v1.0 release details and changelog
+- `../SECURITY.md` - v1.0 security policy and procedures
+
 ### Operator Docs (start here)
 
 - `GETTING_STARTED.md` - **New users start here** - Installation and first steps
@@ -103,7 +113,7 @@ bash scripts/ignored-test-count.sh
 - `DAP_USER_GUIDE.md` - Debug adapter usage
 - `WORKSPACE_NAVIGATION_GUIDE.md` - Cross-file features
 
-### Process Docs
+### Process Docs (v1.0)
 
 - `AGENTIC_DEV.md` - Development model and budget definitions
 - `LESSONS.md` - What went wrong and what changed
@@ -111,18 +121,25 @@ bash scripts/ignored-test-count.sh
 - `forensics/INDEX.md` - PR archaeology inventory
 - `FORENSICS_SCHEMA.md` - PR archaeology dossier template
 - `STABILITY.md` - API stability policy
+- `STABILITY_STATEMENT_v1.0.md` - v1.0 stability guarantees
 - `CONTRIBUTING_LSP.md` - LSP contribution guidelines
+- `../CONTRIBUTING.md` - Development workflow and release process
 
 ### Historical (archived)
 
 - `archive/` - Old roadmaps, superseded docs
 - `reports/` - Point-in-time analysis reports
 
-## Truth Contract
+## Truth Contract (v1.0)
 
 1. Metrics come from computation, not hand-editing
 2. `just status-check` fails if docs drift from computed values
 3. Claims require receipts (test output, gate output, or targeted tests)
 4. No adjectives without evidence (no "revolutionary", "enterprise-grade" without proof)
+5. **v1.0 Production Claims**: All performance and security claims are validated with comprehensive testing
 
 See [`LESSONS.md`](LESSONS.md) for what happens when we violate these rules.
+
+---
+
+**Note**: This is the legacy documentation index. For the most current v1.0 documentation, please see **[docs/README.md](README.md)**.

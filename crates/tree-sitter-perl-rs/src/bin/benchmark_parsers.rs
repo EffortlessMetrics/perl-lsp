@@ -234,18 +234,18 @@ impl BenchmarkRunner {
                     })
                     .filter_map(|e| e.ok())
                 {
-                    if entry.file_type().is_file() {
-                        if let Ok(content) = fs::read_to_string(entry.path()) {
-                            let name = entry
-                                .path()
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("unknown")
-                                .to_string();
-                            test_files.push((name, content));
-                        }
-                        // Skip warning for CI performance
+                    if entry.file_type().is_file()
+                        && let Ok(content) = fs::read_to_string(entry.path())
+                    {
+                        let name = entry
+                            .path()
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        test_files.push((name, content));
                     }
+                    // Skip warning for CI performance
                 }
             }
             // Skip non-existent path warnings in CI for cleaner output
@@ -475,15 +475,13 @@ impl BenchmarkRunner {
         let output_path = Path::new(&self.config.output_path);
 
         // Ensure parent directory exists
-        if let Some(parent) = output_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).map_err(|e| {
-                    BenchmarkError::DirectoryCreationFailed {
-                        path: parent.display().to_string(),
-                        source: e,
-                    }
-                })?;
-            }
+        if let Some(parent) = output_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent).map_err(|e| BenchmarkError::DirectoryCreationFailed {
+                path: parent.display().to_string(),
+                source: e,
+            })?;
         }
 
         let json_output =
