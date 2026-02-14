@@ -193,6 +193,10 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "shmat",
                 "shmdt",
                 "shmctl",
+                // Declarations/Scopes
+                "use",
+                "no",
+                "package",
             ];
             // Build pattern: \b(op1|op2|...)\b
             let pattern = format!(r"\b(?:{})\b", ops.join("|"));
@@ -1844,51 +1848,6 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
     in_sq
 }
 
-/// Check if the match is CORE:: or CORE::GLOBAL:: qualified (must block these)
-fn is_core_qualified(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-
-    // Must have :: immediately before op
-    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
-        return false;
-    }
-
-    // Extract the identifier right before that ::
-    let end = op_start - 2;
-    let mut start = end;
-    while start > 0 {
-        let b = bytes[start - 1];
-        if b.is_ascii_alphanumeric() || b == b'_' {
-            start -= 1;
-        } else {
-            break;
-        }
-    }
-    let seg = &s[start..end];
-    if seg == "CORE" {
-        return true;
-    }
-    if seg != "GLOBAL" {
-        return false;
-    }
-
-    // If GLOBAL, require CORE::GLOBAL::op
-    if start < 2 || bytes[start - 1] != b':' || bytes[start - 2] != b':' {
-        return false;
-    }
-    let end2 = start - 2;
-    let mut start2 = end2;
-    while start2 > 0 {
-        let b = bytes[start2 - 1];
-        if b.is_ascii_alphanumeric() || b == b'_' {
-            start2 -= 1;
-        } else {
-            break;
-        }
-    }
-    &s[start2..end2] == "CORE"
-}
-
 /// Check if the match is a sigil-prefixed identifier ($print, @say, %exit, *dump)
 /// BUT NOT if it's a dereference call (&$print) or method call (->$print)
 fn is_sigil_prefixed_identifier(s: &str, op_start: usize) -> bool {
@@ -1965,16 +1924,6 @@ fn is_simple_braced_scalar_var(s: &str, op_start: usize, op_end: usize) -> bool 
         j += 1;
     }
     j < bytes.len() && bytes[j] == b'}'
-}
-
-/// Check if the match is package-qualified (Foo::print) but not CORE::
-fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
-        return false;
-    }
-    // It's qualified, but we need to check it's not CORE::
-    !is_core_qualified(s, op_start)
 }
 
 /// Validate that an expression is safe for evaluation (non-mutating)
@@ -2061,12 +2010,8 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
                 continue;
             }
 
-            // Allow package-qualified names unless it's CORE::
-            if is_package_qualified_not_core(expression, start) {
-                continue;
-            }
-
-            // Block: either bare op or CORE:: qualified
+            // Block: all dangerous operations, even if package qualified (e.g., POSIX::system)
+            // Previously we allowed non-CORE qualified calls, but this is a security risk
             return Some(format!(
                 "Safe evaluation mode: potentially mutating operation '{}' not allowed (use allowSideEffects: true)",
                 op
@@ -2647,8 +2592,6 @@ mod tests {
             "${print}",         // braced scalar variable
             "${ print }",       // braced with spaces
             "'print'",          // single-quoted string
-            "Foo::print",       // package-qualified
-            "My::Module::exit", // deeply qualified
         ];
 
         for expr in allowed {
@@ -2676,6 +2619,11 @@ mod tests {
             "CORE::GLOBAL::exit",
             "$obj->print",
             "$obj->system('ls')",
+            "Foo::print",       // package-qualified (blocked in strict mode)
+            "My::Module::exit", // deeply qualified (blocked in strict mode)
+            "POSIX::system('ls')", // previously allowed bypass
+            "use Socket",       // module loading
+            "package Foo",      // package declaration
         ];
 
         for expr in blocked {
