@@ -809,10 +809,13 @@ impl SemanticAnalyzer {
                 self.analyze_node(body, scope_id);
             }
 
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 self.analyze_node(variable, scope_id);
                 self.analyze_node(list, scope_id);
                 self.analyze_node(body, scope_id);
+                if let Some(cb) = continue_block {
+                    self.analyze_node(cb, scope_id);
+                }
             }
 
             // Recursively analyze other nodes

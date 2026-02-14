@@ -396,8 +396,13 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 if let Some(result) = f(variable) {
+                if let Some(cb) = continue_block {
+                    if let Some(result) = f(cb) {
+                        results.push(result);
+                    }
+                }
                     return Some(result);
                 }
                 if let Some(result) = f(list) {

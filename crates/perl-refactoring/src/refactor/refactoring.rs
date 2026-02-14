@@ -1892,9 +1892,14 @@ fn visit_node(
                 );
             }
         }
-        NodeKind::Foreach { variable, list, body } => {
+        NodeKind::Foreach { variable, list, body, continue_block } => {
             // Visit list with outer scope
             visit_node(list, start, end, inputs, outputs, declared_in_scope, declared_in_range);
+            
+            // Visit continue block if present
+            if let Some(cb) = continue_block {
+                visit_node(cb, start, end, inputs, outputs, declared_in_scope, declared_in_range);
+            }
 
             // Create inner scope for variable and body
             let mut inner_scope = declared_in_scope.clone();

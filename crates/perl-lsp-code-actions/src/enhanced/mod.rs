@@ -174,10 +174,13 @@ impl EnhancedCodeActionsProvider {
                 }
                 self.collect_actions_for_range(body, range, actions);
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 self.collect_actions_for_range(variable, range, actions);
                 self.collect_actions_for_range(list, range, actions);
                 self.collect_actions_for_range(body, range, actions);
+                if let Some(cb) = continue_block {
+                    self.collect_actions_for_range(cb, range, actions);
+                }
             }
             NodeKind::While { condition, body, .. } => {
                 self.collect_actions_for_range(condition, range, actions);

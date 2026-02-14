@@ -110,7 +110,7 @@ where
                 f(cont)?;
             }
         }
-        Foreach { variable, list, body } => {
+        Foreach { variable, list, body, continue_block } => {
             f(variable)?;
             f(list)?;
             f(body)?;

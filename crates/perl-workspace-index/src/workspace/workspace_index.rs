@@ -2613,8 +2613,11 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 // Iterator is a write context
+                if let Some(cb) = continue_block {
+                    self.visit_node(cb, file_index);
+                }
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let var_name = format!("{}{}", sigil, name);
                     file_index.references.entry(var_name).or_default().push(SymbolReference {

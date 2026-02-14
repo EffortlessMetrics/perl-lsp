@@ -91,7 +91,6 @@ fn parser_continue_in_while_loop() {
 }
 
 #[test]
-#[ignore = "continue block parsing not yet implemented for until loops"]
 fn parser_continue_in_until_loop() {
     let case = find_continue_redo_case("continue.until.basic").expect("Failed to find test case");
     let ast = parse_code(case.source).expect("Failed to parse continue in until loop");
@@ -128,7 +127,6 @@ fn parser_continue_in_for_loop() {
 }
 
 #[test]
-#[ignore = "Foreach AST node doesn't have continue_block field yet"]
 fn parser_continue_in_foreach_loop() {
     let case = find_continue_redo_case("continue.foreach.basic").expect("Failed to find test case");
     let ast = parse_code(case.source).expect("Failed to parse continue in foreach loop");
@@ -264,7 +262,6 @@ fn parser_continue_redo_interaction() {
 }
 
 #[test]
-#[ignore = "Foreach AST node doesn't have continue_block field yet"]
 fn parser_continue_nested_loops() {
     let case = find_continue_redo_case("continue.nested.loops").expect("Failed to find test case");
     let ast = parse_code(case.source).expect("Failed to parse nested loops with continue");
@@ -273,12 +270,12 @@ fn parser_continue_nested_loops() {
         find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
     assert!(for_nodes.len() >= 2, "Should have at least two nested loops");
 
-    // Count continue blocks (only For has continue_block, Foreach doesn't yet)
+    // Count continue blocks
     let continue_blocks = for_nodes
         .iter()
         .filter(|node| match &node.kind {
             NodeKind::For { continue_block, .. } => continue_block.is_some(),
-            // TODO: Add Foreach when continue_block field is added
+            NodeKind::Foreach { continue_block, .. } => continue_block.is_some(),
             _ => false,
         })
         .count();
@@ -368,7 +365,6 @@ fn parser_redo_counter_reset() {
 // ============================================================================
 
 #[test]
-#[ignore = "Foreach AST node doesn't have continue_block field yet"]
 fn parser_continue_ast_structure() {
     let code = r#"
 for my $i (1..3) {
@@ -384,7 +380,7 @@ for my $i (1..3) {
     assert_eq!(for_nodes.len(), 1, "Should have exactly one For/Foreach node");
 
     match &for_nodes[0].kind {
-        NodeKind::Foreach { variable, list, body } => {
+        NodeKind::Foreach { variable, list, body, continue_block } => {
             // Verify iterator variable exists
             assert!(
                 matches!(

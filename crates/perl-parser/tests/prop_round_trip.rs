@@ -93,7 +93,7 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
                 extract_shape_rec(cont, out);
             }
         }
-        Foreach { variable, list, body } => {
+        Foreach { variable, list, body, continue_block } => {
             extract_shape_rec(variable, out);
             extract_shape_rec(list, out);
             extract_shape_rec(body, out);
@@ -230,7 +230,7 @@ fn check_spans_rec(node: &Node, source_len: usize, errors: &mut Vec<String>) {
                 check_spans_rec(cont, source_len, errors);
             }
         }
-        Foreach { variable, list, body } => {
+        Foreach { variable, list, body, continue_block } => {
             check_spans_rec(variable, source_len, errors);
             check_spans_rec(list, source_len, errors);
             check_spans_rec(body, source_len, errors);
