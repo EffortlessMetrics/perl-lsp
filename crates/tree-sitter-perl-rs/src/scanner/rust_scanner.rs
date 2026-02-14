@@ -206,11 +206,13 @@ impl RustScanner {
 
         // Skip whitespace
         while pos < input.len() {
-            current_char = Some(input[pos] as char);
-            if current_char.unwrap().is_whitespace() {
+            let c = input[pos] as char;
+            if c.is_whitespace() {
                 pos += 1;
-                self.state.advance(current_char.unwrap());
+                self.state.advance(c);
+                current_char = Some(c);
             } else {
+                current_char = Some(c);
                 break;
             }
         }
@@ -219,8 +221,10 @@ impl RustScanner {
             return Ok(None);
         }
 
+        let c = current_char.ok_or("unexpected missing character")?;
+
         // Parse based on current character
-        match current_char.unwrap() {
+        match c {
             '$' => self.scan_variable(&input[pos..]),
             '@' => self.scan_array_variable(&input[pos..]),
             '%' => self.scan_hash_variable(&input[pos..]),

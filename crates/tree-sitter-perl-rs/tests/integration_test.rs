@@ -12,7 +12,7 @@ fn test_basic_parsing() {
             // Just ensure it parses without error
             assert!(!format!("{:?}", ast).is_empty());
         }
-        Err(e) => panic!("Failed to parse: {:?}", e),
+        Err(e) => must(Err::<(), _>(format!("Failed to parse: {:?}", e))),
     }
 }
 
@@ -32,7 +32,7 @@ print $text;
             let debug_str = format!("{:?}", ast);
             assert!(debug_str.contains("This is a heredoc"));
         }
-        Err(e) => panic!("Failed to parse heredoc: {:?}", e),
+        Err(e) => must(Err::<(), _>(format!("Failed to parse heredoc: {:?}", e))),
     }
 }
 
@@ -55,7 +55,7 @@ for my $i (1..10) {
         Ok(_) => {
             // Success - it parsed
         }
-        Err(e) => panic!("Failed to parse control flow: {:?}", e),
+        Err(e) => must(Err::<(), _>(format!("Failed to parse control flow: {:?}", e))),
     }
 }
 
@@ -76,7 +76,7 @@ print $greeting;
         Ok(_) => {
             // Success - it parsed
         }
-        Err(e) => panic!("Failed to parse subroutine: {:?}", e),
+        Err(e) => must(Err::<(), _>(format!("Failed to parse subroutine: {:?}", e))),
     }
 }
 
@@ -94,6 +94,6 @@ if ($text =~ /pattern/) {
         Ok(_) => {
             // Success - it parsed
         }
-        Err(e) => panic!("Failed to parse regex: {:?}", e),
+        Err(e) => must(Err::<(), _>(format!("Failed to parse regex: {:?}", e))),
     }
 }

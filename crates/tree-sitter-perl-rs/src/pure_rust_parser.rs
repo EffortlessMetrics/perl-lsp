@@ -2674,11 +2674,12 @@ mod tests {
 
     #[test]
     fn test_basic_parsing() {
+        use perl_tdd_support::must;
         let mut parser = PureRustPerlParser::new();
         let source = "$var";
         let result = parser.parse(source);
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = parser.to_sexp(&ast);
         println!("AST: {:?}", ast);
         println!("S-expression: {}", sexp);
@@ -2686,11 +2687,12 @@ mod tests {
 
     #[test]
     fn test_variable_parsing() {
+        use perl_tdd_support::must;
         let mut parser = PureRustPerlParser::new();
         let source = "$scalar @array %hash";
         let result = parser.parse(source);
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = parser.to_sexp(&ast);
         println!("S-expression: {}", sexp);
     }
@@ -2708,7 +2710,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }
@@ -2725,7 +2727,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }
@@ -2742,7 +2744,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }
@@ -2760,7 +2762,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }
@@ -2778,7 +2780,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }

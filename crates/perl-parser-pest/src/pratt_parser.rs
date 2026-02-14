@@ -375,17 +375,19 @@ impl PrattParser {
         // Simple implementation for now - handle binary expressions
         if pairs.len() == 1 {
             // Single element, just parse it
+            let pair = pairs.into_iter().next().ok_or("missing expression pair")?;
             parser
-                .build_node(pairs.into_iter().next().unwrap())?
-                .ok_or_else(|| "Failed to parse".into())
+                .build_node(pair)?
+                .ok_or_else(|| "Failed to parse node".into())
         } else if pairs.len() >= 3 {
             // Binary expression - use precedence parsing
             self.parse_binary_expr(pairs, 0, parser)
         } else {
             // Fallback
+            let pair = pairs.into_iter().next().ok_or("missing expression fallback pair")?;
             parser
-                .build_node(pairs.into_iter().next().unwrap())?
-                .ok_or_else(|| "Failed to parse".into())
+                .build_node(pair)?
+                .ok_or_else(|| "Failed to parse fallback node".into())
         }
     }
 

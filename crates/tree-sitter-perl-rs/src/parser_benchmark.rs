@@ -116,14 +116,9 @@ pub enum ParserImpl {
 }
 
 /// Benchmark harness for parser implementations
+#[derive(Default)]
 pub struct ParserBenchmark {
     parser: PureRustPerlParser,
-}
-
-impl Default for ParserBenchmark {
-    fn default() -> Self {
-        Self { parser: PureRustPerlParser::new() }
-    }
 }
 
 impl ParserBenchmark {

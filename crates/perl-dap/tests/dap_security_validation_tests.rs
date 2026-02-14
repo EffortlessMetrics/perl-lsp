@@ -68,7 +68,7 @@ fn test_path_validation_parent_traversal_attempts() {
         if let Err(e) = result {
             match e {
                 SecurityError::PathTraversalAttempt(_) => {}
-                _ => panic!("Expected PathTraversalAttempt error for '{}', got: {:?}", path_str, e),
+                _ => must(Err::<(), _>(format!("Expected PathTraversalAttempt error for '{}', got: {:?}", path_str, e))),
             }
         }
     }
@@ -109,7 +109,7 @@ fn test_path_validation_null_byte_injection() {
 
     match result {
         Err(SecurityError::InvalidPathCharacters) => {}
-        _ => panic!("Expected InvalidPathCharacters error"),
+        _ => must(Err::<(), _>(format!("Expected InvalidPathCharacters error"))),
     }
 }
 
@@ -140,7 +140,7 @@ fn test_expression_validation_newline_injection() {
 
         match result {
             Err(SecurityError::InvalidExpression) => {}
-            _ => panic!("Expected InvalidExpression error"),
+            _ => must(Err::<(), _>(format!("Expected InvalidExpression error"))),
         }
     }
 }

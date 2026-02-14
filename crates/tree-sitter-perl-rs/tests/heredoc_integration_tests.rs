@@ -104,7 +104,7 @@ print $result;"#;
         let mut parser = FullPerlParser::new();
         match parser.parse(input) {
             Ok(_) => (),
-            Err(e) => panic!("Failed to parse heredoc in expression: {:?}", e),
+            Err(e) => must(Err::<(), _>(format!("Failed to parse heredoc in expression: {:?}", e))),
         }
     }
 

@@ -10,8 +10,9 @@
 //! - Cross-platform compatibility
 
 use perl_dap::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::channel;
 use std::time::Duration;
+use perl_tdd_support::{must, must_some};
 
 /// Test helper to create a valid TCP attach configuration
 fn create_valid_config() -> TcpAttachConfig {
@@ -21,11 +22,11 @@ fn create_valid_config() -> TcpAttachConfig {
 #[test]
 fn test_tcp_attach_config_validation() {
     // Test valid configuration
-    let config = TcpAttachConfig::new("localhost".to_string(), 13603);
+    let config = create_valid_config();
     assert!(config.validate().is_ok());
 
     // Test with timeout
-    let config = TcpAttachConfig::new("localhost".to_string(), 13603).with_timeout(5000);
+    let config = create_valid_config().with_timeout(5000);
     assert!(config.validate().is_ok());
 
     // Test empty host
@@ -37,22 +38,22 @@ fn test_tcp_attach_config_validation() {
     assert!(config.validate().is_err());
 
     // Test zero timeout
-    let config = TcpAttachConfig::new("localhost".to_string(), 13603).with_timeout(0);
+    let config = create_valid_config().with_timeout(0);
     assert!(config.validate().is_err());
 
     // Test timeout too large
-    let config = TcpAttachConfig::new("localhost".to_string(), 13603).with_timeout(300_001);
+    let config = create_valid_config().with_timeout(300_001);
     assert!(config.validate().is_err());
 }
 
 #[test]
 fn test_tcp_attach_timeout_duration() {
     // Test default timeout
-    let config = TcpAttachConfig::new("localhost".to_string(), 13603);
+    let config = create_valid_config();
     assert_eq!(config.timeout_duration(), Duration::from_millis(5000));
 
     // Test custom timeout
-    let config = TcpAttachConfig::new("localhost".to_string(), 13603).with_timeout(10000);
+    let config = create_valid_config().with_timeout(10000);
     assert_eq!(config.timeout_duration(), Duration::from_millis(10000));
 }
 
@@ -71,15 +72,15 @@ fn test_tcp_attach_session_event_sender() {
     // Send an event and verify it's received
     let event =
         DapEvent::Output { category: "stdout".to_string(), output: "test output".to_string() };
-    tx.send(event).unwrap();
+    must(tx.send(event));
 
-    let received = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+    let received = must(rx.recv_timeout(Duration::from_millis(100)));
     match received {
         DapEvent::Output { category, output } => {
             assert_eq!(category, "stdout");
             assert_eq!(output, "test output");
         }
-        _ => panic!("Received unexpected event type"),
+        _ => must(Err::<(), _>("Received unexpected event type")),
     }
 }
 
@@ -89,44 +90,43 @@ fn test_tcp_attach_event_variants() {
     let (tx, rx) = channel::<DapEvent>();
 
     // Test Output event
-    tx.send(DapEvent::Output { category: "stdout".to_string(), output: "test".to_string() })
-        .unwrap();
-    if let DapEvent::Output { .. } = rx.recv_timeout(Duration::from_millis(100)).unwrap() {
+    must(tx.send(DapEvent::Output { category: "stdout".to_string(), output: "test".to_string() }));
+    if let DapEvent::Output { .. } = must(rx.recv_timeout(Duration::from_millis(100))) {
         // Success
     } else {
-        panic!("Expected Output event");
+        must(Err::<(), _>("Expected Output event"));
     }
 
     // Test Stopped event
-    tx.send(DapEvent::Stopped { reason: "breakpoint".to_string(), thread_id: 1 }).unwrap();
-    if let DapEvent::Stopped { .. } = rx.recv_timeout(Duration::from_millis(100)).unwrap() {
+    must(tx.send(DapEvent::Stopped { reason: "breakpoint".to_string(), thread_id: 1 }));
+    if let DapEvent::Stopped { .. } = must(rx.recv_timeout(Duration::from_millis(100))) {
         // Success
     } else {
-        panic!("Expected Stopped event");
+        must(Err::<(), _>("Expected Stopped event"));
     }
 
     // Test Continued event
-    tx.send(DapEvent::Continued { thread_id: 1 }).unwrap();
-    if let DapEvent::Continued { .. } = rx.recv_timeout(Duration::from_millis(100)).unwrap() {
+    must(tx.send(DapEvent::Continued { thread_id: 1 }));
+    if let DapEvent::Continued { .. } = must(rx.recv_timeout(Duration::from_millis(100))) {
         // Success
     } else {
-        panic!("Expected Continued event");
+        must(Err::<(), _>("Expected Continued event"));
     }
 
     // Test Terminated event
-    tx.send(DapEvent::Terminated { reason: "normal".to_string() }).unwrap();
-    if let DapEvent::Terminated { .. } = rx.recv_timeout(Duration::from_millis(100)).unwrap() {
+    must(tx.send(DapEvent::Terminated { reason: "normal".to_string() }));
+    if let DapEvent::Terminated { .. } = must(rx.recv_timeout(Duration::from_millis(100))) {
         // Success
     } else {
-        panic!("Expected Terminated event");
+        must(Err::<(), _>("Expected Terminated event"));
     }
 
     // Test Error event
-    tx.send(DapEvent::Error { message: "test error".to_string() }).unwrap();
-    if let DapEvent::Error { .. } = rx.recv_timeout(Duration::from_millis(100)).unwrap() {
+    must(tx.send(DapEvent::Error { message: "test error".to_string() }));
+    if let DapEvent::Error { .. } = must(rx.recv_timeout(Duration::from_millis(100))) {
         // Success
     } else {
-        panic!("Expected Error event");
+        must(Err::<(), _>("Expected Error event"));
     }
 }
 
@@ -158,10 +158,6 @@ fn test_tcp_attach_config_edge_cases() {
     // Test with maximum valid port
     let config = TcpAttachConfig::new("localhost".to_string(), 65535);
     assert!(config.validate().is_ok());
-
-    // Test with port just above maximum
-    let config = TcpAttachConfig::new("localhost".to_string(), 65535);
-    assert!(config.validate().is_err());
 
     // Test with minimum valid timeout
     let config = TcpAttachConfig::new("localhost".to_string(), 13603).with_timeout(1);
@@ -204,14 +200,14 @@ fn test_tcp_attach_event_serialization() {
         DapEvent::Output { category: "stderr".to_string(), output: "error message".to_string() };
 
     // Clone and send
-    tx.send(original.clone()).unwrap();
+    must(tx.send(original.clone()));
 
-    let received = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+    let received = must(rx.recv_timeout(Duration::from_millis(100)));
     match received {
         DapEvent::Output { category, output } => {
             assert_eq!(category, "stderr");
             assert_eq!(output, "error message");
         }
-        _ => panic!("Expected Output event"),
+        _ => must(Err::<(), _>("Expected Output event")),
     }
 }

@@ -260,7 +260,7 @@ impl RenameProvider {
             return Err("New name cannot be empty".to_string());
         }
         
-        if new_name.chars().next().unwrap().is_digit(10) {
+        if new_name.starts_with(|c: char| c.is_ascii_digit()) {
             return Err("New name cannot start with a digit".to_string());
         }
         
@@ -460,9 +460,10 @@ mod tests {
     #[test]
     fn test_affected_files_count() {
         let provider = RenameProvider::new();
+        use perl_tdd_support::must;
         
-        let uri1 = Url::parse("file:///test1.pl").unwrap();
-        let uri2 = Url::parse("file:///test2.pl").unwrap();
+        let uri1 = must(Url::parse("file:///test1.pl"));
+        let uri2 = must(Url::parse("file:///test2.pl"));
         
         let references = vec![
             Location { uri: uri1.clone(), range: Range::default() },

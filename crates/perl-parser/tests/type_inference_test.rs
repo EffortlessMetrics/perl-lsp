@@ -39,7 +39,7 @@ fn test_return_type_inference() -> TestResult {
         assert!(!returns.is_empty());
         assert_eq!(returns[0], PerlType::Scalar(ScalarType::Integer));
     } else {
-        panic!("Subroutine get_int not found or wrong type");
+        return Err("Subroutine get_int not found or wrong type".into());
     }
 
     // Check variable assigned from function call
@@ -60,7 +60,7 @@ fn test_implicit_return_inference() -> TestResult {
         assert!(!returns.is_empty());
         assert_eq!(returns[0], PerlType::Scalar(ScalarType::String));
     } else {
-        panic!("Subroutine get_str not found");
+        return Err("Subroutine get_str not found".into());
     }
     Ok(())
 }

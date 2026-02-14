@@ -382,19 +382,21 @@ mod tests {
 
     #[test]
     fn test_initial_parse() {
+        use perl_tdd_support::must;
         let mut parser = IncrementalParser::new();
         let source = "my $x = 42;\nprint $x;";
 
-        let tree = parser.parse_initial(source).unwrap();
+        let tree = must(parser.parse_initial(source));
         assert!(matches!(&tree.root, AstNode::Program(_)));
         assert_eq!(tree.line_breaks.len(), 3); // Start, after first line, end
     }
 
     #[test]
     fn test_simple_edit() {
+        use perl_tdd_support::must;
         let mut parser = IncrementalParser::new();
         let source = "my $x = 42;";
-        parser.parse_initial(source).unwrap();
+        must(parser.parse_initial(source));
 
         // Change 42 to 43
         let edit = Edit {
@@ -407,7 +409,7 @@ mod tests {
         };
 
         let new_source = "my $x = 43;";
-        let tree = parser.apply_edit(edit, new_source).unwrap();
+        let tree = must(parser.apply_edit(edit, new_source));
         assert!(matches!(&tree.root, AstNode::Program(_)));
     }
 

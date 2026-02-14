@@ -390,8 +390,6 @@ pub use perl_parser_core::util;
 // NOTE: diagnostics_catalog moved to perl-lsp crate
 // pub use ide::diagnostics_catalog;
 #[cfg(not(target_arch = "wasm32"))]
-// pub use ide::execute_command;
-
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;
 pub use error::recovery as error_recovery;
@@ -665,11 +663,10 @@ mod tests {
             let ast = must(result);
             if let NodeKind::Program { statements } = &ast.kind {
                 assert_eq!(statements.len(), 1);
-                if let NodeKind::VariableDeclaration { declarator: decl, .. } = &statements[0].kind
-                {
+                let is_var_decl = matches!(statements[0].kind, NodeKind::VariableDeclaration { .. });
+                assert!(is_var_decl, "Expected VariableDeclaration for: {}", code);
+                if let NodeKind::VariableDeclaration { declarator: decl, .. } = &statements[0].kind {
                     assert_eq!(decl, declarator);
-                } else {
-                    panic!("Expected VariableDeclaration for: {}", code);
                 }
             }
         }
@@ -706,6 +703,12 @@ mod tests {
                     _ => None,
                 };
 
+                assert!(
+                    binary_node.is_some(),
+                    "Expected Binary operator for: {}. Found: {:?}",
+                    code,
+                    statements[0].kind
+                );
                 if let Some((op, left, right)) = binary_node {
                     assert_eq!(op, expected_op, "Operator mismatch for: {}", code);
 
@@ -713,15 +716,13 @@ mod tests {
                     println!("Parsing: {}", code);
                     println!("Left node: {:?}", left);
                     println!("Right node: {:?}", right);
-                } else {
-                    panic!(
-                        "Expected Binary operator for: {}. Found: {:?}",
-                        code, statements[0].kind
-                    );
                 }
-            } else {
-                panic!("Expected Program node, found: {:?}", ast.kind);
             }
+            assert!(
+                matches!(ast.kind, NodeKind::Program { .. }),
+                "Expected Program node, found: {:?}",
+                ast.kind
+            );
         }
     }
 
@@ -759,17 +760,21 @@ mod tests {
                     _ => None,
                 };
 
+                assert!(
+                    binary_node.is_some(),
+                    "Expected Binary operator for: {}. Found: {:?}",
+                    code,
+                    statements[0].kind
+                );
                 if let Some(op) = binary_node {
                     assert_eq!(op, expected_op, "Operator mismatch for: {}", code);
-                } else {
-                    panic!(
-                        "Expected Binary operator for: {}. Found: {:?}",
-                        code, statements[0].kind
-                    );
                 }
-            } else {
-                panic!("Expected Program node, found: {:?}", ast.kind);
             }
+            assert!(
+                matches!(ast.kind, NodeKind::Program { .. }),
+                "Expected Program node, found: {:?}",
+                ast.kind
+            );
         }
     }
 

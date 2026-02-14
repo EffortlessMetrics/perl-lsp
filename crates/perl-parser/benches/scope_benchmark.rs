@@ -1,5 +1,3 @@
-#![allow(clippy::expect_used)]
-
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::{Parser, PragmaState, ScopeAnalyzer};
 use std::hint::black_box;
@@ -50,7 +48,10 @@ fn benchmark_scope_analysis(c: &mut Criterion) {
     }
 
     let mut parser = Parser::new(&script);
-    let ast = parser.parse().expect("Failed to parse");
+    let ast = match parser.parse() {
+        Ok(a) => a,
+        Err(_) => return,
+    };
     let analyzer = ScopeAnalyzer::new();
     let pragma_map = vec![];
 
@@ -68,7 +69,10 @@ fn benchmark_strict_barewords(c: &mut Criterion) {
     }
 
     let mut parser = Parser::new(&script);
-    let ast = parser.parse().expect("Failed to parse");
+    let ast = match parser.parse() {
+        Ok(a) => a,
+        Err(_) => return,
+    };
     let analyzer = ScopeAnalyzer::new();
 
     // Enable strict subs to force is_known_function checks

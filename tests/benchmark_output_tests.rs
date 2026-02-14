@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use serde_json::Value;
+use perl_tdd_support::{must, must_some};
 
 /// Test that the benchmark binary runs successfully and produces default output
 #[test]
@@ -10,7 +11,7 @@ fn test_default_output_file() {
     let _ = fs::remove_file("benchmark_results.json");
 
     // Run the benchmark binary with default settings
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p", 
@@ -20,8 +21,7 @@ fn test_default_output_file() {
             "--features", 
             "pure-rust"
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Check command was successful
     assert!(output.status.success(), "Benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
@@ -30,8 +30,8 @@ fn test_default_output_file() {
     assert!(Path::new("benchmark_results.json").exists(), "Default output file not created");
 
     // Validate JSON structure
-    let json_content = fs::read_to_string("benchmark_results.json").expect("Could not read output file");
-    let parsed: Value = serde_json::from_str(&json_content).expect("Invalid JSON");
+    let json_content = must(fs::read_to_string("benchmark_results.json"));
+    let parsed: Value = must(serde_json::from_str(&json_content));
 
     // Check key fields in JSON
     assert!(parsed["metadata"].is_object(), "Metadata section missing");
@@ -49,7 +49,7 @@ fn test_custom_output_path() {
     let _ = fs::remove_file("custom_benchmark_results.json");
 
     // Run benchmark with custom output path
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p", 
@@ -62,8 +62,7 @@ fn test_custom_output_path() {
             "--output",
             "custom_benchmark_results.json"
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Check command was successful
     assert!(output.status.success(), "Custom output benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
@@ -85,7 +84,7 @@ fn test_output_path_with_directory() {
     let output_path = format!("{}/benchmark_results.json", output_dir);
 
     // Run benchmark with output path in non-existent directory
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p", 
@@ -98,8 +97,7 @@ fn test_output_path_with_directory() {
             "--output",
             &output_path
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Check command was successful
     assert!(output.status.success(), "Directory creation benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
@@ -119,7 +117,7 @@ fn test_cli_flags() {
     let _ = fs::remove_file("cli_test_results.json");
 
     // Run benchmark with various CLI flags
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p", 
@@ -136,8 +134,7 @@ fn test_cli_flags() {
             "--warmup", 
             "1"   // Minimized for CI performance
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Check command was successful
     assert!(output.status.success(), "CLI flags benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
@@ -146,8 +143,8 @@ fn test_cli_flags() {
     assert!(Path::new("cli_test_results.json").exists(), "CLI test output file not created");
 
     // Validate configuration was applied
-    let json_content = fs::read_to_string("cli_test_results.json").expect("Could not read CLI test output file");
-    let parsed: Value = serde_json::from_str(&json_content).expect("Invalid JSON in CLI test");
+    let json_content = must(fs::read_to_string("cli_test_results.json"));
+    let parsed: Value = must(serde_json::from_str(&json_content));
     
     let config = &parsed["metadata"]["configuration"];
     assert_eq!(config["iterations"], 5, "Iterations CLI override not applied");
@@ -164,7 +161,7 @@ fn test_save_flag_functionality() {
     let _ = fs::remove_file("benchmark_results.json");
 
     // Run benchmark with --save flag (should use default path)
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p", 
@@ -178,8 +175,7 @@ fn test_save_flag_functionality() {
             "--iterations",
             "2"  // Minimized for CI performance
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Check command was successful
     assert!(output.status.success(), "Save flag benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
@@ -198,7 +194,7 @@ fn test_performance_categories() {
     let _ = fs::remove_file("performance_test_results.json");
 
     // Run benchmark
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p", 
@@ -213,18 +209,16 @@ fn test_performance_categories() {
             "--iterations",
             "2"  // Minimized for CI performance
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Check command was successful
     assert!(output.status.success(), "Performance categories benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Validate JSON structure
-    let json_content = fs::read_to_string("performance_test_results.json").expect("Could not read performance test output file");
-    let parsed: Value = serde_json::from_str(&json_content).expect("Invalid JSON in performance test");
+    let json_content = must(fs::read_to_string("performance_test_results.json"));
+    let parsed: Value = must(serde_json::from_str(&json_content));
 
-    let categories = parsed["summary"]["performance_categories"].as_object()
-        .expect("Performance categories missing");
+    let categories = must_some(parsed["summary"]["performance_categories"].as_object());
 
     // Check for expected category types
     let expected_categories = [
@@ -254,7 +248,7 @@ fn test_metadata_details() {
     let _ = fs::remove_file("metadata_test_results.json");
 
     // Run benchmark
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p", 
@@ -269,17 +263,16 @@ fn test_metadata_details() {
             "--iterations",
             "1"  // Minimized for CI performance
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Check command was successful
     assert!(output.status.success(), "Metadata test benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
 
     // Validate JSON
-    let json_content = fs::read_to_string("metadata_test_results.json").expect("Could not read metadata test output file");
-    let parsed: Value = serde_json::from_str(&json_content).expect("Invalid JSON in metadata test");
+    let json_content = must(fs::read_to_string("metadata_test_results.json"));
+    let parsed: Value = must(serde_json::from_str(&json_content));
 
-    let metadata = parsed["metadata"].as_object().expect("Metadata missing");
+    let metadata = must_some(parsed["metadata"].as_object());
 
     // Check key metadata fields
     assert!(metadata.contains_key("generated_at"), "Missing generated_at timestamp");
@@ -289,7 +282,7 @@ fn test_metadata_details() {
     assert!(metadata.contains_key("total_iterations"), "Missing total iterations");
     
     // Validate timestamp format (should be RFC3339)
-    let timestamp = metadata["generated_at"].as_str().expect("generated_at should be a string");
+    let timestamp = must_some(metadata["generated_at"].as_str());
     assert!(timestamp.contains('T'), "Timestamp should be in RFC3339 format");
     
     // Clean up

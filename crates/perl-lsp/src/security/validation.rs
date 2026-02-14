@@ -277,10 +277,11 @@ mod tests {
     
     #[test]
     fn test_validate_file_path_valid() {
-        let temp_dir = TempDir::new().unwrap();
+        use perl_tdd_support::must;
+        let temp_dir = must(TempDir::new());
         let workspace_root = temp_dir.path();
         let file_path = workspace_root.join("test.pl");
-        fs::write(&file_path, "print 'Hello';").unwrap();
+        must(fs::write(&file_path, "print 'Hello';"));
         
         let result = validate_file_path(&file_path, workspace_root);
         assert!(result.is_ok());
@@ -288,7 +289,8 @@ mod tests {
     
     #[test]
     fn test_validate_file_path_traversal() {
-        let temp_dir = TempDir::new().unwrap();
+        use perl_tdd_support::must;
+        let temp_dir = must(TempDir::new());
         let workspace_root = temp_dir.path();
         let malicious_path = Path::new("../../etc/passwd");
         

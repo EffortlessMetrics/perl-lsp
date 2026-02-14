@@ -1,10 +1,13 @@
 //! Comprehensive tests for regex and pattern matching
-//! 
+//!
 //! These tests validate complex interactions between regex operations
 //! including lookarounds, backreferences, modifiers, substitution,
 //! given/when with regex, and pattern matching with data structures.
 
-use perl_parser::{Parser, ast::{Node, NodeKind}};
+use perl_parser::{
+    Parser,
+    ast::{Node, NodeKind},
+};
 
 /// Test complex regex with lookarounds, backreferences, and modifiers
 #[test]
@@ -122,19 +125,19 @@ if ($conditional_text =~ /^(?(?=\d)\d+|[a-z]+)$/) {
 
     let mut parser = Parser::new(code);
     let ast = parser.parse().expect("Should parse successfully");
-    
+
     // Verify regex operations
     let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
     assert!(!regex_nodes.is_empty(), "Should have regex nodes");
-    
+
     // Verify match operations
     let match_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Match { .. }));
     assert!(!match_nodes.is_empty(), "Should have match operations");
-    
+
     // Verify conditional statements
     let if_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::If { .. }));
     assert!(!if_nodes.is_empty(), "Should have conditional statements");
-    
+
     // Verify string literals with regex content
     let string_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::String { .. }));
     assert!(!string_nodes.is_empty(), "Should have string literals");
@@ -250,23 +253,25 @@ process_file_substitutions('config.txt');
 
     let mut parser = Parser::new(code);
     let ast = parser.parse().expect("Should parse successfully");
-    
+
     // Verify substitution operations
-    let substitution_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Substitution { .. }));
+    let substitution_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Substitution { .. }));
     assert!(!substitution_nodes.is_empty(), "Should have substitution operations");
-    
+
     // Verify transliteration operations
-    let transliteration_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Transliteration { .. }));
+    let transliteration_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Transliteration { .. }));
     assert!(!transliteration_nodes.is_empty(), "Should have transliteration operations");
-    
+
     // Verify match operations
     let match_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Match { .. }));
     assert!(!match_nodes.is_empty(), "Should have match operations");
-    
+
     // Verify eval blocks for error handling
     let eval_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Eval { .. }));
     assert!(!eval_nodes.is_empty(), "Should have eval blocks");
-    
+
     // Verify function calls
     let function_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::FunctionCall { .. }));
     assert!(!function_calls.is_empty(), "Should have function calls");
@@ -466,31 +471,31 @@ given ($value_to_test) {
 
     let mut parser = Parser::new(code);
     let ast = parser.parse().expect("Should parse successfully");
-    
+
     // Verify given statements
     let given_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Given { .. }));
     assert!(!given_nodes.is_empty(), "Should have given statements");
-    
+
     // Verify when clauses
     let when_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::When { .. }));
     assert!(!when_nodes.is_empty(), "Should have when clauses");
-    
+
     // Verify default clauses
     let default_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Default { .. }));
     assert!(!default_nodes.is_empty(), "Should have default clauses");
-    
+
     // Verify regex operations
     let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
     assert!(!regex_nodes.is_empty(), "Should have regex nodes");
-    
+
     // Verify match operations
     let match_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Match { .. }));
     assert!(!match_nodes.is_empty(), "Should have match operations");
-    
+
     // Verify hash literals
     let hash_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::HashLiteral { .. }));
     assert!(!hash_literals.is_empty(), "Should have hash literals");
-    
+
     // Verify array literals
     let array_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::ArrayLiteral { .. }));
     assert!(!array_literals.is_empty(), "Should have array literals");
@@ -740,34 +745,34 @@ my $guard_match = match_with_guards([3, 7]);
 
     let mut parser = Parser::new(code);
     let ast = parser.parse().expect("Should parse successfully");
-    
+
     // Verify given statements
     let given_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Given { .. }));
     assert!(!given_nodes.is_empty(), "Should have given statements");
-    
+
     // Verify when clauses
     let when_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::When { .. }));
     assert!(!when_nodes.is_empty(), "Should have when clauses");
-    
+
     // Verify default clauses
     let default_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Default { .. }));
     assert!(!default_nodes.is_empty(), "Should have default clauses");
-    
+
     // Verify regex operations
     let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
     assert!(!regex_nodes.is_empty(), "Should have regex nodes");
-    
+
     // Verify match operations
     let match_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Match { .. }));
     assert!(!match_nodes.is_empty(), "Should have match operations");
-    
+
     // Verify complex data structures
     let hash_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::HashLiteral { .. }));
     let array_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::ArrayLiteral { .. }));
-    
+
     assert!(!hash_literals.is_empty(), "Should have hash literals");
     assert!(!array_literals.is_empty(), "Should have array literals");
-    
+
     // Verify subroutine declarations
     let sub_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Subroutine { .. }));
     assert!(!sub_nodes.is_empty(), "Should have subroutine declarations");
@@ -901,23 +906,23 @@ if ($verbose_text =~ /
 
     let mut parser = Parser::new(code);
     let ast = parser.parse().expect("Should parse successfully");
-    
+
     // Verify regex operations
     let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
     assert!(!regex_nodes.is_empty(), "Should have regex nodes");
-    
+
     // Verify match operations
     let match_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Match { .. }));
     assert!(!match_nodes.is_empty(), "Should have match operations");
-    
+
     // Verify conditional statements
     let if_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::If { .. }));
     assert!(!if_nodes.is_empty(), "Should have conditional statements");
-    
+
     // Verify string literals with regex content
     let string_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::String { .. }));
     assert!(!string_nodes.is_empty(), "Should have string literals");
-    
+
     // Verify function calls
     let function_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::FunctionCall { .. }));
     assert!(!function_calls.is_empty(), "Should have function calls");
@@ -941,7 +946,7 @@ where
     if predicate(&node.kind) {
         results.push(node);
     }
-    
+
     // Recurse into child nodes based on node type
     match &node.kind {
         NodeKind::Program { statements } => {
@@ -1104,15 +1109,15 @@ where
             find_nodes_recursive(variable, predicate, results);
         }
         NodeKind::Readline { .. } => {} // No complex children
-        NodeKind::Diamond => {} // No children
-        NodeKind::Glob { .. } => {} // No children
+        NodeKind::Diamond => {}         // No children
+        NodeKind::Glob { .. } => {}     // No children
         NodeKind::Typeglob { .. } => {} // No children
-        NodeKind::Number { .. } => {} // No children
-        NodeKind::String { .. } => {} // No children
-        NodeKind::Heredoc { .. } => {} // No children
-        NodeKind::Undef => {} // No children
-        NodeKind::Ellipsis => {} // No children
-        NodeKind::Regex { .. } => {} // No children
+        NodeKind::Number { .. } => {}   // No children
+        NodeKind::String { .. } => {}   // No children
+        NodeKind::Heredoc { .. } => {}  // No children
+        NodeKind::Undef => {}           // No children
+        NodeKind::Ellipsis => {}        // No children
+        NodeKind::Regex { .. } => {}    // No children
         NodeKind::Match { expr, .. } => {
             find_nodes_recursive(expr, predicate, results);
         }
@@ -1128,14 +1133,14 @@ where
             }
         }
         NodeKind::Use { .. } => {} // No complex children
-        NodeKind::No { .. } => {} // No complex children
+        NodeKind::No { .. } => {}  // No complex children
         NodeKind::PhaseBlock { block, .. } => {
             find_nodes_recursive(block, predicate, results);
         }
         NodeKind::DataSection { .. } => {} // No children
-        NodeKind::Format { .. } => {} // No children
-        NodeKind::Identifier { .. } => {} // No children
-        NodeKind::Variable { .. } => {} // No children
+        NodeKind::Format { .. } => {}      // No children
+        NodeKind::Identifier { .. } => {}  // No children
+        NodeKind::Variable { .. } => {}    // No children
         NodeKind::VariableWithAttributes { variable, .. } => {
             find_nodes_recursive(variable, predicate, results);
         }
@@ -1169,8 +1174,10 @@ where
                 find_nodes_recursive(p, predicate, results);
             }
         }
-        NodeKind::MissingExpression | NodeKind::MissingStatement | 
-        NodeKind::MissingIdentifier | NodeKind::MissingBlock => {} // No children
+        NodeKind::MissingExpression
+        | NodeKind::MissingStatement
+        | NodeKind::MissingIdentifier
+        | NodeKind::MissingBlock => {} // No children
         NodeKind::UnknownRest => {} // No children
     }
 }

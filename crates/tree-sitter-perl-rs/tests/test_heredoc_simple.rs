@@ -16,7 +16,7 @@ EOF
         println!("Token {:?}", token);
         count += 1;
         if count > 100 {
-            panic!("Too many tokens - likely infinite loop");
+            must(Err::<(), _>(format!("Too many tokens - likely infinite loop")));
         }
     }
 }

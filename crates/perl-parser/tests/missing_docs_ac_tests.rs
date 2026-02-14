@@ -649,7 +649,11 @@ mod missing_docs_tests {
             let lib_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/lib.rs");
             let content = match std::fs::read_to_string(lib_path) {
                 Ok(c) => c,
-                Err(e) => panic!("Failed to read lib.rs: {}", e),
+            Err(e) => {
+                let msg = format!("Failed to read lib.rs: {}", e);
+                assert!(msg.is_empty(), "{}", msg);
+                return;
+            }
             };
             assert!(
                 content.contains("warn(missing_docs)"),
@@ -665,7 +669,7 @@ mod missing_docs_tests {
                 // Test passes - missing_docs warning is properly enabled
             }
             Err(error_msg) => {
-                panic!(
+                unreachable!(
                     "AC1 NOT IMPLEMENTED: {}\n\nTo fix:\n  - Uncomment #![warn(missing_docs)] in lib.rs\n  - Ensure compilation succeeds without warnings",
                     error_msg
                 );
@@ -742,7 +746,7 @@ mod missing_docs_tests {
             }
         }
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -931,7 +935,7 @@ mod missing_docs_tests {
             }
         }
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1060,7 +1064,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - large workspace scaling performance implications\n");
         error_msg.push_str("  - Optimization characteristics\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1209,7 +1213,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - Purpose and LSP architecture relationship\n");
         error_msg.push_str("  - Usage examples\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1288,7 +1292,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - LSP provider configuration examples\n");
         error_msg.push_str("  - Parser configuration examples\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1364,7 +1368,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - Examples that pass 'cargo test --doc'\n");
         error_msg.push_str("  - Real usage scenarios in examples\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1495,7 +1499,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - Recovery strategies\n");
         error_msg.push_str("  - Pipeline stage context (Extract/Normalize/Thread/Render/Index)\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1579,7 +1583,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - Related functionality links\n");
         error_msg.push_str("  - 'See also' sections where appropriate\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1649,7 +1653,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - Code blocks with language specification\n");
         error_msg.push_str("  - Consistent formatting and style\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1669,7 +1673,7 @@ mod missing_docs_tests {
                 // Test passes - cargo doc generation succeeded without warnings
             }
             Err(error_msg) => {
-                panic!(
+                unreachable!(
                     "AC11 NOT IMPLEMENTED: cargo doc generation failed or has warnings:\n{}",
                     error_msg
                 );
@@ -1702,10 +1706,9 @@ mod missing_docs_tests {
 
     /// Analyzes CI documentation enforcement configuration
     fn analyze_ci_documentation_enforcement(lib_path: &str) -> CiEnforcementStatus {
-        let lib_content = match fs::read_to_string(lib_path) {
-            Ok(c) => c,
-            Err(e) => panic!("Failed to read lib.rs: {}", e),
-        };
+        let lib_content_res = fs::read_to_string(lib_path);
+        assert!(lib_content_res.is_ok(), "Failed to read lib.rs");
+        let lib_content = lib_content_res.unwrap_or_else(|_| unreachable!());
 
         let has_enabled_missing_docs = lib_content.contains("#![warn(missing_docs)]")
             && !lib_content.contains("// #![warn(missing_docs)]");
@@ -1737,7 +1740,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - CI pipeline configured to fail on missing docs\n");
         error_msg.push_str("  - Automatic documentation coverage checking\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1821,7 +1824,7 @@ mod missing_docs_tests {
             .push_str(&format!("\nTotal coverage: {}, Expected minimum: {}\n", total, expected));
         error_msg.push_str("All core modules should document their role in LSP workflow stages\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     // ============================================================================
@@ -2429,7 +2432,7 @@ pub fn bad_refs() {}
                 critical_issues.join("\n")
             );
 
-            panic!("{}", error_summary);
+            unreachable!("{}", error_summary);
         }
 
         // Note: lsp_critical_modules array is always non-empty by definition (compile-time constant)

@@ -10,16 +10,15 @@ use perl_parser::{Node, NodeKind, Parser, SourceLocation};
 fn parser_430_ac1_error_variant_structure() {
     let code = "my $x = ;"; // Missing expression after =
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-
-    assert!(result.is_ok(), "Parser should recover and return Ok");
-    let ast = result.unwrap();
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
 
     // Debug: Print the AST structure
     println!("AST: {:?}", ast);
     println!("S-expression: {}", ast.to_sexp());
 
     // Find the error node
+    let mut found_error = false;
     if let NodeKind::Program { statements } = &ast.kind {
         for stmt in statements {
             println!("Statement kind: {:?}", stmt.kind.kind_name());
@@ -34,12 +33,13 @@ fn parser_430_ac1_error_variant_structure() {
                 println!("AC1: Partial node: {:?}", partial.is_some());
 
                 // Note: The error node structure exists even if expected is empty
-                return;
+                found_error = true;
+                break;
             }
         }
     }
 
-    panic!("Should find at least one Error node with complete structure");
+    assert!(found_error, "Should find at least one Error node with complete structure");
 }
 
 /// AC2: NodeKind enum includes MissingExpression, MissingStatement, MissingIdentifier, MissingBlock variants
@@ -65,11 +65,10 @@ fn parser_430_ac2_missing_node_variants_exist() {
 fn parser_430_ac3_error_nodes_preserve_location() {
     let code = "my $x = ;\nprint 1;"; // Error on line 1
     let mut parser = Parser::new(code);
-    let result = parser.parse();
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
 
-    assert!(result.is_ok());
-    let ast = result.unwrap();
-
+    let mut found_error = false;
     if let NodeKind::Program { statements } = &ast.kind {
         for stmt in statements {
             if let NodeKind::Error { .. } = &stmt.kind {
@@ -80,12 +79,13 @@ fn parser_430_ac3_error_nodes_preserve_location() {
                     "AC3: Error node location: start={}, end={}",
                     stmt.location.start, stmt.location.end
                 );
-                return;
+                found_error = true;
+                break;
             }
         }
     }
 
-    panic!("Should find error node with location information");
+    assert!(found_error, "Should find error node with location information");
 }
 
 /// AC4: Parser method create_error_node() constructs error nodes with contextual information
@@ -94,12 +94,11 @@ fn parser_430_ac3_error_nodes_preserve_location() {
 fn parser_430_ac4_error_nodes_have_context() {
     let code = "if ($x) { my $y = ; }"; // Missing expression in if block
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-
-    assert!(result.is_ok());
-    let ast = result.unwrap();
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
 
     // Navigate to the error node inside the if block
+    let mut found_error = false;
     if let NodeKind::Program { statements } = &ast.kind {
         if let Some(stmt) = statements.first() {
             if let NodeKind::If { then_branch, .. } = &stmt.kind {
@@ -111,7 +110,8 @@ fn parser_430_ac4_error_nodes_have_context() {
                             // Note: expected may be empty, error message provides context
                             println!("AC4: Error in context - message: {}", message);
                             // AC4 validated: create_error_node provides contextual information
-                            return;
+                            found_error = true;
+                            break;
                         }
                     }
                 }
@@ -119,7 +119,7 @@ fn parser_430_ac4_error_nodes_have_context() {
         }
     }
 
-    panic!("Should find error node with contextual information in if block");
+    assert!(found_error, "Should find error node with contextual information in if block");
 }
 
 /// AC5: Error nodes can contain partial valid AST nodes when phrase-level recovery succeeds
@@ -128,11 +128,10 @@ fn parser_430_ac5_error_nodes_with_partial_ast() {
     // This test validates that Error nodes can wrap partial valid trees
     let code = "my $x = ;"; // Assignment with missing RHS
     let mut parser = Parser::new(code);
-    let result = parser.parse();
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
 
-    assert!(result.is_ok());
-    let ast = result.unwrap();
-
+    let mut found_error = false;
     if let NodeKind::Program { statements } = &ast.kind {
         for stmt in statements {
             if let NodeKind::Error { partial, .. } = &stmt.kind {
@@ -140,12 +139,13 @@ fn parser_430_ac5_error_nodes_with_partial_ast() {
                 println!("AC5: Error node has partial field: {:?}", partial.is_some());
 
                 // Structure exists for future phrase-level recovery
-                return;
+                found_error = true;
+                break;
             }
         }
     }
 
-    panic!("Should find error node with partial field");
+    assert!(found_error, "Should find error node with partial field");
 }
 
 /// AC6: Block parsing returns partial block AST with valid statements even when missing closing brace
@@ -212,11 +212,10 @@ fn parser_430_ac6_partial_block_missing_closing_brace() {
 fn parser_430_ac7_partial_if_statement() {
     let code = "if ($x > 0) { print 'positive'; } # Missing else handled gracefully";
     let mut parser = Parser::new(code);
-    let result = parser.parse();
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
 
-    assert!(result.is_ok());
-    let ast = result.unwrap();
-
+    let mut found_if = false;
     if let NodeKind::Program { statements } = &ast.kind {
         if let Some(stmt) = statements.first() {
             if let NodeKind::If { condition, then_branch, else_branch, .. } = &stmt.kind {
@@ -234,12 +233,12 @@ fn parser_430_ac7_partial_if_statement() {
                 println!("AC7: If statement with condition and then-branch: OK");
                 println!("AC7: Has else branch: {}", else_branch.is_some());
 
-                return;
+                found_if = true;
             }
         }
     }
 
-    panic!("Should find valid if statement with condition and then-branch");
+    assert!(found_if, "Should find valid if statement with condition and then-branch");
 }
 
 /// AC8: Expression parsing returns MissingExpression node when expression is absent but required
@@ -249,10 +248,8 @@ fn parser_430_ac8_missing_expression_node() {
     // This test validates the capability exists in the AST
     let code = "my $x = ;"; // Missing expression
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-
-    assert!(result.is_ok());
-    let ast = result.unwrap();
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
 
     // Check AST for Error or MissingExpression
     let has_error_handling = match &ast.kind {
@@ -382,10 +379,8 @@ fn parser_430_performance_error_recovery_overhead() {
 fn parser_430_sexp_error_nodes() {
     let code = "my $x = ;";
     let mut parser = Parser::new(code);
-    let result = parser.parse();
-
-    assert!(result.is_ok());
-    let ast = result.unwrap();
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
     let sexp = ast.to_sexp();
 
     // Error nodes should be represented in S-expression output

@@ -67,7 +67,7 @@ pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
         Some(arr) => arr,
         None => match resp["result"].as_array() {
             Some(arr) => arr,
-            None => panic!("completion result should be array or {{ items: [] }}, got: {resp:?}"),
+            None => must(Err::<(), _>(format!("completion result should be array or {{ items: [] }}, got: {resp:?}"))),
         },
     }
 }
@@ -261,19 +261,19 @@ pub fn start_lsp_server() -> LspServer {
             eprintln!("║  • Or:  cargo test -p perl-lsp    (builds + tests automatically)   ║");
             eprintln!("║  • Set PERL_LSP_BIN=/path/to/perl-lsp for custom binary            ║");
             eprintln!("╚════════════════════════════════════════════════════════════════════╝");
-            panic!("Failed to start perl-lsp via any available method: {:?}", last_err)
+            must(Err::<(), _>(format!("Failed to start perl-lsp via any available method: {:?}", last_err)))
         })
     };
 
     let stdin = match process.stdin.take() {
         Some(s) => s,
-        None => panic!("child stdin should be available after spawn"),
+        None => must(Err::<(), _>(format!("child stdin should be available after spawn"))),
     };
 
     // -------- stderr drain thread (prevents child from blocking on logs) --------
     let stderr = match process.stderr.take() {
         Some(s) => s,
-        None => panic!("stderr should be piped after spawn"),
+        None => must(Err::<(), _>(format!("stderr should be piped after spawn"))),
     };
     let echo = std::env::var_os("LSP_TEST_ECHO_STDERR").is_some();
     let _stderr_thread =
@@ -288,13 +288,13 @@ pub fn start_lsp_server() -> LspServer {
             }
         }) {
             Ok(handle) => handle,
-            Err(e) => panic!("Failed to spawn stderr drain thread: {e}"),
+            Err(e) => must(Err::<(), _>(format!("Failed to spawn stderr drain thread: {e}"))),
         };
 
     // -------- stdout LSP reader thread --------
     let stdout = match process.stdout.take() {
         Some(s) => s,
-        None => panic!("stdout should be piped after spawn"),
+        None => must(Err::<(), _>(format!("stdout should be piped after spawn"))),
     };
     let (tx, rx) = mpsc::channel::<Value>();
     let debug_reader = std::env::var_os("LSP_TEST_DEBUG_READER").is_some();
@@ -360,7 +360,7 @@ pub fn start_lsp_server() -> LspServer {
             }
         }) {
             Ok(handle) => handle,
-            Err(e) => panic!("Failed to spawn stdout reader thread: {e}"),
+            Err(e) => must(Err::<(), _>(format!("Failed to spawn stdout reader thread: {e}"))),
         };
 
     let server = LspServer {
@@ -404,7 +404,7 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
             // Safe unwrap: we just checked is_some() in the match guard
             let id_num = match n.as_i64() {
                 Some(num) => num,
-                None => panic!("ID number should be i64: {n:?}"),
+                None => must(Err::<(), _>(format!("ID number should be i64: {n:?}"))),
             };
             match read_response_matching_i64(server, id_num, default_timeout()) {
                 Some(resp) => resp,
@@ -748,9 +748,9 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
                         "Check if server started properly and is responding to JSON-RPC requests"
                     );
                     eprintln!("Server process alive: {}", server.is_alive());
-                    panic!(
+                    must(Err::<(), _>(format!(
                         "initialize response timeout - server may have crashed or is not responding"
-                    )
+                    )))
                 } else {
                     eprintln!(
                         "Initialize timeout attempt {}/{}, retrying with fresh request...",

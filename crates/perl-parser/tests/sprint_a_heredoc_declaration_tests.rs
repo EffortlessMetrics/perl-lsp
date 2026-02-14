@@ -25,23 +25,16 @@ use perl_parser::Parser;
 
 /// Helper function to parse code and return AST S-expression
 fn parse_to_sexp(input: &str) -> String {
+    use perl_tdd_support::must;
     let mut parser = Parser::new(input);
-    match parser.parse() {
-        Ok(ast) => ast.to_sexp(),
-        Err(e) => panic!("Parse error for input '{}': {}", input, e),
-    }
+    must(parser.parse()).to_sexp()
 }
 
 /// Helper function to parse code and verify it succeeds
-fn parse_and_verify_success(input: &str, test_name: &str) {
+fn parse_and_verify_success(input: &str, _test_name: &str) {
+    use perl_tdd_support::must;
     let mut parser = Parser::new(input);
-    match parser.parse() {
-        Ok(_) => {}
-        Err(e) => panic!(
-            "Test '{}' failed to parse heredoc declaration: {}\nInput: {}",
-            test_name, e, input
-        ),
-    }
+    must(parser.parse());
 }
 
 // ============================================================================

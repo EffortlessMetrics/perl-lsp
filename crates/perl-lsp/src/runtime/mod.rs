@@ -1577,11 +1577,12 @@ mod tests {
                 }
             }
             Err(e) => {
-                if e.to_string().contains("not found") {
+                let err_msg = e.to_string();
+                let is_not_found = err_msg.contains("not found");
+                if is_not_found {
                     eprintln!("Skipping test: perltidy not installed");
-                } else {
-                    panic!("Formatting failed: {}", e);
                 }
+                assert!(is_not_found, "Formatting failed: {}", err_msg);
             }
         }
     }

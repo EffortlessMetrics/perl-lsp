@@ -54,7 +54,8 @@ Hello world
 EOF
 "#;
         let parser = EnhancedPerlParser::new();
-        let ast = parser.parse(source).unwrap();
+        use perl_tdd_support::must;
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("Hello world"));
     }
@@ -63,7 +64,8 @@ EOF
     fn test_enhanced_parser_works_without_heredocs() {
         let source = "my $x = 42;";
         let parser = EnhancedPerlParser::new();
-        let ast = parser.parse(source).unwrap();
+        use perl_tdd_support::must;
+        let ast = must(parser.parse(source));
         let sexp = parser.to_sexp(&ast);
         assert!(sexp.contains("42"));
     }

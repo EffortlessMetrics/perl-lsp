@@ -25,13 +25,13 @@ fn test_basic_substitution() -> TestResult {
                 assert_eq!(replacement, "bar");
                 assert_eq!(modifiers, "");
             } else {
-                panic!("Expected Substitution node in expression, got {:?}", expression.kind);
+                return Err(format!("Expected Substitution node in expression, got {:?}", expression.kind).into());
             }
         } else {
-            panic!("Expected ExpressionStatement node, got {:?}", statements[0].kind);
+            return Err(format!("Expected ExpressionStatement node, got {:?}", statements[0].kind).into());
         }
     } else {
-        panic!("Expected Program node");
+        return Err("Expected Program node".into());
     }
     Ok(())
 }
@@ -60,10 +60,10 @@ fn test_substitution_with_modifiers() -> TestResult {
                 if let NodeKind::Substitution { modifiers, .. } = &expression.kind {
                     assert_eq!(modifiers, expected_modifiers, "Failed for {}", code);
                 } else {
-                    panic!("Expected Substitution node in expression for {}", code);
+                    return Err(format!("Expected Substitution node in expression for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement for {}", code);
+                return Err(format!("Expected ExpressionStatement for {}", code).into());
             }
         }
     }
@@ -99,10 +99,10 @@ fn test_substitution_with_different_delimiters() -> TestResult {
                         code
                     );
                 } else {
-                    panic!("Expected Substitution node for {}", code);
+                    return Err(format!("Expected Substitution node for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement node for {}", code);
+                return Err(format!("Expected ExpressionStatement node for {}", code).into());
             }
         }
     }
@@ -133,10 +133,10 @@ fn test_substitution_with_nested_delimiters() -> TestResult {
                         code
                     );
                 } else {
-                    panic!("Expected Substitution node for {}", code);
+                    return Err(format!("Expected Substitution node for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement node for {}", code);
+                return Err(format!("Expected ExpressionStatement node for {}", code).into());
             }
         }
     }
@@ -167,10 +167,10 @@ fn test_substitution_with_special_chars() -> TestResult {
                         code
                     );
                 } else {
-                    panic!("Expected Substitution node for {}", code);
+                    return Err(format!("Expected Substitution node for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement node for {}", code);
+                return Err(format!("Expected ExpressionStatement node for {}", code).into());
             }
         }
     }
@@ -196,10 +196,10 @@ fn test_substitution_empty_pattern_or_replacement() -> TestResult {
                         code
                     );
                 } else {
-                    panic!("Expected Substitution node for {}", code);
+                    return Err(format!("Expected Substitution node for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement node for {}", code);
+                return Err(format!("Expected ExpressionStatement node for {}", code).into());
             }
         }
     }
@@ -240,10 +240,10 @@ fn test_substitution_empty_replacement_balanced_delimiters() -> TestResult {
                         code
                     );
                 } else {
-                    panic!("Expected Substitution node for {}", code);
+                    return Err(format!("Expected Substitution node for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement node for {}", code);
+                return Err(format!("Expected ExpressionStatement node for {}", code).into());
             }
         }
     }
@@ -295,16 +295,16 @@ fn test_substitution_balanced_delimiters_with_trailing_code() -> TestResult {
             // Verify first statement is a substitution
             if let NodeKind::ExpressionStatement { expression } = &statements[0].kind {
                 if !matches!(expression.kind, NodeKind::Substitution { .. }) {
-                    panic!(
+                    return Err(format!(
                         "First statement should be Substitution for test case '{}', got {:?}\nCode: {}",
                         description, expression.kind, code
-                    );
+                    ).into());
                 }
             } else {
-                panic!(
+                return Err(format!(
                     "First statement should be ExpressionStatement containing Substitution for test case '{}', got {:?}\nCode: {}",
                     description, statements[0].kind, code
-                );
+                ).into());
             }
 
             // For multi-statement cases, verify subsequent statements exist and are properly parsed
@@ -321,10 +321,10 @@ fn test_substitution_balanced_delimiters_with_trailing_code() -> TestResult {
                 }
             }
         } else {
-            panic!(
+            return Err(format!(
                 "Expected Program node for test case '{}', got {:?}\nCode: {}",
                 description, ast.kind, code
-            );
+            ).into());
         }
     }
     Ok(())
@@ -346,10 +346,10 @@ fn test_substitution_with_expressions() -> TestResult {
                 assert_eq!(replacement, r#"sprintf("%02d", $1)"#);
                 assert_eq!(modifiers, "eg");
             } else {
-                panic!("Expected Substitution node");
+                return Err("Expected Substitution node".into());
             }
         } else {
-            panic!("Expected ExpressionStatement node");
+            return Err("Expected ExpressionStatement node".into());
         }
     }
     Ok(())
@@ -402,10 +402,10 @@ fn test_substitution_unicode() -> TestResult {
                         code
                     );
                 } else {
-                    panic!("Expected Substitution node for {}", code);
+                    return Err(format!("Expected Substitution node for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement node for {}", code);
+                return Err(format!("Expected ExpressionStatement node for {}", code).into());
             }
         }
     }
@@ -569,10 +569,10 @@ fn test_substitution_valid_modifier_combinations() -> TestResult {
                 if let NodeKind::Substitution { modifiers, .. } = &expression.kind {
                     assert_eq!(modifiers, expected_modifiers, "Modifiers mismatch for {}", code);
                 } else {
-                    panic!("Expected Substitution node for {}", code);
+                    return Err(format!("Expected Substitution node for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement for {}", code);
+                return Err(format!("Expected ExpressionStatement for {}", code).into());
             }
         }
     }
@@ -626,10 +626,10 @@ fn test_substitution_delimiter_edge_cases() -> TestResult {
                         code
                     );
                 } else {
-                    panic!("Expected Substitution node for {}", code);
+                    return Err(format!("Expected Substitution node for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement node for {}", code);
+                return Err(format!("Expected ExpressionStatement node for {}", code).into());
             }
         }
     }
@@ -671,10 +671,10 @@ fn test_substitution_complex_nested_scenarios() -> TestResult {
                         code
                     );
                 } else {
-                    panic!("Expected Substitution node for {}", code);
+                    return Err(format!("Expected Substitution node for {}", code).into());
                 }
             } else {
-                panic!("Expected ExpressionStatement node for {}", code);
+                return Err(format!("Expected ExpressionStatement node for {}", code).into());
             }
         }
     }

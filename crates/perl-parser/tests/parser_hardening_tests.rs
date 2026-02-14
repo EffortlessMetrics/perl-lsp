@@ -1,4 +1,5 @@
 use perl_parser::Parser;
+use perl_tdd_support::must;
 
 #[test]
 fn q_bareword_in_expr_positions() {
@@ -189,7 +190,7 @@ fn modifier_canonicalization_is_stable() {
         let mut asts = Vec::new();
         for input in &group {
             let mut p = Parser::new(input);
-            let ast = p.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", input));
+            let ast = must(p.parse());
             asts.push((input, ast));
         }
 
@@ -226,7 +227,7 @@ fn modifier_canonicalization_is_stable() {
         let mut asts = Vec::new();
         for input in &group {
             let mut p = Parser::new(input);
-            let ast = p.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", input));
+            let ast = must(p.parse());
             asts.push((input, ast));
         }
 
@@ -256,7 +257,7 @@ fn modifier_canonicalization_is_stable() {
         let mut asts = Vec::new();
         for input in &group {
             let mut p = Parser::new(input);
-            let ast = p.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", input));
+            let ast = must(p.parse());
             asts.push((input, ast));
         }
 
@@ -354,15 +355,9 @@ fn test_recursion_depth_limiting() {
     assert!(result.is_err(), "Unsafe depth should fail with nesting limit error");
 
     // Check that it's specifically a NestingTooDeep error
-    match result {
-        Err(perl_parser::ParseError::NestingTooDeep { .. }) => {
-            // Expected error type
-        }
-        Err(other_error) => {
-            panic!("Expected NestingTooDeep error, got: {:?}", other_error);
-        }
-        Ok(_) => {
-            panic!("Expected error but parsing succeeded");
-        }
-    }
+    assert!(
+        matches!(result, Err(perl_parser::ParseError::NestingTooDeep { .. })),
+        "Expected NestingTooDeep error, got: {:?}",
+        result
+    );
 }

@@ -264,10 +264,10 @@ sub test_another {
         assert!(lens.is_some());
 
         if let Some(lens) = lens {
-            if let Some(ref cmd) = lens.command {
+            let cmd_opt = &lens.command;
+            assert!(cmd_opt.is_some(), "expected command in shebang lens");
+            if let Some(cmd) = cmd_opt {
                 assert_eq!(cmd.title, "▶ Run Script");
-            } else {
-                panic!("expected command in shebang lens");
             }
         }
 
@@ -286,11 +286,10 @@ sub test_another {
         };
 
         let resolved = resolve_code_lens(unresolved, 3);
-        assert!(resolved.command.is_some());
-        if let Some(ref cmd) = resolved.command {
+        let cmd_opt = &resolved.command;
+        assert!(cmd_opt.is_some(), "expected command in resolved lens");
+        if let Some(cmd) = cmd_opt {
             assert_eq!(cmd.title, "3 references");
-        } else {
-            panic!("expected command in resolved lens");
         }
     }
 }

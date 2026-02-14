@@ -244,6 +244,7 @@ impl Default for ReferenceProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_reference_provider_creation() {
@@ -293,7 +294,7 @@ mod tests {
     #[test]
     fn test_symbol_resolution() {
         let provider = ReferenceProvider::new();
-        let uri = Url::parse("file:///test.pl").unwrap();
+        let uri = must(Url::parse("file:///test.pl"));
         let position = Position::new(0, 10);
         
         // This would normally resolve the actual symbol
@@ -308,7 +309,7 @@ mod tests {
         let params = ReferenceParams {
             text_document_position: lsp_types::TextDocumentPositionParams {
                 text_document: lsp_types::TextDocumentIdentifier { 
-                    uri: Url::parse("file:///test.pl").unwrap() 
+                    uri: must(Url::parse("file:///test.pl")) 
                 },
                 position: Position::new(0, 10),
             },

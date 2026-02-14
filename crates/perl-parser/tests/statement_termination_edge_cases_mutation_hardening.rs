@@ -138,17 +138,12 @@ fn test_nested_statement_termination_edge_cases() {
             }
             Err(error) => {
                 // Error is acceptable for some edge cases, but should not be a timeout/hang
-                match error {
-                    ParseError::RecursionLimit => {
-                        panic!(
-                            "MUTATION KILL: {} - hit recursion limit, indicates infinite loop from termination mutation in code: {}",
-                            description, perl_code
-                        );
-                    }
-                    _ => {
-                        // Other parse errors are acceptable for edge cases
-                    }
-                }
+                assert!(
+                    !matches!(error, ParseError::RecursionLimit),
+                    "MUTATION KILL: {} - hit recursion limit, indicates infinite loop from termination mutation in code: {}",
+                    description,
+                    perl_code
+                );
             }
         }
     }
@@ -327,20 +322,12 @@ fn test_termination_special_token_edge_cases() {
         );
 
         // Most of these should parse successfully
-        match parse_result {
-            Ok(_) => {
-                // Success is expected
-            }
-            Err(ParseError::RecursionLimit) => {
-                panic!(
-                    "MUTATION KILL: {} - hit recursion limit, indicates infinite loop from termination mutation: '{}'",
-                    description, perl_code
-                );
-            }
-            Err(_) => {
-                // Other parse errors might be acceptable for edge cases
-            }
-        }
+        assert!(
+            !matches!(parse_result, Err(ParseError::RecursionLimit)),
+            "MUTATION KILL: {} - hit recursion limit, indicates infinite loop from termination mutation: '{}'",
+            description,
+            perl_code
+        );
     }
 }
 
@@ -388,11 +375,10 @@ fn test_deeply_nested_statement_termination() {
         );
 
         // Should not hit recursion limits due to termination issues
-        if let Err(ParseError::RecursionLimit) = parse_result {
-            panic!(
-                "MUTATION KILL: {} - hit recursion limit in deeply nested structure, indicates termination logic mutation",
-                description
-            );
-        }
+        assert!(
+            !matches!(parse_result, Err(ParseError::RecursionLimit)),
+            "MUTATION KILL: {} - hit recursion limit in deeply nested structure, indicates termination logic mutation",
+            description
+        );
     }
 }

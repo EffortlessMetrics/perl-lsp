@@ -252,7 +252,7 @@ fn test_substitution_fuzz_nested_delimiters() {
 
 #[test]
 #[ignore = "substitution fuzz: comprehensive fuzz handling needs investigation"]
-fn test_substitution_comprehensive_fuzz() {
+fn test_substitution_comprehensive_fuzz() -> Result<(), Box<dyn std::error::Error>> {
     // Run the comprehensive fuzz test suite
     match run_substitution_fuzz_tests() {
         Ok(()) => println!("✅ All substitution operator fuzz tests passed!"),
@@ -260,10 +260,10 @@ fn test_substitution_comprehensive_fuzz() {
             // Save crashes to fuzz directory for analysis
             let crash_log = crashes.join("\n");
             let crash_log_path = std::env::temp_dir().join("substitution_fuzz_crashes.log");
-            std::fs::write(&crash_log_path, crash_log)
-                .unwrap_or_else(|e| eprintln!("Failed to write crash log: {}", e));
+            let _ = std::fs::write(&crash_log_path, crash_log);
 
-            panic!("Found {} crashes in substitution operator parsing", crashes.len());
+            return Err(format!("Found {} crashes in substitution operator parsing", crashes.len()).into());
         }
     }
+    Ok(())
 }

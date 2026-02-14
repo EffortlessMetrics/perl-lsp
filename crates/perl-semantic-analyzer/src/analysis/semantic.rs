@@ -2064,7 +2064,9 @@ my $documented = 42;
             .sum::<usize>()
             + col_in_line;
 
-        if let Some(symbol) = model.definition_at(byte_offset) {
+        let definition = model.definition_at(byte_offset);
+        assert!(definition.is_some(), "definition_at returned None for $x reference at {}", byte_offset);
+        if let Some(symbol) = definition {
             assert_eq!(symbol.name, "x");
             assert_eq!(symbol.kind, SymbolKind::scalar());
             assert!(
@@ -2073,8 +2075,6 @@ my $documented = 42;
                 symbol.location.start,
                 byte_offset
             );
-        } else {
-            panic!("definition_at returned None for $x reference at {}", byte_offset);
         }
         Ok(())
     }

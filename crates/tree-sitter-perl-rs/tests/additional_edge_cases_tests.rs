@@ -8,7 +8,7 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         match parser.parse(code) {
             Ok(ast) => parser.to_sexp(&ast),
-            Err(e) => panic!("Parse failed: {:?}\nCode: {}", e, code),
+            Err(e) => must(Err::<(), _>(format!("Parse failed: {:?}\nCode: {}", e, code))),
         }
     }
 

@@ -27,9 +27,12 @@
 //! "#;
 //!
 //! // Get AST and convert to S-expression
-//! let ast = parser.parse(code).unwrap();
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let ast = parser.parse(code)?;
 //! let sexp = parser.to_sexp(&ast);
 //! println!("{}", sexp);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Architecture
@@ -232,19 +235,23 @@ mod test_format_order;
 #[cfg(all(test, feature = "pure-rust"))]
 mod test_statement_debug;
 
+#[cfg(feature = "c-parser")]
 use tree_sitter::Language;
 
 // External C functions from the generated parser
+#[cfg(feature = "c-parser")]
 unsafe extern "C" {
     fn tree_sitter_perl() -> *const tree_sitter::ffi::TSLanguage;
 }
 
 /// Get the tree-sitter language for Perl
+#[cfg(feature = "c-parser")]
 pub fn language() -> Language {
     unsafe { Language::from_raw(tree_sitter_perl()) }
 }
 
 /// Create a new tree-sitter parser instance
+#[cfg(feature = "c-parser")]
 pub fn create_ts_parser() -> Result<tree_sitter::Parser, error::ParseError> {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&language()).map_err(|_| error::ParseError::LanguageLoadFailed)?;
@@ -252,12 +259,14 @@ pub fn create_ts_parser() -> Result<tree_sitter::Parser, error::ParseError> {
 }
 
 /// Parse Perl source code
+#[cfg(feature = "c-parser")]
 pub fn parse(source: &str) -> Result<tree_sitter::Tree, error::ParseError> {
     let mut parser = create_ts_parser()?;
     parser.parse(source, None).ok_or(error::ParseError::ParseFailed)
 }
 
 /// Parse Perl source code with existing tree
+#[cfg(feature = "c-parser")]
 pub fn parse_with_tree(
     source: &str,
     old_tree: Option<&tree_sitter::Tree>,
@@ -277,7 +286,7 @@ pub use full_parser::FullPerlParser;
 #[cfg(feature = "pure-rust")]
 pub use enhanced_full_parser::EnhancedFullParser;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "c-parser"))]
 mod test {
     use super::*;
 
@@ -294,15 +303,16 @@ mod test {
         let result = parse(source);
         assert!(result.is_ok());
 
-        let tree = result.unwrap();
-        let root = tree.root_node();
-        assert_eq!(root.kind(), "source_file");
+        if let Ok(tree) = result {
+            let root = tree.root_node();
+            assert_eq!(root.kind(), "source_file");
+        }
     }
 
     #[test]
     fn test_parser_creation() {
         let mut parser = tree_sitter::Parser::new();
-        parser.set_language(&language()).unwrap();
+        let _ = parser.set_language(&language());
         // Test that parser has a language set
         assert!(parser.language().is_some());
     }

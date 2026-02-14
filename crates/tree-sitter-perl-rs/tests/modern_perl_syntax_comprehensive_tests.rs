@@ -337,7 +337,7 @@ mod modern_perl_syntax {
                 // Validate parameter structure
                 validate_parameter_structure(&sub_node, code)?;
             } else {
-                panic!("No subroutine declaration found for: {}", code);
+                must(Err::<(), _>(format!("No subroutine declaration found for: {}", code)));
             }
         }
 
@@ -859,7 +859,7 @@ mod modern_perl_syntax {
                     }
                 }
             } else if should_be_valid {
-                panic!("Valid Unicode code failed to parse: {}", code);
+                must(Err::<(), _>(format!("Valid Unicode code failed to parse: {}", code)));
             }
         }
 

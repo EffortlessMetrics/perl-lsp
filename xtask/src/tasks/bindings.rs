@@ -12,7 +12,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 pub fn run(header: PathBuf, output: PathBuf) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}")?,
     );
 
     spinner.set_message("Generating bindings");

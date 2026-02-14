@@ -75,7 +75,7 @@ fn bench_dap_event_receiving(c: &mut Criterion) {
                 reason: "breakpoint".to_string(),
                 thread_id: 1,
             };
-            tx.send(event).unwrap();
+            let _ = tx.send(event);
             let _ = rx.recv_timeout(Duration::from_millis(1));
         });
     });

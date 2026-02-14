@@ -385,13 +385,6 @@ mod tests {
     use super::*;
     use perl_tdd_support::{must, must_some};
 
-    fn must_err<T, E: std::fmt::Debug>(result: Result<T, E>) -> E {
-        match result {
-            Err(e) => e,
-            Ok(_) => panic!("Expected error, got Ok"),
-        }
-    }
-
     #[test]
     fn test_config_to_args() {
         let config = PerlTidyConfig::default();
@@ -476,8 +469,12 @@ mod tests {
         let mut formatter = PerlTidyFormatter::new(config, runtime);
 
         let result = formatter.format("invalid code");
-        assert!(result.is_err());
-        assert!(must_err(result).contains("syntax error"));
+        match result {
+            Err(e) => assert!(format!("{:?}", e).contains("syntax error")),
+            Ok(_) => {
+                must(Err::<(), _>("Expected error, got Ok"));
+            }
+        }
     }
 
     #[test]

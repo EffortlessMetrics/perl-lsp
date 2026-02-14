@@ -13,7 +13,7 @@ impl TestUtils {
     /// Parse Perl code and return the tree
     pub fn parse_perl_code(code: &str) -> ParseResult<Tree> {
         let mut parser = Parser::new();
-        parser.set_language(&crate::language()).expect("Failed to set language");
+        parser.set_language(&crate::language()).map_err(|_| crate::error::ParseError::LanguageLoadFailed)?;
         parser.parse(code, None).ok_or(crate::error::ParseError::ParseFailed)
     }
 
@@ -79,6 +79,7 @@ impl TestUtils {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_parse_perl_code() {
@@ -88,14 +89,14 @@ mod tests {
 
     #[test]
     fn test_validate_tree_no_errors() {
-        let tree = TestUtils::parse_perl_code("my $var = 42;").unwrap();
+        let tree = must(TestUtils::parse_perl_code("my $var = 42;"));
         let result = TestUtils::validate_tree_no_errors(&tree);
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_tree_to_sexp() {
-        let tree = TestUtils::parse_perl_code("my $var = 42;").unwrap();
+        let tree = must(TestUtils::parse_perl_code("my $var = 42;"));
         let sexp = TestUtils::tree_to_sexp(&tree);
         assert!(sexp.contains("source_file"));
     }

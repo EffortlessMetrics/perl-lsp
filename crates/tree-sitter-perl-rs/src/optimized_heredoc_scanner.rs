@@ -55,15 +55,16 @@ impl HeredocScanner {
                         heredoc
                     );
                     
-                    let heredoc = self.pending.pop_front().unwrap();
-                    self.collected.push(CollectedHeredoc {
-                        marker: heredoc.marker.clone(),
-                        content,
-                        indented: heredoc.indented,
-                        quoted: heredoc.quoted,
-                        start_pos: heredoc.start_pos,
-                        end_pos: 0, // Would calculate actual position
-                    });
+                    if let Some(heredoc) = self.pending.pop_front() {
+                        self.collected.push(CollectedHeredoc {
+                            marker: heredoc.marker.clone(),
+                            content,
+                            indented: heredoc.indented,
+                            quoted: heredoc.quoted,
+                            start_pos: heredoc.start_pos,
+                            end_pos: 0, // Would calculate actual position
+                        });
+                    }
                     
                     skip_until = end_line + 1;
                     continue;

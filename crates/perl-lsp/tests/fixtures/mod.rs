@@ -159,7 +159,7 @@ pub mod loader {
         fn require_fixture(name: &str) -> PerlSyntaxFixture {
             match get_fixture_by_name(name) {
                 Some(f) => f.clone(),
-                None => panic!("missing fixture: {name}"),
+                None => must(Err::<PerlSyntaxFixture, _>(format!("missing fixture: {name}"))),
             }
         }
 
@@ -234,14 +234,14 @@ pub mod loader {
         fn require_fixture(name: &str) -> PerlSyntaxFixture {
             match get_fixture_by_name(name) {
                 Some(f) => f.clone(),
-                None => panic!("missing fixture: {name}"),
+                None => must(Err::<PerlSyntaxFixture, _>(format!("missing fixture: {name}"))),
             }
         }
 
         fn require_sub_fixture(name: &str) -> SubstitutionFixture {
             match get_substitution_fixture_by_name(name) {
                 Some(f) => f.clone(),
-                None => panic!("missing substitution fixture: {name}"),
+                None => must(Err::<SubstitutionFixture, _>(format!("missing substitution fixture: {name}"))),
             }
         }
 

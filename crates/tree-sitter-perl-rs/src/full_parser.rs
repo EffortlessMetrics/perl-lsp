@@ -389,7 +389,7 @@ my $y = $x / 2;"#;
                 assert!(result.contains("binary_expression"));
             }
             Err(e) => {
-                panic!("Failed to parse: {:?}", e);
+                assert!(false, "Failed to parse: {:?}", e);
             }
         }
     }
@@ -401,7 +401,8 @@ Test content
 EOF"#;
 
         let mut parser = FullPerlParser::new();
-        let result = parser.parse_to_sexp(input).unwrap();
+        use perl_tdd_support::must;
+        let result = must(parser.parse_to_sexp(input));
 
         // Should parse both heredoc and regex match
         assert!(result.contains("Test content"));

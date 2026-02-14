@@ -395,7 +395,13 @@ impl Node {
                 } else {
                     String::new()
                 };
-                format!("(foreach {} {} {}{})", variable.to_sexp(), list.to_sexp(), body.to_sexp(), cont)
+                format!(
+                    "(foreach {} {} {}{})",
+                    variable.to_sexp(),
+                    list.to_sexp(),
+                    body.to_sexp(),
+                    cont
+                )
             }
 
             NodeKind::Given { expr, body } => {

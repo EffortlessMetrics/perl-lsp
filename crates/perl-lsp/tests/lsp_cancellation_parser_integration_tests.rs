@@ -587,7 +587,7 @@ fn test_incremental_parsing_cancellation_preservation_ac6() -> Result<(), Box<dy
                         // Fast parsing completed before cancellation - acceptable
                         println!("  {} completed before early cancellation", scenario.name);
                     },
-                    Err(e) => panic!("Unexpected error during early cancellation: {:?}", e),
+                    Err(e) => must(Err::<(), _>(format!("Unexpected error during early cancellation: {:?}", e))),
                 }
             },
 
@@ -644,7 +644,7 @@ fn test_incremental_parsing_cancellation_preservation_ac6() -> Result<(), Box<dy
                         assert!(parsing_duration > Duration::from_micros(500),
                                "Late cancellation should occur after significant parsing");
                     },
-                    Err(e) => panic!("Unexpected error during late cancellation: {:?}", e),
+                    Err(e) => must(Err::<(), _>(format!("Unexpected error during late cancellation: {:?}", e))),
                 }
 
                 // AC:6 Performance preservation requirement
@@ -794,7 +794,7 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() -> Result<(), Box<dyn 
 
                 println!("  {} successfully cancelled with checkpoint recovery", scenario.name);
             },
-            Err(e) => panic!("Unexpected error during checkpoint cancellation: {:?}", e),
+            Err(e) => must(Err::<(), _>(format!("Unexpected error during checkpoint cancellation: {:?}", e))),
         }
 
         // AC:6 Performance requirement validation
@@ -1131,7 +1131,7 @@ fn test_dual_pattern_indexing_cancellation_ac7() -> Result<(), Box<dyn std::erro
 
                 println!("  {} dual pattern indexing cancelled with atomic consistency", pattern.name);
             },
-            Err(e) => panic!("Unexpected error during dual pattern indexing: {:?}", e),
+            Err(e) => must(Err::<(), _>(format!("Unexpected error during dual pattern indexing: {:?}", e))),
         }
 
         // AC:7 Performance requirement for dual pattern operations
@@ -1347,7 +1347,7 @@ fn test_cross_file_reference_cancellation_ac8() -> Result<(), Box<dyn std::error
 
                     println!("    Tier {:?} cancelled gracefully", navigation_tier);
                 },
-                Err(e) => panic!("Unexpected error during cross-file resolution: {:?}", e),
+                Err(e) => must(Err::<(), _>(format!("Unexpected error during cross-file resolution: {:?}", e))),
             }
 
             // AC:8 Performance requirement for cross-file operations
@@ -1564,7 +1564,7 @@ fn test_multi_tier_resolver_cancellation_ac8() -> Result<(), Box<dyn std::error:
                 println!("  {} cancelled during tier {:?}, fallbacks preserved",
                          scenario.name, scenario.cancel_tier);
             },
-            Err(e) => panic!("Unexpected error during multi-tier resolution: {:?}", e),
+            Err(e) => must(Err::<(), _>(format!("Unexpected error during multi-tier resolution: {:?}", e))),
         }
 
         // AC:8 Performance requirement validation

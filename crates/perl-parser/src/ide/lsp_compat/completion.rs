@@ -199,6 +199,7 @@ impl Default for CompletionProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_completion_provider_creation() {
@@ -215,17 +216,17 @@ mod tests {
         // Test built-in functions
         if let Some(item) = provider.builtin_symbols.get("print") {
             assert_eq!(item.kind, Some(CompletionItemKind::FUNCTION));
-            assert!(item.detail.as_ref().unwrap().contains("built-in function"));
+            assert!(must_some(item.detail.as_ref()).contains("built-in function"));
         } else {
-            panic!("print function not found in built-ins");
+            assert!(false, "print function not found in built-ins");
         }
         
         // Test keywords
         if let Some(item) = provider.builtin_symbols.get("if") {
             assert_eq!(item.kind, Some(CompletionItemKind::KEYWORD));
-            assert!(item.detail.as_ref().unwrap().contains("keyword"));
+            assert!(must_some(item.detail.as_ref()).contains("keyword"));
         } else {
-            panic!("if keyword not found in built-ins");
+            assert!(false, "if keyword not found in built-ins");
         }
     }
 
@@ -235,7 +236,7 @@ mod tests {
         let params = CompletionParams {
             text_document_position: lsp_types::TextDocumentPositionParams {
                 text_document: lsp_types::TextDocumentIdentifier { 
-                    uri: Url::parse("file:///test.pl").unwrap() 
+                    uri: must(Url::parse("file:///test.pl")) 
                 },
                 position: Position::new(0, 0),
             },
@@ -246,7 +247,7 @@ mod tests {
         
         let results = provider.complete(params);
         assert!(results.is_some());
-        assert!(!results.unwrap().is_empty());
+        assert!(!must_some(results).is_empty());
     }
 
     #[test]

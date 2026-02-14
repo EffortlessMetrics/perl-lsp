@@ -102,7 +102,8 @@ sub documented_sub {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("parse");
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
 
     let start = Instant::now();
     let extractor = SymbolExtractor::new_with_source(code);

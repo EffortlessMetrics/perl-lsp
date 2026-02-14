@@ -28,6 +28,7 @@
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
+#![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]

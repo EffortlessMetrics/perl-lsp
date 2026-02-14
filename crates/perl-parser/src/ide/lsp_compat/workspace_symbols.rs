@@ -574,8 +574,8 @@ mod tests {
         };
         
         let symbols = provider.workspace_symbols(params);
-        assert!(symbols.is_some());
-        assert!(symbols.unwrap().is_empty());
+        use perl_tdd_support::must_some;
+        assert!(must_some(symbols).is_empty());
     }
 
     #[test]

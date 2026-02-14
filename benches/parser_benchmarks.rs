@@ -6,6 +6,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use tree_sitter::Parser;
+use perl_tdd_support::must;
 
 // Import the language function based on features
 #[cfg(all(feature = "c-scanner", not(feature = "pure-rust")))]
@@ -40,7 +41,7 @@ fn bench_parser_creation(c: &mut Criterion) {
             #[cfg(not(feature = "pure-rust"))]
             {
                 let mut parser = Parser::new();
-                parser.set_language(&language()).unwrap();
+                must(parser.set_language(&language()));
                 black_box(parser);
             }
             #[cfg(feature = "pure-rust")]
@@ -64,7 +65,7 @@ fn bench_simple_parsing(c: &mut Criterion) {
     c.bench_function("simple_parsing", |b| {
         b.iter(|| {
             for code in &test_cases {
-                black_box(parse(code).unwrap());
+                black_box(must(parse(code)));
             }
         });
     });
@@ -118,7 +119,7 @@ sub baz {
     c.bench_function("complex_parsing", |b| {
         b.iter(|| {
             for code in &complex_cases {
-                black_box(parse(code).unwrap());
+                black_box(must(parse(code)));
             }
         });
     });
@@ -127,16 +128,16 @@ sub baz {
 #[cfg(not(feature = "pure-rust"))]
 fn bench_incremental_parsing(c: &mut Criterion) {
     let mut parser = Parser::new();
-    parser.set_language(&language()).unwrap();
+    must(parser.set_language(&language()));
 
     let initial_code = "my $var = 42;";
-    let tree = parser.parse(initial_code, None).unwrap();
+    let tree = must(parser.parse(initial_code, None));
 
     let modified_code = "my $var = 42; print 'Hello';";
 
     c.bench_function("incremental_parsing", |b| {
         b.iter(|| {
-            black_box(parser.parse(modified_code, Some(&tree)).unwrap());
+            black_box(must(parser.parse(modified_code, Some(&tree))));
         });
     });
 }
@@ -147,7 +148,7 @@ fn bench_incremental_parsing(c: &mut Criterion) {
     c.bench_function("incremental_parsing", |b| {
         b.iter(|| {
             // Just parse the modified code directly
-            black_box(parse("my $var = 42; print 'Hello';").unwrap());
+            black_box(must(parse("my $var = 42; print 'Hello';")));
         });
     });
 }
@@ -163,7 +164,7 @@ fn bench_error_recovery(c: &mut Criterion) {
     c.bench_function("error_recovery", |b| {
         b.iter(|| {
             for code in &error_cases {
-                black_box(parse(code).unwrap());
+                black_box(must(parse(code)));
             }
         });
     });
@@ -188,7 +189,7 @@ my $mixed = "ASCII + 日本語 + emoji 🎉";
     c.bench_function("unicode_parsing", |b| {
         b.iter(|| {
             for code in &unicode_cases {
-                black_box(parse(code).unwrap());
+                black_box(must(parse(code)));
             }
         });
     });
@@ -199,7 +200,7 @@ fn bench_large_file_parsing(c: &mut Criterion) {
 
     c.bench_function("large_file_parsing", |b| {
         b.iter(|| {
-            black_box(parse(&large_code).unwrap());
+            black_box(must(parse(&large_code)));
         });
     });
 }
@@ -212,7 +213,7 @@ fn bench_memory_usage(c: &mut Criterion) {
     c.bench_function("memory_usage", |b| {
         b.iter(|| {
             for code in &test_cases {
-                black_box(parse(code).unwrap());
+                black_box(must(parse(code)));
             }
         });
     });

@@ -47,7 +47,7 @@ mod incremental_performance_tests {
                 // Initial parse with timing
                 let start = Instant::now();
                 if let Err(e) = self.parser.parse(initial_source) {
-                    panic!("Initial parse failed: {:?}", e);
+                    must(Err::<(), _>(format!("Initial parse failed: {:?}", e)));
                 }
                 let initial_time = start.elapsed();
                 self.baseline_times.push(initial_time);
@@ -58,7 +58,7 @@ mod incremental_performance_tests {
 
                 let start = Instant::now();
                 if let Err(e) = self.parser.parse(&new_source) {
-                    panic!("Incremental parse failed: {:?}", e);
+                    must(Err::<(), _>(format!("Incremental parse failed: {:?}", e)));
                 }
                 let incremental_time = start.elapsed();
                 self.incremental_times.push(incremental_time);
@@ -293,7 +293,7 @@ if ($condition) {
                 let new_source = source.replace("42", "9999");
                 let pos = match source.find("42") {
                     Some(p) => p,
-                    None => panic!("Test data should contain '42'"),
+                    None => must(Err::<(), _>(format!("Test data should contain '42'"))),
                 };
                 let edit = Edit::new(
                     pos,
@@ -350,7 +350,7 @@ if ($condition) {
                 let new_source = source.replace("10", "100");
                 let pos = match source.find("10") {
                     Some(p) => p,
-                    None => panic!("Test data should contain '10'"),
+                    None => must(Err::<(), _>(format!("Test data should contain '10'"))),
                 };
                 let edit = Edit::new(
                     pos,
@@ -392,7 +392,7 @@ if ($condition) {
                 let new_source = source.replace("42", "9999");
                 let pos = match source.find("42") {
                     Some(p) => p,
-                    None => panic!("Test data should contain '42'"),
+                    None => must(Err::<(), _>(format!("Test data should contain '42'"))),
                 };
                 let edit = Edit::new(
                     pos,
@@ -424,7 +424,7 @@ if ($condition) {
                 let new_source = source.replace("500", "999");
                 let pos = match source.find("500") {
                     Some(p) => p,
-                    None => panic!("Test data should contain '500'"),
+                    None => must(Err::<(), _>(format!("Test data should contain '500'"))),
                 };
                 let edit = Edit::new(
                     pos,
@@ -459,7 +459,7 @@ if ($condition) {
                 let new_source = source.replace("你好世界", "再见");
                 let pos = match source.find("你好世界") {
                     Some(p) => p,
-                    None => panic!("Test data should contain '你好世界'"),
+                    None => must(Err::<(), _>(format!("Test data should contain '你好世界'"))),
                 };
                 let end_pos = pos + "你好世界".len();
                 let edit = Edit::new(
@@ -495,7 +495,7 @@ if ($condition) {
                     let new_source = source.replace("42", &format!("{}{}", 42, batch));
                     let pos = match source.find("42") {
                         Some(p) => p,
-                        None => panic!("Test data should contain '42'"),
+                        None => must(Err::<(), _>(format!("Test data should contain '42'"))),
                     };
                     let new_len = new_source.len() - source.len() + 2;
                     let edit = Edit::new(
@@ -550,7 +550,7 @@ if ($condition) {
                 let new_source = source.replace("123", "12456");
                 let pos = match source.find("123") {
                     Some(p) => p,
-                    None => panic!("Test data should contain '123'"),
+                    None => must(Err::<(), _>(format!("Test data should contain '123'"))),
                 };
                 let edit = Edit::new(
                     pos + 2, // Edit at boundary between digits
@@ -580,7 +580,7 @@ if ($condition) {
         // Multiple rapid edits
         let mut parser = IncrementalParserV2::new();
         if let Err(e) = parser.parse(source) {
-            panic!("Failed to parse test source: {:?}", e);
+            must(Err::<(), _>(format!("Failed to parse test source: {:?}", e)));
         }
 
         let edits = [
@@ -612,7 +612,7 @@ if ($condition) {
 
             let start = Instant::now();
             if let Err(e) = parser.parse(modified_source) {
-                panic!("Failed to parse modified source: {:?}", e);
+                must(Err::<(), _>(format!("Failed to parse modified source: {:?}", e)));
             }
             let parse_time = start.elapsed();
 

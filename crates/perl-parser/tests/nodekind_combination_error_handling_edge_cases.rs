@@ -1,10 +1,13 @@
 //! Comprehensive tests for error handling and edge cases
-//! 
+//!
 //! These tests validate complex interactions between error conditions
 //! including multiple error conditions, parser recovery, malformed inputs,
 //! ambiguous syntax, and resource limits.
 
-use perl_parser::{Parser, ast::{Node, NodeKind}};
+use perl_parser::{
+    Parser,
+    ast::{Node, NodeKind},
+};
 
 /// Test multiple error conditions in single constructs
 #[test]
@@ -160,27 +163,33 @@ my $hash_deref = %$undefined_ref;  # Hash dereference of undefined
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify error nodes
     let error_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Error { .. }));
     assert!(!error_nodes.is_empty(), "Should have error nodes");
-    
+
     // Verify missing nodes
     let missing_nodes = find_nodes_of_kind(&ast, |k| {
-        matches!(k, NodeKind::MissingExpression | NodeKind::MissingStatement | 
-                      NodeKind::MissingIdentifier | NodeKind::MissingBlock)
+        matches!(
+            k,
+            NodeKind::MissingExpression
+                | NodeKind::MissingStatement
+                | NodeKind::MissingIdentifier
+                | NodeKind::MissingBlock
+        )
     });
     assert!(!missing_nodes.is_empty(), "Should have missing nodes");
-    
+
     // Verify eval blocks for error handling
     let eval_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Eval { .. }));
     assert!(!eval_nodes.is_empty(), "Should have eval blocks");
-    
+
     // Verify die/warn operations
     let function_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::FunctionCall { .. }));
     assert!(!function_calls.is_empty(), "Should have function calls for die/warn");
-    
+
     // Verify conditional statements with error conditions
     let if_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::If { .. }));
     assert!(!if_nodes.is_empty(), "Should have conditional statements");
@@ -323,33 +332,39 @@ print "Recovered: $recovered\n";
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify error nodes for malformed inputs
     let error_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Error { .. }));
     assert!(!error_nodes.is_empty(), "Should have error nodes");
-    
+
     // Verify missing nodes for incomplete structures
     let missing_nodes = find_nodes_of_kind(&ast, |k| {
-        matches!(k, NodeKind::MissingExpression | NodeKind::MissingStatement | 
-                      NodeKind::MissingIdentifier | NodeKind::MissingBlock)
+        matches!(
+            k,
+            NodeKind::MissingExpression
+                | NodeKind::MissingStatement
+                | NodeKind::MissingIdentifier
+                | NodeKind::MissingBlock
+        )
     });
     assert!(!missing_nodes.is_empty(), "Should have missing nodes");
-    
+
     // Verify that some valid structures still parse
     let sub_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Subroutine { .. }));
     assert!(!sub_nodes.is_empty(), "Should have some valid subroutine nodes");
-    
+
     // Verify variable declarations
     let var_decls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::VariableDeclaration { .. }));
     assert!(!var_decls.is_empty(), "Should have variable declarations");
-    
+
     // Verify function calls
     let function_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::FunctionCall { .. }));
     assert!(!function_calls.is_empty(), "Should have function calls");
 }
 
-/// Test behavior with incomplete or ambiguous syntax
+// /// Test behavior with incomplete or ambiguous syntax
 // Temporarily commented out due to compiler panic
 // #[test]
 // #[ignore] // Temporarily ignored due to compiler panic
@@ -738,31 +753,32 @@ my $boundary_results = test_boundaries("test_input");
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify that large structures are parsed
     let hash_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::HashLiteral { .. }));
     assert!(!hash_literals.is_empty(), "Should have hash literals");
-    
+
     let array_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::ArrayLiteral { .. }));
     assert!(!array_literals.is_empty(), "Should have array literals");
-    
+
     // Verify complex expressions
     let binary_ops = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Binary { .. }));
     assert!(!binary_ops.is_empty(), "Should have binary operations");
-    
+
     // Verify subroutine declarations with many parameters
     let sub_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Subroutine { .. }));
     assert!(!sub_nodes.is_empty(), "Should have subroutine declarations");
-    
+
     // Verify try-catch blocks
     let try_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Try { .. }));
     assert!(!try_nodes.is_empty(), "Should have try-catch blocks");
-    
+
     // Verify regex operations
     let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
     assert!(!regex_nodes.is_empty(), "Should have regex operations");
-    
+
     // Verify string literals
     let string_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::String { .. }));
     assert!(!string_nodes.is_empty(), "Should have string literals");
@@ -949,36 +965,39 @@ my $complex_shift = shift @$array_ref;
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify that edge case constructs are parsed
     let sub_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Subroutine { .. }));
     assert!(!sub_nodes.is_empty(), "Should have subroutine nodes");
-    
+
     // Verify format declarations
     let format_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Format { .. }));
     assert!(!format_nodes.is_empty(), "Should have format nodes");
-    
+
     // Verify heredoc nodes
     let heredoc_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Heredoc { .. }));
     assert!(!heredoc_nodes.is_empty(), "Should have heredoc nodes");
-    
+
     // Verify regex operations
     let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
     assert!(!regex_nodes.is_empty(), "Should have regex nodes");
-    
+
     // Verify substitution operations
-    let substitution_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Substitution { .. }));
+    let substitution_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Substitution { .. }));
     assert!(!substitution_nodes.is_empty(), "Should have substitution nodes");
-    
+
     // Verify transliteration operations
-    let transliteration_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Transliteration { .. }));
+    let transliteration_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Transliteration { .. }));
     assert!(!transliteration_nodes.is_empty(), "Should have transliteration nodes");
-    
+
     // Verify package declarations
     let package_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Package { .. }));
     assert!(!package_nodes.is_empty(), "Should have package nodes");
-    
+
     // Verify use/no statements
     let use_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Use { .. }));
     let no_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::No { .. }));
@@ -1004,7 +1023,7 @@ where
     if predicate(&node.kind) {
         results.push(node);
     }
-    
+
     // Recurse into child nodes based on node type
     match &node.kind {
         NodeKind::Program { statements } => {
@@ -1167,15 +1186,15 @@ where
             find_nodes_recursive(variable, predicate, results);
         }
         NodeKind::Readline { .. } => {} // No complex children
-        NodeKind::Diamond => {} // No children
-        NodeKind::Glob { .. } => {} // No children
+        NodeKind::Diamond => {}         // No children
+        NodeKind::Glob { .. } => {}     // No children
         NodeKind::Typeglob { .. } => {} // No children
-        NodeKind::Number { .. } => {} // No children
-        NodeKind::String { .. } => {} // No children
-        NodeKind::Heredoc { .. } => {} // No children
-        NodeKind::Undef => {} // No children
-        NodeKind::Ellipsis => {} // No children
-        NodeKind::Regex { .. } => {} // No children
+        NodeKind::Number { .. } => {}   // No children
+        NodeKind::String { .. } => {}   // No children
+        NodeKind::Heredoc { .. } => {}  // No children
+        NodeKind::Undef => {}           // No children
+        NodeKind::Ellipsis => {}        // No children
+        NodeKind::Regex { .. } => {}    // No children
         NodeKind::Match { expr, .. } => {
             find_nodes_recursive(expr, predicate, results);
         }
@@ -1191,14 +1210,14 @@ where
             }
         }
         NodeKind::Use { .. } => {} // No complex children
-        NodeKind::No { .. } => {} // No complex children
+        NodeKind::No { .. } => {}  // No complex children
         NodeKind::PhaseBlock { block, .. } => {
             find_nodes_recursive(block, predicate, results);
         }
         NodeKind::DataSection { .. } => {} // No children
-        NodeKind::Format { .. } => {} // No children
-        NodeKind::Identifier { .. } => {} // No children
-        NodeKind::Variable { .. } => {} // No children
+        NodeKind::Format { .. } => {}      // No children
+        NodeKind::Identifier { .. } => {}  // No children
+        NodeKind::Variable { .. } => {}    // No children
         NodeKind::VariableWithAttributes { variable, .. } => {
             find_nodes_recursive(variable, predicate, results);
         }
@@ -1232,8 +1251,10 @@ where
                 find_nodes_recursive(p, predicate, results);
             }
         }
-        NodeKind::MissingExpression | NodeKind::MissingStatement | 
-        NodeKind::MissingIdentifier | NodeKind::MissingBlock => {} // No children
+        NodeKind::MissingExpression
+        | NodeKind::MissingStatement
+        | NodeKind::MissingIdentifier
+        | NodeKind::MissingBlock => {} // No children
         NodeKind::UnknownRest => {} // No children
     }
 }

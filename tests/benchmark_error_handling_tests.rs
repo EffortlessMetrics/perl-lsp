@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::os::unix::fs::PermissionsExt;
+use perl_tdd_support::{must, must_some};
 
 /// Test error handling for various edge cases and error scenarios
 mod error_handling {
@@ -10,7 +11,7 @@ mod error_handling {
     /// Test that invalid iterations parameter is handled correctly
     #[test]
     fn test_invalid_iterations() {
-        let output = Command::new("cargo")
+        let output = must(Command::new("cargo")
             .args(&[
                 "run", 
                 "-p",
@@ -23,8 +24,7 @@ mod error_handling {
                 "--iterations",
                 "0"  // Invalid: zero iterations
             ])
-            .output()
-            .expect("Failed to execute benchmark_parsers");
+            .output());
 
         // Command should fail with zero iterations
         assert!(!output.status.success(), "Benchmark should have failed with zero iterations");
@@ -41,16 +41,16 @@ mod error_handling {
         // Create a directory with restricted permissions
         let restricted_dir = "restricted_test_dir";
         let _ = fs::remove_dir_all(restricted_dir);
-        fs::create_dir_all(restricted_dir).expect("Could not create restricted directory");
+        must(fs::create_dir_all(restricted_dir));
         
         // Set directory to read-only
-        let mut perms = fs::metadata(restricted_dir).unwrap().permissions();
+        let mut perms = must(fs::metadata(restricted_dir)).permissions();
         perms.set_mode(0o444); // Read-only
-        fs::set_permissions(restricted_dir, perms).expect("Could not set permissions");
+        must(fs::set_permissions(restricted_dir, perms));
 
         let output_path = format!("{}/benchmark_results.json", restricted_dir);
         
-        let output = Command::new("cargo")
+        let output = must(Command::new("cargo")
             .args(&[
                 "run", 
                 "-p",
@@ -65,14 +65,13 @@ mod error_handling {
                 "--iterations",
                 "1"
             ])
-            .output()
-            .expect("Failed to execute benchmark_parsers");
+            .output());
 
         // Should fail due to permission denied
         assert!(!output.status.success(), "Benchmark should have failed due to permission denied");
         
         // Clean up (restore permissions first)
-        let mut perms = fs::metadata(restricted_dir).unwrap().permissions();
+        let mut perms = must(fs::metadata(restricted_dir)).permissions();
         perms.set_mode(0o755);
         fs::set_permissions(restricted_dir, perms).ok();
         let _ = fs::remove_dir_all(restricted_dir);
@@ -84,9 +83,9 @@ mod error_handling {
         let config_file = "invalid_benchmark_config.json";
         
         // Create invalid JSON config file
-        fs::write(config_file, "{ invalid json content }").expect("Could not create invalid config file");
+        must(fs::write(config_file, "{ invalid json content }"));
         
-        let output = Command::new("cargo")
+        let output = must(Command::new("cargo")
             .args(&[
                 "run", 
                 "-p",
@@ -101,8 +100,7 @@ mod error_handling {
                 "--iterations",
                 "1"
             ])
-            .output()
-            .expect("Failed to execute benchmark_parsers");
+            .output());
 
         // Should fail due to invalid JSON
         assert!(!output.status.success(), "Benchmark should have failed due to invalid JSON config");
@@ -123,7 +121,7 @@ mod error_handling {
         // Ensure file doesn't exist
         let _ = fs::remove_file(config_file);
         
-        let output = Command::new("cargo")
+        let output = must(Command::new("cargo")
             .args(&[
                 "run", 
                 "-p",
@@ -138,8 +136,7 @@ mod error_handling {
                 "--iterations",
                 "1"
             ])
-            .output()
-            .expect("Failed to execute benchmark_parsers");
+            .output());
 
         // Should fail due to nonexistent config file
         assert!(!output.status.success(), "Benchmark should have failed due to nonexistent config file");
@@ -157,7 +154,7 @@ mod error_handling {
         let long_filename = "b".repeat(100);
         let long_path = format!("{}/{}.json", long_dir, long_filename);
         
-        let output = Command::new("cargo")
+        let output = must(Command::new("cargo")
             .args(&[
                 "run", 
                 "-p",
@@ -172,8 +169,7 @@ mod error_handling {
                 "--iterations",
                 "1"
             ])
-            .output()
-            .expect("Failed to execute benchmark_parsers");
+            .output());
 
         // Should either succeed or fail gracefully
         if output.status.success() {
@@ -207,9 +203,9 @@ mod error_handling {
         }
         "#;
         
-        fs::write(config_file, config_content).expect("Could not create empty test files config");
+        must(fs::write(config_file, config_content));
         
-        let output = Command::new("cargo")
+        let output = must(Command::new("cargo")
             .args(&[
                 "run", 
                 "-p",
@@ -222,8 +218,7 @@ mod error_handling {
                 "--config",
                 config_file
             ])
-            .output()
-            .expect("Failed to execute benchmark_parsers");
+            .output());
 
         // Should fail due to empty test files list
         assert!(!output.status.success(), "Benchmark should have failed due to empty test files list");
@@ -240,7 +235,7 @@ mod error_handling {
     /// Test argument parsing with invalid numbers
     #[test]
     fn test_invalid_number_arguments() {
-        let output = Command::new("cargo")
+        let output = must(Command::new("cargo")
             .args(&[
                 "run", 
                 "-p",
@@ -253,8 +248,7 @@ mod error_handling {
                 "--iterations",
                 "not_a_number"  // Invalid number
             ])
-            .output()
-            .expect("Failed to execute benchmark_parsers");
+            .output());
 
         // Should fail due to invalid number
         assert!(!output.status.success(), "Benchmark should have failed due to invalid number argument");
@@ -271,7 +265,7 @@ mod error_handling {
         let _ = fs::remove_file("minimal_test_results.json");
 
         // Run with minimal valid configuration
-        let output = Command::new("cargo")
+        let output = must(Command::new("cargo")
             .args(&[
                 "run", 
                 "-p",
@@ -288,8 +282,7 @@ mod error_handling {
                 "--warmup",
                 "0"   // No warmup
             ])
-            .output()
-            .expect("Failed to execute benchmark_parsers");
+            .output());
 
         // Should succeed with minimal valid configuration
         assert!(output.status.success(), "Minimal configuration should succeed: {}", String::from_utf8_lossy(&output.stderr));
@@ -297,8 +290,8 @@ mod error_handling {
         // Verify output file exists and is valid JSON
         assert!(Path::new("minimal_test_results.json").exists(), "Minimal test output file should exist");
         
-        let json_content = fs::read_to_string("minimal_test_results.json").expect("Could not read minimal test output");
-        let _: serde_json::Value = serde_json::from_str(&json_content).expect("Minimal output should be valid JSON");
+        let json_content = must(fs::read_to_string("minimal_test_results.json"));
+        let _: serde_json::Value = must(serde_json::from_str(&json_content));
         
         // Clean up
         let _ = fs::remove_file("minimal_test_results.json");

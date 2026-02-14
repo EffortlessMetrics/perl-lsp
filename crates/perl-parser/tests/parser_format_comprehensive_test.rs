@@ -42,7 +42,8 @@ fn parser_format_basic_left_justified() {
 $name
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -59,7 +60,8 @@ fn parser_format_right_justified() {
 $value
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -74,7 +76,8 @@ fn parser_format_centered() {
 $title
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -89,7 +92,8 @@ fn parser_format_numeric_specifier() {
 $amount
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -104,7 +108,8 @@ fn parser_format_anonymous() {
 $val
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -119,7 +124,8 @@ fn parser_format_named() {
 $val
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -134,7 +140,8 @@ Page @<<
 $%
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -152,7 +159,8 @@ Line 2: @>>>>>>
         $var2
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -179,7 +187,8 @@ format THIRD =
 $c
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 3);
@@ -194,7 +203,8 @@ fn parser_format_empty_body() {
     let source = r#"format EMPTY =
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -209,7 +219,8 @@ Name: @<<<<<<<<<<<<  Age: @##  Salary: @#####.##
       $name,              $age,        $salary
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -228,7 +239,8 @@ Title: @<<<<<<<<<<<<<<
 ========================================
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -244,7 +256,8 @@ fn parser_format_continuation_field() {
 $description
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -260,7 +273,8 @@ $val
 .
 write;
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert!(statements.len() >= 2);
@@ -277,17 +291,17 @@ fn parser_format_ast_structure() {
 $val
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
-        match &statements[0].kind {
-            NodeKind::Format { name, body } => {
+            let is_format = matches!(statements[0].kind, NodeKind::Format { .. });
+            assert!(is_format, "Expected Format node, got {:?}", statements[0].kind);
+            if let NodeKind::Format { name, body } = &statements[0].kind {
                 assert_eq!(name, "TEST");
                 assert!(!body.is_empty());
             }
-            _ => panic!("Expected Format node"),
-        }
     }
 }
 
@@ -308,8 +322,9 @@ fn parser_format_corpus_file() {
         alt_path
     };
 
-    let content = std::fs::read_to_string(corpus_path).expect("Failed to read corpus file");
-    let ast = parse_code(&content).expect("Failed to parse corpus file");
+    use perl_tdd_support::must;
+    let content = must(std::fs::read_to_string(corpus_path));
+    let ast = must(parse_code(&content));
 
     let format_count = count_format_statements(&ast);
     assert!(
@@ -336,7 +351,8 @@ Continue: ^<<<<<<<
           $wrap
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);
@@ -356,7 +372,8 @@ Page @##
      $%
 .
 "#;
-    let ast = parse_code(source).expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parse_code(source));
     let formats = extract_format_statements(&ast);
 
     assert_eq!(formats.len(), 1);

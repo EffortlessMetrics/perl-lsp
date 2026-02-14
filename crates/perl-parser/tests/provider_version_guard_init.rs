@@ -9,10 +9,8 @@ mod provider_version_guard_init {
     fn provider_panics_without_doc_version() {
         let code = "my $x = 42;";
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => Arc::new(ast),
-            Err(e) => panic!("Parse error: {:?}", e),
-        };
+        use perl_tdd_support::must;
+        let ast = Arc::new(must(parser.parse()));
 
         // Create provider WITHOUT calling with_doc_version
         let provider =
@@ -26,10 +24,8 @@ mod provider_version_guard_init {
     fn provider_works_with_doc_version() {
         let code = "my $x = 42;";
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => Arc::new(ast),
-            Err(e) => panic!("Parse error: {:?}", e),
-        };
+        use perl_tdd_support::must;
+        let ast = Arc::new(must(parser.parse()));
 
         // Create provider WITH with_doc_version
         let provider =

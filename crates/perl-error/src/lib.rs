@@ -830,6 +830,7 @@ mod tests {
         assert_eq!(contexts.len(), 1);
         assert_eq!(contexts[0].line, 0); // line1 is line 0
         assert_eq!(contexts[0].source_line, "line1");
-        assert!(contexts[0].suggestion.as_ref().unwrap().contains("semicolon"));
+        let suggestion = contexts[0].suggestion.as_ref().map(|s| s.as_str()).unwrap_or("");
+        assert!(suggestion.contains("semicolon"));
     }
 }

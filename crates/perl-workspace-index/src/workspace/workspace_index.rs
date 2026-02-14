@@ -1736,9 +1736,12 @@ impl WorkspaceIndex {
     /// use perl_parser::workspace_index::WorkspaceIndex;
     /// use url::Url;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let index = WorkspaceIndex::new();
-    /// let uri = Url::parse("file:///example.pl").unwrap();
+    /// let uri = Url::parse("file:///example.pl")?;
     /// index.remove_file_url(&uri);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn remove_file_url(&self, uri: &Url) {
         self.remove_file(uri.as_str())
@@ -1782,9 +1785,12 @@ impl WorkspaceIndex {
     /// use perl_parser::workspace_index::WorkspaceIndex;
     /// use url::Url;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let index = WorkspaceIndex::new();
-    /// let uri = Url::parse("file:///example.pl").unwrap();
+    /// let uri = Url::parse("file:///example.pl")?;
     /// index.clear_file_url(&uri);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn clear_file_url(&self, uri: &Url) {
         self.clear_file(uri.as_str())
@@ -1814,8 +1820,11 @@ impl WorkspaceIndex {
     /// ```rust,no_run
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let index = WorkspaceIndex::new();
-    /// index.index_file_str("file:///example.pl", "sub hello { }").unwrap();
+    /// index.index_file_str("file:///example.pl", "sub hello { }")?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn index_file_str(&self, uri: &str, text: &str) -> Result<(), String> {
         // Try parsing as URI first
@@ -3146,12 +3155,12 @@ use Data::Dumper;
         let coordinator = IndexCoordinator::new();
         coordinator.transition_to_scanning();
 
-        match coordinator.state() {
-            IndexState::Building { phase, .. } => {
-                assert_eq!(phase, IndexPhase::Scanning);
-            }
-            other => panic!("Expected Building state after scanning, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { phase: IndexPhase::Scanning, .. }),
+            "Expected Building state after scanning, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3161,13 +3170,12 @@ use Data::Dumper;
         coordinator.update_scan_progress(3);
         coordinator.transition_to_indexing(3);
 
-        match coordinator.state() {
-            IndexState::Building { phase, total_count, .. } => {
-                assert_eq!(phase, IndexPhase::Indexing);
-                assert_eq!(total_count, 3);
-            }
-            other => panic!("Expected Building state after indexing, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { phase: IndexPhase::Indexing, total_count: 3, .. }),
+            "Expected Building state after indexing with total_count 3, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3175,12 +3183,12 @@ use Data::Dumper;
         let coordinator = IndexCoordinator::new();
         coordinator.transition_to_ready(100, 5000);
 
-        match coordinator.state() {
-            IndexState::Ready { file_count, symbol_count, .. } => {
-                assert_eq!(file_count, 100);
-                assert_eq!(symbol_count, 5000);
-            }
-            _ => panic!("Expected Ready state"),
+        let state = coordinator.state();
+        if let IndexState::Ready { file_count, symbol_count, .. } = state {
+            assert_eq!(file_count, 100);
+            assert_eq!(symbol_count, 5000);
+        } else {
+            unreachable!("Expected Ready state, got: {:?}", state);
         }
     }
 
@@ -3194,11 +3202,14 @@ use Data::Dumper;
             coordinator.notify_change("file.pm");
         }
 
-        match coordinator.state() {
-            IndexState::Degraded { reason, .. } => {
-                assert!(matches!(reason, DegradationReason::ParseStorm { .. }));
-            }
-            _ => panic!("Expected Degraded state"),
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Degraded { .. }),
+            "Expected Degraded state, got: {:?}",
+            state
+        );
+        if let IndexState::Degraded { reason, .. } = state {
+            assert!(matches!(reason, DegradationReason::ParseStorm { .. }));
         }
     }
 
@@ -3306,11 +3317,14 @@ use Data::Dumper;
             message: "Test error".to_string(),
         });
 
-        match coordinator.state() {
-            IndexState::Degraded { available_symbols, .. } => {
-                assert_eq!(available_symbols, 5000);
-            }
-            _ => panic!("Expected Degraded state"),
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Degraded { .. }),
+            "Expected Degraded state, got: {:?}",
+            state
+        );
+        if let IndexState::Degraded { available_symbols, .. } = state {
+            assert_eq!(available_symbols, 5000);
         }
     }
 
@@ -3348,18 +3362,18 @@ use Data::Dumper;
         // Enforce limits
         coordinator.enforce_limits();
 
-        // Should have degraded due to max_files limit
-        match coordinator.state() {
-            IndexState::Degraded {
-                reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
-                ..
-            } => {
-                // Success - correct degradation
-            }
-            other => {
-                panic!("Expected Degraded state with ResourceLimit(MaxFiles), got: {:?}", other)
-            }
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded {
+                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
+                    ..
+                }
+            ),
+            "Expected Degraded state with ResourceLimit(MaxFiles), got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3400,18 +3414,18 @@ sub sub10 { }
         // Enforce limits
         coordinator.enforce_limits();
 
-        // Should have degraded due to max_total_symbols limit
-        match coordinator.state() {
-            IndexState::Degraded {
-                reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxSymbols },
-                ..
-            } => {
-                // Success - correct degradation
-            }
-            other => {
-                panic!("Expected Degraded state with ResourceLimit(MaxSymbols), got: {:?}", other)
-            }
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded {
+                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxSymbols },
+                    ..
+                }
+            ),
+            "Expected Degraded state with ResourceLimit(MaxSymbols), got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3462,19 +3476,18 @@ sub sub10 { }
         // Transition to ready - should automatically enforce limits
         coordinator.transition_to_ready(5, 100);
 
-        // Should have degraded immediately due to max_files limit
-        match coordinator.state() {
-            IndexState::Degraded {
-                reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
-                ..
-            } => {
-                // Success - limit enforcement triggered during transition_to_ready
-            }
-            other => panic!(
-                "Expected Degraded state after transition_to_ready with exceeded limits, got: {:?}",
-                other
+        let state = coordinator.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded {
+                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
+                    ..
+                }
             ),
-        }
+            "Expected Degraded state after transition_to_ready with exceeded limits, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3486,13 +3499,12 @@ sub sub10 { }
         // Transition to Ready again with different metrics
         coordinator.transition_to_ready(150, 7500);
 
-        match coordinator.state() {
-            IndexState::Ready { file_count, symbol_count, .. } => {
-                assert_eq!(file_count, 150);
-                assert_eq!(symbol_count, 7500);
-            }
-            other => panic!("Expected Ready state, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Ready { file_count: 150, symbol_count: 7500, .. }),
+            "Expected Ready state with updated metrics, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3503,24 +3515,22 @@ sub sub10 { }
         // Initial building state
         coordinator.transition_to_building(100);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 0);
-                assert_eq!(total_count, 100);
-            }
-            other => panic!("Expected Building state, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 0, total_count: 100, .. }),
+            "Expected Building state, got: {:?}",
+            state
+        );
 
         // Update total count
         coordinator.transition_to_building(200);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 0); // Preserved
-                assert_eq!(total_count, 200); // Updated
-            }
-            other => panic!("Expected Building state, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 0, total_count: 200, .. }),
+            "Expected Building state, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3532,13 +3542,12 @@ sub sub10 { }
         // Trigger re-scan
         coordinator.transition_to_building(150);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 0);
-                assert_eq!(total_count, 150);
-            }
-            other => panic!("Expected Building state after re-scan, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 0, total_count: 150, .. }),
+            "Expected Building state after re-scan, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3552,13 +3561,12 @@ sub sub10 { }
         // Attempt recovery
         coordinator.transition_to_building(100);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 0);
-                assert_eq!(total_count, 100);
-            }
-            other => panic!("Expected Building state after recovery, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 0, total_count: 100, .. }),
+            "Expected Building state after recovery, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3569,24 +3577,22 @@ sub sub10 { }
         // Update progress
         coordinator.update_building_progress(50);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 50);
-                assert_eq!(total_count, 100);
-            }
-            other => panic!("Expected Building state with updated progress, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 50, total_count: 100, .. }),
+            "Expected Building state with updated progress, got: {:?}",
+            state
+        );
 
         // Update progress again
         coordinator.update_building_progress(100);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 100);
-                assert_eq!(total_count, 100);
-            }
-            other => panic!("Expected Building state with completed progress, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 100, total_count: 100, .. }),
+            "Expected Building state with completed progress, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3606,14 +3612,15 @@ sub sub10 { }
         // Update progress should detect timeout
         coordinator.update_building_progress(10);
 
-        match coordinator.state() {
-            IndexState::Degraded {
-                reason: DegradationReason::ScanTimeout { elapsed_ms }, ..
-            } => {
-                assert!(elapsed_ms > 0, "Elapsed time should be recorded");
-            }
-            other => panic!("Expected Degraded state with ScanTimeout, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded { reason: DegradationReason::ScanTimeout { .. }, .. }
+            ),
+            "Expected Degraded state with ScanTimeout, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3630,12 +3637,12 @@ sub sub10 { }
         // Update progress immediately (well within limit)
         coordinator.update_building_progress(50);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, .. } => {
-                assert_eq!(indexed_count, 50, "Should still be building without timeout");
-            }
-            other => panic!("Expected Building state (no timeout), got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 50, .. }),
+            "Expected Building state (no timeout), got: {:?}",
+            state
+        );
     }
 
     #[test]

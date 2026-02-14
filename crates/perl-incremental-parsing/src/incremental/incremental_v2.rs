@@ -2236,16 +2236,15 @@ if ($condition) {
             avg_time, min_time, max_time
         );
 
-        // Consistency check - allow reasonable variation for micro-benchmarks
-        // In development environments, timing can vary significantly due to system load
         let variation_factor = max_time as f64 / avg_time as f64;
-        if variation_factor > 10.0 {
-            // Only fail for extreme outliers that indicate real problems
-            panic!(
-                "Extreme performance inconsistency detected: max={}µs, avg={}µs ({}x variation)",
-                max_time, avg_time, variation_factor
-            );
-        } else if variation_factor > 5.0 {
+        assert!(
+            variation_factor <= 10.0,
+            "Extreme performance inconsistency detected: max={}µs, avg={}µs ({}x variation)",
+            max_time,
+            avg_time,
+            variation_factor
+        );
+        if variation_factor > 5.0 {
             println!(
                 "⚠️ High performance variation detected: max={}µs, avg={}µs ({}x variation) - may indicate system load",
                 max_time, avg_time, variation_factor

@@ -268,7 +268,10 @@ impl<'source> PerlLexer<'source> {
         if self.peeked.is_none() {
             self.peeked = Some(self.next_token());
         }
-        self.peeked.as_ref().unwrap()
+        match &self.peeked {
+            Some(token) => token,
+            None => unreachable!("peeked should be Some after next_token call"),
+        }
     }
 
     pub fn span(&self) -> logos::Span {

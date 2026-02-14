@@ -3,6 +3,7 @@ use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
 use perl_parser::incremental_document::IncrementalDocument;
 use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
 use std::hint::black_box;
+use perl_tdd_support::{must, must_some};
 
 fn bench_incremental_small_edit(c: &mut Criterion) {
     let source = r#"
@@ -42,10 +43,7 @@ process_data($items);
                 new_end_byte: 187,
                 new_text: "process".to_string(),
             };
-            match apply_edits(&mut state, &[edit]) {
-                Ok(_) => {}
-                Err(e) => panic!("bench iteration: apply_edits failed: {e}"),
-            }
+            must(apply_edits(&mut state, &[edit]));
             black_box(&state.ast);
         })
     });
@@ -113,10 +111,7 @@ print "$x $y $z\n";
                     new_text: "20".to_string(),
                 },
             ];
-            match apply_edits(&mut state, &edits) {
-                Ok(_) => {}
-                Err(e) => panic!("bench iteration: apply_edits failed: {e}"),
-            }
+            must(apply_edits(&mut state, &edits));
             black_box(&state.ast);
         })
     });
@@ -124,24 +119,15 @@ print "$x $y $z\n";
 
 fn bench_incremental_document_single_edit(c: &mut Criterion) {
     let source = "my $x = 42; my $y = 100; print $x + $y;";
-    let start = match source.find("42") {
-        Some(pos) => pos,
-        None => panic!("bench setup: could not find '42' in source"),
-    };
+    let start = must_some(source.find("42"));
     let end = start + 2;
 
     c.bench_function("incremental_document single edit", |b| {
         b.iter_batched(
-            || match IncrementalDocument::new(source.to_string()) {
-                Ok(doc) => doc,
-                Err(e) => panic!("bench setup: IncrementalDocument::new failed: {e}"),
-            },
+            || must(IncrementalDocument::new(source.to_string())),
             |mut doc| {
                 let edit = IncrementalEdit::new(start, end, "43".to_string());
-                match doc.apply_edit(edit) {
-                    Ok(_) => {}
-                    Err(e) => panic!("bench iteration: apply_edit failed: {e}"),
-                }
+                must(doc.apply_edit(edit));
                 black_box(doc.metrics.nodes_reused);
             },
             BatchSize::SmallInput,
@@ -151,29 +137,17 @@ fn bench_incremental_document_single_edit(c: &mut Criterion) {
 
 fn bench_incremental_document_multiple_edits(c: &mut Criterion) {
     let source = "sub calc { my $a = 10; my $b = 20; $a + $b }";
-    let pos_a = match source.find("10") {
-        Some(pos) => pos,
-        None => panic!("bench setup: could not find '10' in source"),
-    };
-    let pos_b = match source.find("20") {
-        Some(pos) => pos,
-        None => panic!("bench setup: could not find '20' in source"),
-    };
+    let pos_a = must_some(source.find("10"));
+    let pos_b = must_some(source.find("20"));
 
     c.bench_function("incremental_document multiple edits", |b| {
         b.iter_batched(
-            || match IncrementalDocument::new(source.to_string()) {
-                Ok(doc) => doc,
-                Err(e) => panic!("bench setup: IncrementalDocument::new failed: {e}"),
-            },
+            || must(IncrementalDocument::new(source.to_string())),
             |mut doc| {
                 let mut edits = IncrementalEditSet::new();
                 edits.add(IncrementalEdit::new(pos_a, pos_a + 2, "15".to_string()));
                 edits.add(IncrementalEdit::new(pos_b, pos_b + 2, "25".to_string()));
-                match doc.apply_edits(&edits) {
-                    Ok(_) => {}
-                    Err(e) => panic!("bench iteration: apply_edits failed: {e}"),
-                }
+                must(doc.apply_edits(&edits));
                 black_box(doc.metrics.nodes_reused);
             },
             BatchSize::SmallInput,

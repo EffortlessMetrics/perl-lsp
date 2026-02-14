@@ -331,12 +331,10 @@ mod tests {
 
     #[test]
     fn test_parse_standard_frame() {
+        use perl_tdd_support::must_some;
         let mut parser = PerlStackParser::new();
         let line = "  #0  main::foo at script.pl line 10";
-        let frame = parser.parse_frame(line, 0);
-
-        assert!(frame.is_some());
-        let frame = frame.unwrap();
+        let frame = must_some(parser.parse_frame(line, 0));
         assert_eq!(frame.name, "main::foo");
         assert_eq!(frame.line, 10);
         assert_eq!(frame.file_path(), Some("script.pl"));
@@ -344,13 +342,11 @@ mod tests {
 
     #[test]
     fn test_parse_verbose_frame() {
+        use perl_tdd_support::must_some;
         let mut parser = PerlStackParser::new();
         let line =
             "$ = My::Module::method('arg1', 'arg2') called from file `/lib/My/Module.pm' line 42";
-        let frame = parser.parse_frame(line, 0);
-
-        assert!(frame.is_some());
-        let frame = frame.unwrap();
+        let frame = must_some(parser.parse_frame(line, 0));
         assert_eq!(frame.name, "My::Module::method");
         assert_eq!(frame.line, 42);
         assert_eq!(frame.file_path(), Some("/lib/My/Module.pm"));
@@ -358,49 +354,41 @@ mod tests {
 
     #[test]
     fn test_parse_simple_frame() {
+        use perl_tdd_support::must_some;
         let mut parser = PerlStackParser::new();
         let line = ". = main::run() called from '-e' line 1";
-        let frame = parser.parse_frame(line, 0);
-
-        assert!(frame.is_some());
-        let frame = frame.unwrap();
+        let frame = must_some(parser.parse_frame(line, 0));
         assert_eq!(frame.name, "main::run");
         assert_eq!(frame.line, 1);
     }
 
     #[test]
     fn test_parse_context_with_package() {
+        use perl_tdd_support::must_some;
         let mut parser = PerlStackParser::new();
         // Use the standard frame format which is well-supported
         let line = "  #0  My::Package::subname at file.pl line 25";
-        let frame = parser.parse_frame(line, 0);
-
-        assert!(frame.is_some());
-        let frame = frame.unwrap();
+        let frame = must_some(parser.parse_frame(line, 0));
         assert_eq!(frame.name, "My::Package::subname");
         assert_eq!(frame.line, 25);
     }
 
     #[test]
     fn test_parse_context_main() {
+        use perl_tdd_support::must_some;
         let mut parser = PerlStackParser::new();
         let line = "main::(script.pl):42:";
-        let frame = parser.parse_frame(line, 0);
-
-        assert!(frame.is_some());
-        let frame = frame.unwrap();
+        let frame = must_some(parser.parse_frame(line, 0));
         assert_eq!(frame.name, "main");
         assert_eq!(frame.line, 42);
     }
 
     #[test]
     fn test_parse_eval_context() {
+        use perl_tdd_support::must_some;
         let mut parser = PerlStackParser::new();
         let line = "(eval 10)[/path/to/file.pm:42]";
-        let frame = parser.parse_frame(line, 0);
-
-        assert!(frame.is_some());
-        let frame = frame.unwrap();
+        let frame = must_some(parser.parse_frame(line, 0));
         assert!(frame.name.contains("eval 10"));
         assert_eq!(frame.line, 42);
         assert!(frame.source.as_ref().is_some_and(|s| s.is_eval()));
@@ -430,14 +418,14 @@ $ = main::run() called from file `script.pl' line 5
 
     #[test]
     fn test_parse_context_method() {
+        use perl_tdd_support::must_some;
         let parser = PerlStackParser::new();
 
         // The context regex expects formats like:
         // Package::func::(file.pm:100): or main::(file.pm):100:
-        let result = parser.parse_context("main::(file.pm):100:");
-        assert!(result.is_some());
+        let result = must_some(parser.parse_context("main::(file.pm):100:"));
 
-        let (func, file, line) = result.unwrap();
+        let (func, file, line) = result;
         assert_eq!(func, "main");
         assert_eq!(file, "file.pm");
         assert_eq!(line, 100);

@@ -29,11 +29,14 @@
 //! ```rust
 //! use perl_workspace_index::workspace::production_coordinator::ProductionIndexCoordinator;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let coordinator = ProductionIndexCoordinator::default();
 //!
 //! // Index a file
-//! let uri = url::Url::parse("file:///example.pl").unwrap();
-//! coordinator.index_file(uri, "sub hello { return 42; }".to_string());
+//! let uri = url::Url::parse("file:///example.pl")?;
+//! coordinator.index_file(uri, "sub hello { return 42; }".to_string())?;
+//! # Ok(())
+//! # }
 //! ```
 
 use super::cache::{BoundedLruCache, CombinedWorkspaceCacheConfig};

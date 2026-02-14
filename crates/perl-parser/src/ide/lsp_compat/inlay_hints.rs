@@ -428,6 +428,7 @@ impl Default for InlayHintsProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_inlay_hints_provider_creation() {
@@ -465,7 +466,7 @@ mod tests {
         let provider = InlayHintsProvider::new();
         let params = InlayHintParams {
             text_document: lsp_types::TextDocumentIdentifier { 
-                uri: Url::parse("file:///test.pl").unwrap() 
+                uri: must(Url::parse("file:///test.pl")) 
             },
             range: Range::new(Position::new(0, 0), Position::new(10, 0)),
             work_done_progress_params: Default::default(),
@@ -473,7 +474,7 @@ mod tests {
         
         let hints = provider.inlay_hints(params);
         assert!(hints.is_some());
-        assert!(!hints.unwrap().is_empty());
+        assert!(!must_some(hints).is_empty());
     }
 
     #[test]
@@ -496,9 +497,9 @@ mod tests {
         let resolved = provider.resolve_inlay_hint(hint);
         assert!(resolved.is_some());
         
-        let resolved_hint = resolved.unwrap();
+        let resolved_hint = must_some(resolved);
         assert!(resolved_hint.tooltip.is_some());
-        let tooltip_value = &resolved_hint.tooltip.unwrap().value;
+        let tooltip_value = &must_some(resolved_hint.tooltip).value;
         assert!(tooltip_value.contains("Additional Information"));
     }
 
@@ -508,19 +509,19 @@ mod tests {
         
         let type_hint = provider.create_type_hint(Position::new(0, 5), "Scalar");
         assert_eq!(type_hint.kind, Some(InlayHintKind::TYPE));
-        assert!(type_hint.padding_left.unwrap());
-        assert!(!type_hint.padding_right.unwrap());
+        assert!(must_some(type_hint.padding_left));
+        assert!(!must_some(type_hint.padding_right));
         
         let param_hint = provider.create_parameter_hint(Position::new(1, 10), "data");
         assert_eq!(param_hint.kind, Some(InlayHintKind::PARAMETER));
-        assert!(param_hint.padding_left.unwrap());
-        assert!(!param_hint.padding_right.unwrap());
+        assert!(must_some(param_hint.padding_left));
+        assert!(!must_some(param_hint.padding_right));
         
         let return_hint = provider.create_return_type_hint(Position::new(2, 15), "Array");
         assert_eq!(return_hint.kind, Some(InlayHintKind::TYPE));
         
         let decl_hint = provider.create_declaration_hint(Position::new(3, 20), "my $x");
-        assert!(decl_hint.padding_right.unwrap());
+        assert!(must_some(decl_hint.padding_right));
     }
 
     #[test]
@@ -533,7 +534,7 @@ mod tests {
         assert_eq!(hints, 0);
         
         // Update cache
-        let uri = Url::parse("file:///test.pl").unwrap();
+        let uri = must(Url::parse("file:///test.pl"));
         let hints = vec![InlayHint {
             position: Position::new(0, 0),
             label: InlayHintLabel::String(": Scalar".to_string()),

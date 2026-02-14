@@ -232,7 +232,7 @@ mod tests {
                 assert_eq!(replacement, "bar");
                 assert_eq!(flags, "gi");
             }
-            _ => panic!("Failed to parse substitution"),
+            _ => unreachable!("Failed to parse substitution"),
         }
     }
 
@@ -244,7 +244,7 @@ mod tests {
                 assert_eq!(pattern, "pattern");
                 assert_eq!(flags, "i");
             }
-            _ => panic!("Failed to parse match"),
+            _ => unreachable!("Failed to parse match"),
         }
     }
 
@@ -257,7 +257,7 @@ mod tests {
                 assert_eq!(replace, "xyz");
                 assert_eq!(flags, "");
             }
-            _ => panic!("Failed to parse transliteration"),
+            _ => unreachable!("Failed to parse transliteration"),
         }
     }
 }

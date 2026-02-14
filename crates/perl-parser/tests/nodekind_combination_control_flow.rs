@@ -1,10 +1,13 @@
 //! Comprehensive tests for control flow combinations
-//! 
+//!
 //! These tests validate complex interactions between control flow constructs
 //! including labeled statements, nested loops, statement modifiers, return statements,
 //! and loop control operations.
 
-use perl_parser::{Parser, ast::{Node, NodeKind}};
+use perl_parser::{
+    Parser,
+    ast::{Node, NodeKind},
+};
 
 /// Test labeled statements with nested loops and conditionals
 #[test]
@@ -77,25 +80,28 @@ longwordwithoutvowels
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify labeled statements
-    let labeled_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LabeledStatement { .. }));
+    let labeled_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LabeledStatement { .. }));
     assert!(!labeled_nodes.is_empty(), "Should have labeled statements");
-    
+
     // Verify different loop types
     let for_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::For { .. }));
     let foreach_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Foreach { .. }));
     let while_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::While { .. }));
-    
+
     assert!(!for_nodes.is_empty(), "Should have for loops");
     assert!(!foreach_nodes.is_empty(), "Should have foreach loops");
     assert!(!while_nodes.is_empty(), "Should have while loops");
-    
+
     // Verify loop control statements
-    let loop_control_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LoopControl { .. }));
+    let loop_control_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LoopControl { .. }));
     assert!(!loop_control_nodes.is_empty(), "Should have loop control statements");
-    
+
     // Verify conditional statements
     let if_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::If { .. }));
     assert!(!if_nodes.is_empty(), "Should have if statements");
@@ -184,25 +190,29 @@ sub commit_successful {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify statement modifiers
-    let modifier_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::StatementModifier { .. }));
+    let modifier_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::StatementModifier { .. }));
     assert!(!modifier_nodes.is_empty(), "Should have statement modifiers");
-    
+
     // Verify different types of expressions in modifiers
     let binary_ops = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Binary { .. }));
     let function_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::FunctionCall { .. }));
     let method_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::MethodCall { .. }));
-    
+
     assert!(!binary_ops.is_empty(), "Should have binary operations");
     assert!(!function_calls.is_empty(), "Should have function calls");
     assert!(!method_calls.is_empty(), "Should have method calls");
-    
+
     // Verify regex operations
-    let substitution_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Substitution { .. }));
-    let transliteration_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Transliteration { .. }));
-    
+    let substitution_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Substitution { .. }));
+    let transliteration_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Transliteration { .. }));
+
     assert!(!substitution_nodes.is_empty(), "Should have substitution operations");
     assert!(!transliteration_nodes.is_empty(), "Should have transliteration operations");
 }
@@ -328,12 +338,13 @@ my $result8 = subroutine_reference_return(sub { return shift() * 2 });
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify return statements
     let return_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Return { .. }));
     assert!(!return_nodes.is_empty(), "Should have return statements");
-    
+
     // Verify returns in different contexts
     let if_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::If { .. }));
     let for_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::For { .. }));
@@ -341,7 +352,7 @@ my $result8 = subroutine_reference_return(sub { return shift() * 2 });
     let while_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::While { .. }));
     let eval_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Eval { .. }));
     let try_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Try { .. }));
-    
+
     assert!(!if_nodes.is_empty(), "Should have if statements with returns");
     assert!(!for_nodes.is_empty(), "Should have for loops with returns");
     assert!(!foreach_nodes.is_empty(), "Should have foreach loops with returns");
@@ -479,17 +490,19 @@ QUIT
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify loop control statements
-    let loop_control_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LoopControl { .. }));
+    let loop_control_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LoopControl { .. }));
     assert!(!loop_control_nodes.is_empty(), "Should have loop control statements");
-    
+
     // Check for different control types
     let mut next_count = 0;
     let mut last_count = 0;
     let mut redo_count = 0;
-    
+
     for node in &loop_control_nodes {
         if let NodeKind::LoopControl { op, .. } = &node.kind {
             match op.as_str() {
@@ -500,19 +513,19 @@ QUIT
             }
         }
     }
-    
+
     assert!(next_count > 0, "Should have next statements");
     assert!(last_count > 0, "Should have last statements");
     assert!(redo_count > 0, "Should have redo statements");
-    
+
     // Verify continue blocks
     let for_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::For { .. }));
     let foreach_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Foreach { .. }));
     let while_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::While { .. }));
-    
+
     // Check for continue blocks in loops
     let mut continue_count = 0;
-    
+
     for node in &for_nodes {
         if let NodeKind::For { continue_block, .. } = &node.kind {
             if continue_block.is_some() {
@@ -520,7 +533,7 @@ QUIT
             }
         }
     }
-    
+
     for node in &foreach_nodes {
         if let NodeKind::Foreach { continue_block, .. } = &node.kind {
             if continue_block.is_some() {
@@ -528,7 +541,7 @@ QUIT
             }
         }
     }
-    
+
     for node in &while_nodes {
         if let NodeKind::While { continue_block, .. } = &node.kind {
             if continue_block.is_some() {
@@ -536,11 +549,12 @@ QUIT
             }
         }
     }
-    
+
     assert!(continue_count > 0, "Should have continue blocks");
-    
+
     // Verify labeled statements with loop control
-    let labeled_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LabeledStatement { .. }));
+    let labeled_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LabeledStatement { .. }));
     assert!(!labeled_nodes.is_empty(), "Should have labeled statements");
 }
 
@@ -693,25 +707,26 @@ sub save_data {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify conditional structures
     let if_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::If { .. }));
     let ternary_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Ternary { .. }));
     let given_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Given { .. }));
     let when_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::When { .. }));
     let default_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Default { .. }));
-    
+
     assert!(!if_nodes.is_empty(), "Should have if statements");
     assert!(!ternary_nodes.is_empty(), "Should have ternary operators");
     assert!(!given_nodes.is_empty(), "Should have given statements");
     assert!(!when_nodes.is_empty(), "Should have when clauses");
     assert!(!default_nodes.is_empty(), "Should have default clauses");
-    
+
     // Verify logical operators
     let binary_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Binary { .. }));
     assert!(!binary_nodes.is_empty(), "Should have binary operations");
-    
+
     // Verify regex patterns
     let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
     assert!(!regex_nodes.is_empty(), "Should have regex patterns");
@@ -735,7 +750,7 @@ where
     if predicate(&node.kind) {
         results.push(node);
     }
-    
+
     // Recurse into child nodes based on node type
     match &node.kind {
         NodeKind::Program { statements } => {
@@ -898,15 +913,15 @@ where
             find_nodes_recursive(variable, predicate, results);
         }
         NodeKind::Readline { .. } => {} // No complex children
-        NodeKind::Diamond => {} // No children
-        NodeKind::Glob { .. } => {} // No children
+        NodeKind::Diamond => {}         // No children
+        NodeKind::Glob { .. } => {}     // No children
         NodeKind::Typeglob { .. } => {} // No children
-        NodeKind::Number { .. } => {} // No children
-        NodeKind::String { .. } => {} // No children
-        NodeKind::Heredoc { .. } => {} // No children
-        NodeKind::Undef => {} // No children
-        NodeKind::Ellipsis => {} // No children
-        NodeKind::Regex { .. } => {} // No children
+        NodeKind::Number { .. } => {}   // No children
+        NodeKind::String { .. } => {}   // No children
+        NodeKind::Heredoc { .. } => {}  // No children
+        NodeKind::Undef => {}           // No children
+        NodeKind::Ellipsis => {}        // No children
+        NodeKind::Regex { .. } => {}    // No children
         NodeKind::Match { expr, .. } => {
             find_nodes_recursive(expr, predicate, results);
         }
@@ -922,14 +937,14 @@ where
             }
         }
         NodeKind::Use { .. } => {} // No complex children
-        NodeKind::No { .. } => {} // No complex children
+        NodeKind::No { .. } => {}  // No complex children
         NodeKind::PhaseBlock { block, .. } => {
             find_nodes_recursive(block, predicate, results);
         }
         NodeKind::DataSection { .. } => {} // No children
-        NodeKind::Format { .. } => {} // No children
-        NodeKind::Identifier { .. } => {} // No children
-        NodeKind::Variable { .. } => {} // No children
+        NodeKind::Format { .. } => {}      // No children
+        NodeKind::Identifier { .. } => {}  // No children
+        NodeKind::Variable { .. } => {}    // No children
         NodeKind::VariableWithAttributes { variable, .. } => {
             find_nodes_recursive(variable, predicate, results);
         }
@@ -963,8 +978,10 @@ where
                 find_nodes_recursive(p, predicate, results);
             }
         }
-        NodeKind::MissingExpression | NodeKind::MissingStatement | 
-        NodeKind::MissingIdentifier | NodeKind::MissingBlock => {} // No children
+        NodeKind::MissingExpression
+        | NodeKind::MissingStatement
+        | NodeKind::MissingIdentifier
+        | NodeKind::MissingBlock => {} // No children
         NodeKind::UnknownRest => {} // No children
     }
 }

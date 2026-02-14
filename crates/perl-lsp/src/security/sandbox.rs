@@ -336,7 +336,8 @@ impl SafeExecutor {
         // Set working directory to script directory
         config.working_directory = script_path.parent().map(|p| p.to_path_buf());
         
-        self.execute_with_config("perl", &[script_path.to_str().unwrap()], &config)
+        let path_str = script_path.to_str().ok_or_else(|| anyhow!("Invalid script path"))?;
+        self.execute_with_config("perl", &[path_str], &config)
     }
 }
 
@@ -370,27 +371,30 @@ mod tests {
 
     #[test]
     fn test_unsandboxed_execution() {
+        use perl_tdd_support::must;
         let config = SandboxConfig { enabled: false, ..Default::default() };
-        let sandbox = Sandbox::new(config).unwrap();
+        let sandbox = must(Sandbox::new(config));
         
-        let result = sandbox.execute("echo", &["hello"]).unwrap();
+        let result = must(sandbox.execute("echo", &["hello"]));
         assert!(result.success);
-        assert_eq!(result.stdout_str().unwrap().trim(), "hello");
+        assert_eq!(must(result.stdout_str()).trim(), "hello");
     }
 
     #[test]
     fn test_safe_executor() {
+        use perl_tdd_support::must;
         let executor = SafeExecutor::new();
-        let result = executor.execute("echo", &["test"]).unwrap();
+        let result = must(executor.execute("echo", &["test"]));
         assert!(result.success);
-        assert_eq!(result.stdout_str().unwrap().trim(), "test");
+        assert_eq!(must(result.stdout_str()).trim(), "test");
     }
 
     #[test]
     fn test_perl_script_execution() {
-        let temp_dir = TempDir::new().unwrap();
+        use perl_tdd_support::must;
+        let temp_dir = must(TempDir::new());
         let script_path = temp_dir.path().join("test.pl");
-        fs::write(&script_path, "print \"Hello from Perl\\n\";").unwrap();
+        must(fs::write(&script_path, "print \"Hello from Perl\\n\";"));
         
         let executor = SafeExecutor::new();
         let result = executor.execute_perl_script(&script_path, &[]);
@@ -398,12 +402,13 @@ mod tests {
         // Note: This test might fail if Perl is not installed
         if let Ok(result) = result {
             assert!(result.success);
-            assert!(result.stdout_str().unwrap().contains("Hello from Perl"));
+            assert!(must(result.stdout_str()).contains("Hello from Perl"));
         }
     }
 
     #[test]
     fn test_sandbox_result() {
+        use perl_tdd_support::must;
         let result = SandboxResult {
             exit_code: 0,
             stdout: b"test output".to_vec(),
@@ -412,8 +417,8 @@ mod tests {
             execution_time: std::time::Duration::from_millis(100),
         };
         
-        assert_eq!(result.stdout_str().unwrap(), "test output");
-        assert_eq!(result.stderr_str().unwrap(), "");
+        assert_eq!(must(result.stdout_str()), "test output");
+        assert_eq!(must(result.stderr_str()), "");
         assert!(result.success);
         assert!(!result.was_resource_limited());
     }

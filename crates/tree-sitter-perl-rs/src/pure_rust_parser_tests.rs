@@ -9,7 +9,7 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         match parser.parse(input) {
             Ok(ast) => ast,
-            Err(e) => panic!("Parse failed for '{}': {}", input, e),
+            Err(e) => must(Err::<(), _>(format!("Parse failed for '{}': {}", input, e))),
         }
     }
 

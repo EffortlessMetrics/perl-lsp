@@ -1,9 +1,12 @@
 //! Comprehensive tests for modern Perl feature combinations
-//! 
+//!
 //! These tests validate complex interactions between modern Perl features
 //! including try/catch, given/when, class/method, signatures, and more.
 
-use perl_parser::{Parser, ast::{Node, NodeKind}};
+use perl_parser::{
+    Parser,
+    ast::{Node, NodeKind},
+};
 
 /// Test try/catch with signatures, class methods, and variable declarations
 #[test]
@@ -44,29 +47,30 @@ my $result = $obj->process_data("  hello world  ", {trim => 1, uppercase => 1});
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify we have a Program with multiple statements
     assert!(matches!(ast.kind, NodeKind::Program { .. }));
-    
+
     if let NodeKind::Program { statements } = &ast.kind {
         // Should have use statements, class declaration, and variable declarations
         assert!(statements.len() >= 4);
-        
+
         // Find the class declaration
-        let class_nodes: Vec<_> = statements.iter()
-            .filter(|s| matches!(s.kind, NodeKind::Class { .. }))
-            .collect();
+        let class_nodes: Vec<_> =
+            statements.iter().filter(|s| matches!(s.kind, NodeKind::Class { .. })).collect();
         assert_eq!(class_nodes.len(), 1, "Should have exactly one class");
-        
+
         // Verify class has methods
         if let NodeKind::Class { body, .. } = &class_nodes[0].kind {
             if let NodeKind::Block { statements: class_statements } = &body.kind {
-                let method_nodes: Vec<_> = class_statements.iter()
+                let method_nodes: Vec<_> = class_statements
+                    .iter()
                     .filter(|s| matches!(s.kind, NodeKind::Method { .. }))
                     .collect();
                 assert_eq!(method_nodes.len(), 3, "Should have three methods");
-                
+
                 // Verify methods have signatures
                 for method in &method_nodes {
                     if let NodeKind::Method { signature, .. } = &method.kind {
@@ -75,15 +79,16 @@ my $result = $obj->process_data("  hello world  ", {trim => 1, uppercase => 1});
                 }
             }
         }
-        
+
         // Find try-catch blocks
         let try_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Try { .. }));
         assert!(!try_nodes.is_empty(), "Should have try blocks");
-        
+
         // Verify variable declarations with signatures
-        let var_decls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::VariableDeclaration { .. }));
+        let var_decls =
+            find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::VariableDeclaration { .. }));
         assert!(!var_decls.is_empty(), "Should have variable declarations");
-        
+
         // Check for method calls
         let method_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::MethodCall { .. }));
         assert!(!method_calls.is_empty(), "Should have method calls");
@@ -161,25 +166,26 @@ sub process_item {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify given/when structure
     let given_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Given { .. }));
     assert!(!given_nodes.is_empty(), "Should have given statements");
-    
+
     let when_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::When { .. }));
     assert!(!when_nodes.is_empty(), "Should have when clauses");
-    
+
     let default_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Default { .. }));
     assert!(!default_nodes.is_empty(), "Should have default clauses");
-    
+
     // Verify hash and array literals
     let hash_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::HashLiteral { .. }));
     assert!(!hash_literals.is_empty(), "Should have hash literals");
-    
+
     let array_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::ArrayLiteral { .. }));
     assert!(!array_literals.is_empty(), "Should have array literals");
-    
+
     // Verify dereferencing operations
     let binary_ops = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Binary { .. }));
     assert!(!binary_ops.is_empty(), "Should have binary operations for dereferencing");
@@ -252,11 +258,13 @@ my $data = $rect->serialize();
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify role declarations
     let role_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Class { .. }));
-    let roles: Vec<_> = role_nodes.iter()
+    let roles: Vec<_> = role_nodes
+        .iter()
         .filter(|n| {
             if let NodeKind::Class { name, .. } = &n.kind {
                 name.contains("Drawable") || name.contains("Serializable")
@@ -266,36 +274,32 @@ my $data = $rect->serialize();
         })
         .collect();
     assert!(!roles.is_empty(), "Should have role declarations");
-    
+
     // Verify class with inheritance
     let class_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Class { .. }));
-    let shape_class: Vec<_> = class_nodes.iter()
-        .filter(|n| {
-            if let NodeKind::Class { name, .. } = &n.kind {
-                name == "Shape"
-            } else {
-                false
-            }
-        })
-        .collect();
+    let shape_class: Vec<_> =
+        class_nodes
+            .iter()
+            .filter(|n| {
+                if let NodeKind::Class { name, .. } = &n.kind { name == "Shape" } else { false }
+            })
+            .collect();
     assert_eq!(shape_class.len(), 1, "Should have Shape class");
-    
+
     // Verify class with roles
-    let rect_class: Vec<_> = class_nodes.iter()
+    let rect_class: Vec<_> = class_nodes
+        .iter()
         .filter(|n| {
-            if let NodeKind::Class { name, .. } = &n.kind {
-                name == "Rectangle"
-            } else {
-                false
-            }
+            if let NodeKind::Class { name, .. } = &n.kind { name == "Rectangle" } else { false }
         })
         .collect();
     assert_eq!(rect_class.len(), 1, "Should have Rectangle class");
-    
+
     // Verify field declarations with attributes
-    let field_decls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::VariableDeclaration { .. }));
+    let field_decls =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::VariableDeclaration { .. }));
     assert!(!field_decls.is_empty(), "Should have field declarations");
-    
+
     // Verify method with override
     let method_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Method { .. }));
     assert!(!method_nodes.is_empty(), "Should have methods");
@@ -363,36 +367,39 @@ my $complex3 = complex_signature('scalar', (1, 2, 3), (a => 1, b => 2), sub { },
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
-    
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
     // Verify subroutine signatures
     let sub_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Subroutine { .. }));
     assert!(!sub_nodes.is_empty(), "Should have subroutines");
-    
+
     // Check for signatures in subroutines
     for sub in &sub_nodes {
         if let NodeKind::Subroutine { signature, .. } = &sub.kind {
             assert!(signature.is_some(), "Each subroutine should have a signature");
         }
     }
-    
+
     // Verify signature parameters
     let sig_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Signature { .. }));
     assert!(!sig_nodes.is_empty(), "Should have signature nodes");
-    
+
     // Verify different parameter types
-    let mandatory_params = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::MandatoryParameter { .. }));
-    let optional_params = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::OptionalParameter { .. }));
+    let mandatory_params =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::MandatoryParameter { .. }));
+    let optional_params =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::OptionalParameter { .. }));
     let slurpy_params = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::SlurpyParameter { .. }));
-    
+
     assert!(!mandatory_params.is_empty(), "Should have mandatory parameters");
     assert!(!optional_params.is_empty(), "Should have optional parameters");
     assert!(!slurpy_params.is_empty(), "Should have slurpy parameters");
-    
+
     // Verify function calls with various argument patterns
     let func_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::FunctionCall { .. }));
     assert!(!func_calls.is_empty(), "Should have function calls");
-    
+
     // Verify array and hash literals in calls
     let array_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::ArrayLiteral { .. }));
     let hash_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::HashLiteral { .. }));
@@ -418,7 +425,7 @@ where
     if predicate(&node.kind) {
         results.push(node);
     }
-    
+
     // Recurse into child nodes based on node type
     match &node.kind {
         NodeKind::Program { statements } => {
@@ -581,15 +588,15 @@ where
             find_nodes_recursive(variable, predicate, results);
         }
         NodeKind::Readline { .. } => {} // No complex children
-        NodeKind::Diamond => {} // No children
-        NodeKind::Glob { .. } => {} // No children
+        NodeKind::Diamond => {}         // No children
+        NodeKind::Glob { .. } => {}     // No children
         NodeKind::Typeglob { .. } => {} // No children
-        NodeKind::Number { .. } => {} // No children
-        NodeKind::String { .. } => {} // No children
-        NodeKind::Heredoc { .. } => {} // No children
-        NodeKind::Undef => {} // No children
-        NodeKind::Ellipsis => {} // No children
-        NodeKind::Regex { .. } => {} // No children
+        NodeKind::Number { .. } => {}   // No children
+        NodeKind::String { .. } => {}   // No children
+        NodeKind::Heredoc { .. } => {}  // No children
+        NodeKind::Undef => {}           // No children
+        NodeKind::Ellipsis => {}        // No children
+        NodeKind::Regex { .. } => {}    // No children
         NodeKind::Match { expr, .. } => {
             find_nodes_recursive(expr, predicate, results);
         }
@@ -605,14 +612,14 @@ where
             }
         }
         NodeKind::Use { .. } => {} // No complex children
-        NodeKind::No { .. } => {} // No complex children
+        NodeKind::No { .. } => {}  // No complex children
         NodeKind::PhaseBlock { block, .. } => {
             find_nodes_recursive(block, predicate, results);
         }
         NodeKind::DataSection { .. } => {} // No children
-        NodeKind::Format { .. } => {} // No children
-        NodeKind::Identifier { .. } => {} // No children
-        NodeKind::Variable { .. } => {} // No children
+        NodeKind::Format { .. } => {}      // No children
+        NodeKind::Identifier { .. } => {}  // No children
+        NodeKind::Variable { .. } => {}    // No children
         NodeKind::VariableWithAttributes { variable, .. } => {
             find_nodes_recursive(variable, predicate, results);
         }
@@ -646,8 +653,10 @@ where
                 find_nodes_recursive(p, predicate, results);
             }
         }
-        NodeKind::MissingExpression | NodeKind::MissingStatement | 
-        NodeKind::MissingIdentifier | NodeKind::MissingBlock => {} // No children
+        NodeKind::MissingExpression
+        | NodeKind::MissingStatement
+        | NodeKind::MissingIdentifier
+        | NodeKind::MissingBlock => {} // No children
         NodeKind::UnknownRest => {} // No children
     }
 }

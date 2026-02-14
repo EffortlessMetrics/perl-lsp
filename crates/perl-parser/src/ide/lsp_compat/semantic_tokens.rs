@@ -480,6 +480,7 @@ impl Default for SemanticTokensProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_semantic_tokens_provider_creation() {
@@ -542,7 +543,7 @@ mod tests {
         assert!(provider.token_cache.is_empty());
         
         // Update cache
-        let uri = Url::parse("file:///test.pl").unwrap();
+        let uri = must(Url::parse("file:///test.pl"));
         let tokens = vec![SemanticToken {
             delta_line: 0,
             delta_start_char: 0,
@@ -573,7 +574,7 @@ mod tests {
         let provider = SemanticTokensProvider::new();
         let params = SemanticTokensParams {
             text_document: lsp_types::TextDocumentIdentifier { 
-                uri: Url::parse("file:///test.pl").unwrap() 
+                uri: must(Url::parse("file:///test.pl")) 
             },
             work_done_progress_params: Default::default(),
             partial_result_params: Default::default(),
@@ -581,7 +582,7 @@ mod tests {
         
         let tokens = provider.semantic_tokens_full(params);
         assert!(tokens.is_some());
-        assert!(!tokens.unwrap().data.is_empty());
+        assert!(!must_some(tokens).data.is_empty());
     }
 
     #[test]
@@ -589,7 +590,7 @@ mod tests {
         let provider = SemanticTokensProvider::new();
         let params = SemanticTokensRangeParams {
             text_document: lsp_types::TextDocumentIdentifier { 
-                uri: Url::parse("file:///test.pl").unwrap() 
+                uri: must(Url::parse("file:///test.pl")) 
             },
             range: Range::new(Position::new(0, 0), Position::new(1, 0)),
             work_done_progress_params: Default::default(),
@@ -604,7 +605,7 @@ mod tests {
         let provider = SemanticTokensProvider::new();
         let params = SemanticTokensDeltaParams {
             text_document: lsp_types::TextDocumentIdentifier { 
-                uri: Url::parse("file:///test.pl").unwrap() 
+                uri: must(Url::parse("file:///test.pl")) 
             },
             previous_result_id: "previous_id".to_string(),
             work_done_progress_params: Default::default(),
@@ -613,6 +614,6 @@ mod tests {
         
         let delta = provider.semantic_tokens_full_delta(params);
         assert!(delta.is_some());
-        assert!(!delta.unwrap().edits.is_empty());
+        assert!(!must_some(delta).edits.is_empty());
     }
 }

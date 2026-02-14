@@ -13,13 +13,13 @@ use std::time::{Duration, Instant};
 const MAX_PERFORMANCE_PARSE_TIME: Duration = Duration::from_secs(60);
 
 /// Maximum memory usage threshold (in MB)
-const MAX_MEMORY_THRESHOLD_MB: usize = 1000;
+const _MAX_MEMORY_THRESHOLD_MB: usize = 1000;
 
 /// Test massive data structures
 #[test]
 fn test_massive_data_structures() {
     println!("Testing massive data structures...");
-    
+
     let test_cases = vec![
         ("1M element array", generate_massive_array(1_000_000)),
         ("5M element array", generate_massive_array(5_000_000)),
@@ -30,36 +30,54 @@ fn test_massive_data_structures() {
         ("50K deep nested structure", generate_deep_nested_structure(50_000)),
         ("100K deep nested structure", generate_deep_nested_structure(100_000)),
     ];
-    
+
     for (name, code) in test_cases {
         println!("Testing: {} (size: {} bytes)", name, code.len());
-        
+
         let start_time = Instant::now();
         let mut parser = Parser::new(&code);
         let result = parser.parse();
         let parse_time = start_time.elapsed();
-        
+
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Parse time exceeded limit for {}", name);
-                
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Parse time exceeded limit for {}",
+                    name
+                );
+
                 // Verify the structure is present in the AST
                 let sexp = ast.to_sexp();
                 if name.contains("array") {
-                    assert!(sexp.contains("array") || sexp.contains("list"), 
-                           "Array not found in AST for {}", name);
+                    assert!(
+                        sexp.contains("array") || sexp.contains("list"),
+                        "Array not found in AST for {}",
+                        name
+                    );
                 } else if name.contains("hash") {
-                    assert!(sexp.contains("hash") || sexp.contains("pair"), 
-                           "Hash not found in AST for {}", name);
+                    assert!(
+                        sexp.contains("hash") || sexp.contains("pair"),
+                        "Hash not found in AST for {}",
+                        name
+                    );
                 } else if name.contains("nested") {
-                    assert!(!sexp.is_empty(), "AST should not be empty for nested structure {}", name);
+                    assert!(
+                        !sexp.is_empty(),
+                        "AST should not be empty for nested structure {}",
+                        name
+                    );
                 }
             }
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
                 // For massive structures, parsing might fail, but should fail gracefully
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Error detection took too long for {}", name);
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Error detection took too long for {}",
+                    name
+                );
             }
         }
     }
@@ -69,73 +87,85 @@ fn test_massive_data_structures() {
 #[test]
 fn test_pathological_regex_patterns() {
     println!("Testing pathological regex patterns...");
-    
+
     let test_cases = vec![
         // Catastrophic backtracking patterns
-        ("Catastrophic backtracking 1".to_string(), 
-         r#"my $text = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; 
+        (
+            "Catastrophic backtracking 1".to_string(),
+            r#"my $text = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; 
            my $pattern = /^(a+)+b$/; 
-           if ($text =~ $pattern) { print "Match\n"; }"#.to_string()),
-        
-        ("Catastrophic backtracking 2".to_string(), 
-         r#"my $text = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; 
+           if ($text =~ $pattern) { print "Match\n"; }"#
+                .to_string(),
+        ),
+        (
+            "Catastrophic backtracking 2".to_string(),
+            r#"my $text = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; 
            my $pattern = /^(a+)*a$/; 
-           if ($text =~ $pattern) { print "Match\n"; }"#.to_string()),
-        
-        ("Nested quantifiers".to_string(), 
-         r#"my $text = "abcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabc"; 
+           if ($text =~ $pattern) { print "Match\n"; }"#
+                .to_string(),
+        ),
+        (
+            "Nested quantifiers".to_string(),
+            r#"my $text = "abcabcabcabcabcabcabcabcabcabcabcabcabcabcabcabc"; 
            my $pattern = /^(a.*)+b$/; 
-           if ($text =~ $pattern) { print "Match\n"; }"#.to_string()),
-        
+           if ($text =~ $pattern) { print "Match\n"; }"#
+                .to_string(),
+        ),
         // Excessive alternation
         ("1000 alternatives".to_string(), generate_regex_alternations(1000)),
         ("5000 alternatives".to_string(), generate_regex_alternations(5000)),
         ("10000 alternatives".to_string(), generate_regex_alternations(10000)),
-        
         // Complex character classes
         ("Huge character class".to_string(), generate_huge_character_class()),
         ("Nested character classes".to_string(), generate_nested_character_classes()),
-        
         // Complex lookarounds
         ("Complex lookaheads".to_string(), generate_complex_lookaheads()),
         ("Complex lookbehinds".to_string(), generate_complex_lookbehinds()),
         ("Nested lookarounds".to_string(), generate_nested_lookarounds()),
-        
         // Recursive patterns
         ("Deep recursion".to_string(), generate_recursive_regex(100)),
         ("Mutual recursion".to_string(), generate_mutual_recursive_regex()),
-        
         // Unicode complexity
         ("Massive Unicode class".to_string(), generate_massive_unicode_class()),
         ("Complex Unicode properties".to_string(), generate_complex_unicode_properties()),
-        
         // Backreference hell
         ("Many backreferences".to_string(), generate_many_backreferences(100)),
         ("Nested backreferences".to_string(), generate_nested_backreferences()),
     ];
-    
+
     for (name, code) in &test_cases {
         println!("Testing: {}", name);
-        
+
         let start_time = Instant::now();
         let mut parser = Parser::new(code);
         let result = parser.parse();
         let parse_time = start_time.elapsed();
-        
+
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Parse time exceeded limit for {}", name);
-                
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Parse time exceeded limit for {}",
+                    name
+                );
+
                 // Verify the regex is present in the AST
                 let sexp = ast.to_sexp();
-                assert!(sexp.contains("regex") || sexp.contains("pattern") || sexp.contains("match"), 
-                       "Regex not found in AST for {}", name);
+                assert!(
+                    sexp.contains("regex") || sexp.contains("pattern") || sexp.contains("match"),
+                    "Regex not found in AST for {}",
+                    name
+                );
             }
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
                 // Pathological regex might cause issues, but should fail gracefully
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Error detection took too long for {}", name);
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Error detection took too long for {}",
+                    name
+                );
             }
         }
     }
@@ -145,7 +175,7 @@ fn test_pathological_regex_patterns() {
 #[test]
 fn test_extremely_large_files() {
     println!("Testing extremely large source files...");
-    
+
     let test_cases = vec![
         ("100K lines", generate_large_file(100_000)),
         ("500K lines", generate_large_file(500_000)),
@@ -154,20 +184,24 @@ fn test_extremely_large_files() {
         ("50MB file", generate_large_character_file(50_000_000)),
         ("100MB file", generate_large_character_file(100_000_000)),
     ];
-    
+
     for (name, code) in test_cases {
         println!("Testing: {} (size: {} bytes)", name, code.len());
-        
+
         let start_time = Instant::now();
         let mut parser = Parser::new(&code);
         let result = parser.parse();
         let parse_time = start_time.elapsed();
-        
+
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Parse time exceeded limit for {}", name);
-                
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Parse time exceeded limit for {}",
+                    name
+                );
+
                 // Verify the AST is reasonable for the input size
                 let sexp = ast.to_sexp();
                 assert!(!sexp.is_empty(), "AST should not be empty for {}", name);
@@ -175,7 +209,11 @@ fn test_extremely_large_files() {
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
                 // For extremely large files, parsing might fail, but should fail gracefully
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Error detection took too long for {}", name);
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Error detection took too long for {}",
+                    name
+                );
             }
         }
     }
@@ -185,7 +223,7 @@ fn test_extremely_large_files() {
 #[test]
 fn test_deeply_nested_constructs() {
     println!("Testing deeply nested constructs...");
-    
+
     let test_cases = vec![
         ("1000 deep parentheses", generate_deep_parentheses(1000)),
         ("5000 deep parentheses", generate_deep_parentheses(5000)),
@@ -206,20 +244,24 @@ fn test_deeply_nested_constructs() {
         ("5000 deep subroutines", generate_deep_subroutines(5000)),
         ("10000 deep subroutines", generate_deep_subroutines(10000)),
     ];
-    
+
     for (name, code) in test_cases {
         println!("Testing: {}", name);
-        
+
         let start_time = Instant::now();
         let mut parser = Parser::new(&code);
         let result = parser.parse();
         let parse_time = start_time.elapsed();
-        
+
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Parse time exceeded limit for {}", name);
-                
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Parse time exceeded limit for {}",
+                    name
+                );
+
                 // Verify the structure is present in the AST
                 let sexp = ast.to_sexp();
                 assert!(!sexp.is_empty(), "AST should not be empty for {}", name);
@@ -227,7 +269,11 @@ fn test_deeply_nested_constructs() {
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
                 // For extremely deep nesting, parsing might fail, but should fail gracefully
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Error detection took too long for {}", name);
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Error detection took too long for {}",
+                    name
+                );
             }
         }
     }
@@ -237,7 +283,7 @@ fn test_deeply_nested_constructs() {
 #[test]
 fn test_complex_expressions() {
     println!("Testing complex expressions...");
-    
+
     let test_cases = vec![
         ("1000 nested ternary", generate_nested_ternary(1000)),
         ("5000 nested ternary", generate_nested_ternary(5000)),
@@ -252,20 +298,24 @@ fn test_complex_expressions() {
         ("5000 operator precedence", generate_operator_precedence_mess(5000)),
         ("10000 operator precedence", generate_operator_precedence_mess(10000)),
     ];
-    
+
     for (name, code) in test_cases {
         println!("Testing: {}", name);
-        
+
         let start_time = Instant::now();
         let mut parser = Parser::new(&code);
         let result = parser.parse();
         let parse_time = start_time.elapsed();
-        
+
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Parse time exceeded limit for {}", name);
-                
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Parse time exceeded limit for {}",
+                    name
+                );
+
                 // Verify the expression is present in the AST
                 let sexp = ast.to_sexp();
                 assert!(!sexp.is_empty(), "AST should not be empty for {}", name);
@@ -273,7 +323,11 @@ fn test_complex_expressions() {
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
                 // For complex expressions, parsing might fail, but should fail gracefully
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Error detection took too long for {}", name);
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Error detection took too long for {}",
+                    name
+                );
             }
         }
     }
@@ -283,10 +337,10 @@ fn test_complex_expressions() {
 #[test]
 fn test_concurrent_parsing_stress() {
     println!("Testing concurrent parsing stress...");
-    
+
     let thread_count = 16;
     let iterations_per_thread = 10;
-    
+
     let test_cases = vec![
         generate_massive_array(100_000),
         generate_deep_conditionals(1000),
@@ -297,29 +351,29 @@ fn test_concurrent_parsing_stress() {
         generate_deep_parentheses(1000),
         generate_complex_dereference(500),
     ];
-    
+
     let results = Arc::new(Mutex::new(Vec::new()));
     let error_count = Arc::new(Mutex::new(0));
-    
+
     let handles: Vec<_> = (0..thread_count)
         .map(|thread_id| {
             let test_cases = test_cases.clone();
             let results_clone = Arc::clone(&results);
             let error_count_clone = Arc::clone(&error_count);
-            
+
             thread::spawn(move || {
                 for iteration in 0..iterations_per_thread {
                     let case_index = (thread_id + iteration) % test_cases.len();
                     let code = &test_cases[case_index];
-                    
+
                     let start_time = Instant::now();
                     let mut parser = Parser::new(code);
                     let result = parser.parse();
                     let parse_time = start_time.elapsed();
-                    
+
                     let mut results = results_clone.lock().unwrap();
                     results.push((thread_id, iteration, case_index, parse_time, result.is_ok()));
-                    
+
                     if result.is_err() {
                         *error_count_clone.lock().unwrap() += 1;
                     }
@@ -327,25 +381,28 @@ fn test_concurrent_parsing_stress() {
             })
         })
         .collect();
-    
+
     for handle in handles {
         handle.join().unwrap();
     }
-    
+
     let results = results.lock().unwrap();
     let error_count = *error_count.lock().unwrap();
-    
+
     println!("Completed {} concurrent parses with {} errors", results.len(), error_count);
-    
+
     // Verify no parse took too long
     for (thread_id, iteration, case_index, parse_time, _success) in results.iter() {
         assert!(
             *parse_time < MAX_PERFORMANCE_PARSE_TIME,
             "Thread {} iteration {} case {} took too long: {:?}",
-            thread_id, iteration, case_index, parse_time
+            thread_id,
+            iteration,
+            case_index,
+            parse_time
         );
     }
-    
+
     // At least some parses should succeed even under stress
     let success_count = results.iter().filter(|(_, _, _, _, success)| *success).count();
     assert!(success_count > 0, "At least some parses should succeed");
@@ -355,9 +412,9 @@ fn test_concurrent_parsing_stress() {
 #[test]
 fn test_memory_pressure_scenarios() {
     println!("Testing memory pressure scenarios...");
-    
+
     // Simulate memory pressure by parsing multiple large inputs sequentially
-    let test_cases = vec![
+    let test_cases = [
         generate_massive_array(500_000),
         generate_massive_hash(250_000),
         generate_deep_nested_structure(25_000),
@@ -367,20 +424,24 @@ fn test_memory_pressure_scenarios() {
         generate_regex_alternations(5000),
         generate_deep_parentheses(5000),
     ];
-    
+
     for (i, code) in test_cases.iter().enumerate() {
         println!("Testing memory pressure case {} (size: {} bytes)", i, code.len());
-        
+
         let start_time = Instant::now();
         let mut parser = Parser::new(code);
         let result = parser.parse();
         let parse_time = start_time.elapsed();
-        
+
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Parse time exceeded limit for case {}", i);
-                
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Parse time exceeded limit for case {}",
+                    i
+                );
+
                 // Verify the AST is reasonable
                 let sexp = ast.to_sexp();
                 assert!(!sexp.is_empty(), "AST should not be empty for case {}", i);
@@ -388,7 +449,11 @@ fn test_memory_pressure_scenarios() {
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
                 // Under memory pressure, parsing might fail, but should fail gracefully
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Error detection took too long for case {}", i);
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Error detection took too long for case {}",
+                    i
+                );
             }
         }
     }
@@ -398,47 +463,44 @@ fn test_memory_pressure_scenarios() {
 #[test]
 fn test_resource_exhaustion_scenarios() {
     println!("Testing resource exhaustion scenarios...");
-    
+
     let test_cases = vec![
         // File handle exhaustion simulation
         ("Many file handles", generate_many_file_handles(1000)),
-        
         // Symbol table exhaustion
         ("Huge symbol table", generate_huge_symbol_table(100_000)),
-        
         // String memory exhaustion
         ("Huge strings", generate_huge_strings(1000)),
-        
         // Regex compilation exhaustion
         ("Many regex", generate_many_regex(1000)),
-        
         // Subroutine call depth exhaustion
         ("Deep subroutine calls", generate_deep_subroutine_calls(1000)),
-        
         // Array/Hash exhaustion
         ("Huge arrays", generate_huge_arrays(1000)),
         ("Huge hashes", generate_huge_hashes(1000)),
-        
         // Package exhaustion
         ("Many packages", generate_many_packages(1000)),
-        
         // Module exhaustion
         ("Many modules", generate_many_modules(1000)),
     ];
-    
+
     for (name, code) in test_cases {
         println!("Testing: {}", name);
-        
+
         let start_time = Instant::now();
         let mut parser = Parser::new(&code);
         let result = parser.parse();
         let parse_time = start_time.elapsed();
-        
+
         match result {
             Ok(ast) => {
                 println!("  ✓ Parsed successfully in {:?}", parse_time);
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Parse time exceeded limit for {}", name);
-                
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Parse time exceeded limit for {}",
+                    name
+                );
+
                 // Verify the structure is present in the AST
                 let sexp = ast.to_sexp();
                 assert!(!sexp.is_empty(), "AST should not be empty for {}", name);
@@ -446,7 +508,11 @@ fn test_resource_exhaustion_scenarios() {
             Err(e) => {
                 println!("  ✗ Failed to parse: {}", e);
                 // Resource exhaustion should cause graceful failure
-                assert!(parse_time < MAX_PERFORMANCE_PARSE_TIME, "Error detection took too long for {}", name);
+                assert!(
+                    parse_time < MAX_PERFORMANCE_PARSE_TIME,
+                    "Error detection took too long for {}",
+                    name
+                );
             }
         }
     }
@@ -457,7 +523,9 @@ fn test_resource_exhaustion_scenarios() {
 fn generate_massive_array(size: usize) -> String {
     let mut result = String::from("my @array = (");
     for i in 0..size {
-        if i > 0 { result.push_str(", "); }
+        if i > 0 {
+            result.push_str(", ");
+        }
         result.push_str(&i.to_string());
     }
     result.push_str(");");
@@ -467,7 +535,9 @@ fn generate_massive_array(size: usize) -> String {
 fn generate_massive_hash(size: usize) -> String {
     let mut result = String::from("my %hash = (");
     for i in 0..size {
-        if i > 0 { result.push_str(", "); }
+        if i > 0 {
+            result.push_str(", ");
+        }
         result.push_str(&format!("'key{}' => {}", i, i));
     }
     result.push_str(");");
@@ -557,9 +627,9 @@ fn generate_nested_ternary(depth: usize) -> String {
     }
     result.push_str("42");
     for _ in 0..depth {
-        result.push_str(")");
+        result.push(')');
     }
-    result.push_str(";");
+    result.push(';');
     result
 }
 
@@ -568,7 +638,7 @@ fn generate_massive_method_chain(length: usize) -> String {
     for i in 0..length {
         result.push_str(&format!("->method{}", i));
     }
-    result.push_str(";");
+    result.push(';');
     result
 }
 
@@ -577,24 +647,28 @@ fn generate_complex_dereference(depth: usize) -> String {
     for i in 0..depth {
         result.push_str(&format!("->{{nested}}{{key{}}}{{subkey{}}}[{}]", i, i, i));
     }
-    result.push_str(";");
+    result.push(';');
     result
 }
 
 fn generate_operator_precedence_mess(count: usize) -> String {
     let mut result = String::from("my $result = ");
     for i in 0..count {
-        if i > 0 { result.push_str(" + "); }
+        if i > 0 {
+            result.push_str(" + ");
+        }
         result.push_str(&format!("$var{} * $val{} / $div{} % $mod{}", i, i, i, i));
     }
-    result.push_str(";");
+    result.push(';');
     result
 }
 
 fn generate_regex_alternations(count: usize) -> String {
     let mut result = String::from("my $pattern = /(?:");
     for i in 0..count {
-        if i > 0 { result.push_str("|"); }
+        if i > 0 {
+            result.push('|');
+        }
         result.push_str(&format!("pattern{}", i));
     }
     result.push_str(")/; my $text = 'test'; if ($text =~ $pattern) { print 'Match\\n'; }");
@@ -604,7 +678,7 @@ fn generate_regex_alternations(count: usize) -> String {
 fn generate_huge_character_class() -> String {
     let mut result = String::from("my $pattern = /[");
     for i in 0..1000 {
-        result.push_str(&(i as u8 as char).to_string());
+        result.push(i as u8 as char);
     }
     result.push_str("]/; my $text = 'test'; if ($text =~ $pattern) { print 'Match\\n'; }");
     result
@@ -660,7 +734,9 @@ fn generate_recursive_regex(depth: usize) -> String {
 }
 
 fn generate_mutual_recursive_regex() -> String {
-    String::from("my $pattern = /(?:(?P<name>test)|(?P=name))*/; my $text = 'test'; if ($text =~ $pattern) { print 'Match\\n'; }")
+    String::from(
+        "my $pattern = /(?:(?P<name>test)|(?P=name))*/; my $text = 'test'; if ($text =~ $pattern) { print 'Match\\n'; }",
+    )
 }
 
 fn generate_massive_unicode_class() -> String {
@@ -686,7 +762,7 @@ fn generate_many_backreferences(count: usize) -> String {
     for i in 1..=count {
         result.push_str(&format!("(capture{})", i));
     }
-    result.push_str(")");
+    result.push(')');
     for i in 1..=count {
         result.push_str(&format!("\\{}", i));
     }
@@ -699,7 +775,7 @@ fn generate_nested_backreferences() -> String {
     for _ in 0..50 {
         result.push_str("(test)");
     }
-    result.push_str(")");
+    result.push(')');
     for i in 1..=50 {
         result.push_str(&format!("\\{}", i));
     }

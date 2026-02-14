@@ -31,10 +31,10 @@ fn test_continue_handler() {
                     "Continue response should indicate all threads continued"
                 );
             } else {
-                panic!("Continue response should have body with allThreadsContinued");
+                must(Err::<(), _>(format!("Continue response should have body with allThreadsContinued")));
             }
         }
-        _ => panic!("Expected Response message for continue"),
+        _ => must(Err::<(), _>(format!("Expected Response message for continue"))),
     }
 }
 
@@ -52,7 +52,7 @@ fn test_next_handler() {
             assert_eq!(command, "next");
             assert!(message.is_none(), "Next should not have error message");
         }
-        _ => panic!("Expected Response message for next"),
+        _ => must(Err::<(), _>(format!("Expected Response message for next"))),
     }
 }
 
@@ -70,7 +70,7 @@ fn test_step_in_handler() {
             assert_eq!(command, "stepIn");
             assert!(message.is_none(), "StepIn should not have error message");
         }
-        _ => panic!("Expected Response message for stepIn"),
+        _ => must(Err::<(), _>(format!("Expected Response message for stepIn"))),
     }
 }
 
@@ -88,7 +88,7 @@ fn test_step_out_handler() {
             assert_eq!(command, "stepOut");
             assert!(message.is_none(), "StepOut should not have error message");
         }
-        _ => panic!("Expected Response message for stepOut"),
+        _ => must(Err::<(), _>(format!("Expected Response message for stepOut"))),
     }
 }
 
@@ -115,7 +115,7 @@ fn test_pause_handler_no_session() {
                 );
             }
         }
-        _ => panic!("Expected Response message for pause"),
+        _ => must(Err::<(), _>(format!("Expected Response message for pause"))),
     }
 }
 
@@ -154,7 +154,7 @@ fn test_control_flow_sequence_numbers() {
             assert!(seq > 0, "Response sequence should be positive");
             assert_eq!(request_seq, 42, "Request sequence should match");
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>(format!("Expected Response message"))),
     }
 }
 
@@ -175,7 +175,7 @@ fn test_continue_with_thread_id() {
             assert!(success, "Continue with threadId should succeed");
             assert_eq!(command, "continue");
         }
-        _ => panic!("Expected Response message for continue with threadId"),
+        _ => must(Err::<(), _>(format!("Expected Response message for continue with threadId"))),
     }
 }
 
@@ -196,7 +196,7 @@ fn test_next_with_thread_id() {
             assert!(success, "Next with threadId should succeed");
             assert_eq!(command, "next");
         }
-        _ => panic!("Expected Response message for next with threadId"),
+        _ => must(Err::<(), _>(format!("Expected Response message for next with threadId"))),
     }
 }
 
@@ -218,7 +218,7 @@ fn test_step_in_with_target_id() {
             assert!(success, "StepIn with targetId should succeed");
             assert_eq!(command, "stepIn");
         }
-        _ => panic!("Expected Response message for stepIn with targetId"),
+        _ => must(Err::<(), _>(format!("Expected Response message for stepIn with targetId"))),
     }
 }
 
@@ -239,7 +239,7 @@ fn test_step_out_with_thread_id() {
             assert!(success, "StepOut with threadId should succeed");
             assert_eq!(command, "stepOut");
         }
-        _ => panic!("Expected Response message for stepOut with threadId"),
+        _ => must(Err::<(), _>(format!("Expected Response message for stepOut with threadId"))),
     }
 }
 
@@ -260,7 +260,7 @@ fn test_pause_with_thread_id() {
             assert_eq!(command, "pause");
             // Success depends on whether there's an active session
         }
-        _ => panic!("Expected Response message for pause with threadId"),
+        _ => must(Err::<(), _>(format!("Expected Response message for pause with threadId"))),
     }
 }
 
@@ -288,7 +288,7 @@ fn test_sequential_control_flow_operations() {
                 assert!(success, "Operation {} should succeed", command);
                 assert_eq!(&resp_cmd, command, "Command should match");
             }
-            _ => panic!("Expected Response for command {}", command),
+            _ => must(Err::<(), _>(format!("Expected Response for command {}", command))),
         }
     }
 }
@@ -308,7 +308,7 @@ fn test_continue_missing_thread_id() {
             assert!(success, "Continue without threadId should still succeed");
             assert_eq!(command, "continue");
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>(format!("Expected Response message"))),
     }
 }
 
@@ -333,7 +333,7 @@ fn test_control_flow_with_null_arguments() {
                     assert!(success, "{} should succeed with null arguments", command);
                 }
             }
-            _ => panic!("Expected Response for {}", command),
+            _ => must(Err::<(), _>(format!("Expected Response for {}", command))),
         }
     }
 }
@@ -356,7 +356,7 @@ fn test_control_flow_response_format() {
                 assert!(success, "{} should succeed", command);
                 assert_eq!(cmd, command, "Command name should match");
             }
-            _ => panic!("Expected Response for {}", command),
+            _ => must(Err::<(), _>(format!("Expected Response for {}", command))),
         }
     }
 }
@@ -410,7 +410,7 @@ fn test_pause_without_active_session_returns_failure() {
             assert!(!success, "Pause without session should fail");
             assert!(message.is_some(), "Failure should include error message");
         }
-        _ => panic!("Expected Response for pause"),
+        _ => must(Err::<(), _>(format!("Expected Response for pause"))),
     }
 }
 
@@ -437,7 +437,7 @@ fn test_continue_includes_all_threads_continued() {
             );
         }
     } else {
-        panic!("Expected Response for continue");
+        must(Err::<(), _>(format!("Expected Response for continue")));
     }
 }
 
@@ -457,7 +457,7 @@ fn test_all_control_flow_operations_exist() {
             DapMessage::Response { command, .. } => {
                 assert_eq!(command, operation, "Operation {} should be recognized", operation);
             }
-            _ => panic!("Operation {} should return Response", operation),
+            _ => must(Err::<(), _>(format!("Operation {} should return Response", operation))),
         }
     }
 }
@@ -482,7 +482,7 @@ fn test_unknown_control_flow_command() {
                 );
             }
         }
-        _ => panic!("Expected Response for unknown command"),
+        _ => must(Err::<(), _>(format!("Expected Response for unknown command"))),
     }
 }
 
@@ -500,7 +500,7 @@ fn test_control_flow_handlers_thread_safe() {
             DapMessage::Response { success, .. } => {
                 assert!(success, "Handler should work on iteration {}", i);
             }
-            _ => panic!("Expected Response on iteration {}", i),
+            _ => must(Err::<(), _>(format!("Expected Response on iteration {}", i))),
         }
     }
 }
@@ -523,7 +523,7 @@ fn test_step_in_with_granularity() {
             // Should succeed even if granularity is not yet supported
             assert!(success, "StepIn with granularity should succeed");
         }
-        _ => panic!("Expected Response for stepIn with granularity"),
+        _ => must(Err::<(), _>(format!("Expected Response for stepIn with granularity"))),
     }
 }
 
@@ -544,7 +544,7 @@ fn test_next_with_granularity() {
         DapMessage::Response { success, .. } => {
             assert!(success, "Next with granularity should succeed");
         }
-        _ => panic!("Expected Response for next with granularity"),
+        _ => must(Err::<(), _>(format!("Expected Response for next with granularity"))),
     }
 }
 
@@ -565,6 +565,6 @@ fn test_step_out_with_granularity() {
         DapMessage::Response { success, .. } => {
             assert!(success, "StepOut with granularity should succeed");
         }
-        _ => panic!("Expected Response for stepOut with granularity"),
+        _ => must(Err::<(), _>(format!("Expected Response for stepOut with granularity"))),
     }
 }

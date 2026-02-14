@@ -298,8 +298,9 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_path_parent_traversal() {
-        let tempdir = tempfile::tempdir().expect("Failed to create tempdir");
+    fn test_validate_path_parent_traversal() -> Result<()> {
+        use perl_tdd_support::must;
+        let tempdir = must(tempfile::tempdir());
         let workspace = tempdir.path();
 
         let unsafe_path = PathBuf::from("../../../etc/passwd");
@@ -313,24 +314,24 @@ mod tests {
                 // Either error is acceptable - both indicate the path was rejected
             }
             Err(e) => {
-                panic!("Expected PathTraversalAttempt or PathOutsideWorkspace error, got: {:?}", e)
+                return Err(anyhow::anyhow!("Expected PathTraversalAttempt or PathOutsideWorkspace error, got: {:?}", e));
             }
-            Ok(_) => panic!("Expected error, got Ok"),
+            Ok(_) => return Err(anyhow::anyhow!("Expected error, got Ok")),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_validate_path_absolute_outside() {
+    fn test_validate_path_absolute_outside() -> Result<()> {
+        use perl_tdd_support::{must, must_some};
         // Use a specific subdirectory as workspace to ensure separation
-        let workspace =
-            std::env::current_dir().expect("Failed to get current dir").join("test_workspace");
+        let workspace = must(std::env::current_dir()).join("test_workspace");
 
         // Create workspace directory for the test
         fs::create_dir_all(&workspace).ok();
 
         // Use a path that's definitely outside the workspace
-        let unsafe_path =
-            workspace.parent().expect("workspace should have parent").join("etc/passwd");
+        let unsafe_path = must_some(workspace.parent()).join("etc/passwd");
 
         let result = validate_path(&unsafe_path, &workspace);
 
@@ -342,10 +343,11 @@ mod tests {
             "Absolute path outside workspace should be rejected: {:?}",
             result
         );
+        Ok(())
     }
 
     #[test]
-    fn test_validate_path_null_byte() {
+    fn test_validate_path_null_byte() -> Result<()> {
         let workspace = PathBuf::from("/workspace");
         let unsafe_path = PathBuf::from("valid.pl\0../../etc/passwd");
 
@@ -354,8 +356,9 @@ mod tests {
 
         match result {
             Err(SecurityError::InvalidPathCharacters) => {}
-            _ => panic!("Expected InvalidPathCharacters error"),
+            _ => return Err(anyhow::anyhow!("Expected InvalidPathCharacters error")),
         }
+        Ok(())
     }
 
     #[test]
@@ -367,14 +370,15 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_expression_newline() {
+    fn test_validate_expression_newline() -> Result<()> {
         let result = validate_expression("1\nprint 'hacked'");
         assert!(result.is_err(), "Newline should be rejected");
 
         match result {
             Err(SecurityError::InvalidExpression) => {}
-            _ => panic!("Expected InvalidExpression error"),
+            _ => return Err(anyhow::anyhow!("Expected InvalidExpression error")),
         }
+        Ok(())
     }
 
     #[test]
@@ -441,18 +445,16 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_path_mixed_separators() {
+    fn test_validate_path_mixed_separators() -> Result<()> {
+        use perl_tdd_support::must;
         // Use current directory as workspace to ensure it exists
-        let workspace = std::env::current_dir().expect("Failed to get current dir");
+        let workspace = must(std::env::current_dir());
         // Windows-style path with mixed separators - on Unix this is just weird filename chars
         let path = PathBuf::from("..\\../etc/passwd");
 
         let result = validate_path(&path, &workspace);
         // On Unix, backslash is just a character, so ..\ is a directory name, not parent ref
-        // We should still reject the .. component though
-        if path.to_string_lossy().contains("..") {
-            // Path normalization should handle this
-            assert!(result.is_ok() || result.is_err(), "Path should be validated");
-        }
+        assert!(result.is_err(), "Mixed separators should likely be rejected or sanitized: {:?}", result);
+        Ok(())
     }
 }

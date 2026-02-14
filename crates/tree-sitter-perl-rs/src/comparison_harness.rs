@@ -35,17 +35,22 @@ impl Default for ComparisonHarness {
 
 impl ComparisonHarness {
     pub fn new() -> Self {
+        use perl_tdd_support::must;
+        must(Self::try_new())
+    }
+
+    pub fn try_new() -> Result<Self, Box<dyn std::error::Error>> {
         #[cfg(not(feature = "pure-rust"))]
         {
             let mut parser = Parser::new();
             let language = crate::language();
-            parser.set_language(&language).expect("Failed to set language");
-            Self { tree_sitter_parser: parser }
+            parser.set_language(&language)?;
+            Ok(Self { tree_sitter_parser: parser })
         }
 
         #[cfg(feature = "pure-rust")]
         {
-            Self { pure_rust_parser: PureRustPerlParser::new() }
+            Ok(Self { pure_rust_parser: PureRustPerlParser::new() })
         }
     }
 

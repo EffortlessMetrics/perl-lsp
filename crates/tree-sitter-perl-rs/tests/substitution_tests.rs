@@ -7,7 +7,7 @@ mod tests {
         let ast = parser.parse().expect("parse");
         match ast.kind {
             NodeKind::Program { statements } => statements[0].kind.clone(),
-            other => panic!("unexpected AST root: {:?}", other),
+            other => must(Err::<(), _>(format!("unexpected AST root: {:?}", other))),
         }
     }
 
@@ -19,7 +19,7 @@ mod tests {
                 assert_eq!(replacement.as_ref(), "bar");
                 assert_eq!(modifiers.as_ref(), "g");
             }
-            other => panic!("expected substitution node, got {:?}", other),
+            other => must(Err::<(), _>(format!("expected substitution node, got {:?}", other))),
         }
     }
 
@@ -31,7 +31,7 @@ mod tests {
                 assert_eq!(replacement.as_ref(), "bar");
                 assert_eq!(modifiers.as_ref(), "gi");
             }
-            other => panic!("expected substitution node, got {:?}", other),
+            other => must(Err::<(), _>(format!("expected substitution node, got {:?}", other))),
         }
     }
 
@@ -52,7 +52,7 @@ mod tests {
                     assert_eq!(replacement.as_ref(), repl, "replacement mismatch for {code}");
                     assert_eq!(modifiers.as_ref(), mods, "modifier mismatch for {code}");
                 }
-                other => panic!("expected substitution node, got {:?}", other),
+                other => must(Err::<(), _>(format!("expected substitution node, got {:?}", other))),
             }
         }
     }

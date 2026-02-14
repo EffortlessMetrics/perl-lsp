@@ -125,10 +125,9 @@ mod corpus_gap_tests {
 
         for file in files {
             let path = Path::new("test_corpus").join(file);
-            let content = match fs::read_to_string(&path) {
-                Ok(c) => c,
-                Err(e) => panic!("Failed to read file {}: {}", file, e),
-            };
+            let content_res = fs::read_to_string(&path);
+            assert!(content_res.is_ok(), "Failed to read file {}: {:?}", file, content_res.err());
+            let content = content_res.unwrap_or_else(|_| unreachable!());
 
             let start = Instant::now();
             for _ in 0..100 {

@@ -47,7 +47,7 @@ fn test_typeglob_slots_fixed() {
     while let Some(token) = lexer.next_token() {
         println!("Token: {:?}", token);
         if let TokenType::Error(msg) = &token.token_type {
-            panic!("Unexpected error: {}", msg);
+            must(Err::<(), _>(format!("Unexpected error: {}", msg)));
         }
     }
 }
@@ -61,7 +61,7 @@ fn test_operator_overload_fixed() {
     while let Some(token) = lexer.next_token() {
         println!("Token: {:?}", token);
         if let TokenType::Error(msg) = &token.token_type {
-            panic!("Unexpected error: {}", msg);
+            must(Err::<(), _>(format!("Unexpected error: {}", msg)));
         }
     }
 }

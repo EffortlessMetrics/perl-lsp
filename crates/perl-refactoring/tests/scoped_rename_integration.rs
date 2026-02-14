@@ -29,8 +29,7 @@ sub bar {
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let mut config = RefactoringConfig::default();
-    config.safe_mode = false;
+    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -72,8 +71,7 @@ print $outer;
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let mut config = RefactoringConfig::default();
-    config.safe_mode = false;
+    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -119,8 +117,7 @@ print $var;
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let mut config = RefactoringConfig::default();
-    config.safe_mode = false;
+    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -161,8 +158,7 @@ fn test_file_scope_preserves_external_files() {
     let path1 = file1.path().to_path_buf();
     let path2 = file2.path().to_path_buf();
 
-    let mut config = RefactoringConfig::default();
-    config.safe_mode = false;
+    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path1, code1));
     must(engine.index_file(&path2, code2));
@@ -204,8 +200,7 @@ sub foo {
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let mut config = RefactoringConfig::default();
-    config.safe_mode = false;
+    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -244,8 +239,7 @@ print $x;
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let mut config = RefactoringConfig::default();
-    config.safe_mode = false;
+    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 
@@ -289,8 +283,7 @@ print $global;
     must(write!(file, "{}", code));
     let path = file.path().to_path_buf();
 
-    let mut config = RefactoringConfig::default();
-    config.safe_mode = false;
+    let config = RefactoringConfig { safe_mode: false, ..Default::default() };
     let mut engine = RefactoringEngine::with_config(config);
     must(engine.index_file(&path, code));
 

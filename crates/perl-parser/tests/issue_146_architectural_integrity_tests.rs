@@ -14,13 +14,11 @@ mod issue_146_tests {
     #[test]
     fn test_tdd_workflow_compilation_fix() {
         // Test that tdd_workflow.rs compiles without the undefined signature error
-        let output = match Command::new("cargo")
+        let output_res = Command::new("cargo")
             .args(["check", "--package", "perl-parser", "--message-format", "json"])
-            .output()
-        {
-            Ok(o) => o,
-            Err(e) => panic!("Failed to run cargo check: {}", e),
-        };
+            .output();
+        assert!(output_res.is_ok(), "Failed to run cargo check");
+        let output = output_res.unwrap_or_else(|_| unreachable!());
 
         let stdout = String::from_utf8_lossy(&output.stdout);
 
@@ -111,11 +109,9 @@ mod integration_tests {
     /// Full compilation test for entire perl-parser crate
     #[test]
     fn test_full_crate_compilation() {
-        let output =
-            match Command::new("cargo").args(["build", "--package", "perl-parser"]).output() {
-                Ok(o) => o,
-                Err(e) => panic!("Failed to run cargo build: {}", e),
-            };
+        let output_res = Command::new("cargo").args(["build", "--package", "perl-parser"]).output();
+        assert!(output_res.is_ok(), "Failed to run cargo build");
+        let output = output_res.unwrap_or_else(|_| unreachable!());
 
         assert!(
             output.status.success(),
@@ -128,13 +124,11 @@ mod integration_tests {
     #[test]
     #[ignore = "clippy warnings burn-down: collapsible_if across multiple crates"]
     fn test_clippy_compliance() {
-        let output = match Command::new("cargo")
+        let output_res = Command::new("cargo")
             .args(["clippy", "--package", "perl-parser", "--", "-D", "warnings"])
-            .output()
-        {
-            Ok(o) => o,
-            Err(e) => panic!("Failed to run cargo clippy: {}", e),
-        };
+            .output();
+        assert!(output_res.is_ok(), "Failed to run cargo clippy");
+        let output = output_res.unwrap_or_else(|_| unreachable!());
 
         assert!(
             output.status.success(),
@@ -149,13 +143,11 @@ mod integration_tests {
         // This test validates that LSP functionality works correctly
         // after tdd_workflow.rs and refactoring.rs are restored
 
-        let output = match Command::new("cargo")
+        let output_res = Command::new("cargo")
             .args(["test", "--package", "perl-lsp", "--test", "lsp_comprehensive_e2e_test"])
-            .output()
-        {
-            Ok(o) => o,
-            Err(e) => panic!("Failed to run LSP E2E tests: {}", e),
-        };
+            .output();
+        assert!(output_res.is_ok(), "Failed to run LSP E2E tests");
+        let output = output_res.unwrap_or_else(|_| unreachable!());
 
         assert!(
             output.status.success(),

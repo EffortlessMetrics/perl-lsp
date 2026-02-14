@@ -1238,7 +1238,7 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
         for handle in worker_handles {
             match handle.join() {
                 Ok(result) => thread_results.push(result),
-                Err(_) => panic!("Thread panicked during concurrency testing"),
+                Err(_) => must(Err::<(), _>(format!("Thread panicked during concurrency testing"))),
             }
         }
 
@@ -1510,7 +1510,7 @@ fn test_deadlock_detection_and_prevention_ac10() {
         for handle in thread_handles {
             match handle.join() {
                 Ok(result) => thread_results.push(result),
-                Err(_) => panic!("Thread panicked during deadlock detection testing"),
+                Err(_) => must(Err::<(), _>(format!("Thread panicked during deadlock detection testing"))),
             }
         }
 

@@ -1,5 +1,9 @@
 //! Token stream and trivia utilities for the parser.
 
+#![deny(unsafe_code)]
+#![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
+#![warn(rust_2018_idioms)]
+
 pub mod token_stream;
 pub mod token_wrapper;
 pub mod trivia;

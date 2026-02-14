@@ -84,8 +84,7 @@ pub fn run(name: Option<String>, save: bool, output: Option<PathBuf>) -> Result<
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
         ProgressStyle::default_spinner()
-            .template("{spinner:.green} {wide_msg}")
-            .unwrap_or_else(|_| ProgressStyle::default_spinner()),
+            .template("{spinner:.green} {wide_msg}")?,
     );
 
     spinner.set_message("Running benchmarks");
@@ -350,7 +349,8 @@ mod tests {
         // In a real scenario, we might use a test framework like mockall
 
         // Test that we can at least call the validation function
-        let temp_dir = tempfile::tempdir().unwrap();
+        use perl_tdd_support::must;
+        let temp_dir = must(tempfile::tempdir());
         let output_path = temp_dir.path().join("benchmark_results.txt");
 
         assert!(validate_output_path(&output_path).is_ok());

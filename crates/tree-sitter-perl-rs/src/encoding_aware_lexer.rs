@@ -55,17 +55,26 @@ pub enum WarningSeverity {
 }
 
 // Patterns for encoding-related pragmas
-#[allow(clippy::unwrap_used)]
-static ENCODING_PRAGMA: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"(?m)^\s*use\s+encoding\s+['"]([\w\-]+)['"]"#).unwrap());
+static ENCODING_PRAGMA: LazyLock<Regex> = LazyLock::new(|| {
+    match Regex::new(r#"(?m)^\s*use\s+encoding\s+['"]([\w\-]+)['"]"#) {
+        Ok(re) => re,
+        Err(_) => unreachable!("ENCODING_PRAGMA failed to compile"),
+    }
+});
 
-#[allow(clippy::unwrap_used)]
-static UTF8_PRAGMA: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?m)^\s*(use|no)\s+utf8\s*;").unwrap());
+static UTF8_PRAGMA: LazyLock<Regex> = LazyLock::new(|| {
+    match Regex::new(r"(?m)^\s*(use|no)\s+utf8\s*;") {
+        Ok(re) => re,
+        Err(_) => unreachable!("UTF8_PRAGMA failed to compile"),
+    }
+});
 
-#[allow(clippy::unwrap_used)]
-static LOCALE_PRAGMA: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?m)^\s*use\s+locale\s*;").unwrap());
+static LOCALE_PRAGMA: LazyLock<Regex> = LazyLock::new(|| {
+    match Regex::new(r"(?m)^\s*use\s+locale\s*;") {
+        Ok(re) => re,
+        Err(_) => unreachable!("LOCALE_PRAGMA failed to compile"),
+    }
+});
 
 impl Default for EncodingAwareLexer {
     fn default() -> Self {
@@ -370,13 +379,13 @@ Unicode delimiter
         // ASCII is always safe
         match lexer.check_delimiter_encoding_safety("EOF") {
             DelimiterSafety::Safe => {}
-            _ => panic!("ASCII should be safe"),
+            _ => unreachable!("ASCII should be safe"),
         }
 
         // Non-ASCII without encoding changes is safe
         match lexer.check_delimiter_encoding_safety("終") {
             DelimiterSafety::Safe => {}
-            _ => panic!("Should be safe without encoding changes"),
+            _ => unreachable!("Should be safe without encoding changes"),
         }
     }
 

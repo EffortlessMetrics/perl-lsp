@@ -347,7 +347,8 @@ my $x = 42;
 print "Hello, world!\n";
 "#;
 
-        let result = parser.parse_with_understanding(code).unwrap();
+        use perl_tdd_support::must;
+        let result = must(parser.parse_with_understanding(code));
         assert_eq!(result.parse_coverage, 100.0);
         assert!(result.diagnostics.is_empty());
     }
@@ -364,7 +365,8 @@ END
 .
 "#;
 
-        let result = parser.parse_with_understanding(code).unwrap();
+        use perl_tdd_support::must;
+        let result = must(parser.parse_with_understanding(code));
         assert!(!result.diagnostics.is_empty());
         assert!(result.ast.has_anti_patterns());
     }
@@ -380,7 +382,8 @@ END
 }
 "#;
 
-        let result = parser.parse_with_understanding(code).unwrap();
+        use perl_tdd_support::must;
+        let result = must(parser.parse_with_understanding(code));
         assert!(!result.diagnostics.is_empty());
         let report = result.generate_report();
         assert!(report.contains("BEGIN"));

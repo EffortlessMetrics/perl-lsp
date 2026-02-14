@@ -56,40 +56,57 @@ pub struct DelimiterAnalysis {
 }
 
 // Enhanced patterns for delimiter variables
-#[allow(clippy::unwrap_used)]
 static SCALAR_ASSIGN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^\s*(?:my|our|local|state)\s+[\$@%](\w+)\s*=\s*["']([^"']+)["']"#).unwrap()
+    match Regex::new(r#"(?m)^\s*(?:my|our|local|state)\s+[\$@%](\w+)\s*=\s*["']([^"']+)["']"#) {
+        Ok(re) => re,
+        Err(_) => unreachable!("SCALAR_ASSIGN_PATTERN regex failed to compile"),
+    }
 });
 
-#[allow(clippy::unwrap_used)]
 static ARRAY_ASSIGN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^\s*(?:my|our|local|state)\s+@(\w+)\s*=\s*\(([^)]+)\)"#).unwrap()
+    match Regex::new(r#"(?m)^\s*(?:my|our|local|state)\s+@(\w+)\s*=\s*\(([^)]+)\)"#) {
+        Ok(re) => re,
+        Err(_) => unreachable!("ARRAY_ASSIGN_PATTERN regex failed to compile"),
+    }
 });
 
-#[allow(clippy::unwrap_used)]
 static HASH_ASSIGN_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?m)^\s*(?:my|our|local|state)\s+%(\w+)\s*=\s*\(([^)]+)\)"#).unwrap()
+    match Regex::new(r#"(?m)^\s*(?:my|our|local|state)\s+%(\w+)\s*=\s*\(([^)]+)\)"#) {
+        Ok(re) => re,
+        Err(_) => unreachable!("HASH_ASSIGN_PATTERN regex failed to compile"),
+    }
 });
 
 static COMMON_DELIMITER_NAMES: LazyLock<Vec<&'static str>> =
     LazyLock::new(|| vec!["delimiter", "delim", "end", "eof", "marker", "tag", "label"]);
 
-#[allow(clippy::unwrap_used)]
 static STRING_FUNC_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(uc|lc|ucfirst|lcfirst|reverse|chomp|chop)\s*\(\s*(.+?)\s*\)$").unwrap()
+    match Regex::new(r"^(uc|lc|ucfirst|lcfirst|reverse|chomp|chop)\s*\(\s*(.+?)\s*\)$") {
+        Ok(re) => re,
+        Err(_) => unreachable!("STRING_FUNC_PATTERN regex failed to compile"),
+    }
 });
 
-#[allow(clippy::unwrap_used)]
-static STR_CONV_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^(.+?)->(?:to_string|as_string|stringify)\(\s*\)$").unwrap());
+static STR_CONV_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    match Regex::new(r"^(.+?)->(?:to_string|as_string|stringify)\(\s*\)$") {
+        Ok(re) => re,
+        Err(_) => unreachable!("STR_CONV_PATTERN regex failed to compile"),
+    }
+});
 
-#[allow(clippy::unwrap_used)]
-static VAR_INTERP_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\$\{?([a-zA-Z_]\w*)\}?").unwrap());
+static VAR_INTERP_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    match Regex::new(r"\$\{?([a-zA-Z_]\w*)\}?") {
+        Ok(re) => re,
+        Err(_) => unreachable!("VAR_INTERP_PATTERN regex failed to compile"),
+    }
+});
 
-#[allow(clippy::unwrap_used)]
-static HASH_PAIR_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"(\w+)\s*=>\s*["']([^"']+)["']"#).unwrap());
+static HASH_PAIR_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
+    match Regex::new(r#"(\w+)\s*=>\s*["']([^"']+)["']"#) {
+        Ok(re) => re,
+        Err(_) => unreachable!("HASH_PAIR_PATTERN regex failed to compile"),
+    }
+});
 
 impl DynamicDelimiterRecovery {
     pub fn new(mode: RecoveryMode) -> Self {
@@ -854,6 +871,7 @@ my %markers = (sql => "SQL", perl => "PERL");
 
     #[test]
     fn test_braced_variable_resolution() {
+        use perl_tdd_support::must_some;
         let mut recovery = DynamicDelimiterRecovery::new(RecoveryMode::BestGuess);
         let code = r#"my $marker = "END";"#;
         recovery.scan_for_assignments(code);
@@ -864,12 +882,13 @@ my %markers = (sql => "SQL", perl => "PERL");
             file_type_hint: None,
         };
 
-        let result = recovery.try_resolve_variable("${marker}", &context).expect("should resolve");
+        let result = must_some(recovery.try_resolve_variable("${marker}", &context));
         assert_eq!(result.value, "END");
     }
 
     #[test]
     fn test_concatenation_resolution() {
+        use perl_tdd_support::must_some;
         let mut recovery = DynamicDelimiterRecovery::new(RecoveryMode::BestGuess);
         let code = r#"my $base = "ST";"#;
         recovery.scan_for_assignments(code);
@@ -881,13 +900,14 @@ my %markers = (sql => "SQL", perl => "PERL");
         };
 
         let result =
-            recovery.try_resolve_variable("$base . \"ART\"", &context).expect("should resolve");
+            must_some(recovery.try_resolve_variable("$base . \"ART\"", &context));
         assert_eq!(result.value, "START");
         assert_eq!(result.source, ValueSource::Concatenation);
     }
 
     #[test]
     fn test_function_call_resolution() {
+        use perl_tdd_support::must_some;
         let mut recovery = DynamicDelimiterRecovery::new(RecoveryMode::BestGuess);
         let code = r#"my $delimiter = "end";"#;
         recovery.scan_for_assignments(code);
@@ -899,9 +919,8 @@ my %markers = (sql => "SQL", perl => "PERL");
         };
 
         // Test uppercase function
-        let result = recovery
-            .try_resolve_variable("uc($delimiter)", &context)
-            .expect("should resolve uc() call");
+        let result = must_some(recovery
+            .try_resolve_variable("uc($delimiter)", &context));
         assert_eq!(result.value, "END");
         assert_eq!(result.source, ValueSource::FunctionReturn);
 
@@ -909,9 +928,8 @@ my %markers = (sql => "SQL", perl => "PERL");
         recovery.variable_values.clear();
         recovery.scan_for_assignments(r#"my $delimiter = "END";"#);
 
-        let result = recovery
-            .try_resolve_variable("lc($delimiter)", &context)
-            .expect("should resolve lc() call");
+        let result = must_some(recovery
+            .try_resolve_variable("lc($delimiter)", &context));
         assert_eq!(result.value, "end");
         assert_eq!(result.source, ValueSource::FunctionReturn);
     }
@@ -952,16 +970,14 @@ my %markers = (sql => "SQL", perl => "PERL");
         };
 
         // Test array access
-        let result = recovery
-            .try_resolve_variable("$delimiters[0]", &context)
-            .expect("should resolve array access");
+        let result = must_some(recovery
+            .try_resolve_variable("$delimiters[0]", &context));
         assert_eq!(result.value, "EOF");
         assert_eq!(result.source, ValueSource::Heuristic);
 
         // Test hash access
-        let result = recovery
-            .try_resolve_variable("$markers{sql}", &context)
-            .expect("should resolve hash access");
+        let result = must_some(recovery
+            .try_resolve_variable("$markers{sql}", &context));
         assert_eq!(result.value, "SQL");
         assert_eq!(result.source, ValueSource::Heuristic);
     }
@@ -982,9 +998,8 @@ my $suffix = "END";
         };
 
         // Test simple interpolation
-        let result = recovery
-            .try_resolve_variable("\"${prefix}_${suffix}\"", &context)
-            .expect("should resolve interpolated string");
+        let result = must_some(recovery
+            .try_resolve_variable("\"${prefix}_${suffix}\"", &context));
         assert_eq!(result.value, "MY_END");
         assert_eq!(result.source, ValueSource::Concatenation);
     }
@@ -1006,9 +1021,8 @@ my $suffix = "END";
         }
 
         // Test heuristic for unknown env vars
-        let result = recovery
-            .try_resolve_variable("$ENV{CUSTOM_DEBUG_FLAG}", &context)
-            .expect("should provide heuristic for env vars");
+        let result = must_some(recovery
+            .try_resolve_variable("$ENV{CUSTOM_DEBUG_FLAG}", &context));
         assert_eq!(result.value, "1"); // Debug heuristic
         assert_eq!(result.source, ValueSource::Heuristic);
         assert!(result.confidence < 0.5);
@@ -1030,9 +1044,8 @@ my $counter = "1";
         };
 
         // Test numeric concatenation
-        let result = recovery
-            .try_resolve_variable("$type . $counter", &context)
-            .expect("should resolve mixed concatenation");
+        let result = must_some(recovery
+            .try_resolve_variable("$type . $counter", &context));
         assert_eq!(result.value, "SQL1");
         assert_eq!(result.source, ValueSource::Concatenation);
 
@@ -1046,9 +1059,8 @@ my $counter = "1";
             }],
         );
 
-        let result = recovery
-            .try_resolve_variable("${config[0]}", &context)
-            .expect("should resolve subscript");
+        let result = must_some(recovery
+            .try_resolve_variable("${config[0]}", &context));
         assert_eq!(result.value, "DELIMITER");
         assert_eq!(result.source, ValueSource::Heuristic);
         assert!(result.confidence < 0.8); // Reduced confidence for subscripts

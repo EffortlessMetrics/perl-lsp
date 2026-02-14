@@ -64,7 +64,8 @@ mod tests {
     fn test_division_vs_regex() {
         // Test case from the document: "1/ /abc/"
         let input = "1/ /abc/";
-        let result = DisambiguatedParser::parse_to_sexp(input).unwrap();
+        use perl_tdd_support::must;
+        let result = must(DisambiguatedParser::parse_to_sexp(input));
         println!("Result for '{}': {}", input, result);
         assert!(result.contains("binary_expression"));
         assert!(result.contains("number 1"));
@@ -72,7 +73,8 @@ mod tests {
 
         // Test simple division
         let input = "x / 2";
-        let result = DisambiguatedParser::parse_to_sexp(input).unwrap();
+        use perl_tdd_support::must;
+        let result = must(DisambiguatedParser::parse_to_sexp(input));
         assert!(result.contains("binary_expression"));
         assert!(result.contains("identifier x"));
         assert!(result.contains("number 2"));
@@ -81,7 +83,8 @@ mod tests {
     #[test]
     fn test_regex_after_operator() {
         let input = "$x =~ /pattern/";
-        let result = DisambiguatedParser::parse_to_sexp(input).unwrap();
+        use perl_tdd_support::must;
+        let result = must(DisambiguatedParser::parse_to_sexp(input));
         assert!(result.contains("binary_expression"));
         assert!(result.contains("=~"));
         assert!(result.contains("regex"));
@@ -90,13 +93,15 @@ mod tests {
     #[test]
     fn test_substitution() {
         let input = "s/foo/bar/g";
-        let result = DisambiguatedParser::parse_to_sexp(input).unwrap();
+        use perl_tdd_support::must;
+        let result = must(DisambiguatedParser::parse_to_sexp(input));
         println!("Result for '{}': {}", input, result);
         assert!(result.contains("substitution"));
 
         // Test with different delimiters
         let input = "s{foo}{bar}g";
-        let result = DisambiguatedParser::parse_to_sexp(input).unwrap();
+        use perl_tdd_support::must;
+        let result = must(DisambiguatedParser::parse_to_sexp(input));
         assert!(result.contains("substitution"));
     }
 
@@ -104,14 +109,16 @@ mod tests {
     fn test_complex_expressions() {
         // From the document's edge cases
         let input = "print 1/ /foo/";
-        let result = DisambiguatedParser::parse_to_sexp(input).unwrap();
+        use perl_tdd_support::must;
+        let result = must(DisambiguatedParser::parse_to_sexp(input));
         assert!(result.contains("function_call"));
         assert!(result.contains("binary_expression"));
         assert!(result.contains("regex"));
 
         // Multiple divisions and regexes
         let input = "a/b/c =~ /x/y/";
-        let result = DisambiguatedParser::parse_to_sexp(input).unwrap();
+        use perl_tdd_support::must;
+        let result = must(DisambiguatedParser::parse_to_sexp(input));
         println!("Result for '{}': {}", input, result);
         // Should parse as: (a/b)/c =~ (/x/)y/
         assert!(result.contains("binary_expression"));

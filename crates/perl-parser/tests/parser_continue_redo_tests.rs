@@ -15,6 +15,7 @@
 
 use perl_corpus::{continue_redo_cases, find_continue_redo_case, valid_continue_redo_cases};
 use perl_parser::{Node, NodeKind, Parser};
+use perl_tdd_support::{must, must_some};
 
 /// Helper to parse code and return the AST
 fn parse_code(code: &str) -> Result<Node, perl_parser::ParseError> {
@@ -23,7 +24,7 @@ fn parse_code(code: &str) -> Result<Node, perl_parser::ParseError> {
 }
 
 /// Helper to find nodes of a specific kind in the AST
-fn find_nodes<'a>(node: &'a Node, matches: impl Fn(&NodeKind) -> bool + Copy) -> Vec<&'a Node> {
+fn find_nodes(node: &Node, matches: impl Fn(&NodeKind) -> bool + Copy) -> Vec<&Node> {
     let mut results = Vec::new();
     find_nodes_recursive(node, matches, &mut results);
     results
@@ -50,7 +51,7 @@ fn find_nodes_recursive<'a>(
 #[test]
 fn parser_continue_keyword_recognized() {
     let code = r#"while (1) { } continue { print "done\n"; }"#;
-    let ast = parse_code(code).expect("Failed to parse continue block");
+    let ast = must(parse_code(code));
 
     // Check that we have a While node with a continue_block
     let while_nodes = find_nodes(&ast, |kind| matches!(kind, NodeKind::While { .. }));
@@ -59,14 +60,14 @@ fn parser_continue_keyword_recognized() {
     if let NodeKind::While { continue_block, .. } = &while_nodes[0].kind {
         assert!(continue_block.is_some(), "While loop should have a continue block");
     } else {
-        panic!("Expected While node");
+        unreachable!("Expected While node");
     }
 }
 
 #[test]
 fn parser_redo_keyword_recognized() {
     let code = r#"while (1) { redo; }"#;
-    let ast = parse_code(code).expect("Failed to parse redo statement");
+    let ast = must(parse_code(code));
 
     let redo_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
@@ -79,8 +80,8 @@ fn parser_redo_keyword_recognized() {
 
 #[test]
 fn parser_continue_in_while_loop() {
-    let case = find_continue_redo_case("continue.while.basic").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse continue in while loop");
+    let case = must_some(find_continue_redo_case("continue.while.basic"));
+    let ast = must(parse_code(case.source));
 
     let while_nodes = find_nodes(&ast, |kind| matches!(kind, NodeKind::While { .. }));
     assert_eq!(while_nodes.len(), 1, "Should have exactly one While node");
@@ -92,8 +93,8 @@ fn parser_continue_in_while_loop() {
 
 #[test]
 fn parser_continue_in_until_loop() {
-    let case = find_continue_redo_case("continue.until.basic").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse continue in until loop");
+    let case = must_some(find_continue_redo_case("continue.until.basic"));
+    let ast = must(parse_code(case.source));
 
     // Until is represented as While with negated condition
     let while_nodes = find_nodes(&ast, |kind| matches!(kind, NodeKind::While { .. }));
@@ -106,8 +107,8 @@ fn parser_continue_in_until_loop() {
 
 #[test]
 fn parser_continue_in_for_loop() {
-    let case = find_continue_redo_case("continue.for.basic").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse continue in for loop");
+    let case = must_some(find_continue_redo_case("continue.for.basic"));
+    let ast = must(parse_code(case.source));
 
     let for_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
@@ -119,31 +120,25 @@ fn parser_continue_in_for_loop() {
             assert!(continue_block.is_some(), "For loop should have a continue block");
         }
         NodeKind::Foreach { .. } => {
-            // Note: Foreach doesn't have continue_block in current AST - feature not yet implemented
-            // This test case may need to be updated when continue_block is added to Foreach
+            // Note: Foreach doesn't have continue_block in current AST
         }
-        _ => panic!("Expected For or Foreach node"),
+        _ => unreachable!("Expected For or Foreach node"),
     }
 }
 
 #[test]
 fn parser_continue_in_foreach_loop() {
-    let case = find_continue_redo_case("continue.foreach.basic").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse continue in foreach loop");
+    let case = must_some(find_continue_redo_case("continue.foreach.basic"));
+    let ast = must(parse_code(case.source));
 
     let foreach_nodes = find_nodes(&ast, |kind| matches!(kind, NodeKind::Foreach { .. }));
     assert_eq!(foreach_nodes.len(), 1, "Should have exactly one Foreach node");
-
-    // TODO: Update when continue_block is added to Foreach AST node
-    // if let NodeKind::Foreach { continue_block, .. } = &foreach_nodes[0].kind {
-    //     assert!(continue_block.is_some(), "Foreach loop should have a continue block");
-    // }
 }
 
 #[test]
 fn parser_redo_in_while_loop() {
-    let case = find_continue_redo_case("redo.while.basic").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse redo in while loop");
+    let case = must_some(find_continue_redo_case("redo.while.basic"));
+    let ast = must(parse_code(case.source));
 
     let redo_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
@@ -152,8 +147,8 @@ fn parser_redo_in_while_loop() {
 
 #[test]
 fn parser_redo_in_until_loop() {
-    let case = find_continue_redo_case("redo.until.basic").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse redo in until loop");
+    let case = must_some(find_continue_redo_case("redo.until.basic"));
+    let ast = must(parse_code(case.source));
 
     let redo_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
@@ -162,8 +157,8 @@ fn parser_redo_in_until_loop() {
 
 #[test]
 fn parser_redo_in_for_loop() {
-    let case = find_continue_redo_case("redo.for.basic").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse redo in for loop");
+    let case = must_some(find_continue_redo_case("redo.for.basic"));
+    let ast = must(parse_code(case.source));
 
     let redo_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
@@ -176,8 +171,8 @@ fn parser_redo_in_for_loop() {
 
 #[test]
 fn parser_redo_with_label() {
-    let case = find_continue_redo_case("redo.labeled.loop").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse redo with label");
+    let case = must_some(find_continue_redo_case("redo.labeled.loop"));
+    let ast = must(parse_code(case.source));
 
     let redo_nodes = find_nodes(
         &ast,
@@ -192,8 +187,8 @@ fn parser_redo_with_label() {
 
 #[test]
 fn parser_redo_nested_labeled() {
-    let case = find_continue_redo_case("redo.nested.labeled").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse nested labeled redo");
+    let case = must_some(find_continue_redo_case("redo.nested.labeled"));
+    let ast = must(parse_code(case.source));
 
     let redo_nodes = find_nodes(
         &ast,
@@ -223,9 +218,8 @@ fn parser_redo_nested_labeled() {
 
 #[test]
 fn parser_continue_next_interaction() {
-    let case =
-        find_continue_redo_case("continue.next.interaction").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse continue with next");
+    let case = must_some(find_continue_redo_case("continue.next.interaction"));
+    let ast = must(parse_code(case.source));
 
     let for_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
@@ -238,9 +232,8 @@ fn parser_continue_next_interaction() {
 
 #[test]
 fn parser_continue_last_interaction() {
-    let case =
-        find_continue_redo_case("continue.last.interaction").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse continue with last");
+    let case = must_some(find_continue_redo_case("continue.last.interaction"));
+    let ast = must(parse_code(case.source));
 
     let last_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "last"));
@@ -249,9 +242,8 @@ fn parser_continue_last_interaction() {
 
 #[test]
 fn parser_continue_redo_interaction() {
-    let case =
-        find_continue_redo_case("continue.redo.interaction").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse continue with redo");
+    let case = must_some(find_continue_redo_case("continue.redo.interaction"));
+    let ast = must(parse_code(case.source));
 
     let while_nodes = find_nodes(&ast, |kind| matches!(kind, NodeKind::While { .. }));
     assert_eq!(while_nodes.len(), 1, "Should have exactly one While node");
@@ -263,8 +255,8 @@ fn parser_continue_redo_interaction() {
 
 #[test]
 fn parser_continue_nested_loops() {
-    let case = find_continue_redo_case("continue.nested.loops").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse nested loops with continue");
+    let case = must_some(find_continue_redo_case("continue.nested.loops"));
+    let ast = must(parse_code(case.source));
 
     let for_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
@@ -284,10 +276,8 @@ fn parser_continue_nested_loops() {
 
 #[test]
 fn parser_continue_multiple_statements() {
-    let case =
-        find_continue_redo_case("continue.multiple.statements").expect("Failed to find test case");
-    let ast =
-        parse_code(case.source).expect("Failed to parse continue block with multiple statements");
+    let case = must_some(find_continue_redo_case("continue.multiple.statements"));
+    let ast = must(parse_code(case.source));
 
     let for_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
@@ -297,22 +287,19 @@ fn parser_continue_multiple_statements() {
     match &for_nodes[0].kind {
         NodeKind::For { continue_block, .. } => {
             assert!(continue_block.is_some(), "Should have a continue block");
-            let cont = continue_block.as_ref().expect("continue_block should be Some");
+            let cont = must_some(continue_block.as_ref());
             if let NodeKind::Block { statements } = &cont.kind {
                 assert!(statements.len() >= 3, "Continue block should have multiple statements");
             }
         }
-        NodeKind::Foreach { .. } => {
-            // Note: Foreach doesn't have continue_block in current AST
-        }
-        _ => panic!("Expected For or Foreach node"),
+        _ => unreachable!("Expected For node"),
     }
 }
 
 #[test]
 fn parser_continue_empty_block() {
-    let case = find_continue_redo_case("continue.empty.block").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse empty continue block");
+    let case = must_some(find_continue_redo_case("continue.empty.block"));
+    let ast = must(parse_code(case.source));
 
     let for_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
@@ -323,17 +310,14 @@ fn parser_continue_empty_block() {
         NodeKind::For { continue_block, .. } => {
             assert!(continue_block.is_some(), "Should have a continue block");
         }
-        NodeKind::Foreach { .. } => {
-            // Note: Foreach doesn't have continue_block in current AST
-        }
-        _ => panic!("Expected For or Foreach node"),
+        _ => unreachable!("Expected For node"),
     }
 }
 
 #[test]
 fn parser_redo_do_while() {
-    let case = find_continue_redo_case("redo.do.while").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse redo in do-while");
+    let case = must_some(find_continue_redo_case("redo.do.while"));
+    let ast = must(parse_code(case.source));
 
     let redo_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
@@ -342,8 +326,8 @@ fn parser_redo_do_while() {
 
 #[test]
 fn parser_redo_conditional() {
-    let case = find_continue_redo_case("redo.conditional").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse conditional redo");
+    let case = must_some(find_continue_redo_case("redo.conditional"));
+    let ast = must(parse_code(case.source));
 
     let redo_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
@@ -352,8 +336,8 @@ fn parser_redo_conditional() {
 
 #[test]
 fn parser_redo_counter_reset() {
-    let case = find_continue_redo_case("redo.counter.reset").expect("Failed to find test case");
-    let ast = parse_code(case.source).expect("Failed to parse redo with counter reset");
+    let case = must_some(find_continue_redo_case("redo.counter.reset"));
+    let ast = must(parse_code(case.source));
 
     let redo_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
@@ -373,14 +357,14 @@ for my $i (1..3) {
     print "continue\n";
 }
 "#;
-    let ast = parse_code(code).expect("Failed to parse for loop with continue");
+    let ast = must(parse_code(code));
 
     let for_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
     assert_eq!(for_nodes.len(), 1, "Should have exactly one For/Foreach node");
 
     match &for_nodes[0].kind {
-        NodeKind::Foreach { variable, list, body, continue_block: _ } => {
+        NodeKind::Foreach { variable, list, body, .. } => {
             // Verify iterator variable exists
             assert!(
                 matches!(
@@ -396,9 +380,8 @@ for my $i (1..3) {
             );
             // Verify body exists
             assert!(matches!(body.kind, NodeKind::Block { .. }), "Should have body block");
-            // Note: Foreach doesn't have continue_block in current AST
         }
-        _ => panic!("Expected Foreach node"),
+        _ => unreachable!("Expected Foreach node"),
     }
 }
 
@@ -410,7 +393,7 @@ while ($count < 3) {
     redo if $count == 2;
 }
 "#;
-    let ast = parse_code(code).expect("Failed to parse while loop with redo");
+    let ast = must(parse_code(code));
 
     let redo_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));
@@ -430,7 +413,7 @@ LOOP: while ($count < 3) {
     redo LOOP if $count == 2;
 }
 "#;
-    let ast = parse_code(code).expect("Failed to parse while loop with labeled redo");
+    let ast = must(parse_code(code));
 
     let redo_nodes =
         find_nodes(&ast, |kind| matches!(kind, NodeKind::LoopControl { op, .. } if op == "redo"));

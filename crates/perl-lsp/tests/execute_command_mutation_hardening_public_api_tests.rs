@@ -146,7 +146,7 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
                     description
                 );
             }
-            _ => panic!("Unexpected command: {}", command),
+            _ => must(Err::<(), _>(format!("Unexpected command: {}", command))),
         }
     }
 

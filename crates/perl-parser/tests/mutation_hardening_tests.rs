@@ -1132,7 +1132,7 @@ mod integration_mutation_tests {
         let source = "package Test; sub test_function { }";
         let mut doc = match IncrementalDocument::new(source.to_string()) {
             Ok(d) => d,
-            Err(e) => panic!("Should create document: {:?}", e),
+            Err(e) => must(Err::<(), _>(format!("Should create document: {:?}", e))),
         };
 
         // This edit triggers the underflow bug - it's a legitimate bug to fix

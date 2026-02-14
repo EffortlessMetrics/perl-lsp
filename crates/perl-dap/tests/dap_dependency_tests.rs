@@ -9,6 +9,7 @@
 #[cfg(feature = "dap-phase3")]
 mod dap_dependencies {
     use anyhow::Result;
+    use perl_tdd_support::must;
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-fallback
     #[test]
@@ -16,7 +17,8 @@ mod dap_dependencies {
     // AC:18
     fn test_cpan_module_installation_fallback() -> Result<()> {
         // Automatic CPAN module installation fallback
-        panic!("CPAN module installation fallback not yet implemented (AC18)");
+        must(Err::<(), _>("CPAN module installation fallback not yet implemented (AC18)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-version-detection
@@ -25,7 +27,8 @@ mod dap_dependencies {
     // AC:18
     fn test_devel_tsperldap_version_detection() -> Result<()> {
         // Detect installed Devel::TSPerlDAP version
-        panic!("Devel::TSPerlDAP version detection not yet implemented (AC18)");
+        must(Err::<(), _>("Devel::TSPerlDAP version detection not yet implemented (AC18)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-bundled-shim
@@ -34,7 +37,8 @@ mod dap_dependencies {
     // AC:18
     fn test_bundled_shim_fallback() -> Result<()> {
         // Bundled shim fallback when CPAN unavailable
-        panic!("Bundled shim fallback not yet implemented (AC18)");
+        must(Err::<(), _>("Bundled shim fallback not yet implemented (AC18)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-documentation
@@ -43,7 +47,8 @@ mod dap_dependencies {
     // AC:18
     fn test_dependency_management_documentation() -> Result<()> {
         // Documentation for dependency management
-        panic!("Dependency management documentation not yet implemented (AC18)");
+        must(Err::<(), _>("Dependency management documentation not yet implemented (AC18)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-perl-version
@@ -52,7 +57,8 @@ mod dap_dependencies {
     // AC:18
     fn test_perl_version_compatibility() -> Result<()> {
         // Perl version compatibility check (5.10+)
-        panic!("Perl version compatibility not yet implemented (AC18)");
+        must(Err::<(), _>("Perl version compatibility not yet implemented (AC18)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-install
@@ -61,6 +67,7 @@ mod dap_dependencies {
     // AC:18
     fn test_cpan_dependency_installation() -> Result<()> {
         // CPAN dependency installation workflow
-        panic!("CPAN dependency installation not yet implemented (AC18)");
+        must(Err::<(), _>("CPAN dependency installation not yet implemented (AC18)"));
+        Ok(())
     }
 }

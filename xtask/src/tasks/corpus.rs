@@ -449,7 +449,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
 
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
+        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}")?,
     );
 
     spinner.set_message("Running corpus tests");
@@ -476,7 +476,7 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
         .filter(|e| e.file_type().is_file())
     {
         let file_path = entry.path();
-        let file_name = file_path.file_name().unwrap().to_string_lossy();
+        let file_name = file_path.file_name().map_or_else(|| "unknown".into(), |n| n.to_string_lossy());
 
         // Skip files that are clearly not corpus files
         if file_name.starts_with('_')

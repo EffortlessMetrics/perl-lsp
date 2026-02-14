@@ -123,14 +123,18 @@ fn test_mixed_tabs_and_spaces() {
     let parser = TriviaPreservingParser::new(source);
     let result = parser.parse();
 
-    if let Some(first_token) = result.leading_trivia.first() {
+    let found_expected = if let Some(first_token) = result.leading_trivia.first() {
         if let Trivia::Whitespace(ws) = &first_token.trivia {
             assert_eq!(ws, " \t \t ", "Should preserve exact whitespace sequence");
-            return;
+            true
+        } else {
+            false
         }
-    }
+    } else {
+        false
+    };
 
-    panic!("Should capture leading whitespace with mixed tabs/spaces");
+    assert!(found_expected, "Should capture leading whitespace with mixed tabs/spaces");
 }
 
 #[test]

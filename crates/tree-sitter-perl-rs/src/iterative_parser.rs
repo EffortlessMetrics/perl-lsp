@@ -370,12 +370,13 @@ mod tests {
 
     #[test]
     fn test_iterative_vs_recursive_simple() {
+        use perl_tdd_support::{must, must_some};
         let mut parser = PureRustPerlParser::new();
         let input = "$x = 42";
 
         // Parse with Pest
-        let pairs = PerlParser::parse(Rule::program, input).unwrap();
-        let pair = pairs.into_iter().next().unwrap();
+        let pairs = must(PerlParser::parse(Rule::program, input));
+        let pair = must_some(pairs.into_iter().next());
 
         // Compare iterative result
         let iterative_result = parser.build_node_iterative(pair.clone());
@@ -387,10 +388,10 @@ mod tests {
                 println!("Iterative parser returned: {:?}", node);
             }
             Ok(None) => {
-                panic!("Iterative parser returned None");
+                assert!(false, "Iterative parser returned None");
             }
             Err(e) => {
-                panic!("Iterative parser failed with error: {}", e);
+                assert!(false, "Iterative parser failed with error: {}", e);
             }
         }
     }
@@ -413,6 +414,7 @@ mod tests {
 
     #[test]
     fn test_deep_nesting_iterative() {
+        use perl_tdd_support::{must, must_some};
         let mut parser = PureRustPerlParser::new();
 
         // Create deeply nested expression - start with smaller depth
@@ -423,8 +425,8 @@ mod tests {
         }
 
         // This should work without stack overflow in debug mode
-        let pairs = PerlParser::parse(Rule::expression, &expr).unwrap();
-        let pair = pairs.into_iter().next().unwrap();
+        let pairs = must(PerlParser::parse(Rule::expression, &expr));
+        let pair = must_some(pairs.into_iter().next());
 
         let result = parser.build_node_iterative(pair);
         assert!(result.is_ok(), "Deep nesting should work with iterative approach");
@@ -436,8 +438,8 @@ mod tests {
             deep_expr = format!("({})", deep_expr);
         }
 
-        let deep_pairs = PerlParser::parse(Rule::expression, &deep_expr).unwrap();
-        let deep_pair = deep_pairs.into_iter().next().unwrap();
+        let deep_pairs = must(PerlParser::parse(Rule::expression, &deep_expr));
+        let deep_pair = must_some(deep_pairs.into_iter().next());
 
         let deep_result = parser.build_node_iterative(deep_pair);
         assert!(deep_result.is_ok(), "Very deep nesting should work with iterative approach");

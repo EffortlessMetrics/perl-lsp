@@ -51,7 +51,7 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
                 "workspaceSymbolProvider.resolveProvider must be true"
             );
         }
-        other => panic!("unexpected workspaceSymbolProvider: {:?}", other),
+        other => must(Err::<(), _>(format!("unexpected workspaceSymbolProvider: {:?}", other))),
     }
 
     // Assert what SHOULD be advertised (v0.8.4 features)

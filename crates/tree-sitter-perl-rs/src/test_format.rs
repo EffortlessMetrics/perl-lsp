@@ -129,10 +129,11 @@ test line
         let partial_result = PerlParser::parse(Rule::format_declaration, partial);
         println!("  Partial result: {:?}", partial_result);
 
-        let pairs = PerlParser::parse(Rule::format_declaration, input);
-        assert!(pairs.is_ok(), "Failed to parse format declaration: {:?}", pairs.err());
+        let pairs_res = PerlParser::parse(Rule::format_declaration, input);
+        assert!(pairs_res.is_ok(), "Failed to parse format declaration: {:?}", pairs_res.err());
 
-        let pairs = pairs.unwrap();
+        use perl_tdd_support::must;
+        let pairs = must(pairs_res);
         for pair in pairs {
             println!("Rule: {:?}, Text: {}", pair.as_rule(), pair.as_str());
             for inner in pair.into_inner() {

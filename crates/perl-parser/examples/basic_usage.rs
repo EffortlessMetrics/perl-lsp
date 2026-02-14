@@ -6,8 +6,7 @@ use perl_parser::Parser;
 
 fn main() {
     // Read from file if provided, otherwise use default code
-    let code = if std::env::args().len() > 1 {
-        let filename = std::env::args().nth(1).unwrap();
+    let code = if let Some(filename) = std::env::args().nth(1) {
         match std::fs::read_to_string(&filename) {
             Ok(content) => {
                 println!("🔍 Parsing file: {}", filename);
@@ -36,7 +35,8 @@ for (my $i = 0; $i < $count; $i++) {
     print "$i ";
 }
 print "\n;
-"#.to_string()
+"#
+        .to_string()
     };
 
     // Create a parser and parse the code

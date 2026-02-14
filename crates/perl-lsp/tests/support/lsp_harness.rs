@@ -16,6 +16,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use url::Url;
+use perl_tdd_support::{must, must_some};
 
 /// Temporary workspace for testing with real files
 pub struct TempWorkspace {
@@ -48,7 +49,7 @@ impl TempWorkspace {
         let path = self.dir.path().join(relative_path);
         match Url::from_file_path(&path) {
             Ok(url) => url.to_string(),
-            Err(_) => panic!("Failed to create file URL from path: {}", path.display()),
+            Err(_) => must(Url::from_file_path(&path)),
         }
     }
 }
@@ -808,7 +809,7 @@ impl LspHarness {
                 || output_str.contains(&format!("\"id\": {}", request_id))
             {
                 drop(output);
-                panic!("Received response for canceled request ID {}", request_id);
+                assert!(false, "Received response for canceled request ID {}", request_id);
             }
             drop(output);
 
@@ -826,7 +827,7 @@ impl LspHarness {
             if path.len() >= 3 && path.chars().nth(1) == Some(':') {
                 let drive = match path.chars().next() {
                     Some(c) => c.to_lowercase(),
-                    None => panic!("Path should have at least one character: {path}"),
+                    None => assert!(false, "Path should have at least one character: {path}"),
                 };
                 let rest = path[2..].replace('\\', "/");
                 return format!("/mnt/{}{}", drive, rest);
@@ -861,7 +862,7 @@ impl LspHarness {
             {
                 let notif = match notifications.remove(pos) {
                     Some(n) => n,
-                    None => panic!("Notification at position {pos} should exist"),
+                    None => assert!(false, "Notification at position {pos} should exist"),
                 };
                 drop(notifications);
 
@@ -1104,11 +1105,11 @@ macro_rules! with_open_doc {
         let mut $harness = LspHarness::new();
         match $harness.initialize(None) {
             Ok(_) => {}
-            Err(e) => panic!("Failed to initialize: {e}"),
+            Err(e) => assert!(false, "Failed to initialize: {e}"),
         }
         match $harness.open($uri, $text) {
             Ok(_) => {}
-            Err(e) => panic!("Failed to open document: {e}"),
+            Err(e) => assert!(false, "Failed to open document: {e}"),
         }
         $body
     }};
@@ -1121,7 +1122,7 @@ macro_rules! assert_locations {
         {
             let locations = match $response.as_array() {
                 Some(arr) => arr,
-                None => panic!("Response should be array: {:?}", $response),
+                None => assert!(false, "Response should be array: {:?}", $response),
             };
             let expected = vec![
                 $( (
@@ -1152,7 +1153,7 @@ macro_rules! assert_highlights {
         {
             let highlights = match $response.as_array() {
                 Some(arr) => arr,
-                None => panic!("Response should be array: {:?}", $response),
+                None => assert!(false, "Response should be array: {:?}", $response),
             };
             let expected = vec![
                 $( (
@@ -1264,7 +1265,7 @@ impl TestContext {
     pub fn initialize_with(&mut self, root_uri: &str, capabilities: Option<Value>) -> Value {
         match self.harness.initialize_ready(root_uri, capabilities) {
             Ok(v) => v,
-            Err(e) => panic!("initialization should succeed: {e}"),
+            Err(e) => assert!(false, "initialization should succeed: {e}"),
         }
     }
 
@@ -1288,7 +1289,7 @@ impl TestContext {
     pub fn open_document(&mut self, uri: &str, text: &str) {
         match self.harness.open(uri, text) {
             Ok(_) => {}
-            Err(e) => panic!("open should succeed: {e}"),
+            Err(e) => assert!(false, "open should succeed: {e}"),
         }
     }
 
@@ -1297,7 +1298,7 @@ impl TestContext {
         self.version_counter += 1;
         match self.harness.change_full(uri, self.version_counter, text) {
             Ok(_) => {}
-            Err(e) => panic!("change should succeed: {e}"),
+            Err(e) => assert!(false, "change should succeed: {e}"),
         }
     }
 
@@ -1305,7 +1306,7 @@ impl TestContext {
     pub fn close_document(&mut self, uri: &str) {
         match self.harness.close(uri) {
             Ok(_) => {}
-            Err(e) => panic!("close should succeed: {e}"),
+            Err(e) => assert!(false, "close should succeed: {e}"),
         }
     }
 

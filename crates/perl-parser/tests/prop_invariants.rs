@@ -107,7 +107,7 @@ where
             f(condition)?;
             f(body)?;
         }
-        Foreach { variable, list, body, continue_block } => {
+        Foreach { variable, list, body, continue_block: _ } => {
             f(variable)?;
             f(list)?;
             f(body)?;
@@ -219,7 +219,7 @@ proptest! {
     fn parser_doesnt_panic(
         input in match prop::string::string_regex("[^\0]{0,200}") {
             Ok(strat) => strat,
-            Err(e) => panic!("invalid proptest regex pattern: {e:?}"),
+            Err(e) => perl_tdd_support::must(Err(e)),
         }
     ) {
         let mut parser = Parser::new(&input);

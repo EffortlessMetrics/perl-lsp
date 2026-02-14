@@ -79,7 +79,9 @@ impl SecurityContext {
     /// Record a security violation
     pub fn record_violation(&self, violation_type: &str) {
         let count = self.violation_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        *self.last_violation.lock().unwrap() = Some(std::time::Instant::now());
+        if let Ok(mut last) = self.last_violation.lock() {
+            *last = Some(std::time::Instant::now());
+        }
         
         log::warn!(
             "Security violation #{} recorded: {}",
@@ -100,7 +102,9 @@ impl SecurityContext {
             return false;
         }
         
-        if let Some(last) = *self.last_violation.lock().unwrap() {
+        if let Ok(last_guard) = self.last_violation.lock()
+            && let Some(last) = *last_guard
+        {
             // If we've had 10+ violations in the last minute
             last.elapsed() < std::time::Duration::from_secs(60)
         } else {
