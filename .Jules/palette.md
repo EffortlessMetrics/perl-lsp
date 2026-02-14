@@ -9,3 +9,7 @@
 ## 2026-01-29 - [Placeholder UI Elements]
 **Learning:** Exposing placeholder or "coming soon" features in main UI menus (like Status Menu) is considered a UX regression if the commands are not fully functional, even if they provide a "roadmap" message.
 **Action:** Only add commands to high-visibility menus (like Status Menu) if they perform a functional action immediately; avoid "dead" or "informational only" interaction points for core tasks.
+
+## 2026-02-18 - [Context-Aware Status Menu]
+**Learning:** Static menu items for context-specific actions (like "Run Tests") frustrate users when invoked in the wrong context. Dynamic menu items that show "disabled" states with explanations are superior to letting actions fail.
+**Action:** When adding actions to the Status Menu, always check `vscode.window.activeTextEditor` and modify the item's icon/description/command to reflect availability.
