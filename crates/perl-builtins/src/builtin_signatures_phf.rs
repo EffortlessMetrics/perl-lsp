@@ -15,6 +15,7 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "open" => &["FILEHANDLE", "MODE", "FILENAME"],
     "sysopen" => &["FILEHANDLE", "FILENAME", "MODE", "PERMS"],
     "close" => &["FILEHANDLE"],
+    "sysclose" => &["FILEHANDLE"],
     "read" => &["FILEHANDLE", "SCALAR", "LENGTH", "OFFSET"],
     "readpipe" => &["EXPR"],
     "sysread" => &["FILEHANDLE", "SCALAR", "LENGTH", "OFFSET"],
@@ -73,6 +74,13 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "values" => &["HASH"],
     "delete" => &["EXPR"],
     "exists" => &["EXPR"],
+
+    // ===== Control Flow Functions =====
+    "break" => &[],
+    "continue" => &[],
+    "given" => &["EXPR"],
+    "when" => &["EXPR"],
+    "default" => &["BLOCK"],
 
     // ===== Math Functions =====
     "abs" => &["VALUE"],
@@ -277,6 +285,18 @@ pub static BUILTIN_SIGS: phf::Map<&'static str, &'static [&'static str]> = phf_m
     "vec" => &["EXPR", "OFFSET", "BITS"],
     "lock" => &["THING"],
     "prototype" => &["FUNCTION"],
+
+    // Syntax keywords often treated as functions
+    "sub" => &[],
+    "package" => &["NAME"],
+    "import" => &["LIST"],
+    "q" => &["STRING"],
+    "qq" => &["STRING"],
+    "qr" => &["STRING"],
+    "qw" => &["STRING"],
+    "qx" => &["STRING"],
+    "tr" => &["STRING"],
+    "y" => &["STRING"],
 };
 
 /// Full signatures for documentation (used by signature help)
