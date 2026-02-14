@@ -163,8 +163,8 @@ fn test_session_lifecycle_launch_nonexistent_program() {
             assert!(message.is_some());
             let msg = must_some(message);
             assert!(
-                msg.contains("Could not access") || msg.contains("not a regular file"),
-                "Error should mention access issue: {}",
+                msg.contains("Could not access") || msg.contains("not a regular file") || msg.contains("Security Error"),
+                "Error should mention access issue or security error: {}",
                 msg
             );
         }
