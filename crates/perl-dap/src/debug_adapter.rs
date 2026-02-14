@@ -257,6 +257,8 @@ pub struct DebugAdapter {
     thread_counter: Arc<Mutex<i32>>,
     /// Output channel for sending events to client
     event_sender: Option<Sender<DapMessage>>,
+    /// Workspace root path (security boundary)
+    workspace_root: Arc<Mutex<Option<std::path::PathBuf>>>,
 }
 
 /// Active debug session
@@ -381,6 +383,7 @@ impl DebugAdapter {
             breakpoints: BreakpointStore::new(),
             thread_counter: Arc::new(Mutex::new(0)),
             event_sender: None,
+            workspace_root: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -561,8 +564,35 @@ impl DebugAdapter {
         &self,
         seq: i64,
         request_seq: i64,
-        _arguments: Option<Value>,
+        arguments: Option<Value>,
     ) -> DapMessage {
+        // Extract rootUri or rootPath from arguments to set workspace boundary
+        if let Some(args) = &arguments {
+            let mut root = None;
+
+            // Prefer rootUri
+            if let Some(uri) = args.get("rootUri").and_then(|v| v.as_str()) {
+                if let Some(path_str) = uri.strip_prefix("file://") {
+                    // Simple file URI parsing
+                    root = Some(std::path::PathBuf::from(path_str));
+                }
+            }
+
+            // Fallback to rootPath
+            if root.is_none() {
+                if let Some(path) = args.get("rootPath").and_then(|v| v.as_str()) {
+                    root = Some(std::path::PathBuf::from(path));
+                }
+            }
+
+            if let Some(path) = root {
+                eprintln!("DAP workspace root initialized to: {}", path.display());
+                if let Ok(mut guard) = self.workspace_root.lock() {
+                    *guard = Some(path);
+                }
+            }
+        }
+
         let capabilities = json!({
             "supportsConfigurationDoneRequest": true,
             "supportsFunctionBreakpoints": false,
@@ -620,6 +650,46 @@ impl DebugAdapter {
     ) -> DapMessage {
         if let Some(args) = arguments {
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
+
+            // AC16: Path traversal prevention
+            // Ensure workspace root is set (check initialize args, then launch cwd, then default)
+            let workspace_root = {
+                let mut guard = lock_or_recover(&self.workspace_root, "handle_launch.workspace_root");
+                if guard.is_none() {
+                    // Try to get cwd from launch args
+                    if let Some(cwd) = args.get("cwd").and_then(|c| c.as_str()) {
+                        *guard = Some(std::path::PathBuf::from(cwd));
+                    } else {
+                        // Fallback to current directory
+                        match std::env::current_dir() {
+                            Ok(cwd) => *guard = Some(cwd),
+                            Err(e) => eprintln!("Failed to get current dir: {}", e),
+                        }
+                    }
+                }
+                guard.clone()
+            };
+
+            // Validate program path against workspace root
+            if let Some(root) = workspace_root {
+                let program_path = std::path::Path::new(program);
+                match crate::security::validate_path(program_path, &root) {
+                    Ok(_) => {} // Path is valid
+                    Err(e) => {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "launch".to_string(),
+                            body: None,
+                            message: Some(format!("Security Error: {}", e)),
+                        };
+                    }
+                }
+            } else {
+                // Should not happen given fallback logic above
+                eprintln!("Warning: No workspace root determined for security validation");
+            }
 
             let perl_args = args
                 .get("args")
@@ -2330,6 +2400,33 @@ impl DebugAdapter {
                 message: Some("inlineValues requires source.path".to_string()),
             };
         };
+
+        // AC16: Path traversal prevention
+        // Validate source path against workspace root
+        let workspace_root = {
+            let guard = lock_or_recover(&self.workspace_root, "handle_inline_values.workspace_root");
+            // Fallback to current directory if not set (best effort security)
+            guard.clone().or_else(|| std::env::current_dir().ok())
+        };
+
+        if let Some(root) = workspace_root {
+            let path = std::path::Path::new(&source_path);
+            match crate::security::validate_path(path, &root) {
+                Ok(_) => {} // Path is valid
+                Err(e) => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "inlineValues".to_string(),
+                        body: None,
+                        message: Some(format!("Security Error: {}", e)),
+                    };
+                }
+            }
+        } else {
+            eprintln!("Warning: No workspace root and failed to get current dir during inlineValues validation");
+        }
 
         if args.start_line <= 0 || args.end_line <= 0 {
             return DapMessage::Response {

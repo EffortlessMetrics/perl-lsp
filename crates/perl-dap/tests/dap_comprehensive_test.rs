@@ -91,7 +91,9 @@ fn test_dap_launch_with_invalid_program() {
             assert!(!success);
             assert_eq!(command, "launch");
             assert!(message.is_some());
-            assert!(must_some(message).contains("Failed to launch debugger"));
+            let msg = must_some(message);
+            // It could be a security error (if path outside workspace) or launch error
+            assert!(msg.contains("Failed to launch debugger") || msg.contains("Security Error"));
         }
         _ => panic!("Expected response message"),
     }
@@ -155,6 +157,12 @@ fn test_dap_inline_values() -> TestResult {
     write(&script_path, "my $x = 1;\nmy $y = $x + 2;\nmy $z = $y + 3;\n")?;
 
     let mut adapter = DebugAdapter::new();
+
+    // Initialize with correct workspace root to pass security validation
+    adapter.handle_request(0, "initialize", Some(json!({
+        "rootPath": dir.path().to_str().unwrap()
+    })));
+
     let response = adapter.handle_request(
         1,
         "inlineValues",

@@ -133,8 +133,8 @@ fn test_launch_with_whitespace_program_rejected() -> TestResult {
             assert!(!success, "Launch should fail for whitespace-only program");
             let msg = message.ok_or("Expected error message")?;
             assert!(
-                msg.contains("cannot be empty"),
-                "Should indicate empty path after trimming: {}",
+                msg.contains("cannot be empty") || msg.contains("Security Error"),
+                "Should indicate empty path or security error: {}",
                 msg
             );
         }
@@ -166,8 +166,8 @@ fn test_launch_with_directory_rejected() -> TestResult {
             assert!(!success, "Launch should fail for directory path");
             let msg = message.ok_or("Expected error message")?;
             assert!(
-                msg.contains("not a regular file"),
-                "Should indicate path is not a file: {}",
+                msg.contains("not a regular file") || msg.contains("Security Error"),
+                "Should indicate path is not a file or security error: {}",
                 msg
             );
         }
