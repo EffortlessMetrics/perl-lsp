@@ -1448,50 +1448,27 @@ fn is_control_keyword(name: &str) -> bool {
 }
 
 fn is_builtin_function(name: &str) -> bool {
+    if perl_parser_core::builtin_signatures_phf::is_builtin(name) {
+        return true;
+    }
+    // Check for keywords/built-ins not in the signature map
     matches!(
         name,
-        "print"
-            | "say"
-            | "printf"
-            | "sprintf"
-            | "open"
-            | "close"
-            | "read"
-            | "write"
-            | "chomp"
-            | "chop"
-            | "split"
-            | "join"
-            | "push"
-            | "pop"
-            | "shift"
-            | "unshift"
-            | "sort"
-            | "reverse"
-            | "map"
-            | "grep"
-            | "length"
-            | "substr"
-            | "index"
-            | "rindex"
-            | "lc"
-            | "uc"
-            | "lcfirst"
-            | "ucfirst"
-            | "defined"
-            | "undef"
-            | "ref"
+        "package"
+            | "sub"
+            | "import"
+            | "q"
+            | "qq"
+            | "qr"
+            | "qw"
+            | "qx"
+            | "tr"
+            | "break"
+            | "continue"
+            | "given"
+            | "when"
+            | "default"
             | "blessed"
-            | "die"
-            | "warn"
-            | "eval"
-            | "require"
-            | "use"
-            | "return"
-            | "next"
-            | "last"
-            | "redo"
-            | "goto" // ... many more
     )
 }
 
