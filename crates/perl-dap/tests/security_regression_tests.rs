@@ -31,8 +31,9 @@ fn test_command_injection_via_program_argument() -> TestResult {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail because file '-e' does not exist");
             let msg = message.ok_or("Expected error message")?;
+            // Strict path validation catches this first
             assert!(
-                msg.contains("Could not access program file"),
+                msg.contains("Could not access program file") || msg.contains("Security Error"),
                 "Should fail with access error: {}",
                 msg
             );
@@ -78,8 +79,9 @@ fn test_launch_with_nonexistent_file_errors_gracefully() -> TestResult {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for nonexistent file");
             let msg = message.ok_or("Expected error message")?;
+            // Strict path validation catches this first
             assert!(
-                msg.contains("Could not access program file"),
+                msg.contains("Could not access program file") || msg.contains("Security Error"),
                 "Should return meaningful error: {}",
                 msg
             );
@@ -165,9 +167,10 @@ fn test_launch_with_directory_rejected() -> TestResult {
         DapMessage::Response { success, message, .. } => {
             assert!(!success, "Launch should fail for directory path");
             let msg = message.ok_or("Expected error message")?;
+            // Security check may catch this first if outside workspace, or file check if inside
             assert!(
-                msg.contains("not a regular file"),
-                "Should indicate path is not a file: {}",
+                msg.contains("not a regular file") || msg.contains("Security Error"),
+                "Should indicate path is not a file or security error: {}",
                 msg
             );
         }

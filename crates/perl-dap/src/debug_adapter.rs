@@ -9,10 +9,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
+
+use crate::security::validate_path;
 
 use crate::breakpoints::BreakpointStore;
 #[cfg(unix)]
@@ -257,6 +260,8 @@ pub struct DebugAdapter {
     thread_counter: Arc<Mutex<i32>>,
     /// Output channel for sending events to client
     event_sender: Option<Sender<DapMessage>>,
+    /// Workspace root path (for security validation)
+    workspace_root: Option<PathBuf>,
 }
 
 /// Active debug session
@@ -381,6 +386,7 @@ impl DebugAdapter {
             breakpoints: BreakpointStore::new(),
             thread_counter: Arc::new(Mutex::new(0)),
             event_sender: None,
+            workspace_root: std::env::current_dir().ok(),
         }
     }
 
@@ -558,11 +564,23 @@ impl DebugAdapter {
 
     /// Handle initialize request
     fn handle_initialize(
-        &self,
+        &mut self,
         seq: i64,
         request_seq: i64,
-        _arguments: Option<Value>,
+        arguments: Option<Value>,
     ) -> DapMessage {
+        // Store workspace root from initialize arguments if provided
+        if let Some(ref args) = arguments {
+            if let Some(root_path) = args.get("rootPath").and_then(|v| v.as_str()) {
+                self.workspace_root = Some(PathBuf::from(root_path));
+            } else if let Some(root_uri) = args.get("rootUri").and_then(|v| v.as_str()) {
+                // Simple file URI parsing
+                if let Some(path) = root_uri.strip_prefix("file://") {
+                    self.workspace_root = Some(PathBuf::from(path));
+                }
+            }
+        }
+
         let capabilities = json!({
             "supportsConfigurationDoneRequest": true,
             "supportsFunctionBreakpoints": false,
@@ -619,7 +637,55 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         if let Some(args) = arguments {
+            // Resolve workspace root or default to current directory
+            // Note: We intentionally do NOT update self.workspace_root from launch args
+            // to prevent malicious repositories from bypassing path validation by setting cwd to /
+            let workspace = self.workspace_root.clone().unwrap_or_else(|| {
+                std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+            });
+
+            // Determine launch working directory
+            let launch_cwd = if let Some(cwd) = args.get("cwd").and_then(|c| c.as_str()) {
+                PathBuf::from(cwd)
+            } else {
+                workspace.clone()
+            };
+
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
+
+            if program.trim().is_empty() {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "launch".to_string(),
+                    body: None,
+                    message: Some("Program path cannot be empty".to_string()),
+                };
+            }
+
+            // Resolve program path relative to launch_cwd if necessary
+            let program_path = PathBuf::from(program);
+            let resolved_program = if program_path.is_absolute() {
+                program_path
+            } else {
+                launch_cwd.join(program_path)
+            };
+
+            // AC16: Path Traversal Prevention - Validate against workspace root
+            let validated_program = match validate_path(&resolved_program, &workspace) {
+                Ok(path) => path,
+                Err(e) => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "launch".to_string(),
+                        body: None,
+                        message: Some(format!("Security Error: {}", e)),
+                    };
+                }
+            };
 
             let perl_args = args
                 .get("args")
@@ -631,8 +697,9 @@ impl DebugAdapter {
 
             let stop_on_entry = args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
-            // Launch Perl debugger
-            match self.launch_debugger(program, perl_args, stop_on_entry) {
+            // Launch Perl debugger using validated path
+            let program_str = validated_program.to_str().unwrap_or(program);
+            match self.launch_debugger(program_str, perl_args, stop_on_entry) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
                     if stop_on_entry {
