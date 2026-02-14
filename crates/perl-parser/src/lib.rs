@@ -359,12 +359,12 @@
 
 /// Parser engine components and supporting utilities.
 pub mod engine;
-/// IDE integration helpers (LSP/DAP runtime support).
-pub mod ide;
+// /// IDE integration helpers (LSP/DAP runtime support).
+// pub mod ide;
 /// Legacy module aliases for moved engine components.
 pub use engine::{error, parser, position};
-/// Legacy module aliases for IDE compatibility shims.
-pub use ide::{lsp, lsp_compat};
+// /// Legacy module aliases for IDE compatibility shims.
+// pub use ide::{lsp, lsp_compat};
 
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub use engine::ast;
@@ -382,15 +382,15 @@ pub use engine::pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub use engine::quote_parser;
 /// LSP call hierarchy provider for function call navigation.
-pub use ide::call_hierarchy_provider;
+// pub use ide::call_hierarchy_provider;
 /// Enhanced LSP cancellation infrastructure.
-pub use ide::cancellation;
+// pub use ide::cancellation;
 /// Parser utilities and helpers.
 pub use perl_parser_core::util;
 // NOTE: diagnostics_catalog moved to perl-lsp crate
 // pub use ide::diagnostics_catalog;
 #[cfg(not(target_arch = "wasm32"))]
-pub use ide::execute_command;
+// pub use ide::execute_command;
 
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;
@@ -430,10 +430,10 @@ pub use builtins::builtin_signatures_phf;
 pub mod code_actions {
     pub use perl_lsp_code_actions::*;
 }
-pub use ide::lsp_compat::code_actions_pragmas;
+// pub use ide::lsp_compat::code_actions_pragmas;
 /// LSP code actions provider for automated refactoring and fixes.
-pub use ide::lsp_compat::code_actions_provider;
-pub use ide::lsp_compat::code_lens_provider;
+// pub use ide::lsp_compat::code_actions_provider;
+// pub use ide::lsp_compat::code_lens_provider;
 pub use perl_lsp_code_actions::EnhancedCodeActionsProvider;
 /// LSP completion for code suggestions.
 pub mod completion {
@@ -443,16 +443,16 @@ pub mod completion {
 pub mod diagnostics {
     pub use perl_lsp_diagnostics::*;
 }
-pub use ide::lsp_compat::document_highlight;
+// pub use ide::lsp_compat::document_highlight;
 /// LSP document links provider for file and URL navigation.
 pub mod document_links {
     pub use perl_lsp_navigation::*;
 }
 /// Deprecated LSP feature catalog shim (moved to `perl-lsp`).
 #[cfg(feature = "lsp-compat")]
-pub use ide::lsp_compat::features;
-pub use ide::lsp_compat::folding;
-pub use ide::lsp_compat::formatting;
+// pub use ide::lsp_compat::features;
+// pub use ide::lsp_compat::folding;
+// pub use ide::lsp_compat::formatting;
 /// LSP implementation provider.
 pub mod implementation_provider {
     pub use perl_lsp_navigation::*;
@@ -465,19 +465,19 @@ pub mod inlay_hints {
 pub mod inlay_hints_provider {
     pub use perl_lsp_inlay_hints::*;
 }
-pub use ide::lsp_compat::inline_completions;
+// pub use ide::lsp_compat::inline_completions;
 /// LSP linked editing provider for synchronized symbol renaming.
-pub use ide::lsp_compat::linked_editing;
-#[cfg(not(target_arch = "wasm32"))]
-pub use ide::lsp_compat::lsp_document_link;
-pub use ide::lsp_compat::lsp_on_type_formatting;
-pub use ide::lsp_compat::lsp_selection_range;
-#[cfg(not(target_arch = "wasm32"))]
-pub use ide::lsp_compat::lsp_server;
-pub use ide::lsp_compat::lsp_utils;
+// pub use ide::lsp_compat::linked_editing;
+// #[cfg(not(target_arch = "wasm32"))]
+// pub use ide::lsp_compat::lsp_document_link;
+// pub use ide::lsp_compat::lsp_on_type_formatting;
+// pub use ide::lsp_compat::lsp_selection_range;
+// #[cfg(not(target_arch = "wasm32"))]
+// pub use ide::lsp_compat::lsp_server;
+// pub use ide::lsp_compat::lsp_utils;
 /// LSP on-type formatting provider for automatic code formatting.
-pub use ide::lsp_compat::on_type_formatting;
-pub use ide::lsp_compat::pull_diagnostics;
+// pub use ide::lsp_compat::on_type_formatting;
+// pub use ide::lsp_compat::pull_diagnostics;
 /// LSP references provider for symbol usage analysis.
 pub mod references {
     pub use perl_lsp_navigation::*;
@@ -487,7 +487,7 @@ pub mod rename {
     pub use perl_lsp_rename::*;
 }
 /// LSP selection range provider for smart text selection.
-pub use ide::lsp_compat::selection_range;
+// pub use ide::lsp_compat::selection_range;
 /// LSP semantic tokens provider for syntax highlighting.
 pub mod semantic_tokens {
     pub use perl_lsp_semantic_tokens::*;
@@ -496,9 +496,9 @@ pub mod semantic_tokens {
 pub mod semantic_tokens_provider {
     pub use perl_lsp_semantic_tokens::*;
 }
-pub use ide::lsp_compat::signature_help;
-#[cfg(feature = "lsp-compat")]
-pub use ide::lsp_compat::textdoc;
+// pub use ide::lsp_compat::signature_help;
+// #[cfg(feature = "lsp-compat")]
+// pub use ide::lsp_compat::textdoc;
 /// LSP type definition provider.
 #[cfg(feature = "lsp-compat")]
 pub mod type_definition {
@@ -508,7 +508,7 @@ pub mod type_definition {
 pub mod type_hierarchy {
     pub use perl_lsp_navigation::*;
 }
-pub use ide::lsp_compat::uri;
+// pub use ide::lsp_compat::uri;
 /// LSP workspace symbols provider.
 pub mod workspace_symbols {
     pub use perl_lsp_navigation::*;

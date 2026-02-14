@@ -66,8 +66,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 // Import enhanced recovery module
-mod enhanced_recovery;
-pub use enhanced_recovery::{RecoveryConfig, EnhancedRecovery, EnhancedErrorRecovery, ErrorContext};
+// mod enhanced_recovery;
+// pub use enhanced_recovery::{RecoveryConfig, EnhancedRecovery, EnhancedErrorRecovery, ErrorContext};
 
 /// Parser state for a single Perl source input.
 ///
@@ -94,8 +94,8 @@ pub struct Parser<'a> {
     heredoc_start_time: Option<Instant>,
     /// Collection of parse errors encountered during parsing (for error recovery)
     errors: Vec<ParseError>,
-    /// Enhanced error recovery state
-    pub enhanced_recovery: EnhancedRecovery,
+    // Enhanced error recovery state
+    // pub enhanced_recovery: EnhancedRecovery,
 }
 
 // Recursion limit is set conservatively to prevent stack overflow
@@ -137,12 +137,12 @@ impl<'a> Parser<'a> {
             byte_cursor: 0,
             heredoc_start_time: None,
             errors: Vec::new(),
-            enhanced_recovery: EnhancedRecovery::new(RecoveryConfig::default()),
+            // enhanced_recovery: EnhancedRecovery::new(RecoveryConfig::default()),
         }
     }
 
     /// Create a new parser with custom enhanced recovery configuration
-    pub fn new_with_recovery_config(input: &'a str, config: RecoveryConfig) -> Self {
+    pub fn new_with_recovery_config(input: &'a str, _config: ()) -> Self {
         Parser {
             tokens: TokenStream::new(input),
             recursion_depth: 0,
@@ -154,7 +154,7 @@ impl<'a> Parser<'a> {
             byte_cursor: 0,
             heredoc_start_time: None,
             errors: Vec::new(),
-            enhanced_recovery: EnhancedRecovery::new(config),
+            // enhanced_recovery: EnhancedRecovery::new(config),
         }
     }
 
@@ -388,8 +388,8 @@ include!("expressions/quotes.rs");
 
 #[cfg(test)]
 mod error_recovery_tests;
-#[cfg(test)]
-mod enhanced_recovery_tests;
+// #[cfg(test)]
+// mod enhanced_recovery_tests;
 #[cfg(test)]
 mod format_comprehensive_tests;
 #[cfg(test)]

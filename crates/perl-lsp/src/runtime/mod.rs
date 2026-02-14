@@ -1059,7 +1059,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::Foreach { variable: _, list, body } => {
+            NodeKind::Foreach { variable: _, list, body, continue_block: _ } => {
                 count += self.count_references(list, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
             }

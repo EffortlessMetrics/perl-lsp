@@ -171,7 +171,6 @@ impl DocumentHighlightProvider {
                 Some(children)
             }
             NodeKind::Foreach { variable, list, body, continue_block } => {
-                Some(vec![variable.as_ref(), list.as_ref(), body.as_ref()])
                 if let Some(cb) = continue_block {
                     Some(vec![variable.as_ref(), list.as_ref(), body.as_ref(), cb.as_ref()])
                 } else {

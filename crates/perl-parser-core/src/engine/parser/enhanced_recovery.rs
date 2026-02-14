@@ -91,7 +91,7 @@ pub(crate) enum FixType {
 
 impl EnhancedRecovery {
     /// Create a new enhanced recovery instance
-    pub(crate) fn new(config: RecoveryConfig) -> Self {
+    pub fn new(config: RecoveryConfig) -> Self {
         Self {
             config,
             start_time: Instant::now(),

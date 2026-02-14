@@ -523,7 +523,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Foreach { variable, list, body, continue_block } => {
+            NodeKind::Foreach { variable, list, body, continue_block: _ } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
 
                 // The loop variable is implicitly declared
