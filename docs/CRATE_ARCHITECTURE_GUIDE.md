@@ -201,10 +201,10 @@ struct CorpusTestResults {
 # From project root, navigate to xtask directory
 cd xtask
 
-# Run dual-scanner comparison (requires libclang-dev)
-cargo run corpus                        # Default: --scanner both
-cargo run corpus -- --scanner both     # Explicit dual-scanner mode
-cargo run corpus -- --diagnose         # Detailed analysis
+# Run corpus comparison modes (requires legacy feature)
+cargo run --features legacy -- corpus                     # Default scanner: v3
+cargo run --features legacy -- corpus -- --scanner both   # C vs v3 comparison mode
+cargo run --features legacy -- corpus -- --scanner v2-parity --diagnose
 ```
 
 ## Key Components

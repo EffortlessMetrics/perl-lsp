@@ -328,10 +328,11 @@ impl TriviaPreservingParser {
         let start_pos = Position::new(0, 1, 1);
         let mut statement_nodes = Vec::new();
 
-        // Collect any leading trivia before first statement
+        // Collect all trivia from all tokens (including EOF) so that
+        // blank lines between statements and inline POD are surfaced.
         let mut leading_trivia = Vec::new();
-        if let Some(first_token) = self.context.current_token() {
-            leading_trivia = first_token.leading_trivia.clone();
+        for token in &self.context.tokens {
+            leading_trivia.extend(token.leading_trivia.iter().cloned());
         }
 
         // Parse statements

@@ -442,18 +442,20 @@ brew install llvm                  # macOS
 # Navigate to xtask directory (excluded from main workspace)
 cd xtask
 
-# Run dual-scanner corpus comparison
-cargo run corpus                   # Compare both C and Rust scanners
-cargo run corpus -- --scanner both --diagnose  # Detailed analysis
+# Run corpus comparison modes (legacy feature required)
+cargo run --features legacy -- corpus                               # Corpus vs selected parser (default scanner: v3)
+cargo run --features legacy -- corpus -- --scanner both --diagnose # C vs v3 detailed analysis
 
 # Individual scanner validation  
-cargo run corpus -- --scanner c     # C scanner (delegates to Rust)
-cargo run corpus -- --scanner rust  # Rust scanner implementation
-cargo run corpus -- --scanner v3    # V3 native parser
+cargo run --features legacy -- corpus -- --scanner c                    # C scanner
+cargo run --features legacy -- corpus -- --scanner rust                 # In-crate v2 parser
+cargo run --features legacy -- corpus -- --scanner v2-pest-microcrate   # Extracted v2 parser
+cargo run --features legacy -- corpus -- --scanner v2-parity --diagnose # v2 parity mode
+cargo run --features legacy -- corpus -- --scanner v3                   # V3 native parser
 
 # Diagnostic analysis for parser differences
-cargo run corpus -- --diagnose      # Analyze first failing test
-cargo run corpus -- --test          # Test simple expressions
+cargo run --features legacy -- corpus -- --diagnose  # Analyze first failing test
+cargo run --features legacy -- corpus -- --test      # Test simple expressions
 ```
 
 ### Understanding Scanner Mismatch Reports (*Diataxis: Reference* - Output interpretation)

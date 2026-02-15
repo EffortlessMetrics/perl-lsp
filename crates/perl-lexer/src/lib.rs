@@ -1966,7 +1966,13 @@ impl<'a> PerlLexer<'a> {
         }
 
         let text = &self.input[start..self.position];
-        self.mode = LexerMode::ExpectTerm;
+        // Postfix ++ and -- complete a term expression, so next token is an operator
+        // (e.g., "$x++ / 2" → / is division, not regex)
+        if (text == "++" || text == "--") && self.mode == LexerMode::ExpectOperator {
+            // Postfix: stay in ExpectOperator
+        } else {
+            self.mode = LexerMode::ExpectTerm;
+        }
 
         Some(Token {
             token_type: TokenType::Operator(Arc::from(text)),

@@ -158,7 +158,6 @@ fn test_shebang_variations() {
 }
 
 #[test]
-#[ignore = "Known limitation: Multiple consecutive blank lines - see trivia_demo.rs edge cases documentation"]
 fn test_empty_lines_sequence() {
     // Edge case: Multiple empty lines in a row
     let source = "my $x = 1;\n\n\n\nmy $y = 2;".to_string();
@@ -266,7 +265,6 @@ fn test_pod_false_start() {
 }
 
 #[test]
-#[ignore = "Known limitation: POD in middle of code - see trivia_demo.rs edge cases documentation"]
 fn test_inline_pod_preservation() {
     // Edge case: POD in the middle of code (not at file start)
     let source = r#"sub foo {
