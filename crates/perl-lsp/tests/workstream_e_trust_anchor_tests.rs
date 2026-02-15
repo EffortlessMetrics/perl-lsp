@@ -819,6 +819,7 @@ mod workspace_index_unit_tests {
     use perl_parser::workspace_index::{
         DegradationReason, IndexCoordinator, IndexResourceLimits, IndexState, ResourceKind,
     };
+    use perl_tdd_support::must;
 
     // =========================================================================
     // Test: IndexCoordinator query dispatch based on state

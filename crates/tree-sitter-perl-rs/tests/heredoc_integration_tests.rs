@@ -1,5 +1,6 @@
 #[cfg(all(test, feature = "pure-rust"))]
 mod heredoc_integration_tests {
+    use perl_tdd_support::must;
     use tree_sitter_perl::full_parser::FullPerlParser;
     use tree_sitter_perl::heredoc_parser::parse_with_heredocs;
 

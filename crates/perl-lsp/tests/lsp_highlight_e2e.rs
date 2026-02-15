@@ -20,7 +20,7 @@ fn highlights_read_and_write() -> Result<(), Box<dyn std::error::Error>> {
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": col}
         }),
-    );
+    )?;
 
     let highlights =
         response["result"].as_array().ok_or("documentHighlight should return an array")?;
@@ -95,7 +95,7 @@ $global++;
     let response = client.request("textDocument/documentHighlight", json!({
         "textDocument": {"uri": uri},
         "position": {"line": line, "character": col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0)}
-    }));
+    }))?;
 
     let highlights =
         response["result"].as_array().ok_or("documentHighlight should return an array")?;
@@ -124,7 +124,7 @@ fn no_highlights_for_different_variables() -> Result<(), Box<dyn std::error::Err
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": col}
         }),
-    );
+    )?;
 
     let highlights =
         response["result"].as_array().ok_or("documentHighlight should return an array")?;

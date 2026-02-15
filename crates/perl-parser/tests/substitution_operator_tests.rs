@@ -461,7 +461,6 @@ fn find_substitution_node(node: &perl_parser::ast::Node) -> Option<(String, Stri
 
 #[test]
 // MUT_005 FIXED: Invalid modifier validation now properly rejects invalid modifiers
-#[ignore = "substitution: modifier validation needs investigation"]
 fn test_substitution_invalid_modifier_characters() {
     // These test cases specifically target the invalid modifier validation logic.
     //
@@ -692,7 +691,6 @@ fn test_substitution_complex_nested_scenarios() -> TestResult {
 
 // TARGETED MUTATION KILLER TESTS - Kill MUT_005 modifier validation mutation
 #[test]
-#[ignore = "mutation hardening: modifier matching needs investigation"]
 fn test_kill_mutation_modifier_character_matching() -> TestResult {
     // This test specifically targets the modifier character pattern in parser_backup.rs
     // Original: 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r' => {
@@ -760,7 +758,6 @@ fn test_kill_mutation_modifier_character_matching() -> TestResult {
 
 // Additional targeted test for mixed valid/invalid modifiers to ensure precise character matching
 #[test]
-#[ignore = "mutation hardening: mixed modifier validation needs investigation"]
 fn test_kill_mutation_mixed_modifier_validation() {
     // Test mixed cases where some characters are valid and others are invalid
     // This ensures the mutation cannot partially succeed

@@ -231,7 +231,6 @@ print "$x $y $z";
 // @hash{'a', 'b'} as a slice of %hash (sigil changes from % to @ for slices).
 // See: https://perldoc.perl.org/perldata#Slices
 #[test]
-#[ignore = "scope analyzer doesn't yet handle hash slice sigil transformation"]
 fn test_hash_slice_not_undefined() {
     let code = r#"
 use strict;
@@ -521,7 +520,6 @@ my @v = @subset;
 // TODO: Same issue as test_hash_slice_not_undefined - scope analyzer doesn't recognize
 // hash slices with qw() subscripts as referencing a declared %hash variable.
 #[test]
-#[ignore = "scope analyzer doesn't yet handle hash slice sigil transformation"]
 fn test_hash_slice_variable_resolution() {
     let code = r#"
 use strict;

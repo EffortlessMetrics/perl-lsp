@@ -460,7 +460,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Pre-existing parsing bug with multiple === delimiters - needs investigation"]
+    #[ignore = "feature: corpus parser uses single-delimiter sectioning but test data uses paired delimiters"]
     fn parse_file_strips_ast_and_generates_id() {
         let path = temp_file("perl_corpus_parse");
         let contents = r#"==========================================

@@ -312,7 +312,6 @@ fn test_kill_complex_mutation_interactions() {
 
 // TARGET: Edge cases that stress all mutation types simultaneously
 #[test]
-#[ignore = "mutation hardening: parser output format changed"]
 fn test_kill_mutations_comprehensive_edge_cases() {
     // Empty input edge cases (function return mutations)
     let (pattern, _body, modifiers) = extract_regex_parts("");

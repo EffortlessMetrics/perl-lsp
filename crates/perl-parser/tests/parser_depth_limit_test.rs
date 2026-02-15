@@ -10,7 +10,6 @@ use perl_tdd_support::must_err;
 
 /// Test that deeply nested blocks are rejected with NestingTooDeep error
 #[test]
-#[ignore = "recursion limit behavior changed with error recovery"]
 fn parser_depth_limit_nested_blocks() {
     // Create nested blocks beyond the limit
     let depth = 200;
@@ -38,7 +37,6 @@ fn parser_depth_limit_nested_blocks() {
 
 /// Test that deeply nested parentheses in expressions are rejected
 #[test]
-#[ignore = "recursion limit behavior changed with error recovery"]
 fn parser_depth_limit_nested_parens() {
     // Create deeply nested parentheses beyond the limit
     let depth = 200;
@@ -66,7 +64,6 @@ fn parser_depth_limit_nested_parens() {
 
 /// Test that deeply nested array literals are rejected
 #[test]
-#[ignore = "recursion limit behavior changed with error recovery"]
 fn parser_depth_limit_nested_arrays() {
     // Create deeply nested arrays beyond the limit
     let depth = 200;
@@ -94,7 +91,6 @@ fn parser_depth_limit_nested_arrays() {
 
 /// Test that reasonably nested constructs still work (well below the limit)
 #[test]
-#[ignore = "recursion limit behavior changed with error recovery"]
 fn parser_depth_limit_reasonable_nesting() {
     // Create nested blocks well below the limit (15 levels)
     // With depth limit 128 and multiple increments per level,
@@ -120,7 +116,6 @@ fn parser_depth_limit_reasonable_nesting() {
 
 /// Test mixed nesting types (blocks + expressions)
 #[test]
-#[ignore = "recursion limit behavior changed with error recovery"]
 fn parser_depth_limit_mixed_nesting() {
     // Create a mix of blocks and expressions that exceeds the limit.
     // Each { ( pair adds multiple depth increments, so depth=100 should
@@ -150,7 +145,6 @@ fn parser_depth_limit_mixed_nesting() {
 
 /// Test that the limit applies to control flow nesting
 #[test]
-#[ignore = "recursion limit behavior changed with error recovery"]
 fn parser_depth_limit_nested_control_flow() {
     // Create deeply nested if statements
     let depth = 200;
@@ -178,7 +172,6 @@ fn parser_depth_limit_nested_control_flow() {
 
 /// Test that exact limit boundary works correctly (just below limit)
 #[test]
-#[ignore = "recursion limit behavior changed with error recovery"]
 fn parser_depth_limit_boundary_below() {
     // Create nested parens just below the limit
     // With 15 parens and parse_expression + parse_primary both incrementing,
@@ -202,7 +195,6 @@ fn parser_depth_limit_boundary_below() {
 
 /// Test that exact limit boundary fails correctly (just above limit)
 #[test]
-#[ignore = "recursion limit behavior changed with error recovery"]
 fn parser_depth_limit_boundary_above() {
     // Create nested parens that exceed the limit (100 levels)
     let depth = 200;

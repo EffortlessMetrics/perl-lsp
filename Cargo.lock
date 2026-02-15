@@ -1895,6 +1895,7 @@ dependencies = [
  "perl-workspace-index",
  "regex",
  "serde",
+ "serial_test",
  "tempfile",
  "url",
 ]

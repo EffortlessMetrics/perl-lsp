@@ -8,6 +8,7 @@ use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
 };
+use perl_tdd_support::must;
 
 /// Test complex regex with lookarounds, backreferences, and modifiers
 #[test]
@@ -124,7 +125,7 @@ if ($conditional_text =~ /^(?(?=\d)\d+|[a-z]+)$/) {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
+    let ast = must(parser.parse());
 
     // Verify regex operations
     let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
@@ -252,7 +253,7 @@ process_file_substitutions('config.txt');
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
+    let ast = must(parser.parse());
 
     // Verify substitution operations
     let substitution_nodes =
@@ -470,7 +471,7 @@ given ($value_to_test) {
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
+    let ast = must(parser.parse());
 
     // Verify given statements
     let given_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Given { .. }));
@@ -744,7 +745,7 @@ my $guard_match = match_with_guards([3, 7]);
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
+    let ast = must(parser.parse());
 
     // Verify given statements
     let given_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Given { .. }));
@@ -905,7 +906,7 @@ if ($verbose_text =~ /
 "#;
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().expect("Should parse successfully");
+    let ast = must(parser.parse());
 
     // Verify regex operations
     let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));

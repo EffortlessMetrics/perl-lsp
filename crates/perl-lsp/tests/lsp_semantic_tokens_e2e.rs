@@ -14,8 +14,8 @@ fn semantic_tokens_expected_ranges() -> Result<(), Box<dyn std::error::Error>> {
     let source = "my $x = 1;\nsub foo { $x }\nfoo();\n";
     client.did_open(uri, "perl", source)?;
 
-    let response =
-        client.request("textDocument/semanticTokens/full", json!({"textDocument": {"uri": uri}}));
+    let response = client
+        .request("textDocument/semanticTokens/full", json!({"textDocument": {"uri": uri}}))?;
     let data = response["result"]["data"]
         .as_array()
         .ok_or("semanticTokens response should contain data array")?;

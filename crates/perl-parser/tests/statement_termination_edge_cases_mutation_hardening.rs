@@ -152,7 +152,6 @@ fn test_nested_statement_termination_edge_cases() {
 /// Test parsing timeout prevention to catch infinite loops from termination mutations
 /// Uses a timeout mechanism to detect when parsing hangs due to mutations
 #[test]
-#[ignore = "mutation hardening: timeout behavior needs investigation"]
 fn test_parsing_timeout_prevention() {
     use std::time::{Duration, Instant};
 
@@ -209,7 +208,6 @@ fn test_parsing_timeout_prevention() {
 /// Test statement modifier precedence and termination
 /// Ensures statement modifiers don't interfere with proper statement termination
 #[test]
-#[ignore = "mutation hardening: statement modifier termination needs investigation"]
 fn test_statement_modifier_termination_precedence() {
     let test_cases = vec![
         // Simple statement modifiers

@@ -21,7 +21,7 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": base_col}
         }),
-    );
+    )?;
 
     let items =
         prep_response["result"].as_array().ok_or("prepareTypeHierarchy should return an array")?;
@@ -36,7 +36,7 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
         json!({
             "item": base_item
         }),
-    );
+    )?;
 
     let subtypes =
         subtypes_response["result"].as_array().ok_or("subtypes should return an array")?;
@@ -52,7 +52,7 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": child_col}
         }),
-    );
+    )?;
 
     let child_items =
         child_prep["result"].as_array().ok_or("prepareTypeHierarchy should return an array")?;
@@ -63,7 +63,7 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
         json!({
             "item": child_item
         }),
-    );
+    )?;
 
     let supertypes =
         supertypes_response["result"].as_array().ok_or("supertypes should return an array")?;
@@ -102,7 +102,7 @@ use parent qw(Mixin1 Mixin2);
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": char_pos}
         }),
-    );
+    )?;
 
     let items =
         prep_response["result"].as_array().ok_or("prepareTypeHierarchy should return an array")?;
@@ -116,7 +116,7 @@ use parent qw(Mixin1 Mixin2);
         json!({
             "item": combined_item
         }),
-    );
+    )?;
 
     let supertypes =
         supertypes_response["result"].as_array().ok_or("supertypes should return an array")?;
@@ -164,7 +164,7 @@ our @ISA = ('Parent1', 'Parent2');
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": char_pos}
         }),
-    );
+    )?;
 
     let items =
         prep_response["result"].as_array().ok_or("prepareTypeHierarchy should return an array")?;
@@ -178,7 +178,7 @@ our @ISA = ('Parent1', 'Parent2');
         json!({
             "item": child_item
         }),
-    );
+    )?;
 
     let supertypes =
         supertypes_response["result"].as_array().ok_or("supertypes should return an array")?;
@@ -228,7 +228,7 @@ sub test {
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": char_pos}
         }),
-    );
+    )?;
 
     // Should return empty or null for string literals
     let result = &prep_response["result"];
@@ -247,7 +247,7 @@ sub test {
             "textDocument": {"uri": uri},
             "position": {"line": 1, "character": package_col}
         }),
-    );
+    )?;
 
     let items = prep_response2["result"].as_array().ok_or("Package should have type hierarchy")?;
     assert!(!items.is_empty(), "Package Base should be found");

@@ -8,6 +8,7 @@
 //!   cargo bench --bench scanner_benchmarks --features c-scanner
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use perl_tdd_support::must;
 use std::hint::black_box;
 
 // Import the trait once
@@ -158,7 +159,7 @@ fn bench_scanner_basic(c: &mut Criterion) {
             b.iter(|| {
                 let mut scanner = create_scanner();
                 let input = black_box(test_case.as_bytes());
-                scanner.scan(input).unwrap();
+                must(scanner.scan(input));
             });
         });
     }
@@ -171,7 +172,7 @@ fn bench_scanner_large_file(c: &mut Criterion) {
         b.iter(|| {
             let mut scanner = create_scanner();
             let input = black_box(LARGE_TEST_CASE.as_bytes());
-            scanner.scan(input).unwrap();
+            must(scanner.scan(input));
         });
     });
     group.finish();
@@ -186,7 +187,7 @@ fn bench_scanner_throughput(c: &mut Criterion) {
             b.iter(|| {
                 let mut scanner = create_scanner();
                 let input = black_box(test_input.as_bytes());
-                scanner.scan(input).unwrap();
+                must(scanner.scan(input));
             });
         });
     }
@@ -199,7 +200,7 @@ fn bench_scanner_memory_usage(c: &mut Criterion) {
         b.iter(|| {
             let mut scanner = create_scanner();
             let input = black_box(LARGE_TEST_CASE.as_bytes());
-            scanner.scan(input).unwrap();
+            must(scanner.scan(input));
         });
     });
     group.finish();
@@ -216,8 +217,7 @@ fn create_scanner() -> Box<dyn PerlScanner> {
     }
     #[cfg(not(any(feature = "rust-scanner", feature = "c-scanner")))]
     {
-        compile_error!("Must specify either rust-scanner or c-scanner feature");
-        unreachable!()
+        panic!("Must specify either rust-scanner or c-scanner feature");
     }
 }
 

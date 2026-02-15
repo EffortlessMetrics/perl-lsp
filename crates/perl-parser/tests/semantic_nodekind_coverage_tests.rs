@@ -1,11 +1,12 @@
 use std::collections::HashSet;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use perl_parser::{
+    Parser, SourceLocation,
     ast::{Node, NodeKind},
     semantic::SemanticAnalyzer,
-    Parser, SourceLocation,
 };
+use perl_tdd_support::{must, must_some};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -95,9 +96,7 @@ const MANUAL_ONLY_NODE_KIND_NAMES: &[&str] = &[
 
 fn parse_ast(source: &str) -> Node {
     let mut parser = Parser::new(source);
-    parser.parse().unwrap_or_else(|e| {
-        panic!("fixture must parse cleanly; got: {e}");
-    })
+    must(parser.parse())
 }
 
 fn parse_ast_with_recovery(source: &str) -> Node {
@@ -321,11 +320,8 @@ $name, $age, $salary
     let manual_ast = manual_recovery_nodekind_fixture(SourceLocation { start: 0, end: 0 });
     collect_node_kinds(&manual_ast, &mut observed);
 
-    let missing: Vec<_> = ALL_NODE_KIND_NAMES
-        .iter()
-        .copied()
-        .filter(|k| !observed.contains(k))
-        .collect();
+    let missing: Vec<_> =
+        ALL_NODE_KIND_NAMES.iter().copied().filter(|k| !observed.contains(k)).collect();
 
     assert!(missing.is_empty(), "Missing NodeKind coverage: {missing:?}");
 
@@ -339,17 +335,12 @@ fn test_manual_only_nodekinds_exist_and_analyze_without_panic() {
 
     // 1) Ensure the fixture still contains the intended manual-only kinds.
     for kind in MANUAL_ONLY_NODE_KIND_NAMES {
-        assert!(
-            has_node_kind(&manual_ast, kind),
-            "manual fixture must include NodeKind::{kind}"
-        );
+        assert!(has_node_kind(&manual_ast, kind), "manual fixture must include NodeKind::{kind}");
     }
 
     // 2) Ensure semantic analysis doesn't panic on any manual-only kind in isolation.
     for kind in MANUAL_ONLY_NODE_KIND_NAMES {
-        let node = find_first_node_of_kind(&manual_ast, kind)
-            .unwrap_or_else(|| panic!("manual fixture must include NodeKind::{kind}"))
-            .clone();
+        let node = must_some(find_first_node_of_kind(&manual_ast, kind)).clone();
 
         let single = Node::new(NodeKind::Program { statements: vec![node] }, location);
 
@@ -386,9 +377,6 @@ fn test_parser_recovery_produces_error_nodes_and_does_not_panic_semantic() {
         }))
         .is_ok();
 
-        assert!(
-            ok,
-            "[{name}] semantic analysis panicked on recovery AST"
-        );
+        assert!(ok, "[{name}] semantic analysis panicked on recovery AST");
     }
 }

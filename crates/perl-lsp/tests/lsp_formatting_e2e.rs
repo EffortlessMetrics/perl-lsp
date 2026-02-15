@@ -29,7 +29,7 @@ fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>>
             "textDocument": {"uri": uri},
             "options": {"tabSize": 4, "insertSpaces": true}
         }),
-    );
+    )?;
 
     let edits =
         response["result"].as_array().ok_or("formatting should return an array of edits")?;
@@ -93,7 +93,7 @@ sub second{my$b=2;return$b;}
             },
             "options": {"tabSize": 4, "insertSpaces": true}
         }),
-    );
+    )?;
 
     if let Some(result) = response.get("result") {
         if let Some(edits) = result.as_array() {
@@ -149,7 +149,7 @@ return$x;
             "textDocument": {"uri": uri},
             "options": {"tabSize": 4, "insertSpaces": true}
         }),
-    );
+    )?;
 
     let edits =
         response["result"].as_array().ok_or("formatting should return an array of edits")?;
@@ -215,7 +215,7 @@ fn formatting_with_custom_config() -> Result<(), Box<dyn std::error::Error>> {
             "textDocument": {"uri": uri},
             "options": {"tabSize": 2, "insertSpaces": true}
         }),
-    );
+    )?;
 
     let edits =
         response["result"].as_array().ok_or("formatting should return an array of edits")?;
@@ -281,7 +281,7 @@ sub third{my$c=3;return$c;}
             ],
             "options": {"tabSize": 4, "insertSpaces": true}
         }),
-    );
+    )?;
 
     if let Some(result) = response.get("result") {
         if let Some(edits) = result.as_array() {

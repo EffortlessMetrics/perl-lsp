@@ -1271,7 +1271,7 @@ impl TestContext {
     pub fn initialize_with(&mut self, root_uri: &str, capabilities: Option<Value>) -> Value {
         match self.harness.initialize_ready(root_uri, capabilities) {
             Ok(v) => v,
-            Err(e) => panic!("initialization should succeed: {e}"),
+            Err(e) => must(Err::<Value, _>(format!("initialization should succeed: {e}"))),
         }
     }
 

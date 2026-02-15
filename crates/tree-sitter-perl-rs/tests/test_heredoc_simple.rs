@@ -1,5 +1,6 @@
 //! Simple test to debug heredoc recovery
 
+use perl_tdd_support::must;
 use tree_sitter_perl::perl_lexer::PerlLexer;
 
 #[test]

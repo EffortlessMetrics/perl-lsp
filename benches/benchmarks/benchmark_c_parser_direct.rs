@@ -78,7 +78,10 @@ fn main() {
         
         // Create parser once for warmup
         let mut parser = Parser::new();
-        parser.set_language(&language()).expect("Failed to set language");
+        if parser.set_language(&language()).is_err() {
+            eprintln!("Failed to set language");
+            continue;
+        }
         
         // Warmup
         for _ in 0..10 {

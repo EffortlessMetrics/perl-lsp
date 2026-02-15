@@ -116,7 +116,6 @@ EOF
 /// Validates that escape sequences in double-quoted labels are properly
 /// handled according to Perl string interpolation rules.
 #[test]
-#[ignore = "heredoc: label escape handling needs investigation"]
 fn test_heredoc_decl_double_quoted_label_with_escapes() {
     let input = r#"my $x = <<"END\nLINE";
 content here
@@ -237,7 +236,6 @@ CMD
 /// Validates that escape sequences in heredoc labels are properly recognized
 /// and handled according to the quoting style.
 #[test]
-#[ignore = "heredoc: label escape handling needs investigation"]
 fn test_heredoc_decl_label_with_escapes() {
     let input = r#"my $x = <<"END\tTAB";
 content with tab in label
@@ -259,7 +257,6 @@ END	TAB
 /// Validates that backslash escape sequences are handled correctly in
 /// double-quoted heredoc labels.
 #[test]
-#[ignore = "heredoc: label escape handling needs investigation"]
 fn test_heredoc_decl_label_backslash_escapes() {
     let input = r#"my $x = <<"END\\SLASH";
 content here
@@ -409,7 +406,6 @@ content without terminator"#;
 /// Validates that empty heredoc labels (<<) are handled appropriately,
 /// either with error or by using empty string as label.
 #[test]
-#[ignore = "heredoc: empty label handling needs investigation"]
 fn test_heredoc_decl_empty_label() {
     let input = "my $x = <<;\ncontent\n\n";
 

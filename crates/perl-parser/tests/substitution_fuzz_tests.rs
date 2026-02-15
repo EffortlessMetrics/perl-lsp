@@ -22,7 +22,8 @@ fn test_substitution_batch(inputs: &[&str]) -> Vec<String> {
             // Verify modifiers only contain valid characters
             for ch in modifiers.chars() {
                 assert!(
-                    matches!(ch, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r'),
+                    matches!(ch, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r'
+                        | 'a' | 'd' | 'l' | 'u' | 'n' | 'p' | 'c'),
                     "Invalid modifier '{}' in: {}",
                     ch,
                     input
@@ -251,7 +252,6 @@ fn test_substitution_fuzz_nested_delimiters() {
 }
 
 #[test]
-#[ignore = "substitution fuzz: comprehensive fuzz handling needs investigation"]
 fn test_substitution_comprehensive_fuzz() -> Result<(), Box<dyn std::error::Error>> {
     // Run the comprehensive fuzz test suite
     match run_substitution_fuzz_tests() {

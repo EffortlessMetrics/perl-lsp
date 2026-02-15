@@ -2,13 +2,14 @@
 
 #[cfg(test)]
 mod tests {
+    use perl_tdd_support::must;
     use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
 
     fn test_parse(code: &str) -> String {
         let mut parser = PureRustPerlParser::new();
         match parser.parse(code) {
             Ok(ast) => parser.to_sexp(&ast),
-            Err(e) => must(Err::<(), _>(format!("Parse failed: {:?}\nCode: {}", e, code))),
+            Err(e) => must(Err::<String, _>(format!("Parse failed: {:?}\nCode: {}", e, code))),
         }
     }
 

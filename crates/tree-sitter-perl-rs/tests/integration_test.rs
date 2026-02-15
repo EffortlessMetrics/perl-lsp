@@ -1,5 +1,6 @@
 //! Integration tests for the Pure Rust Perl Parser
 
+use perl_tdd_support::must;
 use tree_sitter_perl::PureRustPerlParser;
 
 #[test]

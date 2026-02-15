@@ -2123,6 +2123,7 @@ sub complex {
     mod validation_tests {
         use super::*;
         use perl_tdd_support::{must, must_err};
+        use serial_test::serial;
 
         // --- Perl identifier validation tests ---
 
@@ -2611,31 +2612,24 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: depends on refactor actually modifying files to create backups"]
+        #[serial]
         fn test_cleanup_backup_directories() {
-            use std::io::Write;
+            use std::fs;
 
-            let mut engine = RefactoringEngine::new();
-            engine.config.create_backups = true;
+            let temp_dir = must(tempfile::tempdir());
+            let backup_root = temp_dir.path().to_path_buf();
 
-            // Create a temp file to trigger backup creation
-            let mut file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
-            must(writeln!(file, "sub test {{ }}"));
-            let path = file.path().to_path_buf();
+            // Manually create a backup directory
+            let backup = backup_root.join("refactor_100_0");
+            must(fs::create_dir_all(&backup));
+            must(fs::write(backup.join("file.pl"), "sub test {}"));
 
-            // Perform an operation to create a backup
-            let op = RefactoringType::SymbolRename {
-                old_name: "test".to_string(),
-                new_name: "renamed_test".to_string(),
-                scope: RefactoringScope::File(path.clone()),
+            let config = RefactoringConfig {
+                backup_root: Some(backup_root),
+                max_backup_retention: 0, // Remove all
+                ..RefactoringConfig::default()
             };
-
-            let _ = engine.refactor(op, vec![path.clone()]);
-
-            // Verify backup was created
-            assert!(!engine.operation_history.is_empty());
-
-            // Clean up backups
+            let mut engine = RefactoringEngine::with_config(config);
             let result = must(engine.clear_history());
 
             // Should have removed at least one directory
@@ -2644,7 +2638,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: depends on refactor actually modifying files to create backups"]
+        #[serial]
         fn test_cleanup_respects_retention_count() {
             use std::io::Write;
 
@@ -2681,7 +2675,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: race conditions with shared backup directory in parallel tests"]
+        #[serial]
         fn test_cleanup_respects_age_limit() {
             use std::fs;
 
@@ -2758,27 +2752,26 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: depends on refactor actually modifying files to create backups"]
+        #[serial]
         fn test_backup_cleanup_result_space_reclaimed() {
-            use std::io::Write;
+            use std::fs;
 
-            let mut engine = RefactoringEngine::new();
-            engine.config.create_backups = true;
+            let temp_dir = must(tempfile::tempdir());
+            let backup_root = temp_dir.path().to_path_buf();
 
-            // Create a file with known size
-            let mut file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
-            let test_content = "sub test { print 'hello world'; }";
-            must(write!(file, "{}", test_content));
-            let path = file.path().to_path_buf();
+            // Create backup directory with files of known size
+            let backup = backup_root.join("refactor_100_0");
+            must(fs::create_dir_all(&backup));
 
-            // Perform operation to create backup
-            let op = RefactoringType::SymbolRename {
-                old_name: "test".to_string(),
-                new_name: "renamed_test".to_string(),
-                scope: RefactoringScope::File(path.clone()),
+            let test_content = "sub test { print 'hello world'; }"; // 33 bytes
+            must(fs::write(backup.join("file.pl"), test_content));
+
+            let config = RefactoringConfig {
+                backup_root: Some(backup_root),
+                max_backup_retention: 0, // Remove all
+                ..RefactoringConfig::default()
             };
-
-            let _ = engine.refactor(op, vec![path]);
+            let mut engine = RefactoringEngine::with_config(config);
 
             // Clean up and verify space was reclaimed
             let result = must(engine.clear_history());
@@ -2788,7 +2781,7 @@ sub complex {
         // --- Robust backup cleanup tests (non-flaky) ---
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_identifies_all_backup_directories() {
             // AC1: When clear_history() is called, all backup directories are identified
             // AC5: Method returns count of backup directories removed
@@ -2825,7 +2818,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_respects_retention_count() {
             // AC2: Backup cleanup removes backup files older than a configurable retention period
             // AC3: Operation provides option to keep recent backups (e.g., last N operations)
@@ -2872,7 +2865,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_respects_age_limit() {
             // AC2: Backup cleanup removes backup files older than a configurable retention period
             // AC6: Errors during cleanup are logged but don't prevent operation history clearing
@@ -2916,7 +2909,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_space_reclaimed() {
             // AC5: Method returns count of backup directories removed and total disk space reclaimed
             use std::fs;
@@ -2949,7 +2942,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_only_removes_refactor_backups() {
             // AC8: Cleanup respects backup directory naming convention and only removes refactoring engine backups
             use std::fs;
@@ -2983,7 +2976,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_with_zero_retention_removes_all() {
             // AC2: When max_backup_retention is 0, all backups are removed
             use std::fs;
@@ -3014,7 +3007,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: uses hardcoded shared backup dir that can have leftover state; run in isolation with --ignored"]
+        #[serial]
         fn comprehensive_backup_cleanup_all_acs() {
             // Comprehensive test covering all ACs to avoid race conditions from multiple tests
             // AC1: Identifies all backup directories

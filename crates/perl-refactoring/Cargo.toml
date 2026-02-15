@@ -36,6 +36,7 @@ workspace_refactor = []
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
+serial_test = "3.3.1"
 tempfile = "3.24.0"
 
 [lints]

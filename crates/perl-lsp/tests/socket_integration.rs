@@ -7,7 +7,6 @@ use std::time::Duration;
 /// Integration test for TCP socket mode.
 /// Spawns the LSP server in socket mode, connects, and verifies the initialize handshake.
 #[test]
-#[ignore = "integration test that spawns external process"]
 fn test_socket_connection() -> Result<(), Box<dyn std::error::Error>> {
     let bin_path = env!("CARGO_BIN_EXE_perl-lsp");
 

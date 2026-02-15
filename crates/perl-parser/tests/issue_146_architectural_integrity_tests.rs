@@ -122,7 +122,6 @@ mod integration_tests {
 
     /// Test that clippy passes after architectural repairs
     #[test]
-    #[ignore = "clippy warnings burn-down: collapsible_if across multiple crates"]
     fn test_clippy_compliance() {
         let output_res = Command::new("cargo")
             .args(["clippy", "--package", "perl-parser", "--", "-D", "warnings"])

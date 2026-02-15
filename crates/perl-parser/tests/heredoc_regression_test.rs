@@ -23,7 +23,6 @@ say 1;"#;
 }
 
 #[test]
-#[ignore = "sexp format changed: string node representation needs update"]
 fn test_multiple_heredocs_single_line() -> TestResult {
     // Test multiple heredocs on one line (FIFO processing)
     let input = r#"print <<FIRST, <<SECOND;
@@ -345,7 +344,6 @@ fn test_data_end_with_trailing_junk_non_ws() -> TestResult {
 }
 
 #[test]
-#[ignore = "sexp format changed: my_declaration node representation needs update"]
 fn test_reject_ruby_style_heredoc() -> TestResult {
     // Ruby uses <<- for indented heredocs, Perl does not
     // In Perl, <<-END is invalid syntax since << in expression context

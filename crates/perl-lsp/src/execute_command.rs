@@ -1066,7 +1066,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires perlcritic"]
     fn test_execute_command_run_critic_builtin() -> Result<(), Box<dyn std::error::Error>> {
         // Create a temporary file with violations
         let test_content = r#"#!/usr/bin/perl
@@ -1154,7 +1153,6 @@ print "Value: $variable\n";
     // These tests target specific surviving mutants to achieve ≥80% mutation score
 
     #[test]
-    #[ignore = "requires prove"]
     fn test_command_routing_perl_run_tests() -> Result<(), Box<dyn std::error::Error>> {
         let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
@@ -1179,7 +1177,6 @@ print "Value: $variable\n";
     }
 
     #[test]
-    #[ignore = "requires perl runtime"]
     fn test_command_routing_perl_run_file() -> Result<(), Box<dyn std::error::Error>> {
         let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
@@ -1204,7 +1201,6 @@ print "Value: $variable\n";
     }
 
     #[test]
-    #[ignore = "requires prove"]
     fn test_command_routing_perl_run_test_sub() -> Result<(), Box<dyn std::error::Error>> {
         let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
@@ -1231,7 +1227,6 @@ print "Value: $variable\n";
     }
 
     #[test]
-    #[ignore = "requires perl runtime"]
     fn test_command_routing_perl_debug_tests() -> Result<(), Box<dyn std::error::Error>> {
         let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
@@ -1276,7 +1271,6 @@ print "Value: $variable\n";
     }
 
     #[test]
-    #[ignore = "requires prove"]
     fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std::error::Error>>
     {
         let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
@@ -1535,7 +1529,6 @@ print "Value: $variable\n";
     // These tests specifically target remaining surviving mutants
 
     #[test]
-    #[ignore = "requires perlcritic"]
     fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::error::Error>> {
         let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 

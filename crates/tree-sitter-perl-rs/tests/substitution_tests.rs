@@ -1,13 +1,14 @@
 #[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
 mod tests {
+    use perl_tdd_support::must;
     use tree_sitter_perl::{NodeKind, ParserV2};
 
     fn parse_first_node(code: &str) -> NodeKind {
         let mut parser = ParserV2::new(code);
-        let ast = parser.parse().expect("parse");
+        let ast = must(parser.parse());
         match ast.kind {
             NodeKind::Program { statements } => statements[0].kind.clone(),
-            other => must(Err::<(), _>(format!("unexpected AST root: {:?}", other))),
+            other => must(Err::<NodeKind, _>(format!("unexpected AST root: {:?}", other))),
         }
     }
 

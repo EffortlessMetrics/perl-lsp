@@ -306,7 +306,6 @@ $val
 }
 
 #[test]
-#[ignore = "corpus file has fewer format statements than expected"]
 fn parser_format_corpus_file() {
     // AC5: At least 10 test cases in corpus
     let corpus_path = std::path::Path::new("test_corpus/format_statements.pl");

@@ -1,6 +1,7 @@
 //! Tests for $/cancelRequest notification
 //! Phase 1 Stabilization: Deterministic cancellation tests with stable harness
 
+use perl_tdd_support::must;
 use serde_json::json;
 use std::time::Duration;
 

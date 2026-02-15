@@ -72,7 +72,7 @@ fn test_or_and_precedence() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[ignore = "word operator: statement modifier handling needs investigation"]
+#[ignore = "feature: parser does not support bareword filehandle arguments (open FILE, ...)"]
 fn test_statement_with_or_modifier() -> Result<(), Box<dyn std::error::Error>> {
     // open FILE, "test.txt" or die "error" should parse correctly
     let input = "open FILE, \"test.txt\" or die \"error\"";

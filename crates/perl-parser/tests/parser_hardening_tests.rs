@@ -318,7 +318,6 @@ fn extract_modifiers_from_node(node: &perl_parser::ast::Node) -> Option<String> 
 }
 
 #[test]
-#[ignore = "recursion limit behavior changed with error recovery"]
 fn test_recursion_depth_limiting() {
     // Test that deeply nested blocks are rejected with NestingTooDeep error
 

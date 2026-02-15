@@ -484,12 +484,16 @@ pub mod semantic {
         );
 
         let line = lines[target_line];
-        let col = line.find(needle).unwrap_or_else(|| {
-            panic!(
-                "Could not find '{}' on line {}.\nLine content: '{}'\nFull code:\n{}",
-                needle, target_line, line, code
-            )
-        });
+        let col = line.find(needle);
+        assert!(
+            col.is_some(),
+            "Could not find '{}' on line {}.\nLine content: '{}'\nFull code:\n{}",
+            needle,
+            target_line,
+            line,
+            code
+        );
+        let col = col.unwrap_or(0);
 
         (target_line as u32, col as u32)
     }

@@ -2,6 +2,7 @@
 
 use perl_lsp::convert::{WirePosition, WireRange};
 use perl_lsp::features::formatting::{CodeFormatter, FormattingOptions};
+use perl_tdd_support::must;
 
 #[test]
 fn test_basic_formatting() {
