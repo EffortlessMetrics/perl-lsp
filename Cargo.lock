@@ -3122,6 +3122,7 @@ dependencies = [
  "once_cell",
  "perl-lexer",
  "perl-parser",
+ "perl-parser-pest",
  "perl-tdd-support",
  "pest",
  "pest_derive",

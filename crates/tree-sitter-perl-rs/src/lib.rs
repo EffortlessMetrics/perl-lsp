@@ -7,6 +7,7 @@
 //! ## Features
 //!
 //! - **pure-rust**: Pure Rust Pest-based parser (canonical implementation)
+//! - **v2-pest-microcrate**: Route v2 Pest modules through `perl-parser-pest` (migration path)
 //! - **test-utils**: Testing utilities and benchmarking tools
 //! - **c-scanner**: Legacy C implementation (for benchmarking only)
 //!
@@ -68,7 +69,10 @@ pub mod benchmark_parser;
 pub mod perl_lexer;
 #[cfg(feature = "pure-rust-standalone")]
 pub mod pest_only;
-#[cfg(feature = "pure-rust")]
+#[cfg(all(feature = "pure-rust", feature = "v2-pest-microcrate"))]
+#[path = "pure_rust_parser_bridge.rs"]
+pub mod pure_rust_parser;
+#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod pure_rust_parser;
 
 #[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
@@ -117,7 +121,7 @@ pub use pure_rust_parser::PureRustPerlParser as PureRustParser; // Original for 
 #[cfg(feature = "pure-rust")]
 pub use pure_rust_parser::{AstNode, PerlParser};
 
-#[cfg(feature = "pure-rust")]
+#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod iterative_parser;
 
 #[cfg(feature = "pure-rust")]
@@ -183,7 +187,10 @@ pub mod disambiguated_parser;
 #[cfg(all(test, feature = "pure-rust"))]
 mod test_slash;
 
-#[cfg(feature = "pure-rust")]
+#[cfg(all(feature = "pure-rust", feature = "v2-pest-microcrate"))]
+#[path = "pratt_parser_bridge.rs"]
+pub mod pratt_parser;
+#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod pratt_parser;
 
 #[cfg(feature = "pure-rust")]
@@ -198,7 +205,10 @@ pub mod enhanced_heredoc_lexer;
 #[cfg(feature = "pure-rust")]
 pub mod enhanced_full_parser;
 
-#[cfg(feature = "pure-rust")]
+#[cfg(all(feature = "pure-rust", feature = "v2-pest-microcrate"))]
+#[path = "sexp_formatter_bridge.rs"]
+pub mod sexp_formatter;
+#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod sexp_formatter;
 
 #[cfg(feature = "pure-rust")]

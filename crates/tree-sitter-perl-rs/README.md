@@ -23,6 +23,10 @@ cargo run --bin ts_test_parsers --features pure-rust
 
 # Parse a file
 cargo run --bin ts-parse-rust --features pure-rust -- file.pl
+
+# Opt in to the microcrate bridge for v2 Pest modules
+# (routes pure_rust_parser/pratt_parser/sexp_formatter through perl-parser-pest)
+cargo check --features pure-rust,v2-pest-microcrate
 ```
 
 ## Do Not Use in Production
@@ -32,6 +36,8 @@ This crate:
 - Is not maintained for external use
 - Will not be published to crates.io
 - May change or be removed without notice
+
+The `v2-pest-microcrate` feature is an incremental extraction path and is currently opt-in.
 
 For production use, choose:
 - **`perl-parser`** - Recommended v3 native parser
@@ -172,11 +178,13 @@ cargo bench --features pure-rust
 
 ```
 src/
-├── pure_rust_parser.rs      # Core Pest-based parser
+├── pure_rust_parser.rs      # In-crate v2 parser (default path)
+├── pure_rust_parser_bridge.rs # Optional bridge to perl-parser-pest
 ├── enhanced_full_parser.rs  # Enhanced parser with all features
 ├── streaming_parser.rs      # Memory-efficient streaming
 ├── error_recovery.rs        # Robust error handling
 ├── sexp_formatter.rs        # S-expression output
+├── sexp_formatter_bridge.rs # Optional bridge to perl-parser-pest
 ├── grammar.pest            # Complete Perl 5 PEG grammar
 └── lib.rs                  # Public API
 ```

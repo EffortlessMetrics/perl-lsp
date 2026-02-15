@@ -432,9 +432,14 @@ impl PureRustPerlParser {
         }
     }
 
-    /// Public wrapper that uses stacker to grow the stack as needed
+    /// Build a single AST node from a parsed Pest pair.
+    ///
+    /// This API is intentionally public for compatibility adapters that embed the
+    /// v2 parser in other crates (for example `tree-sitter-perl-rs`).
+    ///
+    /// Uses stack growth via `stacker` to avoid stack overflow on deeply nested input.
     #[inline]
-    pub(crate) fn build_node(
+    pub fn build_node(
         &mut self,
         pair: Pair<Rule>,
     ) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {

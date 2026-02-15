@@ -112,6 +112,7 @@ impl BenchmarkSuite {
 pub enum ParserImpl {
     Recursive,
     RecursiveWithStacker,
+    #[cfg(not(feature = "v2-pest-microcrate"))]
     Iterative,
 }
 
@@ -150,6 +151,7 @@ impl ParserBenchmark {
                     .map_err(|e| format!("Build error: {:?}", e))?
                     .ok_or_else(|| "No AST node produced".to_string())
             }
+            #[cfg(not(feature = "v2-pest-microcrate"))]
             ParserImpl::Iterative => self
                 .parser
                 .build_node_iterative(pair)
@@ -183,11 +185,17 @@ macro_rules! bench_parsers {
                 .map_err(|e| e.to_string())
         });
 
-        // Benchmark iterative parser
-        $suite.bench("Iterative", iterations, || {
-            let mut bench = ParserBenchmark::new();
-            bench.bench_parser(ParserImpl::Iterative, &input).map(|_| ()).map_err(|e| e.to_string())
-        });
+        #[cfg(not(feature = "v2-pest-microcrate"))]
+        {
+            // Benchmark iterative parser
+            $suite.bench("Iterative", iterations, || {
+                let mut bench = ParserBenchmark::new();
+                bench
+                    .bench_parser(ParserImpl::Iterative, &input)
+                    .map(|_| ())
+                    .map_err(|e| e.to_string())
+            });
+        }
     }};
 }
 
@@ -212,11 +220,14 @@ mod tests {
 
         // Print results
         suite.summary();
+        #[cfg(not(feature = "v2-pest-microcrate"))]
         suite.compare("Recursive", "Iterative");
+        #[cfg(not(feature = "v2-pest-microcrate"))]
         suite.compare("Recursive + Stacker", "Iterative");
     }
 
     #[test]
+    #[cfg(not(feature = "v2-pest-microcrate"))]
     #[cfg(debug_assertions)]
     fn test_deep_nesting_benchmark() {
         let mut suite = BenchmarkSuite::new();
