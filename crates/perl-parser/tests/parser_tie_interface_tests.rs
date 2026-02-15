@@ -136,7 +136,6 @@ my $obj = tied %hash;
 }
 
 #[test]
-#[ignore = "parser may not produce Tie nodes for tie return value assignments"]
 fn parser_tie_return_value() {
     let code = r#"my $obj = tie my %hash, 'Tie::StdHash';"#;
     let ast = must(parse_code(code));
@@ -284,7 +283,6 @@ fn parser_tie_corpus_all_cases() {
 }
 
 #[test]
-#[ignore = "corpus cases may not produce expected Tie nodes"]
 fn parser_tie_corpus_tie_nodes_present() {
     // Test that tie cases actually produce Tie nodes
     let cases = tie_interface_cases();

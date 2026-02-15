@@ -129,7 +129,6 @@ fn parser_hang_risk_nested_hash_literals() {
 ///
 /// Tests feature spec: ROADMAP.md#deep-nesting-boundedness
 #[test]
-#[ignore = "feature: function call nesting does not increment recursion_depth — needs parser change"]
 fn parser_hang_risk_nested_function_calls() {
     // Depth 130 is just above MAX_RECURSION_DEPTH (128) but function call parsing
     // does not go through check_recursion(), so the limit is never hit.

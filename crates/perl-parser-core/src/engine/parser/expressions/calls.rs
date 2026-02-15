@@ -177,43 +177,45 @@ impl<'a> Parser<'a> {
     /// Handles both comma-separated and fat-comma-separated arguments.
     /// Fat comma (=>) auto-quotes bareword identifiers on its left side.
     fn parse_args(&mut self) -> ParseResult<Vec<Node>> {
-        self.expect(TokenKind::LeftParen)?;
-        let mut args = Vec::new();
+        self.with_recursion_guard(|s| {
+            s.expect(TokenKind::LeftParen)?;
+            let mut args = Vec::new();
 
-        while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-            // Use parse_assignment instead of parse_expression to avoid comma operator handling
-            let mut arg = self.parse_assignment()?;
+            while s.peek_kind() != Some(TokenKind::RightParen) && !s.tokens.is_eof() {
+                // Use parse_assignment instead of parse_expression to avoid comma operator handling
+                let mut arg = s.parse_assignment()?;
 
-            // Check for fat arrow after the argument
-            // If we see =>, the argument should be auto-quoted if it's a bare identifier
-            if self.peek_kind() == Some(TokenKind::FatArrow) {
-                // Auto-quote bare identifiers before =>
-                if let NodeKind::Identifier { ref name } = arg.kind {
-                    // Convert identifier to string (auto-quoting)
-                    arg = Node::new(
-                        NodeKind::String { value: name.clone(), interpolated: false },
-                        arg.location,
-                    );
+                // Check for fat arrow after the argument
+                // If we see =>, the argument should be auto-quoted if it's a bare identifier
+                if s.peek_kind() == Some(TokenKind::FatArrow) {
+                    // Auto-quote bare identifiers before =>
+                    if let NodeKind::Identifier { ref name } = arg.kind {
+                        // Convert identifier to string (auto-quoting)
+                        arg = Node::new(
+                            NodeKind::String { value: name.clone(), interpolated: false },
+                            arg.location,
+                        );
+                    }
+                    args.push(arg);
+                    s.tokens.next()?; // consume =>
+                    // Continue to parse more arguments (the value after =>)
+                    continue;
                 }
+
                 args.push(arg);
-                self.tokens.next()?; // consume =>
-                // Continue to parse more arguments (the value after =>)
-                continue;
-            }
 
-            args.push(arg);
-
-            // Accept both comma and fat arrow as separators
-            match self.peek_kind() {
-                Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {
-                    self.tokens.next()?;
+                // Accept both comma and fat arrow as separators
+                match s.peek_kind() {
+                    Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {
+                        s.tokens.next()?;
+                    }
+                    _ => break,
                 }
-                _ => break,
             }
-        }
 
-        self.expect(TokenKind::RightParen)?;
-        Ok(args)
+            s.expect(TokenKind::RightParen)?;
+            Ok(args)
+        })
     }
 
 }
