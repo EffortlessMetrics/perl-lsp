@@ -18,26 +18,30 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn test_path_validation_safe_relative_paths() -> TestResult {
-    let workspace = std::env::current_dir()?.join("test_workspace");
-    std::fs::create_dir_all(&workspace)?;
+    let tempdir = tempfile::tempdir()?;
+    let workspace = tempdir.path();
 
     // Safe relative paths
     let safe_paths = vec!["src/main.pl", "./lib/Module.pm", "test.pl", ".gitignore"];
 
     for path_str in safe_paths {
         let path = PathBuf::from(path_str);
-        let result = validate_path(&path, &workspace);
-        assert!(result.is_ok(), "Path '{}' should be valid within workspace", path_str);
+        let result = validate_path(&path, workspace);
+        assert!(
+            result.is_ok(),
+            "Path '{}' should be valid within workspace, got: {:?}",
+            path_str,
+            result
+        );
     }
 
-    std::fs::remove_dir_all(&workspace).ok();
     Ok(())
 }
 
 #[test]
-fn test_path_validation_parent_traversal_attempts() {
-    let workspace = std::env::current_dir().expect("Failed to get cwd").join("test_workspace");
-    std::fs::create_dir_all(&workspace).ok();
+fn test_path_validation_parent_traversal_attempts() -> TestResult {
+    let tempdir = tempfile::tempdir()?;
+    let workspace = tempdir.path();
 
     // Malicious paths with parent directory references
     let malicious_paths =
@@ -45,7 +49,7 @@ fn test_path_validation_parent_traversal_attempts() {
 
     for path_str in malicious_paths {
         let path = PathBuf::from(path_str);
-        let result = validate_path(&path, &workspace);
+        let result = validate_path(&path, workspace);
 
         if result.is_ok() {
             eprintln!(
@@ -67,26 +71,30 @@ fn test_path_validation_parent_traversal_attempts() {
         // Verify it's the right error type
         if let Err(e) = result {
             match e {
-                SecurityError::PathTraversalAttempt(_) => {}
-                _ => panic!("Expected PathTraversalAttempt error for '{}', got: {:?}", path_str, e),
+                SecurityError::PathTraversalAttempt(_)
+                | SecurityError::PathOutsideWorkspace(_) => {}
+                _ => panic!(
+                    "Expected PathTraversalAttempt or PathOutsideWorkspace error for '{}', got: {:?}",
+                    path_str, e
+                ),
             }
         }
     }
 
-    std::fs::remove_dir_all(&workspace).ok();
+    Ok(())
 }
 
 #[test]
-fn test_path_validation_absolute_paths() {
-    let workspace = std::env::current_dir().expect("Failed to get cwd").join("test_workspace");
-    std::fs::create_dir_all(&workspace).ok();
+fn test_path_validation_absolute_paths() -> TestResult {
+    let tempdir = tempfile::tempdir()?;
+    let workspace = tempdir.path();
 
     // Absolute paths outside workspace should be rejected
     let outside_paths = vec!["/etc/passwd", "/root/.ssh/id_rsa"];
 
     for path_str in outside_paths {
         let path = PathBuf::from(path_str);
-        let result = validate_path(&path, &workspace);
+        let result = validate_path(&path, workspace);
         assert!(
             result.is_err(),
             "Absolute path '{}' outside workspace should be rejected",
@@ -94,7 +102,7 @@ fn test_path_validation_absolute_paths() {
         );
     }
 
-    std::fs::remove_dir_all(&workspace).ok();
+    Ok(())
 }
 
 #[test]

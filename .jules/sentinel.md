@@ -70,3 +70,13 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-10-27 - State Corruption via Iterators and Package Switching
+**Vulnerability:** The `perl-dap` safe evaluation mode failed to block iterator consumption operators (`each`, `keys`, `values`), PRNG state consumption (`rand`), string modification (`chop`, `chomp`), and namespace switching (`package`). Using `keys` or `values` on a hash during a debugging session silently resets the hash iterator, potentially breaking the debugged program's loops.
+**Learning:** "Safe" evaluation must consider ALL forms of state mutation, including internal interpreter state like iterators, random number seeds, and the current package context. Even "read-only" looking operations like `keys` have side effects in Perl.
+**Prevention:** Audit built-ins for hidden side effects. Specifically for Perl, block iterator interaction (`each`, `keys`, `values`) and context switching (`package`, `use`, `no`) in safe mode.
+
+## 2026-10-27 - Race Conditions in Security Integration Tests
+**Vulnerability:** The security integration tests in `crates/perl-dap/tests/dap_security_validation_tests.rs` used a shared `test_workspace` directory relative to the current working directory. When running tests in parallel, one test's cleanup (`remove_dir_all`) would delete the workspace while another test was attempting to validate paths against it, causing flaky failures.
+**Learning:** Security tests often require filesystem manipulation (creating/deleting workspaces). Using shared directories prevents parallel execution and causes race conditions.
+**Prevention:** Always use `tempfile::tempdir()` to create isolated, unique workspace directories for each test case involving filesystem operations.
