@@ -108,8 +108,15 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "delete",
                 "undef",
                 "srand",
+                "rand",
                 "bless",
-                "reset", // Process control
+                "reset",
+                "chop",
+                "chomp",
+                "each",
+                "keys",
+                "values",
+                // Process control
                 "system",
                 "exec",
                 "fork",
@@ -123,11 +130,16 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "setpgrp",
                 "setpriority",
                 "umask",
-                "lock", // I/O
+                "lock",
+                "package",
+                "use",
+                "no",
+                // I/O
                 "qx",
                 "readpipe",
                 "syscall",
                 "open",
+                "sysopen",
                 "close",
                 "print",
                 "say",
@@ -162,6 +174,7 @@ fn dangerous_ops_re() -> Option<&'static Regex> {
                 "chdir",
                 "chmod",
                 "chown",
+                "chgrp",
                 "chroot",
                 "truncate",
                 "utime",
@@ -3213,6 +3226,30 @@ DB<1>"#;
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_safe_eval_blocks_missing_ops() {
+        // These operations were previously missing from the blocklist but are dangerous
+        // or state-mutating (iterator resets, package switching, etc.)
+        let missing = [
+            "sysopen $fh, 'file', 0666",
+            "chop $val",
+            "chomp $val",
+            "each %hash",
+            "keys %hash",   // Resets iterator
+            "values %hash", // Resets iterator
+            "rand",         // Consumes PRNG state
+            "chgrp 100, 'file'",
+            "use Data::Dumper",
+            "no strict",
+            "package My::Package",
+        ];
+
+        for expr in missing {
+            let err = validate_safe_expression(expr);
+            assert!(err.is_some(), "Expression '{expr}' should be blocked but was allowed");
         }
     }
 }
