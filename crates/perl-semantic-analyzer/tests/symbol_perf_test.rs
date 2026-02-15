@@ -123,3 +123,39 @@ sub documented_sub {
     assert_eq!(sub_symbols.len(), 1);
     assert!(sub_symbols[0].documentation.is_some());
 }
+
+#[test]
+#[ignore]
+fn benchmark_string_interpolation_extraction() {
+    // Generate code with many interpolated strings
+    let mut code = String::from("package TestPackage;\n\n");
+    code.push_str("sub test_interpolation {\n");
+
+    // 5000 lines of interpolated strings
+    for i in 0..5000 {
+        code.push_str(&format!("    my $var_{} = \"Hello $name_{}, how are you ${{{}}}\";\n", i, i, i));
+    }
+    code.push_str("}\n");
+
+    println!("Code size: {} bytes", code.len());
+
+    // Parse once
+    let mut parser = Parser::new(&code);
+    let ast = parser.parse().expect("parse failed");
+
+    // Benchmark extraction
+    let start = Instant::now();
+    let extractor = SymbolExtractor::new_with_source(&code);
+    let table = extractor.extract(&ast);
+    let duration = start.elapsed();
+
+    println!("Extraction time: {:?}", duration);
+
+    // Verify we found references
+    let total_refs = table.references.len();
+    println!("Total references found: {}", total_refs);
+
+    // We expect 5000 declarations + 5000 * 2 references in strings = 15000 roughly
+    // The exact number depends on how variable declarations are handled vs references
+    assert!(total_refs >= 5000);
+}
