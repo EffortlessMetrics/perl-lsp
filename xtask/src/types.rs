@@ -16,6 +16,7 @@ pub enum ScannerType {
     Rust,
     Both,
     V3,
+    V2PestMicrocrate,
 }
 
 #[derive(Clone, clap::ValueEnum)]

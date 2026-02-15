@@ -172,6 +172,17 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
                 }
             }
         }
+        Some(ScannerType::V2PestMicrocrate) => {
+            // Use the extracted v2 Pest microcrate directly
+            let mut parser = perl_parser_pest::PureRustPerlParser::new();
+            match parser.parse(&test_case.source) {
+                Ok(ast) => parser.to_sexp(&ast),
+                Err(e) => {
+                    // Return an error node for failed parses
+                    format!("(ERROR {})", e)
+                }
+            }
+        }
         Some(ScannerType::Both) => {
             // Parse using both C and V3 scanners and compare results
             let c_tree = tree_sitter_perl::parse(&test_case.source)?;
@@ -293,6 +304,13 @@ fn diagnose_parse_differences(
         }
         Some(ScannerType::Rust) => {
             let mut parser = tree_sitter_perl::PureRustPerlParser::new();
+            match parser.parse(&test_case.source) {
+                Ok(ast) => parser.to_sexp(&ast),
+                Err(e) => format!("(ERROR {})", e),
+            }
+        }
+        Some(ScannerType::V2PestMicrocrate) => {
+            let mut parser = perl_parser_pest::PureRustPerlParser::new();
             match parser.parse(&test_case.source) {
                 Ok(ast) => parser.to_sexp(&ast),
                 Err(e) => format!("(ERROR {})", e),

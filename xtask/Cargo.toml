@@ -24,8 +24,9 @@ indicatif = "0.18.3"
 console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
 perl-parser = { workspace = true }
+perl-parser-pest = { workspace = true, optional = true }
 tree-sitter = { workspace = true }
-tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", optional = true }
+tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", optional = true, features = ["c-parser"] }
 regex = "1.12.2"
 serde_yaml_ng = "0.10.0"
 bindgen = "0.72.1"
@@ -42,7 +43,6 @@ perl-tdd-support = { workspace = true }
 
 [features]
 # Additional tasks that depend on legacy tree-sitter-perl crate
-legacy = []
+legacy = ["tree-sitter-perl", "perl-parser-pest"]
 # Parser-related tasks
 parser-tasks = ["tree-sitter-perl"]
-

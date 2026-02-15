@@ -29,9 +29,11 @@ lazy_static = "1.5.0"
 default = []
 serde = ["dep:serde"]
 
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
 [lib]
 doctest = false
 
 [lints]
 workspace = true
-

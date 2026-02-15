@@ -1,37 +1,40 @@
-//! Enhanced S-expression formatter with position tracking
+//! S-expression formatter for AST nodes
 //!
-//! This module provides tree-sitter compatible S-expression output with:
-//! - Byte position tracking for all nodes
-//! - Proper field names for tree-sitter compatibility
-//! - Compact and pretty-print modes
-//! - Error node handling
+//! This module provides utilities for converting the pure Rust AST
+//! into tree-sitter compatible S-expression strings for testing
+//! and debugging.
 
 use crate::pure_rust_parser::AstNode;
 use std::fmt::Write;
 
+/// Position information for a node
 #[derive(Debug, Clone, Copy)]
-pub struct Position {
+pub struct NodeSpan {
+    pub start: SourcePos,
+    pub end: SourcePos,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SourcePos {
     pub byte: usize,
     pub line: usize,
     pub column: usize,
 }
 
-#[derive(Debug, Clone)]
-pub struct NodeSpan {
-    pub start: Position,
-    pub end: Position,
-}
-
+/// Formatter for converting AST to S-expression
 pub struct SexpFormatter {
+    /// Original source code (for position calculation)
     #[allow(dead_code)]
     source: String,
+    /// Whether to include position information
     include_positions: bool,
+    /// Whether to use compact one-line format
     compact: bool,
 }
 
 impl SexpFormatter {
     pub fn new(source: &str) -> Self {
-        Self { source: source.to_string(), include_positions: true, compact: false }
+        Self { source: source.to_string(), include_positions: false, compact: false }
     }
 
     pub fn with_positions(mut self, include: bool) -> Self {
@@ -76,7 +79,7 @@ impl SexpFormatter {
                     } else {
                         write!(output, " ")?;
                     }
-                    let _ = self.format_node(stmt, output, depth + 1);
+                    self.format_node(stmt, output, depth + 1)?;
                 }
             }
 
@@ -87,7 +90,7 @@ impl SexpFormatter {
                     } else {
                         write!(output, " ")?;
                     }
-                    let _ = self.format_node(stmt, output, depth + 1);
+                    self.format_node(stmt, output, depth + 1)?;
                 }
             }
 
@@ -97,7 +100,7 @@ impl SexpFormatter {
                 } else {
                     write!(output, " ")?;
                 }
-                let _ = self.format_node(inner, output, depth + 1);
+                self.format_node(inner, output, depth + 1)?;
             }
 
             VariableDeclaration { scope, variables, initializer } => {
@@ -106,13 +109,13 @@ impl SexpFormatter {
                 write!(output, " (variables")?;
                 for var in variables {
                     write!(output, " ")?;
-                    let _ = self.format_node(var, output, depth + 1);
+                    self.format_node(var, output, depth + 1)?;
                 }
                 write!(output, ")")?;
 
                 if let Some(init) = initializer {
                     write!(output, " (initializer ")?;
-                    let _ = self.format_node(init, output, depth + 1);
+                    self.format_node(init, output, depth + 1)?;
                     write!(output, ")")?;
                 }
             }
@@ -133,78 +136,89 @@ impl SexpFormatter {
                 }
 
                 write!(output, " (body ")?;
-                let _ = self.format_node(body, output, depth + 1);
+                self.format_node(body, output, depth + 1)?;
                 write!(output, ")")?;
             }
 
             BinaryOp { op, left, right } => {
                 write!(output, " operator: {}", op)?;
                 write!(output, " (left ")?;
-                let _ = self.format_node(left, output, depth + 1);
+                self.format_node(left, output, depth + 1)?;
                 write!(output, ") (right ")?;
-                let _ = self.format_node(right, output, depth + 1);
+                self.format_node(right, output, depth + 1)?;
                 write!(output, ")")?;
             }
 
             UnaryOp { op, operand } => {
                 write!(output, " operator: {}", op)?;
                 write!(output, " (operand ")?;
-                let _ = self.format_node(operand, output, depth + 1);
+                self.format_node(operand, output, depth + 1)?;
+                write!(output, ")")?;
+            }
+
+            TernaryOp { condition, true_expr, false_expr } => {
+                write!(output, " (condition ")?;
+                self.format_node(condition, output, depth + 1)?;
+                write!(output, ") (then ")?;
+                self.format_node(true_expr, output, depth + 1)?;
+                write!(output, ") (else ")?;
+                self.format_node(false_expr, output, depth + 1)?;
                 write!(output, ")")?;
             }
 
             FunctionCall { function, args } => {
                 write!(output, " (function ")?;
-                let _ = self.format_node(function, output, depth + 1);
+                self.format_node(function, output, depth + 1)?;
                 write!(output, ") (arguments")?;
                 for arg in args {
                     write!(output, " ")?;
-                    let _ = self.format_node(arg, output, depth + 1);
+                    self.format_node(arg, output, depth + 1)?;
                 }
                 write!(output, ")")?;
             }
 
             MethodCall { object, method, args } => {
                 write!(output, " (object ")?;
-                let _ = self.format_node(object, output, depth + 1);
+                self.format_node(object, output, depth + 1)?;
                 write!(output, ") method: {} (arguments", method)?;
                 for arg in args {
                     write!(output, " ")?;
-                    let _ = self.format_node(arg, output, depth + 1);
+                    self.format_node(arg, output, depth + 1)?;
                 }
                 write!(output, ")")?;
             }
 
             IfStatement { condition, then_block, elsif_clauses, else_block } => {
                 write!(output, " (condition ")?;
-                let _ = self.format_node(condition, output, depth + 1);
+                self.format_node(condition, output, depth + 1)?;
                 write!(output, ") (then ")?;
-                let _ = self.format_node(then_block, output, depth + 1);
+                self.format_node(then_block, output, depth + 1)?;
                 write!(output, ")")?;
 
-                for (elsif_cond, elsif_block) in elsif_clauses {
+                for (cond, block) in elsif_clauses {
                     write!(output, " (elsif (condition ")?;
-                    let _ = self.format_node(elsif_cond, output, depth + 1);
+                    self.format_node(cond, output, depth + 1)?;
                     write!(output, ") (block ")?;
-                    let _ = self.format_node(elsif_block, output, depth + 1);
+                    self.format_node(block, output, depth + 1)?;
                     write!(output, "))")?;
                 }
 
-                if let Some(else_blk) = else_block {
+                if let Some(else_block) = else_block {
                     write!(output, " (else ")?;
-                    let _ = self.format_node(else_blk, output, depth + 1);
+                    self.format_node(else_block, output, depth + 1)?;
                     write!(output, ")")?;
                 }
             }
 
-            WhileStatement { label, condition, block } => {
+            WhileStatement { label, condition, block }
+            | UntilStatement { label, condition, block } => {
                 if let Some(lbl) = label {
                     write!(output, " label: {}", lbl)?;
                 }
                 write!(output, " (condition ")?;
-                let _ = self.format_node(condition, output, depth + 1);
+                self.format_node(condition, output, depth + 1)?;
                 write!(output, ") (body ")?;
-                let _ = self.format_node(block, output, depth + 1);
+                self.format_node(block, output, depth + 1)?;
                 write!(output, ")")?;
             }
 
@@ -214,17 +228,16 @@ impl SexpFormatter {
                 }
                 if let Some(var) = variable {
                     write!(output, " (variable ")?;
-                    let _ = self.format_node(var, output, depth + 1);
+                    self.format_node(var, output, depth + 1)?;
                     write!(output, ")")?;
                 }
                 write!(output, " (list ")?;
-                let _ = self.format_node(list, output, depth + 1);
+                self.format_node(list, output, depth + 1)?;
                 write!(output, ") (body ")?;
-                let _ = self.format_node(block, output, depth + 1);
+                self.format_node(block, output, depth + 1)?;
                 write!(output, ")")?;
             }
 
-            // Literals
             Number(n) => write!(output, " value: {}", n)?,
             String(s) => write!(output, " value: {:?}", s)?,
             Identifier(id) => write!(output, " name: {}", id)?,
@@ -232,7 +245,7 @@ impl SexpFormatter {
             ArrayVariable(name) => write!(output, " name: {}", name)?,
             HashVariable(name) => write!(output, " name: {}", name)?,
 
-            Heredoc { marker, indented, quoted, content } => {
+            Heredoc { marker, indented, quoted, content, .. } => {
                 write!(
                     output,
                     " marker: {} indented: {} quoted: {} content: {:?}",
@@ -240,11 +253,11 @@ impl SexpFormatter {
                 )?;
             }
 
-            DataSection(content) => {
+            EndSection(content) => {
                 write!(output, " content: {:?}", content)?;
             }
 
-            Pod(content) => {
+            Comment(content) => {
                 write!(output, " content: {:?}", content)?;
             }
 
@@ -252,14 +265,17 @@ impl SexpFormatter {
                 write!(output, " message: {:?} content: {:?}", message, content)?;
             }
 
+            EmptyExpression => {}
+
             // Default for other node types
             _ => {
                 // For complex nodes, recursively format children
-                self.format_children(node, output, depth + 1);
+                self.format_children(node, output, depth + 1)?;
             }
         }
 
-        write!(output, ")")
+        write!(output, ")")?;
+        Ok(())
     }
 
     fn get_node_type(&self, node: &AstNode) -> &'static str {
@@ -309,9 +325,15 @@ impl SexpFormatter {
     }
 
     #[allow(clippy::ptr_arg)] // needs String for consistency with format_node
-    fn format_children(&self, _node: &AstNode, _output: &mut String, _depth: usize) {
+    fn format_children(
+        &self,
+        _node: &AstNode,
+        _output: &mut String,
+        _depth: usize,
+    ) -> std::fmt::Result {
         // This is a placeholder for nodes that need custom formatting
         // In a real implementation, we'd handle all node types
+        Ok(())
     }
 
     fn get_node_span(&self, _node: &AstNode) -> Option<NodeSpan> {
@@ -351,8 +373,8 @@ impl SexpBuilder {
         self.buffer.push_str(value);
     }
 
-    pub fn add_position(&mut self, start: usize, end: usize) {
-        let _ = write!(&mut self.buffer, " [{}-{}]", start, end);
+    pub fn add_position(&mut self, start: usize, end: usize) -> std::fmt::Result {
+        write!(&mut self.buffer, " [{}-{}]", start, end)
     }
 
     pub fn end_node(&mut self) {
@@ -379,11 +401,10 @@ mod tests {
         }))]);
 
         let sexp = formatter.format(&ast);
-        // Note: format_children is a placeholder, so children aren't recursively formatted
-        // This is a known limitation of the v2 parser S-expression formatter
         assert!(sexp.contains("source_file"));
         assert!(sexp.contains("assignment"));
-        // Children formatting is incomplete - this is tracked as a known limitation
+        // `format_children` is still a placeholder for many node kinds, so
+        // child nodes are not guaranteed to be present in output.
     }
 
     #[test]
