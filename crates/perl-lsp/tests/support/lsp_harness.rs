@@ -7,7 +7,7 @@
 
 use parking_lot::Mutex;
 use perl_lsp::LspServer;
-use perl_tdd_support::{must, must_some};
+use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::fs;
@@ -1271,7 +1271,7 @@ impl TestContext {
     pub fn initialize_with(&mut self, root_uri: &str, capabilities: Option<Value>) -> Value {
         match self.harness.initialize_ready(root_uri, capabilities) {
             Ok(v) => v,
-            Err(e) => assert!(false, "initialization should succeed: {e}"),
+            Err(e) => panic!("initialization should succeed: {e}"),
         }
     }
 

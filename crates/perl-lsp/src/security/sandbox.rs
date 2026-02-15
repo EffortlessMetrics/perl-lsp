@@ -80,14 +80,16 @@ impl Sandbox {
         self.apply_sandbox_restrictions(&mut cmd)?;
 
         // Execute and capture output
+        let start = std::time::Instant::now();
         let output = cmd.output()?;
-        
+        let execution_time = start.elapsed();
+
         Ok(SandboxResult {
             exit_code: output.status.code().unwrap_or(-1),
             stdout: output.stdout,
             stderr: output.stderr,
             success: output.status.success(),
-            execution_time: std::time::Duration::from_secs(0), // TODO: Measure actual time
+            execution_time,
         })
     }
 

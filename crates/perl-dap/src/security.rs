@@ -452,16 +452,26 @@ mod tests {
         use perl_tdd_support::must;
         // Use current directory as workspace to ensure it exists
         let workspace = must(std::env::current_dir());
-        // Windows-style path with mixed separators - on Unix this is just weird filename chars
+        // Windows-style path with mixed separators
         let path = PathBuf::from("..\\../etc/passwd");
 
         let result = validate_path(&path, &workspace);
-        // On Unix, backslash is just a character, so ..\ is a directory name, not parent ref
-        assert!(
-            result.is_err(),
-            "Mixed separators should likely be rejected or sanitized: {:?}",
-            result
-        );
+        if cfg!(windows) {
+            // On Windows, backslash is a path separator so this is a traversal attempt
+            assert!(
+                result.is_err(),
+                "Mixed separators should be rejected on Windows: {:?}",
+                result
+            );
+        } else {
+            // On Unix, backslash is a valid filename character, so `..\\..` is a
+            // single directory name component — not a parent traversal
+            assert!(
+                result.is_ok(),
+                "On Unix, backslash is a literal char, not a separator: {:?}",
+                result
+            );
+        }
         Ok(())
     }
 }

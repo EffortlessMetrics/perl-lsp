@@ -18,7 +18,7 @@
 
 #![allow(dead_code)]
 
-use perl_tdd_support::{must, must_some};
+use perl_tdd_support::must_some;
 use serde_json::Value;
 
 /// Assert hover response has text content
