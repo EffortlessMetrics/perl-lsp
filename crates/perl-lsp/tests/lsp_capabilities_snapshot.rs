@@ -4,8 +4,8 @@
 //! and tracked in changelog
 
 use perl_lsp::protocol::capabilities::{BuildFlags, capabilities_json};
-use serde_json::Value;
 use perl_tdd_support::must;
+use serde_json::Value;
 
 /// Snapshot of production capabilities (v0.8.5)
 const PRODUCTION_CAPABILITIES_SNAPSHOT: &str =

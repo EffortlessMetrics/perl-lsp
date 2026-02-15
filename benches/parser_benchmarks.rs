@@ -4,9 +4,9 @@
 //! of the Pure Rust Perl parser, with optional comparison to legacy C parser.
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use perl_tdd_support::must;
 use std::hint::black_box;
 use tree_sitter::Parser;
-use perl_tdd_support::must;
 
 // Import the language function based on features
 #[cfg(all(feature = "c-scanner", not(feature = "pure-rust")))]

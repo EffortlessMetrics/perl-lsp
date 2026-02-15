@@ -469,14 +469,26 @@ fn test_thread_safe_sequence_numbers() {
             let response = adapter.handle_request(i, "initialize", None);
             match response {
                 DapMessage::Response { seq, .. } => seq,
-                _ => must(Err::<(), _>(format!("Expected Response"))),
+                _ => {
+                    must(Err::<(), _>(format!("Expected Response")));
+                    unreachable!()
+                }
             }
         });
         handles.push(handle);
     }
 
     // Collect all sequence numbers
-    let mut seq_numbers: Vec<i64> = handles.into_iter().map(|h| must(h.join())).collect();
+    let mut seq_numbers: Vec<i64> = handles
+        .into_iter()
+        .map(|h| match h.join() {
+            Ok(seq) => seq,
+            Err(_) => {
+                must(Err::<(), _>("Thread joined with error"));
+                unreachable!()
+            }
+        })
+        .collect();
 
     // Verify all unique
     seq_numbers.sort_unstable();

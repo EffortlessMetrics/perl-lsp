@@ -7,11 +7,11 @@ use support::lsp_client::LspClient;
 
 fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///isa.pl";
     let source = "package Base; package Child; use parent 'Base'; package GrandChild; use parent 'Child'; 1;\n";
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Prepare type hierarchy at "Base"
     let base_col = source.find("Base").ok_or("Failed to find 'Base' in source")?;
@@ -71,7 +71,7 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(supertypes.len(), 1, "Child should have one direct supertype");
     assert_eq!(supertypes[0]["name"], "Base", "Supertype should be Base");
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }
 
@@ -79,7 +79,7 @@ fn prepare_and_subtypes() -> Result<(), Box<dyn std::error::Error>> {
 
 fn multiple_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///multi.pl";
     let source = r#"
 package Mixin1;
@@ -89,7 +89,7 @@ use parent qw(Mixin1 Mixin2);
 1;
 "#;
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Find position of "Combined"
     let col = source.find("Combined").ok_or("Failed to find 'Combined' in source")?;
@@ -133,7 +133,7 @@ use parent qw(Mixin1 Mixin2);
     assert!(names.contains(&"Mixin1".to_string()), "Should have Mixin1 as parent");
     assert!(names.contains(&"Mixin2".to_string()), "Should have Mixin2 as parent");
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }
 
@@ -141,7 +141,7 @@ use parent qw(Mixin1 Mixin2);
 
 fn isa_array_inheritance() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///isa.pl";
     let source = r#"
 package Parent1;
@@ -151,7 +151,7 @@ our @ISA = ('Parent1', 'Parent2');
 1;
 "#;
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Find position of "Child"
     let col = source.find("Child").ok_or("Failed to find 'Child' in source")?;
@@ -195,7 +195,7 @@ our @ISA = ('Parent1', 'Parent2');
     assert!(names.contains(&"Parent1".to_string()), "Should have Parent1 in @ISA");
     assert!(names.contains(&"Parent2".to_string()), "Should have Parent2 in @ISA");
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }
 
@@ -203,7 +203,7 @@ our @ISA = ('Parent1', 'Parent2');
 
 fn type_hierarchy_ignores_string_literals() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///string.pl";
     let source = r#"
 package Base;
@@ -215,7 +215,7 @@ sub test {
 1;
 "#;
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Try to get type hierarchy on the string literal 'Base'
     let string_col = source.find("'Base'").ok_or("Failed to find 'Base' in source")?;
@@ -253,6 +253,6 @@ sub test {
     assert!(!items.is_empty(), "Package Base should be found");
     assert_eq!(items[0]["name"], "Base", "Should find the Base package");
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }

@@ -649,11 +649,11 @@ mod missing_docs_tests {
             let lib_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/lib.rs");
             let content = match std::fs::read_to_string(lib_path) {
                 Ok(c) => c,
-            Err(e) => {
-                let msg = format!("Failed to read lib.rs: {}", e);
-                assert!(msg.is_empty(), "{}", msg);
-                return;
-            }
+                Err(e) => {
+                    let msg = format!("Failed to read lib.rs: {}", e);
+                    assert!(msg.is_empty(), "{}", msg);
+                    return;
+                }
             };
             assert!(
                 content.contains("warn(missing_docs)"),

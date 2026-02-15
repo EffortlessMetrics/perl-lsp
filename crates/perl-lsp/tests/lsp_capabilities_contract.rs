@@ -1,4 +1,5 @@
 use perl_lsp::{JsonRpcRequest, LspServer};
+use perl_tdd_support::must;
 use serde_json::json;
 
 /// Test that ensures LSP capabilities match GA contract
@@ -51,7 +52,10 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
                 "workspaceSymbolProvider.resolveProvider must be true"
             );
         }
-        other => must(Err::<(), _>(format!("unexpected workspaceSymbolProvider: {:?}", other))),
+        other => {
+            must(Err::<(), _>(format!("unexpected workspaceSymbolProvider: {:?}", other)));
+            unreachable!()
+        }
     }
 
     // Assert what SHOULD be advertised (v0.8.4 features)

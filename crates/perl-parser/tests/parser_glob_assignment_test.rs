@@ -35,13 +35,25 @@ fn parser_glob_simple_assignment() {
                     assert_eq!(name, "bar", "Expected typeglob name 'bar'");
                 }
             } else {
-                assert!(matches!(expression.kind, NodeKind::Assignment { .. }), "Expected Assignment, got {:?}", expression.kind);
+                assert!(
+                    matches!(expression.kind, NodeKind::Assignment { .. }),
+                    "Expected Assignment, got {:?}",
+                    expression.kind
+                );
             }
         } else {
-            assert!(matches!(stmt.kind, NodeKind::ExpressionStatement { .. }), "Expected ExpressionStatement, got {:?}", stmt.kind);
+            assert!(
+                matches!(stmt.kind, NodeKind::ExpressionStatement { .. }),
+                "Expected ExpressionStatement, got {:?}",
+                stmt.kind
+            );
         }
     } else {
-        assert!(matches!(ast.kind, NodeKind::Program { .. }), "Expected Program node, got {:?}", ast.kind);
+        assert!(
+            matches!(ast.kind, NodeKind::Program { .. }),
+            "Expected Program node, got {:?}",
+            ast.kind
+        );
     }
 }
 

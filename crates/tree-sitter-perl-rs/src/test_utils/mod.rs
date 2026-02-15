@@ -13,7 +13,9 @@ impl TestUtils {
     /// Parse Perl code and return the tree
     pub fn parse_perl_code(code: &str) -> ParseResult<Tree> {
         let mut parser = Parser::new();
-        parser.set_language(&crate::language()).map_err(|_| crate::error::ParseError::LanguageLoadFailed)?;
+        parser
+            .set_language(&crate::language())
+            .map_err(|_| crate::error::ParseError::LanguageLoadFailed)?;
         parser.parse(code, None).ok_or(crate::error::ParseError::ParseFailed)
     }
 

@@ -3172,7 +3172,10 @@ use Data::Dumper;
 
         let state = coordinator.state();
         assert!(
-            matches!(state, IndexState::Building { phase: IndexPhase::Indexing, total_count: 3, .. }),
+            matches!(
+                state,
+                IndexState::Building { phase: IndexPhase::Indexing, total_count: 3, .. }
+            ),
             "Expected Building state after indexing with total_count 3, got: {:?}",
             state
         );

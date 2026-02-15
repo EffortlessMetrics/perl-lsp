@@ -1320,3 +1320,57 @@ gate-execute gate_id:
 gate-list:
     @python3 scripts/list-gates.py
 
+# ============================================================================
+# Release Gate (Slice C: Release candidate validation)
+# ============================================================================
+
+# Release build (locked, optimized)
+release-build:
+    @echo "Building release binary..."
+    cargo build -p perl-lsp --release --locked
+    @echo "Release build complete: target/release/perl-lsp"
+
+# Version sync check (Slice B: single source of version truth)
+version-check:
+    @echo "Checking version sync..."
+    @bash scripts/check-version-sync.sh
+
+# Release gate: full validation for release candidates (~10 min)
+# Composes: ci-gate + release-specific checks
+release-gate: ci-gate release-build sbom-verify version-check
+    @echo "=============================================="
+    @echo "  RELEASE GATE PASSED"
+    @echo "=============================================="
+
+# ============================================================================
+# LSP Test Tiering (Slice D: tiered test execution)
+# ============================================================================
+
+# Tier A: fast smoke tests for perl-lsp (<30s)
+# Run on every PR for quick feedback
+lsp-tier-a:
+    @echo "Running LSP Tier A (smoke tests)..."
+    cargo test -p perl-lsp --test cli_smoke --test lsp_capabilities_snapshot --test lsp_capabilities_contract --test lsp_protocol_tests --locked -- --test-threads=1
+    @echo "LSP Tier A passed"
+
+# Tier B: core behavior tests for perl-lsp (~2-5 min)
+# Run at merge gate for thorough validation
+lsp-tier-b: lsp-tier-a
+    @echo "Running LSP Tier B (core behavior)..."
+    env RUST_TEST_THREADS=2 cargo test -p perl-lsp \
+        --test semantic_definition \
+        --test lsp_completion_tests \
+        --test lsp_unhappy_paths \
+        --test lsp_code_actions_test \
+        --test execute_command_security_tests \
+        --test lsp_behavioral_tests \
+        --test lsp_workspace_index_e2e \
+        --locked -- --test-threads=2
+    @echo "LSP Tier B passed"
+
+# Tier C: full suite (nightly, all integration tests)
+lsp-tier-c:
+    @echo "Running LSP Tier C (full suite)..."
+    env RUST_TEST_THREADS=2 cargo test -p perl-lsp --locked -- --test-threads=2
+    @echo "LSP Tier C passed"
+

@@ -2065,7 +2065,11 @@ my $documented = 42;
             + col_in_line;
 
         let definition = model.definition_at(byte_offset);
-        assert!(definition.is_some(), "definition_at returned None for $x reference at {}", byte_offset);
+        assert!(
+            definition.is_some(),
+            "definition_at returned None for $x reference at {}",
+            byte_offset
+        );
         if let Some(symbol) = definition {
             assert_eq!(symbol.name, "x");
             assert_eq!(symbol.kind, SymbolKind::scalar());

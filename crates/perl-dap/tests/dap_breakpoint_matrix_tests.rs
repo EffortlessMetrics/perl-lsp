@@ -9,9 +9,9 @@
 use anyhow::Result;
 use perl_dap::breakpoints::BreakpointStore;
 use perl_dap::protocol::{SetBreakpointsArguments, Source, SourceBreakpoint};
+use perl_tdd_support::must;
 use std::io::Write;
 use tempfile::NamedTempFile;
-use perl_tdd_support::must;
 
 /// Helper to create a temporary Perl file and set breakpoints
 fn create_test_file_and_set_breakpoints(

@@ -492,8 +492,11 @@ impl ExecuteCommandProvider {
                     return Ok(self.format_critic_error(error_message, "none"));
                 }
 
-                // Security-related errors (workspace traversal) are failures
-                if e.contains("Path traversal") || e.contains("outside workspace root") {
+                // Security-related errors (workspace traversal, length, ..) are failures
+                if e.contains("Path traversal")
+                    || e.contains("outside workspace")
+                    || e.contains("Argument too long")
+                {
                     return Err(format!("Path resolution failed: {}", e));
                 }
 
@@ -712,8 +715,24 @@ impl ExecuteCommandProvider {
             .and_then(|v| v.as_str())
             .ok_or_else(|| "Missing file path argument".to_string())?;
 
+        // Defense in depth: cap argument length to prevent abuse
+        const MAX_ARG_LENGTH: usize = 4096;
+        if raw_path.len() > MAX_ARG_LENGTH {
+            return Err(format!(
+                "Argument too long ({} bytes, max {})",
+                raw_path.len(),
+                MAX_ARG_LENGTH
+            ));
+        }
+
         // Normalize file:// URIs
         let normalized_path = raw_path.strip_prefix("file://").unwrap_or(raw_path);
+
+        // Defense in depth: reject paths with parent traversal components
+        // even though canonicalize() resolves them, this catches attempts early
+        if normalized_path.contains("..") {
+            return Err("Path traversal attempt detected: path contains '..' component".to_string());
+        }
 
         // Convert to PathBuf and canonicalize to resolve .. and . components
         let path = Path::new(normalized_path);
@@ -721,29 +740,42 @@ impl ExecuteCommandProvider {
             .canonicalize()
             .map_err(|e| format!("Failed to canonicalize path '{}': {}", normalized_path, e))?;
 
-        // Enforce workspace root boundaries when configured
-        // Security note: When workspace_roots is empty, path traversal protection is disabled
-        // for backward compatibility. In production, always configure workspace roots via
-        // initialization (root_path or workspaceFolders) to enable security boundaries.
-        // See .jules/sentinel.md for security guidance.
-        if !self.workspace_roots.is_empty() {
-            let mut allowed = false;
-            for workspace_root in &self.workspace_roots {
-                // Try to canonicalize root, skip if fails (e.g. missing dir)
-                if let Ok(canonical_root) = workspace_root.canonicalize() {
-                    if canonical_path.starts_with(&canonical_root) {
-                        allowed = true;
-                        break;
-                    }
+        // Determine workspace boundaries
+        // Security: When workspace_roots is empty (single-file mode), use CWD as the
+        // fallback boundary to prevent unrestricted path traversal. This ensures that
+        // even without explicit workspace configuration, files outside the working
+        // directory cannot be accessed via executeCommand.
+        let effective_roots: Vec<PathBuf> = if self.workspace_roots.is_empty() {
+            // Fallback: use CWD as boundary when no workspace roots configured
+            // This prevents unrestricted path traversal in single-file mode
+            match std::env::current_dir() {
+                Ok(cwd) => vec![cwd],
+                Err(_) => {
+                    return Err(
+                        "No workspace roots configured and cannot determine working directory"
+                            .to_string(),
+                    );
                 }
             }
+        } else {
+            self.workspace_roots.clone()
+        };
 
-            if !allowed {
-                return Err(format!(
-                    "Path traversal detected: {} is outside workspace roots",
-                    canonical_path.display()
-                ));
+        let mut allowed = false;
+        for workspace_root in &effective_roots {
+            if let Ok(canonical_root) = workspace_root.canonicalize() {
+                if canonical_path.starts_with(&canonical_root) {
+                    allowed = true;
+                    break;
+                }
             }
+        }
+
+        if !allowed {
+            return Err(format!(
+                "Path traversal detected: {} is outside workspace boundaries",
+                canonical_path.display()
+            ));
         }
 
         // Validate file existence and readability
@@ -1045,7 +1077,7 @@ print "Value: $variable\n";
         let temp_file = "/tmp/test_violations_unit.pl";
         fs::write(temp_file, test_content)?;
 
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
         let result =
             provider.execute_command("perl.runCritic", vec![Value::String(temp_file.to_string())]);
 
@@ -1122,7 +1154,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
         // Create a test file to ensure we get a specific result
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test';\n";
@@ -1146,7 +1178,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_file() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
         // Create a test file
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'hello world';\n";
@@ -1170,7 +1202,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_test_sub() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
         // Create a test file with a subroutine
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_sub { print 'test executed'; }\n";
@@ -1196,7 +1228,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_debug_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
         // Create a dummy file
         let temp_file = "/tmp/test_debug.pl";
@@ -1241,7 +1273,7 @@ print "Value: $variable\n";
     #[test]
     fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std::error::Error>>
     {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
         // Create a dummy file
         let temp_file = "/tmp/test_missing_sub.pl";
@@ -1498,7 +1530,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
         // Create a dummy file
         let temp_file = "/tmp/test_mutations.pl";

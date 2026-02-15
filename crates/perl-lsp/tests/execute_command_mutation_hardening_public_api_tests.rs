@@ -19,6 +19,7 @@
 //! - Cross-command behavior verification
 
 use perl_lsp::execute_command::{ExecuteCommandProvider, get_supported_commands};
+use perl_tdd_support::must;
 use serde_json::Value;
 use std::fs;
 use std::io::Write;
@@ -146,7 +147,10 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
                     description
                 );
             }
-            _ => must(Err::<(), _>(format!("Unexpected command: {}", command))),
+            _ => {
+                must(Err::<(), _>(format!("Unexpected command: {}", command)));
+                unreachable!()
+            }
         }
     }
 

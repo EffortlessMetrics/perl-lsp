@@ -3,13 +3,17 @@
 #[cfg(test)]
 mod tests {
     use crate::pure_rust_parser::{AstNode, PureRustPerlParser};
+    use perl_tdd_support::must;
 
     // Helper function to parse and check success
     fn parse_successfully(input: &str) -> AstNode {
         let mut parser = PureRustPerlParser::new();
         match parser.parse(input) {
             Ok(ast) => ast,
-            Err(e) => must(Err::<(), _>(format!("Parse failed for '{}': {}", input, e))),
+            Err(e) => {
+                must(Err::<(), _>(format!("Parse failed for '{}': {}", input, e)));
+                unreachable!()
+            }
         }
     }
 

@@ -342,7 +342,9 @@ mod tests {
         assert!(stats.checkpoints_used > 0 || stats.tokens_relexed > 0);
 
         // Trees should be structurally similar
-        if let (NodeKind::Program { statements: s1 }, NodeKind::Program { statements: s2 }) = (&tree1.kind, &tree2.kind) {
+        if let (NodeKind::Program { statements: s1 }, NodeKind::Program { statements: s2 }) =
+            (&tree1.kind, &tree2.kind)
+        {
             assert_eq!(s1.len(), s2.len());
         } else {
             unreachable!("Expected program nodes");

@@ -1,8 +1,8 @@
 #![allow(dead_code)] // Some tests are feature-gated while being fixed
 
+use perl_tdd_support::must;
 use serde_json::json;
 use std::time::Duration;
-use perl_tdd_support::must;
 
 mod common;
 use common::{
@@ -96,7 +96,10 @@ fn test_missing_required_params() -> Result<(), Box<dyn std::error::Error>> {
             assert!(items_array.is_empty(), "Expected empty items array for missing params");
         }
     } else {
-        must(Err::<(), _>(format!("Expected either error or result in response, got: {:?}", response)));
+        must(Err::<(), _>(format!(
+            "Expected either error or result in response, got: {:?}",
+            response
+        )));
     }
     shutdown_and_exit(&mut server);
     Ok(())
@@ -220,7 +223,9 @@ fn test_document_not_found() -> Result<(), Box<dyn std::error::Error>> {
             assert!(result.is_null(), "Expected null or items array for completion result");
         }
     } else {
-        must(Err::<(), _>(format!("Expected either error or result in response for missing document")));
+        must(Err::<(), _>(format!(
+            "Expected either error or result in response for missing document"
+        )));
     }
 
     shutdown_and_exit(&mut server);
@@ -292,7 +297,9 @@ fn test_out_of_bounds_position() -> Result<(), Box<dyn std::error::Error>> {
             assert!(result.is_null(), "Expected null or items array for completion result");
         }
     } else {
-        must(Err::<(), _>(format!("Expected either error or result in response for out-of-bounds position")));
+        must(Err::<(), _>(format!(
+            "Expected either error or result in response for out-of-bounds position"
+        )));
     }
 
     shutdown_and_exit(&mut server);

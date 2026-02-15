@@ -296,12 +296,12 @@ $val
 
     if let NodeKind::Program { statements } = &ast.kind {
         assert_eq!(statements.len(), 1);
-            let is_format = matches!(statements[0].kind, NodeKind::Format { .. });
-            assert!(is_format, "Expected Format node, got {:?}", statements[0].kind);
-            if let NodeKind::Format { name, body } = &statements[0].kind {
-                assert_eq!(name, "TEST");
-                assert!(!body.is_empty());
-            }
+        let is_format = matches!(statements[0].kind, NodeKind::Format { .. });
+        assert!(is_format, "Expected Format node, got {:?}", statements[0].kind);
+        if let NodeKind::Format { name, body } = &statements[0].kind {
+            assert_eq!(name, "TEST");
+            assert!(!body.is_empty());
+        }
     }
 }
 

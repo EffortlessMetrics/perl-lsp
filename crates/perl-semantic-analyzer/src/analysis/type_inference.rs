@@ -996,7 +996,11 @@ mod tests {
 
         // Check that hash types are properly inferred
         let numbers_type = engine.get_type_at("numbers");
-        assert!(matches!(numbers_type, Some(PerlType::Hash { .. })), "Expected hash type for numbers, got {:?}", numbers_type);
+        assert!(
+            matches!(numbers_type, Some(PerlType::Hash { .. })),
+            "Expected hash type for numbers, got {:?}",
+            numbers_type
+        );
         if let Some(PerlType::Hash { value, .. }) = numbers_type {
             assert!(matches!(
                 value.as_ref(),
@@ -1005,7 +1009,11 @@ mod tests {
         }
 
         let mixed_type = engine.get_type_at("mixed");
-        assert!(matches!(mixed_type, Some(PerlType::Hash { .. })), "Expected hash type for mixed, got {:?}", mixed_type);
+        assert!(
+            matches!(mixed_type, Some(PerlType::Hash { .. })),
+            "Expected hash type for mixed, got {:?}",
+            mixed_type
+        );
         if let Some(PerlType::Hash { value, .. }) = mixed_type {
             // Mixed types (int and float) should unify to Float
             assert!(matches!(

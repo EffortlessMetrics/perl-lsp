@@ -314,7 +314,10 @@ mod tests {
                 // Either error is acceptable - both indicate the path was rejected
             }
             Err(e) => {
-                return Err(anyhow::anyhow!("Expected PathTraversalAttempt or PathOutsideWorkspace error, got: {:?}", e));
+                return Err(anyhow::anyhow!(
+                    "Expected PathTraversalAttempt or PathOutsideWorkspace error, got: {:?}",
+                    e
+                ));
             }
             Ok(_) => return Err(anyhow::anyhow!("Expected error, got Ok")),
         }
@@ -454,7 +457,11 @@ mod tests {
 
         let result = validate_path(&path, &workspace);
         // On Unix, backslash is just a character, so ..\ is a directory name, not parent ref
-        assert!(result.is_err(), "Mixed separators should likely be rejected or sanitized: {:?}", result);
+        assert!(
+            result.is_err(),
+            "Mixed separators should likely be rejected or sanitized: {:?}",
+            result
+        );
         Ok(())
     }
 }

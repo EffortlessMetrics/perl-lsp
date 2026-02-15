@@ -663,9 +663,11 @@ mod tests {
             let ast = must(result);
             if let NodeKind::Program { statements } = &ast.kind {
                 assert_eq!(statements.len(), 1);
-                let is_var_decl = matches!(statements[0].kind, NodeKind::VariableDeclaration { .. });
+                let is_var_decl =
+                    matches!(statements[0].kind, NodeKind::VariableDeclaration { .. });
                 assert!(is_var_decl, "Expected VariableDeclaration for: {}", code);
-                if let NodeKind::VariableDeclaration { declarator: decl, .. } = &statements[0].kind {
+                if let NodeKind::VariableDeclaration { declarator: decl, .. } = &statements[0].kind
+                {
                     assert_eq!(decl, declarator);
                 }
             }

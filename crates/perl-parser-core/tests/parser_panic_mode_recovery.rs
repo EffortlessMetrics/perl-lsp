@@ -3,7 +3,7 @@
 //! Tests for panic mode error recovery that allows the parser to continue
 //! parsing after encountering syntax errors by synchronizing to known points.
 
-use perl_parser_core::{NodeKind, Parser, ParseResult};
+use perl_parser_core::{NodeKind, ParseResult, Parser};
 
 // AC1: Parser implements synchronization point detection for Perl syntax
 #[test]

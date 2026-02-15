@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
+use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
-use anyhow::{Result, anyhow, Context};
 
 /// A simple LSP client for testing the LSP server
 #[allow(dead_code)]
@@ -32,10 +32,12 @@ impl LspClient {
             cmd.env(key, value);
         }
 
-        let mut child = cmd.spawn()
-            .with_context(|| format!("Failed to start LSP server '{}'", bin))?;
+        let mut child =
+            cmd.spawn().with_context(|| format!("Failed to start LSP server '{}'", bin))?;
 
-        let stdout = child.stdout.take()
+        let stdout = child
+            .stdout
+            .take()
             .ok_or_else(|| anyhow!("Failed to get stdout from LSP server process"))?;
         let reader = BufReader::new(stdout);
 
@@ -71,8 +73,8 @@ impl LspClient {
 
         loop {
             line.clear();
-            let bytes_read = self.reader.read_line(&mut line)
-                .context("Failed to read line from LSP server")?;
+            let bytes_read =
+                self.reader.read_line(&mut line).context("Failed to read line from LSP server")?;
 
             if bytes_read == 0 {
                 return Err(anyhow!("LSP server closed stdout unexpectedly"));
@@ -94,20 +96,21 @@ impl LspClient {
         }
 
         // Get content length (case-insensitive)
-        let content_length: usize = headers.get("content-length")
+        let content_length: usize = headers
+            .get("content-length")
             .and_then(|s| s.parse().ok())
             .ok_or_else(|| anyhow!("Missing or invalid Content-Length header in LSP response"))?;
 
         // Read the message body
         let mut body = vec![0u8; content_length];
-        self.reader.read_exact(&mut body)
+        self.reader
+            .read_exact(&mut body)
             .with_context(|| format!("Failed to read {} bytes from LSP server", content_length))?;
 
-        serde_json::from_slice(&body)
-            .with_context(|| {
-                let preview = String::from_utf8_lossy(&body);
-                format!("Failed to parse JSON from LSP server. Body: {}", preview)
-            })
+        serde_json::from_slice(&body).with_context(|| {
+            let preview = String::from_utf8_lossy(&body);
+            format!("Failed to parse JSON from LSP server. Body: {}", preview)
+        })
     }
 
     /// Receive messages until we get one with the specified id

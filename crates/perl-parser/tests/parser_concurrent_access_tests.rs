@@ -7,6 +7,7 @@
 //! - Workspace indexing under concurrent access
 
 use perl_parser::Parser;
+use perl_tdd_support::must;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
@@ -51,16 +52,12 @@ my $result = test_func($x);
 
                     match result {
                         Ok(_ast) => {
-                            results_clone
-                                .lock()
-                                .unwrap()
+                            must(results_clone.lock())
                                 .push((thread_id, iteration, true, parse_time));
                         }
                         Err(e) => {
-                            *error_count_clone.lock().unwrap() += 1;
-                            results_clone
-                                .lock()
-                                .unwrap()
+                            *must(error_count_clone.lock()) += 1;
+                            must(results_clone.lock())
                                 .push((thread_id, iteration, false, parse_time));
                             println!("Thread {} iteration {} error: {}", thread_id, iteration, e);
                         }
@@ -351,13 +348,7 @@ fn test_concurrent_workspace_indexing() {
                         }
 
                         let mut guard = must(results_clone.lock());
-                        guard.push((
-                            thread_id,
-                            file_index,
-                            true,
-                            parse_time,
-                            symbols.len(),
-                        ));
+                        guard.push((thread_id, file_index, true, parse_time, symbols.len()));
                     } else {
                         let mut guard = must(results_clone.lock());
                         guard.push((thread_id, file_index, false, parse_time, 0));
@@ -461,12 +452,7 @@ fn test_high_contention_scenarios() {
                     let parse_time = start_time.elapsed();
 
                     let mut guard = must(results_clone.lock());
-                    guard.push((
-                        thread_id,
-                        operation,
-                        result.is_ok(),
-                        parse_time,
-                    ));
+                    guard.push((thread_id, operation, result.is_ok(), parse_time));
                 }
             })
         })
@@ -751,12 +737,7 @@ fn test_concurrent_stress_and_recovery() {
                     let parse_time = start_time.elapsed();
 
                     let mut guard = must(stress_results_clone.lock());
-                    guard.push((
-                        thread_id,
-                        iteration,
-                        result.is_ok(),
-                        parse_time,
-                    ));
+                    guard.push((thread_id, iteration, result.is_ok(), parse_time));
                 }
             })
         })
@@ -795,13 +776,7 @@ print "Result: $y\n";
                     let parse_time = start_time.elapsed();
 
                     let mut guard = must(recovery_results_clone.lock());
-                    guard.push((
-                        thread_id,
-                        iteration,
-                        result.is_ok(),
-                        parse_time,
-                        counter_value,
-                    ));
+                    guard.push((thread_id, iteration, result.is_ok(), parse_time, counter_value));
                 }
             })
         })

@@ -5,6 +5,8 @@
 
 mod diagnostics;
 mod dispatch;
+/// File discovery abstraction for workspace scanning
+pub mod file_discovery;
 mod language;
 mod lifecycle;
 mod notebook;

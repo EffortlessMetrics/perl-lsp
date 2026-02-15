@@ -914,7 +914,9 @@ sub f { } sub g { } sub h { } sub i { } sub j { }
             IndexState::Degraded { reason: DegradationReason::ResourceLimit { kind }, .. } => {
                 assert_eq!(kind, ResourceKind::MaxSymbols);
             }
-            other => must(Err::<(), _>(format!("Expected MaxSymbols degradation, got {:?}", other))),
+            other => {
+                must(Err::<(), _>(format!("Expected MaxSymbols degradation, got {:?}", other)))
+            }
         }
         Ok(())
     }
@@ -939,7 +941,9 @@ sub f { } sub g { } sub h { } sub i { } sub j { }
             } => {
                 assert!(pending_parses > 10);
             }
-            other => must(Err::<(), _>(format!("Expected ParseStorm degradation, got {:?}", other))),
+            other => {
+                must(Err::<(), _>(format!("Expected ParseStorm degradation, got {:?}", other)))
+            }
         }
     }
 

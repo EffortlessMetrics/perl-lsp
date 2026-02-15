@@ -556,7 +556,10 @@ mod tests {
         assert!(
             matches!(
                 state,
-                IndexState::Degraded { reason: DegradationReason::ScanTimeout { elapsed_ms: 35000 }, .. }
+                IndexState::Degraded {
+                    reason: DegradationReason::ScanTimeout { elapsed_ms: 35000 },
+                    ..
+                }
             ),
             "Expected Degraded state with ScanTimeout (35000ms), got: {:?}",
             state

@@ -59,7 +59,7 @@ fn test_run_test_sub_file_path_injection() -> Result<(), Box<dyn Error>> {
 /// code will NOT be executed.
 #[test]
 fn test_run_test_sub_subname_injection() -> Result<(), Box<dyn Error>> {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Create a minimal test file with a marker subroutine
     let test_file = "/tmp/security_test_sub.pl";
@@ -201,7 +201,8 @@ fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
     let file_path = temp_dir.path().join("test_valid.pl");
     fs::write(&file_path, "print 'VALID_OUTPUT';")?;
 
-    let provider = ExecuteCommandProvider::new();
+    let provider =
+        ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
 
     let result = provider.execute_command(
         "perl.runFile",
@@ -213,5 +214,134 @@ fn test_valid_file_execution() -> Result<(), Box<dyn Error>> {
     let output = val["output"].as_str().ok_or("Missing 'output' field")?;
 
     assert!(output.contains("VALID_OUTPUT"), "Output should contain expected result: {}", output);
+    Ok(())
+}
+
+// ============= Slice E: executeCommand Hardening Tests =============
+// These tests verify the CWD boundary fallback, path traversal protection,
+// argument length caps, and command injection prevention.
+
+/// Test that commands are rejected when workspace_roots is empty and path is outside CWD
+#[test]
+fn test_empty_workspace_roots_enforces_cwd_boundary() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+    // Provider has empty workspace_roots by default, which now falls back to CWD.
+    // /etc/passwd is guaranteed to be outside CWD for any normal project directory.
+
+    let result =
+        provider.execute_command("perl.runCritic", vec![Value::String("/etc/passwd".to_string())]);
+
+    assert!(result.is_err(), "Should reject paths outside CWD when workspace_roots is empty");
+    Ok(())
+}
+
+/// Test that path traversal via .. is rejected
+#[test]
+fn test_path_traversal_with_dot_dot() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+
+    let result = provider
+        .execute_command("perl.runCritic", vec![Value::String("../../../etc/passwd".to_string())]);
+
+    assert!(result.is_err(), "Path traversal with .. should be rejected");
+    let err = result.err().ok_or("Expected error")?;
+    assert!(
+        err.contains("traversal") || err.contains(".."),
+        "Error should mention traversal: {}",
+        err
+    );
+    Ok(())
+}
+
+/// Test that extremely long arguments are rejected
+#[test]
+fn test_argument_length_cap() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+
+    let long_path = "a".repeat(5000);
+    let result = provider.execute_command("perl.runCritic", vec![Value::String(long_path)]);
+
+    assert!(result.is_err(), "Extremely long arguments should be rejected");
+    let err = result.err().ok_or("Expected error")?;
+    assert!(
+        err.contains("too long") || err.contains("4096"),
+        "Error should mention length limit: {}",
+        err
+    );
+    Ok(())
+}
+
+/// Test command injection attempts in file paths
+#[test]
+fn test_command_injection_semicolon() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+
+    let malicious = "; rm -rf /tmp/test";
+    let result =
+        provider.execute_command("perl.runCritic", vec![Value::String(malicious.to_string())]);
+
+    // Should fail at path validation, not reach shell execution.
+    // perl.runCritic returns graceful error responses for file-not-found,
+    // so check either Err or Ok-with-error-status.
+    match result {
+        Err(_) => {} // Rejected outright - good
+        Ok(val) => {
+            assert_eq!(val["status"], "error", "Should report error status for malicious path");
+        }
+    }
+    Ok(())
+}
+
+/// Test command injection via backticks
+#[test]
+fn test_command_injection_backticks() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+
+    let malicious = "`echo pwned`";
+    let result =
+        provider.execute_command("perl.runCritic", vec![Value::String(malicious.to_string())]);
+
+    match result {
+        Err(_) => {} // Rejected outright - good
+        Ok(val) => {
+            assert_eq!(val["status"], "error", "Should report error status for backtick injection");
+        }
+    }
+    Ok(())
+}
+
+/// Test command injection via $()
+#[test]
+fn test_command_injection_dollar_paren() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+
+    let malicious = "$(cat /etc/shadow)";
+    let result =
+        provider.execute_command("perl.runCritic", vec![Value::String(malicious.to_string())]);
+
+    match result {
+        Err(_) => {} // Rejected outright - good
+        Ok(val) => {
+            assert_eq!(val["status"], "error", "Should report error status for $() injection");
+        }
+    }
+    Ok(())
+}
+
+/// Test pipe injection
+#[test]
+fn test_command_injection_pipe() -> Result<(), Box<dyn Error>> {
+    let provider = ExecuteCommandProvider::new();
+
+    let malicious = "| cat /etc/passwd";
+    let result =
+        provider.execute_command("perl.runCritic", vec![Value::String(malicious.to_string())]);
+
+    match result {
+        Err(_) => {} // Rejected outright - good
+        Ok(val) => {
+            assert_eq!(val["status"], "error", "Should report error status for pipe injection");
+        }
+    }
     Ok(())
 }

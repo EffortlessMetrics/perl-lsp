@@ -8,8 +8,8 @@
 mod tests {
 
     use crate::{language, parse};
-    use tree_sitter::Parser;
     use perl_tdd_support::{must, must_some};
+    use tree_sitter::Parser;
 
     #[test]
     fn test_language_loading() {
@@ -251,6 +251,7 @@ mod property_tests {
 #[cfg(test)]
 mod error_tests {
     use crate::error::ParseError;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_error_creation() {
@@ -781,7 +782,11 @@ mod highlight_tests {
             for name in &failed_verifications {
                 println!("   - {}", name);
             }
-            assert!(false, "{} highlight files failed token verification", failed_verifications.len());
+            assert!(
+                false,
+                "{} highlight files failed token verification",
+                failed_verifications.len()
+            );
         }
 
         if parsed_files < total_files {

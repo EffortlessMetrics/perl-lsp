@@ -34,11 +34,11 @@ once_cell = "1.21.3"
 lazy_static = "1.5.0"
 clap = { version = "4.5.53", features = ["derive"] }
 chrono = { version = "0.4.42", features = ["serde"] }
+perl-tdd-support = { path = "../perl-tdd-support" }
 
 [dev-dependencies]
 criterion = "0.8.1"
 test-case = "3.3.1"
-perl-tdd-support = { path = "../perl-tdd-support" }
 
 [lints.rust]
 unused_imports = "warn"

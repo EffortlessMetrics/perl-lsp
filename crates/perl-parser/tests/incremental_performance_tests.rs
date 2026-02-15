@@ -46,9 +46,7 @@ mod incremental_performance_tests {
 
                 // Initial parse with timing
                 let start = Instant::now();
-                if let Err(e) = self.parser.parse(initial_source) {
-                    must(Err::<(), _>(format!("Initial parse failed: {:?}", e)));
-                }
+                must(self.parser.parse(initial_source));
                 let initial_time = start.elapsed();
                 self.baseline_times.push(initial_time);
 
@@ -57,9 +55,7 @@ mod incremental_performance_tests {
                 self.parser.edit(edit);
 
                 let start = Instant::now();
-                if let Err(e) = self.parser.parse(&new_source) {
-                    must(Err::<(), _>(format!("Incremental parse failed: {:?}", e)));
-                }
+                must(self.parser.parse(&new_source));
                 let incremental_time = start.elapsed();
                 self.incremental_times.push(incremental_time);
 
@@ -348,10 +344,8 @@ if ($condition) {
             &source,
             |source| {
                 let new_source = source.replace("10", "100");
-                let pos = match source.find("10") {
-                    Some(p) => p,
-                    None => must(Err::<(), _>(format!("Test data should contain '10'"))),
-                };
+                use perl_tdd_support::must_some;
+                let pos = must_some(source.find("10"));
                 let edit = Edit::new(
                     pos,
                     pos + 2,
@@ -422,10 +416,8 @@ if ($condition) {
             &source,
             |source| {
                 let new_source = source.replace("500", "999");
-                let pos = match source.find("500") {
-                    Some(p) => p,
-                    None => must(Err::<(), _>(format!("Test data should contain '500'"))),
-                };
+                use perl_tdd_support::must_some;
+                let pos = must_some(source.find("500"));
                 let edit = Edit::new(
                     pos,
                     pos + 3,
@@ -457,10 +449,8 @@ if ($condition) {
             &source,
             |source| {
                 let new_source = source.replace("你好世界", "再见");
-                let pos = match source.find("你好世界") {
-                    Some(p) => p,
-                    None => must(Err::<(), _>(format!("Test data should contain '你好世界'"))),
-                };
+                use perl_tdd_support::must_some;
+                let pos = must_some(source.find("你好世界"));
                 let end_pos = pos + "你好世界".len();
                 let edit = Edit::new(
                     pos,
@@ -493,10 +483,8 @@ if ($condition) {
                 TestSourceGenerator::simple_variable(),
                 |source| {
                     let new_source = source.replace("42", &format!("{}{}", 42, batch));
-                    let pos = match source.find("42") {
-                        Some(p) => p,
-                        None => must(Err::<(), _>(format!("Test data should contain '42'"))),
-                    };
+                    use perl_tdd_support::must_some;
+                    let pos = must_some(source.find("42"));
                     let new_len = new_source.len() - source.len() + 2;
                     let edit = Edit::new(
                         pos,
@@ -548,10 +536,8 @@ if ($condition) {
             source,
             |source| {
                 let new_source = source.replace("123", "12456");
-                let pos = match source.find("123") {
-                    Some(p) => p,
-                    None => must(Err::<(), _>(format!("Test data should contain '123'"))),
-                };
+                use perl_tdd_support::must_some;
+                let pos = must_some(source.find("123"));
                 let edit = Edit::new(
                     pos + 2, // Edit at boundary between digits
                     pos + 3,
@@ -579,9 +565,7 @@ if ($condition) {
 
         // Multiple rapid edits
         let mut parser = IncrementalParserV2::new();
-        if let Err(e) = parser.parse(source) {
-            must(Err::<(), _>(format!("Failed to parse test source: {:?}", e)));
-        }
+        must(parser.parse(source));
 
         let edits = [
             (8, 9, "10".to_string()),   // Change "1" to "10"
@@ -611,9 +595,7 @@ if ($condition) {
             };
 
             let start = Instant::now();
-            if let Err(e) = parser.parse(modified_source) {
-                must(Err::<(), _>(format!("Failed to parse modified source: {:?}", e)));
-            }
+            must(parser.parse(modified_source));
             let parse_time = start.elapsed();
 
             total_time += parse_time;

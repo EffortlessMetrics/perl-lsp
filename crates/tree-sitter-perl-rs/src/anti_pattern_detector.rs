@@ -54,12 +54,11 @@ trait PatternDetector: Send + Sync {
 struct FormatHeredocDetector;
 
 /// Pattern for identifying format declarations
-static FORMAT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r"(?m)^\s*format\s+(\w+)\s*=\s*$") {
+static FORMAT_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"(?m)^\s*format\s+(\w+)\s*=\s*$") {
         Ok(re) => re,
         Err(_) => unreachable!("FORMAT_PATTERN regex failed to compile"),
-    }
-});
+    });
 
 impl PatternDetector for FormatHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
@@ -115,12 +114,11 @@ impl PatternDetector for FormatHeredocDetector {
 struct BeginTimeHeredocDetector;
 
 /// Pattern for identifying BEGIN blocks with heredocs
-static BEGIN_BLOCK_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r"(?s)\bBEGIN\s*\{([^}]*<<[^}]*)\}") {
+static BEGIN_BLOCK_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"(?s)\bBEGIN\s*\{([^}]*<<[^}]*)\}") {
         Ok(re) => re,
         Err(_) => unreachable!("BEGIN_BLOCK_PATTERN regex failed to compile"),
-    }
-});
+    });
 
 impl PatternDetector for BeginTimeHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
@@ -169,12 +167,11 @@ impl PatternDetector for BeginTimeHeredocDetector {
 struct DynamicDelimiterDetector;
 
 /// Pattern for identifying dynamic heredoc delimiters
-static DYNAMIC_DELIMITER_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r"<<\s*\$\{[^}]+\}|<<\s*\$\w+|<<\s*`[^`]+`") {
+static DYNAMIC_DELIMITER_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"<<\s*\$\{[^}]+\}|<<\s*\$\w+|<<\s*`[^`]+`") {
         Ok(re) => re,
         Err(_) => unreachable!("DYNAMIC_DELIMITER_PATTERN regex failed to compile"),
-    }
-});
+    });
 
 impl PatternDetector for DynamicDelimiterDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
@@ -272,12 +269,11 @@ impl PatternDetector for SourceFilterDetector {
 struct RegexHeredocDetector;
 
 /// Pattern for identifying heredocs inside regex code blocks
-static REGEX_HEREDOC_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r"\(\?\{[^}]*<<[^}]*\}") {
+static REGEX_HEREDOC_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"\(\?\{[^}]*<<[^}]*\}") {
         Ok(re) => re,
         Err(_) => unreachable!("REGEX_HEREDOC_PATTERN regex failed to compile"),
-    }
-});
+    });
 
 impl PatternDetector for RegexHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
@@ -321,12 +317,11 @@ impl PatternDetector for RegexHeredocDetector {
 struct EvalHeredocDetector;
 
 /// Pattern for identifying heredocs inside eval strings
-static EVAL_HEREDOC_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r#"eval\s+(?:'[^']*<<'[^']*'|"[^"]*<<"[^"]*")"#) {
+static EVAL_HEREDOC_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r#"eval\s+(?:'[^']*<<'[^']*'|"[^"]*<<"[^"]*")"#) {
         Ok(re) => re,
         Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),
-    }
-});
+    });
 
 impl PatternDetector for EvalHeredocDetector {
     fn detect(&self, code: &str, offset: usize) -> Vec<(AntiPattern, Location)> {
@@ -370,11 +365,9 @@ impl PatternDetector for EvalHeredocDetector {
 struct TiedHandleDetector;
 
 /// Pattern for identifying tie statements
-static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r"tie\s+([*\$\w+])") {
-        Ok(re) => re,
-        Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),
-    }
+static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"tie\s+([*\$\w+])") {
+    Ok(re) => re,
+    Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),
 });
 
 impl PatternDetector for TiedHandleDetector {

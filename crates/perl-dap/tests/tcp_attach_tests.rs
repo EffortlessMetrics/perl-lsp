@@ -10,9 +10,9 @@
 //! - Cross-platform compatibility
 
 use perl_dap::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
+use perl_tdd_support::{must, must_some};
 use std::sync::mpsc::channel;
 use std::time::Duration;
-use perl_tdd_support::{must, must_some};
 
 /// Test helper to create a valid TCP attach configuration
 fn create_valid_config() -> TcpAttachConfig {

@@ -262,7 +262,11 @@ fn test_substitution_comprehensive_fuzz() -> Result<(), Box<dyn std::error::Erro
             let crash_log_path = std::env::temp_dir().join("substitution_fuzz_crashes.log");
             let _ = std::fs::write(&crash_log_path, crash_log);
 
-            return Err(format!("Found {} crashes in substitution operator parsing", crashes.len()).into());
+            return Err(format!(
+                "Found {} crashes in substitution operator parsing",
+                crashes.len()
+            )
+            .into());
         }
     }
     Ok(())

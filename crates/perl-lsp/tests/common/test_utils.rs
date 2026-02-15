@@ -15,6 +15,7 @@
 
 // Import from the parent's common module (test files must declare `mod common;` before `mod test_utils;`)
 use super::LspServer;
+use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, Instant};
@@ -317,7 +318,9 @@ pub mod assertions {
     pub fn assert_has_diagnostic(response: &Value, expected_message: &str) {
         let items = match response["result"]["items"].as_array() {
             Some(arr) => arr,
-            None => must(Err::<(), _>(format!("Expected diagnostic items array, got: {response:?}"))),
+            None => {
+                must(Err::<(), _>(format!("Expected diagnostic items array, got: {response:?}")))
+            }
         };
 
         let found = items
@@ -353,7 +356,9 @@ pub mod assertions {
     pub fn assert_definition_at(response: &Value, uri: &str, line: u32) {
         let (def_uri, def_line, _) = match super::semantic::first_location(response) {
             Some(loc) => loc,
-            None => must(Err::<(), _>(format!("Expected definition location in response, got: {response:#}"))),
+            None => must(Err::<(), _>(format!(
+                "Expected definition location in response, got: {response:#}"
+            ))),
         };
 
         assert_eq!(
@@ -372,7 +377,9 @@ pub mod assertions {
     pub fn assert_hover_contains(response: &Value, expected_content: &str) {
         let content = match super::semantic::hover_content(response) {
             Some(c) => c,
-            None => must(Err::<(), _>(format!("Expected hover content in response, got: {response:#}"))),
+            None => {
+                must(Err::<(), _>(format!("Expected hover content in response, got: {response:#}")))
+            }
         };
 
         assert!(
@@ -388,7 +395,9 @@ pub mod assertions {
     pub fn assert_hover_contains_any(response: &Value, expected_strings: &[&str]) {
         let content = match super::semantic::hover_content(response) {
             Some(c) => c,
-            None => must(Err::<(), _>(format!("Expected hover content in response, got: {response:#}"))),
+            None => {
+                must(Err::<(), _>(format!("Expected hover content in response, got: {response:#}")))
+            }
         };
 
         let found = expected_strings.iter().any(|s| content.contains(s));

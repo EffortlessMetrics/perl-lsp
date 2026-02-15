@@ -54,14 +54,12 @@ fn parse_with_timeout(code: &str, timeout_ms: u64) -> Result<(), String> {
 
 /// Helper that uses the default timeout
 fn must_terminate(code: &str) {
-    parse_with_timeout(code, DEFAULT_TIMEOUT_MS)
-        .unwrap_or_else(|e| perl_tdd_support::must(Err(e)));
+    parse_with_timeout(code, DEFAULT_TIMEOUT_MS).unwrap_or_else(|e| perl_tdd_support::must(Err(e)));
 }
 
 /// Helper for short-timeout cases
 fn must_terminate_fast(code: &str) {
-    parse_with_timeout(code, SHORT_TIMEOUT_MS)
-        .unwrap_or_else(|e| perl_tdd_support::must(Err(e)));
+    parse_with_timeout(code, SHORT_TIMEOUT_MS).unwrap_or_else(|e| perl_tdd_support::must(Err(e)));
 }
 
 /// Test truncated subroutine declarations - the original "sub (" hang case

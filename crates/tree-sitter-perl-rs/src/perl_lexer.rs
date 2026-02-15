@@ -2128,7 +2128,7 @@ impl<'a> PerlLexer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_tdd_support::{must_some};
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_slash_disambiguation() {

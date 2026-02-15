@@ -306,7 +306,9 @@ impl AgentConfigValidator {
         let mut agents = Vec::new();
 
         for path in agent_files {
-            if let (Ok(config), Ok(category)) = (self.parse_agent_config(&path), AgentCategory::from_path(&path)) {
+            if let (Ok(config), Ok(category)) =
+                (self.parse_agent_config(&path), AgentCategory::from_path(&path))
+            {
                 agents.push(AgentFile { path: path.clone(), config, category });
             }
         }

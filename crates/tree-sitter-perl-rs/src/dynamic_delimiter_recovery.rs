@@ -87,26 +87,23 @@ static STRING_FUNC_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
     }
 });
 
-static STR_CONV_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r"^(.+?)->(?:to_string|as_string|stringify)\(\s*\)$") {
+static STR_CONV_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"^(.+?)->(?:to_string|as_string|stringify)\(\s*\)$") {
         Ok(re) => re,
         Err(_) => unreachable!("STR_CONV_PATTERN regex failed to compile"),
-    }
-});
+    });
 
-static VAR_INTERP_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r"\$\{?([a-zA-Z_]\w*)\}?") {
+static VAR_INTERP_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"\$\{?([a-zA-Z_]\w*)\}?") {
         Ok(re) => re,
         Err(_) => unreachable!("VAR_INTERP_PATTERN regex failed to compile"),
-    }
-});
+    });
 
-static HASH_PAIR_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r#"(\w+)\s*=>\s*["']([^"']+)["']"#) {
+static HASH_PAIR_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r#"(\w+)\s*=>\s*["']([^"']+)["']"#) {
         Ok(re) => re,
         Err(_) => unreachable!("HASH_PAIR_PATTERN regex failed to compile"),
-    }
-});
+    });
 
 impl DynamicDelimiterRecovery {
     pub fn new(mode: RecoveryMode) -> Self {
@@ -794,6 +791,7 @@ impl DynamicHeredocNode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_literal_assignment_detection() {
@@ -899,8 +897,7 @@ my %markers = (sql => "SQL", perl => "PERL");
             file_type_hint: None,
         };
 
-        let result =
-            must_some(recovery.try_resolve_variable("$base . \"ART\"", &context));
+        let result = must_some(recovery.try_resolve_variable("$base . \"ART\"", &context));
         assert_eq!(result.value, "START");
         assert_eq!(result.source, ValueSource::Concatenation);
     }
@@ -919,8 +916,7 @@ my %markers = (sql => "SQL", perl => "PERL");
         };
 
         // Test uppercase function
-        let result = must_some(recovery
-            .try_resolve_variable("uc($delimiter)", &context));
+        let result = must_some(recovery.try_resolve_variable("uc($delimiter)", &context));
         assert_eq!(result.value, "END");
         assert_eq!(result.source, ValueSource::FunctionReturn);
 
@@ -928,8 +924,7 @@ my %markers = (sql => "SQL", perl => "PERL");
         recovery.variable_values.clear();
         recovery.scan_for_assignments(r#"my $delimiter = "END";"#);
 
-        let result = must_some(recovery
-            .try_resolve_variable("lc($delimiter)", &context));
+        let result = must_some(recovery.try_resolve_variable("lc($delimiter)", &context));
         assert_eq!(result.value, "end");
         assert_eq!(result.source, ValueSource::FunctionReturn);
     }
@@ -970,14 +965,12 @@ my %markers = (sql => "SQL", perl => "PERL");
         };
 
         // Test array access
-        let result = must_some(recovery
-            .try_resolve_variable("$delimiters[0]", &context));
+        let result = must_some(recovery.try_resolve_variable("$delimiters[0]", &context));
         assert_eq!(result.value, "EOF");
         assert_eq!(result.source, ValueSource::Heuristic);
 
         // Test hash access
-        let result = must_some(recovery
-            .try_resolve_variable("$markers{sql}", &context));
+        let result = must_some(recovery.try_resolve_variable("$markers{sql}", &context));
         assert_eq!(result.value, "SQL");
         assert_eq!(result.source, ValueSource::Heuristic);
     }
@@ -998,8 +991,7 @@ my $suffix = "END";
         };
 
         // Test simple interpolation
-        let result = must_some(recovery
-            .try_resolve_variable("\"${prefix}_${suffix}\"", &context));
+        let result = must_some(recovery.try_resolve_variable("\"${prefix}_${suffix}\"", &context));
         assert_eq!(result.value, "MY_END");
         assert_eq!(result.source, ValueSource::Concatenation);
     }
@@ -1021,8 +1013,7 @@ my $suffix = "END";
         }
 
         // Test heuristic for unknown env vars
-        let result = must_some(recovery
-            .try_resolve_variable("$ENV{CUSTOM_DEBUG_FLAG}", &context));
+        let result = must_some(recovery.try_resolve_variable("$ENV{CUSTOM_DEBUG_FLAG}", &context));
         assert_eq!(result.value, "1"); // Debug heuristic
         assert_eq!(result.source, ValueSource::Heuristic);
         assert!(result.confidence < 0.5);
@@ -1044,8 +1035,7 @@ my $counter = "1";
         };
 
         // Test numeric concatenation
-        let result = must_some(recovery
-            .try_resolve_variable("$type . $counter", &context));
+        let result = must_some(recovery.try_resolve_variable("$type . $counter", &context));
         assert_eq!(result.value, "SQL1");
         assert_eq!(result.source, ValueSource::Concatenation);
 
@@ -1059,8 +1049,7 @@ my $counter = "1";
             }],
         );
 
-        let result = must_some(recovery
-            .try_resolve_variable("${config[0]}", &context));
+        let result = must_some(recovery.try_resolve_variable("${config[0]}", &context));
         assert_eq!(result.value, "DELIMITER");
         assert_eq!(result.source, ValueSource::Heuristic);
         assert!(result.confidence < 0.8); // Reduced confidence for subscripts

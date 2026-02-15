@@ -25,10 +25,16 @@ fn test_basic_substitution() -> TestResult {
                 assert_eq!(replacement, "bar");
                 assert_eq!(modifiers, "");
             } else {
-                return Err(format!("Expected Substitution node in expression, got {:?}", expression.kind).into());
+                return Err(format!(
+                    "Expected Substitution node in expression, got {:?}",
+                    expression.kind
+                )
+                .into());
             }
         } else {
-            return Err(format!("Expected ExpressionStatement node, got {:?}", statements[0].kind).into());
+            return Err(
+                format!("Expected ExpressionStatement node, got {:?}", statements[0].kind).into()
+            );
         }
     } else {
         return Err("Expected Program node".into());
@@ -60,7 +66,9 @@ fn test_substitution_with_modifiers() -> TestResult {
                 if let NodeKind::Substitution { modifiers, .. } = &expression.kind {
                     assert_eq!(modifiers, expected_modifiers, "Failed for {}", code);
                 } else {
-                    return Err(format!("Expected Substitution node in expression for {}", code).into());
+                    return Err(
+                        format!("Expected Substitution node in expression for {}", code).into()
+                    );
                 }
             } else {
                 return Err(format!("Expected ExpressionStatement for {}", code).into());
@@ -324,7 +332,8 @@ fn test_substitution_balanced_delimiters_with_trailing_code() -> TestResult {
             return Err(format!(
                 "Expected Program node for test case '{}', got {:?}\nCode: {}",
                 description, ast.kind, code
-            ).into());
+            )
+            .into());
         }
     }
     Ok(())

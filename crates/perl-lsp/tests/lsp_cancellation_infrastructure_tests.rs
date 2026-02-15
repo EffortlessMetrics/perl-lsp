@@ -14,6 +14,7 @@
 
 #![allow(unused_imports, dead_code)] // Scaffolding may have unused imports initially
 
+use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -1238,7 +1239,10 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
         for handle in worker_handles {
             match handle.join() {
                 Ok(result) => thread_results.push(result),
-                Err(_) => must(Err::<(), _>(format!("Thread panicked during concurrency testing"))),
+                Err(_) => {
+                    must(Err::<(), _>("Thread panicked during concurrency testing"));
+                    unreachable!()
+                },
             }
         }
 
@@ -1510,7 +1514,10 @@ fn test_deadlock_detection_and_prevention_ac10() {
         for handle in thread_handles {
             match handle.join() {
                 Ok(result) => thread_results.push(result),
-                Err(_) => must(Err::<(), _>(format!("Thread panicked during deadlock detection testing"))),
+                Err(_) => {
+                    must(Err::<(), _>("Thread panicked during deadlock detection testing"));
+                    unreachable!()
+                },
             }
         }
 

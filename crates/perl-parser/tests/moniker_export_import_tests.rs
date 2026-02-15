@@ -187,7 +187,11 @@ package MyModule;
                     );
                 }
             } else {
-                assert!(matches!(program.kind, NodeKind::Program { .. }), "Expected Program node for {}", module_name);
+                assert!(
+                    matches!(program.kind, NodeKind::Program { .. }),
+                    "Expected Program node for {}",
+                    module_name
+                );
             }
         }
     }

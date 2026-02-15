@@ -1,11 +1,11 @@
 #![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+use perl_tdd_support::must;
 use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::fs;
 use std::hint::black_box;
 use tempfile::TempDir;
 use url::Url;
-use perl_tdd_support::must;
 
 /// Sample Perl code representing a typical module
 const SAMPLE_MODULE: &str = r#"

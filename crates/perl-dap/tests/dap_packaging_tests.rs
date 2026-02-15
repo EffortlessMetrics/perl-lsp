@@ -57,7 +57,8 @@ mod dap_packaging {
     // AC:19
     fn test_binary_permissions_unix() -> Result<()> {
         // Unix binary permissions (chmod +x)
-        must(Err::<(), _>(format!("Binary permissions (Unix))) not yet implemented (AC19)");
+        must(Err::<(), _>("Binary permissions (Unix) not yet implemented (AC19)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac19-cross-compilation

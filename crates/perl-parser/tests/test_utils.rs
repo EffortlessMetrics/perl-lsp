@@ -1,5 +1,6 @@
 #![allow(dead_code)] // This is a utility module used by other tests
 
+use perl_tdd_support::{must, must_some};
 /// Test utilities and helpers for LSP testing
 /// Provides common functionality to reduce code duplication
 use serde_json::{Value, json};
@@ -67,7 +68,11 @@ impl TestServerBuilder {
                 .collect();
 
             let obj_opt = init_params.as_object();
-            assert!(obj_opt.is_some(), "Initialization parameters must be a JSON object, got: {:?}", init_params);
+            assert!(
+                obj_opt.is_some(),
+                "Initialization parameters must be a JSON object, got: {:?}",
+                init_params
+            );
             if let Some(obj) = obj_opt {
                 let mut params = obj.clone();
                 params.insert("workspaceFolders".to_string(), folders.into());
@@ -298,7 +303,11 @@ pub mod assertions {
     /// Assert that diagnostics contain expected error
     pub fn assert_has_diagnostic(response: &Value, expected_message: &str) {
         let items_opt = response["result"]["items"].as_array();
-        assert!(items_opt.is_some(), "Expected diagnostic items array in response, got: {:?}", response["result"]);
+        assert!(
+            items_opt.is_some(),
+            "Expected diagnostic items array in response, got: {:?}",
+            response["result"]
+        );
         let items = items_opt.unwrap_or_else(|| unreachable!());
 
         let found = items.iter().any(|item| {
@@ -311,7 +320,11 @@ pub mod assertions {
     /// Assert symbol count
     pub fn assert_symbol_count(response: &Value, expected_count: usize) {
         let symbols_opt = response["result"].as_array();
-        assert!(symbols_opt.is_some(), "Expected symbols array in response, got: {:?}", response["result"]);
+        assert!(
+            symbols_opt.is_some(),
+            "Expected symbols array in response, got: {:?}",
+            response["result"]
+        );
         let symbols = symbols_opt.unwrap_or_else(|| unreachable!());
         assert_eq!(
             symbols.len(),
@@ -428,6 +441,7 @@ pub mod generators {
 
 // Helper to start server from Child process
 fn start_lsp_server() -> TestServer {
+    use perl_tdd_support::must;
     let process = match Command::new("cargo")
         .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
         .stdin(Stdio::piped())
@@ -436,7 +450,10 @@ fn start_lsp_server() -> TestServer {
         .spawn()
     {
         Ok(proc) => proc,
-        Err(e) => must(Err::<(), _>(format!("Failed to start LSP server: {}", e))),
+        Err(e) => {
+            must(Err::<(), _>(format!("Failed to start LSP server: {}", e)));
+            unreachable!()
+        }
     };
 
     TestServer { process }
@@ -477,11 +494,13 @@ fn read_response(child: &mut Child) -> Value {
     }
 
     // Parse content length
-    let content_length: usize = must_some(headers
-        .lines()
-        .find(|line| line.starts_with("Content-Length:"))
-        .and_then(|line| line.split(':').nth(1))
-        .and_then(|len| len.trim().parse().ok()));
+    let content_length: usize = must_some(
+        headers
+            .lines()
+            .find(|line| line.starts_with("Content-Length:"))
+            .and_then(|line| line.split(':').nth(1))
+            .and_then(|len| len.trim().parse().ok()),
+    );
 
     // Read content
     let mut content = vec![0; content_length];

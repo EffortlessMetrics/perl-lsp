@@ -15,13 +15,13 @@ fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>>
     }
 
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///fmt.pl";
 
     // Intentionally poorly formatted code
     let source = "sub test{my$x=1;return$x;}sub another{print'hello';}\n";
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     let response = client.request(
         "textDocument/formatting",
@@ -55,7 +55,7 @@ fn document_formatting_with_perltidy() -> Result<(), Box<dyn std::error::Error>>
         "Should format second subroutine"
     );
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }
 
@@ -69,7 +69,7 @@ fn range_formatting() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///range.pl";
 
     let source = r#"
@@ -80,7 +80,7 @@ sub first{my$a=1;return$a;}
 sub second{my$b=2;return$b;}
 "#;
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Request formatting only for the first subroutine (lines 1-2)
     let response = client.request(
@@ -113,7 +113,7 @@ sub second{my$b=2;return$b;}
         }
     }
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }
 
@@ -127,7 +127,7 @@ fn formatting_preserves_comments() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///comments.pl";
 
     let source = r#"#!/usr/bin/perl
@@ -141,7 +141,7 @@ return$x;
 }
 "#;
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     let response = client.request(
         "textDocument/formatting",
@@ -175,7 +175,7 @@ return$x;
         );
     }
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }
 
@@ -200,12 +200,12 @@ fn formatting_with_custom_config() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write("/tmp/test.perltidyrc", config_content)?;
 
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///custom.pl";
 
     let source = "sub test { my @array = ( 1, 2, 3 ); return \\@array; }\n";
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Note: The LSP server would need to support custom config paths
     // This test demonstrates the structure but may need server-side support
@@ -234,7 +234,7 @@ fn formatting_with_custom_config() -> Result<(), Box<dyn std::error::Error>> {
     // Clean up
     let _ = std::fs::remove_file("/tmp/test.perltidyrc");
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }
 
@@ -248,7 +248,7 @@ fn ranges_formatting() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///ranges.pl";
 
     let source = r#"
@@ -262,7 +262,7 @@ sub second{my$b=2;return$b;}
 sub third{my$c=3;return$c;}
 "#;
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Request formatting for multiple ranges (first and third subroutines)
     let response = client.request(
@@ -304,6 +304,6 @@ sub third{my$c=3;return$c;}
         }
     }
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }

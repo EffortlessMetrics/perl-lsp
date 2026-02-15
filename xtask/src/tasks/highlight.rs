@@ -202,9 +202,7 @@ fn run_highlight_test_case(
 
 pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
     let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}")?,
-    );
+    spinner.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}")?);
 
     spinner.set_message("Running highlight tests");
 
@@ -231,7 +229,8 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>) -> Result<()> {
         .filter(|e| e.path().extension().is_some_and(|ext| ext == "pm"))
     {
         let file_path = entry.path();
-        let file_name = file_path.file_name().map_or_else(|| "unknown".into(), |n| n.to_string_lossy());
+        let file_name =
+            file_path.file_name().map_or_else(|| "unknown".into(), |n| n.to_string_lossy());
 
         spinner.set_message(format!("Processing {}", file_name));
 

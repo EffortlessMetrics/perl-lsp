@@ -2,8 +2,8 @@ use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use perl_parser::incremental::{Edit, IncrementalState, apply_edits};
 use perl_parser::incremental_document::IncrementalDocument;
 use perl_parser::incremental_edit::{IncrementalEdit, IncrementalEditSet};
-use std::hint::black_box;
 use perl_tdd_support::{must, must_some};
+use std::hint::black_box;
 
 fn bench_incremental_small_edit(c: &mut Criterion) {
     let source = r#"

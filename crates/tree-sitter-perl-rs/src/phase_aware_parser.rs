@@ -67,17 +67,15 @@ static PHASE_BLOCK_PATTERN: LazyLock<Regex> =
         Err(_) => unreachable!("PHASE_BLOCK_PATTERN regex failed to compile"),
     });
 
-static EVAL_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new(r#"\beval\s*["'{]"#) {
-        Ok(re) => re,
-        Err(_) => unreachable!("EVAL_PATTERN regex failed to compile"),
-    });
+static EVAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r#"\beval\s*["'{]"#) {
+    Ok(re) => re,
+    Err(_) => unreachable!("EVAL_PATTERN regex failed to compile"),
+});
 
-static USE_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new(r"(?m)^\s*use\s+") {
-        Ok(re) => re,
-        Err(_) => unreachable!("USE_PATTERN regex failed to compile"),
-    });
+static USE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"(?m)^\s*use\s+") {
+    Ok(re) => re,
+    Err(_) => unreachable!("USE_PATTERN regex failed to compile"),
+});
 
 impl Default for PhaseAwareParser {
     fn default() -> Self {

@@ -94,12 +94,11 @@ impl<'a> ContextAwareHeredocParser<'a> {
         let mut contexts = Vec::new();
 
         // Detect eval contexts - use a more permissive regex without backreferences
-        static EVAL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            match Regex::new(r#"eval\s*<<\s*(?:'(\w+)'|"(\w+)"|(\w+))"#) {
+        static EVAL_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| match Regex::new(r#"eval\s*<<\s*(?:'(\w+)'|"(\w+)"|(\w+))"#) {
                 Ok(re) => re,
                 Err(_) => unreachable!("EVAL_REGEX failed to compile"),
-            }
-        });
+            });
 
         for cap in EVAL_REGEX.captures_iter(input) {
             if let Some(m) = cap.get(0) {
@@ -124,24 +123,21 @@ impl<'a> ContextAwareHeredocParser<'a> {
         }
 
         // Detect s///e contexts - handle common delimiters separately to avoid backreferences
-        static SUBST_SLASH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            match Regex::new(r#"s/([^/]*)/([^/]*)/([a-z]*e[a-z]*)"#) {
+        static SUBST_SLASH_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| match Regex::new(r#"s/([^/]*)/([^/]*)/([a-z]*e[a-z]*)"#) {
                 Ok(re) => re,
                 Err(_) => unreachable!("SUBST_SLASH_REGEX failed to compile"),
-            }
-        });
-        static SUBST_PIPE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            match Regex::new(r#"s\|([^|]*)\|([^|]*)\|([a-z]*e[a-z]*)"#) {
+            });
+        static SUBST_PIPE_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| match Regex::new(r#"s\|([^|]*)\|([^|]*)\|([a-z]*e[a-z]*)"#) {
                 Ok(re) => re,
                 Err(_) => unreachable!("SUBST_PIPE_REGEX failed to compile"),
-            }
-        });
-        static SUBST_HASH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            match Regex::new(r#"s#([^#]*)#([^#]*)#([a-z]*e[a-z]*)"#) {
+            });
+        static SUBST_HASH_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| match Regex::new(r#"s#([^#]*)#([^#]*)#([a-z]*e[a-z]*)"#) {
                 Ok(re) => re,
                 Err(_) => unreachable!("SUBST_HASH_REGEX failed to compile"),
-            }
-        });
+            });
 
         // Process all substitution regex patterns
         for regex in &[&*SUBST_SLASH_REGEX, &*SUBST_PIPE_REGEX, &*SUBST_HASH_REGEX] {

@@ -67,7 +67,9 @@ pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
         Some(arr) => arr,
         None => match resp["result"].as_array() {
             Some(arr) => arr,
-            None => must(Err::<(), _>(format!("completion result should be array or {{ items: [] }}, got: {resp:?}"))),
+            None => must(Err::<(), _>(format!(
+                "completion result should be array or {{ items: [] }}, got: {resp:?}"
+            ))),
         },
     }
 }
@@ -261,7 +263,10 @@ pub fn start_lsp_server() -> LspServer {
             eprintln!("║  • Or:  cargo test -p perl-lsp    (builds + tests automatically)   ║");
             eprintln!("║  • Set PERL_LSP_BIN=/path/to/perl-lsp for custom binary            ║");
             eprintln!("╚════════════════════════════════════════════════════════════════════╝");
-            must(Err::<(), _>(format!("Failed to start perl-lsp via any available method: {:?}", last_err)))
+            must(Err::<(), _>(format!(
+                "Failed to start perl-lsp via any available method: {:?}",
+                last_err
+            )))
         })
     };
 

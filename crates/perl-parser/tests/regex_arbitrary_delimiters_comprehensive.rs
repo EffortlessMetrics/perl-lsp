@@ -97,7 +97,11 @@ fn various_delimiters_consistency() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             Err(e) => {
-                return Err(format!("Failed to parse m operator with {} delimiter {}: {}", delim_name, code, e).into());
+                return Err(format!(
+                    "Failed to parse m operator with {} delimiter {}: {}",
+                    delim_name, code, e
+                )
+                .into());
             }
         }
     }
@@ -129,7 +133,11 @@ fn substitution_various_delimiters() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             Err(e) => {
-                return Err(format!("Failed to parse s operator with {} delimiter {}: {}", delim_name, code, e).into());
+                return Err(format!(
+                    "Failed to parse s operator with {} delimiter {}: {}",
+                    delim_name, code, e
+                )
+                .into());
             }
         }
     }
@@ -161,7 +169,8 @@ fn transliteration_various_delimiters() -> Result<(), Box<dyn std::error::Error>
                 return Err(format!(
                     "Failed to parse tr/y operator with {} delimiter {}: {}",
                     delim_name, code, e
-                ).into());
+                )
+                .into());
             }
         }
     }
@@ -190,7 +199,11 @@ fn qr_operator_various_delimiters() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             Err(e) => {
-                return Err(format!("Failed to parse qr operator with {} delimiter {}: {}", delim_name, code, e).into());
+                return Err(format!(
+                    "Failed to parse qr operator with {} delimiter {}: {}",
+                    delim_name, code, e
+                )
+                .into());
             }
         }
     }

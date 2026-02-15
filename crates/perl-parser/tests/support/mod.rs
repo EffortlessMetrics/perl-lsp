@@ -11,9 +11,9 @@ pub mod parser_error_helpers;
 #[cfg(feature = "incremental")]
 pub mod incremental_test_utils;
 
+use perl_tdd_support::{must, must_some};
 use serde_json::Value;
 use std::time::{Duration, Instant};
-use perl_tdd_support::{must, must_some};
 
 // ===================== Constants =====================
 
@@ -193,10 +193,17 @@ pub fn assert_completion_has_items(v: &Option<Value>) {
                 arr
             } else if let Some(obj) = comp.as_object() {
                 let items_opt = obj.get("items").and_then(|v| v.as_array());
-                assert!(items_opt.is_some(), "Completion object must have items array, got: {:?}", obj);
+                assert!(
+                    items_opt.is_some(),
+                    "Completion object must have items array, got: {:?}",
+                    obj
+                );
                 items_opt.unwrap_or_else(|| unreachable!())
             } else {
-                unreachable!("Completion response must be array or object with items, got: {:?}", comp);
+                unreachable!(
+                    "Completion response must be array or object with items, got: {:?}",
+                    comp
+                );
             };
 
             assert!(!items.is_empty(), "completion must return at least one item");
@@ -295,7 +302,11 @@ pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str
             if !items.is_empty() {
                 for item in items {
                     let item_obj_opt = item.as_object();
-                    assert!(item_obj_opt.is_some(), "Call hierarchy item must be object, got: {:?}", item);
+                    assert!(
+                        item_obj_opt.is_some(),
+                        "Call hierarchy item must be object, got: {:?}",
+                        item
+                    );
                     let item_obj = item_obj_opt.unwrap_or_else(|| unreachable!());
                     assert!(item_obj.contains_key("name"), "call hierarchy item must have name");
                     assert!(item_obj.contains_key("uri"), "call hierarchy item must have uri");
@@ -398,7 +409,11 @@ pub fn assert_workspace_symbols_valid(v: &Option<Value>, expected_name: Option<&
                 // Validate each symbol
                 for symbol in arr {
                     let sym_obj_opt = symbol.as_object();
-                    assert!(sym_obj_opt.is_some(), "Workspace symbol must be object, got: {:?}", symbol);
+                    assert!(
+                        sym_obj_opt.is_some(),
+                        "Workspace symbol must be object, got: {:?}",
+                        symbol
+                    );
                     let sym_obj = sym_obj_opt.unwrap_or_else(|| unreachable!());
                     assert!(sym_obj.contains_key("name"), "workspace symbol must have name");
 

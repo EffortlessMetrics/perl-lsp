@@ -18,8 +18,8 @@
 
 #![allow(dead_code)]
 
-use serde_json::Value;
 use perl_tdd_support::{must, must_some};
+use serde_json::Value;
 
 /// Assert hover response has text content
 pub fn assert_hover_has_text(v: &Option<Value>) {

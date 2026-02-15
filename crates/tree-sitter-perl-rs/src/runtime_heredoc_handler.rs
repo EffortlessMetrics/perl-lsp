@@ -49,12 +49,11 @@ impl RuntimeHeredocHandler {
 
         // Detect nested heredocs
         #[allow(clippy::unwrap_used)]
-        static HEREDOC_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            match Regex::new(r#"<<\s*(['"]?)(\w+)(['"]?)"#) {
+        static HEREDOC_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| match Regex::new(r#"<<\s*(['"]?)(\w+)(['"]?)"#) {
                 Ok(re) => re,
                 Err(_) => unreachable!("HEREDOC_REGEX failed to compile"),
-            }
-        });
+            });
 
         let mut result = content.to_string();
         for cap in HEREDOC_REGEX.captures_iter(content) {
@@ -93,12 +92,11 @@ impl RuntimeHeredocHandler {
     fn process_eval_heredocs(&mut self, content: &str) -> Result<String, RuntimeError> {
         // Note: Rust regex doesn't support backreferences, so we'll handle quotes manually
         #[allow(clippy::unwrap_used)]
-        static HEREDOC_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-            match Regex::new(r#"<<\s*(['"]?)(\w+)(['"]?)"#) {
+        static HEREDOC_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| match Regex::new(r#"<<\s*(['"]?)(\w+)(['"]?)"#) {
                 Ok(re) => re,
                 Err(_) => unreachable!("HEREDOC_REGEX failed to compile"),
-            }
-        });
+            });
         let mut processed = content.to_string();
         let mut offset = 0;
 

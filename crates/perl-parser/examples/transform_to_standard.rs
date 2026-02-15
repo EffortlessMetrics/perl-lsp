@@ -7,13 +7,29 @@ use perl_parser::Parser;
 use regex::Regex;
 use std::sync::LazyLock;
 
-static VAR_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(variable (\S) (\w+)\)").unwrap_or_else(|_| unreachable!()));
-static BINARY_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(binary_(\S+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap_or_else(|_| unreachable!()));
-static DECL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\((\w+)_declaration ([^()]+|\([^)]*\))([^()]+|\([^)]*\))?\)").unwrap_or_else(|_| unreachable!()));
-static CALL_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(call (\w+) \(([^)]*)\)\)").unwrap_or_else(|_| unreachable!()));
-static METHOD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(method_call ([^()]+|\([^)]*\)) (\w+) \(([^)]*)\)\)").unwrap_or_else(|_| unreachable!()));
-static ASSIGN_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(assignment_(\w+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap_or_else(|_| unreachable!()));
-static IF_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\(if ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap_or_else(|_| unreachable!()));
+static VAR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\(variable (\S) (\w+)\)").unwrap_or_else(|_| unreachable!()));
+static BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\(binary_(\S+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)")
+        .unwrap_or_else(|_| unreachable!())
+});
+static DECL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\((\w+)_declaration ([^()]+|\([^)]*\))([^()]+|\([^)]*\))?\)")
+        .unwrap_or_else(|_| unreachable!())
+});
+static CALL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\(call (\w+) \(([^)]*)\)\)").unwrap_or_else(|_| unreachable!()));
+static METHOD_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\(method_call ([^()]+|\([^)]*\)) (\w+) \(([^)]*)\)\)")
+        .unwrap_or_else(|_| unreachable!())
+});
+static ASSIGN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\(assignment_(\w+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)")
+        .unwrap_or_else(|_| unreachable!())
+});
+static IF_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\(if ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap_or_else(|_| unreachable!())
+});
 
 fn main() {
     let examples = vec![

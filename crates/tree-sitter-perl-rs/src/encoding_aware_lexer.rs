@@ -55,26 +55,23 @@ pub enum WarningSeverity {
 }
 
 // Patterns for encoding-related pragmas
-static ENCODING_PRAGMA: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r#"(?m)^\s*use\s+encoding\s+['"]([\w\-]+)['"]"#) {
+static ENCODING_PRAGMA: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r#"(?m)^\s*use\s+encoding\s+['"]([\w\-]+)['"]"#) {
         Ok(re) => re,
         Err(_) => unreachable!("ENCODING_PRAGMA failed to compile"),
-    }
-});
+    });
 
-static UTF8_PRAGMA: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r"(?m)^\s*(use|no)\s+utf8\s*;") {
+static UTF8_PRAGMA: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"(?m)^\s*(use|no)\s+utf8\s*;") {
         Ok(re) => re,
         Err(_) => unreachable!("UTF8_PRAGMA failed to compile"),
-    }
-});
+    });
 
-static LOCALE_PRAGMA: LazyLock<Regex> = LazyLock::new(|| {
-    match Regex::new(r"(?m)^\s*use\s+locale\s*;") {
+static LOCALE_PRAGMA: LazyLock<Regex> =
+    LazyLock::new(|| match Regex::new(r"(?m)^\s*use\s+locale\s*;") {
         Ok(re) => re,
         Err(_) => unreachable!("LOCALE_PRAGMA failed to compile"),
-    }
-});
+    });
 
 impl Default for EncodingAwareLexer {
     fn default() -> Self {

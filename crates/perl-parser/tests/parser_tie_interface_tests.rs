@@ -14,7 +14,7 @@ fn parse_code(code: &str) -> Result<Node, perl_parser::ParseError> {
 }
 
 /// Helper to find nodes of a specific kind in the AST
-fn find_nodes(node: &Node, kind_name: &str) -> Vec<&Node> {
+fn find_nodes<'a>(node: &'a Node, kind_name: &str) -> Vec<&'a Node> {
     let mut results = Vec::new();
     let formatted = format!("{:?}", node.kind);
     let node_type = formatted.split('{').next().unwrap_or("").trim();
@@ -275,7 +275,12 @@ fn parser_tie_corpus_all_cases() {
         }
     }
 
-    assert!(failures.is_empty(), "Failed to parse {} corpus cases:\n{}", failures.len(), failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "Failed to parse {} corpus cases:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }
 
 #[test]
@@ -301,7 +306,11 @@ fn parser_tie_corpus_tie_nodes_present() {
         }
     }
 
-    assert!(no_tie_node.is_empty(), "The following tie cases did not produce Tie nodes:\n{}", no_tie_node.join("\n"));
+    assert!(
+        no_tie_node.is_empty(),
+        "The following tie cases did not produce Tie nodes:\n{}",
+        no_tie_node.join("\n")
+    );
 }
 
 #[test]
@@ -385,9 +394,9 @@ fn parser_tie_with_standard_modules() {
                 let tie_nodes = find_nodes(&ast, "Tie");
                 assert!(!tie_nodes.is_empty(), "Should find Tie node in: {}", code);
             }
-                        Err(e) => {
-                            unreachable!("Failed to parse tie with standard module: {:?}\nCode: {}", e, code);
-                        }
+            Err(e) => {
+                unreachable!("Failed to parse tie with standard module: {:?}\nCode: {}", e, code);
+            }
         }
     }
 }
