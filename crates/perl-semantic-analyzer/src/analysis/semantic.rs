@@ -7,6 +7,7 @@
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
+use perl_parser_core::builtin_signatures_phf::is_builtin;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -1448,51 +1449,9 @@ fn is_control_keyword(name: &str) -> bool {
 }
 
 fn is_builtin_function(name: &str) -> bool {
-    matches!(
-        name,
-        "print"
-            | "say"
-            | "printf"
-            | "sprintf"
-            | "open"
-            | "close"
-            | "read"
-            | "write"
-            | "chomp"
-            | "chop"
-            | "split"
-            | "join"
-            | "push"
-            | "pop"
-            | "shift"
-            | "unshift"
-            | "sort"
-            | "reverse"
-            | "map"
-            | "grep"
-            | "length"
-            | "substr"
-            | "index"
-            | "rindex"
-            | "lc"
-            | "uc"
-            | "lcfirst"
-            | "ucfirst"
-            | "defined"
-            | "undef"
-            | "ref"
-            | "blessed"
-            | "die"
-            | "warn"
-            | "eval"
-            | "require"
-            | "use"
-            | "return"
-            | "next"
-            | "last"
-            | "redo"
-            | "goto" // ... many more
-    )
+    // Check against the PHF set first (O(1))
+    // Also include "blessed" which is commonly treated as a builtin but not in the standard list
+    is_builtin(name) || name == "blessed"
 }
 
 /// Get documentation for a Perl built-in function.
