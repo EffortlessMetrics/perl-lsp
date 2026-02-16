@@ -8,22 +8,13 @@ use crate::pure_rust_parser::AstNode;
 pub struct LexerAdapter;
 
 impl LexerAdapter {
-    /// Preprocess input string to handle common Perl lexing ambiguities
+    /// Preprocess input string for Perl parsing.
+    ///
+    /// The pest grammar handles division-vs-regex and substitution/transliteration
+    /// disambiguation natively via PEG ordered-choice rules, so no preprocessing
+    /// is needed. This method returns the input unchanged.
     pub fn preprocess(input: &str) -> String {
-        // Replace common ambiguous patterns with unique markers
-        let mut processed = input.to_string();
-
-        // 1. Division vs Regex
-        // 2. Substitution / Transliteration
-        // 3. Quoted strings
-
-        processed = processed.replace(" / ", " ÷ ");
-        processed = processed.replace("s/", "ṡ");
-        processed = processed.replace("tr/", "ṫ");
-        processed = processed.replace("y/", "ẏ");
-        processed = processed.replace("qr/", "ǫ");
-
-        processed
+        input.to_string()
     }
 
     /// Postprocess AST to restore original tokens
@@ -160,43 +151,27 @@ impl LexerAdapter {
     }
 }
 
-/// Modified grammar rules to handle preprocessed tokens
-pub const PREPROCESSED_GRAMMAR: &str = r#"
-// Division operator (was /)
-division_op = { "÷" }
-
-// Substitution (was s///)
-substitution_op = { "ṡ" }
-
-// Transliteration (was tr/// or y///)
-transliteration_op = { "ṫ" | "ẏ" }
-
-// Quote regex (was qr//)
-quote_regex_op = { "ǫ" }
-"#;
+/// Grammar rules placeholder (preprocessing is now a no-op; the pest grammar
+/// handles all operator disambiguation natively).
+pub const PREPROCESSED_GRAMMAR: &str = "";
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_preprocessing() {
-        // Test division vs regex
-        let input = "x / 2 =~ /foo/";
-        let processed = LexerAdapter::preprocess(input);
-        assert!(processed.contains("÷"));
-        assert!(processed.contains("/foo/"));
-
-        // Test substitution
-        let input = "s/foo/bar/g";
-        let processed = LexerAdapter::preprocess(input);
-        assert!(processed.starts_with("ṡ"));
-
-        // Test complex case
-        let input = "1/ /abc/ + s{x}{y}";
-        let processed = LexerAdapter::preprocess(input);
-        assert!(processed.contains("1÷"));
-        assert!(processed.contains("/abc/"));
-        assert!(processed.contains("ṡ{x}{y}"));
+    fn test_preprocessing_is_passthrough() {
+        // preprocess() is now a no-op — the grammar handles disambiguation natively
+        let cases = [
+            "x / 2 =~ /foo/",
+            "s/foo/bar/g",
+            "1/ /abc/ + s{x}{y}",
+            "tr/a-z/A-Z/",
+            "y/abc/def/",
+            "qr/pattern/i",
+        ];
+        for input in &cases {
+            assert_eq!(LexerAdapter::preprocess(input), *input);
+        }
     }
 }
