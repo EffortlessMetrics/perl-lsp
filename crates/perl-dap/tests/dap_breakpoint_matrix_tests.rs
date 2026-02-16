@@ -9,6 +9,7 @@
 use anyhow::Result;
 use perl_dap::breakpoints::BreakpointStore;
 use perl_dap::protocol::{SetBreakpointsArguments, Source, SourceBreakpoint};
+use perl_tdd_support::must;
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -299,55 +300,55 @@ mod dap_breakpoint_matrix_phase2 {
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#file-boundaries
     #[tokio::test]
-    #[ignore]
     // AC:14
     async fn test_breakpoints_file_boundaries() -> Result<()> {
         // First/last line breakpoint behavior
-        panic!("File boundary breakpoints not yet implemented (AC14)");
+        must(Err::<(), _>("File boundary breakpoints not yet implemented (AC14)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#begin-end-blocks
     #[tokio::test]
-    #[ignore]
     // AC:14
     async fn test_breakpoints_begin_end_blocks() -> Result<()> {
         // BEGIN/END block breakpoint validation
-        panic!("BEGIN/END block breakpoints not yet implemented (AC14)");
+        must(Err::<(), _>("BEGIN/END block breakpoints not yet implemented (AC14)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#multiline-statements
     #[tokio::test]
-    #[ignore]
     // AC:14
     async fn test_breakpoints_multiline_statements() -> Result<()> {
         // Multi-line statement breakpoint behavior
-        panic!("Multiline statement breakpoints not yet implemented (AC14)");
+        must(Err::<(), _>("Multiline statement breakpoints not yet implemented (AC14)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#pod-documentation
     #[tokio::test]
-    #[ignore]
     // AC:14
     async fn test_breakpoints_in_pod_documentation() -> Result<()> {
         // POD documentation breakpoint behavior
-        panic!("POD documentation breakpoints not yet implemented (AC14)");
+        must(Err::<(), _>("POD documentation breakpoints not yet implemented (AC14)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#string-literals
     #[tokio::test]
-    #[ignore]
     // AC:14
     async fn test_breakpoints_in_string_literals() -> Result<()> {
         // String literal breakpoint behavior
-        panic!("String literal breakpoints not yet implemented (AC14)");
+        must(Err::<(), _>("String literal breakpoints not yet implemented (AC14)"));
+        Ok(())
     }
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac14-performance-baselines
     #[test]
-    #[ignore]
     // AC:14
     fn test_performance_benchmark_baselines() -> Result<()> {
         // Benchmark suite: small (100 lines), medium (1000 lines), large (10K+ lines)
-        panic!("Performance benchmark baselines not yet implemented (AC14)");
+        must(Err::<(), _>("Performance benchmark baselines not yet implemented (AC14)"));
+        Ok(())
     }
 }

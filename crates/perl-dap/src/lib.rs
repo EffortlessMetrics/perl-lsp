@@ -368,6 +368,7 @@ pub mod breakpoints;
 pub mod dispatcher; // AC5: Message dispatcher
 pub mod inline_values; // Inline value extraction for debug sessions
 pub mod protocol; // AC5: DAP protocol types // AC7: Breakpoint manager
+pub mod tcp_attach; // TCP attach functionality for connecting to running Perl debugger
 
 // Phase 2 modules (AC5-AC12) - Tracked in GitHub issues
 // See #449: Implement session management (AC5)

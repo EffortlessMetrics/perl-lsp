@@ -442,6 +442,231 @@ We follow the Rust Code of Conduct. Please be respectful and constructive in all
 
 By contributing, you agree that your contributions will be licensed under the same license as the project (typically MIT or Apache-2.0).
 
+## Release Process
+
+This section describes the release process for Perl LSP, now that we've reached v1.0 GA.
+
+### Version Policy
+
+We follow [Semantic Versioning 2.0.0](https://semver.org/):
+
+- **Major (X.0.0)**: Breaking changes, requires migration guide
+- **Minor (X.Y.0)**: New features, backward compatible
+- **Patch (X.Y.Z)**: Bug fixes, security updates, documentation
+
+### Release Types
+
+| Release Type | Frequency | Examples | Requirements |
+|--------------|-----------|----------|--------------|
+| **Major** | Annually (as needed) | 1.0.0 → 2.0.0 | Breaking changes, migration guide, extensive testing |
+| **Minor** | Quarterly | 1.0.0 → 1.1.0 | New features, API additions, performance improvements |
+| **Patch** | Monthly (as needed) | 1.0.0 → 1.0.1 | Bug fixes, security updates, documentation updates |
+
+### Release Process Workflow
+
+#### 1. Pre-Release Preparation
+
+```bash
+# Update version numbers
+cargo update -p perl-parser --precise 1.0.0
+cargo update -p perl-lsp --precise 1.0.0
+# ... for all published crates
+
+# Run comprehensive validation
+just ci-full
+just security-scan
+just semver-check
+
+# Update documentation
+# - UPDATE_CHANGELOG.md
+# - Update version references in README.md
+# - Update feature matrix in docs/FEATURES.md
+```
+
+#### 2. Release Checklist
+
+Before any release, ensure:
+
+- [ ] All tests pass: `just ci-full`
+- [ ] Security scan passes: `just security-scan`
+- [ ] No breaking changes (for minor/patch): `just semver-check`
+- [ ] Documentation updated: `CHANGELOG.md`, version references
+- [ ] Performance benchmarks run: `cargo bench`
+- [ ] Release notes drafted: `RELEASE_NOTES.md`
+- [ ] Version numbers updated in all crates
+- [ ] Git tag prepared: `git tag -a v1.0.0 -m "Release v1.0.0"`
+
+#### 3. Release Execution
+
+```bash
+# Create release branch
+git checkout -b release/v1.0.0
+
+# Final validation
+just ci-full
+
+# Merge to main
+git checkout main
+git merge release/v1.0.0
+
+# Tag and push
+git tag v1.0.0
+git push origin main --tags
+
+# Publish to crates.io
+cargo publish -p perl-parser
+cargo publish -p perl-lexer
+cargo publish -p perl-lsp
+# ... other crates in dependency order
+
+# Create GitHub Release
+gh release create v1.0.0 --title "v1.0.0 - Production Ready" --notes-file RELEASE_NOTES.md
+```
+
+#### 4. Post-Release Tasks
+
+- [ ] Update website/documentation
+- [ ] Announce on community channels
+- [ ] Monitor for issues
+- [ ] Begin next development cycle
+
+### Code Review Process for Releases
+
+#### Release Reviewers
+
+All releases require review from:
+
+- **Core Maintainer**: Technical approval
+- **Release Manager**: Process validation
+- **Security Lead**: Security assessment (for major/minor releases)
+
+#### Review Criteria
+
+**Technical Review:**
+- Code quality and performance
+- Test coverage and quality
+- Documentation completeness
+- Breaking change justification
+
+**Process Review:**
+- Version compliance with SemVer
+- Release checklist completion
+- Changelog accuracy
+- Migration guide quality (for breaking changes)
+
+**Security Review:**
+- Dependency vulnerability scan
+- Security best practices
+- Attack surface analysis
+- Enterprise security requirements
+
+### Testing Requirements for Releases
+
+#### Release Testing Matrix
+
+| Release Type | Required Tests | Performance Tests | Security Tests |
+|--------------|----------------|-------------------|----------------|
+| **Major** | Full test suite | Comprehensive benchmarks | Full security scan |
+| **Minor** | Full test suite | Regression benchmarks | Security scan |
+| **Patch** | Core tests | N/A | Security scan (if security patch) |
+
+#### Test Execution
+
+```bash
+# Full test suite (required for all releases)
+cargo test --workspace
+
+# Performance benchmarks (required for major/minor)
+cargo bench
+
+# Security scan (required for all releases)
+just security-scan
+
+# Mutation testing (required for major releases)
+just mutation-test
+
+# Integration tests (required for major/minor)
+just integration-test
+```
+
+### Version Policy Details
+
+#### Breaking Changes Definition
+
+Breaking changes include:
+- API signature changes
+- Removal of public functions/types
+- Changes in behavior that affect existing code
+- Configuration format changes
+- Dependency requirement changes
+
+#### Compatibility Guarantees
+
+**For v1.x series:**
+- API stability within major version
+- Configuration format stability
+- LSP protocol compatibility
+- File format compatibility
+
+**Migration Support:**
+- Automated migration tools when possible
+- Comprehensive migration guides
+- Deprecation warnings before removal
+- Backward compatibility periods
+
+### Emergency Releases
+
+For critical security issues:
+
+1. **Immediate Assessment**: Triage within 24 hours
+2. **Rapid Fix**: Develop and test fix in 48-72 hours
+3. **Expedited Release**: Bypass normal process if needed
+4. **Security Advisory**: Coordinate disclosure
+5. **Post-Mortem**: Document and improve process
+
+### Release Communication
+
+#### Release Channels
+
+- **GitHub Releases**: Primary announcement channel
+- **CHANGELOG.md**: Detailed change log
+- **Security Advisories**: For security-related releases
+- **Community Forums**: Discussion and support
+- **Email Lists**: For enterprise notifications
+
+#### Release Notes Template
+
+```markdown
+# Release v1.0.0
+
+## Highlights
+- Key features and improvements
+- Performance metrics
+- Security enhancements
+
+## Breaking Changes
+- Detailed list with migration guidance
+
+## New Features
+- Comprehensive feature list with examples
+
+## Bug Fixes
+- Bug fixes with issue references
+
+## Security Updates
+- Security fixes and CVE references
+
+## Performance Improvements
+- Benchmarks and performance metrics
+
+## Upgrade Instructions
+- Step-by-step upgrade guide
+- Migration considerations
+
+## Known Issues
+- Any known limitations or issues
+```
+
 ---
 
-Thank you for contributing to Perl LSP! =�
+Thank you for contributing to Perl LSP! 🚀

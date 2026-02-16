@@ -7,7 +7,7 @@
 > - **Reference sections**: Configuration specifications and options
 > - **Explanation sections**: Understanding DAP architecture and design
 
-**Status**: Native adapter CLI (launch-only) + BridgeAdapter guide (Perl::LanguageServer)
+**Status**: Native adapter CLI (launch + TCP attach) + BridgeAdapter guide (Perl::LanguageServer)
 **Version**: 1.0.0
 **Date**: 2025-10-04
 
@@ -196,8 +196,11 @@ Let's debug a simple Perl script to verify everything works.
 
 **Start your Perl script with DAP**:
 ```bash
+# Start Perl::LanguageServer in DAP mode
 perl -d:LanguageServer::DAP script.pl
 ```
+
+**Note**: The native adapter's TCP attach connects to Perl::LanguageServer DAP via TCP socket. Ensure Perl::LanguageServer is started with DAP support before attempting to attach.
 
 **Attach Configuration**:
 ```json

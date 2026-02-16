@@ -80,8 +80,8 @@ next_statement = { "next" ~ label? ~ semicolon? }
 redo_statement = { "redo" ~ label? ~ semicolon? }
 continue_statement = { "continue" ~ semicolon? }
 
-tie_statement = { "tie" ~ variable ~ "," ~ expression ~ ("," ~ expression)* ~ semicolon? }
-untie_statement = { "untie" ~ variable ~ semicolon? }
+tie_statement = { "tie" ~ expression ~ "," ~ expression ~ ("," ~ expression)* ~ semicolon? }
+untie_statement = { "untie" ~ expression ~ semicolon? }
 tied_statement = { "tied" ~ "(" ~ variable ~ ")" ~ semicolon? }
 
 labeled_block = { label ~ "{" ~ statements? ~ "}" }
@@ -301,7 +301,7 @@ assignment_expression = {
 }
 
 assignment_operator = {
-    "=" ~ !("~") | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
+    "=" ~ !("~") | "+=" | "-=" | "*=" | "_DIV_=" | "/=" | "%=" | "**=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
     | "&&=" | "||=" | "//=" | "&.=" | "|.=" | "^.="
 }
 
@@ -410,7 +410,13 @@ increment = { "++" }
 decrement = { "--" }
 
 primary_expression = {
-    class_method_call
+    variable_declaration
+    | class_method_call
+    // Preprocessor markers must be tried before user_function_call
+    // so _SUB_, _TRANS_, _QR_ aren't consumed as identifiers
+    | substitution
+    | transliteration
+    | regex
     | user_function_call
     | qualified_name_or_identifier
     | literal
@@ -423,9 +429,6 @@ primary_expression = {
     | "(" ~ expression ~ ")"
     | block
     | anonymous_sub
-    | substitution
-    | transliteration
-    | regex
     | heredoc
     | glob
     | readline
@@ -866,7 +869,7 @@ heredoc_escaped = { "\\" ~ bare_heredoc_delimiter }
 bare_heredoc_delimiter = @{ (ASCII_ALPHANUMERIC | "_")+ }
 
 glob = { "<" ~ glob_pattern ~ ">" }
-glob_pattern = @{ (!">'" ~ ANY)* }
+glob_pattern = @{ (!">" ~ ANY)* }
 
 readline = { "<" ~ filehandle? ~ ">" }
 
@@ -961,9 +964,10 @@ list_op_args = {
     list_op_arg ~ ("," ~ list_op_arg)*
 }
 
-// Single argument - stop at low precedence operators or statement boundaries
+// Single argument - stop at low precedence operators, statement boundaries,
+// and the _DIV_ preprocessor marker (which is an infix operator, never a term)
 list_op_arg = {
-    !statement_boundary ~ ternary_expression
+    !statement_boundary ~ !"_DIV_" ~ ternary_expression
 }
 
 // Statement boundaries where list operators stop consuming arguments

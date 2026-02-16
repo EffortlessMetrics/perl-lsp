@@ -1,6 +1,7 @@
 //! Tests for $/cancelRequest notification
 //! Phase 1 Stabilization: Deterministic cancellation tests with stable harness
 
+use perl_tdd_support::must;
 use serde_json::json;
 use std::time::Duration;
 
@@ -154,12 +155,15 @@ fn test_cancel_request_handling() {
             // Request completed before cancellation - that's OK for hover
             // but not for the slow operation
             if has_test_endpoint {
-                panic!("Slow operation should have been cancelled, but got result: {:?}", resp);
+                must(Err::<(), _>(format!(
+                    "Slow operation should have been cancelled, but got result: {:?}",
+                    resp
+                )));
             }
             // For hover, completing is acceptable since it's fast
         }
     } else if has_test_endpoint {
-        panic!("Expected a response for slow operation");
+        must(Err::<(), _>(format!("Expected a response for slow operation")));
     }
     // No response for hover is acceptable (cancelled before processing)
 }

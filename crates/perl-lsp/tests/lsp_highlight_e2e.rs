@@ -6,11 +6,11 @@ use support::lsp_client::LspClient;
 #[test]
 fn highlights_read_and_write() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///test.pl";
     let source = "use strict; use warnings; my $x=1; $x++; print $x;\n";
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Find column for first "$x"
     let col = source.find("$x").ok_or("Could not find '$x' in source")?;
@@ -20,7 +20,7 @@ fn highlights_read_and_write() -> Result<(), Box<dyn std::error::Error>> {
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": col}
         }),
-    );
+    )?;
 
     let highlights =
         response["result"].as_array().ok_or("documentHighlight should return an array")?;
@@ -67,14 +67,14 @@ fn highlights_read_and_write() -> Result<(), Box<dyn std::error::Error>> {
         assert_eq!(range["end"]["line"], 0, "All highlights on line 0");
     }
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }
 
 #[test]
 fn highlights_across_scopes() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///scope.pl";
     let source = r#"
 my $global = 1;
@@ -86,7 +86,7 @@ sub foo {
 $global++;
 "#;
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Highlight $global
     let col = source.find("$global").ok_or("Could not find '$global' in source")?;
@@ -95,7 +95,7 @@ $global++;
     let response = client.request("textDocument/documentHighlight", json!({
         "textDocument": {"uri": uri},
         "position": {"line": line, "character": col - source[..col].rfind('\n').map(|p| p + 1).unwrap_or(0)}
-    }));
+    }))?;
 
     let highlights =
         response["result"].as_array().ok_or("documentHighlight should return an array")?;
@@ -103,18 +103,18 @@ $global++;
     // Should find 4 occurrences of $global
     assert_eq!(highlights.len(), 4, "Should find all 4 occurrences of $global");
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }
 
 #[test]
 fn no_highlights_for_different_variables() -> Result<(), Box<dyn std::error::Error>> {
     let bin = env!("CARGO_BIN_EXE_perl-lsp");
-    let mut client = LspClient::spawn(bin);
+    let mut client = LspClient::spawn(bin)?;
     let uri = "file:///different.pl";
     let source = "my $foo = 1; my $bar = 2; $foo++; $bar++;\n";
 
-    client.did_open(uri, "perl", source);
+    client.did_open(uri, "perl", source)?;
 
     // Highlight $foo
     let col = source.find("$foo").ok_or("Could not find '$foo' in source")?;
@@ -124,7 +124,7 @@ fn no_highlights_for_different_variables() -> Result<(), Box<dyn std::error::Err
             "textDocument": {"uri": uri},
             "position": {"line": 0, "character": col}
         }),
-    );
+    )?;
 
     let highlights =
         response["result"].as_array().ok_or("documentHighlight should return an array")?;
@@ -143,6 +143,6 @@ fn no_highlights_for_different_variables() -> Result<(), Box<dyn std::error::Err
         assert!(!text.contains("bar"), "Highlight should not contain 'bar' variable");
     }
 
-    client.shutdown();
+    client.shutdown()?;
     Ok(())
 }

@@ -370,8 +370,9 @@ mod tests {
     #[test]
     fn test_simple_declaration() {
         let input = "my $x = 42;";
+        use perl_tdd_support::must;
         let mut parser = SimpleParser::new(input);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         assert_eq!(ast.node_type, "program");
         assert_eq!(ast.children.len(), 1);
@@ -381,8 +382,9 @@ mod tests {
     #[test]
     fn test_arithmetic() {
         let input = "$a + $b * $c;";
+        use perl_tdd_support::must;
         let mut parser = SimpleParser::new(input);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         assert_eq!(ast.node_type, "program");
         assert_eq!(ast.children.len(), 1);
@@ -393,8 +395,9 @@ mod tests {
     #[test]
     fn test_if_statement() {
         let input = "if ($x) { return 42; }";
+        use perl_tdd_support::must;
         let mut parser = SimpleParser::new(input);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         assert_eq!(ast.node_type, "program");
         assert_eq!(ast.children.len(), 1);

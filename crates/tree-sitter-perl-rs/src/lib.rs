@@ -7,6 +7,7 @@
 //! ## Features
 //!
 //! - **pure-rust**: Pure Rust Pest-based parser (canonical implementation)
+//! - **v2-pest-microcrate**: Route v2 Pest modules through `perl-parser-pest` (default path)
 //! - **test-utils**: Testing utilities and benchmarking tools
 //! - **c-scanner**: Legacy C implementation (for benchmarking only)
 //!
@@ -27,9 +28,12 @@
 //! "#;
 //!
 //! // Get AST and convert to S-expression
-//! let ast = parser.parse(code).unwrap();
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let ast = parser.parse(code)?;
 //! let sexp = parser.to_sexp(&ast);
 //! println!("{}", sexp);
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Architecture
@@ -65,7 +69,10 @@ pub mod benchmark_parser;
 pub mod perl_lexer;
 #[cfg(feature = "pure-rust-standalone")]
 pub mod pest_only;
-#[cfg(feature = "pure-rust")]
+#[cfg(all(feature = "pure-rust", feature = "v2-pest-microcrate"))]
+#[path = "pure_rust_parser_bridge.rs"]
+pub mod pure_rust_parser;
+#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod pure_rust_parser;
 
 #[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
@@ -114,7 +121,7 @@ pub use pure_rust_parser::PureRustPerlParser as PureRustParser; // Original for 
 #[cfg(feature = "pure-rust")]
 pub use pure_rust_parser::{AstNode, PerlParser};
 
-#[cfg(feature = "pure-rust")]
+#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod iterative_parser;
 
 #[cfg(feature = "pure-rust")]
@@ -180,7 +187,10 @@ pub mod disambiguated_parser;
 #[cfg(all(test, feature = "pure-rust"))]
 mod test_slash;
 
-#[cfg(feature = "pure-rust")]
+#[cfg(all(feature = "pure-rust", feature = "v2-pest-microcrate"))]
+#[path = "pratt_parser_bridge.rs"]
+pub mod pratt_parser;
+#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod pratt_parser;
 
 #[cfg(feature = "pure-rust")]
@@ -195,7 +205,10 @@ pub mod enhanced_heredoc_lexer;
 #[cfg(feature = "pure-rust")]
 pub mod enhanced_full_parser;
 
-#[cfg(feature = "pure-rust")]
+#[cfg(all(feature = "pure-rust", feature = "v2-pest-microcrate"))]
+#[path = "sexp_formatter_bridge.rs"]
+pub mod sexp_formatter;
+#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod sexp_formatter;
 
 #[cfg(feature = "pure-rust")]
@@ -232,19 +245,23 @@ mod test_format_order;
 #[cfg(all(test, feature = "pure-rust"))]
 mod test_statement_debug;
 
+#[cfg(feature = "c-parser")]
 use tree_sitter::Language;
 
 // External C functions from the generated parser
+#[cfg(feature = "c-parser")]
 unsafe extern "C" {
     fn tree_sitter_perl() -> *const tree_sitter::ffi::TSLanguage;
 }
 
 /// Get the tree-sitter language for Perl
+#[cfg(feature = "c-parser")]
 pub fn language() -> Language {
     unsafe { Language::from_raw(tree_sitter_perl()) }
 }
 
 /// Create a new tree-sitter parser instance
+#[cfg(feature = "c-parser")]
 pub fn create_ts_parser() -> Result<tree_sitter::Parser, error::ParseError> {
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&language()).map_err(|_| error::ParseError::LanguageLoadFailed)?;
@@ -252,12 +269,14 @@ pub fn create_ts_parser() -> Result<tree_sitter::Parser, error::ParseError> {
 }
 
 /// Parse Perl source code
+#[cfg(feature = "c-parser")]
 pub fn parse(source: &str) -> Result<tree_sitter::Tree, error::ParseError> {
     let mut parser = create_ts_parser()?;
     parser.parse(source, None).ok_or(error::ParseError::ParseFailed)
 }
 
 /// Parse Perl source code with existing tree
+#[cfg(feature = "c-parser")]
 pub fn parse_with_tree(
     source: &str,
     old_tree: Option<&tree_sitter::Tree>,
@@ -277,7 +296,7 @@ pub use full_parser::FullPerlParser;
 #[cfg(feature = "pure-rust")]
 pub use enhanced_full_parser::EnhancedFullParser;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "c-parser"))]
 mod test {
     use super::*;
 
@@ -294,15 +313,16 @@ mod test {
         let result = parse(source);
         assert!(result.is_ok());
 
-        let tree = result.unwrap();
-        let root = tree.root_node();
-        assert_eq!(root.kind(), "source_file");
+        if let Ok(tree) = result {
+            let root = tree.root_node();
+            assert_eq!(root.kind(), "source_file");
+        }
     }
 
     #[test]
     fn test_parser_creation() {
         let mut parser = tree_sitter::Parser::new();
-        parser.set_language(&language()).unwrap();
+        let _ = parser.set_language(&language());
         // Test that parser has a language set
         assert!(parser.language().is_some());
     }

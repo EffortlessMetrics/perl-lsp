@@ -26,10 +26,11 @@ use std::sync::Arc;
 use std::time::Instant;
 #[cfg(feature = "workspace")]
 use url::Url;
+// Note: WalkDir logic has been extracted to super::file_discovery.
+// These helper functions are retained for potential future use by
+// other workspace operations (e.g., file watcher filtering).
 #[cfg(feature = "workspace")]
-use walkdir::WalkDir;
-
-#[cfg(feature = "workspace")]
+#[allow(dead_code)]
 fn is_perl_source_file(path: &Path) -> bool {
     let Some(ext) = path.extension().and_then(|s| s.to_str()) else {
         return false;
@@ -38,6 +39,7 @@ fn is_perl_source_file(path: &Path) -> bool {
 }
 
 #[cfg(feature = "workspace")]
+#[allow(dead_code)]
 fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
     if !entry.file_type().is_dir() {
         return false;
@@ -960,40 +962,26 @@ impl LspServer {
                     continue;
                 };
 
-                for entry in WalkDir::new(root)
-                    .follow_links(false)
-                    .into_iter()
-                    .filter_entry(|e| !should_skip_dir(e))
-                {
-                    let entry = match entry {
-                        Ok(entry) => entry,
-                        Err(_) => continue,
-                    };
+                let discovery = super::file_discovery::discover_perl_files(&root);
 
-                    if entry.file_type().is_file() && is_perl_source_file(entry.path()) {
-                        files.push(entry.path().to_path_buf());
-                        let total_files = files.len();
+                for path in discovery.files {
+                    files.push(path);
+                    let total_files = files.len();
 
-                        if total_files.is_multiple_of(64) {
-                            coordinator.update_scan_progress(total_files);
-                        }
+                    if total_files.is_multiple_of(64) {
+                        coordinator.update_scan_progress(total_files);
+                    }
 
-                        let elapsed_ms = budget_start.elapsed().as_millis() as u64;
-                        if total_files >= limits.max_files {
-                            early_exit =
-                                Some((EarlyExitReason::FileLimit, elapsed_ms, 0, total_files));
-                            break 'scan;
-                        }
+                    let elapsed_ms = budget_start.elapsed().as_millis() as u64;
+                    if total_files >= limits.max_files {
+                        early_exit = Some((EarlyExitReason::FileLimit, elapsed_ms, 0, total_files));
+                        break 'scan;
+                    }
 
-                        if elapsed_ms > caps.initial_scan_budget_ms {
-                            early_exit = Some((
-                                EarlyExitReason::InitialTimeBudget,
-                                elapsed_ms,
-                                0,
-                                total_files,
-                            ));
-                            break 'scan;
-                        }
+                    if elapsed_ms > caps.initial_scan_budget_ms {
+                        early_exit =
+                            Some((EarlyExitReason::InitialTimeBudget, elapsed_ms, 0, total_files));
+                        break 'scan;
                     }
                 }
             }

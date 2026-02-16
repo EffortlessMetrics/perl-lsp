@@ -1,5 +1,8 @@
 name: Homebrew Auto-Bump
 
+# Update Homebrew formula on release
+# Cost: ~$0.02 per bump
+
 on:
   release:
     types: [published]
@@ -9,20 +12,27 @@ on:
         description: 'Release tag to bump (e.g., v0.8.0)'
         required: false
 
+# Cancel in-flight runs
+concurrency:
+  group: brew-bump-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel brew bumps
+
 jobs:
   bump:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
           python-version: '3.x'
-      
+          cache: 'pip'
+
       - name: Get release tag
         id: tag
         run: |
@@ -34,7 +44,7 @@ jobs:
           VERSION="${TAG#v}"
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-      
+
       - name: Wait for release assets
         run: |
           # Wait up to 10 minutes for release assets to be available
@@ -48,82 +58,78 @@ jobs:
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Download and compute SHA256
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
           VERSION="${{ steps.tag.outputs.version }}"
-          
+
           # Download assets
           mkdir -p /tmp/brew-assets
           cd /tmp/brew-assets
-          
+
           # Download each platform asset
           for platform in "x86_64-apple-darwin" "aarch64-apple-darwin" "x86_64-unknown-linux-gnu" "aarch64-unknown-linux-gnu"; do
             echo "Downloading perl-lsp-v${VERSION}-${platform}.tar.gz..."
             gh release download "${TAG}" --pattern "perl-lsp-v${VERSION}-${platform}.tar.gz" || true
           done
-          
+
           # Compute SHA256
           echo "Computing SHA256 checksums..."
           sha256sum *.tar.gz > checksums.txt
           cat checksums.txt
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Update Homebrew formula
         run: |
           VERSION="${{ steps.tag.outputs.version }}"
-          
+
           # Update version
           sed -i "s/version \"[^\"]*\"/version \"${VERSION}\"/" Formula/perl-lsp.rb
-          
+
           # Update SHA256 for each platform
           cd /tmp/brew-assets
-          
+
           # macOS Intel
           if [ -f "perl-lsp-v${VERSION}-x86_64-apple-darwin.tar.gz" ]; then
             SHA=$(sha256sum "perl-lsp-v${VERSION}-x86_64-apple-darwin.tar.gz" | cut -d' ' -f1)
             sed -i "/x86_64-apple-darwin/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
           fi
-          
+
           # macOS ARM
           if [ -f "perl-lsp-v${VERSION}-aarch64-apple-darwin.tar.gz" ]; then
             SHA=$(sha256sum "perl-lsp-v${VERSION}-aarch64-apple-darwin.tar.gz" | cut -d' ' -f1)
             sed -i "/aarch64-apple-darwin/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
           fi
-          
+
           # Linux x64
           if [ -f "perl-lsp-v${VERSION}-x86_64-unknown-linux-gnu.tar.gz" ]; then
             SHA=$(sha256sum "perl-lsp-v${VERSION}-x86_64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
             sed -i "/x86_64-unknown-linux-gnu/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
           fi
-          
+
           # Linux ARM
           if [ -f "perl-lsp-v${VERSION}-aarch64-unknown-linux-gnu.tar.gz" ]; then
             SHA=$(sha256sum "perl-lsp-v${VERSION}-aarch64-unknown-linux-gnu.tar.gz" | cut -d' ' -f1)
             sed -i "/aarch64-unknown-linux-gnu/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
           fi
-          
-          cd "$GITHUB_WORKSPACE"
-          echo "Updated Formula:"
-          cat Formula/perl-lsp.rb
-      
-      - name: Create PR
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          BRANCH="homebrew-bump-${{ steps.tag.outputs.version }}"
-          git checkout -b "$BRANCH"
-          git add Formula/perl-lsp.rb
-          git commit -m "chore(homebrew): Bump perl-lsp to ${{ steps.tag.outputs.version }}"
-          git push origin "$BRANCH"
-          
-          gh pr create \
-            --title "chore(homebrew): Bump perl-lsp to ${{ steps.tag.outputs.version }}" \
-            --body "Automated bump for release ${{ steps.tag.outputs.tag }}" \
-            --base master \
-            --head "$BRANCH"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Show updated formula
+        run: cat Formula/perl-lsp.rb
+
+      - name: Create PR to Homebrew
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: Formula
+          branch: bump-perl-lsp-${{ steps.tag.outputs.version }}
+          title: "perl-lsp ${{ steps.tag.outputs.version }}"
+          body: |
+            Bump perl-lsp to version ${{ steps.tag.outputs.version }}
+
+            Created by automated workflow from [EffortlessMetrics/tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs).
+          commit-message: "perl-lsp ${{ steps.tag.outputs.version }}"
+          labels: automated-pr
+          repository: Homebrew/homebrew-core
+          signoff: false

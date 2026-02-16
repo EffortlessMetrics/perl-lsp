@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::engine::parser::Parser;
-    use perl_ast::ast::NodeKind;
+    use perl_ast::ast::{Node, NodeKind, SourceLocation};
 
     fn parse_code(input: &str) -> Option<perl_ast::ast::Node> {
         let mut parser = Parser::new(input);
@@ -12,7 +12,11 @@ mod tests {
     fn test_general_indirect_method_call() {
         // AC1: recognize method $object @args
         let source = "move $player 10, 20;";
-        let ast = parse_code(source).unwrap();
+        let ast_opt = parse_code(source);
+        assert!(ast_opt.is_some());
+        let ast = ast_opt.unwrap_or_else(|| {
+            Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
+        });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
             if let NodeKind::IndirectCall { method, object, args } = &stmt.kind {
@@ -21,12 +25,12 @@ mod tests {
                     assert_eq!(sigil, "$");
                     assert_eq!(name, "player");
                 } else {
-                    panic!("Expected Variable as object, got {:?}", object.kind);
+                    unreachable!("Expected Variable as object, got {:?}", object.kind);
                 }
                 // Arguments are parsed until statement terminator
                 assert_eq!(args.len(), 2);
             } else {
-                panic!("Expected IndirectCall node, got {:?}", stmt.kind);
+                unreachable!("Expected IndirectCall node, got {:?}", stmt.kind);
             }
         }
     }
@@ -35,7 +39,11 @@ mod tests {
     fn test_builtin_indirect_syntax() {
         // AC2: handle builtin indirect syntax (print $fh "text")
         let source = "print $fh \"Hello\";";
-        let ast = parse_code(source).unwrap();
+        let ast_opt = parse_code(source);
+        assert!(ast_opt.is_some());
+        let ast = ast_opt.unwrap_or_else(|| {
+            Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
+        });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
             if let NodeKind::IndirectCall { method, object, args } = &stmt.kind {
@@ -53,7 +61,11 @@ mod tests {
     fn test_new_indirect_syntax() {
         // AC1 variant: new Class(...)
         let source = "new Player \"Steven\";";
-        let ast = parse_code(source).unwrap();
+        let ast_opt = parse_code(source);
+        assert!(ast_opt.is_some());
+        let ast = ast_opt.unwrap_or_else(|| {
+            Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
+        });
         if let NodeKind::Program { statements } = &ast.kind {
             let stmt = &statements[0];
             if let NodeKind::IndirectCall { method, object, .. } = &stmt.kind {

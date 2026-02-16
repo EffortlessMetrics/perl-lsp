@@ -341,7 +341,7 @@ fn test_ignored_test_trend_reporting() -> Result<()> {
         "Should detect decreasing trend from 60 to 49 tests"
     );
 
-    assert!(trend_report.data_points.len() > 0, "Should have data points in trend report");
+    assert!(!trend_report.data_points.is_empty(), "Should have data points in trend report");
 
     assert!(trend_report.average_count > 0.0, "Should calculate average count");
 

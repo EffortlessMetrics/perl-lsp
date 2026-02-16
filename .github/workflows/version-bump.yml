@@ -1,0 +1,172 @@
+name: Version Bump & Changelog Generation
+
+# Automated version bumping and changelog generation
+# Triggered by workflow_dispatch or after successful release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New version (e.g., 0.9.0)'
+        required: true
+        type: string
+      bump_type:
+        description: 'Version bump type'
+        required: false
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+        default: patch
+      prerelease:
+        description: 'Is this a prerelease?'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  version-bump:
+    name: Bump Version & Generate Changelog
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-release
+        run: cargo install cargo-release --locked
+
+      - name: Install git-cliff
+        run: |
+          wget -qO- https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-ubuntu.tar.gz | \
+            tar -xz -C /tmp
+          sudo mv /tmp/git-cliff /usr/local/bin/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Read current version from workspace Cargo.toml
+            VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Current version: ${VERSION}"
+
+      - name: Bump workspace version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BUMP_TYPE="${{ github.event.inputs.bump_type }}"
+
+          # Update workspace Cargo.toml
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            # Use explicit version
+            sed -i 's/^version = ".*"/version = "'"${VERSION}"'"/' Cargo.toml
+          else
+            # Use cargo-release for automatic bump
+            cargo release version $BUMP_TYPE --workspace
+          fi
+
+          echo "Version bumped to: $(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PRERELEASE="${{ github.event.inputs.prerelease }}"
+
+          # Generate changelog for the new version
+          git cliff --tag "v${VERSION}" --config cliff.toml > CHANGELOG.new.md
+
+          # Prepend to existing CHANGELOG.md
+          if [ -f CHANGELOG.md ]; then
+            cat CHANGELOG.new.md CHANGELOG.md > CHANGELOG.md.tmp
+            mv CHANGELOG.md.tmp CHANGELOG.md
+          else
+            mv CHANGELOG.new.md CHANGELOG.md
+          fi
+
+          # Clean up
+          rm -f CHANGELOG.new.md
+
+          echo "Changelog generated for v${VERSION}"
+
+      - name: Create version branch
+        id: branch
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH_NAME="release/v${VERSION}"
+          echo "branch=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          git checkout -b ${BRANCH_NAME}
+
+      - name: Commit changes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH_NAME="${{ steps.branch.outputs.branch }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add Cargo.toml
+          git add CHANGELOG.md
+
+          git commit -m "chore(release): bump version to v${VERSION}
+
+          - Update workspace version to ${VERSION}
+          - Generate changelog for release"
+
+          git push origin ${BRANCH_NAME}
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.branch.outputs.branch }}
+          base: main
+          title: "Release v${{ steps.version.outputs.version }}"
+          body: |
+            ## Release v${{ steps.version.outputs.version }}
+
+            This PR prepares the release with:
+            - Version bump to ${{ steps.version.outputs.version }}
+            - Updated changelog
+
+            ### Checklist
+            - [ ] All tests passing
+            - [ ] Documentation updated
+            - [ ] Breaking changes documented
+            - [ ] Migration guide updated (if needed)
+
+            ### Next Steps
+            Once merged, the release workflow will:
+            1. Build binaries for all platforms
+            2. Create GitHub release with assets
+            3. Publish to crates.io
+            4. Update Homebrew formula
+            5. Publish VSCode extension
+            6. Update Scoop and Chocolatey packages
+            7. Build and push Docker images
+          labels: release
+          draft: false
+
+      - name: Summary
+        run: |
+          echo "## Version Bump Complete :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ steps.branch.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR**: Created" >> $GITHUB_STEP_SUMMARY
+          echo "- **Changelog**: Generated" >> $GITHUB_STEP_SUMMARY

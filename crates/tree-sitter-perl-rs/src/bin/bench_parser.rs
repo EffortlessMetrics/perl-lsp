@@ -12,7 +12,10 @@ use walkdir::WalkDir;
 extern crate perl_parser;
 
 fn process_file(file_path: &Path) -> (bool, u128) {
-    let code = fs::read_to_string(file_path).expect("Failed to read file");
+    let code = match fs::read_to_string(file_path) {
+        Ok(c) => c,
+        Err(_) => return (true, 0),
+    };
     let start = Instant::now();
     let mut parser = perl_parser::Parser::new(&code);
     let result = parser.parse();

@@ -1091,6 +1091,7 @@ fn display_summary(output_dir: &std::path::Path, _spinner: &ProgressBar) -> Resu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_memory_measurement_basic() {
@@ -1117,7 +1118,7 @@ mod tests {
             }
             Err(e) => {
                 // Should not fail on supported platforms
-                panic!("get_current_memory_usage failed: {}", e);
+                must(Err::<(), _>(format!("get_current_memory_usage failed: {}", e)));
             }
         }
     }

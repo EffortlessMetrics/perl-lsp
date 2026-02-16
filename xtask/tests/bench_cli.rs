@@ -19,10 +19,13 @@ fn test_benchmark_saves_output() -> Result<()> {
     // Path where benchmark results should be written
     let output_path = temp_dir.path().join("bench_output.txt");
 
+    use perl_tdd_support::must_some;
+    let output_str = must_some(output_path.to_str());
+
     // Run the xtask bench command and verify it succeeds
     let mut cmd = cargo_bin_cmd!("xtask");
     cmd.current_dir(temp_dir.path())
-        .args(["bench", "--name", "dummy", "--save", "--output", output_path.to_str().unwrap()])
+        .args(["bench", "--name", "dummy", "--save", "--output", output_str])
         .assert()
         .success();
 

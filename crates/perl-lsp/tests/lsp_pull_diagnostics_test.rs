@@ -3,7 +3,6 @@ use serde_json::json;
 
 /// Test Pull Diagnostics support (LSP 3.17)
 #[test]
-#[ignore = "feature: undefined variable detection not yet implemented"]
 fn test_document_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 

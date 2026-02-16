@@ -38,7 +38,6 @@ mod final_function_return_kills {
 
     /// Kill mutation: extract_regex_parts -> ("xyzzy".into(), String::new())
     #[test]
-    #[ignore = "mutation hardening: parser output format changed"]
     fn test_kill_regex_parts_xyzzy_string_new_mutation() {
         let cases = vec![
             ("qr/test/i", ("/test/", "i")), // Should return pattern and modifier, not "xyzzy" and String::new()
@@ -66,7 +65,6 @@ mod final_function_return_kills {
 
     /// Kill mutations in extract_transliteration_parts
     #[test]
-    #[ignore = "mutation hardening: parser output format changed"]
     fn test_kill_transliteration_xyzzy_mutations() {
         // Kill: ("xyzzy".into(), "xyzzy".into(), String::new())
         // Kill: (String::new(), "xyzzy".into(), String::new())
@@ -212,7 +210,6 @@ mod final_boolean_logic_kills {
 
     /// Kill mutation: != → == in extract_transliteration_parts (line 137:31)
     #[test]
-    #[ignore = "mutation hardening: parser output format changed"]
     fn test_kill_not_equal_to_equal_mutation() {
         // Test delimiter comparison logic
         let paired_input = "tr{abc}{xyz}";

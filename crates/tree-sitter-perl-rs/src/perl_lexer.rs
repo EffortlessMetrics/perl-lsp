@@ -2128,29 +2128,30 @@ impl<'a> PerlLexer<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must_some;
 
     #[test]
     fn test_slash_disambiguation() {
         // Test case 1: Division after identifier
         let mut lexer = PerlLexer::new("x / 2");
-        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Identifier(Arc::from("x")));
-        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Division);
-        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Number(Arc::from("2")));
+        assert_eq!(must_some(lexer.next_token()).token_type, TokenType::Identifier(Arc::from("x")));
+        assert_eq!(must_some(lexer.next_token()).token_type, TokenType::Division);
+        assert_eq!(must_some(lexer.next_token()).token_type, TokenType::Number(Arc::from("2")));
 
         // Test case 2: Regex after operator
         let mut lexer = PerlLexer::new("=~ /foo/");
-        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Operator(Arc::from("=~")));
-        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::RegexMatch);
+        assert_eq!(must_some(lexer.next_token()).token_type, TokenType::Operator(Arc::from("=~")));
+        assert_eq!(must_some(lexer.next_token()).token_type, TokenType::RegexMatch);
 
         // Test case 3: Division then regex
         let mut lexer = PerlLexer::new("1/ /abc/");
-        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Number(Arc::from("1")));
-        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::Division);
-        assert_eq!(lexer.next_token().unwrap().token_type, TokenType::RegexMatch);
+        assert_eq!(must_some(lexer.next_token()).token_type, TokenType::Number(Arc::from("1")));
+        assert_eq!(must_some(lexer.next_token()).token_type, TokenType::Division);
+        assert_eq!(must_some(lexer.next_token()).token_type, TokenType::RegexMatch);
 
         // Test case 4: Substitution
         let mut lexer = PerlLexer::new("s/foo/bar/g");
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         assert_eq!(token.token_type, TokenType::Substitution);
         assert_eq!(token.text.as_ref(), "s/foo/bar/g");
     }
@@ -2159,12 +2160,12 @@ mod tests {
     fn test_complex_delimiters() {
         // Test s{}{} syntax
         let mut lexer = PerlLexer::new("s{foo}{bar}g");
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         assert_eq!(token.token_type, TokenType::Substitution);
 
         // Test nested delimiters
         let mut lexer = PerlLexer::new("s{f{o}o}{bar}");
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         assert_eq!(token.token_type, TokenType::Substitution);
     }
 
@@ -2172,19 +2173,19 @@ mod tests {
     fn test_string_interpolation() {
         // Test simple variable interpolation
         let mut lexer = PerlLexer::new(r#""Hello $name""#);
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         match &token.token_type {
             TokenType::InterpolatedString(parts) => {
                 assert_eq!(parts.len(), 2);
                 assert!(matches!(&parts[0], StringPart::Literal(s) if s.as_ref() == "Hello "));
                 assert!(matches!(&parts[1], StringPart::Variable(s) if s.as_ref() == "$name"));
             }
-            _ => panic!("Expected InterpolatedString"),
+            _ => unreachable!("Expected InterpolatedString"),
         }
 
         // Test method call interpolation
         let mut lexer = PerlLexer::new(r#""The value is $obj->method()""#);
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         match &token.token_type {
             TokenType::InterpolatedString(parts) => {
                 assert_eq!(parts.len(), 3);
@@ -2196,12 +2197,12 @@ mod tests {
                     matches!(&parts[2], StringPart::MethodCall(s) if s.as_ref() == "->method()")
                 );
             }
-            _ => panic!("Expected InterpolatedString"),
+            _ => unreachable!("Expected InterpolatedString"),
         }
 
         // Test ${expr} interpolation
         let mut lexer = PerlLexer::new(r#""Total: ${count + 1}""#);
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         match &token.token_type {
             TokenType::InterpolatedString(parts) => {
                 assert_eq!(parts.len(), 2);
@@ -2210,24 +2211,24 @@ mod tests {
                     matches!(&parts[1], StringPart::Expression(s) if s.as_ref() == "${count + 1}")
                 );
             }
-            _ => panic!("Expected InterpolatedString"),
+            _ => unreachable!("Expected InterpolatedString"),
         }
 
         // Test array interpolation
         let mut lexer = PerlLexer::new(r#""Items: @array""#);
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         match &token.token_type {
             TokenType::InterpolatedString(parts) => {
                 assert_eq!(parts.len(), 2);
                 assert!(matches!(&parts[0], StringPart::Literal(s) if s.as_ref() == "Items: "));
                 assert!(matches!(&parts[1], StringPart::Variable(s) if s.as_ref() == "@array"));
             }
-            _ => panic!("Expected InterpolatedString"),
+            _ => unreachable!("Expected InterpolatedString"),
         }
 
         // Test array slice interpolation
         let mut lexer = PerlLexer::new(r#""Value: $array[0]""#);
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         match &token.token_type {
             TokenType::InterpolatedString(parts) => {
                 assert_eq!(parts.len(), 3);
@@ -2235,12 +2236,12 @@ mod tests {
                 assert!(matches!(&parts[1], StringPart::Variable(s) if s.as_ref() == "$array"));
                 assert!(matches!(&parts[2], StringPart::ArraySlice(s) if s.as_ref() == "[0]"));
             }
-            _ => panic!("Expected InterpolatedString"),
+            _ => unreachable!("Expected InterpolatedString"),
         }
 
         // Test special variables
         let mut lexer = PerlLexer::new(r#""PID: $$, Error: $!""#);
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         match &token.token_type {
             TokenType::InterpolatedString(parts) => {
                 assert_eq!(parts.len(), 4);
@@ -2249,17 +2250,17 @@ mod tests {
                 assert!(matches!(&parts[2], StringPart::Literal(s) if s.as_ref() == ", Error: "));
                 assert!(matches!(&parts[3], StringPart::Variable(s) if s.as_ref() == "$!"));
             }
-            _ => panic!("Expected InterpolatedString"),
+            _ => unreachable!("Expected InterpolatedString"),
         }
 
         // Test escaped characters (should be StringLiteral, not InterpolatedString)
         let mut lexer = PerlLexer::new(r#""Line 1\nLine 2\t\$escaped""#);
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         assert!(matches!(token.token_type, TokenType::StringLiteral));
 
         // Test plain string (no interpolation)
         let mut lexer = PerlLexer::new(r#""Just a plain string""#);
-        let token = lexer.next_token().unwrap();
+        let token = must_some(lexer.next_token());
         assert!(matches!(token.token_type, TokenType::StringLiteral));
     }
 
@@ -2268,19 +2269,19 @@ mod tests {
         // Test unknown character
         let mut lexer = PerlLexer::new("x § y");
 
-        let token1 = lexer.next_token().unwrap();
+        let token1 = must_some(lexer.next_token());
         assert!(matches!(token1.token_type, TokenType::Identifier(_)));
 
-        let token2 = lexer.next_token().unwrap();
+        let token2 = must_some(lexer.next_token());
         match &token2.token_type {
             TokenType::Error(msg) => {
                 assert!(msg.contains("Unknown character"));
                 assert!(msg.contains("§"));
             }
-            _ => panic!("Expected Error token, got {:?}", token2.token_type),
+            _ => unreachable!("Expected Error token, got {:?}", token2.token_type),
         }
 
-        let token3 = lexer.next_token().unwrap();
+        let token3 = must_some(lexer.next_token());
         assert!(matches!(token3.token_type, TokenType::Identifier(_)));
     }
 }

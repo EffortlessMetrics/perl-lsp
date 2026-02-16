@@ -157,7 +157,7 @@ enum Commands {
     #[cfg(feature = "legacy")]
     Corpus {
         /// Path to corpus directory
-        #[arg(long, default_value = "c/test/corpus")]
+        #[arg(long, default_value = "tree-sitter-perl/test/corpus")]
         path: PathBuf,
 
         /// Run with specific scanner

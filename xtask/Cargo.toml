@@ -13,7 +13,7 @@ categories = ["development-tools"]
 [dependencies]
 clap = { version = "4.5.55", features = ["derive"] }
 color-eyre = "0.6.5"
-difference = "2.0.0"
+similar = "2.7.0"
 duct = "1.1.1"
 walkdir = "2.5.0"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -24,8 +24,9 @@ indicatif = "0.18.3"
 console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
 perl-parser = { workspace = true }
+perl-parser-pest = { workspace = true, optional = true }
 tree-sitter = { workspace = true }
-tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", optional = true }
+tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", optional = true, features = ["c-parser"] }
 regex = "1.12.2"
 serde_yaml_ng = "0.10.0"
 bindgen = "0.72.1"
@@ -38,10 +39,10 @@ procfs = "0.18.0"
 [dev-dependencies]
 tempfile = "3.24.0"
 assert_cmd = "2.1.2"
+perl-tdd-support = { workspace = true }
 
 [features]
 # Additional tasks that depend on legacy tree-sitter-perl crate
-legacy = []
+legacy = ["tree-sitter-perl", "perl-parser-pest"]
 # Parser-related tasks
 parser-tasks = ["tree-sitter-perl"]
-

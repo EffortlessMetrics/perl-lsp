@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features including completion, navigation, diagnostics, formatting, and refactoring.
 
-**Version**: 0.8.8
+**Version**: 0.9.0
 
 ## Commands
 

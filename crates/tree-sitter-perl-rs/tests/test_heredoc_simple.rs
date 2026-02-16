@@ -1,5 +1,6 @@
 //! Simple test to debug heredoc recovery
 
+use perl_tdd_support::must;
 use tree_sitter_perl::perl_lexer::PerlLexer;
 
 #[test]
@@ -16,7 +17,7 @@ EOF
         println!("Token {:?}", token);
         count += 1;
         if count > 100 {
-            panic!("Too many tokens - likely infinite loop");
+            must(Err::<(), _>(format!("Too many tokens - likely infinite loop")));
         }
     }
 }

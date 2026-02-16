@@ -11,6 +11,7 @@ pub mod parser_error_helpers;
 #[cfg(feature = "incremental")]
 pub mod incremental_test_utils;
 
+use perl_tdd_support::{must, must_some};
 use serde_json::Value;
 use std::time::{Duration, Instant};
 
@@ -140,27 +141,21 @@ fn line_col_to_offset(lines: &[&str], line: usize, col_utf16: usize) -> usize {
 /// Extract object from optional value with meaningful error
 #[allow(dead_code)]
 pub fn expect_obj(v: &Option<Value>) -> &serde_json::Map<String, Value> {
-    let val = match v.as_ref() {
-        Some(val) => val,
-        None => panic!("Expected Some value, got None"),
-    };
-    match val.as_object() {
-        Some(obj) => obj,
-        None => panic!("Expected JSON object, got: {:?}", val),
-    }
+    use perl_tdd_support::must_some;
+    let val = must_some(v.as_ref());
+    let obj = val.as_object();
+    assert!(obj.is_some(), "Expected JSON object, got: {:?}", val);
+    obj.unwrap_or_else(|| unreachable!())
 }
 
 /// Extract array from optional value with meaningful error
 #[allow(dead_code)]
 pub fn expect_arr(v: &Option<Value>) -> &Vec<Value> {
-    let val = match v.as_ref() {
-        Some(val) => val,
-        None => panic!("Expected Some value, got None"),
-    };
-    match val.as_array() {
-        Some(arr) => arr,
-        None => panic!("Expected JSON array, got: {:?}", val),
-    }
+    use perl_tdd_support::must_some;
+    let val = must_some(v.as_ref());
+    let arr = val.as_array();
+    assert!(arr.is_some(), "Expected JSON array, got: {:?}", val);
+    arr.unwrap_or_else(|| unreachable!())
 }
 
 // ===================== Assertion Helpers =====================
@@ -170,10 +165,9 @@ pub fn expect_arr(v: &Option<Value>) -> &Vec<Value> {
 pub fn assert_hover_has_text(v: &Option<Value>) {
     if let Some(hover) = v {
         if !hover.is_null() {
-            let obj = match hover.as_object() {
-                Some(o) => o,
-                None => panic!("Hover should be object, got: {:?}", hover),
-            };
+            let obj_opt = hover.as_object();
+            assert!(obj_opt.is_some(), "Hover should be object, got: {:?}", hover);
+            let obj = obj_opt.unwrap_or_else(|| unreachable!());
             assert!(obj.contains_key("contents"), "hover must have contents field");
 
             let contents = &obj["contents"];
@@ -198,22 +192,27 @@ pub fn assert_completion_has_items(v: &Option<Value>) {
             let items = if let Some(arr) = comp.as_array() {
                 arr
             } else if let Some(obj) = comp.as_object() {
-                match obj.get("items").and_then(|v| v.as_array()) {
-                    Some(arr) => arr,
-                    None => panic!("Completion object must have items array, got: {:?}", obj),
-                }
+                let items_opt = obj.get("items").and_then(|v| v.as_array());
+                assert!(
+                    items_opt.is_some(),
+                    "Completion object must have items array, got: {:?}",
+                    obj
+                );
+                items_opt.unwrap_or_else(|| unreachable!())
             } else {
-                panic!("Completion response must be array or object with items, got: {:?}", comp);
+                unreachable!(
+                    "Completion response must be array or object with items, got: {:?}",
+                    comp
+                );
             };
 
             assert!(!items.is_empty(), "completion must return at least one item");
 
             // Validate first item has required fields
             if let Some(first) = items.first() {
-                let item = match first.as_object() {
-                    Some(obj) => obj,
-                    None => panic!("Completion item must be object, got: {:?}", first),
-                };
+                let item_opt = first.as_object();
+                assert!(item_opt.is_some(), "Completion item must be object, got: {:?}", first);
+                let item = item_opt.unwrap_or_else(|| unreachable!());
                 assert!(item.contains_key("label"), "completion item must have label");
             }
         }
@@ -266,10 +265,9 @@ pub fn assert_references_found(v: &Option<Value>) {
 pub fn assert_references_found_with_min(v: &Option<Value>, min_refs: Option<usize>) {
     if let Some(refs_val) = v {
         if !refs_val.is_null() {
-            let refs = match refs_val.as_array() {
-                Some(arr) => arr,
-                None => panic!("References should be array, got: {:?}", refs_val),
-            };
+            let refs_opt = refs_val.as_array();
+            assert!(refs_opt.is_some(), "References should be array, got: {:?}", refs_val);
+            let refs = refs_opt.unwrap_or_else(|| unreachable!());
 
             if let Some(min) = min_refs {
                 assert!(
@@ -280,12 +278,10 @@ pub fn assert_references_found_with_min(v: &Option<Value>, min_refs: Option<usiz
                 );
             }
 
-            // Validate each reference has required fields
             for reference in refs {
-                let ref_obj = match reference.as_object() {
-                    Some(obj) => obj,
-                    None => panic!("Reference must be object, got: {:?}", reference),
-                };
+                let ref_obj_opt = reference.as_object();
+                assert!(ref_obj_opt.is_some(), "Reference must be object, got: {:?}", reference);
+                let ref_obj = ref_obj_opt.unwrap_or_else(|| unreachable!());
                 assert!(ref_obj.contains_key("uri"), "reference must have uri");
                 assert!(ref_obj.contains_key("range"), "reference must have range");
                 assert_range_valid(&ref_obj["range"], "reference range");
@@ -299,18 +295,19 @@ pub fn assert_references_found_with_min(v: &Option<Value>, min_refs: Option<usiz
 pub fn assert_call_hierarchy_items(v: &Option<Value>, expected_name: Option<&str>) {
     if let Some(ch_val) = v {
         if !ch_val.is_null() {
-            let items = match ch_val.as_array() {
-                Some(arr) => arr,
-                None => panic!("Call hierarchy should be array, got: {:?}", ch_val),
-            };
+            let items_opt = ch_val.as_array();
+            assert!(items_opt.is_some(), "Call hierarchy should be array, got: {:?}", ch_val);
+            let items = items_opt.unwrap_or_else(|| unreachable!());
 
             if !items.is_empty() {
-                // Validate each item has required fields
                 for item in items {
-                    let item_obj = match item.as_object() {
-                        Some(obj) => obj,
-                        None => panic!("Call hierarchy item must be object, got: {:?}", item),
-                    };
+                    let item_obj_opt = item.as_object();
+                    assert!(
+                        item_obj_opt.is_some(),
+                        "Call hierarchy item must be object, got: {:?}",
+                        item
+                    );
+                    let item_obj = item_obj_opt.unwrap_or_else(|| unreachable!());
                     assert!(item_obj.contains_key("name"), "call hierarchy item must have name");
                     assert!(item_obj.contains_key("uri"), "call hierarchy item must have uri");
                     assert!(item_obj.contains_key("range"), "call hierarchy item must have range");
@@ -346,20 +343,17 @@ pub fn assert_folding_ranges_valid(v: &Option<Value>) {
     assert!(!ranges.is_empty(), "should have at least one folding range");
 
     for range in ranges {
-        let obj = match range.as_object() {
-            Some(o) => o,
-            None => panic!("Folding range must be object, got: {:?}", range),
-        };
+        let obj_opt = range.as_object();
+        assert!(obj_opt.is_some(), "Folding range must be object, got: {:?}", range);
+        let obj = obj_opt.unwrap_or_else(|| unreachable!());
 
-        let start = match obj.get("startLine").and_then(|v| v.as_u64()) {
-            Some(s) => s,
-            None => panic!("Folding range must have startLine, got: {:?}", obj),
-        };
+        let start_opt = obj.get("startLine").and_then(|v| v.as_u64());
+        assert!(start_opt.is_some(), "Folding range must have startLine, got: {:?}", obj);
+        let start = start_opt.unwrap_or_else(|| unreachable!());
 
-        let end = match obj.get("endLine").and_then(|v| v.as_u64()) {
-            Some(e) => e,
-            None => panic!("Folding range must have endLine, got: {:?}", obj),
-        };
+        let end_opt = obj.get("endLine").and_then(|v| v.as_u64());
+        assert!(end_opt.is_some(), "Folding range must have endLine, got: {:?}", obj);
+        let end = end_opt.unwrap_or_else(|| unreachable!());
 
         assert!(end > start, "folding range must span multiple lines");
 
@@ -378,16 +372,14 @@ pub fn assert_folding_ranges_valid(v: &Option<Value>) {
 pub fn assert_code_actions_available(v: &Option<Value>) {
     if let Some(actions) = v {
         if !actions.is_null() {
-            let arr = match actions.as_array() {
-                Some(a) => a,
-                None => panic!("Code actions should be array, got: {:?}", actions),
-            };
+            let arr_opt = actions.as_array();
+            assert!(arr_opt.is_some(), "Code actions should be array, got: {:?}", actions);
+            let arr = arr_opt.unwrap_or_else(|| unreachable!());
 
             for action in arr {
-                let action_obj = match action.as_object() {
-                    Some(obj) => obj,
-                    None => panic!("Code action must be object, got: {:?}", action),
-                };
+                let action_obj_opt = action.as_object();
+                assert!(action_obj_opt.is_some(), "Code action must be object, got: {:?}", action);
+                let action_obj = action_obj_opt.unwrap_or_else(|| unreachable!());
                 assert!(action_obj.contains_key("title"), "code action must have title");
 
                 // Must have either command or edit
@@ -409,18 +401,20 @@ pub fn assert_code_actions_available(v: &Option<Value>) {
 pub fn assert_workspace_symbols_valid(v: &Option<Value>, expected_name: Option<&str>) {
     if let Some(symbols) = v {
         if !symbols.is_null() {
-            let arr = match symbols.as_array() {
-                Some(a) => a,
-                None => panic!("Workspace symbols should be array, got: {:?}", symbols),
-            };
+            let arr_opt = symbols.as_array();
+            assert!(arr_opt.is_some(), "Workspace symbols should be array, got: {:?}", symbols);
+            let arr = arr_opt.unwrap_or_else(|| unreachable!());
 
             if !arr.is_empty() {
                 // Validate each symbol
                 for symbol in arr {
-                    let sym_obj = match symbol.as_object() {
-                        Some(obj) => obj,
-                        None => panic!("Workspace symbol must be object, got: {:?}", symbol),
-                    };
+                    let sym_obj_opt = symbol.as_object();
+                    assert!(
+                        sym_obj_opt.is_some(),
+                        "Workspace symbol must be object, got: {:?}",
+                        symbol
+                    );
+                    let sym_obj = sym_obj_opt.unwrap_or_else(|| unreachable!());
                     assert!(sym_obj.contains_key("name"), "workspace symbol must have name");
 
                     // Must have either location or containerName
@@ -455,20 +449,18 @@ pub fn assert_workspace_symbols_valid(v: &Option<Value>, expected_name: Option<&
 
 /// Validate a range object
 fn assert_range_valid(range: &Value, context: &str) {
-    let range_obj = match range.as_object() {
-        Some(obj) => obj,
-        None => panic!("{} must be object, got: {:?}", context, range),
-    };
+    let range_obj_opt = range.as_object();
+    assert!(range_obj_opt.is_some(), "{} must be object, got: {:?}", context, range);
+    let range_obj = range_obj_opt.unwrap_or_else(|| unreachable!());
 
     // Check start position
-    let start = match range_obj.get("start") {
-        Some(s) => s,
-        None => panic!("{} must have start, got: {:?}", context, range_obj),
-    };
-    let start_obj = match start.as_object() {
-        Some(obj) => obj,
-        None => panic!("{} start must be object, got: {:?}", context, start),
-    };
+    let start_val = range_obj.get("start");
+    assert!(start_val.is_some(), "{} must have start, got: {:?}", context, range_obj);
+    let start = start_val.unwrap_or_else(|| unreachable!());
+
+    let start_obj_opt = start.as_object();
+    assert!(start_obj_opt.is_some(), "{} start must be object, got: {:?}", context, start);
+    let start_obj = start_obj_opt.unwrap_or_else(|| unreachable!());
     assert!(
         start_obj.get("line").and_then(|v| v.as_u64()).is_some(),
         "{} start must have line number",
@@ -481,14 +473,13 @@ fn assert_range_valid(range: &Value, context: &str) {
     );
 
     // Check end position
-    let end = match range_obj.get("end") {
-        Some(e) => e,
-        None => panic!("{} must have end, got: {:?}", context, range_obj),
-    };
-    let end_obj = match end.as_object() {
-        Some(obj) => obj,
-        None => panic!("{} end must be object, got: {:?}", context, end),
-    };
+    let end_val = range_obj.get("end");
+    assert!(end_val.is_some(), "{} must have end, got: {:?}", context, range_obj);
+    let end = end_val.unwrap_or_else(|| unreachable!());
+
+    let end_obj_opt = end.as_object();
+    assert!(end_obj_opt.is_some(), "{} end must be object, got: {:?}", context, end);
+    let end_obj = end_obj_opt.unwrap_or_else(|| unreachable!());
     assert!(
         end_obj.get("line").and_then(|v| v.as_u64()).is_some(),
         "{} end must have line number",
@@ -504,10 +495,9 @@ fn assert_range_valid(range: &Value, context: &str) {
 /// Validate a location object
 #[allow(dead_code)]
 fn assert_location_valid(location: &Value, context: &str) {
-    let loc_obj = match location.as_object() {
-        Some(obj) => obj,
-        None => panic!("{} must be object, got: {:?}", context, location),
-    };
+    let loc_obj_opt = location.as_object();
+    assert!(loc_obj_opt.is_some(), "{} must be object, got: {:?}", context, location);
+    let loc_obj = loc_obj_opt.unwrap_or_else(|| unreachable!());
     assert!(loc_obj.contains_key("uri"), "{} must have uri", context);
     assert!(
         loc_obj.get("uri").and_then(|v| v.as_str()).is_some(),
@@ -515,9 +505,10 @@ fn assert_location_valid(location: &Value, context: &str) {
         context
     );
 
-    match loc_obj.get("range") {
-        Some(range) => assert_range_valid(range, &format!("{} range", context)),
-        None => panic!("{} must have range, got: {:?}", context, loc_obj),
+    let range_val = loc_obj.get("range");
+    assert!(range_val.is_some(), "{} must have range, got: {:?}", context, loc_obj);
+    if let Some(range) = range_val {
+        assert_range_valid(range, &format!("{} range", context));
     }
 }
 
@@ -566,7 +557,7 @@ where
 macro_rules! assert_lsp {
     ($cond:expr, $($arg:tt)*) => {
         if !$cond {
-            panic!("LSP assertion failed: {}", format!($($arg)*));
+            must(Err::<(), _>(format!("LSP assertion failed: {}", format!($($arg)*))));
         }
     };
 }
@@ -577,7 +568,7 @@ macro_rules! assert_lsp_optional {
     ($cond:expr, $($arg:tt)*) => {
         if !$cond {
             if std::env::var("CI").is_ok() {
-                panic!("LSP assertion failed in CI: {}", format!($($arg)*));
+                must(Err::<(), _>(format!("LSP assertion failed in CI: {}", format!($($arg)*))));
             } else {
                 eprintln!("⚠ LSP warning: {}", format!($($arg)*));
             }

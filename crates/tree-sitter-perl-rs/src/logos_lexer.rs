@@ -563,24 +563,26 @@ mod tests {
     
     #[test]
     fn test_basic_lexing() {
+        use perl_tdd_support::must_some;
         let mut lexer = PerlLexer::new("$x = 42");
         
-        let (token, _) = lexer.next().unwrap();
+        let (token, _) = must_some(lexer.next());
         assert!(matches!(token, Token::ScalarVar(s) if s == "$x"));
         
-        let (token, _) = lexer.next().unwrap();
+        let (token, _) = must_some(lexer.next());
         assert!(matches!(token, Token::Assign));
         
-        let (token, _) = lexer.next().unwrap();
+        let (token, _) = must_some(lexer.next());
         assert!(matches!(token, Token::Number(s) if s == "42"));
     }
     
     #[test]
     fn test_keywords() {
+        use perl_tdd_support::must_some;
         let mut lexer = PerlLexer::new("if my $x");
         
-        assert!(matches!(lexer.next().unwrap().0, Token::If));
-        assert!(matches!(lexer.next().unwrap().0, Token::My));
-        assert!(matches!(lexer.next().unwrap().0, Token::ScalarVar(_)));
+        assert!(matches!(must_some(lexer.next()).0, Token::If));
+        assert!(matches!(must_some(lexer.next()).0, Token::My));
+        assert!(matches!(must_some(lexer.next()).0, Token::ScalarVar(_)));
     }
 }

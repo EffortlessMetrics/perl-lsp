@@ -280,7 +280,7 @@ pub enum Token {
     QuoteRegex,        // qr// in term context
     
     // Quote-like operators
-    #[regex(r"q[qwrx]?\s*([^a-zA-Z0-9\s])", |lex| lex.slice().chars().last().unwrap())]
+    #[regex(r"q[qwrx]?\s*([^a-zA-Z0-9\s])", |lex| lex.slice().chars().last().unwrap_or('\0'))]
     QuoteOp(char),     // q//, qq//, qw//, qr//, qx//
     
     // Here-doc marker

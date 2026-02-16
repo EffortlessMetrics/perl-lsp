@@ -545,10 +545,13 @@ impl IncrementalDocument {
                 }
                 self.cache_node(body);
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 self.cache_node(variable);
                 self.cache_node(list);
                 self.cache_node(body);
+                if let Some(cb) = continue_block {
+                    self.cache_node(cb);
+                }
             }
             NodeKind::VariableDeclaration { variable, initializer, .. } => {
                 self.cache_node(variable);

@@ -137,7 +137,6 @@ mod lib_integration_tests {
     /// Note: The modules are named `tdd` and `refactor` (not `tdd_workflow` and `refactoring`).
     /// The tdd_workflow and refactoring submodules are re-exported from these parent modules.
     #[test]
-    #[ignore = "issue-146: tdd_workflow and refactoring modules not yet implemented"]
     fn test_lib_module_declarations() -> Result<(), Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string("src/lib.rs")?;
 
@@ -224,7 +223,6 @@ mod quality_assurance_tests {
 
     /// Test that the crate builds without warnings after fixes
     #[test]
-    #[ignore = "warnings burn-down: address in follow-up PR"]
     fn test_build_without_warnings() -> Result<(), Box<dyn std::error::Error>> {
         let output = Command::new("cargo").args(["build", "--package", "perl-parser"]).output()?;
 

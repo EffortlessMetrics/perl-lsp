@@ -941,8 +941,9 @@ mod tests {
     #[test]
     fn test_slash_as_division() {
         let input = "my $x = 10 / 2;";
+        use perl_tdd_support::must;
         let mut parser = SimpleParser::new(input);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         assert_eq!(ast.node_type, "program");
         assert_eq!(ast.children.len(), 1);
@@ -959,8 +960,9 @@ mod tests {
     #[test]
     fn test_slash_as_regex() {
         let input = "if (/test/) { print; }";
+        use perl_tdd_support::must;
         let mut parser = SimpleParser::new(input);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         assert_eq!(ast.node_type, "program");
         assert_eq!(ast.children.len(), 1);
@@ -975,8 +977,9 @@ mod tests {
     #[test]
     fn test_regex_match_operator() {
         let input = "$text =~ /pattern/;";
+        use perl_tdd_support::must;
         let mut parser = SimpleParser::new(input);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         assert_eq!(ast.node_type, "program");
         assert_eq!(ast.children.len(), 1);
@@ -992,8 +995,9 @@ mod tests {
     #[test]
     fn test_method_calls() {
         let input = "$obj->method();";
+        use perl_tdd_support::must;
         let mut parser = SimpleParser::new(input);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         assert_eq!(ast.node_type, "program");
         assert_eq!(ast.children.len(), 1);
@@ -1005,8 +1009,9 @@ mod tests {
     #[test]
     fn test_complex_expression() {
         let input = "my $result = $a + $b * $c / 2 - ($d =~ /test/);";
+        use perl_tdd_support::must;
         let mut parser = SimpleParser::new(input);
-        let ast = parser.parse().unwrap();
+        let ast = must(parser.parse());
 
         assert_eq!(ast.node_type, "program");
         assert_eq!(ast.children.len(), 1);

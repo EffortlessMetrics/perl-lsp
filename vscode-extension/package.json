@@ -2,7 +2,7 @@
   "name": "perl-lsp",
   "displayName": "Perl Language Server",
   "description": "Comprehensive Perl language support powered by tree-sitter-perl LSP",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "publisher": "effortlesssteven",
   "engines": {
     "vscode": "^1.88.0"

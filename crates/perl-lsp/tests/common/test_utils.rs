@@ -302,6 +302,8 @@ impl Drop for TestServer {
 
 /// Test assertion helpers
 pub mod assertions {
+    #![allow(clippy::panic)]
+
     use serde_json::Value;
 
     /// Assert that the response contains no errors
@@ -315,10 +317,9 @@ pub mod assertions {
 
     /// Assert that diagnostics contain expected error
     pub fn assert_has_diagnostic(response: &Value, expected_message: &str) {
-        let items = match response["result"]["items"].as_array() {
-            Some(arr) => arr,
-            None => panic!("Expected diagnostic items array, got: {response:?}"),
-        };
+        let items = response["result"]["items"]
+            .as_array()
+            .unwrap_or_else(|| panic!("Expected diagnostic items array, got: {response:?}"));
 
         let found = items
             .iter()
@@ -329,10 +330,9 @@ pub mod assertions {
 
     /// Assert symbol count
     pub fn assert_symbol_count(response: &Value, expected_count: usize) {
-        let symbols = match response["result"].as_array() {
-            Some(arr) => arr,
-            None => panic!("Expected symbols array, got: {response:?}"),
-        };
+        let symbols = response["result"]
+            .as_array()
+            .unwrap_or_else(|| panic!("Expected symbols array, got: {response:?}"));
         assert_eq!(
             symbols.len(),
             expected_count,
@@ -351,10 +351,10 @@ pub mod assertions {
 
     /// Assert that definition response contains a location at the expected position
     pub fn assert_definition_at(response: &Value, uri: &str, line: u32) {
-        let (def_uri, def_line, _) = match super::semantic::first_location(response) {
-            Some(loc) => loc,
-            None => panic!("Expected definition location in response, got: {response:#}"),
-        };
+        let (def_uri, def_line, _) =
+            super::semantic::first_location(response).unwrap_or_else(|| {
+                panic!("Expected definition location in response, got: {response:#}")
+            });
 
         assert_eq!(
             def_uri, uri,
@@ -370,10 +370,8 @@ pub mod assertions {
 
     /// Assert that hover response contains expected content
     pub fn assert_hover_contains(response: &Value, expected_content: &str) {
-        let content = match super::semantic::hover_content(response) {
-            Some(c) => c,
-            None => panic!("Expected hover content in response, got: {response:#}"),
-        };
+        let content = super::semantic::hover_content(response)
+            .unwrap_or_else(|| panic!("Expected hover content in response, got: {response:#}"));
 
         assert!(
             content.contains(expected_content),
@@ -386,10 +384,8 @@ pub mod assertions {
 
     /// Assert that hover response contains any of the expected strings
     pub fn assert_hover_contains_any(response: &Value, expected_strings: &[&str]) {
-        let content = match super::semantic::hover_content(response) {
-            Some(c) => c,
-            None => panic!("Expected hover content in response, got: {response:#}"),
-        };
+        let content = super::semantic::hover_content(response)
+            .unwrap_or_else(|| panic!("Expected hover content in response, got: {response:#}"));
 
         let found = expected_strings.iter().any(|s| content.contains(s));
         assert!(
@@ -479,23 +475,25 @@ pub mod semantic {
     pub fn find_pos(code: &str, needle: &str, target_line: usize) -> (u32, u32) {
         let lines: Vec<&str> = code.lines().collect();
 
-        if target_line >= lines.len() {
-            panic!(
-                "Target line {} does not exist in code (total lines: {}).\nCode:\n{}",
-                target_line,
-                lines.len(),
-                code
-            );
-        }
+        assert!(
+            target_line < lines.len(),
+            "Target line {} does not exist in code (total lines: {}).\nCode:\n{}",
+            target_line,
+            lines.len(),
+            code
+        );
 
         let line = lines[target_line];
-        let col = match line.find(needle) {
-            Some(c) => c,
-            None => panic!(
-                "Could not find '{}' on line {}.\nLine content: '{}'\nFull code:\n{}",
-                needle, target_line, line, code
-            ),
-        };
+        let col = line.find(needle);
+        assert!(
+            col.is_some(),
+            "Could not find '{}' on line {}.\nLine content: '{}'\nFull code:\n{}",
+            needle,
+            target_line,
+            line,
+            code
+        );
+        let col = col.unwrap_or(0);
 
         (target_line as u32, col as u32)
     }

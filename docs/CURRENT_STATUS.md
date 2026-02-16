@@ -52,13 +52,13 @@ Key terms:
 
 | Metric | Value | Target | Status |
 | --- | --- | --- | --- |
-| **Tier A Tests** | 0 lib tests (discovered), 163 ignores (tracked) | 100% pass | PASS |
+| **Tier A Tests** | 1221 lib tests (discovered), 161 ignores (tracked) | 100% pass | PASS |
 | **Tracked Test Debt** | 2 (1 bug, 1 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
 | **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 93%+ | In progress |
 <!-- END: STATUS_METRICS_TABLE -->
 | **Parser Coverage** | ~100% | 100% | Complete |
-| **Semantic Analyzer** | Phase 2-6 Complete | Phase 3 | All NodeKind handlers |
+| **Semantic Analyzer** | Phase 1, 2, 3 Complete (100%) | Complete | All NodeKind handlers |
 | **Mutation Score** | 87% | 87%+ | Target met |
 | **Documentation** | perl-parser missing_docs = 0 (baseline 0) | 0 | Ratchet |
 
@@ -68,7 +68,7 @@ Key terms:
 
 - **Parser**: Production-ready Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
 - **LSP Server**: Capability catalog is `features.toml`; Tier A gate is `just ci-gate`; TCP socket mode available
-- **Semantic Analyzer**: Phase 2-6 complete with all NodeKind handlers, `textDocument/definition` integrated, uninitialized variable detection
+- **Semantic Analyzer**: Phase 1, 2, 3 complete with all NodeKind handlers (100% AST node coverage), `textDocument/definition` integrated, uninitialized variable detection
 - **Refactoring Engine**: `perform_inline` and `perform_move_code` implemented
 - **Test Infrastructure**: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)
 - **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups
@@ -80,8 +80,8 @@ Key terms:
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
 - **LSP Coverage**: 100% user-visible feature coverage (53/53 advertised features from `features.toml`)
 - **Protocol Compliance**: 100% overall LSP protocol support (89/89 including plumbing)
-- **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~611 sections) + `test_corpus/` (24 `.pl` files)
-- **Test Status**: 0 lib tests (Tier A), 163 ignores tracked (2 total tracked debt: 1 bug, 1 manual)
+- **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~611 sections) + `test_corpus/` (78 `.pl` files)
+- **Test Status**: 1221 lib tests (Tier A), 161 ignores tracked (2 total tracked debt: 1 bug, 1 manual)
 - **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server production-ready (`just ci-gate` passing)

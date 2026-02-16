@@ -294,7 +294,7 @@ fn extract_shape_rec(node: &Node, out: &mut Vec<String>) {
             }
         }
 
-        Foreach { variable, list, body } => {
+        Foreach { variable, list, body, continue_block: _continue_block } => {
             extract_shape_rec(variable, out);
             extract_shape_rec(list, out);
             extract_shape_rec(body, out);

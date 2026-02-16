@@ -1,5 +1,5 @@
 use perl_dap::{DapMessage, DebugAdapter};
-use perl_tdd_support::must_some;
+use perl_tdd_support::{must, must_some};
 use serde_json::json;
 use std::fs::write;
 use std::sync::mpsc::{Receiver, channel};
@@ -68,7 +68,7 @@ fn test_dap_initialize() {
                 body.get("supportsEvaluateForHovers").and_then(|v| v.as_bool()).unwrap_or(false)
             );
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -93,7 +93,7 @@ fn test_dap_launch_with_invalid_program() {
             assert!(message.is_some());
             assert!(must_some(message).contains("Failed to launch debugger"));
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -112,7 +112,7 @@ fn test_dap_launch_missing_arguments() {
             assert!(message.is_some());
             assert_eq!(must_some(message), "Missing launch arguments");
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -144,7 +144,7 @@ fn test_dap_breakpoints_no_session() {
                 assert!(!bp.get("verified").and_then(|v| v.as_bool()).unwrap_or(true));
             }
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -185,7 +185,7 @@ fn test_dap_inline_values() -> TestResult {
                 })
             );
         }
-        _ => panic!("Expected inlineValues response"),
+        _ => must(Err::<(), _>("Expected inlineValues response")),
     }
 
     Ok(())
@@ -241,7 +241,7 @@ fn test_dap_breakpoints_invalid_line() {
                 assert!(bp.get("message").is_some());
             }
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -261,7 +261,7 @@ fn test_dap_evaluate_empty_expression() {
             assert_eq!(command, "evaluate");
             assert_eq!(must_some(message), "Empty expression");
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -281,7 +281,7 @@ fn test_dap_evaluate_no_session() {
             assert_eq!(command, "evaluate");
             assert!(must_some(message).contains("No debugger session"));
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -300,7 +300,7 @@ fn test_dap_threads_no_session() {
             let threads = must_some(body.get("threads").and_then(|t| t.as_array()));
             assert_eq!(threads.len(), 0); // No threads without session
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -322,7 +322,7 @@ fn test_dap_stacktrace_no_session() {
             assert_eq!(frames.len(), 1);
             assert_eq!(must_some(frames[0].get("name").and_then(|n| n.as_str())), "main::hello");
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -338,7 +338,7 @@ fn test_dap_pause_no_session() {
             assert_eq!(command, "pause");
             assert_eq!(must_some(message), "Failed to pause debugger");
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -356,7 +356,7 @@ fn test_dap_disconnect_cleans_up_session() {
             assert!(success);
             assert_eq!(command, "disconnect");
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -372,7 +372,7 @@ fn test_dap_unknown_command() {
             assert_eq!(command, "unknownCommand");
             assert!(must_some(message).starts_with("Unknown command"));
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -388,7 +388,7 @@ fn test_dap_variables_missing_reference() {
             assert_eq!(command, "variables");
             assert_eq!(must_some(message), "Missing arguments");
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -420,7 +420,7 @@ fn test_dap_variables_default_scope() {
             assert!(var_names.contains(&"@_"));
             assert!(var_names.contains(&"$self"));
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -436,7 +436,7 @@ fn test_dap_scopes_missing_frame() {
             assert_eq!(command, "scopes");
             assert_eq!(must_some(message), "Missing frameId");
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -463,7 +463,7 @@ fn test_dap_scopes_valid_frame() {
             assert_eq!(must_some(scope.get("name").and_then(|n| n.as_str())), "Locals");
             assert_eq!(must_some(scope.get("variablesReference").and_then(|v| v.as_i64())), 11);
         }
-        _ => panic!("Expected response message"),
+        _ => must(Err::<(), _>("Expected response message")),
     }
 }
 
@@ -507,7 +507,7 @@ print "Result: $result\n";
     let init_response = adapter.handle_request(1, "initialize", None);
     match init_response {
         DapMessage::Response { success, .. } => assert!(success, "Initialize should succeed"),
-        _ => panic!("Expected response for initialize"),
+        _ => must(Err::<(), _>("Expected response for initialize")),
     }
 
     // Wait for initialized event with timeout
@@ -534,14 +534,14 @@ print "Result: $result\n";
                 // Test the rest of the API even if launch fails
             }
         }
-        _ => panic!("Expected launch response"),
+        _ => must(Err::<(), _>("Expected launch response")),
     }
 
     // Configuration done - should work regardless
     let config_response = adapter.handle_request(3, "configurationDone", None);
     match config_response {
         DapMessage::Response { success, .. } => assert!(success, "Configuration should succeed"),
-        _ => panic!("Expected configurationDone response"),
+        _ => must(Err::<(), _>("Expected configurationDone response")),
     }
 
     // Set breakpoints - should work even without active session
@@ -563,7 +563,7 @@ print "Result: $result\n";
                 breakpoints[0].get("verified").and_then(|v| v.as_bool()).unwrap_or(false);
             eprintln!("Breakpoint verified: {}", verified);
         }
-        _ => panic!("Expected setBreakpoints response"),
+        _ => must(Err::<(), _>("Expected setBreakpoints response")),
     }
 
     // Test thread listing
@@ -576,7 +576,7 @@ print "Result: $result\n";
             // May have 0 or 1 threads depending on launch success
             assert!(threads.len() <= 1, "Should have 0 or 1 thread");
         }
-        _ => panic!("Expected threads response"),
+        _ => must(Err::<(), _>("Expected threads response")),
     }
 
     // Continue - should handle gracefully even if no session
@@ -586,14 +586,14 @@ print "Result: $result\n";
             // May succeed or fail depending on session state
             eprintln!("Continue response success: {}", success);
         }
-        _ => panic!("Expected continue response"),
+        _ => must(Err::<(), _>("Expected continue response")),
     }
 
     // Disconnect - should always work
     let disconnect_response = adapter.handle_request(7, "disconnect", None);
     match disconnect_response {
         DapMessage::Response { success, .. } => assert!(success, "disconnect should succeed"),
-        _ => panic!("Expected disconnect response"),
+        _ => must(Err::<(), _>("Expected disconnect response")),
     }
 
     eprintln!("DAP lifecycle test completed successfully");

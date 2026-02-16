@@ -1,0 +1,125 @@
+name: Scoop Auto-Bump
+
+# Update Scoop bucket on release
+# Cost: ~$0.02 per bump
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to bump (e.g., v0.9.0)'
+        required: false
+
+# Cancel in-flight runs
+concurrency:
+  group: scoop-bump-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel scoop bumps
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Wait for release assets
+        run: |
+          # Wait up to 10 minutes for release assets to be available
+          for i in {1..20}; do
+            echo "Checking for release assets (attempt $i/20)..."
+            if gh release view "${{ steps.tag.outputs.tag }}" --json assets -q '.assets | length' | grep -q '^[1-9]'; then
+              echo "Assets found!"
+              break
+            fi
+            sleep 30
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Windows binary
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${{ steps.tag.outputs.version }}"
+
+          # Download Windows binary
+          mkdir -p /tmp/scoop-assets
+          cd /tmp/scoop-assets
+
+          echo "Downloading perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip..."
+          gh release download "${TAG}" \
+            --pattern "perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip" \
+            --dir /tmp/scoop-assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute SHA256
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          cd /tmp/scoop-assets
+
+          # Compute SHA256
+          SHA=$(sha256sum "perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip" | cut -d' ' -f1)
+          echo "sha256=${SHA}" >> $GITHUB_OUTPUT
+          echo "SHA256: ${SHA}"
+
+      - name: Update Scoop manifest
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          SHA="${{ steps.sha.outputs.sha256 }}"
+
+          # Update version and hash
+          sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" distribution/scoop/perl-lsp.json
+          sed -i "s/\"url\": \"[^\"]*x86_64-pc-windows-msvc.zip\"/\"url\": \"https:\/\/github.com\/EffortlessMetrics\/tree-sitter-perl-rs\/releases\/download\/v${VERSION}\/perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip\"/" distribution/scoop/perl-lsp.json
+          sed -i "s/\"hash\": \"[^\"]*\"/\"hash\": \"${SHA}\"/" distribution/scoop/perl-lsp.json
+
+          # Show updated manifest
+          cat distribution/scoop/perl-lsp.json
+
+      - name: Create PR to Scoop bucket
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: distribution/scoop
+          branch: bump-perl-lsp-${{ steps.tag.outputs.version }}
+          title: "perl-lsp@${{ steps.tag.outputs.version }}"
+          body: |
+            Bump perl-lsp to version ${{ steps.tag.outputs.version }}
+
+            Created by automated workflow from [EffortlessMetrics/tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs).
+
+            ### Changes
+            - Updated version to ${{ steps.tag.outputs.version }}
+            - Updated SHA256 checksum
+          commit-message: "perl-lsp@${{ steps.tag.outputs.version }}"
+          labels: automated-pr
+          repository: ScoopInstaller/Main
+          signoff: false
+
+      - name: Summary
+        run: |
+          echo "## Scoop Bump Complete :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: ${{ steps.tag.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **SHA256**: ${{ steps.sha.outputs.sha256 }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR**: Created to ScoopInstaller/Main" >> $GITHUB_STEP_SUMMARY

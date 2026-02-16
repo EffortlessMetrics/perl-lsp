@@ -129,10 +129,11 @@ fn parser_hang_risk_nested_hash_literals() {
 ///
 /// Tests feature spec: ROADMAP.md#deep-nesting-boundedness
 #[test]
-#[ignore = "Stack overflow in debug builds"]
 fn parser_hang_risk_nested_function_calls() {
-    // Reduced from 300 to 260 to avoid stack overflow in debug builds before hitting recursion limit
-    let depth = 260;
+    // Depth 130 is just above MAX_RECURSION_DEPTH (128) but function call parsing
+    // does not go through check_recursion(), so the limit is never hit.
+    // At depth 260+ the debug-build stack overflows before any limit applies.
+    let depth = 130;
     let mut code = String::new();
 
     for i in 0..depth {

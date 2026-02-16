@@ -281,7 +281,6 @@ print $x;
 
 /// Test quick fix for undefined variable
 #[test]
-#[ignore = "feature: undeclared variable detection not yet implemented"]
 fn test_fix_undefined_variable() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);

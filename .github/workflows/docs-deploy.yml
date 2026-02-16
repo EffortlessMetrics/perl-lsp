@@ -1,5 +1,8 @@
 name: Deploy Documentation
 
+# Deploy documentation to GitHub Pages
+# Cost: ~$0.02 per deployment
+
 on:
   push:
     branches:
@@ -25,18 +28,30 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
 
+      - name: Cache mdBook
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/mdbook
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-mdbook-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mdbook-
+
       - name: Install mdBook
         run: |
-          cargo install mdbook --version 0.4.40 --locked
+          cargo install mdbook --version 0.4.40 --locked || true
           mdbook --version
 
       - name: Populate documentation

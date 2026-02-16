@@ -14,11 +14,14 @@
 //! ```no_run
 //! use perl_semantic_analyzer::{Parser, symbol::SymbolExtractor};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut parser = Parser::new("sub hello { my $x = 1; }");
-//! let ast = parser.parse().expect("parse");
+//! let ast = parser.parse()?;
 //! let extractor = SymbolExtractor::new();
 //! let table = extractor.extract(&ast);
 //! assert!(table.symbols.contains_key("hello"));
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::SourceLocation;
@@ -523,7 +526,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block: _ } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
 
                 // The loop variable is implicitly declared

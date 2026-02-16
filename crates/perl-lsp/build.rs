@@ -5,7 +5,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get git tag for embedding in version output
     let tag = std::process::Command::new("git")
         .args(["describe", "--tags", "--always"])
@@ -36,7 +36,8 @@ fn main() {
     println!("cargo:rerun-if-changed=../../.git/packed-refs");
 
     // Generate feature catalog from features.toml
-    generate_feature_catalog();
+    generate_feature_catalog()?;
+    Ok(())
 }
 
 #[derive(serde::Deserialize)]
@@ -107,10 +108,10 @@ fn read_catalog() -> Result<Catalog, Box<dyn std::error::Error>> {
     Ok(toml::from_str(&content)?)
 }
 
-fn generate_feature_catalog() {
-    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| {
-        panic!("OUT_DIR must be set by cargo during build - this is a build environment issue")
-    });
+fn generate_feature_catalog() -> Result<(), Box<dyn std::error::Error>> {
+    let out_dir = env::var("OUT_DIR").map_err(
+        |_| "OUT_DIR must be set by cargo during build - this is a build environment issue",
+    )?;
     let dest_path = Path::new(&out_dir).join("feature_catalog.rs");
 
     match read_catalog() {
@@ -119,11 +120,15 @@ fn generate_feature_catalog() {
             let mut seen = std::collections::HashSet::new();
             for f in &catalog.feature {
                 if !seen.insert(&f.id) {
-                    panic!("Duplicate feature id in features.toml: {}", f.id);
+                    return Err(format!("Duplicate feature id in features.toml: {}", f.id).into());
                 }
                 match f.maturity.as_str() {
                     "experimental" | "preview" | "ga" | "planned" | "production" => {}
-                    other => panic!("Unknown maturity {:?} for feature {}", other, f.id),
+                    other => {
+                        return Err(
+                            format!("Unknown maturity {:?} for feature {}", other, f.id).into()
+                        );
+                    }
                 }
             }
 
@@ -264,9 +269,9 @@ fn generate_feature_catalog() {
             code.push_str("    COMPLIANCE_PERCENT\n");
             code.push_str("}\n");
 
-            if let Err(e) = fs::write(&dest_path, code) {
-                panic!("Failed to write feature_catalog.rs to {:?}: {}", dest_path, e);
-            }
+            fs::write(&dest_path, code).map_err(|e| {
+                format!("Failed to write feature_catalog.rs to {:?}: {}", dest_path, e)
+            })?;
         }
         Err(e) => {
             eprintln!("Warning: Failed to generate feature catalog: {}", e);
@@ -281,7 +286,7 @@ fn generate_feature_catalog() {
             );
             code.push_str("pub struct Feature { }\n");
             code.push_str("/// Fallback parser version when features.toml is not available\n");
-            code.push_str("pub const VERSION: &str = \"0.8.5\";\n");
+            code.push_str("pub const VERSION: &str = \"0.9.0\";\n");
             code.push_str("/// Fallback LSP version when features.toml is not available\n");
             code.push_str("pub const LSP_VERSION: &str = \"3.18\";\n");
             code.push_str(
@@ -299,9 +304,10 @@ fn generate_feature_catalog() {
             code.push_str("/// Returns zero compliance when features.toml is not available\n");
             code.push_str("pub fn compliance_percent() -> f32 { 0.0 }\n");
 
-            if let Err(e) = fs::write(&dest_path, code) {
-                panic!("Failed to write minimal feature_catalog.rs to {:?}: {}", dest_path, e);
-            }
+            fs::write(&dest_path, code).map_err(|e| {
+                format!("Failed to write minimal feature_catalog.rs to {:?}: {}", dest_path, e)
+            })?;
         }
     }
+    Ok(())
 }

@@ -7,6 +7,7 @@
 
 use parking_lot::Mutex;
 use perl_lsp::LspServer;
+use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::fs;
@@ -48,7 +49,7 @@ impl TempWorkspace {
         let path = self.dir.path().join(relative_path);
         match Url::from_file_path(&path) {
             Ok(url) => url.to_string(),
-            Err(_) => panic!("Failed to create file URL from path: {}", path.display()),
+            Err(_) => must(Url::from_file_path(&path)).to_string(),
         }
     }
 }
@@ -800,17 +801,17 @@ impl LspHarness {
 
         // Wait for timeout period to ensure no response arrives
         while start.elapsed() < timeout {
-            let output = self.output_buffer.lock();
-            let output_str = String::from_utf8_lossy(&output);
-
-            // Check if we got a response for this ID
-            if output_str.contains(&format!("\"id\":{}", request_id))
-                || output_str.contains(&format!("\"id\": {}", request_id))
             {
-                drop(output);
-                panic!("Received response for canceled request ID {}", request_id);
+                let output = self.output_buffer.lock();
+                let output_str = String::from_utf8_lossy(&output);
+
+                // Check if we got a response for this ID
+                if output_str.contains(&format!("\"id\":{}", request_id))
+                    || output_str.contains(&format!("\"id\": {}", request_id))
+                {
+                    assert!(false, "Received response for canceled request ID {}", request_id);
+                }
             }
-            drop(output);
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -824,12 +825,15 @@ impl LspHarness {
         if cfg!(target_os = "linux") && std::env::var("WSL_DISTRO_NAME").is_ok() {
             // In WSL, convert Windows paths like C:\foo to /mnt/c/foo
             if path.len() >= 3 && path.chars().nth(1) == Some(':') {
-                let drive = match path.chars().next() {
-                    Some(c) => c.to_lowercase(),
-                    None => panic!("Path should have at least one character: {path}"),
+                let drive_char = match path.chars().next() {
+                    Some(c) => c.to_lowercase().next().unwrap_or(c),
+                    None => {
+                        assert!(false, "Path should have at least one character: {path}");
+                        ' '
+                    }
                 };
                 let rest = path[2..].replace('\\', "/");
-                return format!("/mnt/{}{}", drive, rest);
+                return format!("/mnt/{}{}", drive_char, rest);
             }
         }
 
@@ -861,7 +865,10 @@ impl LspHarness {
             {
                 let notif = match notifications.remove(pos) {
                     Some(n) => n,
-                    None => panic!("Notification at position {pos} should exist"),
+                    None => {
+                        assert!(false, "Notification at position {pos} should exist");
+                        json!({})
+                    }
                 };
                 drop(notifications);
 
@@ -1104,11 +1111,11 @@ macro_rules! with_open_doc {
         let mut $harness = LspHarness::new();
         match $harness.initialize(None) {
             Ok(_) => {}
-            Err(e) => panic!("Failed to initialize: {e}"),
+            Err(e) => assert!(false, "Failed to initialize: {e}"),
         }
         match $harness.open($uri, $text) {
             Ok(_) => {}
-            Err(e) => panic!("Failed to open document: {e}"),
+            Err(e) => assert!(false, "Failed to open document: {e}"),
         }
         $body
     }};
@@ -1121,7 +1128,7 @@ macro_rules! assert_locations {
         {
             let locations = match $response.as_array() {
                 Some(arr) => arr,
-                None => panic!("Response should be array: {:?}", $response),
+                None => assert!(false, "Response should be array: {:?}", $response),
             };
             let expected = vec![
                 $( (
@@ -1152,7 +1159,7 @@ macro_rules! assert_highlights {
         {
             let highlights = match $response.as_array() {
                 Some(arr) => arr,
-                None => panic!("Response should be array: {:?}", $response),
+                None => assert!(false, "Response should be array: {:?}", $response),
             };
             let expected = vec![
                 $( (
@@ -1264,7 +1271,7 @@ impl TestContext {
     pub fn initialize_with(&mut self, root_uri: &str, capabilities: Option<Value>) -> Value {
         match self.harness.initialize_ready(root_uri, capabilities) {
             Ok(v) => v,
-            Err(e) => panic!("initialization should succeed: {e}"),
+            Err(e) => must(Err::<Value, _>(format!("initialization should succeed: {e}"))),
         }
     }
 
@@ -1288,7 +1295,7 @@ impl TestContext {
     pub fn open_document(&mut self, uri: &str, text: &str) {
         match self.harness.open(uri, text) {
             Ok(_) => {}
-            Err(e) => panic!("open should succeed: {e}"),
+            Err(e) => assert!(false, "open should succeed: {e}"),
         }
     }
 
@@ -1297,7 +1304,7 @@ impl TestContext {
         self.version_counter += 1;
         match self.harness.change_full(uri, self.version_counter, text) {
             Ok(_) => {}
-            Err(e) => panic!("change should succeed: {e}"),
+            Err(e) => assert!(false, "change should succeed: {e}"),
         }
     }
 
@@ -1305,7 +1312,7 @@ impl TestContext {
     pub fn close_document(&mut self, uri: &str) {
         match self.harness.close(uri) {
             Ok(_) => {}
-            Err(e) => panic!("close should succeed: {e}"),
+            Err(e) => assert!(false, "close should succeed: {e}"),
         }
     }
 

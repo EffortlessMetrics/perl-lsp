@@ -4,6 +4,7 @@
 //! and tracked in changelog
 
 use perl_lsp::protocol::capabilities::{BuildFlags, capabilities_json};
+use perl_tdd_support::must;
 use serde_json::Value;
 
 /// Snapshot of production capabilities (v0.8.5)
@@ -23,7 +24,7 @@ fn test_production_capabilities_snapshot() -> Result<(), Box<dyn std::error::Err
         let actual_pretty = serde_json::to_string_pretty(&actual)?;
         let expected_pretty = serde_json::to_string_pretty(&expected)?;
 
-        panic!(
+        must(Err::<(), _>(format!(
             "Production capabilities have changed!\n\
             If this is intentional:\n\
             1. Update the changelog\n\
@@ -32,7 +33,7 @@ fn test_production_capabilities_snapshot() -> Result<(), Box<dyn std::error::Err
             Expected:\n{}\n\n\
             Actual:\n{}",
             expected_pretty, actual_pretty
-        );
+        )));
     }
 
     Ok(())
@@ -47,13 +48,13 @@ fn test_ga_lock_capabilities_snapshot() -> Result<(), Box<dyn std::error::Error>
         let actual_pretty = serde_json::to_string_pretty(&actual)?;
         let expected_pretty = serde_json::to_string_pretty(&expected)?;
 
-        panic!(
+        must(Err::<(), _>(format!(
             "GA-lock capabilities have changed!\n\
             This should NEVER change without a major version bump.\n\n\
             Expected:\n{}\n\n\
             Actual:\n{}",
             expected_pretty, actual_pretty
-        );
+        )));
     }
 
     Ok(())

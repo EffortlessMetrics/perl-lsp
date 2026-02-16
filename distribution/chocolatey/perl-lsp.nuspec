@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>perl-lsp</id>
+    <version>1.0.0</version>
+    <title>Perl Language Server</title>
+    <authors>EffortlessMetrics</authors>
+    <owners>EffortlessMetrics</owners>
+    <licenseUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/main/LICENSE-APACHE</licenseUrl>
+    <projectUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/EffortlessMetrics/tree-sitter-perl-rs/main/vscode-extension/images/icon.png</iconUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>
+perl-lsp is a high-performance Language Server Protocol implementation for Perl,
+providing advanced IDE features including real-time syntax checking, code completion,
+go-to-definition, find references, symbol search, and refactoring support.
+
+## Features
+
+- ~100% Perl syntax coverage
+- Real-time syntax checking and diagnostics
+- Code completion with type inference
+- Go-to-definition and find references
+- Symbol search across workspace
+- Advanced refactoring operations
+- Incremental parsing with <1ms updates
+- Cross-file navigation with dual indexing
+- Import optimization
+
+## Installation
+
+After installation, configure your editor to use `perl-lsp --stdio`.
+
+## Documentation
+
+See https://github.com/EffortlessMetrics/tree-sitter-perl-rs for full documentation.
+    </description>
+    <summary>High-performance Perl Language Server with 100% syntax coverage</summary>
+    <releaseNotes>https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases</releaseNotes>
+    <copyright>2025 EffortlessMetrics</copyright>
+    <tags>perl lsp language-server development ide</tags>
+    <packageSourceUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs</packageSourceUrl>
+    <docsUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/main/README.md</docsUrl>
+    <bugTrackerUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues</bugTrackerUrl>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

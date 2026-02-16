@@ -239,10 +239,11 @@ mod tests {
 
     #[test]
     fn test_parse_bare_regex() {
+        use perl_tdd_support::must;
         let input = "/test/i";
         let mut parser = RegexParser::new(input, 0);
 
-        let result = parser.parse_bare_regex().unwrap();
+        let result = must(parser.parse_bare_regex());
         assert_eq!(result.pattern, "test");
         assert_eq!(result.modifiers, "i");
         assert_eq!(result.delimiter, '/');
@@ -250,29 +251,32 @@ mod tests {
 
     #[test]
     fn test_parse_regex_with_escapes() {
+        use perl_tdd_support::must;
         let input = r"/test\/path/";
         let mut parser = RegexParser::new(input, 0);
 
-        let result = parser.parse_bare_regex().unwrap();
+        let result = must(parser.parse_bare_regex());
         assert_eq!(result.pattern, r"test\/path");
     }
 
     #[test]
     fn test_parse_match_operator() {
+        use perl_tdd_support::must;
         let input = "m/pattern/gi";
         let mut parser = RegexParser::new(input, 1); // Start after 'm'
 
-        let result = parser.parse_match_operator().unwrap();
+        let result = must(parser.parse_match_operator());
         assert_eq!(result.pattern, "pattern");
         assert_eq!(result.modifiers, "gi");
     }
 
     #[test]
     fn test_parse_substitute_operator() {
+        use perl_tdd_support::must;
         let input = "s/old/new/g";
         let mut parser = RegexParser::new(input, 1); // Start after 's'
 
-        let result = parser.parse_substitute_operator().unwrap();
+        let result = must(parser.parse_substitute_operator());
         assert_eq!(result.pattern, "old");
         assert_eq!(result.replacement, Some("new".to_string()));
         assert_eq!(result.modifiers, "g");
@@ -280,10 +284,11 @@ mod tests {
 
     #[test]
     fn test_parse_with_alternate_delimiters() {
+        use perl_tdd_support::must;
         let input = "m{test}i";
         let mut parser = RegexParser::new(input, 1); // Start after 'm'
 
-        let result = parser.parse_match_operator().unwrap();
+        let result = must(parser.parse_match_operator());
         assert_eq!(result.pattern, "test");
         assert_eq!(result.delimiter, '}');
         assert_eq!(result.modifiers, "i");

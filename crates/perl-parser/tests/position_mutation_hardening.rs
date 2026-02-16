@@ -157,7 +157,6 @@ fn test_utf16_fractional_positions() {
 
 /// Test round-trip conversion edge cases
 #[test]
-#[ignore = "UTF-16 roundtrip edge cases: emoji handling needs investigation"]
 fn test_utf16_roundtrip_edge_cases() {
     let texts = vec![
         "",                  // Empty text
@@ -204,8 +203,7 @@ fn test_utf16_roundtrip_edge_cases() {
                             // For positions inside multi-UTF-16-unit characters (like emoji),
                             // the round-trip may snap to the character boundary.
                             // Allow tolerance for positions that might be inside surrogate pairs.
-                            let col_diff =
-                                if back_col > col { back_col - col } else { col - back_col };
+                            let col_diff = back_col.abs_diff(col);
                             // Allow up to 1 column difference for surrogate pair snapping
                             assert!(
                                 back_line == line && col_diff <= 1,

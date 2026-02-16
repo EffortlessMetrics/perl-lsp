@@ -6,8 +6,9 @@ use std::sync::LazyLock;
 /// Fallback URI for when parsing fails.
 /// Invariant: "file:///unknown" is a valid URI per RFC 3986.
 static FALLBACK_URI: LazyLock<Uri> = LazyLock::new(|| {
-    #[allow(clippy::expect_used)]
-    "file:///unknown".parse().expect("file:///unknown must be a valid URI")
+    "file:///unknown"
+        .parse()
+        .unwrap_or_else(|_| unreachable!("file:///unknown must be a valid URI"))
 });
 
 /// Helper function to parse a URI string into an lsp_types::Uri.

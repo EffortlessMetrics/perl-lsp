@@ -2,6 +2,9 @@
 //!
 //! Tests map to acceptance criteria in WORKSPACE_RENAME_SPECIFICATION.md
 //! Each test is tagged with // AC:ACx for traceability
+//!
+//! Run with: cargo test -p perl-refactoring --features workspace-rename-tests --test workspace_rename_tests
+#![cfg(feature = "workspace-rename-tests")]
 
 use perl_refactoring::workspace_rename::{WorkspaceRename, WorkspaceRenameConfig};
 use tempfile::TempDir;
@@ -24,7 +27,6 @@ fn setup_workspace(files: &[(&str, &str)]) -> Result<TempDir, Box<dyn std::error
 // ============================================================================
 
 #[test]
-#[ignore = "TODO: Requires WorkspaceIndex integration"]
 // AC:AC1
 fn workspace_rename_identifies_all_occurrences() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Multi-file corpus with qualified and bare references
@@ -56,7 +58,6 @@ fn workspace_rename_identifies_all_occurrences() -> Result<(), Box<dyn std::erro
 // ============================================================================
 
 #[test]
-#[ignore = "TODO: Requires conflict detection implementation"]
 // AC:AC2
 fn workspace_rename_detects_conflicts() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Rename to existing symbol name
@@ -83,7 +84,6 @@ fn workspace_rename_detects_conflicts() -> Result<(), Box<dyn std::error::Error>
 // ============================================================================
 
 #[test]
-#[ignore = "TODO: Requires transaction and rollback implementation"]
 // AC:AC3
 fn workspace_rename_atomic_rollback() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Partial failure triggers complete rollback
@@ -115,7 +115,6 @@ fn workspace_rename_atomic_rollback() -> Result<(), Box<dyn std::error::Error>> 
 // ============================================================================
 
 #[test]
-#[ignore = "TODO: Requires scope-aware symbol resolution"]
 // AC:AC4
 fn workspace_rename_respects_scoping() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Package scope boundaries
@@ -154,7 +153,6 @@ sub name { 'Other::name' }
 // ============================================================================
 
 #[test]
-#[ignore = "TODO: Requires backup mechanism implementation"]
 // AC:AC5
 fn workspace_rename_creates_backups() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Backup creation when enabled
@@ -184,7 +182,6 @@ fn workspace_rename_creates_backups() -> Result<(), Box<dyn std::error::Error>> 
 // ============================================================================
 
 #[test]
-#[ignore = "TODO: Requires timeout mechanism implementation"]
 // AC:AC6
 fn workspace_rename_respects_timeout() {
     // Test: Timeout enforcement for large workspaces
@@ -211,7 +208,6 @@ fn workspace_rename_respects_timeout() {
 // ============================================================================
 
 #[test]
-#[ignore = "TODO: Requires progress reporting implementation"]
 // AC:AC7
 fn workspace_rename_reports_progress() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Progress events during operation
@@ -241,7 +237,6 @@ fn workspace_rename_reports_progress() -> Result<(), Box<dyn std::error::Error>>
 // ============================================================================
 
 #[test]
-#[ignore = "TODO: Requires index update integration"]
 // AC:AC8
 fn workspace_rename_updates_dual_index() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Index updated with qualified and bare forms
@@ -274,7 +269,6 @@ fn workspace_rename_updates_dual_index() -> Result<(), Box<dyn std::error::Error
 // ============================================================================
 
 #[test]
-#[ignore = "TODO: Unicode handling"]
 fn workspace_rename_handles_unicode() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Unicode identifiers
     let _workspace =
@@ -285,7 +279,6 @@ fn workspace_rename_handles_unicode() -> Result<(), Box<dyn std::error::Error>> 
 }
 
 #[test]
-#[ignore = "TODO: Circular dependency handling"]
 fn workspace_rename_handles_circular_deps() -> Result<(), Box<dyn std::error::Error>> {
     // Test: Circular module dependencies
     let _workspace = setup_workspace(&[

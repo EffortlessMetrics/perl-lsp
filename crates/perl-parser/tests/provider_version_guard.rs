@@ -3,6 +3,8 @@ mod provider_version_guard {
     use perl_parser::{Parser, declaration::DeclarationProvider, declaration::ParentMap};
     use std::sync::Arc;
 
+    use perl_tdd_support::{must, must_some};
+
     // Only meaningful in debug builds, where debug_assert! panics.
     #[cfg(debug_assertions)]
     #[test]
@@ -10,10 +12,7 @@ mod provider_version_guard {
     fn provider_panics_if_used_with_stale_version() {
         let code = "use constant FOO => 1; sub m { my $x = FOO }";
         let mut p = Parser::new(code);
-        let ast = match p.parse() {
-            Ok(ast) => Arc::new(ast),
-            Err(e) => panic!("Parse error: {:?}", e),
-        };
+        let ast = Arc::new(must(p.parse()));
 
         // Build a real parent map so we get far enough to hit the assert.
         let mut pm: ParentMap = ParentMap::default();
@@ -25,10 +24,7 @@ mod provider_version_guard {
             .with_doc_version(1);
 
         // …but call it with a newer doc version => should panic in debug.
-        let off = match code.find("FOO") {
-            Some(off) => off,
-            None => panic!("FOO not found in code"),
-        };
+        let off = must_some(code.find("FOO"));
         let _ = prov.find_declaration(off, 2);
     }
 }

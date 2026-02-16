@@ -80,6 +80,23 @@ mod corpus_gap_tests {
         test_corpus_file("tie_interface.pl")
     }
 
+    /// Regression: anonymous sub as expression initializer (`my $c = sub { 1 };`)
+    /// must produce a subroutine node inside the initializer (locks down peek_second() fix).
+    #[test]
+    fn test_anonymous_sub_expression() -> Result<(), Box<dyn std::error::Error>> {
+        let input = "my $c = sub { 1 };";
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+
+        let sexp = ast.to_sexp();
+        // The variable declaration's initializer should contain a subroutine node
+        assert!(
+            sexp.contains("subroutine") || sexp.contains("anonymous_sub") || sexp.contains("sub"),
+            "expected subroutine/anonymous_sub/sub node in initializer, got: {sexp}"
+        );
+        Ok(())
+    }
+
     // Property-based test for delimiters
     #[test]
     fn test_arbitrary_delimiters() {
@@ -105,7 +122,7 @@ mod corpus_gap_tests {
 
     // Benchmark corpus files (optional, run with --release)
     #[test]
-    #[ignore] // Run with: cargo test --ignored --release
+    #[ignore = "stress: performance benchmark, run with --ignored --release"]
     fn bench_corpus_files() {
         use std::time::Instant;
 
@@ -125,10 +142,9 @@ mod corpus_gap_tests {
 
         for file in files {
             let path = Path::new("test_corpus").join(file);
-            let content = match fs::read_to_string(&path) {
-                Ok(c) => c,
-                Err(e) => panic!("Failed to read file {}: {}", file, e),
-            };
+            let content_res = fs::read_to_string(&path);
+            assert!(content_res.is_ok(), "Failed to read file {}: {:?}", file, content_res.err());
+            let content = content_res.unwrap_or_else(|_| unreachable!());
 
             let start = Instant::now();
             for _ in 0..100 {

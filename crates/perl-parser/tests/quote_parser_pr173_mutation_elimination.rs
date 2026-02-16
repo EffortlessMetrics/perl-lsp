@@ -20,7 +20,6 @@ use perl_parser::quote_parser::*;
 // and extract_transliteration_parts where `c == closing` is mutated to true/false
 
 #[test]
-#[ignore = "mutation hardening: parser output format changed"]
 fn test_kill_match_guard_closing_delimiter_mutations() {
     // Test substitution parsing where closing delimiter detection is critical
     // Mutant #5: line 136:30 - replace match guard c == closing with false

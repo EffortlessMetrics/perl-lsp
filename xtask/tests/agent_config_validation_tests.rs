@@ -127,7 +127,7 @@ impl AgentConfigValidator {
             let path = entry.path();
             if path.is_dir() {
                 self.find_agent_files_recursive(&path, files)?;
-            } else if path.extension().map_or(false, |ext| ext == "md") {
+            } else if path.extension().is_some_and(|ext| ext == "md") {
                 files.push(path);
             }
         }
@@ -306,10 +306,10 @@ impl AgentConfigValidator {
         let mut agents = Vec::new();
 
         for path in agent_files {
-            if let Ok(config) = self.parse_agent_config(&path) {
-                if let Ok(category) = AgentCategory::from_path(&path) {
-                    agents.push(AgentFile { path: path.clone(), config, category });
-                }
+            if let (Ok(config), Ok(category)) =
+                (self.parse_agent_config(&path), AgentCategory::from_path(&path))
+            {
+                agents.push(AgentFile { path: path.clone(), config, category });
             }
         }
 
@@ -605,16 +605,9 @@ mod tests {
 
             let lines: Vec<&str> = content.lines().collect();
             let closing_delimiter = lines.iter().skip(1).position(|line| *line == "---");
+            let yaml_end = closing_delimiter.map_or(0, |pos| pos + 2); // +1 for opening, +1 for closing
             assert!(
-                closing_delimiter.is_some(),
-                "Agent file {} should have closing YAML delimiter ---",
-                path.display()
-            );
-
-            // Verify content after YAML front matter exists
-            let yaml_end = closing_delimiter.unwrap() + 2; // +1 for opening, +1 for closing
-            assert!(
-                lines.len() > yaml_end,
+                closing_delimiter.is_some() && lines.len() > yaml_end,
                 "Agent file {} should have content after YAML front matter",
                 path.display()
             );

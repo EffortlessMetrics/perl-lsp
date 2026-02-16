@@ -1,5 +1,6 @@
 #![allow(dead_code)] // Some tests are feature-gated while being fixed
 
+use perl_tdd_support::must;
 use serde_json::json;
 use std::time::Duration;
 
@@ -95,7 +96,10 @@ fn test_missing_required_params() -> Result<(), Box<dyn std::error::Error>> {
             assert!(items_array.is_empty(), "Expected empty items array for missing params");
         }
     } else {
-        panic!("Expected either error or result in response, got: {:?}", response);
+        must(Err::<(), _>(format!(
+            "Expected either error or result in response, got: {:?}",
+            response
+        )));
     }
     shutdown_and_exit(&mut server);
     Ok(())
@@ -165,7 +169,7 @@ fn test_invalid_uri_format() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     } else {
-        panic!("Expected either error or result in response for invalid URI");
+        must(Err::<(), _>(format!("Expected either error or result in response for invalid URI")));
     }
 
     shutdown_and_exit(&mut server);
@@ -219,7 +223,9 @@ fn test_document_not_found() -> Result<(), Box<dyn std::error::Error>> {
             assert!(result.is_null(), "Expected null or items array for completion result");
         }
     } else {
-        panic!("Expected either error or result in response for missing document");
+        must(Err::<(), _>(format!(
+            "Expected either error or result in response for missing document"
+        )));
     }
 
     shutdown_and_exit(&mut server);
@@ -291,7 +297,9 @@ fn test_out_of_bounds_position() -> Result<(), Box<dyn std::error::Error>> {
             assert!(result.is_null(), "Expected null or items array for completion result");
         }
     } else {
-        panic!("Expected either error or result in response for out-of-bounds position");
+        must(Err::<(), _>(format!(
+            "Expected either error or result in response for out-of-bounds position"
+        )));
     }
 
     shutdown_and_exit(&mut server);
@@ -835,10 +843,10 @@ fn test_cancel_request() -> Result<(), Box<dyn std::error::Error>> {
                         "Result should be valid completion result"
                     );
                 } else {
-                    panic!(
+                    must(Err::<(), _>(format!(
                         "Expected either error or result in completion response, got: {:?}",
                         resp
-                    );
+                    )));
                 }
             }
         } else {

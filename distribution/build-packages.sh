@@ -3,7 +3,7 @@
 
 set -e
 
-VERSION="0.7.3"
+VERSION="1.0.0"
 PACKAGE_NAME="perl-lsp"
 DESCRIPTION="High-performance Perl Language Server with 100% syntax coverage"
 MAINTAINER="Tree-sitter Perl Contributors <dev@example.com>"
@@ -41,7 +41,7 @@ chmod 755 "$BIN_DIR/perl-lsp"
 MAN_DIR="$TEMP_DIR/usr/share/man/man1"
 mkdir -p "$MAN_DIR"
 cat > "$MAN_DIR/perl-lsp.1" << 'EOF'
-.TH PERL-LSP 1 "January 2025" "perl-lsp 0.7.3" "User Commands"
+.TH PERL-LSP 1 "February 2026" "perl-lsp 1.0.0" "User Commands"
 .SH NAME
 perl-lsp \- Perl Language Server Protocol implementation
 .SH SYNOPSIS

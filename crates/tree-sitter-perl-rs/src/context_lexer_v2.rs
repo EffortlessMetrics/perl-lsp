@@ -258,7 +258,7 @@ mod tests {
                 assert_eq!(construct.pattern, "test");
                 assert_eq!(construct.modifiers, "i");
             }
-            _ => panic!("Expected regex token"),
+            _ => unreachable!("Expected regex token"),
         }
 
         // Next should be plus
@@ -280,7 +280,7 @@ mod tests {
                 assert_eq!(construct.pattern, "test");
                 assert_eq!(construct.modifiers, "gi");
             }
-            _ => panic!("Expected match operator"),
+            _ => unreachable!("Expected match operator"),
         }
     }
 
@@ -295,7 +295,7 @@ mod tests {
                 assert_eq!(construct.replacement, Some("new".to_string()));
                 assert_eq!(construct.modifiers, "g");
             }
-            _ => panic!("Expected substitute operator"),
+            _ => unreachable!("Expected substitute operator"),
         }
     }
 }

@@ -24,11 +24,9 @@ mod moniker_export_import_tests {
 
     /// Parse Perl code and return the AST root
     fn parse_code(code: &str) -> Node {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse code: {}", e),
-        }
+        must(parser.parse())
     }
 
     /// Create a Use node for testing find_import_source
@@ -176,6 +174,8 @@ package MyModule;
 
             if let NodeKind::Program { statements } = &program.kind {
                 assert_eq!(statements.len(), 1, "Expected 1 statement for {}", module_name);
+                let is_use = matches!(statements[0].kind, NodeKind::Use { .. });
+                assert!(is_use, "Expected Use node for {}", module_name);
                 if let NodeKind::Use { module, args, .. } = &statements[0].kind {
                     assert_eq!(module, module_name, "Module name mismatch");
                     assert_eq!(args.len(), 1, "Expected 1 arg for {}", module_name);
@@ -185,11 +185,13 @@ package MyModule;
                         expected_prefix,
                         module_name
                     );
-                } else {
-                    panic!("Expected Use node for {}", module_name);
                 }
             } else {
-                panic!("Expected Program node for {}", module_name);
+                assert!(
+                    matches!(program.kind, NodeKind::Program { .. }),
+                    "Expected Program node for {}",
+                    module_name
+                );
             }
         }
     }
@@ -339,10 +341,10 @@ sub bar { return 'hello'; }
         let ast = parse_code(code);
 
         // Verify parsing succeeds and structure is correct
+        let is_program = matches!(ast.kind, NodeKind::Program { .. });
+        assert!(is_program, "Expected Program node, got {:?}", ast.kind);
         if let NodeKind::Program { statements } = &ast.kind {
             assert!(!statements.is_empty(), "Expected multiple statements");
-        } else {
-            panic!("Expected Program node");
         }
     }
 

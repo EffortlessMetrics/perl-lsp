@@ -1,12 +1,12 @@
 [package]
 name = "perl-parser-pest"
-version = "0.8.8"
+version = "0.9.0"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Perl LSP Contributors"]
+authors = ["Tree-sitter Perl Contributors"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/perl-lsp"
-homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-parser-pest"
 description = "Legacy Pest-based Perl parser (v2) — maintained as a learning tool and compatibility layer"
 readme = "README.md"
@@ -15,23 +15,27 @@ categories = ["parsing", "development-tools"]
 include = ["src/**", "src/grammar.pest", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-pest = "2.8.5"
-pest_derive = "2.8.5"
-stacker = "0.1.22"
+pest = "2.8.6"
+pest_derive = "2.8.6"
+stacker = "0.1.23"
 thiserror = "2.0.18"
-serde = { version = "1.0.228", features = ["derive"], optional = true }
-regex = "1.12.2"
-unicode-ident = "1.0.22"
+serde = { version = "1.0.228", features = ["derive"] }
+postcard = { version = "1.1.3", features = ["alloc"] }
+regex = "1.12.3"
+unicode-ident = "1.0.24"
 once_cell = "1.21.3"
 lazy_static = "1.5.0"
 
 [features]
 default = []
-serde = ["dep:serde"]
+# Backward-compatible feature alias; serde support is always enabled.
+serde = []
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
 
 [lib]
 doctest = false
 
 [lints]
 workspace = true
-

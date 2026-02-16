@@ -389,8 +389,19 @@ impl Node {
                 result
             }
 
-            NodeKind::Foreach { variable, list, body } => {
-                format!("(foreach {} {} {})", variable.to_sexp(), list.to_sexp(), body.to_sexp())
+            NodeKind::Foreach { variable, list, body, continue_block } => {
+                let cont = if let Some(cb) = continue_block {
+                    format!(" {}", cb.to_sexp())
+                } else {
+                    String::new()
+                };
+                format!(
+                    "(foreach {} {} {}{})",
+                    variable.to_sexp(),
+                    list.to_sexp(),
+                    body.to_sexp(),
+                    cont
+                )
             }
 
             NodeKind::Given { expr, body } => {
@@ -824,10 +835,13 @@ impl Node {
                     f(cont);
                 }
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 f(variable);
                 f(list);
                 f(body);
+                if let Some(cb) = continue_block {
+                    f(cb);
+                }
             }
             NodeKind::Given { expr, body } => {
                 f(expr);
@@ -1069,10 +1083,13 @@ impl Node {
                     f(cont);
                 }
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 f(variable);
                 f(list);
                 f(body);
+                if let Some(cb) = continue_block {
+                    f(cb);
+                }
             }
             NodeKind::Given { expr, body } => {
                 f(expr);
@@ -1552,6 +1569,8 @@ pub enum NodeKind {
         list: Box<Node>,
         /// Loop body
         body: Box<Node>,
+        /// Optional continue block
+        continue_block: Option<Box<Node>>,
     },
 
     /// Given statement for switch-like matching (Perl 5.10+)

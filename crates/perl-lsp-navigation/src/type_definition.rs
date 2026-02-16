@@ -310,10 +310,16 @@ impl TypeDefinitionProvider {
                 }
                 f(body);
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 f(variable);
+                if let Some(cb) = continue_block {
+                    f(cb);
+                }
                 f(list);
                 f(body);
+                if let Some(cb) = continue_block {
+                    f(cb);
+                }
             }
             _ => {
                 // Other node types don't have children we need to traverse

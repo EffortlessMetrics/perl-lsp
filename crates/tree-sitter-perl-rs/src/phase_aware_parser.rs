@@ -61,15 +61,21 @@ pub enum PhaseAction {
     PartialParse { warning: String },             // Parse with warnings
 }
 
-#[allow(clippy::unwrap_used)]
 static PHASE_BLOCK_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?m)^\s*(BEGIN|CHECK|INIT|END)\s*\{").unwrap());
+    LazyLock::new(|| match Regex::new(r"(?m)^\s*(BEGIN|CHECK|INIT|END)\s*\{") {
+        Ok(re) => re,
+        Err(_) => unreachable!("PHASE_BLOCK_PATTERN regex failed to compile"),
+    });
 
-#[allow(clippy::unwrap_used)]
-static EVAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r#"\beval\s*["'{]"#).unwrap());
+static EVAL_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r#"\beval\s*["'{]"#) {
+    Ok(re) => re,
+    Err(_) => unreachable!("EVAL_PATTERN regex failed to compile"),
+});
 
-#[allow(clippy::unwrap_used)]
-static USE_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)^\s*use\s+").unwrap());
+static USE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"(?m)^\s*use\s+") {
+    Ok(re) => re,
+    Err(_) => unreachable!("USE_PATTERN regex failed to compile"),
+});
 
 impl Default for PhaseAwareParser {
     fn default() -> Self {
@@ -395,7 +401,7 @@ DONE
                 assert!(reason.contains("BEGIN"));
                 assert_eq!(severity, Severity::Warning);
             }
-            _ => panic!("Expected Defer action"),
+            _ => assert!(false, "Expected Defer action"),
         }
     }
 
@@ -412,7 +418,7 @@ DONE
                 assert!(warning.contains("END block"));
                 assert!(warning.contains("program termination"));
             }
-            _ => panic!("Expected PartialParse action for END phase"),
+            _ => assert!(false, "Expected PartialParse action for END phase"),
         }
     }
 
@@ -429,7 +435,7 @@ DONE
                 assert!(reason.contains("eval"));
                 assert_eq!(severity, Severity::Warning);
             }
-            _ => panic!("Expected Defer action for eval phase"),
+            _ => assert!(false, "Expected Defer action for eval phase"),
         }
 
         // Verify eval heredoc was added to deferred list
@@ -440,6 +446,7 @@ DONE
         // Generate diagnostics and verify eval-specific suggestion
         let diagnostics = parser.generate_phase_diagnostics();
         assert_eq!(diagnostics.len(), 1);
-        assert!(diagnostics[0].suggested_fix.as_ref().unwrap().contains("regular string"));
+        let fix = diagnostics[0].suggested_fix.as_ref().map(|s| s.as_str()).unwrap_or("");
+        assert!(fix.contains("regular string"));
     }
 }

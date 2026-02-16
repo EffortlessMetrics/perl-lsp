@@ -1531,57 +1531,62 @@ mod tests {
 
     #[test]
     fn test_basic_parsing() {
+        use perl_tdd_support::must;
         let source = "my $x = 42;";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("AST: {:#?}", ast);
         println!("S-expression: {}", ast.to_sexp());
     }
 
     #[test]
     fn test_complex_expression() {
+        use perl_tdd_support::must;
         let source = "$a + $b * $c";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("S-expression: {}", ast.to_sexp());
     }
 
     #[test]
     fn test_if_statement() {
+        use perl_tdd_support::must;
         let source = "if ($x > 10) { print \"big\"; } else { print \"small\"; }";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("S-expression: {}", ast.to_sexp());
     }
 
     #[test]
     fn test_subroutine() {
+        use perl_tdd_support::must;
         let source = "sub hello { my $name = shift; print \"Hello, $name!\\n\"; }";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("S-expression: {}", ast.to_sexp());
     }
 
     #[test]
     fn test_foreach_loop() {
+        use perl_tdd_support::must;
         let source = "foreach my $item (@list) { print $item; }";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("S-expression: {}", ast.to_sexp());
     }
 }

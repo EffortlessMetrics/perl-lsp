@@ -2,15 +2,17 @@
 
 use std::path::PathBuf;
 
+use color_eyre::eyre::{Result, eyre};
+
 /// Get the project root directory using CARGO_MANIFEST_DIR.
 /// This is more robust than current_dir() in CI environments.
-pub fn project_root() -> PathBuf {
+pub fn project_root() -> Result<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     // xtask is in xtask/, so go up one level to get project root
     manifest_dir
         .parent()
-        .unwrap_or_else(|| panic!("xtask should be in a subdirectory - invalid project structure"))
-        .to_path_buf()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| eyre!("xtask should be in a subdirectory - invalid project structure"))
 }
 
 /// Build constrained environment variables for resource-limited CI.

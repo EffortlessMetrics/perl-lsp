@@ -50,7 +50,10 @@ impl RuntimeHeredocHandler {
         // Detect nested heredocs
         #[allow(clippy::unwrap_used)]
         static HEREDOC_REGEX: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r#"<<\s*(['"]?)(\w+)(['"]?)"#).unwrap());
+            LazyLock::new(|| match Regex::new(r#"<<\s*(['"]?)(\w+)(['"]?)"#) {
+                Ok(re) => re,
+                Err(_) => unreachable!("HEREDOC_REGEX failed to compile"),
+            });
 
         let mut result = content.to_string();
         for cap in HEREDOC_REGEX.captures_iter(content) {
@@ -90,7 +93,10 @@ impl RuntimeHeredocHandler {
         // Note: Rust regex doesn't support backreferences, so we'll handle quotes manually
         #[allow(clippy::unwrap_used)]
         static HEREDOC_REGEX: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r#"<<\s*(['"]?)(\w+)(['"]?)"#).unwrap());
+            LazyLock::new(|| match Regex::new(r#"<<\s*(['"]?)(\w+)(['"]?)"#) {
+                Ok(re) => re,
+                Err(_) => unreachable!("HEREDOC_REGEX failed to compile"),
+            });
         let mut processed = content.to_string();
         let mut offset = 0;
 
@@ -242,12 +248,13 @@ mod tests {
 
     #[test]
     fn test_basic_evaluation() {
+        use perl_tdd_support::must;
         let mut handler = RuntimeHeredocHandler::new();
         let mut context = RuntimeHeredocContext::default();
         context.variables.insert("name".to_string(), "World".to_string());
 
         let content = "Hello, $name!";
-        let result = handler.evaluate_heredoc(content, &context).unwrap();
+        let result = must(handler.evaluate_heredoc(content, &context));
         assert_eq!(result, "Hello, World!");
     }
 

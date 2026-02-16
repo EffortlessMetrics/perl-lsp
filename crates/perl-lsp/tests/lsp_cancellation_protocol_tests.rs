@@ -457,7 +457,7 @@ fn test_atomic_cancellation_token_operations_ac2() -> Result<(), Box<dyn std::er
     for handle in handles {
         match handle.join() {
             Ok(thread_results) => all_results.extend(thread_results),
-            Err(_) => panic!("Thread panicked during concurrent cancellation test"),
+            Err(_) => must(Err::<(), _>(format!("Thread panicked during concurrent cancellation test"))),
         }
     }
 
@@ -562,7 +562,7 @@ fn test_cancellation_registry_concurrent_operations_ac2() -> Result<(), Box<dyn 
     for handle in handles {
         match handle.join() {
             Ok(thread_results) => all_operation_results.extend(thread_results),
-            Err(_) => panic!("Thread panicked during registry operations"),
+            Err(_) => must(Err::<(), _>(format!("Thread panicked during registry operations"))),
         }
     }
 
@@ -663,7 +663,7 @@ fn test_provider_cleanup_thread_safety_ac2() -> Result<(), Box<dyn std::error::E
     for handle in provider_handles {
         match handle.join() {
             Ok(result) => cleanup_results.push(result),
-            Err(_) => panic!("Provider cleanup thread panicked"),
+            Err(_) => must(Err::<(), _>(format!("Provider cleanup thread panicked"))),
         }
     }
 

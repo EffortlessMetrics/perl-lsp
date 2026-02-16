@@ -1,5 +1,8 @@
 name: Release
 
+# Build and release perl-lsp binaries for all platforms
+# Cost: ~$0.50 per release (across all platforms)
+
 on:
   push:
     tags:
@@ -11,6 +14,11 @@ on:
         required: true
         type: string
 
+# Cancel in-flight runs on new pushes
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false  # Don't cancel release builds
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -19,6 +27,7 @@ jobs:
   build:
     name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -62,11 +71,12 @@ jobs:
         if: matrix.use_cross
         run: cargo install cross --locked --git https://github.com/cross-rs/cross
 
-      - name: Cache
+      - name: Cache cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
           cache-on-failure: true
+          cache-all-crates: true
 
       - name: Build binary
         shell: bash
@@ -83,7 +93,7 @@ jobs:
           NAME="perl-lsp"
           TARGET="${{ matrix.target }}"
           VERSION="${{ github.event.inputs.tag || github.ref_name }}"
-          
+
           # Binary name with .exe for Windows
           if [[ "$TARGET" == *"windows"* ]]; then
             BIN="${NAME}.exe"
@@ -92,22 +102,22 @@ jobs:
             BIN="${NAME}"
             EXT=".tar.gz"
           fi
-          
+
           # Create package directory
           PKG_NAME="${NAME}-${VERSION}-${TARGET}"
           mkdir -p "${PKG_NAME}"
-          
+
           # Copy binary
           cp "target/${TARGET}/release/${BIN}" "${PKG_NAME}/"
-          
+
           # Strip binary on Unix
           if [[ "$TARGET" != *"windows"* ]] && [[ "${{ matrix.use_cross }}" != "true" ]]; then
             strip "${PKG_NAME}/${BIN}" 2>/dev/null || true
           fi
-          
+
           # Copy additional files
           cp README.md LICENSE "${PKG_NAME}/" 2>/dev/null || true
-          
+
           # Generate checksums
           cd "${PKG_NAME}"
           if command -v sha256sum >/dev/null; then
@@ -116,14 +126,14 @@ jobs:
             shasum -a 256 "${BIN}" > SHA256SUMS.txt
           fi
           cd ..
-          
+
           # Create archive
           if [[ "$EXT" == ".zip" ]]; then
             7z a "${PKG_NAME}${EXT}" "${PKG_NAME}"/*
           else
             tar czf "${PKG_NAME}${EXT}" "${PKG_NAME}"
           fi
-          
+
           echo "ASSET=${PKG_NAME}${EXT}" >> $GITHUB_ENV
           echo "PKG_NAME=${PKG_NAME}" >> $GITHUB_ENV
 
@@ -138,6 +148,7 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       id-token: write  # Required for SLSA provenance
@@ -150,127 +161,63 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install tooling
-        run: |
-          cargo install cargo-sbom --locked
+      - name: Install cargo-release
+        run: cargo install cargo-release --locked
 
-      - name: Generate SBOM (SPDX)
-        run: |
-          cargo sbom --output-format spdx_json_2_3 > sbom-spdx.json
-          echo "Generated SBOM-SPDX ($(wc -l < sbom-spdx.json) lines)"
-
-      - name: Generate SBOM (CycloneDX)
-        run: |
-          cargo sbom --output-format cyclone_dx_json_1_6 > sbom-cyclonedx.json
-          echo "Generated SBOM-CycloneDX ($(wc -l < sbom-cyclonedx.json) lines)"
-
-      - name: Download artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: true
 
-      - name: Prepare release files
-        run: |
-          set -euo pipefail
-          
-          # Check if artifacts exist
-          echo "Contents of artifacts directory:"
-          ls -la artifacts/ || echo "No artifacts directory found"
-          
-          # Find and move artifacts
-          ASSETS=$(find artifacts -name '*.tar.gz' -o -name '*.zip' 2>/dev/null || true)
-          if [ -z "$ASSETS" ]; then
-            echo "ERROR: No artifacts found. Did the build steps succeed?"
-            exit 1
-          fi
-          
-          echo "Found artifacts:"
-          echo "$ASSETS"
-          echo "$ASSETS" | xargs -I {} mv {} .
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
 
-          # Generate aggregate checksums for binaries
-          sha256sum *.tar.gz *.zip > SHA256SUMS
-
-          # Generate checksums for SBOMs
-          sha256sum sbom-*.json >> SHA256SUMS
-
-          # List files for verification
-          echo "Files ready for release:"
-          ls -la *.tar.gz *.zip sbom-*.json SHA256SUMS
-
-      - name: Attest build provenance (SLSA)
-        uses: actions/attest-build-provenance@v3
-        with:
-          subject-path: |
-            *.tar.gz
-            *.zip
-            sbom-*.json
-
-      - name: Generate release body
+      - name: Generate release notes
+        id: release_notes
         run: |
           VERSION="${{ github.event.inputs.tag || github.ref_name }}"
-          cat > release-body.md << 'EOF'
-          ## Perl LSP ${VERSION}
-          
+          cat > release_notes.md << EOF
+          ## Release ${VERSION}
+
           ### Installation
-          
-          #### Quick install (Linux/macOS)
-          ```bash
-          curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
-          ```
-          
-          #### Quick install (Windows PowerShell)
-          ```powershell
-          irm https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.ps1 | iex
-          ```
-          
-          #### Homebrew (macOS/Linux)
-          ```bash
-          brew tap effortlesssteven/tap
-          brew install perl-lsp
-          ```
-          
-          ### Platform Support
-          
-          | Platform | Architecture | Binary |
-          |----------|-------------|--------|
-          | Linux | x86_64 | ✅ GNU + musl |
-          | Linux | aarch64 | ✅ GNU + musl |
-          | macOS | x86_64 | ✅ Intel |
-          | macOS | aarch64 | ✅ Apple Silicon |
-          | Windows | x86_64 | ✅ MSVC |
-          
-          ### Changes
-          See [CHANGELOG.md](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/main/CHANGELOG.md) for details.
 
-          ### Supply Chain Security
-
-          This release includes:
-          - **SBOM (Software Bill of Materials)**: Available in SPDX and CycloneDX formats
-          - **SLSA Provenance**: Build attestations for all artifacts (Level 2)
-          - **Checksums**: SHA256 hashes for verification
-
-          Verify build provenance using:
           \`\`\`bash
-          gh attestation verify <artifact> --owner EffortlessMetrics
+          # Using cargo
+          cargo install perl-lsp
+
+          # Or download binary for your platform
+          # See assets below
           \`\`\`
+
+          ### Changes
+
+          See the [CHANGELOG](CHANGELOG.md) for detailed changes.
+
+          ### Checksums
+
+          All binaries include SHA256 checksums in their packages.
           EOF
-          sed -i "s/\${VERSION}/${VERSION}/g" release-body.md
+          cat release_notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          name: ${{ github.event.inputs.tag || github.ref_name }}
-          body_path: release-body.md
+          files: artifacts/*/*
+          body_path: release_notes.md
           draft: false
-          prerelease: ${{ contains(github.event.inputs.tag || github.ref_name, '-') }}
-          files: |
-            *.tar.gz
-            *.zip
-            sbom-*.json
-            SHA256SUMS
+          prerelease: false
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate SBOM
+        run: |
+          cargo install cargo-sbom --locked || true
+          cargo sbom --output-format spdx_json_2_3 > sbom-spdx.json
+
+      - name: Upload SBOM as release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: sbom-spdx.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

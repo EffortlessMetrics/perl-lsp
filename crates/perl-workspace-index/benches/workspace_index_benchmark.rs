@@ -1,4 +1,6 @@
+#![allow(clippy::panic, clippy::unwrap_used, clippy::expect_used)]
 use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+use perl_tdd_support::must;
 use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::fs;
 use std::hint::black_box;
@@ -175,21 +177,15 @@ fn bench_initial_index_small_workspace(c: &mut Criterion) {
         b.iter_batched(
             || {
                 // Setup: create a temporary workspace with 5 files
-                let temp_dir =
-                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir = must(TempDir::new());
                 let base_path = temp_dir.path();
 
                 // Create 5 different Perl files
-                fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("script.pl"), SAMPLE_SCRIPT)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("modern.pm"), MODERN_PERL)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("complex.pm"), COMPLEX_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
+                must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+                must(fs::write(base_path.join("script.pl"), SAMPLE_SCRIPT));
+                must(fs::write(base_path.join("modern.pm"), MODERN_PERL));
+                must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
 
                 (temp_dir, WorkspaceIndex::new())
             },
@@ -197,16 +193,11 @@ fn bench_initial_index_small_workspace(c: &mut Criterion) {
                 // Benchmark: index all files
                 let base_path = temp_dir.path();
 
-                let uri1 = Url::from_file_path(base_path.join("module1.pm"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
-                let uri2 = Url::from_file_path(base_path.join("module2.pm"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
-                let uri3 = Url::from_file_path(base_path.join("script.pl"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
-                let uri4 = Url::from_file_path(base_path.join("modern.pm"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
-                let uri5 = Url::from_file_path(base_path.join("complex.pm"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
+                let uri1 = must(Url::from_file_path(base_path.join("module1.pm")));
+                let uri2 = must(Url::from_file_path(base_path.join("module2.pm")));
+                let uri3 = must(Url::from_file_path(base_path.join("script.pl")));
+                let uri4 = must(Url::from_file_path(base_path.join("modern.pm")));
+                let uri5 = must(Url::from_file_path(base_path.join("complex.pm")));
 
                 index.index_file(uri1, SAMPLE_MODULE.to_string()).ok();
                 index.index_file(uri2, MULTI_PACKAGE_MODULE.to_string()).ok();
@@ -226,8 +217,7 @@ fn bench_initial_index_medium_workspace(c: &mut Criterion) {
     c.bench_function("initial index medium workspace (10 files)", |b| {
         b.iter_batched(
             || {
-                let temp_dir =
-                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir = must(TempDir::new());
                 let base_path = temp_dir.path();
 
                 // Create 10 files by duplicating samples with variations
@@ -240,8 +230,7 @@ fn bench_initial_index_medium_workspace(c: &mut Criterion) {
                         3 => MODERN_PERL,
                         _ => COMPLEX_MODULE,
                     };
-                    fs::write(base_path.join(&filename), content)
-                        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                    must(fs::write(base_path.join(&filename), content));
                 }
 
                 (temp_dir, WorkspaceIndex::new())
@@ -251,8 +240,7 @@ fn bench_initial_index_medium_workspace(c: &mut Criterion) {
 
                 for i in 0..10 {
                     let filename = format!("module{}.pm", i);
-                    let uri = Url::from_file_path(base_path.join(&filename))
-                        .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
+                    let uri = must(Url::from_file_path(base_path.join(&filename)));
                     let content = match i % 5 {
                         0 => SAMPLE_MODULE,
                         1 => MULTI_PACKAGE_MODULE,
@@ -278,62 +266,50 @@ fn bench_incremental_update(c: &mut Criterion) {
         b.iter_batched(
             || {
                 // Setup: create and index a workspace
-                let temp_dir =
-                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir = must(TempDir::new());
                 let base_path = temp_dir.path();
 
-                fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("script.pl"), SAMPLE_SCRIPT)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("modern.pm"), MODERN_PERL)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("complex.pm"), COMPLEX_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
+                must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+                must(fs::write(base_path.join("script.pl"), SAMPLE_SCRIPT));
+                must(fs::write(base_path.join("modern.pm"), MODERN_PERL));
+                must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
 
                 let index = WorkspaceIndex::new();
 
                 // Initial indexing
                 index
                     .index_file(
-                        Url::from_file_path(base_path.join("module1.pm"))
-                            .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+                        must(Url::from_file_path(base_path.join("module1.pm"))),
                         SAMPLE_MODULE.to_string(),
                     )
                     .ok();
                 index
                     .index_file(
-                        Url::from_file_path(base_path.join("module2.pm"))
-                            .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+                        must(Url::from_file_path(base_path.join("module2.pm"))),
                         MULTI_PACKAGE_MODULE.to_string(),
                     )
                     .ok();
                 index
                     .index_file(
-                        Url::from_file_path(base_path.join("script.pl"))
-                            .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+                        must(Url::from_file_path(base_path.join("script.pl"))),
                         SAMPLE_SCRIPT.to_string(),
                     )
                     .ok();
                 index
                     .index_file(
-                        Url::from_file_path(base_path.join("modern.pm"))
-                            .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+                        must(Url::from_file_path(base_path.join("modern.pm"))),
                         MODERN_PERL.to_string(),
                     )
                     .ok();
                 index
                     .index_file(
-                        Url::from_file_path(base_path.join("complex.pm"))
-                            .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+                        must(Url::from_file_path(base_path.join("complex.pm"))),
                         COMPLEX_MODULE.to_string(),
                     )
                     .ok();
 
-                let update_uri = Url::from_file_path(base_path.join("module1.pm"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
+                let update_uri = must(Url::from_file_path(base_path.join("module1.pm")));
 
                 (temp_dir, index, update_uri)
             },
@@ -395,36 +371,30 @@ sub new_method {  # New method added
 /// due to hash table indexing.
 fn bench_symbol_lookup(c: &mut Criterion) {
     // Setup: create an indexed workspace once for all iterations
-    let temp_dir = TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+    let temp_dir = must(TempDir::new());
     let base_path = temp_dir.path();
 
-    fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
-        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-    fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE)
-        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-    fs::write(base_path.join("complex.pm"), COMPLEX_MODULE)
-        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+    must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
+    must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+    must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
 
     let index = WorkspaceIndex::new();
 
     index
         .index_file(
-            Url::from_file_path(base_path.join("module1.pm"))
-                .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+            must(Url::from_file_path(base_path.join("module1.pm"))),
             SAMPLE_MODULE.to_string(),
         )
         .ok();
     index
         .index_file(
-            Url::from_file_path(base_path.join("module2.pm"))
-                .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+            must(Url::from_file_path(base_path.join("module2.pm"))),
             MULTI_PACKAGE_MODULE.to_string(),
         )
         .ok();
     index
         .index_file(
-            Url::from_file_path(base_path.join("complex.pm"))
-                .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+            must(Url::from_file_path(base_path.join("complex.pm"))),
             COMPLEX_MODULE.to_string(),
         )
         .ok();
@@ -446,36 +416,30 @@ fn bench_symbol_lookup(c: &mut Criterion) {
 /// Benchmark find_references (cross-file reference lookup)
 fn bench_find_references(c: &mut Criterion) {
     // Setup: create an indexed workspace
-    let temp_dir = TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+    let temp_dir = must(TempDir::new());
     let base_path = temp_dir.path();
 
-    fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
-        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-    fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE)
-        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-    fs::write(base_path.join("complex.pm"), COMPLEX_MODULE)
-        .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+    must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
+    must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+    must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
 
     let index = WorkspaceIndex::new();
 
     index
         .index_file(
-            Url::from_file_path(base_path.join("module1.pm"))
-                .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+            must(Url::from_file_path(base_path.join("module1.pm"))),
             SAMPLE_MODULE.to_string(),
         )
         .ok();
     index
         .index_file(
-            Url::from_file_path(base_path.join("module2.pm"))
-                .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+            must(Url::from_file_path(base_path.join("module2.pm"))),
             MULTI_PACKAGE_MODULE.to_string(),
         )
         .ok();
     index
         .index_file(
-            Url::from_file_path(base_path.join("complex.pm"))
-                .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path")),
+            must(Url::from_file_path(base_path.join("complex.pm"))),
             COMPLEX_MODULE.to_string(),
         )
         .ok();
@@ -492,7 +456,7 @@ fn bench_find_references(c: &mut Criterion) {
 /// Benchmark workspace symbol search (fuzzy matching)
 fn bench_workspace_symbol_search(c: &mut Criterion) {
     // Setup: create an indexed workspace
-    let temp_dir = TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+    let temp_dir = must(TempDir::new());
     let base_path = temp_dir.path();
 
     // Create multiple files with various symbols
@@ -505,16 +469,14 @@ fn bench_workspace_symbol_search(c: &mut Criterion) {
             3 => MODERN_PERL,
             _ => COMPLEX_MODULE,
         };
-        fs::write(base_path.join(&filename), content)
-            .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+        must(fs::write(base_path.join(&filename), content));
     }
 
     let index = WorkspaceIndex::new();
 
     for i in 0..10 {
         let filename = format!("module{}.pm", i);
-        let uri = Url::from_file_path(base_path.join(&filename))
-            .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
+        let uri = must(Url::from_file_path(base_path.join(&filename)));
         let content = match i % 5 {
             0 => SAMPLE_MODULE,
             1 => MULTI_PACKAGE_MODULE,
@@ -545,25 +507,18 @@ fn bench_file_removal_and_reindex(c: &mut Criterion) {
         b.iter_batched(
             || {
                 // Setup: create and index a workspace
-                let temp_dir =
-                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir = must(TempDir::new());
                 let base_path = temp_dir.path();
 
-                fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
-                fs::write(base_path.join("complex.pm"), COMPLEX_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
+                must(fs::write(base_path.join("module2.pm"), MULTI_PACKAGE_MODULE));
+                must(fs::write(base_path.join("complex.pm"), COMPLEX_MODULE));
 
                 let index = WorkspaceIndex::new();
 
-                let uri1 = Url::from_file_path(base_path.join("module1.pm"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
-                let uri2 = Url::from_file_path(base_path.join("module2.pm"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
-                let uri3 = Url::from_file_path(base_path.join("complex.pm"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
+                let uri1 = must(Url::from_file_path(base_path.join("module1.pm")));
+                let uri2 = must(Url::from_file_path(base_path.join("module2.pm")));
+                let uri3 = must(Url::from_file_path(base_path.join("complex.pm")));
 
                 index.index_file(uri1.clone(), SAMPLE_MODULE.to_string()).ok();
                 index.index_file(uri2.clone(), MULTI_PACKAGE_MODULE.to_string()).ok();
@@ -673,15 +628,12 @@ fn bench_early_exit_optimization(c: &mut Criterion) {
     c.bench_function("early exit content hash check", |b| {
         b.iter_batched(
             || {
-                let temp_dir =
-                    TempDir::new().unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                let temp_dir = must(TempDir::new());
                 let base_path = temp_dir.path();
-                fs::write(base_path.join("module1.pm"), SAMPLE_MODULE)
-                    .unwrap_or_else(|e| panic!("benchmark setup failed: {e}"));
+                must(fs::write(base_path.join("module1.pm"), SAMPLE_MODULE));
 
                 let index = WorkspaceIndex::new();
-                let uri = Url::from_file_path(base_path.join("module1.pm"))
-                    .unwrap_or_else(|()| panic!("benchmark setup failed: invalid path"));
+                let uri = must(Url::from_file_path(base_path.join("module1.pm")));
 
                 // Initial index
                 index.index_file(uri.clone(), SAMPLE_MODULE.to_string()).ok();

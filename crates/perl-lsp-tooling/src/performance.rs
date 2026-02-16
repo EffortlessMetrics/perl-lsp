@@ -470,7 +470,8 @@ mod tests {
 
         // Wait for all threads to complete
         for handle in handles {
-            handle.join().expect("Thread should not panic");
+            let res = handle.join();
+            assert!(res.is_ok(), "Thread should not panic");
         }
 
         // Cache should still be functional

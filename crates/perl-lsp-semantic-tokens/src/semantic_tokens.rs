@@ -207,12 +207,15 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
 /// # Examples
 /// ```rust
 /// use perl_lsp_providers::{Parser, ide::lsp_compat::semantic_tokens::collect_semantic_tokens};
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let code = "my $x = 1;";
 /// let mut parser = Parser::new(code);
-/// let ast = parser.parse().unwrap();
+/// let ast = parser.parse()?;
 /// let to_pos16 = |pos| (0u32, pos as u32);
 /// let tokens = collect_semantic_tokens(&ast, code, &to_pos16);
 /// assert!(!tokens.is_empty());
+/// # Ok(())
+/// # }
 /// ```
 pub fn collect_semantic_tokens(
     ast: &Node,

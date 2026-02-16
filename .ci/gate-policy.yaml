@@ -94,6 +94,19 @@ tiers:
     trigger:
       - schedule: "0 3 * * *"
 
+  # ---------------------------------------------------------------------------
+  # release: Required for release candidate validation
+  # ---------------------------------------------------------------------------
+  # Target: < 10 minutes
+  # Purpose: Validate everything needed before cutting a release
+  # Enforcement: Hard fail - blocks release
+  release:
+    description: "Release candidate validation"
+    target_duration_seconds: 600
+    enforcement: required
+    trigger:
+      - workflow_dispatch
+
 # =============================================================================
 # Gate Definitions
 # =============================================================================
@@ -270,6 +283,39 @@ gates:
     tags:
       - docs
       - build
+
+  - name: v2_parity
+    tier: merge_gate
+    description: "Verify in-crate v2 and perl-parser-pest v2 produce identical corpus output"
+    required: true
+    command: >-
+      cargo run --locked -p xtask --features legacy
+      -- corpus --scanner v2-parity
+    timeout_seconds: 300
+    retry_count: 0
+    budgets:
+      max_duration_ms: 240000
+    quarantine: false
+    tags:
+      - parser
+      - corpus
+      - parity
+      - microcrate
+
+  - name: v2_bundle_sync
+    tier: merge_gate
+    description: "Verify v2 bundle files stay synchronized while bridge fallback exists"
+    required: true
+    command: bash scripts/check-v2-bundle-sync.sh
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - parser
+      - sync
+      - microcrate
 
   - name: workflow_audit
     tier: merge_gate
@@ -461,6 +507,104 @@ gates:
       - reproducibility
       - quality
 
+  # ===========================================================================
+  # Tier: release
+  # ===========================================================================
+  # Release candidate validation gates.
+
+  - name: release_build
+    tier: release
+    description: "Release build with locked dependencies"
+    required: true
+    command: cargo build -p perl-lsp --release --locked
+    timeout_seconds: 300
+    retry_count: 0
+    budgets:
+      max_duration_ms: 300000
+    quarantine: false
+    tags:
+      - release
+      - build
+
+  - name: version_sync
+    tier: release
+    description: "All version strings agree across features.toml, Cargo.toml, package.json, build.rs"
+    required: true
+    command: bash scripts/check-version-sync.sh
+    timeout_seconds: 30
+    retry_count: 0
+    budgets:
+      max_duration_ms: 10000
+    quarantine: false
+    tags:
+      - release
+      - version
+      - hygiene
+
+  - name: sbom_verify
+    tier: release
+    description: "SBOM generation and verification for supply chain security"
+    required: true
+    command: >-
+      just sbom-verify
+    timeout_seconds: 300
+    retry_count: 0
+    budgets:
+      max_duration_ms: 300000
+    quarantine: false
+    tags:
+      - release
+      - sbom
+      - supply-chain
+
+  # ===========================================================================
+  # LSP Tiered Testing
+  # ===========================================================================
+  # Fast smoke subset for merge gate, full suite for nightly.
+
+  - name: lsp_tier_a
+    tier: merge_gate
+    description: "LSP smoke tests: capabilities, protocol basics (<30s)"
+    required: true
+    command: >-
+      cargo test -p perl-lsp
+      --test cli_smoke --test lsp_capabilities_snapshot
+      --test lsp_capabilities_contract --test lsp_protocol_tests
+      --locked -- --test-threads=1
+    timeout_seconds: 60
+    retry_count: 1
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - test
+      - lsp
+      - smoke
+      - tier-a
+
+  - name: lsp_tier_b
+    tier: merge_gate
+    description: "LSP core behavior: definitions, completion, security (2-5 min)"
+    required: true
+    command: >-
+      env RUST_TEST_THREADS=2
+      cargo test -p perl-lsp
+      --test semantic_definition --test lsp_completion_tests
+      --test lsp_unhappy_paths --test lsp_code_actions_test
+      --test execute_command_security_tests --test lsp_behavioral_tests
+      --test lsp_workspace_index_e2e
+      --locked -- --test-threads=2
+    timeout_seconds: 300
+    retry_count: 1
+    budgets:
+      max_duration_ms: 300000
+    quarantine: false
+    tags:
+      - test
+      - lsp
+      - behavior
+      - tier-b
+
 # =============================================================================
 # Flake Management Policy
 # =============================================================================
@@ -626,11 +770,19 @@ workflow_integration:
         - clippy_full
         - unit_core
         - unit_full
+        - lsp_tier_a
+        - lsp_tier_b
         - lsp_smoke
         - policy_checks
         - workflow_audit
         - nested_lock_check
       # Note: security_audit and docs_build run in separate jobs for caching
+
+    release-gate:
+      gates:
+        - release_build
+        - version_sync
+        - sbom_verify
 
   # Environment variables set by workflows
   workflow_env:

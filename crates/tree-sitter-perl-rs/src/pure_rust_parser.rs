@@ -326,7 +326,6 @@ impl PureRustPerlParser {
         match <PerlParser as Parser<Rule>>::parse(Rule::program, source) {
             Ok(pairs) => self.build_ast(pairs),
             Err(e) => {
-                eprintln!("Parse error: {:?}", e);
                 // Attempt partial parsing by trying to parse individual statements
                 self.parse_with_recovery(source, e)
             }
@@ -432,9 +431,12 @@ impl PureRustPerlParser {
         }
     }
 
-    /// Public wrapper that uses stacker to grow the stack as needed
+    /// Public wrapper that uses stacker to grow the stack as needed.
+    ///
+    /// This remains public so bridge consumers (for example `tree-sitter-perl-rs`
+    /// with `v2-pest-microcrate`) can continue calling internal v2 build paths.
     #[inline]
-    pub(crate) fn build_node(
+    pub fn build_node(
         &mut self,
         pair: Pair<Rule>,
     ) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
@@ -2674,11 +2676,12 @@ mod tests {
 
     #[test]
     fn test_basic_parsing() {
+        use perl_tdd_support::must;
         let mut parser = PureRustPerlParser::new();
         let source = "$var";
         let result = parser.parse(source);
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = parser.to_sexp(&ast);
         println!("AST: {:?}", ast);
         println!("S-expression: {}", sexp);
@@ -2686,11 +2689,12 @@ mod tests {
 
     #[test]
     fn test_variable_parsing() {
+        use perl_tdd_support::must;
         let mut parser = PureRustPerlParser::new();
         let source = "$scalar @array %hash";
         let result = parser.parse(source);
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         let sexp = parser.to_sexp(&ast);
         println!("S-expression: {}", sexp);
     }
@@ -2708,7 +2712,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }
@@ -2725,7 +2729,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }
@@ -2742,7 +2746,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }
@@ -2760,7 +2764,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }
@@ -2778,7 +2782,7 @@ mod tests {
             }
             Err(e) => {
                 println!("Parse error: {}", e);
-                panic!("Parse should succeed");
+                assert!(false, "Parse should succeed");
             }
         }
     }

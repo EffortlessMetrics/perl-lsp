@@ -65,6 +65,8 @@ merge-gate: _check-tools-basic pr-fast
     just _timed "lsp-smoke" "just lsp-smoke" && \
     just _timed "security-audit" "just security-audit" && \
     just _timed "ci-policy" "just ci-policy" && \
+    just _timed "ci-v2-bundle-sync" "just ci-v2-bundle-sync" && \
+    just _timed "ci-v2-parity" "just ci-v2-parity" && \
     just _timed "ci-lsp-def" "just ci-lsp-def" && \
     just _timed "ci-parser-features-check" "just ci-parser-features-check" && \
     just _timed "ci-features-invariants" "just ci-features-invariants"; \
@@ -150,6 +152,37 @@ security-audit:
     else \
         echo "SKIP: cargo-audit not installed (run: cargo install cargo-audit)"; \
     fi
+
+# Production hardening security scan
+security-hardening:
+    @echo "Running production hardening security scan..."
+    @./scripts/security-hardening.sh
+
+# Production hardening performance scan
+performance-hardening:
+    @echo "Running production hardening performance scan..."
+    @./scripts/performance-hardening.sh
+
+# Production hardening E2E validation
+e2e-validation:
+    @echo "Running production hardening E2E validation..."
+    @./scripts/e2e-validation.sh
+
+# Complete production hardening validation
+production-hardening: security-hardening performance-hardening e2e-validation
+    @echo "✅ Production hardening validation completed"
+    @echo "📊 Check generated reports for detailed results"
+
+# Production gates validation
+production-gates-validation:
+    @echo "Running production gates validation..."
+    @./scripts/production-gates-validation.sh
+
+# Complete Phase 6 production readiness validation
+phase6-production-readiness: production-hardening production-gates-validation
+    @echo "🎉 Phase 6 Production Hardening completed!"
+    @echo "📋 All security, performance, and validation checks complete"
+    @echo "🚀 Ready for v1.0 release validation"
 
 # Generate SBOM in SPDX format
 sbom-spdx:
@@ -332,6 +365,8 @@ ci-gate:
     just ci-forbid-fatal && \
     just ci-test-lib && \
     just ci-policy && \
+    just ci-v2-bundle-sync && \
+    just ci-v2-parity && \
     just ci-lsp-def && \
     just ci-parser-features-check && \
     just ci-features-invariants
@@ -418,6 +453,18 @@ ci-test-lib:
     @echo "🧪 Running library tests..."
     cargo test --workspace --lib --locked
     @echo "✅ Library tests passed"
+
+# V2 bundle sync guard (in-crate v2 files must match extracted perl-parser-pest v2 files)
+ci-v2-bundle-sync:
+    @echo "🔍 Checking v2 bundle sync..."
+    bash scripts/check-v2-bundle-sync.sh
+    @echo "✅ V2 bundle sync check passed"
+
+# V2 parser parity guard (in-crate v2 vs extracted perl-parser-pest v2)
+ci-v2-parity:
+    @echo "🧪 Running v2 parity corpus check..."
+    cargo run --locked -p xtask --features legacy -- corpus --scanner v2-parity
+    @echo "✅ V2 parity corpus check passed"
 
 # Targeted parser/DAP verification (low-memory, for heredoc/breakpoint changes)
 # Key fixes: unset RUSTC_WRAPPER (not empty), --no-deps on clippy, targeted tests
@@ -656,6 +703,18 @@ bugs-wave-c:
     cargo test -p perl-parser --test parser_regressions -- print_filehandle_then_variable_is_indirect --nocapture --ignored || true
 
 # ============================================================================
+# Roadmap Gate (informational, never blocks merge)
+# ============================================================================
+
+# Run feature/infra ignored tests and report progress
+roadmap-gate:
+    @echo "=== ROADMAP BACKLOG: running ignored feature/infra tests ==="
+    -cargo test -p perl-semantic-analyzer -- test_anonymous_subroutine --ignored --nocapture
+    -cargo test -p perl-dap -- test_attach_tcp_valid_arguments test_attach_default_values --ignored --nocapture
+    -cargo test -p perl-parser -- test_statement_with_or_modifier --ignored --nocapture
+    -RUST_TEST_THREADS=2 cargo test -p perl-lsp -- test_fix_undefined_variable test_user_story_debugging_workflow test_user_story_refactoring_legacy_code --ignored --test-threads=2 --nocapture
+    @echo "=== Roadmap gate complete (failures = unimplemented features) ==="
+
 # Health Scoreboard (keep yourself honest)
 # ============================================================================
 
@@ -1289,3 +1348,56 @@ gate-execute gate_id:
 gate-list:
     @python3 scripts/list-gates.py
 
+# ============================================================================
+# Release Gate (Slice C: Release candidate validation)
+# ============================================================================
+
+# Release build (locked, optimized)
+release-build:
+    @echo "Building release binary..."
+    cargo build -p perl-lsp --release --locked
+    @echo "Release build complete: target/release/perl-lsp"
+
+# Version sync check (Slice B: single source of version truth)
+version-check:
+    @echo "Checking version sync..."
+    @bash scripts/check-version-sync.sh
+
+# Release gate: full validation for release candidates (~10 min)
+# Composes: ci-gate + release-specific checks
+release-gate: ci-gate release-build sbom-verify version-check
+    @echo "=============================================="
+    @echo "  RELEASE GATE PASSED"
+    @echo "=============================================="
+
+# ============================================================================
+# LSP Test Tiering (Slice D: tiered test execution)
+# ============================================================================
+
+# Tier A: fast smoke tests for perl-lsp (<30s)
+# Run on every PR for quick feedback
+lsp-tier-a:
+    @echo "Running LSP Tier A (smoke tests)..."
+    cargo test -p perl-lsp --test cli_smoke --test lsp_capabilities_snapshot --test lsp_capabilities_contract --test lsp_protocol_tests --locked -- --test-threads=1
+    @echo "LSP Tier A passed"
+
+# Tier B: core behavior tests for perl-lsp (~2-5 min)
+# Run at merge gate for thorough validation
+lsp-tier-b: lsp-tier-a
+    @echo "Running LSP Tier B (core behavior)..."
+    env RUST_TEST_THREADS=2 cargo test -p perl-lsp \
+        --test semantic_definition \
+        --test lsp_completion_tests \
+        --test lsp_unhappy_paths \
+        --test lsp_code_actions_test \
+        --test execute_command_security_tests \
+        --test lsp_behavioral_tests \
+        --test lsp_workspace_index_e2e \
+        --locked -- --test-threads=2
+    @echo "LSP Tier B passed"
+
+# Tier C: full suite (nightly, all integration tests)
+lsp-tier-c:
+    @echo "Running LSP Tier C (full suite)..."
+    env RUST_TEST_THREADS=2 cargo test -p perl-lsp --locked -- --test-threads=2
+    @echo "LSP Tier C passed"

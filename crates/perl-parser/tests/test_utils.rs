@@ -1,5 +1,6 @@
 #![allow(dead_code)] // This is a utility module used by other tests
 
+use perl_tdd_support::{must, must_some};
 /// Test utilities and helpers for LSP testing
 /// Provides common functionality to reduce code duplication
 use serde_json::{Value, json};
@@ -66,25 +67,25 @@ impl TestServerBuilder {
                 .map(|path| json!({ "uri": format!("file://{}", path), "name": path }))
                 .collect();
 
-            match init_params.as_object() {
-                Some(obj) => {
-                    let mut params = obj.clone();
-                    params.insert("workspaceFolders".to_string(), folders.into());
+            let obj_opt = init_params.as_object();
+            assert!(
+                obj_opt.is_some(),
+                "Initialization parameters must be a JSON object, got: {:?}",
+                init_params
+            );
+            if let Some(obj) = obj_opt {
+                let mut params = obj.clone();
+                params.insert("workspaceFolders".to_string(), folders.into());
 
-                    send_request(
-                        &mut server.process,
-                        json!({
-                            "jsonrpc": "2.0",
-                            "id": 1,
-                            "method": "initialize",
-                            "params": params
-                        }),
-                    );
-                }
-                None => panic!(
-                    "Initialization parameters must be a JSON object, got: {:?}",
-                    init_params
-                ),
+                send_request(
+                    &mut server.process,
+                    json!({
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": params
+                    }),
+                );
             }
         } else {
             send_request(
@@ -301,12 +302,13 @@ pub mod assertions {
 
     /// Assert that diagnostics contain expected error
     pub fn assert_has_diagnostic(response: &Value, expected_message: &str) {
-        let items = match response["result"]["items"].as_array() {
-            Some(arr) => arr,
-            None => {
-                panic!("Expected diagnostic items array in response, got: {:?}", response["result"])
-            }
-        };
+        let items_opt = response["result"]["items"].as_array();
+        assert!(
+            items_opt.is_some(),
+            "Expected diagnostic items array in response, got: {:?}",
+            response["result"]
+        );
+        let items = items_opt.unwrap_or_else(|| unreachable!());
 
         let found = items.iter().any(|item| {
             item["message"].as_str().map(|msg| msg.contains(expected_message)).unwrap_or(false)
@@ -317,10 +319,13 @@ pub mod assertions {
 
     /// Assert symbol count
     pub fn assert_symbol_count(response: &Value, expected_count: usize) {
-        let symbols = match response["result"].as_array() {
-            Some(arr) => arr,
-            None => panic!("Expected symbols array in response, got: {:?}", response["result"]),
-        };
+        let symbols_opt = response["result"].as_array();
+        assert!(
+            symbols_opt.is_some(),
+            "Expected symbols array in response, got: {:?}",
+            response["result"]
+        );
+        let symbols = symbols_opt.unwrap_or_else(|| unreachable!());
         assert_eq!(
             symbols.len(),
             expected_count,
@@ -436,6 +441,7 @@ pub mod generators {
 
 // Helper to start server from Child process
 fn start_lsp_server() -> TestServer {
+    use perl_tdd_support::must;
     let process = match Command::new("cargo")
         .args(["run", "-p", "perl-parser", "--bin", "perl-lsp", "--", "--stdio"])
         .stdin(Stdio::piped())
@@ -444,7 +450,10 @@ fn start_lsp_server() -> TestServer {
         .spawn()
     {
         Ok(proc) => proc,
-        Err(e) => panic!("Failed to start LSP server: {}", e),
+        Err(e) => {
+            must(Err::<(), _>(format!("Failed to start LSP server: {}", e)));
+            unreachable!()
+        }
     };
 
     TestServer { process }
@@ -452,24 +461,14 @@ fn start_lsp_server() -> TestServer {
 
 // Send request to server via JSON-RPC
 fn send_request(child: &mut Child, request: Value) {
-    let request_str = match serde_json::to_string(&request) {
-        Ok(s) => s,
-        Err(e) => panic!("Failed to serialize request to JSON: {}", e),
-    };
+    use perl_tdd_support::{must, must_some};
+    let request_str = must(serde_json::to_string(&request));
     let length = request_str.len();
 
-    let stdin = match child.stdin.as_mut() {
-        Some(s) => s,
-        None => panic!("Child process stdin not available"),
-    };
+    let stdin = must_some(child.stdin.as_mut());
 
-    if let Err(e) = write!(stdin, "Content-Length: {}\r\n\r\n{}", length, request_str) {
-        panic!("Failed to write request to LSP server stdin: {}", e);
-    }
-
-    if let Err(e) = stdin.flush() {
-        panic!("Failed to flush request to LSP server stdin: {}", e);
-    }
+    must(write!(stdin, "Content-Length: {}\r\n\r\n{}", length, request_str));
+    must(stdin.flush());
 }
 
 // Send notification to server
@@ -479,50 +478,34 @@ fn send_notification(child: &mut Child, notification: Value) {
 
 // Read response from server
 fn read_response(child: &mut Child) -> Value {
-    let stdout = match child.stdout.as_mut() {
-        Some(s) => s,
-        None => panic!("Child process stdout not available"),
-    };
+    use perl_tdd_support::{must, must_some};
+    let stdout = must_some(child.stdout.as_mut());
     let mut reader = BufReader::new(stdout);
 
     // Read headers
     let mut headers = String::new();
     loop {
         let mut line = String::new();
-        match reader.read_line(&mut line) {
-            Ok(_) => {
-                if line == "\r\n" {
-                    break;
-                }
-                headers.push_str(&line);
-            }
-            Err(e) => panic!("Failed to read headers from LSP server: {}", e),
+        must(reader.read_line(&mut line));
+        if line == "\r\n" {
+            break;
         }
+        headers.push_str(&line);
     }
 
     // Parse content length
-    let content_length: usize = headers
-        .lines()
-        .find(|line| line.starts_with("Content-Length:"))
-        .and_then(|line| line.split(':').nth(1))
-        .and_then(|len| len.trim().parse().ok())
-        .unwrap_or_else(|| {
-            panic!("Content-Length header not found in response headers: {}", headers)
-        });
+    let content_length: usize = must_some(
+        headers
+            .lines()
+            .find(|line| line.starts_with("Content-Length:"))
+            .and_then(|line| line.split(':').nth(1))
+            .and_then(|len| len.trim().parse().ok()),
+    );
 
     // Read content
     let mut content = vec![0; content_length];
     use std::io::Read;
-    if let Err(e) = reader.read_exact(&mut content) {
-        panic!("Failed to read {} bytes of content from LSP server: {}", content_length, e);
-    }
+    must(reader.read_exact(&mut content));
 
-    match serde_json::from_slice(&content) {
-        Ok(v) => v,
-        Err(e) => panic!(
-            "Failed to parse JSON response from LSP server: {} (content: {})",
-            e,
-            String::from_utf8_lossy(&content)
-        ),
-    }
+    must(serde_json::from_slice(&content))
 }

@@ -130,8 +130,8 @@ fn main() {
                 if !times.is_empty() {
                     let total: Duration = times.iter().sum();
                     let avg = total / times.len() as u32;
-                    let min = times.iter().min().unwrap();
-                    let max = times.iter().max().unwrap();
+                    let min = times.iter().min().cloned().unwrap_or(Duration::from_secs(0));
+                    let max = times.iter().max().cloned().unwrap_or(Duration::from_secs(0));
 
                     println!("\n{} parser:", parser);
                     println!("  Successful parses: {}/{}", times.len(), iterations);

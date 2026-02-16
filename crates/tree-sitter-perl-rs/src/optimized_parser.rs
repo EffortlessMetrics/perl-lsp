@@ -290,26 +290,28 @@ mod tests {
     
     #[test]
     fn test_optimized_parser() {
+        use perl_tdd_support::must;
         let mut parser = OptimizedParser::new();
         
         // Test simple assignment (fast path)
         let code = "$x = 42;";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         assert!(matches!(ast, OptAstNode::Program(_)));
         
         // Test method call (fast path)
         let code = "$obj->method();";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         assert!(matches!(ast, OptAstNode::Program(_)));
     }
     
     #[test]
     fn test_string_interning() {
+        use perl_tdd_support::must;
         let mut parser = OptimizedParser::new();
         
         // Multiple uses of same variable should share string
         let code = "$x = $x + $x;";
-        let ast = parser.parse(code).unwrap();
+        let ast = must(parser.parse(code));
         
         // Check that interning is working (would need to expose pool for real test)
         assert!(matches!(ast, OptAstNode::Program(_)));

@@ -12,3 +12,4 @@ cc 654624096f0061692845cac797b1dc3b9e53daec9c95c5434f76504fd31da0f3 # shrinks to
 cc 449ba099aca513373f097fb6dbcaddadb16d7a1216ed4a18d96f560a62ee715b # shrinks to stmt = "print '{\\';"
 cc 4241d4c5ca2ee6a9802f35eef58eb83f86b96f226cad7edf35c20fa76d6a5c97 # shrinks to stmts = ["if ($A > 0) { $A = '{'; }", "$A = '\\';"]
 cc a8b8b3e1e599b94099cf7b4574103d2f39501daefdd927c2b29ff8fdf415356e # shrinks to stmts = ["if ($A > 0) { $A = '{'; }", "my $A = \"$\";"]
+cc 936d8f47658e301c76065744d79e143375880aac98c7bac3a094d5f4631845a3 # shrinks to stmt = "if ($_ > 0) { $_ = \"$\"; }"

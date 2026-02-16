@@ -245,10 +245,13 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "corpus audit: test file 'test.pl' may not exist"]
-    fn test_extract_nodekinds_from_content() {
-        let path = PathBuf::from("test.pl");
+    fn test_extract_nodekinds_from_content() -> Result<(), Box<dyn std::error::Error>> {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new()?;
+        writeln!(tmp, "my $x = 1;\nprint $x;\nsub foo {{ return 42; }}")?;
+        let path = PathBuf::from(tmp.path());
         let nodekinds = extract_nodekinds_from_content(&path);
         assert!(!nodekinds.is_empty());
+        Ok(())
     }
 }

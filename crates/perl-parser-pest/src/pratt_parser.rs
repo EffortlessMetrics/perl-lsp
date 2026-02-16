@@ -376,7 +376,7 @@ impl PrattParser {
         if pairs.len() == 1 {
             // Single element, just parse it
             parser
-                .build_node(pairs.into_iter().next().unwrap())?
+                .build_node(pairs.into_iter().next().ok_or(crate::error::ParseError::ParseFailed)?)?
                 .ok_or_else(|| "Failed to parse".into())
         } else if pairs.len() >= 3 {
             // Binary expression - use precedence parsing
@@ -384,7 +384,7 @@ impl PrattParser {
         } else {
             // Fallback
             parser
-                .build_node(pairs.into_iter().next().unwrap())?
+                .build_node(pairs.into_iter().next().ok_or(crate::error::ParseError::ParseFailed)?)?
                 .ok_or_else(|| "Failed to parse".into())
         }
     }

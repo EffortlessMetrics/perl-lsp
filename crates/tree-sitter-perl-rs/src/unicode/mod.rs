@@ -105,8 +105,9 @@ mod tests {
 
     #[test]
     fn test_unicode_normalization() {
+        use perl_tdd_support::must;
         let input = "café";
-        let normalized = UnicodeUtils::normalize(input, NormalizationForm::NFC).unwrap();
+        let normalized = must(UnicodeUtils::normalize(input, NormalizationForm::NFC));
         assert_eq!(normalized, "café");
     }
 

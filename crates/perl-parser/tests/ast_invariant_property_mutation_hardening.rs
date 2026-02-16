@@ -436,16 +436,14 @@ mod ast_construction_mutation_tests {
 
         // Wait for all threads to complete
         for handle in handles {
-            if let Err(e) = handle.join() {
-                panic!("Thread should complete successfully: {:?}", e);
-            }
+            let res = handle.join();
+            assert!(res.is_ok(), "Thread should complete successfully: {:?}", res.err());
         }
 
         // Analyze results for consistency
-        let final_results = match results.lock() {
-            Ok(guard) => guard,
-            Err(e) => panic!("Lock poisoned: {}", e),
-        };
+        let results_guard = results.lock();
+        assert!(results_guard.is_ok(), "Lock poisoned");
+        let final_results = results_guard.unwrap_or_else(|_| unreachable!());
         assert!(
             !final_results.is_empty(),
             "Should have collected results from concurrent operations"

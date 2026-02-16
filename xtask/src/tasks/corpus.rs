@@ -2,8 +2,8 @@
 
 use crate::types::ScannerType;
 use color_eyre::eyre::{Context, Result};
-use difference::Changeset;
 use indicatif::{ProgressBar, ProgressStyle};
+use similar::{ChangeTag, TextDiff};
 use std::fs;
 use std::path::PathBuf;
 use walkdir::WalkDir;
@@ -141,6 +141,49 @@ fn normalize_sexp(s: &str) -> String {
     s.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
+fn parse_with_incrate_v2(source: &str) -> String {
+    let mut parser = tree_sitter_perl::PureRustPerlParser::new();
+    match parser.parse(source) {
+        Ok(ast) => parser.to_sexp(&ast),
+        Err(e) => format!("(ERROR {})", e),
+    }
+}
+
+fn parse_with_microcrate_v2(source: &str) -> String {
+    let mut parser = perl_parser_pest::PureRustPerlParser::new();
+    match parser.parse(source) {
+        Ok(ast) => parser.to_sexp(&ast),
+        Err(e) => format!("(ERROR {})", e),
+    }
+}
+
+fn resolve_corpus_path(path: PathBuf) -> PathBuf {
+    if path.exists() {
+        return path;
+    }
+
+    if path.is_absolute() {
+        return path;
+    }
+
+    // Keep relative paths stable regardless of invocation cwd.
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+
+    let candidate = repo_root.join(&path);
+    if candidate.exists() {
+        return candidate;
+    }
+
+    for rel in ["tree-sitter-perl/test/corpus", "c/test/corpus", "test/corpus"] {
+        let fallback = repo_root.join(rel);
+        if fallback.exists() {
+            return fallback;
+        }
+    }
+
+    path
+}
+
 /// Run a single corpus test case
 fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType>) -> Result<bool> {
     // Parse the source code using tree-sitter-perl
@@ -150,17 +193,7 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
-        Some(ScannerType::Rust) => {
-            // Use the pure-rust parser
-            let mut parser = tree_sitter_perl::PureRustPerlParser::new();
-            match parser.parse(&test_case.source) {
-                Ok(ast) => parser.to_sexp(&ast),
-                Err(e) => {
-                    // Return an error node for failed parses
-                    format!("(ERROR {})", e)
-                }
-            }
-        }
+        Some(ScannerType::Rust) => parse_with_incrate_v2(&test_case.source),
         Some(ScannerType::V3) => {
             // Use the perl-parser v3 native parser
             let mut parser = perl_parser::Parser::new(&test_case.source);
@@ -171,6 +204,32 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
                     format!("(ERROR {})", e)
                 }
             }
+        }
+        Some(ScannerType::V2PestMicrocrate) => parse_with_microcrate_v2(&test_case.source),
+        Some(ScannerType::V2Parity) => {
+            // Parse using in-crate v2 and extracted v2 microcrate and compare outputs directly.
+            let in_crate_raw = parse_with_incrate_v2(&test_case.source);
+            let in_crate_sexp = normalize_sexp(&in_crate_raw);
+
+            let microcrate_raw = parse_with_microcrate_v2(&test_case.source);
+            let microcrate_sexp = normalize_sexp(&microcrate_raw);
+
+            if in_crate_sexp == microcrate_sexp {
+                return Ok(true);
+            }
+
+            println!("\n❌ Test failed: {}", test_case.name);
+            let diff = TextDiff::from_lines(&in_crate_raw, &microcrate_raw);
+            println!("Diff between in-crate v2 and v2-pest-microcrate:");
+            for change in diff.iter_all_changes() {
+                match change.tag() {
+                    ChangeTag::Equal => print!("{}", change),
+                    ChangeTag::Delete => print!("\x1b[91m-{}\x1b[0m", change),
+                    ChangeTag::Insert => print!("\x1b[92m+{}\x1b[0m", change),
+                }
+            }
+            println!();
+            return Ok(false);
         }
         Some(ScannerType::Both) => {
             // Parse using both C and V3 scanners and compare results
@@ -190,8 +249,16 @@ fn run_corpus_test_case(test_case: &CorpusTestCase, scanner: &Option<ScannerType
             }
 
             println!("\n❌ Test failed: {}", test_case.name);
-            let diff = Changeset::new(&c_raw, &v3_raw, "\n");
-            println!("Diff between C and V3:\n{}", diff);
+            let diff = TextDiff::from_lines(&c_raw, &v3_raw);
+            println!("Diff between C and V3:");
+            for change in diff.iter_all_changes() {
+                match change.tag() {
+                    ChangeTag::Equal => print!("{}", change),
+                    ChangeTag::Delete => print!("\x1b[91m-{}\x1b[0m", change),
+                    ChangeTag::Insert => print!("\x1b[92m+{}\x1b[0m", change),
+                }
+            }
+            println!();
             return Ok(false);
         }
         None => {
@@ -278,18 +345,51 @@ fn diagnose_parse_differences(
         return Ok(());
     }
 
+    if let Some(ScannerType::V2Parity) = scanner {
+        let in_crate_sexp = normalize_sexp(&parse_with_incrate_v2(&test_case.source));
+        let microcrate_sexp = normalize_sexp(&parse_with_microcrate_v2(&test_case.source));
+
+        println!("\n📊 In-crate v2 S-expression:\n{}", in_crate_sexp);
+        println!("\n📊 V2 microcrate S-expression:\n{}", microcrate_sexp);
+
+        println!("\n🔍 STRUCTURAL ANALYSIS:");
+        let in_crate_nodes = count_nodes(&in_crate_sexp);
+        let microcrate_nodes = count_nodes(&microcrate_sexp);
+        println!("In-crate v2 nodes: {}", in_crate_nodes);
+        println!("V2 microcrate nodes: {}", microcrate_nodes);
+
+        let missing = find_missing_nodes(&in_crate_sexp, &microcrate_sexp);
+        if !missing.is_empty() {
+            println!("❌ Nodes missing in v2 microcrate output:");
+            for node in missing {
+                println!("  - {}", node);
+            }
+        }
+
+        let extra = find_extra_nodes(&in_crate_sexp, &microcrate_sexp);
+        if !extra.is_empty() {
+            println!("➕ Extra nodes in v2 microcrate output:");
+            for node in extra {
+                println!("  - {}", node);
+            }
+        }
+
+        if in_crate_sexp == microcrate_sexp {
+            println!("✅ In-crate v2 and v2 microcrate produce identical S-expressions");
+        } else {
+            println!("❌ In-crate v2 and v2 microcrate differ");
+        }
+
+        return Ok(());
+    }
+
     let actual_sexp = match scanner {
         Some(ScannerType::C) => {
             let tree = tree_sitter_perl::parse(&test_case.source)?;
             tree.root_node().to_sexp()
         }
-        Some(ScannerType::Rust) => {
-            let mut parser = tree_sitter_perl::PureRustPerlParser::new();
-            match parser.parse(&test_case.source) {
-                Ok(ast) => parser.to_sexp(&ast),
-                Err(e) => format!("(ERROR {})", e),
-            }
-        }
+        Some(ScannerType::Rust) => parse_with_incrate_v2(&test_case.source),
+        Some(ScannerType::V2PestMicrocrate) => parse_with_microcrate_v2(&test_case.source),
         Some(ScannerType::V3) | None => {
             let mut parser = perl_parser::Parser::new(&test_case.source);
             match parser.parse() {
@@ -297,7 +397,7 @@ fn diagnose_parse_differences(
                 Err(e) => format!("(ERROR {})", e),
             }
         }
-        Some(ScannerType::Both) => unreachable!(),
+        Some(ScannerType::Both) | Some(ScannerType::V2Parity) => unreachable!(),
     };
 
     let actual = normalize_sexp(&actual_sexp);
@@ -440,14 +540,12 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
     }
 
     let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}").unwrap(),
-    );
+    spinner.set_style(ProgressStyle::default_spinner().template("{spinner:.green} {wide_msg}")?);
 
     spinner.set_message("Running corpus tests");
 
     // Find all corpus test files
-    let corpus_path = if path.exists() { path } else { PathBuf::from("test/corpus") };
+    let corpus_path = resolve_corpus_path(path);
 
     if !corpus_path.exists() {
         spinner.finish_with_message("❌ Corpus directory not found");
@@ -468,7 +566,8 @@ pub fn run(path: PathBuf, scanner: Option<ScannerType>, diagnose: bool, test: bo
         .filter(|e| e.file_type().is_file())
     {
         let file_path = entry.path();
-        let file_name = file_path.file_name().unwrap().to_string_lossy();
+        let file_name =
+            file_path.file_name().map_or_else(|| "unknown".into(), |n| n.to_string_lossy());
 
         // Skip files that are clearly not corpus files
         if file_name.starts_with('_')

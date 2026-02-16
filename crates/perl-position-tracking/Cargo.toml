@@ -1,11 +1,16 @@
 [package]
 name = "perl-position-tracking"
-version = "0.8.8"
+version = "0.9.0"
 edition = "2021"
+authors = ["Tree-sitter Perl Contributors"]
 description = "UTF-8/UTF-16 position tracking and conversion for Perl LSP"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/perl-lsp"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+documentation = "https://docs.rs/perl-position-tracking"
+keywords = ["perl", "position", "utf16", "lsp"]
+categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
   "Cargo.toml",

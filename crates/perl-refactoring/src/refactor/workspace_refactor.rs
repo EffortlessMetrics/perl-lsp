@@ -1409,7 +1409,7 @@ use JSON; # Duplicate
         let result = refactor.inline_variable_all("$const", &paths[0], (0, 0))?;
 
         // Should affect all files where $const is used
-        assert!(result.file_edits.len() >= 1);
+        assert!(!result.file_edits.is_empty());
         assert!(result.description.contains("workspace"));
         Ok(())
     }

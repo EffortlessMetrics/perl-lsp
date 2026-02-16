@@ -5,6 +5,8 @@
 
 mod diagnostics;
 mod dispatch;
+/// File discovery abstraction for workspace scanning
+pub mod file_discovery;
 mod language;
 mod lifecycle;
 mod notebook;
@@ -1059,7 +1061,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::Foreach { variable: _, list, body } => {
+            NodeKind::Foreach { variable: _, list, body, continue_block: _ } => {
                 count += self.count_references(list, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
             }
@@ -1577,11 +1579,12 @@ mod tests {
                 }
             }
             Err(e) => {
-                if e.to_string().contains("not found") {
+                let err_msg = e.to_string();
+                let is_not_found = err_msg.contains("not found");
+                if is_not_found {
                     eprintln!("Skipping test: perltidy not installed");
-                } else {
-                    panic!("Formatting failed: {}", e);
                 }
+                assert!(is_not_found, "Formatting failed: {}", err_msg);
             }
         }
     }

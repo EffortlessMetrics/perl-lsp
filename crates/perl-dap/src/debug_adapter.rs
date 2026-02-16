@@ -5,6 +5,7 @@
 
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
+use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
@@ -249,8 +250,10 @@ fn is_escape_sequence(s: &str, match_start: usize) -> bool {
 pub struct DebugAdapter {
     /// Sequence number for messages
     seq: Arc<Mutex<i64>>,
-    /// Active debug session
+    /// Active debug session (process-based)
     session: Arc<Mutex<Option<DebugSession>>>,
+    /// TCP attach session (for connecting to running debugger)
+    tcp_session: Arc<Mutex<Option<TcpAttachSession>>>,
     /// Breakpoints store
     breakpoints: BreakpointStore,
     /// Thread ID counter
@@ -378,6 +381,7 @@ impl DebugAdapter {
         Self {
             seq: Arc::new(Mutex::new(0)),
             session: Arc::new(Mutex::new(None)),
+            tcp_session: Arc::new(Mutex::new(None)),
             breakpoints: BreakpointStore::new(),
             thread_counter: Arc::new(Mutex::new(0)),
             event_sender: None,
@@ -515,6 +519,56 @@ impl DebugAdapter {
             "initialize" => self.handle_initialize(seq, request_seq, arguments),
             "launch" => self.handle_launch(seq, request_seq, arguments),
             "attach" => self.handle_attach(seq, request_seq, arguments),
+            "disconnect" => self.handle_disconnect(seq, request_seq, arguments),
+            "setBreakpoints" => self.handle_set_breakpoints(seq, request_seq, arguments),
+            "configurationDone" => self.handle_configuration_done(seq, request_seq),
+            "threads" => self.handle_threads(seq, request_seq),
+            "stackTrace" => self.handle_stack_trace(seq, request_seq, arguments),
+            "scopes" => self.handle_scopes(seq, request_seq, arguments),
+            "variables" => self.handle_variables(seq, request_seq, arguments),
+            "continue" => self.handle_continue(seq, request_seq, arguments),
+            "next" => self.handle_next(seq, request_seq, arguments),
+            "stepIn" => self.handle_step_in(seq, request_seq, arguments),
+            "stepOut" => self.handle_step_out(seq, request_seq, arguments),
+            "pause" => self.handle_pause(seq, request_seq, arguments),
+            "evaluate" => self.handle_evaluate(seq, request_seq, arguments),
+            "inlineValues" => self.handle_inline_values(seq, request_seq, arguments),
+            _ => DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: command.to_string(),
+                body: None,
+                message: Some(format!("Unknown command: {}", command)),
+            },
+        }
+    }
+
+    /// Handle a DAP request (mock version for testing)
+    pub fn handle_request_mock(
+        &mut self,
+        request_seq: i64,
+        command: &str,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        eprintln!("DAP request (mock): {} {:?}", command, arguments);
+
+        let seq = self.next_seq();
+
+        match command {
+            "initialize" => self.handle_initialize(seq, request_seq, arguments),
+            "launch" => self.handle_launch(seq, request_seq, arguments),
+            "attach" => {
+                // Mock attach to avoid actual connection
+                DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "attach".to_string(),
+                    body: None,
+                    message: Some("Attach not yet fully implemented".to_string()),
+                }
+            }
             "disconnect" => self.handle_disconnect(seq, request_seq, arguments),
             "setBreakpoints" => self.handle_set_breakpoints(seq, request_seq, arguments),
             "configurationDone" => self.handle_configuration_done(seq, request_seq),
@@ -1090,12 +1144,8 @@ impl DebugAdapter {
     ///
     /// # Current Implementation
     ///
-    /// TCP attachment is not yet fully implemented. This is a placeholder that:
-    /// - Validates attach arguments
-    /// - Returns appropriate error messages
-    /// - Provides foundation for future TCP socket implementation
-    ///
-    /// Process ID attachment will be added in Phase 2.
+    /// TCP attachment is now fully implemented with socket support.
+    /// Process ID attachment will be added in a future phase.
     fn handle_attach(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         // Parse attach arguments
         if let Some(args) = arguments {
@@ -1173,34 +1223,156 @@ impl DebugAdapter {
                     )),
                 }
             } else {
-                // TCP attachment mode (future implementation)
-                let timeout_msg = if let Some(t) = timeout {
-                    format!(" with {}ms timeout", t)
-                } else {
-                    String::new()
-                };
-                eprintln!("Attach request: TCP attachment to {}:{}{}", host, port, timeout_msg);
+                // TCP attachment mode (IMPLEMENTED)
+                let mut config = TcpAttachConfig::new(host.to_string(), port);
+                if let Some(t) = timeout {
+                    config = config.with_timeout(t);
+                }
 
-                // TCP socket connection not yet implemented - See #449
-                // This will require:
-                // 1. Establishing TCP connection to host:port
-                // 2. Setting up bidirectional message proxying
-                // 3. Handling connection errors gracefully
-                // 4. Managing timeout during connection attempt
-                // 5. Sending appropriate DAP events (attached, initialized)
+                // Validate configuration
+                if let Err(e) = config.validate() {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some(format!("Invalid attach configuration: {}", e)),
+                    };
+                }
 
-                DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "attach".to_string(),
-                    body: None,
-                    message: Some(format!(
-                        "TCP attachment not yet fully implemented. \
-                         Would connect to {}:{}{} for Perl::LanguageServer DAP. \
-                         Use BridgeAdapter for current Perl::LanguageServer integration.",
-                        host, port, timeout_msg
-                    )),
+                // Create TCP attach session
+                let mut session = TcpAttachSession::new();
+
+                // Set up event channel for TCP events
+                let (tx, rx) = channel::<DapEvent>();
+                session.set_event_sender(tx);
+
+                // Attempt to connect
+                match session.connect(&config) {
+                    Ok(()) => {
+                        // Store session
+                        if let Ok(mut guard) = self.tcp_session.lock() {
+                            *guard = Some(session);
+                        }
+
+                        // Start reader thread
+                        if let Ok(mut guard) = self.tcp_session.lock() {
+                            if let Some(ref mut s) = *guard {
+                                if let Err(e) = s.start_reader() {
+                                    eprintln!("Failed to start TCP reader: {}", e);
+                                    return DapMessage::Response {
+                                        seq,
+                                        request_seq,
+                                        success: false,
+                                        command: "attach".to_string(),
+                                        body: None,
+                                        message: Some(format!("Failed to start TCP reader: {}", e)),
+                                    };
+                                }
+                            }
+                        }
+
+                        // Start event handler thread for TCP events
+                        let seq_counter = self.seq.clone();
+                        let event_sender = self.event_sender.clone();
+                        thread::spawn(move || {
+                            while let Ok(event) = rx.recv() {
+                                match event {
+                                    DapEvent::Output { category, output } => {
+                                        if let Some(ref sender) = event_sender {
+                                            let mut seq_lock = seq_counter
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "output".to_string(),
+                                                body: Some(json!({
+                                                    "category": category,
+                                                    "output": output
+                                                })),
+                                            });
+                                        }
+                                    }
+                                    DapEvent::Stopped { reason, thread_id } => {
+                                        if let Some(ref sender) = event_sender {
+                                            let mut seq_lock = seq_counter
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "stopped".to_string(),
+                                                body: Some(json!({
+                                                    "reason": reason,
+                                                    "threadId": thread_id,
+                                                    "allThreadsStopped": true
+                                                })),
+                                            });
+                                        }
+                                    }
+                                    DapEvent::Continued { thread_id } => {
+                                        if let Some(ref sender) = event_sender {
+                                            let mut seq_lock = seq_counter
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "continued".to_string(),
+                                                body: Some(json!({
+                                                    "threadId": thread_id,
+                                                    "allThreadsContinued": true
+                                                })),
+                                            });
+                                        }
+                                    }
+                                    DapEvent::Terminated { reason } => {
+                                        if let Some(ref sender) = event_sender {
+                                            let mut seq_lock = seq_counter
+                                                .lock()
+                                                .unwrap_or_else(|e| e.into_inner());
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "terminated".to_string(),
+                                                body: Some(json!({
+                                                    "reason": reason
+                                                })),
+                                            });
+                                        }
+                                    }
+                                    DapEvent::Error { message } => {
+                                        eprintln!("TCP attach error: {}", message);
+                                    }
+                                }
+                            }
+                        });
+
+                        DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: true,
+                            command: "attach".to_string(),
+                            body: None,
+                            message: None,
+                        }
+                    }
+                    Err(e) => DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some(format!(
+                            "Failed to connect to {}:{} ({}ms timeout): {}",
+                            config.host,
+                            config.port,
+                            config.timeout_ms.unwrap_or(30000),
+                            e
+                        )),
+                    },
                 }
             }
         } else {
@@ -1233,6 +1405,13 @@ impl DebugAdapter {
         {
             let _ = session.process.kill();
             session.state = DebugState::Terminated;
+        }
+
+        // Disconnect TCP session if active
+        if let Ok(mut guard) = self.tcp_session.lock()
+            && let Some(ref mut tcp_session) = *guard
+        {
+            let _ = tcp_session.disconnect();
         }
 
         // Send terminated event
@@ -2402,7 +2581,7 @@ mod tests {
     }
 
     #[test]
-    fn test_initialize_response() {
+    fn test_initialize_response() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let response = adapter.handle_request(1, "initialize", None);
 
@@ -2412,8 +2591,9 @@ mod tests {
                 assert_eq!(command, "initialize");
                 assert!(body.is_some());
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
+        Ok(())
     }
 
     #[test]
@@ -2429,7 +2609,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Missing attach arguments"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }
@@ -2453,7 +2633,7 @@ mod tests {
                 assert!(msg.contains("localhost:13603"));
                 assert!(msg.contains("5000ms timeout"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }
@@ -2475,7 +2655,7 @@ mod tests {
                 assert!(msg.contains("Process ID attachment"));
                 assert!(msg.contains("12345"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }
@@ -2497,7 +2677,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Host cannot be empty"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }
@@ -2519,7 +2699,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Host cannot be empty"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }
@@ -2541,7 +2721,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Port must be in range"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }
@@ -2564,7 +2744,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Timeout must be greater than 0"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }
@@ -2587,7 +2767,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Timeout cannot exceed"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }
@@ -2608,7 +2788,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("localhost:13603"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }
@@ -2630,7 +2810,7 @@ mod tests {
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("192.168.1.100:9000"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
         Ok(())
     }

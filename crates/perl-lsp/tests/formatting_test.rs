@@ -2,6 +2,7 @@
 
 use perl_lsp::convert::{WirePosition, WireRange};
 use perl_lsp::features::formatting::{CodeFormatter, FormattingOptions};
+use perl_tdd_support::must;
 
 #[test]
 fn test_basic_formatting() {
@@ -35,7 +36,7 @@ fn test_basic_formatting() {
                 eprintln!("Skipping test: perltidy not installed");
                 return;
             }
-            panic!("Formatting failed: {}", e);
+            must(Err::<(), _>(format!("Formatting failed: {}", e)));
         }
     }
 }
@@ -72,7 +73,7 @@ fn test_range_formatting() {
                 eprintln!("Skipping test: perltidy not installed");
                 return;
             }
-            panic!("Range formatting failed: {}", e);
+            must(Err::<(), _>(format!("Range formatting failed: {}", e)));
         }
     }
 }
@@ -99,7 +100,7 @@ fn test_empty_document() {
                 eprintln!("Skipping test: perltidy not installed");
                 return;
             }
-            panic!("Formatting empty document failed: {}", e);
+            must(Err::<(), _>(format!("Formatting empty document failed: {}", e)));
         }
     }
 }

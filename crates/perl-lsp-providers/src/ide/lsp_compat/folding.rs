@@ -198,7 +198,7 @@ impl FoldingRangeExtractor {
             }
 
             NodeKind::For { init: _, condition: _, update: _, body, continue_block: _ }
-            | NodeKind::Foreach { variable: _, list: _, body } => {
+            | NodeKind::Foreach { variable: _, list: _, body, continue_block: _ } => {
                 self.add_range_from_node(node, None);
                 self.visit_node(body);
             }

@@ -734,22 +734,24 @@ cargo test --doc                      # Documentation tests
 sudo apt-get install libclang-dev  # Ubuntu/Debian
 brew install llvm                  # macOS
 
-# Run dual-scanner corpus comparison (requires xtask excluded from workspace)
-cd xtask && cargo run corpus                              # Default: compare both scanners
-cd xtask && cargo run corpus -- --scanner both           # Explicit dual-scanner mode
-cd xtask && cargo run corpus -- --scanner both --diagnose # With detailed analysis
+# Run corpus comparison modes (requires legacy feature)
+cargo run -p xtask --features legacy -- corpus                          # Corpus vs selected parser (default scanner: v3)
+cargo run -p xtask --features legacy -- corpus --scanner both           # C vs v3 comparison mode
+cargo run -p xtask --features legacy -- corpus --scanner both --diagnose
 
 # Individual scanner testing
-cd xtask && cargo run corpus -- --scanner c              # C scanner (delegates to Rust)
-cd xtask && cargo run corpus -- --scanner rust           # Rust scanner implementation  
-cd xtask && cargo run corpus -- --scanner v3             # V3 parser only
+cargo run -p xtask --features legacy -- corpus --scanner c                    # C scanner
+cargo run -p xtask --features legacy -- corpus --scanner rust                 # In-crate v2 pest parser
+cargo run -p xtask --features legacy -- corpus --scanner v2-pest-microcrate   # Extracted perl-parser-pest v2
+cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose # v2<->v2 drift detector
+cargo run -p xtask --features legacy -- corpus --scanner v3                   # V3 parser only
 
 # Diagnostic analysis (*Diataxis: Reference* - detailed comparison)
-cd xtask && cargo run corpus -- --diagnose               # Analyze first failing test
-cd xtask && cargo run corpus -- --test                   # Test current parser behavior
+cargo run -p xtask --features legacy -- corpus --diagnose  # Analyze first failing test
+cargo run -p xtask --features legacy -- corpus --test      # Test current parser behavior
 
 # Custom corpus path
-cd xtask && cargo run corpus -- --path ../test/corpus    # Custom corpus directory
+cargo run -p xtask --features legacy -- corpus --path tree-sitter-perl/test/corpus
 ```
 
 ### Dual-Scanner Output Analysis (*Diataxis: Explanation* - Understanding results)
@@ -795,19 +797,21 @@ cd xtask && cargo run corpus -- --path ../test/corpus    # Custom corpus directo
 
 ```bash
 # Basic corpus command structure
-cd xtask && cargo run corpus [OPTIONS]
+cargo run -p xtask --features legacy -- corpus [OPTIONS]
 
 # Command line options:
---path <PATH>              # Corpus directory path (default: ../c/test/corpus)
---scanner <SCANNER>        # Scanner type: c, rust, v3, both (default: both)
+--path <PATH>              # Corpus directory path (default: tree-sitter-perl/test/corpus)
+--scanner <SCANNER>        # Scanner type: c, rust, v2-pest-microcrate, v2-parity, v3, both
 --diagnose                 # Run diagnostic analysis on first failing test
 --test                     # Test current parser behavior with simple expressions
 
 # Scanner type options:
 c       # Use C tree-sitter scanner only (baseline for comparison)
-rust    # Use Rust tree-sitter scanner only (PureRustPerlParser)
+rust    # Use in-crate v2 pest parser (tree_sitter_perl::PureRustPerlParser)
+v2-pest-microcrate  # Use extracted perl-parser-pest v2 parser
+v2-parity  # Compare in-crate v2 vs extracted v2 output only (ignores corpus expected)
 v3      # Use V3 native parser only (perl_parser::Parser)
-both    # Compare C scanner vs Rust scanner (legacy testing - C now delegates to Rust)
+both    # Compare C scanner vs V3 parser output before corpus expectation check
 
 # Prerequisites for dual-scanner mode:
 # Ubuntu/Debian: sudo apt-get install libclang-dev

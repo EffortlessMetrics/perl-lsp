@@ -65,6 +65,10 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
+// Import enhanced recovery module
+// mod enhanced_recovery;
+// pub use enhanced_recovery::{RecoveryConfig, EnhancedRecovery, EnhancedErrorRecovery, ErrorContext};
+
 /// Parser state for a single Perl source input.
 ///
 /// Construct with [`Parser::new`] and call [`Parser::parse`] to obtain an AST.
@@ -90,6 +94,8 @@ pub struct Parser<'a> {
     heredoc_start_time: Option<Instant>,
     /// Collection of parse errors encountered during parsing (for error recovery)
     errors: Vec<ParseError>,
+    // Enhanced error recovery state
+    // pub enhanced_recovery: EnhancedRecovery,
 }
 
 // Recursion limit is set conservatively to prevent stack overflow
@@ -131,6 +137,24 @@ impl<'a> Parser<'a> {
             byte_cursor: 0,
             heredoc_start_time: None,
             errors: Vec::new(),
+            // enhanced_recovery: EnhancedRecovery::new(RecoveryConfig::default()),
+        }
+    }
+
+    /// Create a new parser with custom enhanced recovery configuration
+    pub fn new_with_recovery_config(input: &'a str, _config: ()) -> Self {
+        Parser {
+            tokens: TokenStream::new(input),
+            recursion_depth: 0,
+            last_end_position: 0,
+            in_for_loop_init: false,
+            at_stmt_start: true,
+            pending_heredocs: VecDeque::new(),
+            src_bytes: input.as_bytes(),
+            byte_cursor: 0,
+            heredoc_start_time: None,
+            errors: Vec::new(),
+            // enhanced_recovery: EnhancedRecovery::new(config),
         }
     }
 
@@ -223,6 +247,130 @@ impl<'a> Parser<'a> {
     }
 }
 
+// impl<'a> EnhancedErrorRecovery for Parser<'a> {
+//     fn with_enhanced_recovery() -> Self {
+//         unimplemented!("Use Parser::new() for default enhanced recovery")
+//     }
+//
+//     fn with_enhanced_recovery_config(_config: RecoveryConfig) -> Self {
+//         unimplemented!("Use Parser::new_with_recovery_config() instead")
+//     }
+//
+//     fn recovery_state(&self) -> &EnhancedRecovery {
+//         &self.enhanced_recovery
+//     }
+//
+//     fn recovery_state_mut(&mut self) -> &mut EnhancedRecovery {
+//         &mut self.enhanced_recovery
+//     }
+//
+//     fn create_enhanced_error_node(
+//         &mut self,
+//         error: ParseError,
+//         context: ErrorContext,
+//     ) -> Node {
+//         // Track node creation for memory monitoring
+//         self.enhanced_recovery.track_node();
+//
+//         // Get suggestions based on error type and context
+//         let error_type = match &error {
+//             ParseError::UnexpectedToken { .. } => "unexpected_token",
+//             ParseError::UnclosedDelimiter { .. } => "unclosed_delimiter",
+//             ParseError::UnexpectedEof => "missing_expression",
+//             _ => "syntax_error",
+//         };
+//
+//         let suggestions = self.enhanced_recovery.get_suggestions(error_type, &context);
+//
+//         // Create enhanced error message with suggestions
+//         let mut message = format!("{}", error);
+//         if let Some(best_suggestion) = suggestions.first() {
+//             if best_suggestion.confidence > 0.7 {
+//                 message.push_str(&format!(" Suggestion: {}", best_suggestion.message));
+//             }
+//         }
+//
+//         let start = context.current_token
+//             .as_ref()
+//             .map(|t| t.start)
+//             .unwrap_or(self.current_position());
+//         let end = context.current_token
+//             .as_ref()
+//             .map(|t| t.end)
+//             .unwrap_or(start);
+//
+//         Node::new(
+//             NodeKind::Error {
+//                 message,
+//                 expected: vec![],
+//                 found: context.current_token,
+//                 partial: None, // We don't store suggestions in the AST, just in the message
+//             },
+//             SourceLocation { start, end }
+//         )
+//     }
+//
+//     fn apply_adaptive_recovery(&mut self, error: &ParseError, context: &ErrorContext) -> bool {
+//         // Check resource limits before recovery
+//         if let Err(e) = self.enhanced_recovery.should_continue() {
+//             self.record_error(e);
+//             return false;
+//         }
+//
+//         let strategy = self.enhanced_recovery.apply_adaptive_recovery(error);
+//
+//         match strategy {
+//             enhanced_recovery::RecoveryStrategy::SkipToken => {
+//                 let _ = self.consume_token();
+//                 true
+//             }
+//             enhanced_recovery::RecoveryStrategy::InsertClosing => {
+//                 // Try to insert missing closing delimiter
+//                 if let Some(token) = &context.current_token {
+//                     match token.kind {
+//                         TokenKind::LeftBrace => {
+//                             // Insert closing brace
+//                             self.create_error_node(
+//                                 "Unclosed delimiter".to_string(),
+//                                 vec![TokenKind::LeftBrace],
+//                             );
+//                             true
+//                         }
+//                         TokenKind::LeftParen => {
+//                             // Insert closing parenthesis
+//                             self.create_error_node(
+//                                 "Unclosed delimiter".to_string(),
+//                                 vec![TokenKind::LeftParen],
+//                             );
+//                             true
+//                         }
+//                         TokenKind::LeftBracket => {
+//                             // Insert closing bracket
+//                             self.create_error_node(
+//                                 "Unclosed delimiter".to_string(),
+//                                 vec![TokenKind::LeftBracket],
+//                             );
+//                             true
+//                         }
+//                         _ => false,
+//                     }
+//                 } else {
+//                     false
+//                 }
+//             }
+//             enhanced_recovery::RecoveryStrategy::TreatAsVariable => {
+//                 // Try to treat as variable declaration
+//                 self.create_error_node(
+//                     "Treating as variable declaration".to_string(),
+//                     vec![TokenKind::ScalarSigil],
+//                 );
+//                 true
+//             }
+//             _ => false,
+//         }
+//     }
+// }
+
 include!("helpers.rs");
 include!("heredoc.rs");
 include!("statements.rs");
@@ -240,6 +388,8 @@ include!("expressions/quotes.rs");
 
 #[cfg(test)]
 mod error_recovery_tests;
+// #[cfg(test)]
+// mod enhanced_recovery_tests;
 #[cfg(test)]
 mod format_comprehensive_tests;
 #[cfg(test)]

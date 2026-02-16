@@ -450,7 +450,6 @@ fn lexer_slash_ambiguity_pathological_many_slashes() -> TestResult {
 ///
 /// Tests feature spec: ROADMAP.md#slash-ambiguity
 #[test]
-#[ignore = "lexer may not yet fully support postfix operator tokenization"]
 fn lexer_slash_ambiguity_division_after_postfix_op() {
     let test_cases = vec!["$x++ / 2", "$x-- / 2"];
 

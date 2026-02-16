@@ -14,8 +14,10 @@ mod tests {
         must(write!(file, "{}", code));
         let path = file.path().to_path_buf();
 
-        let mut config = crate::refactor::refactoring::RefactoringConfig::default();
-        config.safe_mode = false;
+        let config = crate::refactor::refactoring::RefactoringConfig {
+            safe_mode: false,
+            ..Default::default()
+        };
         let mut engine = RefactoringEngine::with_config(config);
         must(engine.index_file(&path, code));
 
@@ -44,8 +46,10 @@ mod tests {
         must(write!(file, "{}", code));
         let path = file.path().to_path_buf();
 
-        let mut config = crate::refactor::refactoring::RefactoringConfig::default();
-        config.safe_mode = false;
+        let config = crate::refactor::refactoring::RefactoringConfig {
+            safe_mode: false,
+            ..Default::default()
+        };
         let mut engine = RefactoringEngine::with_config(config);
         must(engine.index_file(&path, code));
 
@@ -76,8 +80,10 @@ mod tests {
         let path1 = file1.path().to_path_buf();
         let path2 = file2.path().to_path_buf();
 
-        let mut config = crate::refactor::refactoring::RefactoringConfig::default();
-        config.safe_mode = false;
+        let config = crate::refactor::refactoring::RefactoringConfig {
+            safe_mode: false,
+            ..Default::default()
+        };
         let mut engine = RefactoringEngine::with_config(config);
         must(engine.index_file(&path1, code1));
         must(engine.index_file(&path2, code2));

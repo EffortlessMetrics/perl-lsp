@@ -393,7 +393,7 @@ impl<'a> Parser<'a> {
         let found_token = self.tokens.peek().ok().cloned();
         
         Node::new(
-            NodeKind::Error { 
+            NodeKind::Error {
                 message,
                 expected: vec![],
                 found: found_token,
@@ -402,6 +402,40 @@ impl<'a> Parser<'a> {
             SourceLocation { start: location, end }
         )
     }
+
+    // /// Enhanced error recovery with context-aware suggestions
+    // fn recover_from_error_enhanced(&mut self, error: ParseError) -> Node {
+    //     // Check resource limits
+    //     if let Err(e) = self.enhanced_recovery.should_continue() {
+    //         self.record_error(e);
+    //         return self.create_error_node("Resource limit exceeded".to_string(), vec![]);
+    //     }
+
+    //     // Analyze error context
+    //     let current_token = self.tokens.peek().ok().cloned();
+    //     let previous_tokens = self.get_previous_tokens_for_context(5);
+    //     let context = helpers::analyze_error_context(
+    //         current_token,
+    //         previous_tokens,
+    //         self.at_stmt_start,
+    //         self.recursion_depth,
+    //     );
+
+    //     // Try adaptive recovery first
+    //     if self.apply_adaptive_recovery(&error, &context) {
+    //         // Recovery succeeded, create a node to continue parsing
+    //         return self.create_enhanced_error_node(error, context);
+    //     }
+
+    //     // Fall back to standard error node creation
+    //     self.create_enhanced_error_node(error, context)
+    // }
+
+    // /// Get previous tokens for context analysis
+    // fn get_previous_tokens_for_context(&self, _count: usize) -> Vec<Token> {
+    //     // This is a simplified implementation - in practice, you'd need to track token history
+    //     Vec::new()
+    // }
 
     /// AC4: Error node creation with precise token info
     #[allow(dead_code)]

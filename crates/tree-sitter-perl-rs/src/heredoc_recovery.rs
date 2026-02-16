@@ -60,17 +60,30 @@ impl Default for RecoveryConfig {
     }
 }
 
-#[allow(clippy::unwrap_used)]
-static DYNAMIC_DELIMITER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<<$(\w+)").unwrap());
-#[allow(clippy::unwrap_used, dead_code)]
-static EXPR_DELIMITER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<<\$\{([^}]+)\}").unwrap());
-#[allow(clippy::unwrap_used, dead_code)]
-static SPACED_DELIMITER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<<\s+\$(\w+)").unwrap());
-#[allow(clippy::unwrap_used)]
+static DYNAMIC_DELIMITER: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"<<$(\w+)") {
+    Ok(re) => re,
+    Err(_) => unreachable!("DYNAMIC_DELIMITER regex failed to compile"),
+});
+#[allow(dead_code)]
+static EXPR_DELIMITER: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"<<\$\{([^}]+)\}") {
+    Ok(re) => re,
+    Err(_) => unreachable!("EXPR_DELIMITER regex failed to compile"),
+});
+#[allow(dead_code)]
+static SPACED_DELIMITER: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"<<\s+\$(\w+)") {
+    Ok(re) => re,
+    Err(_) => unreachable!("SPACED_DELIMITER regex failed to compile"),
+});
 static METHOD_DELIMITER: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"<<$(\w+)->(\w+)\(\)").unwrap());
-#[allow(clippy::unwrap_used, dead_code)]
-static CONCAT_DELIMITER: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"<<\(([^)]+)\)").unwrap());
+    LazyLock::new(|| match Regex::new(r"<<$(\w+)->(\w+)\(\)") {
+        Ok(re) => re,
+        Err(_) => unreachable!("METHOD_DELIMITER regex failed to compile"),
+    });
+#[allow(dead_code)]
+static CONCAT_DELIMITER: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"<<\(([^)]+)\)") {
+    Ok(re) => re,
+    Err(_) => unreachable!("CONCAT_DELIMITER regex failed to compile"),
+});
 
 /// Heredoc recovery infrastructure
 pub struct HeredocRecovery {
@@ -255,9 +268,11 @@ impl HeredocRecovery {
         let expression = &input[position..expr_end];
 
         // Check for array element access like $markers[1]
-        #[allow(clippy::unwrap_used)]
         static ARRAY_PATTERN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"\$(\w+)\[(\d+)\]").unwrap());
+            LazyLock::new(|| match Regex::new(r"\$(\w+)\[(\d+)\]") {
+                Ok(re) => re,
+                Err(_) => unreachable!("ARRAY_PATTERN regex failed to compile"),
+            });
         if let Some(cap) = ARRAY_PATTERN.captures(expression) {
             let var_name = cap.get(1)?.as_str();
             let index: usize = cap.get(2)?.as_str().parse().ok()?;
@@ -302,9 +317,11 @@ impl HeredocRecovery {
         }
 
         // Check for package variables like $My::Pkg::var
-        #[allow(clippy::unwrap_used)]
         static PKG_VAR_PATTERN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"\$((?:\w+::)*\w+)").unwrap());
+            LazyLock::new(|| match Regex::new(r"\$((?:\w+::)*\w+)") {
+                Ok(re) => re,
+                Err(_) => unreachable!("PKG_VAR_PATTERN regex failed to compile"),
+            });
         if let Some(cap) = PKG_VAR_PATTERN.captures(expression) {
             let var_name = cap.get(1)?.as_str();
 
@@ -329,9 +346,11 @@ impl HeredocRecovery {
         }
 
         // Check for braced variable access like ${var}
-        #[allow(clippy::unwrap_used)]
         static BRACE_VAR_PATTERN: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"\$\{(.+)\}").unwrap());
+            LazyLock::new(|| match Regex::new(r"\$\{(.+)\}") {
+                Ok(re) => re,
+                Err(_) => unreachable!("BRACE_VAR_PATTERN regex failed to compile"),
+            });
         if let Some(cap) = BRACE_VAR_PATTERN.captures(expression) {
             let var_name = cap.get(1)?.as_str();
 
@@ -356,8 +375,10 @@ impl HeredocRecovery {
         }
 
         // Check for simple scalar variables like $var
-        #[allow(clippy::unwrap_used)]
-        static VAR_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$(\w+)").unwrap());
+        static VAR_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"\$(\w+)") {
+            Ok(re) => re,
+            Err(_) => unreachable!("VAR_PATTERN regex failed to compile"),
+        });
         if let Some(cap) = VAR_PATTERN.captures(expression) {
             let mut _current_var = cap.get(1)?.as_str();
 
