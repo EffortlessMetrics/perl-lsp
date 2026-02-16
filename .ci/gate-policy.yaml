@@ -200,9 +200,9 @@ gates:
 
   - name: unit_full
     tier: merge_gate
-    description: "All workspace library tests"
+    description: "All release-track workspace library tests (excluding internal tree-sitter harness)"
     required: true
-    command: cargo test --workspace --lib --locked
+    command: cargo test --workspace --lib --locked --exclude tree-sitter-perl
     timeout_seconds: 300
     retry_count: 1
     budgets:

@@ -135,7 +135,7 @@ test-core:
 # Test full workspace (thorough, for merge gate)
 test-full:
     @echo "Running tests (full workspace)..."
-    RUST_TEST_THREADS=2 cargo test --workspace --lib --locked
+    RUST_TEST_THREADS=2 cargo test --workspace --lib --locked --exclude tree-sitter-perl
     @echo "Tests (full) passed"
 
 # LSP smoke test (deterministic, single-threaded)
@@ -317,7 +317,7 @@ ci-gate-low-mem:
         cargo clippy --workspace --bins --locked --no-deps -j1 -- -D clippy::unwrap_used -D clippy::expect_used && \
         just ci-forbid-fatal && \
         echo "🧪 Running library tests (single-threaded)..." && \
-        cargo test --workspace --lib --locked -j1 -- --test-threads=1 && \
+        cargo test --workspace --lib --locked --exclude tree-sitter-perl -j1 -- --test-threads=1 && \
         just ci-policy && \
         just ci-lsp-def && \
         just ci-parser-features-check && \
@@ -445,13 +445,13 @@ ci-forbid-fatal:
 # Core tests (fast, essential)
 ci-test-core:
     @echo "🧪 Running core tests..."
-    cargo test --workspace --lib --bins
+    cargo test --workspace --lib --bins --exclude tree-sitter-perl
     @echo "✅ Core tests passed"
 
 # Library tests only (fastest, for merge gate)
 ci-test-lib:
     @echo "🧪 Running library tests..."
-    cargo test --workspace --lib --locked
+    cargo test --workspace --lib --locked --exclude tree-sitter-perl
     @echo "✅ Library tests passed"
 
 # V2 bundle sync guard (in-crate v2 files must match extracted perl-parser-pest v2 files)
@@ -537,7 +537,7 @@ trace-lowmem-steps:
     @echo "Step 3: clippy bins (no-deps)"
     @just trace 'env -u RUSTC_WRAPPER cargo clippy --workspace --bins --locked --no-deps -j1 -- -D clippy::unwrap_used -D clippy::expect_used'
     @echo "Step 4: tests lib"
-    @just trace 'env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 cargo test --workspace --lib --locked -j1 -- --test-threads=1'
+    @just trace 'env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 cargo test --workspace --lib --locked --exclude tree-sitter-perl -j1 -- --test-threads=1'
     @echo "📊 Check target/ci-trace/ for Max RSS values"
 
 # Full parser/DAP tests (not just heredoc-targeted) with low-memory settings

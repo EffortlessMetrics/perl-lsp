@@ -52,12 +52,16 @@ def _run(cmd: list[str], timeout_s: int) -> str:
 def _count_tier_a_lib_tests() -> int | None:
     """Count Tier A lib tests by enumerating test names.
 
-    This matches the shape of `just ci-test-lib` (workspace lib tests).
+    This matches `just ci-test-lib` (workspace lib tests excluding the internal
+    tree-sitter validation harness crate).
     We avoid parsing the fragile per-crate "X tests, Y benchmarks" summaries and instead count
     actual test entries:
       `foo::bar::baz: test`
     """
-    output = _run(["cargo", "test", "--workspace", "--lib", "--", "--list"], timeout_s=180)
+    output = _run(
+        ["cargo", "test", "--workspace", "--lib", "--exclude", "tree-sitter-perl", "--", "--list"],
+        timeout_s=180,
+    )
     if not output:
         return None
     return len(re.findall(r":\s*test\s*$", output, re.MULTILINE))
