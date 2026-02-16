@@ -14,10 +14,10 @@
 //! cargo bench --bench dap_native_benchmarks
 //! ```
 
-use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use perl_dap::tcp_attach::{TcpAttachConfig, TcpAttachSession};
-use std::sync::mpsc::{Sender, channel};
-use std::time::{Duration, Instant};
+use std::sync::mpsc::channel;
+use std::time::Duration;
 
 /// Benchmark configuration for TCP attach
 fn create_benchmark_config() -> TcpAttachConfig {

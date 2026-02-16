@@ -80,6 +80,23 @@ mod corpus_gap_tests {
         test_corpus_file("tie_interface.pl")
     }
 
+    /// Regression: anonymous sub as expression initializer (`my $c = sub { 1 };`)
+    /// must produce a subroutine node inside the initializer (locks down peek_second() fix).
+    #[test]
+    fn test_anonymous_sub_expression() -> Result<(), Box<dyn std::error::Error>> {
+        let input = "my $c = sub { 1 };";
+        let mut parser = Parser::new(input);
+        let ast = parser.parse()?;
+
+        let sexp = ast.to_sexp();
+        // The variable declaration's initializer should contain a subroutine node
+        assert!(
+            sexp.contains("subroutine") || sexp.contains("anonymous_sub") || sexp.contains("sub"),
+            "expected subroutine/anonymous_sub/sub node in initializer, got: {sexp}"
+        );
+        Ok(())
+    }
+
     // Property-based test for delimiters
     #[test]
     fn test_arbitrary_delimiters() {
