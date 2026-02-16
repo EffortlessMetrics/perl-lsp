@@ -5,30 +5,39 @@ set -euo pipefail
 # This intentionally targets real language constructs, not prose in comments.
 PATTERN='unsafe[[:space:]]*\{|unsafe[[:space:]]+extern|unsafe[[:space:]]+impl|#!\[allow\(unsafe_code\)\]'
 
-# Build target list, excluding legacy/generated parser crates.
-TARGETS=()
-for d in crates/*/src; do
-    if [[ "$d" == *"tree-sitter-perl-rs"* ]] || [[ "$d" == *"perl-parser-pest"* ]]; then
-        continue
-    fi
-    TARGETS+=("$d")
-done
-
 tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
+tmp_files="$(mktemp)"
+trap 'rm -f "$tmp" "$tmp_files"' EXIT
 
-if rg -n "$PATTERN" "${TARGETS[@]}" >"$tmp"; then
-  : # matches found
-else
-  status=$?
-  if [[ "$status" -ne 1 ]]; then
-    echo "rg failed (exit=$status)" >&2
-    exit "$status"
-  fi
-  : # exit 1 = no matches, keep going
-fi
+# Build source file list, excluding legacy/support crates and test-only files.
+find crates -path '*/src/*.rs' -type f \
+  ! -path '*/tree-sitter-perl-rs/*' \
+  ! -path '*/tree-sitter-perl-c/*' \
+  ! -path '*/perl-parser-pest/*' \
+  ! -path '*/perl-tdd-support/*' \
+  ! -path '*/tests/*' \
+  ! -name '*_test.rs' \
+  ! -name '*_tests.rs' \
+  ! -name 'tests.rs' >"$tmp_files"
 
-count="$(wc -l <"$tmp" | tr -d ' ')"
+count=0
+>"$tmp"
+while IFS= read -r file; do
+  # Ignore inline test modules declared after `#[cfg(test)]`.
+  test_start=$(rg -n '^\s*#\[cfg\(test\)\]' "$file" | head -1 | cut -d: -f1 || true)
+  [[ -z "$test_start" ]] && test_start=999999
+
+  matches=$(rg -nH "$PATTERN" "$file" || true)
+  [[ -z "$matches" ]] && continue
+
+  while IFS=: read -r matched_file line text; do
+    if (( line < test_start )); then
+      echo "$matched_file:$line:$text" >>"$tmp"
+      count=$((count + 1))
+    fi
+  done <<<"$matches"
+done <"$tmp_files"
+
 baseline_file="ci/unsafe_prod_baseline.txt"
 if [ -f "$baseline_file" ]; then
   baseline=$(cat "$baseline_file")

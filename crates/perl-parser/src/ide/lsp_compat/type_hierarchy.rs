@@ -42,17 +42,6 @@
 //! # }
 //! ```
 
-use std::sync::LazyLock;
-
-static UNKNOWN_URI: LazyLock<Url> = LazyLock::new(|| {
-    Url::parse("file:///unknown").unwrap_or_else(|_| {
-        Url::parse("file:///").unwrap_or_else(|_| {
-            // Truly catastrophic if this fails, but it's a constant
-            unreachable!("Failed to parse constant fallback URIs")
-        })
-    })
-});
-
 /// Provides type hierarchy analysis for Perl projects
 ///
 /// This struct implements LSP type hierarchy functionality, offering
@@ -518,7 +507,7 @@ impl TypeHierarchyProvider {
                 "Class with {} methods",
                 type_info.methods.len()
             )),
-            uri: Some(Url::parse(&type_info.file_path).unwrap_or_else(|_| UNKNOWN_URI.clone())),
+            uri: Url::parse(&type_info.file_path).ok(),
             range: type_info.definition_range,
             selection_range: type_info.definition_range,
             data: None,

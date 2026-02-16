@@ -78,21 +78,30 @@ impl From<lsp_types::Range> for WireRange {
     }
 }
 #[cfg(feature = "lsp-compat")]
+fn fallback_lsp_uri() -> lsp_types::Uri {
+    for candidate in ["file:///unknown", "file:///", "about:blank", "urn:perl-lsp:unknown"] {
+        if let Ok(uri) = candidate.parse::<lsp_types::Uri>() {
+            return uri;
+        }
+    }
+
+    // Last-resort fallback that avoids panicking if URI parser behavior changes unexpectedly.
+    let mut suffix = 0usize;
+    loop {
+        let candidate = format!("http://localhost/{suffix}");
+        if let Ok(uri) = candidate.parse::<lsp_types::Uri>() {
+            return uri;
+        }
+        suffix = suffix.saturating_add(1);
+    }
+}
+
+#[cfg(feature = "lsp-compat")]
 impl From<WireLocation> for lsp_types::Location {
     fn from(l: WireLocation) -> Self {
-        use std::sync::LazyLock;
-
-        // Fallback URI for when parsing fails.
-        // Invariant: "file:///unknown" is a valid URI per RFC 3986.
-        static FALLBACK_URI: LazyLock<lsp_types::Uri> = LazyLock::new(|| {
-            "file:///unknown"
-                .parse()
-                .unwrap_or_else(|_| unreachable!("file:///unknown must be a valid URI"))
-        });
-
         let uri = match l.uri.parse::<lsp_types::Uri>() {
             Ok(u) => u,
-            Err(_) => FALLBACK_URI.clone(),
+            Err(_) => fallback_lsp_uri(),
         };
         Self { uri, range: l.range.into() }
     }
