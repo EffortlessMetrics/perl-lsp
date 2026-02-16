@@ -5,7 +5,7 @@ use perl_semantic_analyzer::{Parser, symbol::SymbolExtractor};
 use std::time::Instant;
 
 #[test]
-#[ignore] // Only run when explicitly requested
+#[ignore = "stress: performance benchmark, run on-demand with --ignored"]
 fn benchmark_symbol_extraction() {
     // Generate large test code
     let mut code = String::from("package TestPackage;\n\n");

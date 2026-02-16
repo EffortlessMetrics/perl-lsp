@@ -186,6 +186,15 @@ impl EnhancedCodeActionsProvider {
                 self.collect_actions_for_range(condition, range, actions);
                 self.collect_actions_for_range(body, range, actions);
             }
+            NodeKind::Subroutine { body, prototype, signature, .. } => {
+                self.collect_actions_for_range(body, range, actions);
+                if let Some(proto) = prototype {
+                    self.collect_actions_for_range(proto, range, actions);
+                }
+                if let Some(sig) = signature {
+                    self.collect_actions_for_range(sig, range, actions);
+                }
+            }
             _ => {}
         }
     }
@@ -252,7 +261,7 @@ impl EnhancedCodeActionsProvider {
             let insert_pos = helpers.find_pragma_insert_position();
 
             actions.push(CodeAction {
-                title: "Add recommended pragmas".to_string(),
+                title: format!("Add missing pragmas ({})", pragmas.join(", ")),
                 kind: CodeActionKind::QuickFix,
                 diagnostics: Vec::new(),
                 edit: CodeActionEdit {

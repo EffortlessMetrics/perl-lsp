@@ -82,8 +82,14 @@ impl<'a> Parser<'a> {
             }
 
             // print STDOUT ... (uppercase bareword filehandle)
+            // But NOT if followed by comma — that's a regular call: open FILE, "..."
             if next_kind == TokenKind::Identifier {
                 if next_text.chars().next().is_some_and(|c| c.is_uppercase()) {
+                    if let Ok(third) = self.tokens.peek_third() {
+                        if third.kind == TokenKind::Comma {
+                            return false;
+                        }
+                    }
                     return true;
                 }
             }
@@ -146,8 +152,14 @@ impl<'a> Parser<'a> {
         let mut args = vec![];
 
         // Continue parsing arguments until we hit a statement terminator
+        // Word operators (or, and, not, xor) bind less tightly than list operators,
+        // so they terminate argument collection for indirect calls.
         while !Self::is_statement_terminator(self.peek_kind())
             && !self.is_statement_modifier_keyword()
+            && !matches!(
+                self.peek_kind(),
+                Some(TokenKind::WordOr | TokenKind::WordAnd | TokenKind::WordXor | TokenKind::WordNot)
+            )
         {
             // Use parse_assignment instead of parse_expression to avoid grouping by comma operator
             args.push(self.parse_assignment()?);

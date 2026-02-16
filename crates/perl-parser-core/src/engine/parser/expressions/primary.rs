@@ -547,8 +547,9 @@ impl<'a> Parser<'a> {
 
             // Handle 'sub' specially - it might be an anonymous subroutine
             TokenKind::Sub => {
-                // Check if this is an anonymous subroutine
-                let next = self.peek_kind();
+                // Check if the token AFTER 'sub' is { or ( (anonymous subroutine)
+                // We use peek_second() because peek() is still 'sub' (unconsumed)
+                let next = self.tokens.peek_second().ok().map(|t| t.kind);
                 if matches!(next, Some(k) if matches!(k, TokenKind::LeftBrace | TokenKind::LeftParen))
                 {
                     // It's an anonymous subroutine

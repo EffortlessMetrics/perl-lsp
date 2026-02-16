@@ -687,6 +687,18 @@ bugs-wave-c:
     cargo test -p perl-parser --test parser_regressions -- print_filehandle_then_variable_is_indirect --nocapture --ignored || true
 
 # ============================================================================
+# Roadmap Gate (informational, never blocks merge)
+# ============================================================================
+
+# Run feature/infra ignored tests and report progress
+roadmap-gate:
+    @echo "=== ROADMAP BACKLOG: running ignored feature/infra tests ==="
+    -cargo test -p perl-semantic-analyzer -- test_anonymous_subroutine --ignored --nocapture
+    -cargo test -p perl-dap -- test_attach_tcp_valid_arguments test_attach_default_values --ignored --nocapture
+    -cargo test -p perl-parser -- test_statement_with_or_modifier --ignored --nocapture
+    -RUST_TEST_THREADS=2 cargo test -p perl-lsp -- test_fix_undefined_variable test_user_story_debugging_workflow test_user_story_refactoring_legacy_code --ignored --test-threads=2 --nocapture
+    @echo "=== Roadmap gate complete (failures = unimplemented features) ==="
+
 # Health Scoreboard (keep yourself honest)
 # ============================================================================
 

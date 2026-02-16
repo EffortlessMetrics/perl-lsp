@@ -257,6 +257,15 @@ base_total=${baseline[total]:-0}
 delta=$(format_delta "$total" "$base_total")
 printf "%-12s %8d %8d %8b\n" "TOTAL" "$total" "$base_total" "$delta"
 echo "==============================================="
+
+# Two-number split: CI_DEBT vs BACKLOG vs PERMANENT
+ci_debt=$((${counts[brokenpipe]} + ${counts[bug]} + ${counts[bare]} + ${counts[other]}))
+backlog=$((${counts[feature]} + ${counts[infra]}))
+permanent=$((${counts[manual]} + ${counts[stress]}))
+echo ""
+printf "CI_DEBT    = %-3d  (brokenpipe + bug + bare + other; must be 0)\n" "$ci_debt"
+printf "BACKLOG    = %-3d  (feature + infra; planned work)\n" "$backlog"
+printf "PERMANENT  = %-3d  (manual + stress; bench/helpers)\n" "$permanent"
 echo ""
 
 # Show details by category if verbose

@@ -105,7 +105,7 @@ mod corpus_gap_tests {
 
     // Benchmark corpus files (optional, run with --release)
     #[test]
-    #[ignore] // Run with: cargo test --ignored --release
+    #[ignore = "stress: performance benchmark, run with --ignored --release"]
     fn bench_corpus_files() {
         use std::time::Instant;
 

@@ -1365,7 +1365,13 @@ impl DebugAdapter {
                         success: false,
                         command: "attach".to_string(),
                         body: None,
-                        message: Some(format!("Failed to connect to debugger: {}", e)),
+                        message: Some(format!(
+                            "Failed to connect to {}:{} ({}ms timeout): {}",
+                            config.host,
+                            config.port,
+                            config.timeout_ms.unwrap_or(30000),
+                            e
+                        )),
                     },
                 }
             }
@@ -2609,7 +2615,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Requires TCP listener on localhost:13603"]
     fn test_attach_tcp_valid_arguments() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let args = json!({
@@ -2768,7 +2773,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Requires TCP listener on localhost:13603"]
     fn test_attach_default_values() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         // Empty args should use defaults and fail with missing arguments message
