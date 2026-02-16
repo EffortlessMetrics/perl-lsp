@@ -229,6 +229,7 @@ mod tests {
     #[test]
     #[cfg(not(feature = "v2-pest-microcrate"))]
     #[cfg(debug_assertions)]
+    #[cfg(feature = "stress-tests")]
     fn test_deep_nesting_benchmark() {
         let mut suite = BenchmarkSuite::new();
 

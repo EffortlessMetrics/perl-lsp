@@ -1853,6 +1853,7 @@ dependencies = [
 name = "perl-parser-pest"
 version = "0.9.0"
 dependencies = [
+ "bincode",
  "lazy_static",
  "once_cell",
  "perl-tdd-support",

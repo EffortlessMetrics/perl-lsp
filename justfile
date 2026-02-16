@@ -65,6 +65,8 @@ merge-gate: _check-tools-basic pr-fast
     just _timed "lsp-smoke" "just lsp-smoke" && \
     just _timed "security-audit" "just security-audit" && \
     just _timed "ci-policy" "just ci-policy" && \
+    just _timed "ci-v2-bundle-sync" "just ci-v2-bundle-sync" && \
+    just _timed "ci-v2-parity" "just ci-v2-parity" && \
     just _timed "ci-lsp-def" "just ci-lsp-def" && \
     just _timed "ci-parser-features-check" "just ci-parser-features-check" && \
     just _timed "ci-features-invariants" "just ci-features-invariants"; \
@@ -363,6 +365,8 @@ ci-gate:
     just ci-forbid-fatal && \
     just ci-test-lib && \
     just ci-policy && \
+    just ci-v2-bundle-sync && \
+    just ci-v2-parity && \
     just ci-lsp-def && \
     just ci-parser-features-check && \
     just ci-features-invariants
@@ -449,6 +453,18 @@ ci-test-lib:
     @echo "🧪 Running library tests..."
     cargo test --workspace --lib --locked
     @echo "✅ Library tests passed"
+
+# V2 bundle sync guard (in-crate v2 files must match extracted perl-parser-pest v2 files)
+ci-v2-bundle-sync:
+    @echo "🔍 Checking v2 bundle sync..."
+    bash scripts/check-v2-bundle-sync.sh
+    @echo "✅ V2 bundle sync check passed"
+
+# V2 parser parity guard (in-crate v2 vs extracted perl-parser-pest v2)
+ci-v2-parity:
+    @echo "🧪 Running v2 parity corpus check..."
+    cargo run --locked -p xtask --features legacy -- corpus --scanner v2-parity
+    @echo "✅ V2 parity corpus check passed"
 
 # Targeted parser/DAP verification (low-memory, for heredoc/breakpoint changes)
 # Key fixes: unset RUSTC_WRAPPER (not empty), --no-deps on clippy, targeted tests
@@ -1385,4 +1401,3 @@ lsp-tier-c:
     @echo "Running LSP Tier C (full suite)..."
     env RUST_TEST_THREADS=2 cargo test -p perl-lsp --locked -- --test-threads=2
     @echo "LSP Tier C passed"
-

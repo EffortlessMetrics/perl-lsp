@@ -7,7 +7,7 @@
 //! ## Features
 //!
 //! - **pure-rust**: Pure Rust Pest-based parser (canonical implementation)
-//! - **v2-pest-microcrate**: Route v2 Pest modules through `perl-parser-pest` (migration path)
+//! - **v2-pest-microcrate**: Route v2 Pest modules through `perl-parser-pest` (default path)
 //! - **test-utils**: Testing utilities and benchmarking tools
 //! - **c-scanner**: Legacy C implementation (for benchmarking only)
 //!

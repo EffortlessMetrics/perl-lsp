@@ -284,6 +284,39 @@ gates:
       - docs
       - build
 
+  - name: v2_parity
+    tier: merge_gate
+    description: "Verify in-crate v2 and perl-parser-pest v2 produce identical corpus output"
+    required: true
+    command: >-
+      cargo run --locked -p xtask --features legacy
+      -- corpus --scanner v2-parity
+    timeout_seconds: 300
+    retry_count: 0
+    budgets:
+      max_duration_ms: 240000
+    quarantine: false
+    tags:
+      - parser
+      - corpus
+      - parity
+      - microcrate
+
+  - name: v2_bundle_sync
+    tier: merge_gate
+    description: "Verify v2 bundle files stay synchronized while bridge fallback exists"
+    required: true
+    command: bash scripts/check-v2-bundle-sync.sh
+    timeout_seconds: 60
+    retry_count: 0
+    budgets:
+      max_duration_ms: 30000
+    quarantine: false
+    tags:
+      - parser
+      - sync
+      - microcrate
+
   - name: workflow_audit
     tier: merge_gate
     description: "Audit CI workflows for ungated expensive jobs"

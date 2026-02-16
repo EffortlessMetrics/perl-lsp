@@ -326,7 +326,6 @@ impl PureRustPerlParser {
         match <PerlParser as Parser<Rule>>::parse(Rule::program, source) {
             Ok(pairs) => self.build_ast(pairs),
             Err(e) => {
-                eprintln!("Parse error: {:?}", e);
                 // Attempt partial parsing by trying to parse individual statements
                 self.parse_with_recovery(source, e)
             }
@@ -432,9 +431,12 @@ impl PureRustPerlParser {
         }
     }
 
-    /// Public wrapper that uses stacker to grow the stack as needed
+    /// Public wrapper that uses stacker to grow the stack as needed.
+    ///
+    /// This remains public so bridge consumers (for example `tree-sitter-perl-rs`
+    /// with `v2-pest-microcrate`) can continue calling internal v2 build paths.
     #[inline]
-    pub(crate) fn build_node(
+    pub fn build_node(
         &mut self,
         pair: Pair<Rule>,
     ) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {

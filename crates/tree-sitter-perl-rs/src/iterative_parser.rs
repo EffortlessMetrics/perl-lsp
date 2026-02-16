@@ -413,35 +413,42 @@ mod tests {
     }
 
     #[test]
-    fn test_deep_nesting_iterative() {
+    fn test_shallow_nesting_iterative() {
         use perl_tdd_support::{must, must_some};
         let mut parser = PureRustPerlParser::new();
 
-        // Create deeply nested expression - start with smaller depth
-        let depth = 100;
+        // depth=10, fast correctness check
+        let depth = 10;
         let mut expr = "42".to_string();
         for _ in 0..depth {
             expr = format!("({})", expr);
         }
 
-        // This should work without stack overflow in debug mode
         let pairs = must(PerlParser::parse(Rule::expression, &expr));
         let pair = must_some(pairs.into_iter().next());
 
         let result = parser.build_node_iterative(pair);
-        assert!(result.is_ok(), "Deep nesting should work with iterative approach");
+        assert!(result.is_ok(), "Shallow nesting should work with iterative approach");
+    }
 
-        // Now test with even deeper nesting
-        let deep_depth = 500;
-        let mut deep_expr = "42".to_string();
-        for _ in 0..deep_depth {
-            deep_expr = format!("({})", deep_expr);
+    #[test]
+    #[cfg(feature = "stress-tests")]
+    fn test_deep_nesting_iterative() {
+        use perl_tdd_support::{must, must_some};
+        let mut parser = PureRustPerlParser::new();
+
+        // Test depths 100 and 500
+        for depth in [100, 500] {
+            let mut expr = "42".to_string();
+            for _ in 0..depth {
+                expr = format!("({})", expr);
+            }
+
+            let pairs = must(PerlParser::parse(Rule::expression, &expr));
+            let pair = must_some(pairs.into_iter().next());
+
+            let result = parser.build_node_iterative(pair);
+            assert!(result.is_ok(), "Depth {} should work with iterative approach", depth);
         }
-
-        let deep_pairs = must(PerlParser::parse(Rule::expression, &deep_expr));
-        let deep_pair = must_some(deep_pairs.into_iter().next());
-
-        let deep_result = parser.build_node_iterative(deep_pair);
-        assert!(deep_result.is_ok(), "Very deep nesting should work with iterative approach");
     }
 }

@@ -19,7 +19,8 @@ pest = "2.8.5"
 pest_derive = "2.8.5"
 stacker = "0.1.22"
 thiserror = "2.0.18"
-serde = { version = "1.0.228", features = ["derive"], optional = true }
+serde = { version = "1.0.228", features = ["derive"] }
+bincode = { version = "2.0.0-rc.3", features = ["serde"] }
 regex = "1.12.2"
 unicode-ident = "1.0.22"
 once_cell = "1.21.3"
@@ -27,7 +28,8 @@ lazy_static = "1.5.0"
 
 [features]
 default = []
-serde = ["dep:serde"]
+# Backward-compatible feature alias; serde support is always enabled.
+serde = []
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

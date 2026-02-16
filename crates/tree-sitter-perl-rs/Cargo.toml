@@ -56,9 +56,9 @@ only_used_in_recursion = "warn"
 ptr_arg = "warn"
 
 [features]
-default = ["pure-rust"]
+default = ["pure-rust", "v2-pest-microcrate"]
 pure-rust = []
-# Opt-in migration path: source v2 Pest modules from perl-parser-pest microcrate.
+# Source v2 Pest modules from perl-parser-pest microcrate (enabled by default).
 v2-pest-microcrate = ["dep:perl-parser-pest"]
 bindings = ["dep:bindgen"]
 c-parser = ["dep:cc"]

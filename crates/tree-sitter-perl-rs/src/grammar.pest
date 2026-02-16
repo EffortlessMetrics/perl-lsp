@@ -301,7 +301,7 @@ assignment_expression = {
 }
 
 assignment_operator = {
-    "=" ~ !("~") | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
+    "=" ~ !("~") | "+=" | "-=" | "*=" | "_DIV_=" | "/=" | "%=" | "**=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
     | "&&=" | "||=" | "//=" | "&.=" | "|.=" | "^.="
 }
 
@@ -702,12 +702,13 @@ identifier = @{
 }
 
 // Reserved words that should not be identifiers
-reserved_word = { 
-    "sub" | "my" | "our" | "local" | "state" | "if" | "elsif" | "else" | "unless" | 
+reserved_word = {
+    "sub" | "my" | "our" | "local" | "state" | "if" | "elsif" | "else" | "unless" |
     "while" | "until" | "foreach" | "format" | "for" | "return" | "last" | "next" | "redo" |
     "package" | "use" | "require" | "do" | "eval" | "goto" | "qw" | "qq" | "qx" | "qr" | "q" |
-    "tie" | "untie" | "tied" | "try" | "catch" | "finally" | "defer" | "class" | "method" | 
-    "field" | "role" | "print" | "say" | "warn" | "die"
+    "tie" | "untie" | "tied" | "try" | "catch" | "finally" | "defer" | "class" | "method" |
+    "field" | "role" | "print" | "say" | "warn" | "die" |
+    "_DIV_" | "_SUB_" | "_TRANS_" | "_QR_"
 }
 
 // Special identifiers that are only reserved in specific contexts

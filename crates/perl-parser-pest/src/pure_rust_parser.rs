@@ -326,7 +326,6 @@ impl PureRustPerlParser {
         match <PerlParser as Parser<Rule>>::parse(Rule::program, source) {
             Ok(pairs) => self.build_ast(pairs),
             Err(e) => {
-                eprintln!("Parse error: {:?}", e);
                 // Attempt partial parsing by trying to parse individual statements
                 self.parse_with_recovery(source, e)
             }
