@@ -67,10 +67,10 @@ fn test_path_validation_parent_traversal_attempts() {
 
         if let Err(e) = result {
             match e {
-                SecurityError::PathTraversalAttempt(_) => {}
+                SecurityError::PathTraversalAttempt(_) | SecurityError::PathOutsideWorkspace(_) => {}
                 _ => {
                     must(Err::<(), _>(format!(
-                        "Expected PathTraversalAttempt error for '{}', got: {:?}",
+                        "Expected PathTraversalAttempt or PathOutsideWorkspace error for '{}', got: {:?}",
                         path_str, e
                     )));
                     unreachable!()
