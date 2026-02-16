@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-05-23 - [LSP Command Execution Fail-Closed]
+**Vulnerability:** `ExecuteCommandProvider` allowed arbitrary file execution (e.g. `perl.runFile`) when no workspace roots were configured, intended for backward compatibility but effectively a "fail open" default.
+**Learning:** Backward compatibility features can introduce significant security gaps if they bypass core security controls like path validation.
+**Prevention:** Enforce "Fail Closed" defaults in security-critical components. Require explicit configuration (e.g. workspace roots) before allowing dangerous operations.
