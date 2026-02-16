@@ -26,8 +26,6 @@ pub enum ParseErrorKind {
     Eq,
     serde::Serialize,
     serde::Deserialize,
-    bincode::Encode,
-    bincode::Decode,
 )]
 pub enum ParseError {
     /// Failed to parse the input

@@ -269,11 +269,10 @@ mod error_tests {
     #[test]
     fn test_error_serialization() {
         let error = ParseError::ParseFailed;
-        let serialized = bincode::encode_to_vec(&error, bincode::config::standard());
+        let serialized = postcard::to_allocvec(&error);
         assert!(serialized.is_ok(), "Error serialization failed");
 
-        let (deserialized, _): (ParseError, _) =
-            must(bincode::decode_from_slice(&must(serialized), bincode::config::standard()));
+        let deserialized: ParseError = must(postcard::from_bytes(&must(serialized)));
         assert!(matches!(deserialized, ParseError::ParseFailed));
     }
 }
