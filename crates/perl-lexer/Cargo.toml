@@ -16,7 +16,7 @@ include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 
 [dependencies]
 # Core dependencies
-unicode-ident = "1.0.22"
+unicode-ident = "1.0.24"
 memchr = "2.7.6"
 
 # For better error handling

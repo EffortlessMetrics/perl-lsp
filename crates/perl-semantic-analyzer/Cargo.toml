@@ -26,7 +26,7 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-symbol-types = { workspace = true }
-regex = "1.12.2"
+regex = "1.12.3"
 rustc-hash = "2.1.1"
 serde = { version = "1.0.228", features = ["derive"] }
 

@@ -26,7 +26,7 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-edit = { workspace = true }
 perl-lexer = { workspace = true }
-anyhow = "1.0.100"
+anyhow = "1.0.101"
 lsp-types = "0.97.0"
 ropey = "1.6.1"
 serde_json = "1.0.149"

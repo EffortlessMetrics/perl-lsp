@@ -28,13 +28,13 @@ perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol-types = { workspace = true }
 perl-uri = { workspace = true }
 parking_lot = "0.12.5"
-regex = "1.12.2"
+regex = "1.12.3"
 serde = { version = "1.0.228", features = ["derive"] }
 url = "2.5.8"
 lsp-types = { version = "0.97.0", optional = true }
 
 [dev-dependencies]
-anyhow = "1.0.100"
+anyhow = "1.0.101"
 criterion = "0.8.1"
 tempfile = "3.24.0"
 perl-tdd-support = { workspace = true }
