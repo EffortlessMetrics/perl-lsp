@@ -57,9 +57,7 @@ impl LexerAdapter {
                     // Check if next char in input is '=' (divide-assign /=)
                     if token.end < input.len()
                         && input.as_bytes()[token.end] == b'='
-                        && tokens
-                            .get(i + 1)
-                            .is_some_and(|next| next.start == token.end)
+                        && tokens.get(i + 1).is_some_and(|next| next.start == token.end)
                     {
                         output.push_str("_DIV_=");
                         skip_next = true;

@@ -22,8 +22,23 @@ fn test_substitution_batch(inputs: &[&str]) -> Vec<String> {
             // Verify modifiers only contain valid characters
             for ch in modifiers.chars() {
                 assert!(
-                    matches!(ch, 'g' | 'i' | 'm' | 's' | 'x' | 'o' | 'e' | 'r'
-                        | 'a' | 'd' | 'l' | 'u' | 'n' | 'p' | 'c'),
+                    matches!(
+                        ch,
+                        'g' | 'i'
+                            | 'm'
+                            | 's'
+                            | 'x'
+                            | 'o'
+                            | 'e'
+                            | 'r'
+                            | 'a'
+                            | 'd'
+                            | 'l'
+                            | 'u'
+                            | 'n'
+                            | 'p'
+                            | 'c'
+                    ),
                     "Invalid modifier '{}' in: {}",
                     ch,
                     input

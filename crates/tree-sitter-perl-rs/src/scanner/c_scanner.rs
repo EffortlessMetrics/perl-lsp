@@ -48,20 +48,18 @@ impl PerlScanner for CScanner {
 
     fn serialize(&self, buffer: &mut Vec<u8>) -> ParseResult<()> {
         // Serialize C scanner state
-        let state_bytes = postcard::to_allocvec(&self.state)
-            .map_err(|e| {
-                ParseError::scanner_error_simple(&format!("Serialization failed: {}", e))
-            })?;
+        let state_bytes = postcard::to_allocvec(&self.state).map_err(|e| {
+            ParseError::scanner_error_simple(&format!("Serialization failed: {}", e))
+        })?;
         buffer.extend_from_slice(&state_bytes);
         Ok(())
     }
 
     fn deserialize(&mut self, buffer: &[u8]) -> ParseResult<()> {
         // Deserialize C scanner state
-        let decoded: ScannerState = postcard::from_bytes(buffer)
-            .map_err(|e| {
-                ParseError::scanner_error_simple(&format!("Deserialization failed: {}", e))
-            })?;
+        let decoded: ScannerState = postcard::from_bytes(buffer).map_err(|e| {
+            ParseError::scanner_error_simple(&format!("Deserialization failed: {}", e))
+        })?;
         self.state = decoded;
         Ok(())
     }

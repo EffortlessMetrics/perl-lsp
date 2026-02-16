@@ -431,5 +431,4 @@ mod tests {
         assert!(config.validate_syntax);
         assert!(!config.follow_symlinks);
     }
-
 }
