@@ -74,7 +74,7 @@ Key terms:
 - **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups
 - **Safety Ratchets**: production baseline currently at `unwrap/expect=0`, panic-family macros (`panic!/todo!/unimplemented!/unreachable!`) = `0`, explicit `unsafe` syntax = `0`
 - **Security**: Comprehensive hardening complete (path traversal, command injection, DAP evaluate, perldoc/perlcritic argument injection)
-- **DAP Server**: Native adapter CLI (launch/step/breakpoints), async BridgeAdapter with graceful shutdown; attach/variables/evaluate pending
+- **DAP Server**: Phase 1 bridge mode delegates to Perl::LanguageServer (requires external CPAN module); native Phase 2 adapter is scaffolded with data structures and test stubs but not yet functional (breakpoint setting, stepping, variable inspection all unimplemented); async BridgeAdapter with graceful shutdown available for bridge mode
 - **Index State Machine Receipts (2026-02-16)**: `just ci-gate` + targeted state-machine tests and workspace benchmarks validated transitions, instrumentation, and caps (`~368.7us` initial small index, `~721.1us` initial medium index, `~212.6us` incremental update)
 
 ### Computed Metrics (auto-updated by `just status-update`)
@@ -130,7 +130,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 | --- | --- | --- |
 | perl-parser | Production | ~100% Perl 5, 87% mutation score |
 | perl-lsp | Production | Coverage tracked via `features.toml` |
-| perl-dap | Phase 1 | Native adapter CLI; BridgeAdapter library available |
+| perl-dap | Phase 1 (Bridge Only) | BridgeAdapter delegates to Perl::LanguageServer; native adapter scaffolded but not functional |
 | perl-lexer | Production | Context-aware, sub-microsecond |
 | perl-corpus | Production | Corpus counts tracked in computed metrics |
 

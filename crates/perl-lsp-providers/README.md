@@ -33,11 +33,31 @@ This crate provides Language Server Protocol feature implementations for the Per
 ## Usage
 
 ```rust
-use perl_lsp_providers::ide::lsp_compat::completion::complete;
-use perl_lsp_providers::ide::lsp_compat::textdoc::TextDocument;
+use perl_parser_core::Parser;
+use perl_lsp_providers::completion::CompletionProvider;
 
-// Provider usage depends on specific LSP feature implementations
+let source = "my $value = 1; $";
+let mut parser = Parser::new(source);
+let ast = parser.parse().expect("valid source");
+
+let provider = CompletionProvider::new(&ast);
+let completions = provider.get_completions_with_path(source, source.len(), None);
+assert!(!completions.is_empty());
 ```
+
+## Microcrate Compatibility
+
+The providers crate now exposes two stable import styles:
+
+- Preferred top-level re-exports (microcrate-first):
+  - `perl_lsp_providers::completion::CompletionProvider`
+  - `perl_lsp_providers::diagnostics::DiagnosticsProvider`
+  - `perl_lsp_providers::formatting::FormattingProvider`
+  - `perl_lsp_providers::tooling::SubprocessRuntime`
+- Deprecated legacy shims (kept for compatibility):
+  - `perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider`
+  - `perl_lsp_providers::ide::lsp_compat::diagnostics::DiagnosticsProvider`
+  - `perl_lsp_providers::ide::lsp_compat::formatting::FormattingProvider`
 
 ## Architecture
 

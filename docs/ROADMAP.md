@@ -220,7 +220,7 @@ These items are explicitly deferred:
 
 ### v1.0.0: "Boring Promises" (sequence after v0.9.1)
 
-**Goal**: Freeze the surfaces you're willing to support.
+**Goal**: Freeze the surfaces you're willing to support. Close known gaps honestly.
 
 **Deliverables**:
 
@@ -236,28 +236,97 @@ These items are explicitly deferred:
    - One canonical benchmark run committed under `benchmarks/results/`
    - Remove "UNVERIFIED" tags where you now have receipts
 
+4. **Gap closing (honest assessment items)**
+   - ~~Fix execute_command test failures (7 tests)~~ ✓ Fixed: workspace root security boundary was not set in integration tests
+   - ~~Correct `features.toml` DAP maturity levels~~ ✓ Fixed: DAP features now `maturity = "planned"` (was "preview")
+   - ~~Fix `CURRENT_STATUS.md` DAP narrative~~ ✓ Fixed: now describes bridge-only reality
+   - Add E2E LSP smoke test (send initialize→didOpen→completion→shutdown, verify responses)
+   - Document Moo/Moose limitations honestly in user-facing docs
+
 **Exit criteria**:
 - Capability snapshot + docs aligned
 - Benchmarks published
 - Upgrade notes exist from v0.8.x → v1.0
+- Honest assessment document (`docs/HONEST_ASSESSMENT.md`) exists and is current
+- No DAP features marked as GA in `features.toml`
 
 ---
 
-## Known Gaps (v0.9.1 Hardening)
+### v1.1: Semantic Depth
 
-These gaps are tracked in [`docs/issues/`](issues/) and need closure before v0.9.1 close-out:
+**Goal**: Close the Moo/Moose gap — the #1 real-world limitation.
 
-### Corpus Coverage Gaps
-- See `docs/issues/corpus/` for NodeKind reachability and GA feature alignment
+**Deliverables**:
 
-### Hang/Bounds Risks (P0)
-- Deep nesting boundedness
-- Slash ambiguity (division vs regex)
-- Regex literal handling
+1. **Moo/Moose `has` attribute recognition**
+   - Semantic analyzer recognizes `has` as a field declaration
+   - Hover on Moo attributes shows field type, default, documentation
+   - Completion inside `has` blocks suggests type constraints, `is`, `isa`, `default`, etc.
+
+2. **Class::Accessor support**
+   - Auto-generated accessor methods visible in completion and go-to-definition
+
+3. **Role composition tracking**
+   - `with 'Role'` connects role methods to consuming class
+   - Go-to-definition resolves role methods
+
+**Exit criteria**:
+- Hover on `has 'name'` in a Moo class returns field information
+- Completion inside `has` blocks works
+- `features.toml` updated with Moo/Moose semantic coverage
+
+---
+
+### v1.2: DAP Phase 2 (Native Debugging)
+
+**Goal**: Native debugging without requiring Perl::LanguageServer.
+
+**Deliverables**:
+
+1. **Native breakpoint setting** with AST validation
+2. **Step into/over/out** via Perl debugger integration (`perl -d`)
+3. **Variable inspection** via PadWalker integration
+4. **Build `Devel::TSPerlDAP` Perl shim** (currently does not exist)
+
+**Exit criteria**:
+- Set breakpoint, hit breakpoint, inspect variables — works without external CPAN modules
+- DAP features promoted to `maturity = "preview"` in `features.toml`
+- VSCode extension debug configuration works out of the box
+
+---
+
+### v2.0: DAP Phase 3 + Polish
+
+**Goal**: Full debugging experience and ecosystem polish.
+
+**Deliverables**:
+
+1. Attach debugging (connect to running Perl process)
+2. Expression evaluation with safe eval
+3. Full debug console
+4. Pest parser decision: archive to `archive/` or maintain for benchmark comparison
+5. Package manager distribution (Homebrew, apt, etc.)
+
+---
+
+## Known Gaps
+
+> For the full honest assessment, see [`docs/HONEST_ASSESSMENT.md`](HONEST_ASSESSMENT.md).
+
+### Resolved (v0.9.1)
+- ~~Corpus coverage gaps~~ ✓ Comprehensive corpus (732KB, 78 files, 611+ sections)
+- ~~Hang/bounds risks~~ ✓ Budget-protected lexer, recursion limits, fuzz testing
+- ~~Execute command test failures~~ ✓ Fixed workspace root security boundary
+
+### Open Gaps
+- **DAP is scaffolded, not functional**: Native Phase 2 adapter is stubs only; bridge mode requires external Perl::LanguageServer. See `features.toml` where DAP features are `maturity = "planned"`.
+- **Moo/Moose semantic blindness**: Parser tokenizes correctly but semantic analyzer doesn't understand `has` as field declaration. #1 real-world gap.
+- **No E2E LSP smoke test**: All testing is unit/integration; no automated test that starts the server and sends real LSP messages end-to-end.
+- **Pest parser orphaned**: Compiles and works but excluded from CI, not used in production, 10-100x slower than v3. Maintained for reference only.
 
 ### Known Constraints
 - **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
-- **Native DAP completeness**: Attach/variables/evaluate deferred (see "Not Before v1.0")
+- **Native DAP completeness**: Deferred to v1.2 milestone
 
 ---
 
@@ -306,15 +375,16 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 The LSP compliance table is now auto-generated. Source of truth: `features.toml`
 
 <!-- BEGIN: COMPLIANCE_TABLE -->
-| Area | Implemented | Total | Coverage |
-|------|-------------|-------|----------|
-| debug | 2 | 2 | 100% |
-| notebook | 2 | 2 | 100% |
-| protocol | 9 | 9 | 100% |
-| text_document | 41 | 41 | 100% |
-| window | 9 | 9 | 100% |
-| workspace | 26 | 26 | 100% |
-| **Overall** | **89** | **89** | **100%** |
+| Area | Implemented | Total | Coverage | Notes |
+|------|-------------|-------|----------|-------|
+| debug | 0 | 2 | 0% | DAP features are `planned`, not functional |
+| notebook | 2 | 2 | 100% | Preview status |
+| protocol | 9 | 9 | 100% | |
+| text_document | 41 | 41 | 100% | |
+| window | 9 | 9 | 100% | |
+| workspace | 26 | 26 | 100% | |
+| **LSP (excl. DAP)** | **87** | **87** | **100%** | |
+| **Overall (incl. DAP)** | **87** | **89** | **98%** | DAP features planned |
 <!-- END: COMPLIANCE_TABLE -->
 
 **v0.9.0 Metrics**:
