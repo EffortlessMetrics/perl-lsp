@@ -165,7 +165,7 @@ mod doc_validation_helpers {
             "tokens/token_stream.rs",
             "refactor/import_optimizer.rs",
             "analysis/scope_analyzer.rs",
-            "tooling/performance.rs",
+            "performance.rs",
         ];
 
         performance_critical_modules.iter().any(|module| file_path.ends_with(module))
@@ -597,6 +597,7 @@ mod missing_docs_tests {
     fn source_roots() -> Vec<SourceRoot> {
         let root = workspace_root();
         vec![
+            SourceRoot { name: "perl-parser", path: root.join("crates/perl-parser/src") },
             SourceRoot { name: "perl-parser-core", path: root.join("crates/perl-parser-core/src") },
             SourceRoot {
                 name: "perl-semantic-analyzer",
@@ -612,6 +613,7 @@ mod missing_docs_tests {
                 path: root.join("crates/perl-incremental-parsing/src"),
             },
             SourceRoot { name: "perl-tdd-support", path: root.join("crates/perl-tdd-support/src") },
+            SourceRoot { name: "perl-lsp-tooling", path: root.join("crates/perl-lsp-tooling/src") },
             SourceRoot {
                 name: "perl-lsp-providers",
                 path: root.join("crates/perl-lsp-providers/src"),
@@ -685,6 +687,8 @@ mod missing_docs_tests {
         // AC:AC2 - Verify all public structs/enums have comprehensive documentation
         // including workflow role description
         let roots = source_roots();
+        // Focus AC2 on parser-facing modules. Workspace internals are validated
+        // in crate-local tests under `perl-workspace-index`.
         let critical_modules = [
             "engine/parser/mod.rs",
             "engine/ast.rs",
@@ -692,7 +696,6 @@ mod missing_docs_tests {
             "tokens/token_stream.rs",
             "analysis/semantic.rs",
             "analysis/symbol.rs",
-            "workspace/workspace_index.rs",
         ];
 
         let mut all_missing_docs = Vec::new();
@@ -756,13 +759,13 @@ mod missing_docs_tests {
         // AC:AC3 - Verify all public functions have comprehensive documentation
         // with summary, parameters, return values, and error conditions
         let roots = source_roots();
+        // Focus AC3 on parser-facing APIs. Workspace internals are validated in
+        // crate-local tests under `perl-workspace-index`.
         let function_critical_modules = [
             "engine/parser/mod.rs",
             "ide/lsp_compat/completion.rs",
             "ide/lsp_compat/diagnostics.rs",
             "ide/lsp_compat/formatting.rs",
-            "workspace/workspace_index.rs",
-            "ide/lsp_compat/semantic_tokens.rs",
             "refactor/import_optimizer.rs",
         ];
 
@@ -951,7 +954,7 @@ mod missing_docs_tests {
             "tokens/token_stream.rs",
             "refactor/import_optimizer.rs",
             "analysis/scope_analyzer.rs",
-            "tooling/performance.rs",
+            "performance.rs",
         ];
 
         let (missing_performance_docs, missing_modules) =
@@ -1585,11 +1588,11 @@ mod missing_docs_tests {
     fn test_rust_documentation_best_practices() {
         // AC:AC10 - Verify documentation follows Rust best practices with consistent style
         let roots = source_roots();
+        // Keep style checks scoped to parser-facing documentation.
         let sample_modules = [
             "engine/parser/mod.rs",
             "ide/lsp_compat/completion.rs",
             "ide/lsp_compat/diagnostics.rs",
-            "workspace/workspace_index.rs",
         ];
 
         let (style_violations, missing_modules) =

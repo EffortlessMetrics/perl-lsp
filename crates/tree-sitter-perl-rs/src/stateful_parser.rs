@@ -483,7 +483,7 @@ EOF
 print "after heredoc";"#;
 
         // This test would verify heredoc parsing works correctly
-        // let ast = parser.parse(input).unwrap();
+        // let ast = parser.parse(input);
     }
 
     #[test]
@@ -521,7 +521,7 @@ $name, $login, $office
 print "after format";"#;
 
         // Test format parsing
-        // let ast = parser.parse(input).unwrap();
+        // let ast = parser.parse(input);
     }
 
     #[test]

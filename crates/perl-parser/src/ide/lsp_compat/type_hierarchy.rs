@@ -12,6 +12,13 @@
 //! 4. **Complete**: Context-aware completion using type information
 //! 5. **Analyze**: Cross-reference analysis and refactoring
 //!
+//! # Protocol and Client Capabilities
+//!
+//! - **Client capabilities**: Uses negotiated type-hierarchy capabilities to
+//!   control preparation and traversal responses.
+//! - **Protocol compliance**: Implements `textDocument/typeHierarchy` methods
+//!   from the LSP 3.17 specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Hierarchy building**: O(n) where n is type definitions

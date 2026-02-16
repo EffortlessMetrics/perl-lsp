@@ -12,12 +12,24 @@
 //! 4. **Complete**: Context-aware completion with this module
 //! 5. **Analyze**: Cross-reference analysis and refactoring
 //!
+//! # Protocol and Client Capabilities
+//!
+//! - **Client capabilities**: Tailors completion details and snippets to
+//!   client-declared completion capabilities.
+//! - **Protocol compliance**: Implements the `textDocument/completion` request
+//!   flow from the LSP 3.17 specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Completion resolution**: O(1) average with hash table indexing
 //! - **Context analysis**: <10μs for typical completion scenarios
 //! - **Memory usage**: ~500KB for 10K completion items
 //! - **Large workspace scaling**: Designed to scale to 50K+ symbols
+//!
+//! # See Also
+//!
+//! - [`crate::ide::lsp_compat::references::ReferenceProvider`]
+//! - [`crate::ide::lsp_compat::diagnostics::DiagnosticProvider`]
 //!
 //! # Usage Examples
 //!
@@ -159,6 +171,35 @@ impl CompletionProvider {
     ///
     /// - O(1) average lookup time for indexed symbols
     /// - <10μs context analysis for typical scenarios
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::ide::lsp_compat::completion::CompletionProvider;
+    /// use lsp_types::{CompletionParams, Position, TextDocumentIdentifier, TextDocumentPositionParams};
+    /// use url::Url;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let provider = CompletionProvider::new();
+    /// let params = CompletionParams {
+    ///     text_document_position: TextDocumentPositionParams {
+    ///         text_document: TextDocumentIdentifier { uri: Url::parse("file:///tmp/demo.pl")? },
+    ///         position: Position::new(0, 0),
+    ///     },
+    ///     work_done_progress_params: Default::default(),
+    ///     partial_result_params: Default::default(),
+    ///     context: None,
+    /// };
+    ///
+    /// let items = provider.complete(params).unwrap_or_default();
+    /// assert!(!items.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Arguments: `params` provides the LSP completion request context.
+    /// Returns: matching completion items, or `None` when completion is unavailable.
+    /// Example: see this function example and [`CompletionProvider::update_workspace_symbols`].
     pub fn complete(&self, params: CompletionParams) -> Option<Vec<CompletionItem>> {
         let position = params.text_document_position.position;
         
@@ -181,10 +222,38 @@ impl CompletionProvider {
     ///
     /// * `symbols` - HashMap of symbol names to completion items
     ///
+    /// # Returns
+    ///
+    /// Updates the provider in place and does not return a value.
+    ///
     /// # Performance
     ///
     /// - O(n) where n is the number of symbols
     /// - Memory efficient: reuses existing allocations
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::ide::lsp_compat::completion::CompletionProvider;
+    /// use lsp_types::CompletionItem;
+    /// use std::collections::HashMap;
+    ///
+    /// let mut provider = CompletionProvider::new();
+    /// let mut symbols = HashMap::new();
+    /// symbols.insert(
+    ///     "demo".to_string(),
+    ///     CompletionItem {
+    ///         label: "demo".to_string(),
+    ///         ..Default::default()
+    ///     },
+    /// );
+    ///
+    /// provider.update_workspace_symbols(symbols);
+    /// ```
+    ///
+    /// Arguments: `symbols` replaces the current workspace symbol completion cache.
+    /// Returns: this method updates state in place and returns `()`.
+    /// Example: call this after refreshing workspace symbols from the index.
     pub fn update_workspace_symbols(&mut self, symbols: HashMap<String, CompletionItem>) {
         self.workspace_symbols = symbols;
     }

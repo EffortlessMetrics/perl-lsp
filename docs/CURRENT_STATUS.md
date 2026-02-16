@@ -75,6 +75,7 @@ Key terms:
 - **Safety Ratchets**: production baseline currently at `unwrap/expect=0`, panic-family macros (`panic!/todo!/unimplemented!/unreachable!`) = `0`, explicit `unsafe` syntax = `0`
 - **Security**: Comprehensive hardening complete (path traversal, command injection, DAP evaluate, perldoc/perlcritic argument injection)
 - **DAP Server**: Native adapter CLI (launch/step/breakpoints), async BridgeAdapter with graceful shutdown; attach/variables/evaluate pending
+- **Index State Machine Receipts (2026-02-16)**: `just ci-gate` + targeted state-machine tests and workspace benchmarks validated transitions, instrumentation, and caps (`~368.7us` initial small index, `~721.1us` initial medium index, `~212.6us` incremental update)
 
 ### Computed Metrics (auto-updated by `just status-update`)
 
@@ -94,9 +95,9 @@ Key terms:
 
 ## What's Next
 
-**Now (v0.9.1 close-out)**
-- Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)
-- Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
+**Now (post v0.9.1 close-out)**
+- Keep verification receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
+- Publish benchmark outputs under `benchmarks/results/` for v1.0.x evidence trail
 
 **Next (v1.0.0 readiness)**
 - Stability statement (GA-lock + versioning rules)
@@ -119,7 +120,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 - **Tracked test debt**: see `scripts/ignored-test-count.sh`; feature-gated ignores are by design
 - **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
 - **Docs scope**: perl-parser missing_docs is ratcheted (see `ci/check_missing_docs.sh`); workspace-wide enforcement is a separate decision
-- **Index State Machine**: Verification pending (run `just ci-gate` + targeted tests/benchmarks)
+- **Index State Machine**: Verification complete (2026-02-16 receipts captured with `just ci-gate` + targeted tests/benchmarks)
 
 ---
 
@@ -145,5 +146,5 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-01-28 (narrative sections only; run `just status-update` to refresh metrics)*
+*Last Updated: 2026-02-16 (narrative sections only; run `just status-update` to refresh metrics)*
 *Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

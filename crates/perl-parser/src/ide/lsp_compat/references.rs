@@ -12,6 +12,13 @@
 //! 4. **Complete**: Context-aware completion using symbol information
 //! 5. **Analyze**: Cross-reference analysis and refactoring operations
 //!
+//! # Protocol and Client Capabilities
+//!
+//! - **Client capabilities**: Honors capability negotiation for reference
+//!   requests and related location metadata.
+//! - **Protocol compliance**: Implements `textDocument/references` from the
+//!   LSP 3.17 specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Reference lookup**: O(1) average with hash table indexing

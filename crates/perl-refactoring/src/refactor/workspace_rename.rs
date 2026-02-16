@@ -414,7 +414,6 @@ impl WorkspaceRename {
 }
 
 #[cfg(test)]
-#[allow(clippy::todo)] // Placeholder tests for #433 - todo!() won't execute in ignored tests
 mod tests {
     use super::*;
 

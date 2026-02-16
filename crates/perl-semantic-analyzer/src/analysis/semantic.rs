@@ -1434,6 +1434,9 @@ impl SemanticAnalyzer {
     /// - Variable references (looks up declaration)
     /// - Function calls (basic return type hints)
     ///
+    /// In the semantic workflow (Parse -> Index -> Analyze), this method runs
+    /// during the Analyze stage and consumes symbols produced during Index.
+    ///
     /// # Arguments
     ///
     /// * `node` - The AST node to infer type for

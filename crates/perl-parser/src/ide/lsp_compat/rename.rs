@@ -12,6 +12,13 @@
 //! 4. **Complete**: Context-aware completion with symbol awareness
 //! 5. **Analyze**: Workspace refactoring with this rename module
 //!
+//! # Protocol and Client Capabilities
+//!
+//! - **Client capabilities**: Uses client-declared rename capabilities to
+//!   decide whether prepare/confirm flows are available.
+//! - **Protocol compliance**: Implements `textDocument/rename` behavior and
+//!   response structure according to the LSP 3.17 specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Rename analysis**: O(n) where n is total references

@@ -141,7 +141,28 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Create a new parser with custom enhanced recovery configuration
+    /// Create a new parser with custom enhanced recovery configuration.
+    ///
+    /// This constructor exists for API compatibility while enhanced recovery
+    /// configuration is being phased in.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - Perl source text to tokenize and parse.
+    /// * `_config` - Placeholder recovery configuration parameter.
+    ///
+    /// # Returns
+    ///
+    /// A parser instance initialized for the provided source text.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser_core::Parser;
+    ///
+    /// let parser = Parser::new_with_recovery_config("my $x = 1;", ());
+    /// assert_eq!(parser.errors().len(), 0);
+    /// ```
     pub fn new_with_recovery_config(input: &'a str, _config: ()) -> Self {
         Parser {
             tokens: TokenStream::new(input),
@@ -249,11 +270,11 @@ impl<'a> Parser<'a> {
 
 // impl<'a> EnhancedErrorRecovery for Parser<'a> {
 //     fn with_enhanced_recovery() -> Self {
-//         unimplemented!("Use Parser::new() for default enhanced recovery")
+//         return Parser::new(...) for default enhanced recovery.
 //     }
 //
 //     fn with_enhanced_recovery_config(_config: RecoveryConfig) -> Self {
-//         unimplemented!("Use Parser::new_with_recovery_config() instead")
+//         return Parser::new_with_recovery_config(...) instead.
 //     }
 //
 //     fn recovery_state(&self) -> &EnhancedRecovery {

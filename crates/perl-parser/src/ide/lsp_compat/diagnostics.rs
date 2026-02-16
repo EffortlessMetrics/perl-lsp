@@ -12,6 +12,13 @@
 //! 4. **Complete**: Reduced completion on syntax errors
 //! 5. **Analyze**: Enhanced diagnostics with this module
 //!
+//! # Protocol and Client Capabilities
+//!
+//! - **Client capabilities**: Honors client-declared diagnostic capabilities
+//!   (for example tags and related information) when shaping responses.
+//! - **Protocol compliance**: Implements `textDocument/publishDiagnostics`
+//!   semantics from the LSP 3.17 specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Error detection**: O(n) where n is source length
@@ -178,6 +185,9 @@ impl DiagnosticProvider {
     ///
     /// let provider = DiagnosticProvider::with_config(config);
     /// ```
+    ///
+    /// Arguments: `config` overrides default diagnostic behavior.
+    /// Returns: a configured [`DiagnosticProvider`].
     pub fn with_config(config: DiagnosticConfig) -> Self {
         Self {
             severity_config: config,
@@ -200,6 +210,25 @@ impl DiagnosticProvider {
     ///
     /// - O(n) where n is number of parse errors + AST nodes
     /// - <1ms for typical files with <10 errors
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_parser::ide::lsp_compat::diagnostics::DiagnosticProvider;
+    /// use perl_parser::ParseResult;
+    /// use url::Url;
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let provider = DiagnosticProvider::new();
+    /// let result = ParseResult::default();
+    /// let diagnostics = provider.generate_diagnostics(&result, Url::parse("file:///tmp/demo.pl")?);
+    /// assert!(diagnostics.is_empty());
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Arguments: `result` contains parser output; `uri` identifies the source file.
+    /// Returns: diagnostics sorted by source position.
     pub fn generate_diagnostics(
         &self,
         result: &crate::ParseResult,

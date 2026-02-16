@@ -1,6 +1,6 @@
 # TODOs & Missing Features
 
-> **Last Updated**: 2026-01-27
+> **Last Updated**: 2026-02-16
 > **Sources of truth**: `docs/ROADMAP.md` (plans), `docs/CURRENT_STATUS.md` (metrics), `features.toml` (capabilities)
 > **Rule**: If this file conflicts with those sources, update this file (not the sources).
 
@@ -24,20 +24,20 @@
 - [x] Add instrumentation (state durations, early-exit reasons, transition counts)
 - [x] Add targeted tests + benchmarks (small/medium/large workspaces)
 - [x] Document invariants and failure modes (docs + inline commentary)
-- [ ] Capture receipts (ci-gate + targeted tests/benchmarks)
+- [x] Capture receipts (ci-gate + targeted tests/benchmarks)
 
 ### Documentation Cleanup (missing_docs + module-level docs)
 
-- [ ] Run `cargo test -p perl-parser --test missing_docs_ac_tests` and capture receipts
-- [ ] Add or verify module-level docs for public modules (perl-parser + other public crates)
-- [ ] Ensure `cargo doc --no-deps -p perl-parser` is clean
-- [ ] Align wording across `START_HERE.md`, `CURRENT_STATUS.md`, `ROADMAP.md`, `CHANGELOG.md`
+- [x] Run `cargo test -p perl-parser --features doc-coverage --test missing_docs_ac_tests` and capture receipts
+- [x] Add or verify module-level docs for public modules (perl-parser + other public crates)
+- [x] Ensure `cargo doc --no-deps -p perl-parser` is clean
+- [x] Align wording across `START_HERE.md`, `CURRENT_STATUS.md`, `ROADMAP.md`, `CHANGELOG.md`
 
 ### Release Notes + Doc Alignment
 
-- [ ] v0.9.1 release notes draft (CHANGELOG + release summary)
-- [ ] Ensure `features.toml` and capability snapshots remain consistent
-- [ ] Verify `docs/CURRENT_STATUS.md` narrative matches receipts
+- [x] v0.9.1 release notes draft (CHANGELOG + release summary)
+- [x] Ensure `features.toml` and capability snapshots remain consistent
+- [x] Verify `docs/CURRENT_STATUS.md` narrative matches receipts
 
 ---
 

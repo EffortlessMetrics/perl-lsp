@@ -5,7 +5,7 @@
 
 use perl_parser_core::ast::Node;
 use rustc_hash::FxHashMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Build nested selection range objects by climbing parent map.
 pub fn selection_chain(

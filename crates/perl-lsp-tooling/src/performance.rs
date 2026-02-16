@@ -1,4 +1,9 @@
-//! Performance optimizations for large projects
+//! Performance optimizations for large projects.
+//!
+//! This module is designed for large workspace scaling, including repositories
+//! with tens of thousands of files where cache hit rates and bounded memory
+//! usage are required to keep indexing and analysis responsive for enterprise
+//! and large-file workloads.
 
 use moka::sync::Cache;
 use perl_parser_core::Node;

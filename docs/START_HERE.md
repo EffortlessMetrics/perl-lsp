@@ -6,7 +6,7 @@ Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 
 ## 📍 You Are Here
 
-**Project Status**: v0.9.0 released; v0.9.1 close-out in progress; v1.0 planning underway
+**Project Status**: v0.9.1 close-out receipts captured; v1.0.x hardening underway
 **Open Issues**: See GitHub milestones/issues for live counts
 
 ## 🎯 5-Minute Orientation
@@ -21,9 +21,9 @@ perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 
 ### Current Focus
 
-**Now (v0.9.1 close-out)**
-- Workspace index state machine verification + receipts (phase transitions, early-exit caps)
-- Documentation cleanup (`missing_docs`)
+**Now (post v0.9.1 close-out)**
+- Keep close-out receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
+- Publish benchmark outputs under `benchmarks/results/`
 
 **Next (v1.0.0)**
 - Stability statement + packaging stance
@@ -54,10 +54,10 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 
 ## 🚨 What Needs Attention RIGHT NOW
 
-### Now (as of 2026-01-27)
-1. 🔴 **Index state machine verification** - confirm transitions, early-exit caps, and receipts
-2. 🔴 **Documentation cleanup** - reduce `missing_docs` violations + module-level docs
-3. 🟡 **v0.9.1 release notes + doc alignment** - CHANGELOG/ROADMAP/CURRENT_STATUS in sync
+### Now (as of 2026-02-16)
+1. 🟡 **Benchmark publication** - commit canonical benchmark outputs under `benchmarks/results/`
+2. 🟡 **v1.0.x packaging stance** - finalize supported platforms and shipping model
+3. 🟡 **Upgrade notes polish** - ensure v0.8.x → v1.0 path is explicit
 4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/LSP_MISSING_FEATURES_REPORT.md`
 
 ### Next
@@ -115,8 +115,8 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp  # With adaptive threading
 
 ## 💡 Where to Start Contributing
 
-- Check the active milestone (v0.9.1) and the `good first issue` / `help wanted` labels
-- Near-term work: index state machine + documentation cleanup (see ROADMAP)
+- Check the active milestone and the `good first issue` / `help wanted` labels
+- Near-term work: benchmark publication + v1.0.x packaging/readiness (see ROADMAP)
 - Larger efforts: v1.0 milestone and `phase:*` labels
 - See [CONTRIBUTING.md](../CONTRIBUTING.md) for workflow details
 

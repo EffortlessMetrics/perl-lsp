@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **v0.9.1 close-out receipts captured**: workspace index state-machine transitions, instrumentation, and early-exit behavior verified with targeted tests in `perl-workspace-index`
+- **Performance caps validated**: workspace index benchmarks confirm wide margin to targets (`~368.7us` initial small, `~721.1us` initial medium, `~212.6us` incremental)
+- **Documentation hardening completed**: `cargo test -p perl-parser --features doc-coverage --test missing_docs_ac_tests` and `cargo doc --no-deps -p perl-parser` both clean
+- **Milestone docs aligned**: `START_HERE.md`, `CURRENT_STATUS.md`, `ROADMAP.md`, and `TODO.md` now reflect the same post-close-out status
+
 ## [1.0.0] - 2026-02-13
 
 ### Added
