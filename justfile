@@ -362,6 +362,7 @@ ci-gate:
     just ci-clippy-lib && \
     just clippy-prod-no-unwrap && \
     just clippy-no-unwrap-all && \
+    just ci-unsafe-ratchet && \
     just ci-forbid-fatal && \
     just ci-test-lib && \
     just ci-policy && \
@@ -435,6 +436,12 @@ clippy-no-unwrap-all:
     @echo "🔒 Enforcing no unwrap/expect everywhere (including tests)..."
     cargo clippy --workspace --all-targets -- -D clippy::unwrap_used -D clippy::expect_used
     @echo "✅ Production code is panic-safe (no unwrap/expect)"
+
+# Unsafe syntax ratchet (production source only)
+ci-unsafe-ratchet:
+    @echo "🛡️  Checking unsafe syntax ratchet..."
+    @bash ci/check_unsafe_prod.sh
+    @echo "✅ Unsafe syntax ratchet passed"
 
 # Forbid fatal constructs gate - catches abort/exit/panic that Clippy misses
 ci-forbid-fatal:

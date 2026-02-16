@@ -1,11 +1,10 @@
 //! Performance test for symbol extraction
-//! Run with: cargo test -p perl-semantic-analyzer --test symbol_perf_test -- --nocapture --ignored
+//! Run with: cargo test -p perl-semantic-analyzer --test symbol_perf_test -- --nocapture
 
 use perl_semantic_analyzer::{Parser, symbol::SymbolExtractor};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[test]
-#[ignore = "stress: performance benchmark, run on-demand with --ignored"]
 fn benchmark_symbol_extraction() {
     // Generate large test code
     let mut code = String::from("package TestPackage;\n\n");
@@ -42,7 +41,7 @@ sub test_{} {{
     }
 
     // Benchmark
-    let iterations = 10;
+    let iterations = 5;
     let mut total_time = std::time::Duration::ZERO;
     let mut symbol_count = 0;
     let mut ref_count = 0;
@@ -76,11 +75,22 @@ sub test_{} {{
     );
 
     // Performance requirement: should process at least 1000 symbols/sec
-    let symbols_per_sec = (symbol_count as f64 * 1000.0) / avg_time.as_millis() as f64;
+    let symbols_per_sec = (symbol_count as f64 * 1000.0) / avg_time.as_millis().max(1) as f64;
     println!("Symbols per second: {:.0}", symbols_per_sec);
 
-    // This is a baseline - optimizations should improve this
-    assert!(avg_time.as_millis() < 500, "Symbol extraction too slow: {:?}", avg_time);
+    assert!(
+        symbol_count >= 500,
+        "Expected at least 500 symbols from synthetic workload, found {symbol_count}"
+    );
+    assert!(
+        ref_count >= 100,
+        "Expected reference extraction to produce entries, found {ref_count}"
+    );
+    assert!(
+        avg_time <= Duration::from_secs(2),
+        "Symbol extraction too slow for default lane: {:?}",
+        avg_time
+    );
 }
 
 #[test]

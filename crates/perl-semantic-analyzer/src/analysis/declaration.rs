@@ -3,8 +3,6 @@
 //! Provides go-to-declaration functionality for finding where symbols are declared.
 //! Supports LocationLink for enhanced client experience.
 
-#![allow(unsafe_code)]
-
 use crate::ast::{Node, NodeKind};
 use crate::workspace_index::{SymKind, SymbolKey};
 use rustc_hash::FxHashMap;
@@ -309,9 +307,12 @@ impl<'a> DeclarationProvider<'a> {
             };
             &temp_parent_map
         };
+        let node_lookup = self.build_node_lookup_map();
 
         while let Some(&parent_ptr) = parent_map.get(&current_ptr) {
-            let parent = unsafe { &*parent_ptr };
+            let Some(parent) = node_lookup.get(&parent_ptr).copied() else {
+                break;
+            };
 
             // Check siblings before this node in the current scope
             for child in self.get_children(parent) {
@@ -491,9 +492,12 @@ impl<'a> DeclarationProvider<'a> {
             };
             &temp_parent_map
         };
+        let node_lookup = self.build_node_lookup_map();
 
         while let Some(&parent_ptr) = parent_map.get(&current_ptr) {
-            let parent = unsafe { &*parent_ptr };
+            let Some(parent) = node_lookup.get(&parent_ptr).copied() else {
+                break;
+            };
 
             // Check siblings before this node for package declarations
             for child in self.get_children(parent) {
@@ -889,6 +893,19 @@ impl<'a> DeclarationProvider<'a> {
 
     fn get_children<'b>(&self, node: &'b Node) -> Vec<&'b Node> {
         Self::get_children_static(node)
+    }
+
+    fn build_node_lookup_map(&self) -> FxHashMap<*const Node, &Node> {
+        let mut map = FxHashMap::default();
+        Self::build_node_lookup(self.ast.as_ref(), &mut map);
+        map
+    }
+
+    fn build_node_lookup<'b>(node: &'b Node, map: &mut FxHashMap<*const Node, &'b Node>) {
+        map.insert(node as *const Node, node);
+        for child in Self::get_children_static(node) {
+            Self::build_node_lookup(child, map);
+        }
     }
 
     fn get_children_static(node: &Node) -> Vec<&Node> {

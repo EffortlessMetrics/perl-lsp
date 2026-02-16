@@ -20,7 +20,7 @@ $left,      $center,  $right
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -54,7 +54,7 @@ $name, length($name)
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -85,7 +85,7 @@ $description
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -116,7 +116,7 @@ $int,            $float
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -148,7 +148,7 @@ $num1, $str1, $str2, $str3, $num2, $str4
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -180,7 +180,7 @@ $ARGV,         $.,       $%
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -226,7 +226,7 @@ $title
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -263,7 +263,7 @@ my $y = 42;
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -299,7 +299,7 @@ $left,      $center,  $right
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -336,7 +336,7 @@ scalar(localtime), $^T
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });
@@ -363,7 +363,7 @@ scalar(localtime), $^T
         assert!(ast_opt.is_some(), "Should have parsed successfully");
         let ast = ast_opt.unwrap_or_else(|| {
             // Since we assert!(ast_opt.is_some()) above, this is technically unreachable
-            // but we need to satisfy the compiler without an explicit .unwrap()
+            // but we need to satisfy the compiler without an explicit unwrap call
             // which is denied by clippy policy.
             Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
         });

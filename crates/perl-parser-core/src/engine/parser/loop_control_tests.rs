@@ -14,7 +14,11 @@ mod tests {
         let keywords = ["next", "last", "redo"];
         for kw in keywords {
             let source = format!("{};", kw);
-            let ast = parse_code(&source).unwrap();
+            let ast_opt = parse_code(&source);
+            assert!(ast_opt.is_some());
+            let ast = ast_opt.unwrap_or_else(|| {
+                Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
+            });
             if let NodeKind::Program { statements } = &ast.kind {
                 let stmt = &statements[0];
                 if let NodeKind::LoopControl { op, label } = &stmt.kind {

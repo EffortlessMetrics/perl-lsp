@@ -5,7 +5,7 @@
 
 use perl_parser_core::ast::Node;
 use rustc_hash::FxHashMap;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 /// Build nested selection range objects by climbing parent map.
 pub fn selection_chain(
@@ -16,15 +16,16 @@ pub fn selection_chain(
 ) -> Value {
     // Find leaf node at offset
     let leaf = perl_semantic_analyzer::declaration::find_node_at_offset(ast, offset).unwrap_or(ast);
+    let mut node_lookup = FxHashMap::default();
+    build_node_lookup(ast, &mut node_lookup);
 
     let mut current_ptr = leaf as *const Node;
     let mut acc = None;
 
     loop {
-        // We know these pointers are valid because they come from our AST
-        // Using allow(unsafe) here is valid since we control the AST lifetime
-        #[allow(unsafe_code)]
-        let node = unsafe { &*current_ptr };
+        let Some(node) = node_lookup.get(&current_ptr).copied() else {
+            break;
+        };
 
         let (sl, sc) = to_pos16(node.location.start);
         let (el, ec) = to_pos16(node.location.end);
@@ -55,6 +56,13 @@ pub fn selection_chain(
             }
         })
     })
+}
+
+fn build_node_lookup<'a>(node: &'a Node, map: &mut FxHashMap<*const Node, &'a Node>) {
+    map.insert(node as *const Node, node);
+    for child in perl_semantic_analyzer::declaration::get_node_children(node) {
+        build_node_lookup(child, map);
+    }
 }
 
 /// Helper to build parent map for an AST
