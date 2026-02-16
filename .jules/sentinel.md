@@ -43,7 +43,7 @@ Users hovering over expressions containing these keywords could accidentally tri
 
 ## 2026-10-25 - Path Traversal via Configuration
 **Vulnerability:** The `BinaryDownloader` constructed file paths using `path.join(tempDir, assetName)` where `assetName` was derived from a user-configurable version tag (`perl-lsp.versionTag`). An attacker could supply a malicious tag (e.g., `../../etc/passwd`) to write files outside the intended temporary directory.
-**Learning:** Never trust that `path.join` with a "filename" will stay within a directory. If the filename part comes from user input (even indirectly via configuration), it must be validated to ensure it contains no path separators.
+**Learning:** Never trust that `path.join` with a "filename" will stay within a directory. If the filename part comes from user input (even indirectly via configuration), they must be validated to ensure it contains no path separators.
 **Prevention:** Explicitly validate that constructed filenames match a strict allowlist (e.g., `^[a-zA-Z0-9_.-]+$`) and reject any input containing path separators or `..`.
 
 ## 2026-10-25 - Safe Evaluation Bypass via Dereference
@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-11-20 - Infinite Redirect Loop DoS
+**Vulnerability:** The `BinaryDownloader` in `vscode-extension` recursively followed HTTP redirects without a limit or loop detection. A malicious or misconfigured server could trigger an infinite recursion, causing a stack overflow and crashing the extension host (DoS).
+**Learning:** Recursive functions handling external input (like HTTP redirects) must always have a termination condition (depth limit). Relying on the external system to stop redirecting is unsafe.
+**Prevention:** Implement a `maxRedirects` counter (e.g., 5) and fail if the limit is exceeded. Always decrement or increment a counter when recursing.
