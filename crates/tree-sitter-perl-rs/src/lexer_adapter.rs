@@ -543,7 +543,11 @@ mod tests {
 
     #[test]
     fn test_parse_substitution_simple() {
-        let (p, r, f) = parse_substitution_text("s/foo/bar/g").expect("should parse");
+        let parsed = parse_substitution_text("s/foo/bar/g");
+        assert!(parsed.is_some(), "expected substitution parse for s/foo/bar/g");
+        let Some((p, r, f)) = parsed else {
+            return;
+        };
         assert_eq!(p, "foo");
         assert_eq!(r, "bar");
         assert_eq!(f, "g");
@@ -551,7 +555,11 @@ mod tests {
 
     #[test]
     fn test_parse_substitution_braces() {
-        let (p, r, f) = parse_substitution_text("s{foo}{bar}g").expect("should parse");
+        let parsed = parse_substitution_text("s{foo}{bar}g");
+        assert!(parsed.is_some(), "expected substitution parse for brace delimiters");
+        let Some((p, r, f)) = parsed else {
+            return;
+        };
         assert_eq!(p, "foo");
         assert_eq!(r, "bar");
         assert_eq!(f, "g");
@@ -559,7 +567,11 @@ mod tests {
 
     #[test]
     fn test_parse_substitution_nested_braces() {
-        let (p, r, f) = parse_substitution_text("s{f{o}o}{bar}").expect("should parse");
+        let parsed = parse_substitution_text("s{f{o}o}{bar}");
+        assert!(parsed.is_some(), "expected substitution parse for s{{f{{o}}o}}{{bar}}");
+        let Some((p, r, f)) = parsed else {
+            return;
+        };
         assert_eq!(p, "f{o}o");
         assert_eq!(r, "bar");
         assert_eq!(f, "");
@@ -567,7 +579,11 @@ mod tests {
 
     #[test]
     fn test_parse_substitution_escaped_delimiter() {
-        let (p, r, f) = parse_substitution_text("s/foo\\/bar/baz/").expect("should parse");
+        let parsed = parse_substitution_text("s/foo\\/bar/baz/");
+        assert!(parsed.is_some(), "expected substitution parse for escaped delimiter case");
+        let Some((p, r, f)) = parsed else {
+            return;
+        };
         assert_eq!(p, "foo\\/bar");
         assert_eq!(r, "baz");
         assert_eq!(f, "");
@@ -575,7 +591,11 @@ mod tests {
 
     #[test]
     fn test_parse_transliteration_simple() {
-        let (s, r, f) = parse_transliteration_text("tr/a-z/A-Z/").expect("should parse");
+        let parsed = parse_transliteration_text("tr/a-z/A-Z/");
+        assert!(parsed.is_some(), "expected transliteration parse for tr/a-z/A-Z/");
+        let Some((s, r, f)) = parsed else {
+            return;
+        };
         assert_eq!(s, "a-z");
         assert_eq!(r, "A-Z");
         assert_eq!(f, "");
@@ -583,7 +603,11 @@ mod tests {
 
     #[test]
     fn test_parse_transliteration_y() {
-        let (s, r, f) = parse_transliteration_text("y/abc/def/").expect("should parse");
+        let parsed = parse_transliteration_text("y/abc/def/");
+        assert!(parsed.is_some(), "expected transliteration parse for y/abc/def/");
+        let Some((s, r, f)) = parsed else {
+            return;
+        };
         assert_eq!(s, "abc");
         assert_eq!(r, "def");
         assert_eq!(f, "");
@@ -591,7 +615,11 @@ mod tests {
 
     #[test]
     fn test_parse_transliteration_braces() {
-        let (s, r, f) = parse_transliteration_text("tr{a-z}{A-Z}").expect("should parse");
+        let parsed = parse_transliteration_text("tr{a-z}{A-Z}");
+        assert!(parsed.is_some(), "expected transliteration parse for brace delimiters");
+        let Some((s, r, f)) = parsed else {
+            return;
+        };
         assert_eq!(s, "a-z");
         assert_eq!(r, "A-Z");
         assert_eq!(f, "");
