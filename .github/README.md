@@ -4,6 +4,13 @@ This directory contains GitHub-specific configuration files for the perl-lsp pro
 
 ## Files
 
+### Repository Settings
+
+- **[settings.yaml](settings.yaml)** - Repository metadata as code
+  - Canonical description and homepage
+  - Repository topics (GitHub tags)
+  - Default branch and merge strategy settings
+
 ### Dependency Management
 
 - **[dependabot.yml](dependabot.yml)** - Automated dependency updates via Dependabot

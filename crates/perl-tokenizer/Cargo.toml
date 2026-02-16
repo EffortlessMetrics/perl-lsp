@@ -7,6 +7,10 @@ authors = ["Tree-sitter Perl Contributors"]
 description = "Token stream and utilities for Perl parser"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+documentation = "https://docs.rs/perl-tokenizer"
+keywords = ["perl", "tokenizer", "parser", "lexer"]
+categories = ["parsing", "text-processing"]
 
 [dependencies]
 perl-lexer = { workspace = true }

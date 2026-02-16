@@ -8,6 +8,10 @@ description = "Heredoc collector and processor for Perl"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+documentation = "https://docs.rs/perl-heredoc"
+keywords = ["perl", "heredoc", "parser"]
+categories = ["parsing", "text-processing"]
 
 [dependencies]
 perl-position-tracking = { workspace = true }

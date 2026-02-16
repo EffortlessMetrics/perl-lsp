@@ -7,6 +7,10 @@ authors = ["Tree-sitter Perl Contributors"]
 description = "Error types and recovery strategies for Perl parser"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+documentation = "https://docs.rs/perl-error"
+keywords = ["perl", "parser", "error", "recovery"]
+categories = ["parsing", "development-tools"]
 
 [dependencies]
 thiserror = "2.0.18"

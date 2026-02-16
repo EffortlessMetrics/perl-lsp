@@ -3,7 +3,14 @@ name = "perl-pragma"
 version = "0.9.0"
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+description = "Perl pragma extraction and analysis primitives"
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-pragma"
+keywords = ["perl", "pragma", "parser", "ast"]
+categories = ["parsing", "development-tools"]
 
 [dependencies]
 perl-ast = { workspace = true }

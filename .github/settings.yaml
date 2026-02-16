@@ -1,0 +1,23 @@
+repository:
+  description: "Production-ready Perl parser, LSP, and DAP ecosystem in Rust."
+  homepage: "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+  default_branch: "master"
+  has_issues: true
+  has_projects: false
+  has_wiki: false
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: true
+  delete_branch_on_merge: true
+  allow_auto_merge: true
+  topics:
+    - perl
+    - lsp
+    - dap
+    - language-server
+    - parser
+    - tree-sitter
+    - rust
+    - ide
+    - semantic-analysis
+    - debugging

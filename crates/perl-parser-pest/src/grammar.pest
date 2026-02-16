@@ -412,6 +412,11 @@ decrement = { "--" }
 primary_expression = {
     variable_declaration
     | class_method_call
+    // Preprocessor markers must be tried before user_function_call
+    // so _SUB_, _TRANS_, _QR_ aren't consumed as identifiers
+    | substitution
+    | transliteration
+    | regex
     | user_function_call
     | qualified_name_or_identifier
     | literal
@@ -424,9 +429,6 @@ primary_expression = {
     | "(" ~ expression ~ ")"
     | block
     | anonymous_sub
-    | substitution
-    | transliteration
-    | regex
     | heredoc
     | glob
     | readline
@@ -962,9 +964,10 @@ list_op_args = {
     list_op_arg ~ ("," ~ list_op_arg)*
 }
 
-// Single argument - stop at low precedence operators or statement boundaries
+// Single argument - stop at low precedence operators, statement boundaries,
+// and the _DIV_ preprocessor marker (which is an infix operator, never a term)
 list_op_arg = {
-    !statement_boundary ~ ternary_expression
+    !statement_boundary ~ !"_DIV_" ~ ternary_expression
 }
 
 // Statement boundaries where list operators stop consuming arguments
