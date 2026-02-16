@@ -721,29 +721,29 @@ impl ExecuteCommandProvider {
             .canonicalize()
             .map_err(|e| format!("Failed to canonicalize path '{}': {}", normalized_path, e))?;
 
-        // Enforce workspace root boundaries when configured
-        // Security note: When workspace_roots is empty, path traversal protection is disabled
-        // for backward compatibility. In production, always configure workspace roots via
-        // initialization (root_path or workspaceFolders) to enable security boundaries.
-        // See .jules/sentinel.md for security guidance.
-        if !self.workspace_roots.is_empty() {
-            let mut allowed = false;
-            for workspace_root in &self.workspace_roots {
-                // Try to canonicalize root, skip if fails (e.g. missing dir)
-                if let Ok(canonical_root) = workspace_root.canonicalize() {
-                    if canonical_path.starts_with(&canonical_root) {
-                        allowed = true;
-                        break;
-                    }
+        // Enforce workspace root boundaries
+        // Security: Fail closed if no workspace roots are configured.
+        // File execution is restricted to within the configured workspace roots.
+        if self.workspace_roots.is_empty() {
+            return Err("Security violation: No workspace roots configured. File execution is disabled.".to_string());
+        }
+
+        let mut allowed = false;
+        for workspace_root in &self.workspace_roots {
+            // Try to canonicalize root, skip if fails (e.g. missing dir)
+            if let Ok(canonical_root) = workspace_root.canonicalize() {
+                if canonical_path.starts_with(&canonical_root) {
+                    allowed = true;
+                    break;
                 }
             }
+        }
 
-            if !allowed {
-                return Err(format!(
-                    "Path traversal detected: {} is outside workspace roots",
-                    canonical_path.display()
-                ));
-            }
+        if !allowed {
+            return Err(format!(
+                "Path traversal detected: {} is outside workspace roots",
+                canonical_path.display()
+            ));
         }
 
         // Validate file existence and readability
@@ -1045,7 +1045,8 @@ print "Value: $variable\n";
         let temp_file = "/tmp/test_violations_unit.pl";
         fs::write(temp_file, test_content)?;
 
-        let provider = ExecuteCommandProvider::new();
+        // Use temp dir as workspace root
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
         let result =
             provider.execute_command("perl.runCritic", vec![Value::String(temp_file.to_string())]);
 
@@ -1122,7 +1123,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
         // Create a test file to ensure we get a specific result
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test';\n";
@@ -1146,7 +1147,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_file() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
         // Create a test file
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'hello world';\n";
@@ -1170,7 +1171,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_test_sub() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
         // Create a test file with a subroutine
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_sub { print 'test executed'; }\n";
@@ -1196,7 +1197,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_debug_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
         // Create a dummy file
         let temp_file = "/tmp/test_debug.pl";
@@ -1241,7 +1242,7 @@ print "Value: $variable\n";
     #[test]
     fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std::error::Error>>
     {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
         // Create a dummy file
         let temp_file = "/tmp/test_missing_sub.pl";
@@ -1498,7 +1499,7 @@ print "Value: $variable\n";
 
     #[test]
     fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::new();
+        let provider = ExecuteCommandProvider::with_workspace_roots(vec![PathBuf::from("/tmp")]);
 
         // Create a dummy file
         let temp_file = "/tmp/test_mutations.pl";
@@ -1531,6 +1532,35 @@ print "Value: $variable\n";
             result_value,
             Value::Object(serde_json::Map::new()),
             "Should not be empty object"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_execute_command_fails_without_workspace_roots() -> Result<(), Box<dyn std::error::Error>> {
+        // Create a file in temp dir
+        let temp_file = std::env::temp_dir().join("perl_lsp_no_roots.pl");
+        fs::write(&temp_file, "print 'no roots';")?;
+
+        // Initialize provider WITHOUT workspace roots (default)
+        let provider = ExecuteCommandProvider::new();
+
+        // Try to execute the file
+        let result = provider.execute_command(
+            "perl.runFile",
+            vec![Value::String(temp_file.to_string_lossy().to_string())],
+        );
+
+        // Clean up
+        fs::remove_file(temp_file).ok();
+
+        // Verify it fails with security violation
+        assert!(result.is_err(), "Should fail when no workspace roots are configured");
+        let error = result.err().ok_or("expected error")?;
+        assert!(
+            error.contains("Security violation") || error.contains("No workspace roots configured"),
+            "Error should indicate missing workspace roots: {}",
+            error
         );
         Ok(())
     }
