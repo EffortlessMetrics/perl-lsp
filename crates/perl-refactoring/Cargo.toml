@@ -33,6 +33,7 @@ url = "2.5.4"
 default = ["workspace_refactor"]
 modernize = []
 workspace_refactor = []
+workspace-rename-tests = []  # Workspace rename integration tests (requires WorkspaceIndex)
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

@@ -949,7 +949,10 @@ impl ScopeAnalyzer {
     fn extract_variable_name<'a>(&self, node: &'a Node) -> ExtractedName<'a> {
         match &node.kind {
             NodeKind::Variable { sigil, name } => ExtractedName::Parts(sigil, name),
-            NodeKind::MandatoryParameter { variable } => self.extract_variable_name(variable),
+            NodeKind::MandatoryParameter { variable }
+            | NodeKind::OptionalParameter { variable, .. }
+            | NodeKind::SlurpyParameter { variable }
+            | NodeKind::NamedParameter { variable } => self.extract_variable_name(variable),
             NodeKind::ArrayLiteral { elements } => {
                 // Handle array reference patterns like @{$ref}
                 if elements.len() == 1 {

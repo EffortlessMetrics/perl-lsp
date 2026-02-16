@@ -4,7 +4,6 @@ use perl_parser::Parser;
 use std::sync::Arc;
 
 #[test]
-#[ignore = "feature: parameter validation diagnostics not yet implemented"]
 fn test_duplicate_parameter_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"sub test($x, $y, $x) {
     print $x;
@@ -32,7 +31,6 @@ fn test_duplicate_parameter_code_actions() -> Result<(), Box<dyn std::error::Err
 }
 
 #[test]
-#[ignore = "feature: parameter validation diagnostics not yet implemented"]
 fn test_parameter_shadowing_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"my $data = 42;
 
@@ -66,7 +64,6 @@ sub process($data) {
 }
 
 #[test]
-#[ignore = "feature: parameter validation diagnostics not yet implemented"]
 fn test_unused_parameter_code_actions() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"sub calculate($x, $y, $unused) {
     return $x + $y;
@@ -121,7 +118,6 @@ print FOO;"#;
 }
 
 #[test]
-#[ignore = "feature: parameter validation diagnostics not yet implemented"]
 fn test_multiple_parameter_issues() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"my $x = 1;
 my $y = 2;

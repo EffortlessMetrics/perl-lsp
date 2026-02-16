@@ -198,13 +198,10 @@ struct CorpusTestResults {
 
 #### **Usage Pattern** (*Diataxis: How-to Guide* - Implementation approach)
 ```bash
-# From project root, navigate to xtask directory
-cd xtask
-
 # Run corpus comparison modes (requires legacy feature)
-cargo run --features legacy -- corpus                     # Default scanner: v3
-cargo run --features legacy -- corpus -- --scanner both   # C vs v3 comparison mode
-cargo run --features legacy -- corpus -- --scanner v2-parity --diagnose
+cargo run -p xtask --features legacy -- corpus                          # Default scanner: v3
+cargo run -p xtask --features legacy -- corpus --scanner both           # C vs v3 comparison mode
+cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose
 ```
 
 ## Key Components

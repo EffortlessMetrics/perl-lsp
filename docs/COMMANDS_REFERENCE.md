@@ -735,23 +735,23 @@ sudo apt-get install libclang-dev  # Ubuntu/Debian
 brew install llvm                  # macOS
 
 # Run corpus comparison modes (requires legacy feature)
-cd xtask && cargo run --features legacy -- corpus                         # Corpus vs selected parser (default scanner: v3)
-cd xtask && cargo run --features legacy -- corpus -- --scanner both       # C vs v3 comparison mode
-cd xtask && cargo run --features legacy -- corpus -- --scanner both --diagnose
+cargo run -p xtask --features legacy -- corpus                          # Corpus vs selected parser (default scanner: v3)
+cargo run -p xtask --features legacy -- corpus --scanner both           # C vs v3 comparison mode
+cargo run -p xtask --features legacy -- corpus --scanner both --diagnose
 
 # Individual scanner testing
-cd xtask && cargo run --features legacy -- corpus -- --scanner c                    # C scanner
-cd xtask && cargo run --features legacy -- corpus -- --scanner rust                 # In-crate v2 pest parser
-cd xtask && cargo run --features legacy -- corpus -- --scanner v2-pest-microcrate   # Extracted perl-parser-pest v2
-cd xtask && cargo run --features legacy -- corpus -- --scanner v2-parity --diagnose # v2<->v2 drift detector
-cd xtask && cargo run --features legacy -- corpus -- --scanner v3                   # V3 parser only
+cargo run -p xtask --features legacy -- corpus --scanner c                    # C scanner
+cargo run -p xtask --features legacy -- corpus --scanner rust                 # In-crate v2 pest parser
+cargo run -p xtask --features legacy -- corpus --scanner v2-pest-microcrate   # Extracted perl-parser-pest v2
+cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose # v2<->v2 drift detector
+cargo run -p xtask --features legacy -- corpus --scanner v3                   # V3 parser only
 
 # Diagnostic analysis (*Diataxis: Reference* - detailed comparison)
-cd xtask && cargo run --features legacy -- corpus -- --diagnose  # Analyze first failing test
-cd xtask && cargo run --features legacy -- corpus -- --test      # Test current parser behavior
+cargo run -p xtask --features legacy -- corpus --diagnose  # Analyze first failing test
+cargo run -p xtask --features legacy -- corpus --test      # Test current parser behavior
 
 # Custom corpus path
-cd xtask && cargo run --features legacy -- corpus -- --path ../tree-sitter-perl/test/corpus
+cargo run -p xtask --features legacy -- corpus --path tree-sitter-perl/test/corpus
 ```
 
 ### Dual-Scanner Output Analysis (*Diataxis: Explanation* - Understanding results)
@@ -797,7 +797,7 @@ cd xtask && cargo run --features legacy -- corpus -- --path ../tree-sitter-perl/
 
 ```bash
 # Basic corpus command structure
-cd xtask && cargo run --features legacy -- corpus [OPTIONS]
+cargo run -p xtask --features legacy -- corpus [OPTIONS]
 
 # Command line options:
 --path <PATH>              # Corpus directory path (default: tree-sitter-perl/test/corpus)

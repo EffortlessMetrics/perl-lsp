@@ -13,7 +13,6 @@ mod dap_dependencies {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-fallback
     #[test]
-    #[ignore]
     // AC:18
     fn test_cpan_module_installation_fallback() -> Result<()> {
         // Automatic CPAN module installation fallback
@@ -23,7 +22,6 @@ mod dap_dependencies {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-version-detection
     #[test]
-    #[ignore]
     // AC:18
     fn test_devel_tsperldap_version_detection() -> Result<()> {
         // Detect installed Devel::TSPerlDAP version
@@ -33,7 +31,6 @@ mod dap_dependencies {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-bundled-shim
     #[test]
-    #[ignore]
     // AC:18
     fn test_bundled_shim_fallback() -> Result<()> {
         // Bundled shim fallback when CPAN unavailable
@@ -43,7 +40,6 @@ mod dap_dependencies {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-documentation
     #[test]
-    #[ignore]
     // AC:18
     fn test_dependency_management_documentation() -> Result<()> {
         // Documentation for dependency management
@@ -53,7 +49,6 @@ mod dap_dependencies {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-perl-version
     #[test]
-    #[ignore]
     // AC:18
     fn test_perl_version_compatibility() -> Result<()> {
         // Perl version compatibility check (5.10+)
@@ -63,7 +58,6 @@ mod dap_dependencies {
 
     /// Tests feature spec: DAP_IMPLEMENTATION_SPECIFICATION.md#ac18-cpan-install
     #[test]
-    #[ignore]
     // AC:18
     fn test_cpan_dependency_installation() -> Result<()> {
         // CPAN dependency installation workflow

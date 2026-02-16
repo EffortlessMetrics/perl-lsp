@@ -98,6 +98,7 @@ semantic-phase2 = []  # Semantic analyzer Phase 2+ features
 parser-extras = []  # General aspirational parser tests
 crash-repros = []  # Enable crash reproducer tests (may hang - use with timeout)
 slow_tests = []  # Enable slow stress tests (deep nesting, etc.)
+doc-coverage = []  # SPEC-149 documentation coverage tests
 
 [dev-dependencies]
 assert_cmd = "2.1.2"
