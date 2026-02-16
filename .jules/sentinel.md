@@ -70,3 +70,8 @@ Users hovering over expressions containing these keywords could accidentally tri
 **Vulnerability:** The VS Code extension settings `perl-lsp.serverPath` and `perl-lsp.downloadBaseUrl` lacked `scope: "machine"`, allowing them to be defined in a workspace's `.vscode/settings.json`. An attacker could create a malicious repository that, when opened, executes an arbitrary binary or downloads a compromised one.
 **Learning:** VS Code extension settings default to `window` scope (which includes Workspace), making them vulnerable to configuration injection attacks if they control executable paths or download URLs.
 **Prevention:** Always explicitly set `scope: "machine"` (or `application`) in `package.json` for any setting that controls executable paths, command arguments, or sensitive URLs.
+
+## 2026-05-27 - Infinite Redirect DoS in Binary Downloader
+**Vulnerability:** The `BinaryDownloader` implemented manual redirect following recursively without a recursion limit. An attacker could set up a server that redirects infinitely (or to a very large depth), causing the extension to consume resources indefinitely (DoS) or crash. Additionally, relative `Location` headers caused a crash due to improper URL resolution.
+**Learning:** Manual implementation of HTTP features (like redirects) often misses standard safeguards present in mature libraries. `http.get` in Node.js does not follow redirects automatically, leading developers to implement it manually, where edge cases like infinite loops and relative URLs are easily overlooked.
+**Prevention:** Always implement a maximum redirect count (e.g., 5) when manually following redirects. Use `new URL(newLocation, previousUrl)` to robustly resolve relative redirects.
