@@ -851,34 +851,70 @@ impl SymbolExtractor {
         statements: &[Node],
         idx: usize,
     ) -> Option<usize> {
-        if idx + 1 >= statements.len() {
-            return None;
-        }
-
         let first = &statements[idx];
-        let second = &statements[idx + 1];
 
-        let is_has_marker = matches!(
-            &first.kind,
-            NodeKind::ExpressionStatement { expression }
-                if matches!(&expression.kind, NodeKind::Identifier { name } if name == "has")
-        );
-        if !is_has_marker {
-            return None;
+        // Form A:
+        // 1) ExpressionStatement(Identifier("has"))
+        // 2) ExpressionStatement(HashLiteral(...))
+        if idx + 1 < statements.len() {
+            let second = &statements[idx + 1];
+            let is_has_marker = matches!(
+                &first.kind,
+                NodeKind::ExpressionStatement { expression }
+                    if matches!(&expression.kind, NodeKind::Identifier { name } if name == "has")
+            );
+
+            if is_has_marker
+                && let NodeKind::ExpressionStatement { expression } = &second.kind
+                && let NodeKind::HashLiteral { pairs } = &expression.kind
+            {
+                let has_location =
+                    SourceLocation { start: first.location.start, end: second.location.end };
+                self.synthesize_moo_has_pairs(pairs, has_location, false);
+                self.visit_node(second);
+                return Some(2);
+            }
         }
 
-        let NodeKind::ExpressionStatement { expression } = &second.kind else {
-            return None;
-        };
-        let NodeKind::HashLiteral { pairs } = &expression.kind else {
-            return None;
-        };
+        // Form B:
+        // ExpressionStatement(HashLiteral((Binary("[]", Identifier("has"), attr_expr), options)))
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::HashLiteral { pairs } = &expression.kind
+        {
+            let has_embedded_marker = pairs.iter().any(|(key_node, _)| {
+                matches!(
+                    &key_node.kind,
+                    NodeKind::Binary { op, left, .. }
+                        if op == "[]" && matches!(&left.kind, NodeKind::Identifier { name } if name == "has")
+                )
+            });
 
-        let has_location = SourceLocation { start: first.location.start, end: second.location.end };
+            if has_embedded_marker {
+                self.synthesize_moo_has_pairs(pairs, first.location, true);
+                self.visit_node(first);
+                return Some(1);
+            }
+        }
+
+        None
+    }
+
+    /// Synthesize symbols from parsed `has` key/value pairs.
+    fn synthesize_moo_has_pairs(
+        &mut self,
+        pairs: &[(Node, Node)],
+        has_location: SourceLocation,
+        require_embedded_marker: bool,
+    ) {
         let scope_id = self.table.current_scope();
         let package = self.table.current_package.clone();
 
         for (attr_expr, options_expr) in pairs {
+            let Some(attr_expr) = Self::moo_attribute_expr(attr_expr, require_embedded_marker)
+            else {
+                continue;
+            };
+
             let attribute_names = Self::collect_symbol_names(attr_expr);
             if attribute_names.is_empty() {
                 continue;
@@ -886,7 +922,8 @@ impl SymbolExtractor {
 
             let option_map = Self::extract_hash_options(options_expr);
             let metadata = Self::attribute_metadata(&option_map);
-            let generated_methods = Self::moo_accessor_names(&attribute_names, &option_map);
+            let generated_methods =
+                Self::moo_accessor_names(&attribute_names, &option_map, options_expr);
 
             for attribute_name in attribute_names {
                 self.table.add_symbol(Symbol {
@@ -914,10 +951,22 @@ impl SymbolExtractor {
                 });
             }
         }
+    }
 
-        // Traverse the hash literal to keep nested expression analysis working.
-        self.visit_node(second);
-        Some(2)
+    /// Resolve the attribute-expression node used in a parsed `has` declaration pair.
+    fn moo_attribute_expr<'a>(attr_expr: &'a Node, require_embedded_marker: bool) -> Option<&'a Node> {
+        if let NodeKind::Binary { op, left, right } = &attr_expr.kind
+            && op == "[]"
+            && matches!(&left.kind, NodeKind::Identifier { name } if name == "has")
+        {
+            return Some(right.as_ref());
+        }
+
+        if require_embedded_marker {
+            None
+        } else {
+            Some(attr_expr)
+        }
     }
 
     /// Extract Class::Accessor generated accessors from `mk_*_accessors` calls.
@@ -930,8 +979,10 @@ impl SymbolExtractor {
             return false;
         };
 
-        let is_accessor_generator =
-            matches!(method.as_str(), "mk_accessors" | "mk_ro_accessors" | "mk_wo_accessors");
+        let is_accessor_generator = matches!(
+            method.as_str(),
+            "mk_accessors" | "mk_ro_accessors" | "mk_rw_accessors" | "mk_wo_accessors"
+        );
         if !is_accessor_generator {
             return false;
         }
@@ -1039,15 +1090,21 @@ impl SymbolExtractor {
     fn moo_accessor_names(
         attribute_names: &[String],
         option_map: &HashMap<String, String>,
+        options_expr: &Node,
     ) -> Vec<String> {
         let mut methods = Vec::new();
         let mut seen = HashSet::new();
 
-        for key in ["accessor", "reader", "writer", "predicate", "clearer"] {
-            if let Some(raw_name) = option_map.get(key)
-                && let Some(name) = Self::normalize_symbol_name(raw_name)
-                && seen.insert(name.clone())
-            {
+        for key in ["accessor", "reader", "writer", "predicate", "clearer", "builder"] {
+            for name in Self::option_method_names(options_expr, key, attribute_names) {
+                if seen.insert(name.clone()) {
+                    methods.push(name);
+                }
+            }
+        }
+
+        for name in Self::handles_method_names(options_expr) {
+            if seen.insert(name.clone()) {
                 methods.push(name);
             }
         }
@@ -1065,6 +1122,92 @@ impl SymbolExtractor {
         }
 
         methods
+    }
+
+    /// Find an option value node inside a hash-literal options list.
+    fn find_hash_option_value<'a>(options_expr: &'a Node, key: &str) -> Option<&'a Node> {
+        let NodeKind::HashLiteral { pairs } = &options_expr.kind else {
+            return None;
+        };
+
+        for (key_node, value_node) in pairs {
+            if Self::single_symbol_name(key_node).as_deref() == Some(key) {
+                return Some(value_node);
+            }
+        }
+
+        None
+    }
+
+    /// Compute method names from a single Moo/Moose option key.
+    fn option_method_names(
+        options_expr: &Node,
+        key: &str,
+        attribute_names: &[String],
+    ) -> Vec<String> {
+        let Some(value_node) = Self::find_hash_option_value(options_expr, key) else {
+            return Vec::new();
+        };
+
+        let mut names = Self::collect_symbol_names(value_node);
+        if !names.is_empty() {
+            names.sort();
+            names.dedup();
+            return names;
+        }
+
+        // Moo/Moose shorthand: `predicate => 1`, `clearer => 1`, `builder => 1`.
+        if !Self::is_truthy_shorthand(value_node) {
+            return Vec::new();
+        }
+
+        match key {
+            "predicate" => attribute_names.iter().map(|name| format!("has_{name}")).collect(),
+            "clearer" => attribute_names.iter().map(|name| format!("clear_{name}")).collect(),
+            "builder" => attribute_names.iter().map(|name| format!("_build_{name}")).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Determine if an option node is a static truthy shorthand literal (`1`, `true`, `'1'`).
+    fn is_truthy_shorthand(node: &Node) -> bool {
+        match &node.kind {
+            NodeKind::Number { value } => value.trim() == "1",
+            NodeKind::Identifier { name } => {
+                let lower = name.trim().to_ascii_lowercase();
+                lower == "1" || lower == "true"
+            }
+            NodeKind::String { value, .. } => {
+                Self::normalize_symbol_name(value).is_some_and(|value| {
+                    let lower = value.to_ascii_lowercase();
+                    value == "1" || lower == "true"
+                })
+            }
+            _ => false,
+        }
+    }
+
+    /// Extract delegated method names from a Moo/Moose `handles` option.
+    fn handles_method_names(options_expr: &Node) -> Vec<String> {
+        let Some(handles_node) = Self::find_hash_option_value(options_expr, "handles") else {
+            return Vec::new();
+        };
+
+        let mut names = Vec::new();
+        match &handles_node.kind {
+            NodeKind::HashLiteral { pairs } => {
+                for (key_node, _) in pairs {
+                    names.extend(Self::collect_symbol_names(key_node));
+                }
+            }
+            _ => {
+                names.extend(Self::collect_symbol_names(handles_node));
+            }
+        }
+
+        names.sort();
+        names.dedup();
+        names
     }
 
     /// Extract one or more symbol names from a framework declaration expression.
@@ -1106,8 +1249,39 @@ impl SymbolExtractor {
             }
             NodeKind::Identifier { name } => name.clone(),
             NodeKind::Number { value } => value.clone(),
-            NodeKind::ArrayLiteral { .. } => "array".to_string(),
-            NodeKind::HashLiteral { .. } => "hash".to_string(),
+            NodeKind::ArrayLiteral { elements } => {
+                let mut entries = Vec::new();
+                for element in elements {
+                    entries.extend(Self::collect_symbol_names(element));
+                }
+                entries.sort();
+                entries.dedup();
+                if entries.is_empty() {
+                    "array".to_string()
+                } else {
+                    format!("[{}]", entries.join(","))
+                }
+            }
+            NodeKind::HashLiteral { pairs } => {
+                let mut entries = Vec::new();
+                for (key_node, value_node) in pairs {
+                    let Some(key_name) = Self::single_symbol_name(key_node) else {
+                        continue;
+                    };
+                    if let Some(value_name) = Self::single_symbol_name(value_node) {
+                        entries.push(format!("{key_name}->{value_name}"));
+                    } else {
+                        entries.push(key_name);
+                    }
+                }
+                entries.sort();
+                entries.dedup();
+                if entries.is_empty() {
+                    "hash".to_string()
+                } else {
+                    format!("{{{}}}", entries.join(","))
+                }
+            }
             NodeKind::Undef => "undef".to_string(),
             _ => "expr".to_string(),
         }

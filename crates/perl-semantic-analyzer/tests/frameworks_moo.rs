@@ -106,3 +106,71 @@ has 'name' => (is => 'ro');
         "did not expect synthetic accessor without Moo/Moose context"
     );
 }
+
+#[test]
+fn moo_has_qw_attribute_list_generates_symbols_for_each_attribute() {
+    let code = r#"
+use Moo;
+has [qw(first_name last_name)] => (is => 'ro');
+"#;
+
+    let table = extract_symbols(code);
+
+    for attr in ["first_name", "last_name"] {
+        assert!(has_symbol(&table, attr, SymbolKind::scalar()), "expected attribute `{attr}`");
+        assert!(
+            has_symbol(&table, attr, SymbolKind::Subroutine),
+            "expected generated accessor `{attr}`"
+        );
+    }
+}
+
+#[test]
+fn moo_has_generates_builder_predicate_clearer_and_handles_methods() {
+    let code = r#"
+use Moo;
+has 'profile' => (
+    is => 'rw',
+    builder => 1,
+    predicate => 1,
+    clearer => 1,
+    handles => [qw(full_name timezone)],
+);
+"#;
+
+    let table = extract_symbols(code);
+
+    for method in
+        ["profile", "_build_profile", "has_profile", "clear_profile", "full_name", "timezone"]
+    {
+        assert!(
+            has_symbol(&table, method, SymbolKind::Subroutine),
+            "expected generated Moo method `{method}`"
+        );
+    }
+}
+
+#[test]
+fn moo_has_handles_hash_generates_delegated_methods() {
+    let code = r#"
+use Moo;
+has 'profile' => (
+    is => 'ro',
+    handles => {
+        full_name => 'name',
+        timezone => 'tz',
+    },
+);
+"#;
+
+    let table = extract_symbols(code);
+
+    assert!(
+        has_symbol(&table, "full_name", SymbolKind::Subroutine),
+        "expected delegated method `full_name`"
+    );
+    assert!(
+        has_symbol(&table, "timezone", SymbolKind::Subroutine),
+        "expected delegated method `timezone`"
+    );
+}

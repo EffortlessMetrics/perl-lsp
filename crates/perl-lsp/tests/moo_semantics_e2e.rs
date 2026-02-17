@@ -8,6 +8,7 @@ mod moo_semantics_e2e_tests {
     use serde_json::Value;
 
     const MOO_BASIC: &str = include_str!("fixtures/frameworks/moo_basic.pl");
+    const MOO_HANDLES: &str = include_str!("fixtures/frameworks/moo_handles.pl");
     const MOOSE_BASIC: &str = include_str!("fixtures/frameworks/moose_basic.pl");
     const CLASS_ACCESSOR_BASIC: &str = include_str!("fixtures/frameworks/class_accessor.pl");
 
@@ -55,6 +56,64 @@ mod moo_semantics_e2e_tests {
         let expected_def_line =
             code.lines().position(|line| line.contains("has 'name'")).ok_or("has line missing")?
                 as u32;
+
+        let definition_response = server.get_definition(uri, call_line as u32, call_char as u32);
+        let (_, def_line, _) =
+            semantic::first_location(&definition_response).ok_or("definition result missing")?;
+        assert_eq!(
+            def_line, expected_def_line,
+            "definition should resolve to Moo `has` declaration line"
+        );
+
+        server.shutdown();
+        Ok(())
+    }
+
+    #[test]
+    fn moo_handles_generate_delegated_and_shorthand_methods()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let code = MOO_HANDLES;
+        let uri = "file:///moo_handles_semantics.pl";
+
+        let mut server = TestServerBuilder::new().build();
+        server.open_document(uri, code);
+
+        let completion_line = code
+            .lines()
+            .position(|line| line.contains("$self->"))
+            .ok_or("completion line not found")?;
+        let completion_char = code
+            .lines()
+            .nth(completion_line)
+            .and_then(|line| line.find("$self->full_name"))
+            .map(|idx| idx + "$self->".len())
+            .ok_or("completion position not found")?;
+
+        let completion_response =
+            server.get_completion(uri, completion_line as u32, completion_char as u32);
+        let items = completion_items(&completion_response).ok_or("missing completion items")?;
+
+        for expected in ["full_name", "timezone", "has_profile", "clear_profile", "_build_profile"]
+        {
+            assert!(
+                items.iter().any(|item| item["label"] == expected),
+                "expected `{expected}` completion, got: {completion_response:#}"
+            );
+        }
+
+        let call_line = code
+            .lines()
+            .position(|line| line.contains("full_name();"))
+            .ok_or("definition call line not found")?;
+        let call_char = code
+            .lines()
+            .nth(call_line)
+            .and_then(|line| line.find("full_name()"))
+            .ok_or("definition call position not found")?;
+        let expected_def_line = code
+            .lines()
+            .position(|line| line.contains("has 'profile'"))
+            .ok_or("has line missing")? as u32;
 
         let definition_response = server.get_definition(uri, call_line as u32, call_char as u32);
         let (_, def_line, _) =
