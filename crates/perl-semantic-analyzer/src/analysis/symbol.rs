@@ -954,7 +954,7 @@ impl SymbolExtractor {
     }
 
     /// Resolve the attribute-expression node used in a parsed `has` declaration pair.
-    fn moo_attribute_expr<'a>(attr_expr: &'a Node, require_embedded_marker: bool) -> Option<&'a Node> {
+    fn moo_attribute_expr(attr_expr: &Node, require_embedded_marker: bool) -> Option<&Node> {
         if let NodeKind::Binary { op, left, right } = &attr_expr.kind
             && op == "[]"
             && matches!(&left.kind, NodeKind::Identifier { name } if name == "has")
@@ -962,11 +962,7 @@ impl SymbolExtractor {
             return Some(right.as_ref());
         }
 
-        if require_embedded_marker {
-            None
-        } else {
-            Some(attr_expr)
-        }
+        if require_embedded_marker { None } else { Some(attr_expr) }
     }
 
     /// Extract Class::Accessor generated accessors from `mk_*_accessors` calls.
