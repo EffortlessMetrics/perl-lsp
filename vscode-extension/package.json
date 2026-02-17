@@ -127,6 +127,29 @@
                 "default": {}
               }
             }
+          },
+          "attach": {
+            "properties": {
+              "processId": {
+                "type": "number",
+                "description": "Attach to an existing Perl process by PID"
+              },
+              "host": {
+                "type": "string",
+                "description": "Host for TCP attach mode",
+                "default": "localhost"
+              },
+              "port": {
+                "type": "number",
+                "description": "Port for TCP attach mode",
+                "default": 13603
+              },
+              "timeout": {
+                "type": "number",
+                "description": "TCP attach timeout in milliseconds",
+                "default": 5000
+              }
+            }
           }
         },
         "initialConfigurations": [
@@ -136,6 +159,14 @@
             "name": "Perl: Launch Script",
             "program": "${workspaceFolder}/script.pl",
             "stopOnEntry": true
+          },
+          {
+            "type": "perl",
+            "request": "attach",
+            "name": "Perl: Attach to Debugger",
+            "host": "localhost",
+            "port": 13603,
+            "timeout": 5000
           }
         ]
       }

@@ -7,11 +7,11 @@
 > - **Reference sections**: Configuration specifications and options
 > - **Explanation sections**: Understanding DAP architecture and design
 
-**Status**: Native adapter CLI (launch + TCP attach) + BridgeAdapter guide (Perl::LanguageServer)
+**Status**: Native adapter CLI (launch + attach + stepping + evaluate) + BridgeAdapter guide (Perl::LanguageServer)
 **Version**: 1.0.0
 **Date**: 2025-10-04
 
-**Note**: The `perl-dap` CLI runs the native adapter (launch-only) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.
+**Note**: The `perl-dap` CLI runs the native adapter (launch + attach) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.
 
 ---
 
@@ -109,7 +109,7 @@ Create a launch configuration in your workspace to enable debugging.
 
 **Configuration Explained**:
 - `type`: Must be `"perl"` for Perl debugging
-- `request`: `"launch"` to start a new process, `"attach"` to connect to running process (bridge only; native adapter does not support attach yet)
+- `request`: `"launch"` to start a new process, `"attach"` to connect to a running process/debugger
 - `name`: Display name in VS Code's debug dropdown
 - `program`: Path to the Perl script to debug (supports VS Code variables like `${file}`)
 - `args`: Command-line arguments to pass to your script
@@ -146,7 +146,7 @@ Let's debug a simple Perl script to verify everything works.
 
 4. **Observe the debugger**:
    - Execution pauses at line 8
-   - Variables panel shows `$name` and `$greeting` values in BridgeAdapter mode (native adapter shows placeholders)
+   - Variables panel shows best-effort parsed values from debugger output
    - Call stack shows your script in the execution context
 
 5. **Step through code**:
@@ -156,9 +156,9 @@ Let's debug a simple Perl script to verify everything works.
    - **Continue** (`F5`): Resume execution until next breakpoint
 
 6. **Inspect variables**:
-   - Hover over variables to see values (placeholder output in native adapter)
-   - Use the Variables panel to explore data structures (placeholder output in native adapter)
-   - Use the Debug Console to evaluate Perl expressions (placeholder output in native adapter)
+   - Hover over variables to inspect parsed values
+   - Use the Variables panel to explore data structures with lazy expansion
+   - Use the Debug Console to evaluate Perl expressions (safe mode by default)
 
 7. **Stop debugging**: Press `Shift+F5` or click the red stop square in the debug toolbar.
 
@@ -190,27 +190,31 @@ Let's debug a simple Perl script to verify everything works.
 
 ### Attach to a Running Process
 
-**Note**: The `perl-dap` native adapter does not support attach yet. This section applies to the BridgeAdapter/Perl::LanguageServer path.
+**Use Case**: Connect to an already-running debug target.
 
-**Use Case**: Connect to an already-running Perl script that was started with DAP support.
-
-**Start your Perl script with DAP**:
-```bash
-# Start Perl::LanguageServer in DAP mode
-perl -d:LanguageServer::DAP script.pl
-```
-
-**Note**: The native adapter's TCP attach connects to Perl::LanguageServer DAP via TCP socket. Ensure Perl::LanguageServer is started with DAP support before attempting to attach.
+The native adapter supports two attach modes:
+- `processId`: local PID signal-control mode
+- `host`/`port`: TCP debugger endpoint (for shim/bridge workflows)
 
 **Attach Configuration**:
 ```json
 {
   "type": "perl",
   "request": "attach",
-  "name": "Attach to Perl::LanguageServer",
+  "name": "Attach by TCP",
   "host": "localhost",
   "port": 13603,
   "timeout": 5000
+}
+```
+
+**Attach by PID**:
+```json
+{
+  "type": "perl",
+  "request": "attach",
+  "name": "Attach by PID",
+  "processId": 12345
 }
 ```
 
@@ -344,15 +348,16 @@ Launch configurations support VS Code variables for dynamic paths:
 
 ### Attach Configuration
 
-Complete schema for `"request": "attach"` configurations (BridgeAdapter only; native adapter does not support attach yet).
+Complete schema for `"request": "attach"` configurations.
 
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
 | `type` | `string` | ✅ Yes | N/A | Must be `"perl"` |
 | `request` | `string` | ✅ Yes | N/A | Must be `"attach"` for connecting to running process |
 | `name` | `string` | ✅ Yes | N/A | Display name in debug dropdown |
-| `host` | `string` | ✅ Yes | `"localhost"` | Hostname or IP address of DAP server |
-| `port` | `number` | ✅ Yes | `13603` | Port number of DAP server |
+| `processId` | `number` | ❌ No | N/A | Local process ID for signal-control attach mode |
+| `host` | `string` | ❌ No | `"localhost"` | Hostname or IP address of DAP server |
+| `port` | `number` | ❌ No | `13603` | Port number of DAP server |
 | `timeout` | `number` | ❌ No | `5000` | Connection timeout in milliseconds |
 
 **Example Attach Configuration**:
@@ -444,12 +449,11 @@ The `perl-dap` CLI uses the native adapter to drive `perl -d` directly. A Bridge
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**BridgeAdapter Design Decisions**:
+**BridgeAdapter Compatibility Role**:
 
-1. **Immediate User Value**: Bridge to existing, mature Perl::LanguageServer DAP implementation
-2. **Minimal Dependencies**: No complex Perl debugger protocol parsing in Rust
-3. **Cross-Platform Foundation**: Platform abstraction layer ready for Phase 2 native implementation
-4. **Clean Separation**: Bridge adapter isolated in `perl-dap` crate for future replacement
+1. **Interoperability**: Supports environments already standardized on Perl::LanguageServer DAP
+2. **Migration Path**: Lets teams move incrementally from bridge-based workflows to native `perl-dap`
+3. **Isolation**: Bridge code remains separate from native adapter runtime paths
 
 **BridgeAdapter Trade-offs**:
 
@@ -458,12 +462,11 @@ The `perl-dap` CLI uses the native adapter to drive `perl -d` directly. A Bridge
 
 ### Future Roadmap
 
-**Phase 2: Native Adapter Completion (Planned)**
+**Native Adapter Roadmap**
 
-The CLI already uses the native adapter; Phase 2 focuses on attach support, parsed variables/evaluate output, and hardened evaluation.
+The CLI already uses the native adapter with launch + attach + evaluation support. Remaining roadmap items focus on deeper protocol parity and hardening.
 
 **Planned Features**:
-- Direct DAP protocol implementation in Rust
 - AST-based breakpoint validation (leveraging `perl-parser`)
 - Incremental parsing integration (<1ms breakpoint updates)
 - Workspace navigation for cross-file debugging

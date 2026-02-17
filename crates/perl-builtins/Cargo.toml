@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 description = "Builtin symbol metadata for Perl parser and LSP tooling"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

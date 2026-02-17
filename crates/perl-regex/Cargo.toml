@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 description = "Regex parsing and validation helpers for Perl syntax"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

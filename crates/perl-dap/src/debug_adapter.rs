@@ -53,6 +53,7 @@ static ASSIGNMENT_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new(
 static DEREF_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SET_VARIABLE_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static FUNCTION_BREAKPOINT_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 
@@ -263,6 +264,17 @@ fn is_valid_set_variable_name(name: &str) -> bool {
     set_variable_name_re().is_some_and(|re| re.is_match(name))
 }
 
+fn function_breakpoint_name_re() -> Option<&'static Regex> {
+    FUNCTION_BREAKPOINT_NAME_RE
+        .get_or_init(|| Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$"))
+        .as_ref()
+        .ok()
+}
+
+fn is_valid_function_breakpoint_name(name: &str) -> bool {
+    function_breakpoint_name_re().is_some_and(|re| re.is_match(name))
+}
+
 /// Check if the match is an escape sequence (preceded by backslash)
 fn is_escape_sequence(s: &str, match_start: usize) -> bool {
     if match_start == 0 {
@@ -289,6 +301,10 @@ pub struct DebugAdapter {
     event_sender: Option<Sender<DapMessage>>,
     /// Bounded history of debugger output for stack/variable/evaluate parsing
     recent_output: Arc<Mutex<VecDeque<String>>>,
+    /// Function breakpoints (`setFunctionBreakpoints`) stored with REPLACE semantics
+    function_breakpoints: Arc<Mutex<Vec<String>>>,
+    /// Monotonic IDs for function breakpoints
+    next_function_breakpoint_id: Arc<Mutex<i64>>,
 }
 
 /// Active debug session
@@ -416,6 +432,8 @@ impl DebugAdapter {
             thread_counter: Arc::new(Mutex::new(0)),
             event_sender: None,
             recent_output: Arc::new(Mutex::new(VecDeque::with_capacity(RECENT_OUTPUT_MAX_LINES))),
+            function_breakpoints: Arc::new(Mutex::new(Vec::new())),
+            next_function_breakpoint_id: Arc::new(Mutex::new(1)),
         }
     }
 
@@ -532,7 +550,7 @@ impl DebugAdapter {
                 continue;
             };
 
-            let response = self.handle_request(seq, &command, arguments);
+            let response = self.dispatch_request(seq, &command, arguments);
             let payload = match serde_json::to_string(&response) {
                 Ok(payload) => payload,
                 Err(e) => {
@@ -545,6 +563,13 @@ impl DebugAdapter {
             let mut writer = lock_or_recover(&shared_writer, "response_writer");
             writer.write_all(frame.as_bytes())?;
             writer.flush()?;
+
+            // DAP requires this event only after initialize response is sent.
+            if command == "initialize"
+                && Self::response_succeeded_for_command(&response, "initialize")
+            {
+                self.send_event("initialized", None);
+            }
         }
     }
 
@@ -557,6 +582,52 @@ impl DebugAdapter {
     ) -> DapMessage {
         eprintln!("DAP request: {} {:?}", command, arguments);
 
+        let response = self.dispatch_request(request_seq, command, arguments);
+
+        // Preserve existing direct-call behavior for tests and in-memory usage.
+        if command == "initialize" && Self::response_succeeded_for_command(&response, "initialize")
+        {
+            self.send_event("initialized", None);
+        }
+
+        response
+    }
+
+    /// Handle a DAP request (mock version for testing)
+    pub fn handle_request_mock(
+        &mut self,
+        request_seq: i64,
+        command: &str,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        eprintln!("DAP request (mock): {} {:?}", command, arguments);
+
+        if command == "attach" {
+            let seq = self.next_seq();
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "attach".to_string(),
+                body: None,
+                message: Some("Attach not yet fully implemented".to_string()),
+            };
+        }
+
+        let response = self.dispatch_request(request_seq, command, arguments);
+        if command == "initialize" && Self::response_succeeded_for_command(&response, "initialize")
+        {
+            self.send_event("initialized", None);
+        }
+        response
+    }
+
+    fn dispatch_request(
+        &mut self,
+        request_seq: i64,
+        command: &str,
+        arguments: Option<Value>,
+    ) -> DapMessage {
         let seq = self.next_seq();
 
         match command {
@@ -566,6 +637,12 @@ impl DebugAdapter {
             "disconnect" => self.handle_disconnect(seq, request_seq, arguments),
             "terminate" => self.handle_terminate(seq, request_seq, arguments),
             "setBreakpoints" => self.handle_set_breakpoints(seq, request_seq, arguments),
+            "setFunctionBreakpoints" => {
+                self.handle_set_function_breakpoints(seq, request_seq, arguments)
+            }
+            "setExceptionBreakpoints" => {
+                self.handle_set_exception_breakpoints(seq, request_seq, arguments)
+            }
             "configurationDone" => self.handle_configuration_done(seq, request_seq),
             "threads" => self.handle_threads(seq, request_seq),
             "stackTrace" => self.handle_stack_trace(seq, request_seq, arguments),
@@ -590,56 +667,15 @@ impl DebugAdapter {
         }
     }
 
-    /// Handle a DAP request (mock version for testing)
-    pub fn handle_request_mock(
-        &mut self,
-        request_seq: i64,
-        command: &str,
-        arguments: Option<Value>,
-    ) -> DapMessage {
-        eprintln!("DAP request (mock): {} {:?}", command, arguments);
-
-        let seq = self.next_seq();
-
-        match command {
-            "initialize" => self.handle_initialize(seq, request_seq, arguments),
-            "launch" => self.handle_launch(seq, request_seq, arguments),
-            "attach" => {
-                // Mock attach to avoid actual connection
-                DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "attach".to_string(),
-                    body: None,
-                    message: Some("Attach not yet fully implemented".to_string()),
-                }
-            }
-            "disconnect" => self.handle_disconnect(seq, request_seq, arguments),
-            "terminate" => self.handle_terminate(seq, request_seq, arguments),
-            "setBreakpoints" => self.handle_set_breakpoints(seq, request_seq, arguments),
-            "configurationDone" => self.handle_configuration_done(seq, request_seq),
-            "threads" => self.handle_threads(seq, request_seq),
-            "stackTrace" => self.handle_stack_trace(seq, request_seq, arguments),
-            "scopes" => self.handle_scopes(seq, request_seq, arguments),
-            "variables" => self.handle_variables(seq, request_seq, arguments),
-            "setVariable" => self.handle_set_variable(seq, request_seq, arguments),
-            "continue" => self.handle_continue(seq, request_seq, arguments),
-            "next" => self.handle_next(seq, request_seq, arguments),
-            "stepIn" => self.handle_step_in(seq, request_seq, arguments),
-            "stepOut" => self.handle_step_out(seq, request_seq, arguments),
-            "pause" => self.handle_pause(seq, request_seq, arguments),
-            "evaluate" => self.handle_evaluate(seq, request_seq, arguments),
-            "inlineValues" => self.handle_inline_values(seq, request_seq, arguments),
-            _ => DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: command.to_string(),
-                body: None,
-                message: Some(format!("Unknown command: {}", command)),
-            },
-        }
+    fn response_succeeded_for_command(response: &DapMessage, expected_command: &str) -> bool {
+        matches!(
+            response,
+            DapMessage::Response {
+                success: true,
+                command,
+                ..
+            } if command == expected_command
+        )
     }
 
     /// Get next sequence number (monotonically increasing, poison-safe)
@@ -899,7 +935,7 @@ impl DebugAdapter {
     ) -> DapMessage {
         let capabilities = json!({
             "supportsConfigurationDoneRequest": true,
-            "supportsFunctionBreakpoints": false,
+            "supportsFunctionBreakpoints": true,
             "supportsConditionalBreakpoints": true,
             "supportsHitConditionalBreakpoints": false,
             "supportsEvaluateForHovers": true,
@@ -931,9 +967,6 @@ impl DebugAdapter {
             "supportsInstructionBreakpoints": false,
             "supportsExceptionFilterOptions": false
         });
-
-        // Send initialized event
-        self.send_event("initialized", None);
 
         DapMessage::Response {
             seq,
@@ -1088,6 +1121,9 @@ impl DebugAdapter {
                 } else {
                     return Err("Failed to lock session".to_string());
                 }
+
+                // Apply any function breakpoints configured before launch.
+                self.apply_stored_function_breakpoints();
 
                 // Start output reader thread
                 self.start_output_reader();
@@ -1961,6 +1997,9 @@ impl DebugAdapter {
             }
         }
 
+        // Keep function breakpoints active after line-breakpoint synchronization.
+        self.apply_stored_function_breakpoints();
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -1970,6 +2009,130 @@ impl DebugAdapter {
                 "breakpoints": verified_breakpoints
             })),
             message: None,
+        }
+    }
+
+    /// Handle setFunctionBreakpoints request.
+    ///
+    /// Uses replace semantics and best-effort synchronization to the running debugger.
+    fn handle_set_function_breakpoints(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let Some(args) = arguments else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setFunctionBreakpoints".to_string(),
+                body: None,
+                message: Some("Missing arguments".to_string()),
+            };
+        };
+
+        let requested =
+            args.get("breakpoints").and_then(Value::as_array).cloned().unwrap_or_default();
+
+        let mut validated_names = Vec::with_capacity(requested.len());
+        let mut response_breakpoints = Vec::with_capacity(requested.len());
+
+        for entry in requested {
+            let name = entry.get("name").and_then(Value::as_str).unwrap_or("").trim().to_string();
+
+            let id = {
+                let mut next = lock_or_recover(
+                    &self.next_function_breakpoint_id,
+                    "debug_adapter.next_function_breakpoint_id",
+                );
+                let id = *next;
+                *next += 1;
+                id
+            };
+
+            let invalid_reason = if name.is_empty() {
+                Some("Function breakpoint name is required".to_string())
+            } else if name.contains('\n') || name.contains('\r') {
+                Some("Function breakpoint name cannot contain newlines".to_string())
+            } else if !is_valid_function_breakpoint_name(&name) {
+                Some(format!(
+                    "Invalid function breakpoint name `{name}` (expected package-qualified Perl symbol)"
+                ))
+            } else {
+                None
+            };
+
+            if let Some(reason) = invalid_reason {
+                response_breakpoints.push(json!({
+                    "id": id,
+                    "verified": false,
+                    "message": reason
+                }));
+                continue;
+            }
+
+            validated_names.push(name.clone());
+            response_breakpoints.push(json!({
+                "id": id,
+                "verified": true
+            }));
+        }
+
+        // DAP replace semantics: overwrite existing function breakpoints.
+        if let Ok(mut stored) = self.function_breakpoints.lock() {
+            *stored = validated_names;
+        }
+
+        // Best-effort apply to currently running session as well.
+        self.apply_stored_function_breakpoints();
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "setFunctionBreakpoints".to_string(),
+            body: Some(json!({ "breakpoints": response_breakpoints })),
+            message: None,
+        }
+    }
+
+    /// Handle setExceptionBreakpoints request.
+    ///
+    /// Perl debugger integration is currently best-effort; we accept request payload
+    /// to keep client workflows unblocked and return an empty breakpoint list.
+    fn handle_set_exception_breakpoints(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "setExceptionBreakpoints".to_string(),
+            body: Some(json!({ "breakpoints": [] })),
+            message: None,
+        }
+    }
+
+    /// Apply stored function breakpoints to the active debugger session.
+    fn apply_stored_function_breakpoints(&self) {
+        let names =
+            self.function_breakpoints.lock().map(|stored| stored.clone()).unwrap_or_default();
+        if names.is_empty() {
+            return;
+        }
+
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && let Some(stdin) = session.process.stdin.as_mut()
+        {
+            for name in names {
+                let cmd = format!("b {name}\n");
+                let _ = stdin.write_all(cmd.as_bytes());
+            }
+            let _ = stdin.flush();
         }
     }
 

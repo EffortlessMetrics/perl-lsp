@@ -6,7 +6,7 @@ Debug Adapter Protocol (DAP) server for Perl debugging in VS Code and other DAP-
 
 The **perl-dap** crate provides a DAP server for Perl debugging. It includes a native adapter used by the CLI (drives `perl -d` directly) and a BridgeAdapter library that can proxy to Perl::LanguageServer.
 
-**Current Status**: Native adapter CLI (experimental) + BridgeAdapter library (not wired into CLI)
+**Current Status**: Native adapter CLI (launch + attach + stepping + evaluate) with BridgeAdapter library available for compatibility workflows.
 
 ## Architecture
 
@@ -23,9 +23,10 @@ perl-dap (Rust)
 ### Native Adapter (Default CLI)
 
 - **Launch Debugging**: Start `perl -d` via stdio
+- **Attach Debugging**: Attach via TCP (`host`/`port`) or PID signal-control mode (`processId`)
 - **Breakpoints + Stepping**: Best-effort breakpoint/step control
 - **Stack/Threads**: Best-effort stack frames and single-thread view
-- **Variables/Evaluate**: Placeholder output (no parsed values yet)
+- **Variables/Evaluate**: Parsed best-effort values from debugger output with safe evaluation checks
 - **Cross-Platform Support**: Windows, macOS, Linux, and WSL path translation
 
 ### BridgeAdapter (Library)
@@ -35,9 +36,9 @@ perl-dap (Rust)
 
 ### Planned
 
-- Attach support in the native adapter
-- Parsed variable/evaluate output
-- AST-based breakpoint validation
+- Deeper debugger protocol parity (exception/thread controls)
+- More deterministic stack/variable extraction from complex frames
+- Additional hardening and transcript coverage
 
 ## Quick Start
 
@@ -114,18 +115,18 @@ println!("{}", create_attach_json_snippet());
 | `args` | String[] | Command-line arguments |
 | `cwd` | String | Working directory |
 | `env` | Object | Environment variables |
-| `perlBinary` | String | Path to perl executable |
+| `perlPath` | String | Path to perl executable |
 | `includePaths` | String[] | Additional @INC paths |
 | `stopOnEntry` | Boolean | Break at first line |
 
-> Note: `attach` is not supported by the native adapter yet. The attach config applies to BridgeAdapter usage.
-
-### Attach Configuration (BridgeAdapter Only)
+### Attach Configuration (Native Adapter + BridgeAdapter)
 
 | Option | Type | Description |
 |--------|------|-------------|
+| `processId` | Number | Attach to local running process by PID (signal-control mode) |
 | `port` | Number | Debug port (default: 13603) |
 | `host` | String | Host address (default: localhost) |
+| `timeout` | Number | TCP attach timeout in milliseconds |
 
 ## Testing
 

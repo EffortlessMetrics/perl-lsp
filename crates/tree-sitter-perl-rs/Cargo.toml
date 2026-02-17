@@ -4,6 +4,7 @@ rust-version = "1.89"
 version = "0.8.3"
 edition = "2024"
 description = "Tree-sitter Perl validation harness (internal only)"
+readme = "README.md"
 publish = false
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"

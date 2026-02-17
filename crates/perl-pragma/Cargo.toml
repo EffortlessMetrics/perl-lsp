@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 description = "Perl pragma extraction and analysis primitives"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
