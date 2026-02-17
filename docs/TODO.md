@@ -1,6 +1,6 @@
 # TODOs & Missing Features
 
-> **Last Updated**: 2026-02-16
+> **Last Updated**: 2026-02-17
 > **Sources of truth**: `docs/ROADMAP.md` (plans), `docs/CURRENT_STATUS.md` (metrics), `features.toml` (capabilities)
 > **Rule**: If this file conflicts with those sources, update this file (not the sources).
 
@@ -55,13 +55,17 @@
 
 ### DAP (Preview / Not Advertised)
 
-- **`dap.breakpoints`** (preview, not advertised)
-  - [x] Confirm semantics (REPLACE behavior, storage, validation)
-  - [x] Add integration tests around breakpoint lifecycle
+- **`dap.breakpoints.hit_condition`** (preview, not advertised)
+  - [x] Validate hit-count parsing and runtime counter behavior
+  - [ ] Add dedicated E2E fixture coverage for multi-hit workflows
 
-- **`dap.inline_values`** (preview, not advertised)
-  - [x] Decide mapping to LSP `inlineValue`
-  - [x] Add handler(s) and tests
+- **`dap.breakpoints.logpoints`** (preview, not advertised)
+  - [x] Implement logMessage parsing and output emission path
+  - [ ] Add dedicated E2E fixture for output+continue semantics
+
+- **`dap.exceptions.die`** (preview, not advertised)
+  - [x] Implement `setExceptionBreakpoints` filter handling
+  - [ ] Add E2E fixture proving stop behavior changes when enabled
 
 ---
 

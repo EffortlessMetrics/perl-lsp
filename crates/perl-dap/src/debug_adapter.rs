@@ -1106,7 +1106,7 @@ impl DebugAdapter {
             "supportsConfigurationDoneRequest": true,
             "supportsFunctionBreakpoints": true,
             "supportsConditionalBreakpoints": true,
-            "supportsHitConditionalBreakpoints": true,
+            "supportsHitConditionalBreakpoints": false,
             "supportsEvaluateForHovers": true,
             "supportsStepBack": false,
             "supportsSetVariable": true,
@@ -1116,13 +1116,13 @@ impl DebugAdapter {
             "supportsCompletionsRequest": false,
             "supportsModulesRequest": false,
             "supportsRestartRequest": false,
-            "supportsExceptionOptions": true,
+            "supportsExceptionOptions": false,
             "supportsValueFormattingOptions": true,
             "supportsExceptionInfoRequest": false,
             "supportTerminateDebuggee": true,
             "supportsDelayedStackTraceLoading": false,
             "supportsLoadedSourcesRequest": false,
-            "supportsLogPoints": true,
+            "supportsLogPoints": false,
             "supportsTerminateThreadsRequest": false,
             "supportsSetExpression": false,
             "supportsTerminateRequest": true,
@@ -1134,16 +1134,9 @@ impl DebugAdapter {
             "supportsClipboardContext": false,
             "supportsSteppingGranularity": false,
             "supportsInstructionBreakpoints": false,
-            "supportsExceptionFilterOptions": true,
+            "supportsExceptionFilterOptions": false,
             "supportsInlineValues": true,
-            "exceptionBreakpointFilters": [
-                {
-                    "filter": "die",
-                    "label": "Perl die/uncaught exception",
-                    "default": false,
-                    "supportsCondition": false
-                }
-            ]
+            "exceptionBreakpointFilters": []
         });
 
         DapMessage::Response {

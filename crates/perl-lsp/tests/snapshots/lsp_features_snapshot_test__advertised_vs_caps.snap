@@ -34,7 +34,8 @@ caps:
   - lsp.type_definition
   - lsp.workspace_symbol
 catalog:
-  - dap.breakpoints
+  - dap.breakpoints.basic
+  - dap.core
   - dap.inline_values
   - lsp.apply_edit
   - lsp.call_hierarchy
