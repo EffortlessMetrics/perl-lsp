@@ -41,6 +41,11 @@ members = [
     "crates/perl-lsp",
     "crates/perl-dap",
     "crates/tree-sitter-perl-rs",
+    "crates/perl-ts-heredoc-analysis",
+    "crates/perl-ts-logos-lexer",
+    "crates/perl-ts-heredoc-parser",
+    "crates/perl-ts-partial-ast",
+    "crates/perl-ts-advanced-parsers",
     "xtask",
 ]
 

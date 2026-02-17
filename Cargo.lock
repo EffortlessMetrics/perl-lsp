@@ -2062,6 +2062,65 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-ts-advanced-parsers"
+version = "0.1.0"
+dependencies = [
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "perl-ts-heredoc-analysis",
+ "perl-ts-heredoc-parser",
+ "perl-ts-partial-ast",
+ "pest",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "perl-ts-heredoc-analysis"
+version = "0.1.0"
+dependencies = [
+ "encoding_rs",
+ "perl-tdd-support",
+ "regex",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-ts-heredoc-parser"
+version = "0.1.0"
+dependencies = [
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "perl-ts-heredoc-analysis",
+ "regex",
+]
+
+[[package]]
+name = "perl-ts-logos-lexer"
+version = "0.1.0"
+dependencies = [
+ "chumsky",
+ "logos",
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "regex",
+]
+
+[[package]]
+name = "perl-ts-partial-ast"
+version = "0.1.0"
+dependencies = [
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "perl-ts-heredoc-analysis",
+ "pest",
+ "regex",
+ "serde_json",
+]
+
+[[package]]
 name = "perl-uri"
 version = "0.9.0"
 dependencies = [
@@ -3242,6 +3301,11 @@ dependencies = [
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",
+ "perl-ts-advanced-parsers",
+ "perl-ts-heredoc-analysis",
+ "perl-ts-heredoc-parser",
+ "perl-ts-logos-lexer",
+ "perl-ts-partial-ast",
  "pest",
  "pest_derive",
  "postcard",

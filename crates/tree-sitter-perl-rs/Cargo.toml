@@ -39,6 +39,11 @@ lazy_static = "1.5.0"
 clap = { version = "4.5.53", features = ["derive"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 perl-tdd-support = { path = "../perl-tdd-support" }
+perl-ts-heredoc-analysis = { path = "../perl-ts-heredoc-analysis" }
+perl-ts-logos-lexer = { path = "../perl-ts-logos-lexer" }
+perl-ts-heredoc-parser = { path = "../perl-ts-heredoc-parser" }
+perl-ts-partial-ast = { path = "../perl-ts-partial-ast" }
+perl-ts-advanced-parsers = { path = "../perl-ts-advanced-parsers" }
 
 [dev-dependencies]
 criterion = "0.8.1"
