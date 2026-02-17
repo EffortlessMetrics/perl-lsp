@@ -3,6 +3,7 @@
 //! This module provides a DAP server that integrates with Perl's built-in debugger
 //! to enable debugging support in VSCode and other DAP-compatible editors.
 
+use crate::feature_catalog::has_feature as catalog_has_feature;
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
@@ -102,7 +103,12 @@ fn error_re() -> Option<&'static Regex> {
 
 fn exception_re() -> Option<&'static Regex> {
     EXCEPTION_RE
-        .get_or_init(|| Regex::new(r"(?i)\b(?:died|uncaught exception|panic)\b"))
+        .get_or_init(|| {
+            // Perl `die` often emits two lines:
+            //  - message text
+            //  - `at /path/file.pl line N.`
+            Regex::new(r"(?i)\b(?:died|uncaught exception|panic)\b|^\s*at\s+\S+?\s+line\s+\d+\.?$")
+        })
         .as_ref()
         .ok()
 }
@@ -1102,30 +1108,54 @@ impl DebugAdapter {
         request_seq: i64,
         _arguments: Option<Value>,
     ) -> DapMessage {
+        let supports_core = catalog_has_feature("dap.core");
+        let supports_basic_breakpoints = catalog_has_feature("dap.breakpoints.basic");
+        let supports_hit_conditions = catalog_has_feature("dap.breakpoints.hit_condition");
+        let supports_log_points = catalog_has_feature("dap.breakpoints.logpoints");
+        let supports_exceptions = catalog_has_feature("dap.exceptions.die");
+        let supports_inline_values = catalog_has_feature("dap.inline_values");
+
+        let exception_breakpoint_filters = if supports_exceptions {
+            json!([
+                {
+                    "filter": "die",
+                    "label": "Perl die() and uncaught exceptions",
+                    "default": true
+                },
+                {
+                    "filter": "all",
+                    "label": "All Perl exception events",
+                    "default": false
+                }
+            ])
+        } else {
+            json!([])
+        };
+
         let capabilities = json!({
-            "supportsConfigurationDoneRequest": true,
-            "supportsFunctionBreakpoints": true,
-            "supportsConditionalBreakpoints": true,
-            "supportsHitConditionalBreakpoints": false,
-            "supportsEvaluateForHovers": true,
+            "supportsConfigurationDoneRequest": supports_core,
+            "supportsFunctionBreakpoints": supports_core,
+            "supportsConditionalBreakpoints": supports_basic_breakpoints,
+            "supportsHitConditionalBreakpoints": supports_hit_conditions,
+            "supportsEvaluateForHovers": supports_core,
             "supportsStepBack": false,
-            "supportsSetVariable": true,
+            "supportsSetVariable": supports_core,
             "supportsRestartFrame": false,
             "supportsGotoTargetsRequest": false,
             "supportsStepInTargetsRequest": false,
             "supportsCompletionsRequest": false,
             "supportsModulesRequest": false,
             "supportsRestartRequest": false,
-            "supportsExceptionOptions": false,
-            "supportsValueFormattingOptions": true,
+            "supportsExceptionOptions": supports_exceptions,
+            "supportsValueFormattingOptions": supports_core,
             "supportsExceptionInfoRequest": false,
-            "supportTerminateDebuggee": true,
+            "supportTerminateDebuggee": supports_core,
             "supportsDelayedStackTraceLoading": false,
             "supportsLoadedSourcesRequest": false,
-            "supportsLogPoints": false,
+            "supportsLogPoints": supports_log_points,
             "supportsTerminateThreadsRequest": false,
             "supportsSetExpression": false,
-            "supportsTerminateRequest": true,
+            "supportsTerminateRequest": supports_core,
             "supportsDataBreakpoints": false,
             "supportsReadMemoryRequest": false,
             "supportsDisassembleRequest": false,
@@ -1134,9 +1164,9 @@ impl DebugAdapter {
             "supportsClipboardContext": false,
             "supportsSteppingGranularity": false,
             "supportsInstructionBreakpoints": false,
-            "supportsExceptionFilterOptions": false,
-            "supportsInlineValues": true,
-            "exceptionBreakpointFilters": []
+            "supportsExceptionFilterOptions": supports_exceptions,
+            "supportsInlineValues": supports_inline_values,
+            "exceptionBreakpointFilters": exception_breakpoint_filters
         });
 
         DapMessage::Response {
@@ -2248,7 +2278,7 @@ impl DebugAdapter {
         {
             if let Some(stdin) = session.process.stdin.as_mut() {
                 // Clear breakpoints in file (Perl debugger 'B' command)
-                let _ = stdin.write_all(b"B\n");
+                let _ = stdin.write_all(b"B *\n");
                 let _ = stdin.flush();
 
                 // Set new breakpoints that were successfully verified
@@ -3865,6 +3895,79 @@ mod tests {
             }
             _ => return Err("Expected response".into()),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_initialize_capabilities_follow_feature_catalog()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let init = adapter.handle_request(1, "initialize", None);
+
+        let capabilities = match init {
+            DapMessage::Response { success: true, command, body: Some(body), .. }
+                if command == "initialize" =>
+            {
+                body
+            }
+            _ => return Err("Expected successful initialize response".into()),
+        };
+
+        let capability_map =
+            capabilities.as_object().ok_or("Initialize response body must be a JSON object")?;
+
+        let expectations = [
+            ("supportsConfigurationDoneRequest", crate::feature_catalog::has_feature("dap.core")),
+            ("supportsFunctionBreakpoints", crate::feature_catalog::has_feature("dap.core")),
+            (
+                "supportsConditionalBreakpoints",
+                crate::feature_catalog::has_feature("dap.breakpoints.basic"),
+            ),
+            (
+                "supportsHitConditionalBreakpoints",
+                crate::feature_catalog::has_feature("dap.breakpoints.hit_condition"),
+            ),
+            ("supportsEvaluateForHovers", crate::feature_catalog::has_feature("dap.core")),
+            ("supportsSetVariable", crate::feature_catalog::has_feature("dap.core")),
+            ("supportsValueFormattingOptions", crate::feature_catalog::has_feature("dap.core")),
+            ("supportTerminateDebuggee", crate::feature_catalog::has_feature("dap.core")),
+            ("supportsLogPoints", crate::feature_catalog::has_feature("dap.breakpoints.logpoints")),
+            ("supportsExceptionOptions", crate::feature_catalog::has_feature("dap.exceptions.die")),
+            (
+                "supportsExceptionFilterOptions",
+                crate::feature_catalog::has_feature("dap.exceptions.die"),
+            ),
+            ("supportsInlineValues", crate::feature_catalog::has_feature("dap.inline_values")),
+            ("supportsTerminateRequest", crate::feature_catalog::has_feature("dap.core")),
+        ];
+
+        for (capability, expected) in expectations {
+            let actual = capability_map
+                .get(capability)
+                .and_then(Value::as_bool)
+                .ok_or_else(|| format!("Capability `{capability}` must be present as boolean"))?;
+            assert_eq!(
+                actual, expected,
+                "Capability `{capability}` must mirror features.toml advertisement"
+            );
+        }
+
+        let exception_filters = capability_map
+            .get("exceptionBreakpointFilters")
+            .and_then(Value::as_array)
+            .ok_or("exceptionBreakpointFilters must be present as an array")?;
+        if crate::feature_catalog::has_feature("dap.exceptions.die") {
+            assert!(
+                !exception_filters.is_empty(),
+                "Exception filters should be advertised when dap.exceptions.die is enabled"
+            );
+        } else {
+            assert!(
+                exception_filters.is_empty(),
+                "Exception filters should be empty when dap.exceptions.die is not advertised"
+            );
+        }
+
         Ok(())
     }
 

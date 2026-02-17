@@ -9,6 +9,10 @@ use tempfile::tempdir;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+fn perl_available() -> bool {
+    std::process::Command::new("perl").arg("--version").output().is_ok()
+}
+
 fn wait_for_event(
     rx: &Receiver<DapMessage>,
     event_name: &str,
@@ -108,7 +112,7 @@ fn evaluate_with_retry(
 
 #[test]
 fn dap_smoke_e2e() -> TestResult {
-    if std::process::Command::new("perl").arg("--version").output().is_err() {
+    if !perl_available() {
         eprintln!("Skipping dap_smoke_e2e - perl executable is not available");
         return Ok(());
     }

@@ -361,6 +361,7 @@ pub mod bridge_adapter;
 pub mod configuration;
 /// Debug Adapter Protocol (DAP) implementation for Perl debugging.
 pub mod debug_adapter;
+pub mod feature_catalog;
 pub mod platform;
 
 // Phase 2 modules (AC5-AC12) - IN PROGRESS

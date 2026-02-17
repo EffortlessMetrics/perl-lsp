@@ -1551,6 +1551,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "tracing",
  "tracing-subscriber",
  "winapi",

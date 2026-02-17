@@ -408,7 +408,7 @@ area = "debug"
 maturity = "preview"
 advertised = false
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs"]
+tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
 description = "Hit-count breakpoints (e.g., >= N, == N, %N) with runtime counter gating"
 
 [[feature]]
@@ -418,7 +418,7 @@ area = "debug"
 maturity = "preview"
 advertised = false
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs"]
+tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
 description = "Logpoint breakpoints (`logMessage`) emit output events and continue execution"
 
 [[feature]]
@@ -428,7 +428,7 @@ area = "debug"
 maturity = "preview"
 advertised = false
 counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs"]
+tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
 description = "Exception breakpoint handling for `die`/uncaught exception categories"
 
 [[feature]]
