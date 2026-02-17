@@ -198,8 +198,8 @@ impl BuildFlags {
             linked_editing: true,    // Implemented for paired delimiters
             inline_completion: true, // Deterministic inline completions
             inline_values: true,     // Debug inline values
-            notebook_document_sync: false, // Notebook support not advertised by default
-            notebook_cell_execution: false, // Notebook execution tracking not advertised
+            notebook_document_sync: true, // Notebook sync notifications supported in production
+            notebook_cell_execution: true, // Cell execution summaries tracked in notebook store
             moniker: true,           // Stable symbol identifiers
             document_color: true,    // LSP 3.18 color detection for hex/ANSI codes
             source_organize_imports: true, // Fully implemented and tested
@@ -274,8 +274,8 @@ impl BuildFlags {
             linked_editing: false, // Not GA yet
             inline_completion: false, // New feature, not GA yet
             inline_values: false, // New feature, not GA yet
-            notebook_document_sync: false, // Not GA yet
-            notebook_cell_execution: false, // Not GA yet
+            notebook_document_sync: false, // Deliberately conservative in GA-lock builds
+            notebook_cell_execution: false, // Deliberately conservative in GA-lock builds
             moniker: false, // New feature, not GA yet
             document_color: false, // New feature, not GA yet
             source_organize_imports: false, // Excluded from GA-lock contract
@@ -338,6 +338,16 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     caps.references_provider = Some(OneOf::Left(true));
     caps.document_symbol_provider = Some(OneOf::Left(true));
     caps.workspace_symbol_provider = Some(OneOf::Left(true));
+
+    if build.notebook_document_sync {
+        caps.notebook_document_sync = Some(OneOf::Left(NotebookDocumentSyncOptions {
+            notebook_selector: vec![NotebookSelector::ByNotebook {
+                notebook: Notebook::String("jupyter-notebook".to_string()),
+                cells: Some(vec![NotebookCellSelector { language: "perl".to_string() }]),
+            }],
+            save: Some(true),
+        }));
+    }
 
     if build.formatting {
         caps.document_formatting_provider = Some(OneOf::Left(true));

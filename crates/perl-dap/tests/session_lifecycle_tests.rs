@@ -51,6 +51,7 @@ fn test_session_lifecycle_initialize() {
             let caps = must_some(body);
             assert!(caps.get("supportsConfigurationDoneRequest").is_some());
             assert!(caps.get("supportsEvaluateForHovers").is_some());
+            assert!(caps.get("supportsInlineValues").is_some());
         }
         _ => must(Err::<(), _>(format!("Expected Response message"))),
     }

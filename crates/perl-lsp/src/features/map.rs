@@ -17,6 +17,9 @@ pub fn feature_ids_from_caps(c: &ServerCapabilities) -> Vec<&'static str> {
     if c.definition_provider.is_some() {
         v.push("lsp.definition");
     }
+    if c.notebook_document_sync.is_some() {
+        v.push("lsp.notebook_document_sync");
+    }
     if c.type_definition_provider.is_some() {
         v.push("lsp.type_definition");
     }
@@ -133,6 +136,15 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
             }
             "lsp.definition" => {
                 caps.definition_provider = Some(OneOf::Left(true));
+            }
+            "lsp.notebook_document_sync" => {
+                caps.notebook_document_sync = Some(OneOf::Left(NotebookDocumentSyncOptions {
+                    notebook_selector: vec![NotebookSelector::ByNotebook {
+                        notebook: Notebook::String("jupyter-notebook".to_string()),
+                        cells: Some(vec![NotebookCellSelector { language: "perl".to_string() }]),
+                    }],
+                    save: Some(true),
+                }));
             }
             "lsp.type_definition" => {
                 caps.type_definition_provider =

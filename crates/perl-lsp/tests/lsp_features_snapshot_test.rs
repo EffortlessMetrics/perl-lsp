@@ -38,7 +38,7 @@ fn test_advertised_features_match_capabilities() -> Result<(), Box<dyn std::erro
 
     // Also verify compliance percentage is reasonable
     let p = compliance_percent();
-    assert!((80.0..=85.0).contains(&p), "unexpected compliance percent: {}", p);
+    assert!((95.0..=100.0).contains(&p), "unexpected compliance percent: {}", p);
 
     Ok(())
 }

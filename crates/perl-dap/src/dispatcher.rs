@@ -244,6 +244,7 @@ impl DapDispatcher {
             supports_exception_options: Some(false),
             supports_exception_filter_options: Some(false),
             supports_terminate_request: Some(true),
+            supports_inline_values: Some(true),
         };
 
         serde_json::to_value(&capabilities).context("Failed to serialize capabilities")

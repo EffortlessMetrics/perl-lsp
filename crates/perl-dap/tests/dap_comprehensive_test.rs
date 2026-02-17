@@ -70,6 +70,7 @@ fn test_dap_initialize() {
             assert!(
                 body.get("supportsFunctionBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false)
             );
+            assert!(body.get("supportsInlineValues").and_then(|v| v.as_bool()).unwrap_or(false));
         }
         _ => must(Err::<(), _>("Expected response message")),
     }

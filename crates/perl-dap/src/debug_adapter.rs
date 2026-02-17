@@ -1135,6 +1135,7 @@ impl DebugAdapter {
             "supportsSteppingGranularity": false,
             "supportsInstructionBreakpoints": false,
             "supportsExceptionFilterOptions": true,
+            "supportsInlineValues": true,
             "exceptionBreakpointFilters": [
                 {
                     "filter": "die",
@@ -3903,6 +3904,7 @@ mod tests {
             ("supportsLogPoints", "setBreakpoints"),
             ("supportsExceptionOptions", "setExceptionBreakpoints"),
             ("supportsExceptionFilterOptions", "setExceptionBreakpoints"),
+            ("supportsInlineValues", "inlineValues"),
             ("supportsTerminateRequest", "terminate"),
             ("supportTerminateDebuggee", "terminate"),
         ];
@@ -3944,6 +3946,11 @@ mod tests {
                     Some(json!({"variablesReference": 11, "name": "$x", "value": "1"}))
                 }
                 "variables" => Some(json!({"variablesReference": 11})),
+                "inlineValues" => Some(json!({
+                    "source": { "path": "/tmp/capability_honesty.pl" },
+                    "startLine": 1,
+                    "endLine": 1
+                })),
                 "terminate" => Some(json!({"restart": false})),
                 _ => None,
             };

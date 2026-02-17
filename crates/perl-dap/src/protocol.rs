@@ -254,6 +254,9 @@ pub struct Capabilities {
     /// Supports terminate request
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports_terminate_request: Option<bool>,
+    /// Supports custom inlineValues request for inline debug hints
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_inline_values: Option<bool>,
 }
 
 // ============================================================================

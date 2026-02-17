@@ -142,6 +142,7 @@ print "$x\n";
             .and_then(|v| v.as_bool())
             .unwrap_or(false)
     );
+    assert!(capabilities.get("supportsInlineValues").and_then(|v| v.as_bool()).unwrap_or(false));
     let _initialized = wait_for_event(&rx, "initialized", Duration::from_secs(2))?;
 
     response_success(
