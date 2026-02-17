@@ -1086,20 +1086,28 @@ impl DebugAdapter {
         let recent_output = self.recent_output.clone();
 
         thread::spawn(move || {
-            // Take stdout handle
-            let stdout = {
+            // Perl's debugger prompt and evaluation output are emitted on stderr.
+            // Prefer stderr as the control stream, with stdout as a fallback.
+            let control_stream: Option<Box<dyn Read + Send>> = {
                 if let Ok(mut guard) = session.lock() {
-                    guard.as_mut().and_then(|s| s.process.stdout.take())
+                    guard.as_mut().and_then(|s| {
+                        if let Some(stderr) = s.process.stderr.take() {
+                            Some(Box::new(stderr) as Box<dyn Read + Send>)
+                        } else {
+                            s.process
+                                .stdout
+                                .take()
+                                .map(|stdout| Box::new(stdout) as Box<dyn Read + Send>)
+                        }
+                    })
                 } else {
                     eprintln!("Failed to lock session in output reader");
                     None
                 }
             };
 
-            let Some(stdout) = stdout else {
-                eprintln!(
-                    "No stdout handle available for Perl debugger - output reader thread exiting"
-                );
+            let Some(control_stream) = control_stream else {
+                eprintln!("No debugger output stream available - output reader thread exiting");
                 // Send termination event
                 if let Some(ref sender) = sender {
                     let mut seq_lock = match seq.lock() {
@@ -1113,13 +1121,13 @@ impl DebugAdapter {
                     let _ = sender.send(DapMessage::Event {
                         seq: *seq_lock,
                         event: "terminated".to_string(),
-                        body: Some(json!({"reason": "no_stdout"})),
+                        body: Some(json!({"reason": "no_debugger_stream"})),
                     });
                 }
                 return;
             };
 
-            let mut reader = BufReader::new(stdout);
+            let mut reader = BufReader::new(control_stream);
             let mut line = String::new();
 
             let mut current_file = String::new();
@@ -1257,6 +1265,91 @@ impl DebugAdapter {
                         }
 
                         if context_updated {
+                            let mut should_emit_stopped = false;
+                            let thread_id = {
+                                let Ok(mut guard) = session.lock() else {
+                                    eprintln!(
+                                        "Failed to lock session when processing debugger context"
+                                    );
+                                    continue;
+                                };
+                                if let Some(ref mut s) = *guard {
+                                    if !current_file.is_empty() && current_line > 0 {
+                                        s.stack_frames = vec![StackFrame {
+                                            id: 1,
+                                            name: if current_func.is_empty() {
+                                                "main".to_string()
+                                            } else {
+                                                current_func.clone()
+                                            },
+                                            source: Source {
+                                                name: Some(
+                                                    std::path::Path::new(&current_file)
+                                                        .file_name()
+                                                        .and_then(|n| n.to_str())
+                                                        .unwrap_or(&current_file)
+                                                        .to_string(),
+                                                ),
+                                                path: current_file.clone(),
+                                                source_reference: None,
+                                            },
+                                            line: current_line,
+                                            column: 1,
+                                            end_line: None,
+                                            end_column: None,
+                                        }];
+                                    }
+
+                                    if matches!(s.state, DebugState::Running) {
+                                        s.state = DebugState::Stopped;
+                                        should_emit_stopped = true;
+                                    }
+                                    s.thread_id
+                                } else {
+                                    continue;
+                                }
+                            };
+
+                            if should_emit_stopped && let Some(ref sender) = sender {
+                                match seq.lock() {
+                                    Ok(mut seq_lock) => {
+                                        *seq_lock += 1;
+                                        if sender
+                                            .send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "stopped".to_string(),
+                                                body: Some(json!({
+                                                    "reason": "step",
+                                                    "threadId": thread_id,
+                                                    "allThreadsStopped": true
+                                                })),
+                                            })
+                                            .is_err()
+                                        {
+                                            eprintln!(
+                                                "Failed to send stopped event - client disconnected"
+                                            );
+                                            return;
+                                        }
+                                    }
+                                    Err(poisoned) => {
+                                        eprintln!(
+                                            "Sequence lock poisoned when sending stopped event, recovering"
+                                        );
+                                        let mut seq_lock = poisoned.into_inner();
+                                        *seq_lock += 1;
+                                        let _ = sender.send(DapMessage::Event {
+                                            seq: *seq_lock,
+                                            event: "stopped".to_string(),
+                                            body: Some(json!({
+                                                "reason": "step",
+                                                "threadId": thread_id,
+                                                "allThreadsStopped": true
+                                            })),
+                                        });
+                                    }
+                                }
+                            }
                             continue;
                         }
 

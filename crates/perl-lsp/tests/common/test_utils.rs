@@ -272,6 +272,22 @@ impl TestServer {
         )
     }
 
+    /// Request completion items at a position
+    pub fn get_completion(&mut self, uri: &str, line: u32, character: u32) -> Value {
+        super::send_request(
+            &mut self.server,
+            json!({
+                "jsonrpc": "2.0",
+                "id": next_request_id(),
+                "method": "textDocument/completion",
+                "params": {
+                    "textDocument": { "uri": uri },
+                    "position": { "line": line, "character": character }
+                }
+            }),
+        )
+    }
+
     /// Request signature help
     pub fn get_signature_help(&mut self, uri: &str, line: u32, character: u32) -> Value {
         super::send_request(

@@ -78,6 +78,14 @@ impl LspServer {
                             .map(|d| format!("\n**Declaration**: `{}`", d))
                             .unwrap_or_default();
 
+                        // Include synthesized framework metadata (for example:
+                        // `is=ro`, `isa=Str`) when available.
+                        let attrs_info = if symbol_info.attributes.is_empty() {
+                            String::new()
+                        } else {
+                            format!("\n**Attributes**: {}", symbol_info.attributes.join(", "))
+                        };
+
                         // Add documentation if available
                         let doc_info = symbol_info
                             .documentation
@@ -88,10 +96,11 @@ impl LspServer {
                         return Ok(Some(json!({
                             "contents": {
                                 "kind": "markdown",
-                                "value": format!("**{}**\n\n`{}`{}{}",
+                                "value": format!("**{}**\n\n`{}`{}{}{}",
                                     kind_str,
                                     full_name,
                                     decl_info,
+                                    attrs_info,
                                     doc_info
                                 ),
                             },
