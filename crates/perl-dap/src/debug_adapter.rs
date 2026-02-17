@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::breakpoints::BreakpointStore;
+use crate::breakpoints::{BreakpointHitOutcome, BreakpointStore};
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
@@ -48,6 +48,7 @@ static STACK_FRAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 #[allow(dead_code)] // Reserved for future variable parsing enhancements
 static VARIABLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ERROR_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static EXCEPTION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static DANGEROUS_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ASSIGNMENT_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
@@ -95,6 +96,13 @@ fn error_re() -> Option<&'static Regex> {
         .get_or_init(|| {
             Regex::new(r"^(?:.*?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)|Syntax error|Can't locate|Global symbol).*$")
         })
+        .as_ref()
+        .ok()
+}
+
+fn exception_re() -> Option<&'static Regex> {
+    EXCEPTION_RE
+        .get_or_init(|| Regex::new(r"(?i)\b(?:died|uncaught exception|panic)\b"))
         .as_ref()
         .ok()
 }
@@ -313,6 +321,8 @@ pub struct DebugAdapter {
     function_breakpoints: Arc<Mutex<Vec<String>>>,
     /// Monotonic IDs for function breakpoints
     next_function_breakpoint_id: Arc<Mutex<i64>>,
+    /// Exception breakpoint policy: break on `die`/uncaught exception output.
+    exception_break_on_die: Arc<Mutex<bool>>,
     /// Unique marker IDs used to frame debugger output per command.
     debugger_output_marker: Arc<AtomicU64>,
 }
@@ -329,6 +339,8 @@ struct DebugSession {
     variables: HashMap<i32, Vec<Variable>>,
     /// Thread ID
     thread_id: i32,
+    /// Last resume command issued while running.
+    last_resume_mode: ResumeMode,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -337,6 +349,15 @@ enum DebugState {
     Running,
     Stopped,
     Terminated,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum ResumeMode {
+    Continue,
+    Next,
+    StepIn,
+    StepOut,
+    Unknown,
 }
 
 /// Represents a DAP message, which can be a request, response, or event.
@@ -444,6 +465,7 @@ impl DebugAdapter {
             recent_output: Arc::new(Mutex::new(VecDeque::with_capacity(RECENT_OUTPUT_MAX_LINES))),
             function_breakpoints: Arc::new(Mutex::new(Vec::new())),
             next_function_breakpoint_id: Arc::new(Mutex::new(1)),
+            exception_break_on_die: Arc::new(Mutex::new(false)),
             debugger_output_marker: Arc::new(AtomicU64::new(1)),
         }
     }
@@ -1084,7 +1106,7 @@ impl DebugAdapter {
             "supportsConfigurationDoneRequest": true,
             "supportsFunctionBreakpoints": true,
             "supportsConditionalBreakpoints": true,
-            "supportsHitConditionalBreakpoints": false,
+            "supportsHitConditionalBreakpoints": true,
             "supportsEvaluateForHovers": true,
             "supportsStepBack": false,
             "supportsSetVariable": true,
@@ -1094,13 +1116,13 @@ impl DebugAdapter {
             "supportsCompletionsRequest": false,
             "supportsModulesRequest": false,
             "supportsRestartRequest": false,
-            "supportsExceptionOptions": false,
+            "supportsExceptionOptions": true,
             "supportsValueFormattingOptions": true,
             "supportsExceptionInfoRequest": false,
             "supportTerminateDebuggee": true,
             "supportsDelayedStackTraceLoading": false,
             "supportsLoadedSourcesRequest": false,
-            "supportsLogPoints": false,
+            "supportsLogPoints": true,
             "supportsTerminateThreadsRequest": false,
             "supportsSetExpression": false,
             "supportsTerminateRequest": true,
@@ -1112,7 +1134,15 @@ impl DebugAdapter {
             "supportsClipboardContext": false,
             "supportsSteppingGranularity": false,
             "supportsInstructionBreakpoints": false,
-            "supportsExceptionFilterOptions": false
+            "supportsExceptionFilterOptions": true,
+            "exceptionBreakpointFilters": [
+                {
+                    "filter": "die",
+                    "label": "Perl die/uncaught exception",
+                    "default": false,
+                    "supportsCondition": false
+                }
+            ]
         });
 
         DapMessage::Response {
@@ -1276,6 +1306,7 @@ impl DebugAdapter {
                     stack_frames: Vec::new(),
                     variables: HashMap::new(),
                     thread_id,
+                    last_resume_mode: ResumeMode::Unknown,
                 };
 
                 if let Ok(mut guard) = self.session.lock() {
@@ -1302,6 +1333,8 @@ impl DebugAdapter {
         let seq = self.seq.clone();
         let sender = self.event_sender.clone();
         let recent_output = self.recent_output.clone();
+        let breakpoints = self.breakpoints.clone();
+        let exception_break_on_die = self.exception_break_on_die.clone();
 
         thread::spawn(move || {
             // Perl's debugger prompt and evaluation output are emitted on stderr.
@@ -1483,7 +1516,16 @@ impl DebugAdapter {
                         }
 
                         if context_updated {
+                            let break_on_die =
+                                exception_break_on_die.lock().map(|guard| *guard).unwrap_or(false);
+                            let exception_match =
+                                break_on_die && exception_re().is_some_and(|re| re.is_match(&text));
+
                             let mut should_emit_stopped = false;
+                            let mut should_auto_continue = false;
+                            let mut stop_reason = "step".to_string();
+                            let mut logpoint_messages: Vec<String> = Vec::new();
+
                             let thread_id = {
                                 let Ok(mut guard) = session.lock() else {
                                     eprintln!(
@@ -1491,6 +1533,7 @@ impl DebugAdapter {
                                     );
                                     continue;
                                 };
+
                                 if let Some(ref mut s) = *guard {
                                     if !current_file.is_empty() && current_line > 0 {
                                         s.stack_frames = vec![StackFrame {
@@ -1519,14 +1562,87 @@ impl DebugAdapter {
                                     }
 
                                     if matches!(s.state, DebugState::Running) {
-                                        s.state = DebugState::Stopped;
                                         should_emit_stopped = true;
+                                        let resume_mode = s.last_resume_mode.clone();
+
+                                        let breakpoint_outcome =
+                                            if matches!(resume_mode, ResumeMode::Continue)
+                                                && !current_file.is_empty()
+                                                && current_line > 0
+                                            {
+                                                breakpoints.register_breakpoint_hit(
+                                                    &current_file,
+                                                    i64::from(current_line),
+                                                )
+                                            } else {
+                                                BreakpointHitOutcome::default()
+                                            };
+
+                                        if exception_match {
+                                            stop_reason = "exception".to_string();
+                                            s.state = DebugState::Stopped;
+                                        } else if breakpoint_outcome.matched {
+                                            logpoint_messages = breakpoint_outcome.log_messages;
+                                            if breakpoint_outcome.should_stop {
+                                                stop_reason = "breakpoint".to_string();
+                                                s.state = DebugState::Stopped;
+                                            } else {
+                                                if let Some(stdin) = s.process.stdin.as_mut() {
+                                                    let _ = stdin.write_all(b"c\n");
+                                                    let _ = stdin.flush();
+                                                }
+                                                s.state = DebugState::Running;
+                                                s.last_resume_mode = ResumeMode::Continue;
+                                                should_auto_continue = true;
+                                            }
+                                        } else {
+                                            s.state = DebugState::Stopped;
+                                        }
+
+                                        if !should_auto_continue {
+                                            s.last_resume_mode = ResumeMode::Unknown;
+                                        }
                                     }
+
                                     s.thread_id
                                 } else {
                                     continue;
                                 }
                             };
+
+                            if let Some(ref sender) = sender {
+                                for message in logpoint_messages {
+                                    match seq.lock() {
+                                        Ok(mut seq_lock) => {
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "output".to_string(),
+                                                body: Some(json!({
+                                                    "category": "console",
+                                                    "output": format!("{message}\n")
+                                                })),
+                                            });
+                                        }
+                                        Err(poisoned) => {
+                                            let mut seq_lock = poisoned.into_inner();
+                                            *seq_lock += 1;
+                                            let _ = sender.send(DapMessage::Event {
+                                                seq: *seq_lock,
+                                                event: "output".to_string(),
+                                                body: Some(json!({
+                                                    "category": "console",
+                                                    "output": format!("{message}\n")
+                                                })),
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+
+                            if should_auto_continue {
+                                continue;
+                            }
 
                             if should_emit_stopped && let Some(ref sender) = sender {
                                 match seq.lock() {
@@ -1537,7 +1653,7 @@ impl DebugAdapter {
                                                 seq: *seq_lock,
                                                 event: "stopped".to_string(),
                                                 body: Some(json!({
-                                                    "reason": "step",
+                                                    "reason": stop_reason,
                                                     "threadId": thread_id,
                                                     "allThreadsStopped": true
                                                 })),
@@ -1560,7 +1676,7 @@ impl DebugAdapter {
                                             seq: *seq_lock,
                                             event: "stopped".to_string(),
                                             body: Some(json!({
-                                                "reason": "step",
+                                                "reason": stop_reason,
                                                 "threadId": thread_id,
                                                 "allThreadsStopped": true
                                             })),
@@ -2261,14 +2377,39 @@ impl DebugAdapter {
 
     /// Handle setExceptionBreakpoints request.
     ///
-    /// Perl debugger integration is currently best-effort; we accept request payload
-    /// to keep client workflows unblocked and return an empty breakpoint list.
+    /// Supports `die`/uncaught exception breaks via output classification in the
+    /// debugger reader thread.
     fn handle_set_exception_breakpoints(
         &self,
         seq: i64,
         request_seq: i64,
-        _arguments: Option<Value>,
+        arguments: Option<Value>,
     ) -> DapMessage {
+        let mut break_on_die = false;
+
+        if let Some(args) = arguments {
+            if let Some(filters) = args.get("filters").and_then(Value::as_array) {
+                break_on_die = filters.iter().filter_map(Value::as_str).any(|filter| {
+                    filter.eq_ignore_ascii_case("die") || filter.eq_ignore_ascii_case("all")
+                });
+            }
+
+            if !break_on_die
+                && let Some(filter_options) = args.get("filterOptions").and_then(Value::as_array)
+            {
+                break_on_die = filter_options
+                    .iter()
+                    .filter_map(|entry| entry.get("filterId").and_then(Value::as_str))
+                    .any(|filter| {
+                        filter.eq_ignore_ascii_case("die") || filter.eq_ignore_ascii_case("all")
+                    });
+            }
+        }
+
+        if let Ok(mut guard) = self.exception_break_on_die.lock() {
+            *guard = break_on_die;
+        }
+
         DapMessage::Response {
             seq,
             request_seq,
@@ -2860,6 +3001,7 @@ impl DebugAdapter {
             let _ = stdin.write_all(b"c\n");
             let _ = stdin.flush();
             session.state = DebugState::Running;
+            session.last_resume_mode = ResumeMode::Continue;
             thread_id = session.thread_id;
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
@@ -2896,6 +3038,7 @@ impl DebugAdapter {
             let _ = stdin.write_all(b"n\n");
             let _ = stdin.flush();
             session.state = DebugState::Running;
+            session.last_resume_mode = ResumeMode::Next;
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -2924,6 +3067,7 @@ impl DebugAdapter {
             let _ = stdin.write_all(b"s\n");
             let _ = stdin.flush();
             session.state = DebugState::Running;
+            session.last_resume_mode = ResumeMode::StepIn;
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -2952,6 +3096,7 @@ impl DebugAdapter {
             let _ = stdin.write_all(b"r\n");
             let _ = stdin.flush();
             session.state = DebugState::Running;
+            session.last_resume_mode = ResumeMode::StepOut;
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -3751,9 +3896,13 @@ mod tests {
             ("supportsConfigurationDoneRequest", "configurationDone"),
             ("supportsFunctionBreakpoints", "setFunctionBreakpoints"),
             ("supportsConditionalBreakpoints", "setBreakpoints"),
+            ("supportsHitConditionalBreakpoints", "setBreakpoints"),
             ("supportsEvaluateForHovers", "evaluate"),
             ("supportsSetVariable", "setVariable"),
             ("supportsValueFormattingOptions", "variables"),
+            ("supportsLogPoints", "setBreakpoints"),
+            ("supportsExceptionOptions", "setExceptionBreakpoints"),
+            ("supportsExceptionFilterOptions", "setExceptionBreakpoints"),
             ("supportsTerminateRequest", "terminate"),
             ("supportTerminateDebuggee", "terminate"),
         ];
@@ -3785,9 +3934,11 @@ mod tests {
                 "setFunctionBreakpoints" => {
                     Some(json!({"breakpoints": [{ "name": "main::noop" }]}))
                 }
-                "setBreakpoints" => Some(
-                    json!({"source": { "path": "/tmp/capability_honesty.pl" }, "breakpoints": [{ "line": 1 }]}),
-                ),
+                "setBreakpoints" => Some(json!({
+                    "source": { "path": "/tmp/capability_honesty.pl" },
+                    "breakpoints": [{ "line": 1, "hitCondition": ">= 1", "logMessage": "breakpoint hit" }]
+                })),
+                "setExceptionBreakpoints" => Some(json!({"filters": ["die"]})),
                 "evaluate" => Some(json!({"expression": "$x", "allowSideEffects": true})),
                 "setVariable" => {
                     Some(json!({"variablesReference": 11, "name": "$x", "value": "1"}))
@@ -3815,6 +3966,66 @@ mod tests {
                 _ => return Err(format!("Expected response for `{command}`").into()),
             }
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_set_exception_breakpoints_toggles_die_filter() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut adapter = DebugAdapter::new();
+
+        assert!(
+            !*lock_or_recover(
+                &adapter.exception_break_on_die,
+                "test_set_exception_breakpoints.initial"
+            ),
+            "die filter should default to disabled"
+        );
+
+        let response = adapter.handle_request(
+            1,
+            "setExceptionBreakpoints",
+            Some(json!({
+                "filters": ["die"]
+            })),
+        );
+        match response {
+            DapMessage::Response { success: true, command, .. } => {
+                assert_eq!(command, "setExceptionBreakpoints");
+            }
+            _ => return Err("Expected successful setExceptionBreakpoints response".into()),
+        }
+
+        assert!(
+            *lock_or_recover(
+                &adapter.exception_break_on_die,
+                "test_set_exception_breakpoints.enabled"
+            ),
+            "die filter should be enabled after request"
+        );
+
+        let disable = adapter.handle_request(
+            2,
+            "setExceptionBreakpoints",
+            Some(json!({
+                "filters": []
+            })),
+        );
+        match disable {
+            DapMessage::Response { success: true, command, .. } => {
+                assert_eq!(command, "setExceptionBreakpoints");
+            }
+            _ => return Err("Expected successful setExceptionBreakpoints response".into()),
+        }
+
+        assert!(
+            !*lock_or_recover(
+                &adapter.exception_break_on_die,
+                "test_set_exception_breakpoints.disabled"
+            ),
+            "die filter should be disabled when no matching filters are configured"
+        );
 
         Ok(())
     }

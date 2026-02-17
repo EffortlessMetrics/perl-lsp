@@ -395,11 +395,11 @@ description = "Inline variable values while debugging (native adapter preview)"
 id = "dap.breakpoints"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "preview"
-advertised = false
+maturity = "ga"
+advertised = true
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs"]
-description = "Breakpoint support with AST validation in native adapter (preview)"
+description = "Breakpoint support with AST validation, hit conditions, and logpoints in native adapter"
 
 # Protocol / Lifecycle Features
 

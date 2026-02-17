@@ -152,7 +152,13 @@ mod dap_phase2_tests {
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
             source: Source { path: Some(fixture_path.clone()), name: Some("test.pl".to_string()) },
-            breakpoints: Some(vec![SourceBreakpoint { line: 2, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 2,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
 

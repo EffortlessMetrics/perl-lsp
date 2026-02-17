@@ -239,6 +239,10 @@ impl DapDispatcher {
             supports_configuration_done_request: Some(true),
             supports_evaluate_for_hovers: Some(true),
             supports_conditional_breakpoints: Some(false), // Phase 2 (AC7) - See #450
+            supports_hit_conditional_breakpoints: Some(false),
+            supports_log_points: Some(false),
+            supports_exception_options: Some(false),
+            supports_exception_filter_options: Some(false),
             supports_terminate_request: Some(true),
         };
 

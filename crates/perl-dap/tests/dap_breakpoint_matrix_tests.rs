@@ -35,7 +35,13 @@ fn create_test_file_and_set_breakpoints(
     // Create breakpoint arguments
     let source_breakpoints: Vec<SourceBreakpoint> = lines
         .iter()
-        .map(|&line| SourceBreakpoint { line, column: None, condition: None })
+        .map(|&line| SourceBreakpoint {
+            line,
+            column: None,
+            condition: None,
+            hit_condition: None,
+            log_message: None,
+        })
         .collect();
 
     let args = SetBreakpointsArguments {
@@ -239,7 +245,13 @@ my $y = 100;
     // Set initial breakpoints
     let args1 = SetBreakpointsArguments {
         source: Source { path: Some(path.clone()), name: Some("test.pl".to_string()) },
-        breakpoints: Some(vec![SourceBreakpoint { line: 2, column: None, condition: None }]),
+        breakpoints: Some(vec![SourceBreakpoint {
+            line: 2,
+            column: None,
+            condition: None,
+            hit_condition: None,
+            log_message: None,
+        }]),
         source_modified: None,
     };
     store.set_breakpoints(&args1);
@@ -248,8 +260,20 @@ my $y = 100;
     let args2 = SetBreakpointsArguments {
         source: Source { path: Some(path.clone()), name: Some("test.pl".to_string()) },
         breakpoints: Some(vec![
-            SourceBreakpoint { line: 1, column: None, condition: None },
-            SourceBreakpoint { line: 3, column: None, condition: None },
+            SourceBreakpoint {
+                line: 1,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            },
+            SourceBreakpoint {
+                line: 3,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            },
         ]),
         source_modified: None,
     };
@@ -276,7 +300,13 @@ fn test_breakpoint_file_not_found() -> Result<()> {
             path: Some("/nonexistent/file.pl".to_string()),
             name: Some("file.pl".to_string()),
         },
-        breakpoints: Some(vec![SourceBreakpoint { line: 1, column: None, condition: None }]),
+        breakpoints: Some(vec![SourceBreakpoint {
+            line: 1,
+            column: None,
+            condition: None,
+            hit_condition: None,
+            log_message: None,
+        }]),
         source_modified: None,
     };
 
@@ -314,7 +344,13 @@ mod dap_breakpoint_matrix_phase2 {
             breakpoints: Some(
                 lines
                     .iter()
-                    .map(|line| SourceBreakpoint { line: *line, column: None, condition: None })
+                    .map(|line| SourceBreakpoint {
+                        line: *line,
+                        column: None,
+                        condition: None,
+                        hit_condition: None,
+                        log_message: None,
+                    })
                     .collect(),
             ),
             source_modified: None,

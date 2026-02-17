@@ -18,6 +18,7 @@
 use crate::protocol::{Breakpoint, SetBreakpointsArguments};
 use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 // ============= AST Validation Utilities (AC7) =============
@@ -67,6 +68,12 @@ pub struct BreakpointRecord {
     pub column: Option<i64>,
     /// Breakpoint condition (e.g., "$x > 10")
     pub condition: Option<String>,
+    /// Breakpoint hit-count condition (e.g., ">= 5", "%2")
+    pub hit_condition: Option<String>,
+    /// Logpoint message. When present, hit events log output and continue.
+    pub log_message: Option<String>,
+    /// Number of times this breakpoint has been hit in the current session.
+    pub hit_count: u64,
     /// Whether breakpoint was successfully verified
     pub verified: bool,
     /// Verification message (error/warning if not verified or adjusted)
@@ -84,6 +91,75 @@ impl BreakpointRecord {
             message: self.message.clone(),
         }
     }
+}
+
+/// Result of applying a runtime breakpoint hit to stored breakpoint metadata.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BreakpointHitOutcome {
+    /// True when at least one verified breakpoint matched the file/line location.
+    pub matched: bool,
+    /// True when execution should stop and emit a `stopped` event.
+    pub should_stop: bool,
+    /// Logpoint messages to emit as `output` events.
+    pub log_messages: Vec<String>,
+}
+
+fn parse_hit_condition_operand(raw: &str) -> Option<u64> {
+    raw.trim().parse::<u64>().ok()
+}
+
+fn is_valid_hit_condition(raw: &str) -> bool {
+    evaluate_hit_condition(Some(raw), 1).is_some()
+}
+
+fn evaluate_hit_condition(raw: Option<&str>, hit_count: u64) -> Option<bool> {
+    let Some(raw) = raw else {
+        return Some(true);
+    };
+
+    let expr = raw.trim();
+    if expr.is_empty() {
+        return Some(true);
+    }
+
+    if let Some(rest) = expr.strip_prefix(">=") {
+        return parse_hit_condition_operand(rest).map(|n| hit_count >= n);
+    }
+    if let Some(rest) = expr.strip_prefix("<=") {
+        return parse_hit_condition_operand(rest).map(|n| hit_count <= n);
+    }
+    if let Some(rest) = expr.strip_prefix("==") {
+        return parse_hit_condition_operand(rest).map(|n| hit_count == n);
+    }
+    if let Some(rest) = expr.strip_prefix('=') {
+        return parse_hit_condition_operand(rest).map(|n| hit_count == n);
+    }
+    if let Some(rest) = expr.strip_prefix('>') {
+        return parse_hit_condition_operand(rest).map(|n| hit_count > n);
+    }
+    if let Some(rest) = expr.strip_prefix('<') {
+        return parse_hit_condition_operand(rest).map(|n| hit_count < n);
+    }
+    if let Some(rest) = expr.strip_prefix('%') {
+        return parse_hit_condition_operand(rest)
+            .and_then(|n| if n == 0 { None } else { Some(hit_count.is_multiple_of(n)) });
+    }
+
+    parse_hit_condition_operand(expr).map(|n| hit_count == n)
+}
+
+fn file_paths_match(stored: &str, observed: &str) -> bool {
+    if stored == observed {
+        return true;
+    }
+    if stored.ends_with(observed) || observed.ends_with(stored) {
+        return true;
+    }
+
+    let stored_name = Path::new(stored).file_name().and_then(|name| name.to_str());
+    let observed_name = Path::new(observed).file_name().and_then(|name| name.to_str());
+
+    matches!((stored_name, observed_name), (Some(left), Some(right)) if left == right)
 }
 
 /// Thread-safe breakpoint storage
@@ -139,8 +215,8 @@ impl BreakpointStore {
     ///         name: Some("script.pl".to_string()),
     ///     },
     ///     breakpoints: Some(vec![
-    ///         SourceBreakpoint { line: 10, column: None, condition: None },
-    ///         SourceBreakpoint { line: 25, column: None, condition: None },
+    ///         SourceBreakpoint { line: 10, column: None, condition: None, hit_condition: None, log_message: None },
+    ///         SourceBreakpoint { line: 25, column: None, condition: None, hit_condition: None, log_message: None },
     ///     ]),
     ///     source_modified: None,
     /// };
@@ -186,6 +262,9 @@ impl BreakpointStore {
                     line: bp.line,
                     column: bp.column,
                     condition: bp.condition.clone(),
+                    hit_condition: bp.hit_condition.clone(),
+                    log_message: bp.log_message.clone(),
+                    hit_count: 0,
                     verified: false,
                     message: Some("Line number must be positive".to_string()),
                 });
@@ -202,8 +281,47 @@ impl BreakpointStore {
                         line: bp.line,
                         column: bp.column,
                         condition: bp.condition.clone(),
+                        hit_condition: bp.hit_condition.clone(),
+                        log_message: bp.log_message.clone(),
+                        hit_count: 0,
                         verified: false,
                         message: Some("Breakpoint condition cannot contain newlines".to_string()),
+                    };
+                    records.push(record);
+                    continue;
+                }
+            }
+
+            if let Some(ref hit_condition) = bp.hit_condition {
+                let hit_condition = hit_condition.trim();
+                if hit_condition.contains('\n') || hit_condition.contains('\r') {
+                    let record = BreakpointRecord {
+                        id,
+                        line: bp.line,
+                        column: bp.column,
+                        condition: bp.condition.clone(),
+                        hit_condition: bp.hit_condition.clone(),
+                        log_message: bp.log_message.clone(),
+                        hit_count: 0,
+                        verified: false,
+                        message: Some("Hit condition cannot contain newlines".to_string()),
+                    };
+                    records.push(record);
+                    continue;
+                }
+                if !is_valid_hit_condition(hit_condition) {
+                    let record = BreakpointRecord {
+                        id,
+                        line: bp.line,
+                        column: bp.column,
+                        condition: bp.condition.clone(),
+                        hit_condition: bp.hit_condition.clone(),
+                        log_message: bp.log_message.clone(),
+                        hit_count: 0,
+                        verified: false,
+                        message: Some(format!(
+                            "Invalid hitCondition `{hit_condition}` (expected numeric expression like `10`, `>= 5`, `%2`)"
+                        )),
                     };
                     records.push(record);
                     continue;
@@ -228,6 +346,9 @@ impl BreakpointStore {
                 line: resolved_line,
                 column: bp.column,
                 condition: bp.condition.clone(),
+                hit_condition: bp.hit_condition.clone(),
+                log_message: bp.log_message.clone(),
+                hit_count: 0,
                 verified,
                 message,
             };
@@ -297,6 +418,45 @@ impl BreakpointStore {
             }
         }
         None
+    }
+
+    /// Register a runtime breakpoint hit and return stop/logpoint behavior.
+    ///
+    /// This method updates per-breakpoint hit counters and evaluates DAP hit
+    /// conditions. For logpoints, execution continues after emitting output.
+    pub fn register_breakpoint_hit(&self, source_path: &str, line: i64) -> BreakpointHitOutcome {
+        let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
+        let mut outcome = BreakpointHitOutcome::default();
+
+        for (stored_path, records) in &mut *breakpoints_map {
+            if !file_paths_match(stored_path, source_path) {
+                continue;
+            }
+
+            for record in records {
+                if !record.verified || record.line != line {
+                    continue;
+                }
+
+                outcome.matched = true;
+                record.hit_count = record.hit_count.saturating_add(1);
+
+                let hit_condition_match =
+                    evaluate_hit_condition(record.hit_condition.as_deref(), record.hit_count)
+                        .unwrap_or(false);
+                if !hit_condition_match {
+                    continue;
+                }
+
+                if let Some(message) = record.log_message.clone() {
+                    outcome.log_messages.push(message);
+                } else {
+                    outcome.should_stop = true;
+                }
+            }
+        }
+
+        outcome
     }
 
     /// AC7.4: Adjust breakpoints for a file edit
@@ -401,11 +561,19 @@ print "result: $final\n";
         let args = SetBreakpointsArguments {
             source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 10, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
                 SourceBreakpoint {
                     line: 25,
                     column: Some(5),
                     condition: Some("$x > 10".to_string()),
+                    hit_condition: None,
+                    log_message: None,
                 },
             ]),
             source_modified: None,
@@ -429,7 +597,13 @@ print "result: $final\n";
         // Set initial breakpoints
         let args1 = SetBreakpointsArguments {
             source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
-            breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
         store.set_breakpoints(&args1);
@@ -438,8 +612,20 @@ print "result: $final\n";
         let args2 = SetBreakpointsArguments {
             source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 20, column: None, condition: None },
-                SourceBreakpoint { line: 26, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 20,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 26,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
             ]),
             source_modified: None,
         };
@@ -462,8 +648,20 @@ print "result: $final\n";
         let args = SetBreakpointsArguments {
             source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 10, column: None, condition: None },
-                SourceBreakpoint { line: 20, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 20,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
             ]),
             source_modified: None,
         };
@@ -482,9 +680,27 @@ print "result: $final\n";
             source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
             // Use lines within our 30-line test file, but out of order
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 25, column: None, condition: None },
-                SourceBreakpoint { line: 10, column: None, condition: None },
-                SourceBreakpoint { line: 15, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 25,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 15,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
             ]),
             source_modified: None,
         };
@@ -507,7 +723,13 @@ print "result: $final\n";
                 path: Some(source_path.to_string()),
                 name: Some("script.pl".to_string()),
             },
-            breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
         store.set_breakpoints(&args);
@@ -530,7 +752,13 @@ print "result: $final\n";
                 path: Some("/workspace/file1.pl".to_string()),
                 name: Some("file1.pl".to_string()),
             },
-            breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
         store.set_breakpoints(&args1);
@@ -540,7 +768,13 @@ print "result: $final\n";
                 path: Some("/workspace/file2.pl".to_string()),
                 name: Some("file2.pl".to_string()),
             },
-            breakpoints: Some(vec![SourceBreakpoint { line: 20, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 20,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
         store.set_breakpoints(&args2);
@@ -562,8 +796,20 @@ print "result: $final\n";
                 name: Some("script.pl".to_string()),
             },
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 10, column: None, condition: None },
-                SourceBreakpoint { line: 25, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 25,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
             ]),
             source_modified: None,
         };
@@ -603,7 +849,13 @@ print "result: $final\n";
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
             source: Source { path: None, name: Some("script.pl".to_string()) },
-            breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
 
@@ -623,6 +875,9 @@ print "result: $final\n";
             line: 10,
             column: None,
             condition: None,
+            hit_condition: None,
+            log_message: None,
+            hit_count: 0,
             verified: true,
             message: None,
         };
@@ -643,6 +898,69 @@ print "result: $final\n";
         // 3. Edit after breakpoint (no shift)
         store.adjust_breakpoints_for_edit(source_path, 20, 10);
         assert_eq!(store.get_breakpoints(source_path)[0].line, 12);
+    }
+
+    #[test]
+    fn test_hit_condition_parser_variants() {
+        assert_eq!(evaluate_hit_condition(None, 1), Some(true));
+        assert_eq!(evaluate_hit_condition(Some(""), 1), Some(true));
+        assert_eq!(evaluate_hit_condition(Some("3"), 3), Some(true));
+        assert_eq!(evaluate_hit_condition(Some("=3"), 2), Some(false));
+        assert_eq!(evaluate_hit_condition(Some(">= 2"), 2), Some(true));
+        assert_eq!(evaluate_hit_condition(Some(">2"), 2), Some(false));
+        assert_eq!(evaluate_hit_condition(Some("%2"), 4), Some(true));
+        assert_eq!(evaluate_hit_condition(Some("%0"), 4), None);
+        assert_eq!(evaluate_hit_condition(Some("invalid"), 1), None);
+    }
+
+    #[test]
+    fn test_register_breakpoint_hit_respects_hit_conditions_and_logpoints() {
+        let (_file, source_path) = create_test_perl_file();
+        let store = BreakpointStore::new();
+
+        let args = SetBreakpointsArguments {
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            breakpoints: Some(vec![
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: Some(">= 2".to_string()),
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 15,
+                    column: None,
+                    condition: None,
+                    hit_condition: Some("%2".to_string()),
+                    log_message: Some("loop tick".to_string()),
+                },
+            ]),
+            source_modified: None,
+        };
+        let responses = store.set_breakpoints(&args);
+        assert_eq!(responses.len(), 2);
+        assert!(responses.iter().all(|bp| bp.verified));
+
+        let first_hit = store.register_breakpoint_hit(&source_path, 10);
+        assert!(first_hit.matched);
+        assert!(!first_hit.should_stop);
+        assert!(first_hit.log_messages.is_empty());
+
+        let second_hit = store.register_breakpoint_hit(&source_path, 10);
+        assert!(second_hit.matched);
+        assert!(second_hit.should_stop);
+        assert!(second_hit.log_messages.is_empty());
+
+        let logpoint_first = store.register_breakpoint_hit(&source_path, 15);
+        assert!(logpoint_first.matched);
+        assert!(!logpoint_first.should_stop);
+        assert!(logpoint_first.log_messages.is_empty());
+
+        let logpoint_second = store.register_breakpoint_hit(&source_path, 15);
+        assert!(logpoint_second.matched);
+        assert!(!logpoint_second.should_stop);
+        assert_eq!(logpoint_second.log_messages, vec!["loop tick".to_string()]);
     }
 
     #[test]
