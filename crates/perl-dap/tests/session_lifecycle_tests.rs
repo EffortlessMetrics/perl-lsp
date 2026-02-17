@@ -95,6 +95,99 @@ fn test_session_lifecycle_disconnect_without_session() {
 
 #[test]
 // AC:5.5
+fn test_session_lifecycle_terminate_without_session() {
+    // Test that terminate works even without an active session and emits terminated event
+    let (mut adapter, rx) = create_test_adapter();
+
+    let response = adapter.handle_request(1, "terminate", Some(json!({ "restart": false })));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "Terminate should succeed even without session");
+            assert_eq!(command, "terminate");
+        }
+        _ => must(Err::<(), _>(format!("Expected Response message"))),
+    }
+
+    let event = wait_for_event(&rx, 100);
+    assert!(event.is_some(), "Should emit terminated event");
+    match must_some(event) {
+        DapMessage::Event { event, body, .. } => {
+            assert_eq!(event, "terminated");
+            let restart = body
+                .as_ref()
+                .and_then(|value| value.get("restart"))
+                .and_then(|value| value.as_bool());
+            assert_eq!(restart, Some(false), "terminate event should include restart flag");
+        }
+        _ => must(Err::<(), _>(format!("Expected Event message"))),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_set_variable_without_session_returns_error() {
+    // setVariable should fail clearly when no debugger session is active
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x",
+            "value": "2"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable should fail without active session");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("No debugger session"),
+                "Error should mention missing session: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>(format!("Expected Response message"))),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_set_variable_rejects_invalid_variable_name() {
+    // setVariable should reject names that could inject debugger commands
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x; system('id')",
+            "value": "2"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable should reject invalid variable names");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("Invalid variable name"),
+                "Error should report invalid variable name: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>(format!("Expected Response message"))),
+    }
+}
+
+#[test]
+// AC:5.5
 fn test_session_lifecycle_launch_missing_arguments() {
     // Test that launch fails gracefully with missing arguments
     let (mut adapter, _rx) = create_test_adapter();

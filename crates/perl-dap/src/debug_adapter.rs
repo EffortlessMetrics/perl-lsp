@@ -52,6 +52,7 @@ static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new(
 static ASSIGNMENT_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static DEREF_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static SET_VARIABLE_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 
@@ -245,6 +246,21 @@ fn deref_re() -> Option<&'static Regex> {
 /// Regex to match glob operations: <*...>
 fn glob_re() -> Option<&'static Regex> {
     GLOB_RE.get_or_init(|| Regex::new(r"<\*[^>]*>")).as_ref().ok()
+}
+
+/// Regex for validating setVariable variable names to avoid debugger command injection.
+fn set_variable_name_re() -> Option<&'static Regex> {
+    SET_VARIABLE_NAME_RE
+        .get_or_init(|| {
+            Regex::new(r"^[\$\@\%](?:[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*|\d+|_)$")
+        })
+        .as_ref()
+        .ok()
+}
+
+/// Validate DAP setVariable names (e.g. `$x`, `%ENV`, `$Package::value`) for safe passthrough.
+fn is_valid_set_variable_name(name: &str) -> bool {
+    set_variable_name_re().is_some_and(|re| re.is_match(name))
 }
 
 /// Check if the match is an escape sequence (preceded by backslash)
@@ -548,12 +564,14 @@ impl DebugAdapter {
             "launch" => self.handle_launch(seq, request_seq, arguments),
             "attach" => self.handle_attach(seq, request_seq, arguments),
             "disconnect" => self.handle_disconnect(seq, request_seq, arguments),
+            "terminate" => self.handle_terminate(seq, request_seq, arguments),
             "setBreakpoints" => self.handle_set_breakpoints(seq, request_seq, arguments),
             "configurationDone" => self.handle_configuration_done(seq, request_seq),
             "threads" => self.handle_threads(seq, request_seq),
             "stackTrace" => self.handle_stack_trace(seq, request_seq, arguments),
             "scopes" => self.handle_scopes(seq, request_seq, arguments),
             "variables" => self.handle_variables(seq, request_seq, arguments),
+            "setVariable" => self.handle_set_variable(seq, request_seq, arguments),
             "continue" => self.handle_continue(seq, request_seq, arguments),
             "next" => self.handle_next(seq, request_seq, arguments),
             "stepIn" => self.handle_step_in(seq, request_seq, arguments),
@@ -598,12 +616,14 @@ impl DebugAdapter {
                 }
             }
             "disconnect" => self.handle_disconnect(seq, request_seq, arguments),
+            "terminate" => self.handle_terminate(seq, request_seq, arguments),
             "setBreakpoints" => self.handle_set_breakpoints(seq, request_seq, arguments),
             "configurationDone" => self.handle_configuration_done(seq, request_seq),
             "threads" => self.handle_threads(seq, request_seq),
             "stackTrace" => self.handle_stack_trace(seq, request_seq, arguments),
             "scopes" => self.handle_scopes(seq, request_seq, arguments),
             "variables" => self.handle_variables(seq, request_seq, arguments),
+            "setVariable" => self.handle_set_variable(seq, request_seq, arguments),
             "continue" => self.handle_continue(seq, request_seq, arguments),
             "next" => self.handle_next(seq, request_seq, arguments),
             "stepIn" => self.handle_step_in(seq, request_seq, arguments),
@@ -1805,13 +1825,8 @@ impl DebugAdapter {
         }
     }
 
-    /// Handle disconnect request
-    fn handle_disconnect(
-        &mut self,
-        seq: i64,
-        request_seq: i64,
-        _arguments: Option<Value>,
-    ) -> DapMessage {
+    /// Clear active process session, TCP session, and PID-attach mode state.
+    fn clear_active_session_state(&self) {
         // Terminate the debug session
         if let Ok(mut guard) = self.session.lock()
             && let Some(mut session) = guard.take()
@@ -1834,6 +1849,16 @@ impl DebugAdapter {
         if let Ok(mut guard) = self.attached_pid.lock() {
             *guard = None;
         }
+    }
+
+    /// Handle disconnect request
+    fn handle_disconnect(
+        &mut self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        self.clear_active_session_state();
 
         // Send terminated event
         self.send_event("terminated", None);
@@ -1843,6 +1868,31 @@ impl DebugAdapter {
             request_seq,
             success: true,
             command: "disconnect".to_string(),
+            body: None,
+            message: None,
+        }
+    }
+
+    /// Handle terminate request
+    fn handle_terminate(
+        &mut self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let restart =
+            arguments.as_ref().and_then(|args| args.get("restart")).and_then(Value::as_bool);
+
+        self.clear_active_session_state();
+
+        let terminated_body = restart.map(|restart| json!({ "restart": restart }));
+        self.send_event("terminated", terminated_body);
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "terminate".to_string(),
             body: None,
             message: None,
         }
@@ -2212,6 +2262,151 @@ impl DebugAdapter {
             command: "variables".to_string(),
             body: Some(json!({
                 "variables": variables
+            })),
+            message: None,
+        }
+    }
+
+    /// Handle setVariable request
+    fn handle_set_variable(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let Some(args) = arguments else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some("Missing arguments".to_string()),
+            };
+        };
+
+        let variables_ref = args.get("variablesReference").and_then(Value::as_i64).unwrap_or(0);
+        if variables_ref <= 0 {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some("Missing variablesReference".to_string()),
+            };
+        }
+
+        let name = args.get("name").and_then(Value::as_str).unwrap_or("").trim();
+        let value = args.get("value").and_then(Value::as_str).unwrap_or("").trim();
+
+        if name.is_empty() {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some("Missing variable name".to_string()),
+            };
+        }
+
+        if value.is_empty() {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some("Missing variable value".to_string()),
+            };
+        }
+
+        if name.contains('\n')
+            || name.contains('\r')
+            || value.contains('\n')
+            || value.contains('\r')
+        {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some("Variable name/value cannot contain newlines".to_string()),
+            };
+        }
+
+        if !is_valid_set_variable_name(name) {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some(format!(
+                    "Invalid variable name `{name}` for setVariable (expected Perl sigil-prefixed variable)"
+                )),
+            };
+        }
+
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
+            if let Some(stdin) = session.process.stdin.as_mut() {
+                // Use debugger eval command for assignment and immediate read-back.
+                let assign_cmd = format!("x {name} = {value}\n");
+                let _ = stdin.write_all(assign_cmd.as_bytes());
+                let _ = stdin.flush();
+
+                let read_back_cmd = format!("x {name}\n");
+                let _ = stdin.write_all(read_back_cmd.as_bytes());
+                let _ = stdin.flush();
+            } else {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "setVariable".to_string(),
+                    body: None,
+                    message: Some("No debugger session active".to_string()),
+                };
+            }
+        } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some(format!(
+                    "setVariable is unavailable for processId attach (PID {pid}) without an active debugger transport"
+                )),
+            };
+        } else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some("No debugger session".to_string()),
+            };
+        }
+
+        Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
+        let (rendered_value, rendered_type) = self
+            .parse_evaluate_result_from_output(name)
+            .unwrap_or_else(|| (value.to_string(), "string".to_string()));
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "setVariable".to_string(),
+            body: Some(json!({
+                "value": rendered_value,
+                "type": rendered_type,
+                "variablesReference": 0
             })),
             message: None,
         }
