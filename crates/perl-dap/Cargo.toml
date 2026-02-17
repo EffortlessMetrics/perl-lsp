@@ -58,6 +58,9 @@ ropey = "1.6.1"
 
 # Perl parser for AST breakpoint validation
 perl-parser = { path = "../perl-parser" }
+perl-dap-eval = { workspace = true }
+perl-dap-variables = { workspace = true }
+perl-dap-stack = { workspace = true }
 
 # Process management
 # Note: tokio-process not needed (using tokio::process)

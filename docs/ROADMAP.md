@@ -36,7 +36,7 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 | **perl-lexer** | Production | `just ci-gate` | Tokenization stable |
 | **perl-corpus** | Production | `just ci-gate` | Regression corpus + mutation hardening inputs |
 | **perl-lsp** | Production (advertised subset) | capability snapshots + targeted tests | Advertise only what's tested; keep GA-lock stable |
-| **perl-dap** | Experimental (native adapter) | manual smoke | CLI uses native adapter; BridgeAdapter library available (Perl::LanguageServer) |
+| **perl-dap** | Phase 1 (Bridge Only) | manual smoke | BridgeAdapter delegates to Perl::LanguageServer; native adapter scaffolded but not functional |
 | **perl-parser-pest** (v2) | Legacy | N/A | Optional crate; keep out of default gate |
 | **Semantic Analyzer** | Phase 2-6 Complete | `just ci-gate` | All NodeKind handlers; full semantic analysis pipeline |
 
@@ -73,7 +73,7 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 | **perl-lsp** | v0.8.8 | Production | LSP server (see `features.toml` for GA coverage) |
 | **perl-lexer** | v0.8.8 | Production | Context-aware tokenizer |
 | **perl-corpus** | v0.8.8 | Production | Test corpus (see `just status-check` for counts) |
-| **perl-dap** | v0.1.0 | Phase 1 | Debug Adapter Protocol (native adapter CLI; BridgeAdapter library) |
+| **perl-dap** | v0.1.0 | Phase 1 (Bridge Only) | Debug Adapter Protocol (BridgeAdapter delegates to Perl::LanguageServer; native adapter scaffolded) |
 | **perl-parser-pest** | v0.8.8 | Legacy | Pest-based parser (maintained) |
 
 ---
@@ -427,4 +427,4 @@ Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - What went wrong and what changed
 
-<!-- Last Updated: 2026-01-28 -->
+<!-- Last Updated: 2026-02-16 -->

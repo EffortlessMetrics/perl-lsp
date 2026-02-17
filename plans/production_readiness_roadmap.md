@@ -212,7 +212,7 @@ graph TB
 
 **Current State**: Microcrate extraction complete with compatibility hardening
 
-**Remaining Work**:
+**Coverage Matrix**:
 Based on [`microcrate_architecture_design.md`](microcrate_architecture_design.md):
 
 | Proposed Crate | Status | Priority | Complexity |

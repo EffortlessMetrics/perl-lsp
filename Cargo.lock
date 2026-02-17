@@ -1537,6 +1537,9 @@ dependencies = [
  "lsp-types",
  "nix",
  "once_cell",
+ "perl-dap-eval",
+ "perl-dap-stack",
+ "perl-dap-variables",
  "perl-parser",
  "perl-tdd-support",
  "proptest",
@@ -1550,6 +1553,40 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "winapi",
+]
+
+[[package]]
+name = "perl-dap-eval"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "perl-tdd-support",
+ "regex",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-dap-stack"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "perl-tdd-support",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-dap-variables"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "perl-tdd-support",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]

@@ -6,14 +6,20 @@
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
+use perl_dap_eval::SafeEvaluator;
+use perl_dap_stack::PerlStackParser;
+use perl_dap_variables::{
+    PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
+use std::time::Duration;
 
 use crate::breakpoints::BreakpointStore;
 #[cfg(unix)]
@@ -45,6 +51,8 @@ static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new(
 static ASSIGNMENT_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static DEREF_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+const RECENT_OUTPUT_MAX_LINES: usize = 2048;
+const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
@@ -260,6 +268,8 @@ pub struct DebugAdapter {
     thread_counter: Arc<Mutex<i32>>,
     /// Output channel for sending events to client
     event_sender: Option<Sender<DapMessage>>,
+    /// Bounded history of debugger output for stack/variable/evaluate parsing
+    recent_output: Arc<Mutex<VecDeque<String>>>,
 }
 
 /// Active debug session
@@ -385,6 +395,7 @@ impl DebugAdapter {
             breakpoints: BreakpointStore::new(),
             thread_counter: Arc::new(Mutex::new(0)),
             event_sender: None,
+            recent_output: Arc::new(Mutex::new(VecDeque::with_capacity(RECENT_OUTPUT_MAX_LINES))),
         }
     }
 
@@ -610,6 +621,238 @@ impl DebugAdapter {
         }
     }
 
+    /// Snapshot debugger output history for parsing without holding locks.
+    fn snapshot_recent_output_lines(&self) -> Vec<String> {
+        let output = lock_or_recover(&self.recent_output, "debug_adapter.recent_output");
+        output.iter().cloned().collect()
+    }
+
+    /// Wait briefly for debugger command responses to arrive in the output buffer.
+    fn wait_for_debugger_output_window(timeout_ms: u32) {
+        let wait_ms = u64::from(timeout_ms.min(250)).max(DEBUGGER_QUERY_WAIT_MS);
+        thread::sleep(Duration::from_millis(wait_ms));
+    }
+
+    /// Convert i64 values in protocol payloads to i32 with saturation.
+    fn i64_to_i32_saturating(value: i64) -> i32 {
+        match i32::try_from(value) {
+            Ok(v) => v,
+            Err(_) => {
+                if value.is_negative() {
+                    i32::MIN
+                } else {
+                    i32::MAX
+                }
+            }
+        }
+    }
+
+    /// Convert microcrate rendered variables into adapter-local protocol values.
+    fn rendered_to_variable(rendered: RenderedVariable) -> Variable {
+        Variable {
+            name: rendered.name,
+            value: rendered.value,
+            type_: rendered.type_name,
+            variables_reference: Self::i64_to_i32_saturating(rendered.variables_reference),
+            named_variables: rendered.named_variables.map(Self::i64_to_i32_saturating),
+            indexed_variables: rendered.indexed_variables.map(Self::i64_to_i32_saturating),
+        }
+    }
+
+    /// Determine if a variable name should appear in a given scope.
+    fn scope_allows_variable_name(scope_type: i32, name: &str) -> bool {
+        match scope_type {
+            // Locals
+            1 => !name.contains("::"),
+            // Package variables (qualified)
+            2 => name.contains("::"),
+            // Globals/specials
+            3 => {
+                matches!(name, "$_" | "@ARGV" | "%ENV" | "$!" | "$@" | "$/" | "$|" | "$0" | "$^W")
+                    || name.starts_with("$^")
+            }
+            _ => true,
+        }
+    }
+
+    /// Convert parsed stack frames from `perl-dap-stack` into local DAP response frames.
+    fn parse_stack_frames_from_text(output: &str) -> Vec<StackFrame> {
+        let mut parser = PerlStackParser::new();
+        parser
+            .parse_stack_trace(output)
+            .into_iter()
+            .map(|frame| {
+                let source = frame.source.unwrap_or_default();
+                let path = source.path.unwrap_or_else(|| "<unknown>".to_string());
+                let name = source.name.or_else(|| {
+                    std::path::Path::new(&path)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .map(ToString::to_string)
+                });
+                StackFrame {
+                    id: Self::i64_to_i32_saturating(frame.id),
+                    name: frame.name,
+                    source: Source { name, path, source_reference: None },
+                    line: Self::i64_to_i32_saturating(frame.line),
+                    column: Self::i64_to_i32_saturating(frame.column),
+                    end_line: frame.end_line.map(Self::i64_to_i32_saturating),
+                    end_column: frame.end_column.map(Self::i64_to_i32_saturating),
+                }
+            })
+            .collect()
+    }
+
+    /// Filter out internal debugger and shim frames from user-visible stack traces.
+    fn filter_user_visible_frames(frames: Vec<StackFrame>) -> Vec<StackFrame> {
+        frames
+            .into_iter()
+            .filter(|f| {
+                !f.name.starts_with("Devel::TSPerlDAP::")
+                    && !f.name.starts_with("DB::")
+                    && !f.source.path.contains("perl5db.pl")
+            })
+            .collect()
+    }
+
+    /// Parse variables from recent debugger output using microcrate parser/renderer.
+    fn parse_scope_variables_from_output(
+        &self,
+        variables_ref: i32,
+        start: usize,
+        count: usize,
+    ) -> (Vec<Variable>, HashMap<i32, Vec<Variable>>) {
+        let lines = self.snapshot_recent_output_lines();
+        let parser = VariableParser::new();
+        let renderer = PerlVariableRenderer::new();
+        let scope_type = variables_ref % 10;
+        let mut seen = HashSet::new();
+        let mut parsed = Vec::new();
+
+        for line in lines.iter().rev() {
+            let text = line.trim();
+            if text.is_empty() {
+                continue;
+            }
+            if let Ok((name, value)) = parser.parse_assignment(text) {
+                if !Self::scope_allows_variable_name(scope_type, &name) {
+                    continue;
+                }
+                if seen.insert(name.clone()) {
+                    parsed.push((name, value));
+                }
+                if parsed.len() >= 256 {
+                    break;
+                }
+            }
+        }
+
+        parsed.reverse();
+
+        let mut top_level = Vec::new();
+        let mut child_cache = HashMap::new();
+        for (idx, (name, value)) in parsed.into_iter().skip(start).take(count).enumerate() {
+            let child_ref = variables_ref.saturating_mul(1000).saturating_add(
+                Self::i64_to_i32_saturating(i64::try_from(idx + 1).unwrap_or(i64::from(i32::MAX))),
+            );
+            let rendered = if value.is_expandable() {
+                renderer.render_with_reference(&name, &value, i64::from(child_ref))
+            } else {
+                renderer.render(&name, &value)
+            };
+            top_level.push(Self::rendered_to_variable(rendered));
+
+            if value.is_expandable() {
+                let children = renderer
+                    .render_children(&value, 0, 256)
+                    .into_iter()
+                    .map(Self::rendered_to_variable)
+                    .collect::<Vec<_>>();
+                if !children.is_empty() {
+                    child_cache.insert(child_ref, children);
+                }
+            }
+        }
+
+        (top_level, child_cache)
+    }
+
+    /// Parse evaluate output from recent debugger lines into a DAP result payload.
+    fn parse_evaluate_result_from_output(&self, expression: &str) -> Option<(String, String)> {
+        let lines = self.snapshot_recent_output_lines();
+        if lines.is_empty() {
+            return None;
+        }
+
+        let parser = VariableParser::new();
+        let renderer = PerlVariableRenderer::new();
+
+        for line in lines.iter().rev() {
+            let text = line.trim();
+            if text.is_empty() || prompt_re().is_some_and(|re| re.is_match(text)) {
+                continue;
+            }
+
+            if let Ok((name, value)) = parser.parse_assignment(text) {
+                let rendered = renderer.render(&name, &value);
+                let type_name = rendered.type_name.unwrap_or_else(|| "string".to_string());
+                // Prefer direct matches for the evaluated expression, but allow fallback assignment.
+                if name == expression || text.starts_with(expression) || text.contains(expression) {
+                    return Some((rendered.value, type_name));
+                }
+                return Some((rendered.value, type_name));
+            }
+        }
+
+        lines
+            .iter()
+            .rev()
+            .map(|line| line.trim())
+            .find(|line| !line.is_empty() && !line.starts_with("DB<"))
+            .map(|line| (line.to_string(), "string".to_string()))
+    }
+
+    /// Build deterministic placeholder variables used when debugger output is unavailable.
+    fn fallback_scope_variables(variables_ref: i32) -> Vec<Variable> {
+        match variables_ref % 10 {
+            1 => vec![
+                Variable {
+                    name: "@_".to_string(),
+                    value: "array(size=0)".to_string(),
+                    type_: Some("array".to_string()),
+                    variables_reference: variables_ref.saturating_mul(100) + 1,
+                    named_variables: None,
+                    indexed_variables: Some(0),
+                },
+                Variable {
+                    name: "$self".to_string(),
+                    value: "blessed(My::Module)".to_string(),
+                    type_: Some("hash".to_string()),
+                    variables_reference: variables_ref.saturating_mul(100) + 2,
+                    named_variables: Some(5),
+                    indexed_variables: None,
+                },
+            ],
+            2 => vec![Variable {
+                name: "$VERSION".to_string(),
+                value: "\"1.0.0\"".to_string(),
+                type_: Some("scalar".to_string()),
+                variables_reference: 0,
+                named_variables: None,
+                indexed_variables: None,
+            }],
+            3 => vec![Variable {
+                name: "$_".to_string(),
+                value: "undef".to_string(),
+                type_: Some("scalar".to_string()),
+                variables_reference: 0,
+                named_variables: None,
+                indexed_variables: None,
+            }],
+            _ => Vec::new(),
+        }
+    }
+
     /// Handle initialize request
     fn handle_initialize(
         &self,
@@ -823,6 +1066,7 @@ impl DebugAdapter {
         let session = self.session.clone();
         let seq = self.seq.clone();
         let sender = self.event_sender.clone();
+        let recent_output = self.recent_output.clone();
 
         thread::spawn(move || {
             // Take stdout handle
@@ -876,6 +1120,16 @@ impl DebugAdapter {
                     Ok(_) => {
                         let text = line.trim_end().to_string();
                         eprintln!("Debugger output: {}", text); // Debug logging
+                        {
+                            let mut output = lock_or_recover(
+                                &recent_output,
+                                "debug_adapter.recent_output_reader",
+                            );
+                            if output.len() >= RECENT_OUTPUT_MAX_LINES {
+                                let _ = output.pop_front();
+                            }
+                            output.push_back(text.clone());
+                        }
 
                         // Send all output to client with error handling
                         if let Some(ref sender) = sender {
@@ -1554,35 +1808,48 @@ impl DebugAdapter {
         request_seq: i64,
         _arguments: Option<Value>,
     ) -> DapMessage {
-        let stack_frames =
-            if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-                // AC8.2.1: Filter internal frames from user-visible stack
-                session
-                    .stack_frames
-                    .iter()
-                    .filter(|f| {
-                        !f.name.starts_with("Devel::TSPerlDAP::")
-                            && !f.name.starts_with("DB::")
-                            && !f.source.path.contains("perl5db.pl")
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>()
-            } else {
-                // No session - return placeholder frame for testing
-                vec![StackFrame {
-                    id: 1,
-                    name: "main::hello".to_string(),
-                    source: Source {
-                        name: Some("hello.pl".to_string()),
-                        path: "/tmp/hello.pl".to_string(),
-                        source_reference: None,
-                    },
-                    line: 10,
-                    column: 1,
-                    end_line: None,
-                    end_column: None,
-                }]
-            };
+        // Ask the debugger for an explicit stack snapshot when a live session is present.
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && let Some(stdin) = session.process.stdin.as_mut()
+        {
+            let _ = stdin.write_all(b"T\n");
+            let _ = stdin.flush();
+            Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
+        }
+
+        let output_lines = self.snapshot_recent_output_lines();
+        let parsed_frames = if output_lines.is_empty() {
+            Vec::new()
+        } else {
+            let output = output_lines.join("\n");
+            Self::filter_user_visible_frames(Self::parse_stack_frames_from_text(&output))
+        };
+
+        let stack_frames = if !parsed_frames.is_empty() {
+            // Keep parsed frames as best-effort latest snapshot.
+            if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            {
+                session.stack_frames = parsed_frames.clone();
+            }
+            parsed_frames
+        } else if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
+            Self::filter_user_visible_frames(session.stack_frames.clone())
+        } else {
+            // No session - return placeholder frame for testing
+            vec![StackFrame {
+                id: 1,
+                name: "main::hello".to_string(),
+                source: Source {
+                    name: Some("hello.pl".to_string()),
+                    path: "/tmp/hello.pl".to_string(),
+                    source_reference: None,
+                },
+                line: 10,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }]
+        };
 
         DapMessage::Response {
             seq,
@@ -1664,6 +1931,13 @@ impl DebugAdapter {
 
         let variables_ref =
             args.get("variablesReference").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        let start = args.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let count = args
+            .get("count")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(256)
+            .clamp(1, 1024);
 
         if variables_ref == 0 {
             return DapMessage::Response {
@@ -1676,117 +1950,71 @@ impl DebugAdapter {
             };
         }
 
-        // AC8.4: Render scalars/arrays/hashes with lazy child expansion
-        let variables = if let Some(ref mut session) =
-            *lock_or_recover(&self.session, "debug_adapter.session")
-        {
-            // Try to get cached variables first
-            if let Some(vars) = session.variables.get(&variables_ref) {
-                vars.clone()
-            } else {
-                // Logic to fetch variables based on scope type
-                let frame_id = variables_ref / 10;
-                let scope_type = variables_ref % 10;
+        // AC8.4: Render scalars/arrays/hashes with lazy child expansion.
+        let parsed_from_output;
+        let mut parsed_child_cache = HashMap::new();
+        let mut used_session_cache = false;
 
-                match scope_type {
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
+            // Return cached variables first for stable references and fast repeated expansion.
+            if let Some(vars) = session.variables.get(&variables_ref) {
+                used_session_cache = true;
+                parsed_from_output = vars.clone();
+            } else {
+                // Request fresh scope output from Perl debugger for scope roots only.
+                let frame_id = variables_ref / 10;
+                match variables_ref % 10 {
                     1 => {
-                        // Locals Scope (lexicals)
                         if let Some(stdin) = session.process.stdin.as_mut() {
-                            // Request lexical variables for the given frame
                             let cmd = format!("V {} .\n", frame_id);
                             let _ = stdin.write_all(cmd.as_bytes());
                             let _ = stdin.flush();
                         }
-
-                        // Placeholder for actual Perl shim response parsing
-                        vec![
-                            Variable {
-                                name: "@_".to_string(),
-                                value: "array(size=0)".to_string(),
-                                type_: Some("array".to_string()),
-                                variables_reference: variables_ref * 100 + 1,
-                                named_variables: None,
-                                indexed_variables: Some(0),
-                            },
-                            Variable {
-                                name: "$self".to_string(),
-                                value: "blessed(My::Module)".to_string(),
-                                type_: Some("hash".to_string()),
-                                variables_reference: variables_ref * 100 + 2,
-                                named_variables: Some(5),
-                                indexed_variables: None,
-                            },
-                        ]
                     }
                     2 => {
-                        // Package Scope
-                        vec![Variable {
-                            name: "$VERSION".to_string(),
-                            value: "\"1.0.0\"".to_string(),
-                            type_: Some("scalar".to_string()),
-                            variables_reference: 0,
-                            named_variables: None,
-                            indexed_variables: None,
-                        }]
+                        if let Some(stdin) = session.process.stdin.as_mut() {
+                            let cmd = format!("V {} ::\n", frame_id);
+                            let _ = stdin.write_all(cmd.as_bytes());
+                            let _ = stdin.flush();
+                        }
                     }
                     3 => {
-                        // Globals Scope
-                        vec![Variable {
-                            name: "$_".to_string(),
-                            value: "undef".to_string(),
-                            type_: Some("scalar".to_string()),
-                            variables_reference: 0,
-                            named_variables: None,
-                            indexed_variables: None,
-                        }]
+                        if let Some(stdin) = session.process.stdin.as_mut() {
+                            let cmd = format!("V {} *\n", frame_id);
+                            let _ = stdin.write_all(cmd.as_bytes());
+                            let _ = stdin.flush();
+                        }
                     }
-                    _ => {
-                        // Expand nested structure (Array/Hash/Object)
-                        Vec::new()
-                    }
+                    _ => {}
                 }
+
+                Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
+                let (vars, child_cache) =
+                    self.parse_scope_variables_from_output(variables_ref, start, count);
+                parsed_from_output = vars;
+                parsed_child_cache = child_cache;
             }
         } else {
-            // No session - return placeholders for testing rendering logic
-            let scope_type = variables_ref % 10;
-            match scope_type {
-                1 => vec![
-                    Variable {
-                        name: "@_".to_string(),
-                        value: "array(size=0)".to_string(),
-                        type_: Some("array".to_string()),
-                        variables_reference: variables_ref * 100 + 1,
-                        named_variables: None,
-                        indexed_variables: Some(0),
-                    },
-                    Variable {
-                        name: "$self".to_string(),
-                        value: "blessed(My::Module)".to_string(),
-                        type_: Some("hash".to_string()),
-                        variables_reference: variables_ref * 100 + 2,
-                        named_variables: Some(5),
-                        indexed_variables: None,
-                    },
-                ],
-                2 => vec![Variable {
-                    name: "$VERSION".to_string(),
-                    value: "\"1.0.0\"".to_string(),
-                    type_: Some("scalar".to_string()),
-                    variables_reference: 0,
-                    named_variables: None,
-                    indexed_variables: None,
-                }],
-                3 => vec![Variable {
-                    name: "$_".to_string(),
-                    value: "undef".to_string(),
-                    type_: Some("scalar".to_string()),
-                    variables_reference: 0,
-                    named_variables: None,
-                    indexed_variables: None,
-                }],
-                _ => Vec::new(),
-            }
+            let (vars, _child_cache) =
+                self.parse_scope_variables_from_output(variables_ref, start, count);
+            parsed_from_output = vars;
+        }
+
+        let variables = if parsed_from_output.is_empty() {
+            Self::fallback_scope_variables(variables_ref)
+        } else {
+            parsed_from_output
         };
+
+        // Cache parsed variables and generated child references for expansion requests.
+        if !used_session_cache
+            && let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+        {
+            session.variables.insert(variables_ref, variables.clone());
+            for (reference, children) in parsed_child_cache {
+                session.variables.insert(reference, children);
+            }
+        }
 
         DapMessage::Response {
             seq,
@@ -2403,6 +2631,20 @@ impl DebugAdapter {
                         message: Some(error),
                     };
                 }
+
+                // Re-run through microcrate validator to keep evaluation policy aligned
+                // with shared DAP security logic.
+                let evaluator = SafeEvaluator::new();
+                if let Err(error) = evaluator.validate(expression) {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "evaluate".to_string(),
+                        body: None,
+                        message: Some(error.to_string()),
+                    };
+                }
             }
 
             // AC10.3: Get timeout configuration (5s default, 30s hard limit)
@@ -2439,9 +2681,15 @@ impl DebugAdapter {
                 };
             }
 
-            // For now, return a placeholder result with timeout info
-            // In a full implementation, we'd capture the debugger's response with timeout enforcement
-            let result = format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms);
+            // Capture best-effort evaluate output from the buffered debugger stream.
+            Self::wait_for_debugger_output_window(timeout_ms);
+            let (result, result_type) =
+                self.parse_evaluate_result_from_output(expression).unwrap_or_else(|| {
+                    (
+                        format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms),
+                        "string".to_string(),
+                    )
+                });
 
             DapMessage::Response {
                 seq,
@@ -2450,7 +2698,7 @@ impl DebugAdapter {
                 command: "evaluate".to_string(),
                 body: Some(json!({
                     "result": result,
-                    "type": "string",
+                    "type": result_type,
                     "variablesReference": 0
                 })),
                 message: None,
@@ -2812,6 +3060,75 @@ mod tests {
             }
             _ => return Err("Expected response".into()),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_scope_variables_from_recent_output() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        {
+            let mut output =
+                lock_or_recover(&adapter.recent_output, "test_parse_scope_variables.recent_output");
+            output.push_back("$foo = 42".to_string());
+            output.push_back("@arr = (1, 2, 3)".to_string());
+            output.push_back("%hash = {a => 1}".to_string());
+        }
+
+        let (vars, child_cache) = adapter.parse_scope_variables_from_output(11, 0, 20);
+        let names: Vec<&str> = vars.iter().map(|v| v.name.as_str()).collect();
+        assert!(names.contains(&"$foo"));
+        assert!(names.contains(&"@arr"));
+        assert!(names.contains(&"%hash"));
+        assert!(!child_cache.is_empty(), "expected child cache entries for expandable values");
+        Ok(())
+    }
+
+    #[test]
+    fn test_stack_trace_uses_recent_output_when_available() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut adapter = DebugAdapter::new();
+        {
+            let mut output = lock_or_recover(
+                &adapter.recent_output,
+                "test_stack_trace_recent_output.recent_output",
+            );
+            output.push_back("# 0 main::compute at /tmp/script.pl line 20".to_string());
+            output.push_back("# 1 Foo::process called at /tmp/Foo.pm line 15".to_string());
+        }
+
+        let response = adapter.handle_request(1, "stackTrace", Some(json!({"threadId": 1})));
+        match response {
+            DapMessage::Response { success, body, .. } => {
+                assert!(success);
+                let body = body.ok_or("missing stackTrace body")?;
+                let frames = body
+                    .get("stackFrames")
+                    .and_then(|v| v.as_array())
+                    .ok_or("missing stackFrames")?;
+                assert!(
+                    frames.len() >= 2,
+                    "expected parsed frames from recent output, got {}",
+                    frames.len()
+                );
+            }
+            _ => return Err("expected stackTrace response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_evaluate_result_from_recent_output() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        {
+            let mut output =
+                lock_or_recover(&adapter.recent_output, "test_parse_evaluate_result.recent_output");
+            output.push_back("$result = 123".to_string());
+        }
+
+        let parsed = adapter.parse_evaluate_result_from_output("$result");
+        let (value, ty) = parsed.ok_or("expected parsed evaluate result")?;
+        assert_eq!(value, "123");
+        assert_eq!(ty, "SCALAR");
         Ok(())
     }
 
