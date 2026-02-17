@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
-use perl_parser_core::Parser;
+use perl_parser_core::{ParseError, Parser};
 
-fn parse_minimal_ast(source: &str) -> Arc<perl_parser_core::Node> {
+fn parse_minimal_ast(source: &str) -> Result<Arc<perl_parser_core::Node>, ParseError> {
     let mut parser = Parser::new(source);
-    Arc::new(parser.parse().expect("failed to parse minimal Perl source"))
+    parser.parse().map(Arc::new)
 }
 
 #[test]
-fn top_level_microcrate_reexports_are_usable() {
+fn top_level_microcrate_reexports_are_usable() -> Result<(), ParseError> {
     let source = "my $x = 1;\n$x++;";
-    let ast = parse_minimal_ast(source);
+    let ast = parse_minimal_ast(source)?;
 
     let _completion_provider = perl_lsp_providers::completion::CompletionProvider::new(&ast);
     let _diagnostics_provider =
@@ -39,13 +39,14 @@ fn top_level_microcrate_reexports_are_usable() {
         status_code: 0,
     };
     assert!(subprocess_output.success());
+    Ok(())
 }
 
 #[test]
 #[allow(deprecated)]
-fn legacy_lsp_compat_reexports_are_still_usable() {
+fn legacy_lsp_compat_reexports_are_still_usable() -> Result<(), ParseError> {
     let source = "my $x = 1;\n$x++;";
-    let ast = parse_minimal_ast(source);
+    let ast = parse_minimal_ast(source)?;
 
     let _completion_provider =
         perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider::new(&ast);
@@ -67,6 +68,7 @@ fn legacy_lsp_compat_reexports_are_still_usable() {
         perl_lsp_providers::ide::lsp_compat::formatting::FormatPosition::new(0, 0),
         perl_lsp_providers::ide::lsp_compat::formatting::FormatPosition::new(0, 5),
     );
+    Ok(())
 }
 
 #[test]
