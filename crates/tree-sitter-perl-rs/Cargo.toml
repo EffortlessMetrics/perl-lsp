@@ -39,11 +39,11 @@ lazy_static = "1.5.0"
 clap = { version = "4.5.53", features = ["derive"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 perl-tdd-support = { path = "../perl-tdd-support" }
-perl-ts-heredoc-analysis = { path = "../perl-ts-heredoc-analysis" }
-perl-ts-logos-lexer = { path = "../perl-ts-logos-lexer" }
-perl-ts-heredoc-parser = { path = "../perl-ts-heredoc-parser" }
-perl-ts-partial-ast = { path = "../perl-ts-partial-ast" }
-perl-ts-advanced-parsers = { path = "../perl-ts-advanced-parsers" }
+perl-ts-heredoc-analysis = { path = "../perl-ts-heredoc-analysis", optional = true }
+perl-ts-logos-lexer = { path = "../perl-ts-logos-lexer", optional = true }
+perl-ts-heredoc-parser = { path = "../perl-ts-heredoc-parser", optional = true }
+perl-ts-partial-ast = { path = "../perl-ts-partial-ast", optional = true }
+perl-ts-advanced-parsers = { path = "../perl-ts-advanced-parsers", optional = true }
 
 [dev-dependencies]
 criterion = "0.8.1"
@@ -65,13 +65,21 @@ ptr_arg = "warn"
 
 [features]
 default = ["pure-rust", "v2-pest-microcrate"]
-pure-rust = []
+pure-rust = [
+  "dep:perl-ts-heredoc-analysis",
+  "dep:perl-ts-logos-lexer",
+  "dep:perl-ts-heredoc-parser",
+  "dep:perl-ts-partial-ast",
+  "dep:perl-ts-advanced-parsers",
+]
 # Source v2 Pest modules from perl-parser-pest microcrate (enabled by default).
 v2-pest-microcrate = ["dep:perl-parser-pest"]
 bindings = ["dep:bindgen"]
 c-parser = ["dep:cc"]
 pure-rust-standalone = ["pure-rust"]  # For benchmarking without perl-lexer
-token-parser = []
+token-parser = [
+  "dep:perl-ts-logos-lexer",
+]
 test-utils = []
 # Legacy features (for benchmarking only)
 c-scanner = []

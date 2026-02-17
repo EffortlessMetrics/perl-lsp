@@ -429,7 +429,7 @@ fn node_type_name(node: &AstNode) -> &'static str {
     }
 }
 
-fn extract_error_position(error: &tree_sitter_perl::error::ParseError) -> Option<(usize, usize)> {
+fn extract_error_position(error: &perl_parser_pest::error::ParseError) -> Option<(usize, usize)> {
     // Try to extract line/column from error message
     let error_str = format!("{}", error);
     if error_str.contains("line") {

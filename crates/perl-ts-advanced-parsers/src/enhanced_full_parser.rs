@@ -7,10 +7,12 @@
 //! - Format declarations
 //! - Context-sensitive parsing
 
-use perl_ts_heredoc_parser::enhanced_heredoc_lexer::{HeredocDeclaration, process_with_enhanced_heredocs};
 use perl_parser_pest::ParseError;
-use perl_ts_heredoc_parser::lexer_adapter::LexerAdapter;
 use perl_parser_pest::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule};
+use perl_ts_heredoc_parser::enhanced_heredoc_lexer::{
+    HeredocDeclaration, process_with_enhanced_heredocs,
+};
+use perl_ts_heredoc_parser::lexer_adapter::LexerAdapter;
 use pest::Parser;
 use std::collections::HashMap;
 use std::sync::Arc;

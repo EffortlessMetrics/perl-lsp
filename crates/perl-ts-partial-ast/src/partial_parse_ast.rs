@@ -3,8 +3,8 @@
 //! This module extends the standard AST with nodes that can represent
 //! unparseable or problematic constructs while still maintaining a valid tree.
 
-use perl_ts_heredoc_analysis::anti_pattern_detector::{AntiPattern, Diagnostic};
 use perl_parser_pest::{AstNode, PureRustPerlParser};
+use perl_ts_heredoc_analysis::anti_pattern_detector::{AntiPattern, Diagnostic};
 use std::sync::Arc;
 
 /// Extended AST node that can represent partial or problematic parses

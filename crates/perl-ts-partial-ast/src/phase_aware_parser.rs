@@ -4,8 +4,10 @@
 //! to properly handle heredocs and other constructs that behave differently
 //! depending on when they're evaluated.
 
-use perl_ts_heredoc_analysis::anti_pattern_detector::{AntiPattern, Diagnostic, Location, Severity};
 use crate::partial_parse_ast::{ExtendedAstNode, RuntimeContext};
+use perl_ts_heredoc_analysis::anti_pattern_detector::{
+    AntiPattern, Diagnostic, Location, Severity,
+};
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::LazyLock;

@@ -3,8 +3,8 @@
 //! This module ensures all our advanced parsing features output
 //! tree-sitter compatible AST nodes, with diagnostics kept separate.
 
-use perl_ts_heredoc_analysis::anti_pattern_detector::{AntiPattern, Diagnostic};
 use crate::partial_parse_ast::ExtendedAstNode;
+use perl_ts_heredoc_analysis::anti_pattern_detector::{AntiPattern, Diagnostic};
 
 /// Tree-sitter compatible node types for edge cases
 #[derive(Debug, Clone)]
@@ -321,9 +321,15 @@ impl TreeSitterAdapter {
 
         TreeSitterDiagnostic {
             severity: match diag.severity {
-                perl_ts_heredoc_analysis::anti_pattern_detector::Severity::Error => DiagnosticSeverity::Error,
-                perl_ts_heredoc_analysis::anti_pattern_detector::Severity::Warning => DiagnosticSeverity::Warning,
-                perl_ts_heredoc_analysis::anti_pattern_detector::Severity::Info => DiagnosticSeverity::Info,
+                perl_ts_heredoc_analysis::anti_pattern_detector::Severity::Error => {
+                    DiagnosticSeverity::Error
+                }
+                perl_ts_heredoc_analysis::anti_pattern_detector::Severity::Warning => {
+                    DiagnosticSeverity::Warning
+                }
+                perl_ts_heredoc_analysis::anti_pattern_detector::Severity::Info => {
+                    DiagnosticSeverity::Info
+                }
             },
             message: diag.message,
             start_byte: location.offset,
@@ -409,7 +415,11 @@ mod tests {
     fn test_error_node_conversion() {
         let ast = ExtendedAstNode::Unparseable {
             pattern: AntiPattern::DynamicHeredocDelimiter {
-                location: perl_ts_heredoc_analysis::anti_pattern_detector::Location { line: 1, column: 1, offset: 0 },
+                location: perl_ts_heredoc_analysis::anti_pattern_detector::Location {
+                    line: 1,
+                    column: 1,
+                    offset: 0,
+                },
                 expression: "<<$var".to_string(),
             },
             raw_text: Arc::from("<<$var"),

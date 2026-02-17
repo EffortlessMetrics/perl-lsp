@@ -3,8 +3,8 @@
 //! This module implements the fourth parsing phase that handles heredocs
 //! in special contexts like eval strings and regex substitutions with /e flag.
 
-use perl_ts_heredoc_parser::heredoc_parser::{HeredocDeclaration, HeredocScanner};
 use perl_parser_pest::{AstNode, PureRustPerlParser};
+use perl_ts_heredoc_parser::heredoc_parser::{HeredocDeclaration, HeredocScanner};
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};

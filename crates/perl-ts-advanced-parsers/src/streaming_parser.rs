@@ -4,10 +4,12 @@
 //! without loading them entirely into memory. It processes files in chunks
 //! and emits parse events as it goes.
 
-use perl_ts_heredoc_parser::enhanced_heredoc_lexer::{HeredocDeclaration, process_with_enhanced_heredocs};
 use perl_parser_pest::ParseError;
-use perl_ts_heredoc_parser::lexer_adapter::LexerAdapter;
 use perl_parser_pest::pure_rust_parser::{AstNode, PerlParser, Rule};
+use perl_ts_heredoc_parser::enhanced_heredoc_lexer::{
+    HeredocDeclaration, process_with_enhanced_heredocs,
+};
+use perl_ts_heredoc_parser::lexer_adapter::LexerAdapter;
 use pest::Parser;
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read};

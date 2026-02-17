@@ -633,7 +633,7 @@ print $text;"#;
         assert_eq!(declarations[0].terminator, "EOF");
         assert!(!declarations[0].interpolated);
         assert_eq!(declarations[0].content.as_deref(), Some("Hello, World!\nThis is a heredoc."));
-        assert!(processed.contains("__HEREDOC__"));
+        assert!(processed.contains("__HEREDOC_1__"));
     }
 
     #[test]

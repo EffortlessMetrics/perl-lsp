@@ -1,6 +1,6 @@
 use perl_parser_pest::ParseError;
-use perl_ts_heredoc_parser::lexer_adapter::LexerAdapter;
 use perl_parser_pest::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule};
+use perl_ts_heredoc_parser::lexer_adapter::LexerAdapter;
 use pest::Parser;
 
 /// A Perl parser that handles context-sensitive constructs

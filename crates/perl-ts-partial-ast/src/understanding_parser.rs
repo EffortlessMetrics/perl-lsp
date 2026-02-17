@@ -3,9 +3,11 @@
 //! This parser extends the pure Rust parser to detect, analyze, and provide
 //! insights about problematic Perl constructs, particularly heredoc edge cases.
 
-use perl_ts_heredoc_analysis::anti_pattern_detector::{AntiPattern, AntiPatternDetector, Diagnostic};
 use crate::partial_parse_ast::{ExtendedAstBuilder, ExtendedAstNode, RecoveryState};
 use perl_parser_pest::pure_rust_parser::{AstNode, PerlParser, PureRustPerlParser, Rule};
+use perl_ts_heredoc_analysis::anti_pattern_detector::{
+    AntiPattern, AntiPatternDetector, Diagnostic,
+};
 use pest::Parser;
 use std::sync::Arc;
 
@@ -162,12 +164,13 @@ impl UnderstandingParser {
                         // Can't parse the rest, mark as unparseable
                         parsed_fragments.push(ExtendedAstNode::Unparseable {
                             pattern: AntiPattern::DynamicHeredocDelimiter {
-                                location: perl_ts_heredoc_analysis::anti_pattern_detector::Location {
-                                    line: code[..current_pos].lines().count(),
-                                    column: current_pos
-                                        - code[..current_pos].rfind('\n').unwrap_or(0),
-                                    offset: current_pos,
-                                },
+                                location:
+                                    perl_ts_heredoc_analysis::anti_pattern_detector::Location {
+                                        line: code[..current_pos].lines().count(),
+                                        column: current_pos
+                                            - code[..current_pos].rfind('\n').unwrap_or(0),
+                                        offset: current_pos,
+                                    },
                                 expression: "parse_error".to_string(),
                             },
                             raw_text: Arc::from(chunk),

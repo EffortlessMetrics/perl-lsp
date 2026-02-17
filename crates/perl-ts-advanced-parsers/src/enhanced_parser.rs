@@ -1,7 +1,7 @@
 //! Enhanced parser that automatically uses stateful parsing for heredocs
 
-use perl_parser_pest::{AstNode, PureRustPerlParser};
 use crate::stateful_parser::StatefulPerlParser;
+use perl_parser_pest::{AstNode, PureRustPerlParser};
 
 /// Enhanced Perl parser that automatically handles heredocs and other stateful constructs
 pub struct EnhancedPerlParser {

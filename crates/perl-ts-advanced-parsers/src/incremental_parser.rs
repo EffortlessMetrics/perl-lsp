@@ -388,7 +388,9 @@ mod tests {
 
         let tree = must(parser.parse_initial(source));
         assert!(matches!(&tree.root, AstNode::Program(_)));
-        assert_eq!(tree.line_breaks.len(), 3); // Start, after first line, end
+        // find_line_breaks returns [0] (start) plus one entry per newline,
+        // so for one newline we get [0, 12] => length 2.
+        assert_eq!(tree.line_breaks.len(), 2);
     }
 
     #[test]

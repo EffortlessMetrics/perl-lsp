@@ -7,7 +7,7 @@
 //! - Multiple heredocs in lists
 //! - Heredocs in complex contexts (hashes, arrays, returns)
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -58,6 +58,7 @@ pub struct EnhancedHeredocLexer<'a> {
     pending_heredocs: VecDeque<HeredocDeclaration>,
     active_heredoc: Option<HeredocDeclaration>,
     heredoc_counter: usize,
+    completed_heredocs: Vec<HeredocDeclaration>,
 }
 
 impl<'a> EnhancedHeredocLexer<'a> {
@@ -70,6 +71,7 @@ impl<'a> EnhancedHeredocLexer<'a> {
             pending_heredocs: VecDeque::new(),
             active_heredoc: None,
             heredoc_counter: 0,
+            completed_heredocs: Vec::new(),
         }
     }
 
@@ -226,6 +228,11 @@ impl<'a> EnhancedHeredocLexer<'a> {
                     self.advance();
                 }
 
+                // Store completed heredoc with content
+                let mut completed = heredoc.clone();
+                completed.content = Some(Arc::from(content.as_str()));
+                self.completed_heredocs.push(completed);
+
                 // Create content token
                 let token = HeredocToken {
                     kind: HeredocTokenKind::HeredocContent,
@@ -332,28 +339,21 @@ pub fn process_with_enhanced_heredocs(input: &str) -> (String, Vec<HeredocDeclar
     let tokens = lexer.tokenize();
 
     let mut output = String::new();
-    let mut declarations = Vec::new();
-    let mut content_map = HashMap::new();
 
-    // Build output and collect heredoc info
-    for token in tokens {
+    // Build output from tokens (skip heredoc content, keep placeholders)
+    for token in &tokens {
         match token.kind {
-            HeredocTokenKind::HeredocStart => {
-                output.push_str(&token.text);
-            }
             HeredocTokenKind::HeredocContent => {
-                // Store content for later
-                if let Some(mut heredoc) = lexer.pending_heredocs.pop_front() {
-                    heredoc.content = Some(Arc::from(token.text.as_str()));
-                    content_map.insert(heredoc.placeholder_id.clone(), heredoc.clone());
-                    declarations.push(heredoc);
-                }
+                // Content is already captured in completed_heredocs during tokenization
             }
             _ => {
                 output.push_str(&token.text);
             }
         }
     }
+
+    // Declarations were collected during tokenization
+    let declarations = lexer.completed_heredocs;
 
     (output, declarations)
 }

@@ -92,7 +92,8 @@ pub struct HeredocRecovery {
     /// Cached resolved delimiters
     pub delimiter_cache: HashMap<String, Arc<str>>,
     /// Context-aware delimiter recovery
-    pub delimiter_recovery: perl_ts_heredoc_analysis::dynamic_delimiter_recovery::DynamicDelimiterRecovery,
+    pub delimiter_recovery:
+        perl_ts_heredoc_analysis::dynamic_delimiter_recovery::DynamicDelimiterRecovery,
 }
 
 impl HeredocRecovery {
@@ -100,9 +101,10 @@ impl HeredocRecovery {
         Self {
             config,
             delimiter_cache: HashMap::new(),
-            delimiter_recovery: perl_ts_heredoc_analysis::dynamic_delimiter_recovery::DynamicDelimiterRecovery::new(
-                perl_ts_heredoc_analysis::dynamic_delimiter_recovery::RecoveryMode::BestGuess,
-            ),
+            delimiter_recovery:
+                perl_ts_heredoc_analysis::dynamic_delimiter_recovery::DynamicDelimiterRecovery::new(
+                    perl_ts_heredoc_analysis::dynamic_delimiter_recovery::RecoveryMode::BestGuess,
+                ),
         }
     }
 

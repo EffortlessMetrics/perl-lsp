@@ -11,3 +11,8 @@ pub mod simple_parser;
 pub mod simple_parser_v2;
 pub mod simple_token;
 pub mod token_ast;
+
+#[cfg(feature = "logos-tokens")]
+pub mod logos_lexer;
+#[cfg(feature = "logos-tokens")]
+pub mod token_parser;

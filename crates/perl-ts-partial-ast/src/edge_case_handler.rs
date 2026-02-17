@@ -3,12 +3,14 @@
 //! This module combines phase-aware parsing, dynamic delimiter recovery,
 //! and other edge case detection systems into a unified interface.
 
-use perl_ts_heredoc_analysis::anti_pattern_detector::{AntiPatternDetector, Diagnostic};
-use perl_ts_heredoc_analysis::dynamic_delimiter_recovery::{DynamicDelimiterRecovery, ParseContext, RecoveryMode};
 use crate::partial_parse_ast::ExtendedAstNode;
 use crate::phase_aware_parser::{PerlPhase, PhaseAwareParser};
-use perl_parser_pest::AstNode;
 use crate::understanding_parser::{ParseResult, UnderstandingParser};
+use perl_parser_pest::AstNode;
+use perl_ts_heredoc_analysis::anti_pattern_detector::{AntiPatternDetector, Diagnostic};
+use perl_ts_heredoc_analysis::dynamic_delimiter_recovery::{
+    DynamicDelimiterRecovery, ParseContext, RecoveryMode,
+};
 use std::sync::Arc;
 
 pub struct EdgeCaseHandler {

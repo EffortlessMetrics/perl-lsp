@@ -17,6 +17,9 @@ perl-ts-heredoc-parser = { path = "../perl-ts-heredoc-parser" }
 perl-ts-partial-ast = { path = "../perl-ts-partial-ast" }
 perl-parser-pest = { path = "../perl-parser-pest" }
 
+[features]
+stress-tests = []
+
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }
 
