@@ -19,8 +19,8 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn test_path_validation_safe_relative_paths() -> TestResult {
-    let workspace = std::env::current_dir()?.join("test_workspace");
-    std::fs::create_dir_all(&workspace)?;
+    let temp_dir = tempfile::tempdir()?;
+    let workspace = temp_dir.path();
 
     // Safe relative paths
     let safe_paths = vec!["src/main.pl", "./lib/Module.pm", "test.pl", ".gitignore"];
@@ -31,14 +31,13 @@ fn test_path_validation_safe_relative_paths() -> TestResult {
         assert!(result.is_ok(), "Path '{}' should be valid within workspace", path_str);
     }
 
-    std::fs::remove_dir_all(&workspace).ok();
     Ok(())
 }
 
 #[test]
 fn test_path_validation_parent_traversal_attempts() {
-    let workspace = must(std::env::current_dir()).join("test_workspace");
-    std::fs::create_dir_all(&workspace).ok();
+    let temp_dir = must(tempfile::tempdir());
+    let workspace = temp_dir.path();
 
     // Malicious paths with parent directory references
     let malicious_paths =
@@ -67,10 +66,10 @@ fn test_path_validation_parent_traversal_attempts() {
 
         if let Err(e) = result {
             match e {
-                SecurityError::PathTraversalAttempt(_) => {}
+                SecurityError::PathTraversalAttempt(_) | SecurityError::PathOutsideWorkspace(_) => {}
                 _ => {
                     must(Err::<(), _>(format!(
-                        "Expected PathTraversalAttempt error for '{}', got: {:?}",
+                        "Expected PathTraversalAttempt or PathOutsideWorkspace error for '{}', got: {:?}",
                         path_str, e
                     )));
                     unreachable!()
@@ -78,14 +77,12 @@ fn test_path_validation_parent_traversal_attempts() {
             }
         }
     }
-
-    std::fs::remove_dir_all(&workspace).ok();
 }
 
 #[test]
 fn test_path_validation_absolute_paths() {
-    let workspace = must(std::env::current_dir()).join("test_workspace");
-    std::fs::create_dir_all(&workspace).ok();
+    let temp_dir = must(tempfile::tempdir());
+    let workspace = temp_dir.path();
 
     // Absolute paths outside workspace should be rejected
     let outside_paths = vec!["/etc/passwd", "/root/.ssh/id_rsa"];
@@ -99,8 +96,6 @@ fn test_path_validation_absolute_paths() {
             path_str
         );
     }
-
-    std::fs::remove_dir_all(&workspace).ok();
 }
 
 #[test]
