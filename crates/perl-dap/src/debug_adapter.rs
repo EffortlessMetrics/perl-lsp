@@ -17,10 +17,11 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::breakpoints::BreakpointStore;
 #[cfg(unix)]
@@ -52,10 +53,12 @@ static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new(
 static ASSIGNMENT_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static DEREF_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static ANSI_ESCAPE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SET_VARIABLE_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static FUNCTION_BREAKPOINT_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
+const DEBUGGER_FRAME_POLL_MS: u64 = 10;
 
 fn context_re() -> Option<&'static Regex> {
     CONTEXT_RE
@@ -249,6 +252,11 @@ fn glob_re() -> Option<&'static Regex> {
     GLOB_RE.get_or_init(|| Regex::new(r"<\*[^>]*>")).as_ref().ok()
 }
 
+/// Regex for matching ANSI escape sequences in debugger output.
+fn ansi_escape_re() -> Option<&'static Regex> {
+    ANSI_ESCAPE_RE.get_or_init(|| Regex::new(r"\x1B\[[0-9;]*[A-Za-z]")).as_ref().ok()
+}
+
 /// Regex for validating setVariable variable names to avoid debugger command injection.
 fn set_variable_name_re() -> Option<&'static Regex> {
     SET_VARIABLE_NAME_RE
@@ -305,6 +313,8 @@ pub struct DebugAdapter {
     function_breakpoints: Arc<Mutex<Vec<String>>>,
     /// Monotonic IDs for function breakpoints
     next_function_breakpoint_id: Arc<Mutex<i64>>,
+    /// Unique marker IDs used to frame debugger output per command.
+    debugger_output_marker: Arc<AtomicU64>,
 }
 
 /// Active debug session
@@ -434,6 +444,7 @@ impl DebugAdapter {
             recent_output: Arc::new(Mutex::new(VecDeque::with_capacity(RECENT_OUTPUT_MAX_LINES))),
             function_breakpoints: Arc::new(Mutex::new(Vec::new())),
             next_function_breakpoint_id: Arc::new(Mutex::new(1)),
+            debugger_output_marker: Arc::new(AtomicU64::new(1)),
         }
     }
 
@@ -700,6 +711,118 @@ impl DebugAdapter {
         output.iter().cloned().collect()
     }
 
+    /// Allocate a unique marker id used for framed debugger output capture.
+    fn next_debugger_marker_id(&self) -> u64 {
+        self.debugger_output_marker.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// Normalize debugger output lines for deterministic parsing by:
+    /// - removing ANSI escape sequences
+    /// - stripping debugger prompt prefixes (e.g. `DB<1>`)
+    fn normalize_debugger_output_line(line: &str) -> String {
+        let mut normalized = if let Some(re) = ansi_escape_re() {
+            re.replace_all(line, "").into_owned()
+        } else {
+            line.to_string()
+        };
+
+        if let Some(prompt_start) = normalized.find("DB<")
+            && let Some(prompt_end) = normalized[prompt_start..].find('>')
+        {
+            let content_start = prompt_start + prompt_end + 1;
+            normalized = normalized[content_start..].to_string();
+        }
+
+        normalized.trim().to_string()
+    }
+
+    /// Infer a coarse DAP value type from literal-like debugger output.
+    fn infer_debugger_value_type(text: &str) -> String {
+        if text == "undef" {
+            "undef".to_string()
+        } else if text.parse::<i64>().is_ok() {
+            "integer".to_string()
+        } else if text.parse::<f64>().is_ok() {
+            "number".to_string()
+        } else if text.starts_with('[') && text.ends_with(']') {
+            "array".to_string()
+        } else if text.starts_with('{') && text.ends_with('}') {
+            "hash".to_string()
+        } else {
+            "string".to_string()
+        }
+    }
+
+    /// Write a debugger command and flush immediately so output framing remains ordered.
+    fn write_debugger_command(stdin: &mut impl Write, command: &str) -> Result<(), String> {
+        stdin.write_all(command.as_bytes()).map_err(|e| format!("write debugger command: {e}"))?;
+        stdin.flush().map_err(|e| format!("flush debugger command: {e}"))?;
+        Ok(())
+    }
+
+    /// Send commands wrapped with unique begin/end markers.
+    ///
+    /// Returns `(begin_marker, end_marker)` so callers can wait for framed output.
+    fn send_framed_debugger_commands(
+        &self,
+        stdin: &mut impl Write,
+        commands: &[String],
+    ) -> Result<(String, String), String> {
+        let marker_id = self.next_debugger_marker_id();
+        let begin_marker = format!("DAP_BEGIN_{marker_id}");
+        let end_marker = format!("DAP_END_{marker_id}");
+
+        Self::write_debugger_command(stdin, &format!("p \"{begin_marker}\"\n"))?;
+        for command in commands {
+            if command.ends_with('\n') {
+                Self::write_debugger_command(stdin, command)?;
+            } else {
+                Self::write_debugger_command(stdin, &format!("{command}\n"))?;
+            }
+        }
+        Self::write_debugger_command(stdin, &format!("p \"{end_marker}\"\n"))?;
+
+        Ok((begin_marker, end_marker))
+    }
+
+    /// Capture debugger output lines between begin/end markers.
+    fn capture_framed_debugger_output(
+        &self,
+        begin_marker: &str,
+        end_marker: &str,
+        timeout_ms: u64,
+    ) -> Option<Vec<String>> {
+        let deadline =
+            Instant::now() + Duration::from_millis(timeout_ms.max(DEBUGGER_QUERY_WAIT_MS));
+
+        loop {
+            let lines = self.snapshot_recent_output_lines();
+            let normalized_lines: Vec<String> =
+                lines.iter().map(|line| Self::normalize_debugger_output_line(line)).collect();
+
+            if let Some(begin_idx) =
+                normalized_lines.iter().rposition(|line| line.contains(begin_marker))
+                && let Some(end_rel) = normalized_lines[begin_idx + 1..]
+                    .iter()
+                    .position(|line| line.contains(end_marker))
+            {
+                let end_idx = begin_idx + 1 + end_rel;
+                let framed = normalized_lines[begin_idx + 1..end_idx]
+                    .iter()
+                    .filter(|line| !line.trim().is_empty())
+                    .cloned()
+                    .collect::<Vec<_>>();
+                return Some(framed);
+            }
+
+            if Instant::now() >= deadline {
+                return None;
+            }
+
+            thread::sleep(Duration::from_millis(DEBUGGER_FRAME_POLL_MS));
+        }
+    }
+
     /// Wait briefly for debugger command responses to arrive in the output buffer.
     fn wait_for_debugger_output_window(timeout_ms: u32) {
         let wait_ms = u64::from(timeout_ms.min(250)).max(DEBUGGER_QUERY_WAIT_MS);
@@ -803,7 +926,8 @@ impl DebugAdapter {
         let mut parsed = Vec::new();
 
         for line in lines.iter().rev() {
-            let text = line.trim();
+            let normalized = Self::normalize_debugger_output_line(line);
+            let text = normalized.trim();
             if text.is_empty() {
                 continue;
             }
@@ -850,9 +974,12 @@ impl DebugAdapter {
         (top_level, child_cache)
     }
 
-    /// Parse evaluate output from recent debugger lines into a DAP result payload.
-    fn parse_evaluate_result_from_output(&self, expression: &str) -> Option<(String, String)> {
-        let lines = self.snapshot_recent_output_lines();
+    /// Parse evaluate output from debugger lines into a DAP result payload.
+    fn parse_evaluate_result_from_lines(
+        lines: &[String],
+        expression: &str,
+        allow_fallback_line: bool,
+    ) -> Option<(String, String)> {
         if lines.is_empty() {
             return None;
         }
@@ -861,7 +988,8 @@ impl DebugAdapter {
         let renderer = PerlVariableRenderer::new();
 
         for line in lines.iter().rev() {
-            let text = line.trim();
+            let normalized = Self::normalize_debugger_output_line(line);
+            let text = normalized.trim();
             if text.is_empty() || prompt_re().is_some_and(|re| re.is_match(text)) {
                 continue;
             }
@@ -873,16 +1001,24 @@ impl DebugAdapter {
                 if name == expression || text.starts_with(expression) || text.contains(expression) {
                     return Some((rendered.value, type_name));
                 }
+                if !allow_fallback_line {
+                    continue;
+                }
                 return Some((rendered.value, type_name));
+            }
+
+            if allow_fallback_line {
+                return Some((text.to_string(), Self::infer_debugger_value_type(text)));
             }
         }
 
-        lines
-            .iter()
-            .rev()
-            .map(|line| line.trim())
-            .find(|line| !line.is_empty() && !line.starts_with("DB<"))
-            .map(|line| (line.to_string(), "string".to_string()))
+        None
+    }
+
+    /// Parse evaluate output from recent debugger lines into a DAP result payload.
+    fn parse_evaluate_result_from_output(&self, expression: &str) -> Option<(String, String)> {
+        let lines = self.snapshot_recent_output_lines();
+        Self::parse_evaluate_result_from_lines(&lines, expression, true)
     }
 
     /// Build deterministic placeholder variables used when debugger output is unavailable.
@@ -998,8 +1134,21 @@ impl DebugAdapter {
 
             let stop_on_entry = args.get("stopOnEntry").and_then(|s| s.as_bool()).unwrap_or(false);
 
+            let env_overrides = args
+                .get("env")
+                .and_then(Value::as_object)
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .filter_map(|(key, value)| {
+                            value.as_str().map(|value| (key.clone(), value.to_string()))
+                        })
+                        .collect::<HashMap<String, String>>()
+                })
+                .unwrap_or_default();
+
             // Launch Perl debugger
-            match self.launch_debugger(program, perl_args, stop_on_entry) {
+            match self.launch_debugger(program, perl_args, stop_on_entry, env_overrides) {
                 Ok(thread_id) => {
                     // Send stopped event if stop on entry
                     if stop_on_entry {
@@ -1049,6 +1198,7 @@ impl DebugAdapter {
         program: &str,
         args: Vec<String>,
         stop_on_entry: bool,
+        env_overrides: HashMap<String, String>,
     ) -> Result<i32, String> {
         // Security: Validate program path before any process spawning
         // This prevents command injection via flag arguments (e.g., "-e malicious_code")
@@ -1090,6 +1240,7 @@ impl DebugAdapter {
         cmd.arg("--");
         cmd.arg(program);
         cmd.args(&args);
+        cmd.envs(env_overrides);
 
         // Set up pipes
         cmd.stdin(Stdio::piped());
@@ -2513,16 +2664,25 @@ impl DebugAdapter {
             };
         }
 
-        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session") {
+        let output_frame_markers = if let Some(ref mut session) =
+            *lock_or_recover(&self.session, "debug_adapter.session")
+        {
             if let Some(stdin) = session.process.stdin.as_mut() {
-                // Use debugger eval command for assignment and immediate read-back.
-                let assign_cmd = format!("x {name} = {value}\n");
-                let _ = stdin.write_all(assign_cmd.as_bytes());
-                let _ = stdin.flush();
-
-                let read_back_cmd = format!("x {name}\n");
-                let _ = stdin.write_all(read_back_cmd.as_bytes());
-                let _ = stdin.flush();
+                // Frame assignment + read-back so output parsing is deterministic.
+                let commands = vec![format!("p {name} = {value}"), format!("p {name}")];
+                match self.send_framed_debugger_commands(stdin, &commands) {
+                    Ok(markers) => Some(markers),
+                    Err(error) => {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "setVariable".to_string(),
+                            body: None,
+                            message: Some(format!("Failed to send setVariable command: {error}")),
+                        };
+                    }
+                }
             } else {
                 return DapMessage::Response {
                     seq,
@@ -2554,12 +2714,27 @@ impl DebugAdapter {
                 body: None,
                 message: Some("No debugger session".to_string()),
             };
-        }
+        };
 
-        Self::wait_for_debugger_output_window(DEBUGGER_QUERY_WAIT_MS as u32);
-        let (rendered_value, rendered_type) = self
-            .parse_evaluate_result_from_output(name)
-            .unwrap_or_else(|| (value.to_string(), "string".to_string()));
+        let parsed = output_frame_markers
+            .as_ref()
+            .and_then(|(begin, end)| {
+                self.capture_framed_debugger_output(begin, end, DEBUGGER_QUERY_WAIT_MS * 8)
+            })
+            .and_then(|lines| Self::parse_evaluate_result_from_lines(&lines, "", true));
+
+        let Some((rendered_value, rendered_type)) = parsed else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setVariable".to_string(),
+                body: None,
+                message: Some(format!(
+                    "setVariable read-back for `{name}` produced no parseable output"
+                )),
+            };
+        };
 
         DapMessage::Response {
             seq,
@@ -3230,15 +3405,26 @@ impl DebugAdapter {
             let timeout_ms =
                 args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32).unwrap_or(5000);
             let timeout_ms = timeout_ms.min(30000); // Enforce 30s hard limit
-
             // Send evaluation command to debugger
-            if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            let output_frame_markers = if let Some(ref mut session) =
+                *lock_or_recover(&self.session, "debug_adapter.session")
             {
                 if let Some(stdin) = session.process.stdin.as_mut() {
-                    // Use 'x' command for better evaluation output
-                    let cmd = format!("x {}\n", expression);
-                    let _ = stdin.write_all(cmd.as_bytes());
-                    let _ = stdin.flush();
+                    // Frame debugger output so evaluate parsing only considers this request's output.
+                    let commands = vec![format!("x {expression}")];
+                    match self.send_framed_debugger_commands(stdin, &commands) {
+                        Ok(markers) => Some(markers),
+                        Err(error) => {
+                            return DapMessage::Response {
+                                seq,
+                                request_seq,
+                                success: false,
+                                command: "evaluate".to_string(),
+                                body: None,
+                                message: Some(format!("Failed to send evaluate command: {error}")),
+                            };
+                        }
+                    }
                 } else {
                     return DapMessage::Response {
                         seq,
@@ -3271,17 +3457,23 @@ impl DebugAdapter {
                     body: None,
                     message: Some("No debugger session".to_string()),
                 };
-            }
+            };
 
-            // Capture best-effort evaluate output from the buffered debugger stream.
-            Self::wait_for_debugger_output_window(timeout_ms);
-            let (result, result_type) =
-                self.parse_evaluate_result_from_output(expression).unwrap_or_else(|| {
-                    (
-                        format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms),
-                        "string".to_string(),
-                    )
-                });
+            let framed_lines = output_frame_markers.as_ref().and_then(|(begin, end)| {
+                self.capture_framed_debugger_output(begin, end, u64::from(timeout_ms))
+            });
+
+            let parsed = framed_lines
+                .as_ref()
+                .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
+                .or_else(|| self.parse_evaluate_result_from_output(expression));
+
+            let (result, result_type) = parsed.unwrap_or_else(|| {
+                (
+                    format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms),
+                    "string".to_string(),
+                )
+            });
 
             DapMessage::Response {
                 seq,
@@ -3433,6 +3625,96 @@ mod tests {
             }
             _ => return Err("Expected response".into()),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_initialize_capabilities_are_backed_by_handlers()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let init = adapter.handle_request(1, "initialize", None);
+
+        let capabilities = match init {
+            DapMessage::Response { success: true, command, body: Some(body), .. }
+                if command == "initialize" =>
+            {
+                body
+            }
+            _ => return Err("Expected successful initialize response".into()),
+        };
+
+        let capability_map =
+            capabilities.as_object().ok_or("Initialize response body must be a JSON object")?;
+
+        let capability_to_command = [
+            ("supportsConfigurationDoneRequest", "configurationDone"),
+            ("supportsFunctionBreakpoints", "setFunctionBreakpoints"),
+            ("supportsConditionalBreakpoints", "setBreakpoints"),
+            ("supportsEvaluateForHovers", "evaluate"),
+            ("supportsSetVariable", "setVariable"),
+            ("supportsValueFormattingOptions", "variables"),
+            ("supportsTerminateRequest", "terminate"),
+            ("supportTerminateDebuggee", "terminate"),
+        ];
+
+        let mut mapped_commands = HashSet::new();
+        for (capability, raw_value) in capability_map {
+            let is_support_flag =
+                capability.starts_with("supports") || capability == "supportTerminateDebuggee";
+            if !is_support_flag || !raw_value.as_bool().unwrap_or(false) {
+                continue;
+            }
+
+            let command = capability_to_command
+                .iter()
+                .find_map(|(supported, command)| (*supported == capability).then_some(*command))
+                .ok_or_else(|| {
+                    format!(
+                        "Capability `{capability}` is true but has no handler mapping in this invariant test"
+                    )
+                })?;
+
+            let _ = mapped_commands.insert(command);
+        }
+
+        let mut request_seq = 2;
+        for command in mapped_commands {
+            let arguments = match command {
+                "configurationDone" => Some(json!({})),
+                "setFunctionBreakpoints" => {
+                    Some(json!({"breakpoints": [{ "name": "main::noop" }]}))
+                }
+                "setBreakpoints" => Some(
+                    json!({"source": { "path": "/tmp/capability_honesty.pl" }, "breakpoints": [{ "line": 1 }]}),
+                ),
+                "evaluate" => Some(json!({"expression": "$x", "allowSideEffects": true})),
+                "setVariable" => {
+                    Some(json!({"variablesReference": 11, "name": "$x", "value": "1"}))
+                }
+                "variables" => Some(json!({"variablesReference": 11})),
+                "terminate" => Some(json!({"restart": false})),
+                _ => None,
+            };
+
+            let response = adapter.handle_request(request_seq, command, arguments);
+            request_seq += 1;
+
+            match response {
+                DapMessage::Response { command: actual, message, .. } => {
+                    assert_eq!(
+                        actual, command,
+                        "Capability-mapped command `{command}` must route to its handler"
+                    );
+                    let message_text = message.unwrap_or_default();
+                    assert!(
+                        !message_text.contains("Unknown command"),
+                        "Capability-mapped command `{command}` must not hit unknown-command path"
+                    );
+                }
+                _ => return Err(format!("Expected response for `{command}`").into()),
+            }
+        }
+
         Ok(())
     }
 

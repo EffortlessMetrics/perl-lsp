@@ -52,6 +52,17 @@ fn response_success(response: DapMessage, command: &str) -> Result<Option<Value>
     }
 }
 
+fn stopped_reason(message: &DapMessage) -> Option<String> {
+    match message {
+        DapMessage::Event { event, body, .. } if event == "stopped" => body
+            .as_ref()
+            .and_then(|payload| payload.get("reason"))
+            .and_then(Value::as_str)
+            .map(ToString::to_string),
+        _ => None,
+    }
+}
+
 fn evaluate_with_retry(
     adapter: &mut DebugAdapter,
     request_seq: &mut i64,
@@ -140,12 +151,23 @@ print "$x\n";
             Some(json!({
                 "program": script_path_str,
                 "args": [],
-                "stopOnEntry": true
+                "stopOnEntry": true,
+                "env": {
+                    "PERL_PERTURB_KEYS": "0",
+                    "PERL_HASH_SEED": "0",
+                    "LC_ALL": "C",
+                    "TZ": "UTC"
+                }
             })),
         ),
         "launch",
     )?;
-    let _entry_stop = wait_for_event(&rx, "stopped", Duration::from_secs(3))?;
+    let entry_stop = wait_for_event(&rx, "stopped", Duration::from_secs(3))?;
+    assert_eq!(
+        stopped_reason(&entry_stop).as_deref(),
+        Some("entry"),
+        "expected stopped reason `entry`, got: {entry_stop:#?}"
+    );
 
     let breakpoints_body = response_success(
         adapter.handle_request(
@@ -178,7 +200,13 @@ print "$x\n";
         adapter.handle_request(5, "continue", Some(json!({"threadId": 1}))),
         "continue",
     )?;
-    let _breakpoint_stop = wait_for_event(&rx, "stopped", Duration::from_secs(3))?;
+    let breakpoint_stop = wait_for_event(&rx, "stopped", Duration::from_secs(3))?;
+    let breakpoint_reason = stopped_reason(&breakpoint_stop);
+    assert!(
+        breakpoint_reason.as_deref() == Some("breakpoint")
+            || breakpoint_reason.as_deref() == Some("step"),
+        "expected stopped reason `breakpoint` or `step`, got: {breakpoint_stop:#?}"
+    );
 
     let mut request_seq = 6;
     let result_before =
@@ -197,6 +225,56 @@ print "$x\n";
     let frames =
         stack.get("stackFrames").and_then(Value::as_array).ok_or("stackTrace frames missing")?;
     assert!(!frames.is_empty(), "expected at least one stack frame");
+    let frame_id = frames
+        .first()
+        .and_then(|frame| frame.get("id"))
+        .and_then(Value::as_i64)
+        .ok_or("stackTrace first frame missing id")?;
+
+    let scopes = response_success(
+        adapter.handle_request(request_seq, "scopes", Some(json!({"frameId": frame_id}))),
+        "scopes",
+    )?
+    .ok_or("scopes response missing body")?;
+    request_seq += 1;
+    let scopes_arr =
+        scopes.get("scopes").and_then(Value::as_array).ok_or("scopes array missing")?;
+    let locals_scope = scopes_arr
+        .iter()
+        .find(|scope| scope.get("name").and_then(Value::as_str) == Some("Locals"))
+        .ok_or("Locals scope missing")?;
+    let locals_ref = locals_scope
+        .get("variablesReference")
+        .and_then(Value::as_i64)
+        .ok_or("Locals scope missing variablesReference")?;
+
+    let variables = response_success(
+        adapter.handle_request(
+            request_seq,
+            "variables",
+            Some(json!({
+                "variablesReference": locals_ref,
+                "start": 0,
+                "count": 50
+            })),
+        ),
+        "variables",
+    )?
+    .ok_or("variables response missing body")?;
+    request_seq += 1;
+    let vars_arr =
+        variables.get("variables").and_then(Value::as_array).ok_or("variables array missing")?;
+    assert!(!vars_arr.is_empty(), "expected variables response to include entries");
+    let mut var_names = vars_arr
+        .iter()
+        .filter_map(|var| var.get("name").and_then(Value::as_str))
+        .collect::<Vec<_>>();
+    var_names.sort_unstable();
+    assert!(
+        var_names.windows(2).all(|window| window[0] <= window[1]),
+        "expected sorted variable names, got: {var_names:?}"
+    );
+    assert!(!var_names.is_empty(), "expected at least one variable name in locals scope");
 
     response_success(
         adapter.handle_request(request_seq, "next", Some(json!({"threadId": 1}))),
@@ -209,6 +287,36 @@ print "$x\n";
     assert!(
         !result_after.trim().is_empty(),
         "expected non-empty evaluate result after step, got: {result_after}"
+    );
+
+    let set_variable = response_success(
+        adapter.handle_request(
+            request_seq,
+            "setVariable",
+            Some(json!({
+                "variablesReference": locals_ref,
+                "name": "$x",
+                "value": "3"
+            })),
+        ),
+        "setVariable",
+    )?
+    .ok_or("setVariable response missing body")?;
+    request_seq += 1;
+    let set_value = set_variable
+        .get("value")
+        .and_then(Value::as_str)
+        .ok_or("setVariable response missing value")?;
+    assert!(
+        set_value.contains('3'),
+        "expected setVariable read-back value to include 3, got: {set_value}"
+    );
+
+    let result_after_set =
+        evaluate_with_retry(&mut adapter, &mut request_seq, "$x", "3", Duration::from_secs(2))?;
+    assert!(
+        result_after_set.contains('3') && !result_after_set.contains("timeout"),
+        "expected `$x` to be 3 after setVariable, got: {result_after_set}"
     );
 
     response_success(

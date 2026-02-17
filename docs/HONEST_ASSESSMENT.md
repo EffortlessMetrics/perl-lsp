@@ -26,7 +26,7 @@ needs hardening before GA.
 
 ### LSP Server — Production-Ready
 
-**Evidence**: 1045 lib tests pass, proper lifecycle (initialize/initialized/shutdown/exit),
+**Evidence**: 1048 lib tests pass, proper lifecycle (initialize/initialized/shutdown/exit),
 full JSON-RPC dispatch with cancellation support, enterprise-grade error handling.
 
 | Capability | Status | Evidence |
@@ -66,7 +66,7 @@ full JSON-RPC dispatch with cancellation support, enterprise-grade error handlin
 
 ### Parser (v3 Native Recursive Descent) — Production-Ready
 
-**Evidence**: 1045 tests pass, 87% mutation score, ~100% Perl 5 syntax coverage,
+**Evidence**: 1048 lib tests pass, 87% mutation score, ~100% Perl 5 syntax coverage,
 sub-microsecond incremental parsing (931ns).
 
 **Handles well**:
@@ -146,6 +146,10 @@ Native DAP now exists and runs, but behavior depth is still uneven across modes.
 - Native breakpoint setting with AST validation (`perl-dap-breakpoint` microcrate)
 - Step/continue/pause control-flow handlers with monotonic DAP sequencing
 - Safe-evaluation guardrails and command-injection protections
+- Deterministic framed debugger output capture for evaluate/setVariable requests
+- `setVariable` read-back verification (fails explicitly if read-back parsing fails)
+- Capability-honesty invariant test (`initialize` supports flags map to real handlers)
+- DAP smoke E2E now asserts variable inspection and setVariable round-trip
 - PID and TCP attach modes, plus stdio and socket transports
 - BridgeAdapter fallback to Perl::LanguageServer for compatibility
 - Feature-gated Phase 2/3 test suites with real assertions (no universal "not yet implemented" stubs)
@@ -160,33 +164,32 @@ inspect/evaluate workflows as in-progress rather than GA-stable.
 
 **Status in `features.toml`**: DAP features are `maturity = "preview"` and intentionally not GA.
 
-### GAP 2: Moo/Moose Semantic Blindness
+### GAP 2: Moo/Moose Semantics Are Partial (Not Blind)
 
-The parser tokenizes Moo/Moose code correctly, but the semantic analyzer does not understand
-framework-specific idioms:
+Framework-aware semantics now exist for common idioms:
+- Moo/Moose `has` accessors are recognized in completion/definition paths
+- Hover metadata includes key attribute options for supported patterns
+- Class::Accessor-generated methods are surfaced in semantic navigation
 
-- `has` declarations are not recognized as field definitions
-- Hover on Moo attributes returns nothing useful
-- Completion inside Moose `has` blocks doesn't suggest type constraints
-- Role composition (`with 'Role'`) is parsed but roles are not tracked
-- `Class::Accessor` auto-generated accessors are invisible to the IDE
+Remaining depth gaps:
+- Completion inside Moose `has` option blocks is still limited (not full option+constraint guidance)
+- Role composition (`with 'Role'`) is parsed but role relationships are not modeled deeply
+- Advanced metaprogramming patterns are still best-effort
 
-**Why this matters**: Most production Perl uses Moo or Moose. The parser handles the syntax,
-but IDE features like "show me what fields this class has" or "complete attribute options"
-don't work. This is the #1 real-world gap for daily use.
+**Why this matters**: Most production Perl uses Moo/Moose/Class::Accessor. Baseline
+navigation now works for common accessors, but full framework intelligence is still
+in-progress.
 
-### GAP 3: No End-to-End Smoke Test
+### GAP 3: E2E Smoke Coverage Is Real but Narrow
 
-All testing is unit/integration against internal APIs. There is no automated test that:
-1. Starts the LSP server via stdio
-2. Sends an `initialize` request
-3. Opens a document
-4. Requests completion/hover/definition
-5. Verifies the response
-6. Shuts down cleanly
+There are automated stdio E2E smoke tests for both LSP and DAP (run in `ci-gate`):
+- `crates/perl-lsp/tests/lsp_smoke_e2e.rs`
+- `crates/perl-dap/tests/dap_smoke_e2e.rs`
 
-The closest is `just ci-gate` which runs lib tests. A real E2E test would catch
-integration issues that unit tests miss.
+Current gap is breadth, not existence:
+- Smoke coverage is still single-path and does not represent cross-editor matrix depth
+- Advanced scenario matrices (large workspace stress, adapter restarts, attach-mode variants)
+  are less mature than core library coverage
 
 ### GAP 4: Pest Parser Is Orphaned
 
@@ -230,9 +233,9 @@ are caught by the test suite. This is excellent for a parser.
 **What it does NOT mean**: 87% of real-world bugs would be caught. Mutation testing measures
 test sensitivity, not completeness of the specification.
 
-### "954 Tests, 0 Ignored"
+### "1048 Lib Tests, 0 Ignored"
 
-**What it means**: Every test in the suite passes. No tests are skipped.
+**What it means**: Every library test in the suite passes. No tracked ignores are used.
 
 **What it does NOT mean**: No bugs exist. The tests cover the implemented behavior;
 they cannot cover behavior that hasn't been fully implemented (Moo semantics, GA-depth DAP, etc.).
@@ -266,14 +269,14 @@ See [ROADMAP.md](ROADMAP.md) for the full gap-closing plan. Summary:
 
 **v1.0 Readiness**:
 1. Keep DAP preview maturity/docs/tests aligned
-2. Add E2E LSP smoke test
+2. Broaden E2E smoke coverage beyond current single-path LSP/DAP flows
 3. Document Moo/Moose limitations honestly
 4. Stability statement and packaging stance
 
 **v1.1 (Semantic Depth)**:
-1. Moo/Moose `has` attribute recognition
-2. Class::Accessor support
-3. Type constraint awareness
+1. Expand Moo/Moose support beyond base `has` paths (roles, richer option modeling)
+2. Deepen Class::Accessor patterns (`follow_best_practice`, generated getter/setter variants)
+3. Improve Moose type-constraint awareness in completion and hover
 
 **v1.2 (DAP Preview -> GA)**:
 1. Deep variable inspection/evaluate fidelity in native sessions

@@ -2679,29 +2679,45 @@ sub complex {
         fn test_cleanup_respects_age_limit() {
             use std::fs;
 
-            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
-            let _ = fs::create_dir_all(&backup_root);
+            let temp_dir = must(tempfile::tempdir());
+            let backup_root = temp_dir.path().to_path_buf();
+            must(fs::create_dir_all(&backup_root));
 
             // Create an old backup directory manually
             let old_backup = backup_root.join("refactor_1000_0");
-            let _ = fs::create_dir_all(&old_backup);
+            must(fs::create_dir_all(&old_backup));
 
             // Create a test file in the old backup
             let test_file = old_backup.join("file_0.pl");
             must(fs::write(&test_file, "sub old_backup { }"));
 
-            // Set the modification time to be old (this is platform-dependent)
-            // For testing, we'll verify that the cleanup logic runs without error
+            // Wait until filesystem metadata reports the backup is older than the age threshold.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut reached_age_limit = false;
+            while std::time::Instant::now() < deadline {
+                if let Ok(metadata) = fs::metadata(&old_backup)
+                    && let Ok(modified) = metadata.modified()
+                    && let Ok(age) = std::time::SystemTime::now().duration_since(modified)
+                    && age > std::time::Duration::from_secs(1)
+                {
+                    reached_age_limit = true;
+                    break;
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            assert!(
+                reached_age_limit,
+                "backup directory did not age past threshold within test timeout"
+            );
 
             let config = RefactoringConfig {
+                backup_root: Some(backup_root),
                 backup_max_age_seconds: 1, // 1 second age limit
                 ..RefactoringConfig::default()
             };
 
             let mut engine = RefactoringEngine::with_config(config);
-
-            // Wait to ensure backup is older than 1 second
-            std::thread::sleep(std::time::Duration::from_secs(2));
 
             // Run cleanup
             let result = engine.clear_history();
