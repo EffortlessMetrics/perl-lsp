@@ -52,7 +52,7 @@ Key terms:
 
 | Metric | Value | Target | Status |
 | --- | --- | --- | --- |
-| **Tier A Tests** | 954 lib tests (discovered), 0 ignores (tracked) | 100% pass | PASS |
+| **Tier A Tests** | 1045 lib tests (discovered), 0 ignores (tracked) | 100% pass | PASS |
 | **Tracked Test Debt** | 0 (0 bug, 0 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
 | **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 93%+ | In progress |
@@ -74,7 +74,7 @@ Key terms:
 - **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups
 - **Safety Ratchets**: production baseline currently at `unwrap/expect=0`, panic-family macros (`panic!/todo!/unimplemented!/unreachable!`) = `0`, explicit `unsafe` syntax = `0`
 - **Security**: Comprehensive hardening complete (path traversal, command injection, DAP evaluate, perldoc/perlcritic argument injection)
-- **DAP Server**: Phase 1 bridge mode delegates to Perl::LanguageServer (requires external CPAN module); native Phase 2 adapter is scaffolded with data structures and test stubs but not yet functional (breakpoint setting, stepping, variable inspection all unimplemented); async BridgeAdapter with graceful shutdown available for bridge mode
+- **DAP Server**: Native adapter preview is implemented (breakpoints with AST validation via `perl-dap-breakpoint`, step/pause/continue handlers, safe-eval guards, stdio+socket transport, PID/TCP attach modes); BridgeAdapter remains available for Perl::LanguageServer interoperability
 - **Index State Machine Receipts (2026-02-16)**: `just ci-gate` + targeted state-machine tests and workspace benchmarks validated transitions, instrumentation, and caps (`~368.7us` initial small index, `~721.1us` initial medium index, `~212.6us` incremental update)
 
 ### Computed Metrics (auto-updated by `just status-update`)
@@ -83,7 +83,7 @@ Key terms:
 - **LSP Coverage**: 100% user-visible feature coverage (53/53 advertised features from `features.toml`)
 - **Protocol Compliance**: 100% overall LSP protocol support (89/89 including plumbing)
 - **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~611 sections) + `test_corpus/` (78 `.pl` files)
-- **Test Status**: 954 lib tests (Tier A), 0 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
+- **Test Status**: 1045 lib tests (Tier A), 0 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
 - **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server production-ready (`just ci-gate` passing)
@@ -107,7 +107,7 @@ Key terms:
 - Merge gates (#210) after CI pipeline cleanup (#211)
 
 **Later (post v1.0)**
-- Native DAP completeness (attach, variables/evaluate, safe eval)
+- DAP preview -> GA hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)
 - Full LSP 3.18 compliance
 - Package manager distribution (Homebrew/apt/etc.)
 
@@ -130,7 +130,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 | --- | --- | --- |
 | perl-parser | Production | ~100% Perl 5, 87% mutation score |
 | perl-lsp | Production | Coverage tracked via `features.toml` |
-| perl-dap | Phase 1 (Bridge Only) | BridgeAdapter delegates to Perl::LanguageServer; native adapter scaffolded but not functional |
+| perl-dap | Preview (Native + Bridge) | Native adapter implemented/tested (phase2+phase3 suites); BridgeAdapter retained for compatibility |
 | perl-lexer | Production | Context-aware, sub-microsecond |
 | perl-corpus | Production | Corpus counts tracked in computed metrics |
 
@@ -146,5 +146,5 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-02-16 (narrative sections only; run `just status-update` to refresh metrics)*
+*Last Updated: 2026-02-17 (narrative sections only; run `just status-update` to refresh metrics)*
 *Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

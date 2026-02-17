@@ -1537,6 +1537,7 @@ dependencies = [
  "lsp-types",
  "nix",
  "once_cell",
+ "perl-dap-breakpoint",
  "perl-dap-eval",
  "perl-dap-stack",
  "perl-dap-variables",
@@ -1553,6 +1554,17 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "winapi",
+]
+
+[[package]]
+name = "perl-dap-breakpoint"
+version = "0.1.0"
+dependencies = [
+ "perl-parser",
+ "perl-tdd-support",
+ "ropey",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]

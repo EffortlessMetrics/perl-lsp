@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
@@ -260,6 +261,8 @@ pub struct DebugAdapter {
     seq: Arc<Mutex<i64>>,
     /// Active debug session (process-based)
     session: Arc<Mutex<Option<DebugSession>>>,
+    /// Attached process ID for PID-based attach mode
+    attached_pid: Arc<Mutex<Option<u32>>>,
     /// TCP attach session (for connecting to running debugger)
     tcp_session: Arc<Mutex<Option<TcpAttachSession>>>,
     /// Breakpoints store
@@ -391,6 +394,7 @@ impl DebugAdapter {
         Self {
             seq: Arc::new(Mutex::new(0)),
             session: Arc::new(Mutex::new(None)),
+            attached_pid: Arc::new(Mutex::new(None)),
             tcp_session: Arc::new(Mutex::new(None)),
             breakpoints: BreakpointStore::new(),
             thread_counter: Arc::new(Mutex::new(0)),
@@ -406,75 +410,81 @@ impl DebugAdapter {
 
     /// Run the debug adapter server
     pub fn run(&mut self) -> io::Result<()> {
-        let stdin = io::stdin();
-        // Create a shared stdout writer to prevent interleaving between the main loop
-        // and the event handler thread. This is critical for DAP protocol correctness:
-        // both response frames and event frames must be written atomically to avoid
-        // corrupting Content-Length framing.
-        let stdout_writer: Arc<Mutex<io::Stdout>> = Arc::new(Mutex::new(io::stdout()));
-        let event_stdout = Arc::clone(&stdout_writer);
+        self.run_with_io(io::stdin(), io::stdout())
+    }
 
-        // Create channel for events
+    /// Run the debug adapter over a TCP socket transport.
+    ///
+    /// This binds to `127.0.0.1:<port>`, accepts one client connection, and
+    /// serves the DAP session on that stream.
+    pub fn run_socket(&mut self, port: u16) -> io::Result<()> {
+        let listener = TcpListener::bind(("127.0.0.1", port))?;
+        eprintln!("DAP socket transport listening on 127.0.0.1:{port}");
+
+        let (stream, peer_addr) = listener.accept()?;
+        eprintln!("DAP socket client connected: {peer_addr}");
+
+        let reader_stream = stream.try_clone()?;
+        self.run_with_io(reader_stream, stream)
+    }
+
+    /// Shared DAP transport loop used by stdio and socket modes.
+    fn run_with_io<R, W>(&mut self, input: R, output: W) -> io::Result<()>
+    where
+        R: Read,
+        W: Write + Send + 'static,
+    {
+        // Create a shared writer to prevent interleaving between the main loop
+        // and the event handler thread.
+        let shared_writer: Arc<Mutex<W>> = Arc::new(Mutex::new(output));
+        let event_writer = Arc::clone(&shared_writer);
+
+        // Create channel for asynchronous events.
         let (tx, rx) = channel::<DapMessage>();
         self.event_sender = Some(tx.clone());
 
-        // Start event handler thread with enhanced error handling
-        // Uses shared stdout writer to serialize output with main loop
         thread::spawn(move || {
             while let Ok(msg) = rx.recv() {
-                match serde_json::to_string(&msg) {
-                    Ok(json) => {
-                        let content_length = json.len();
-                        let frame = format!("Content-Length: {}\r\n\r\n{}", content_length, json);
-                        // Lock shared stdout for atomic frame write
-                        match event_stdout.lock() {
-                            Ok(mut stdout) => {
-                                if let Err(e) = stdout.write_all(frame.as_bytes()) {
-                                    eprintln!("Failed to write DAP frame in event handler: {}", e);
-                                }
-                                if let Err(e) = stdout.flush() {
-                                    eprintln!("Failed to flush stdout in event handler: {}", e);
-                                }
-                            }
-                            Err(poisoned) => {
-                                // Recover from poisoned mutex
-                                eprintln!(
-                                    "Warning: stdout mutex poisoned in event handler, recovering"
-                                );
-                                let mut stdout = poisoned.into_inner();
-                                let _ = stdout.write_all(frame.as_bytes());
-                                let _ = stdout.flush();
-                            }
-                        }
+                let frame = match serde_json::to_string(&msg) {
+                    Ok(payload) => {
+                        format!("Content-Length: {}\r\n\r\n{}", payload.len(), payload)
                     }
                     Err(e) => {
                         eprintln!("Failed to serialize DAP message: {} - {:#?}", e, msg);
-                        // Continue processing other messages
+                        continue;
                     }
+                };
+
+                let mut writer = lock_or_recover(&event_writer, "event_writer");
+                if let Err(e) = writer.write_all(frame.as_bytes()) {
+                    eprintln!("Failed to write DAP frame in event handler: {}", e);
+                    continue;
+                }
+                if let Err(e) = writer.flush() {
+                    eprintln!("Failed to flush DAP frame in event handler: {}", e);
                 }
             }
             eprintln!("Event handler thread terminating - channel closed");
         });
 
-        // Read messages from stdin with proper DAP protocol handling
-        let mut reader = BufReader::new(stdin);
+        let mut reader = BufReader::new(input);
         let mut line = String::new();
 
         loop {
-            // Read headers
+            // Read headers.
             let mut headers = HashMap::new();
             loop {
                 line.clear();
                 match reader.read_line(&mut line) {
                     Ok(0) => return Ok(()), // EOF
                     Ok(_) => {
-                        let line = line.trim_end();
-                        if line.is_empty() {
-                            break; // End of headers
+                        let trimmed = line.trim_end();
+                        if trimmed.is_empty() {
+                            break;
                         }
-                        if let Some(colon_pos) = line.find(':') {
-                            let key = line[..colon_pos].trim();
-                            let value = line[colon_pos + 1..].trim();
+                        if let Some(colon_pos) = trimmed.find(':') {
+                            let key = trimmed[..colon_pos].trim();
+                            let value = trimmed[colon_pos + 1..].trim();
                             headers.insert(key.to_string(), value.to_string());
                         }
                     }
@@ -482,36 +492,43 @@ impl DebugAdapter {
                 }
             }
 
-            // Read content body based on Content-Length
-            if let Some(content_length) = headers.get("Content-Length") {
-                if let Ok(length) = content_length.parse::<usize>() {
-                    let mut buffer = vec![0u8; length];
-                    reader.read_exact(&mut buffer)?;
+            // Read content body based on Content-Length.
+            let Some(content_length) = headers.get("Content-Length") else {
+                continue;
+            };
+            let Ok(length) = content_length.parse::<usize>() else {
+                eprintln!("Invalid Content-Length header: {content_length}");
+                continue;
+            };
 
-                    // Parse and handle the message
-                    if let Ok(msg) = serde_json::from_slice::<DapMessage>(&buffer) {
-                        if let DapMessage::Request { seq, command, arguments } = msg {
-                            let response = self.handle_request(seq, &command, arguments);
-                            if let Ok(json) = serde_json::to_string(&response) {
-                                let content_length = json.len();
-                                let frame =
-                                    format!("Content-Length: {}\r\n\r\n{}", content_length, json);
-                                // Lock shared stdout for atomic frame write
-                                let mut stdout = lock_or_recover(&stdout_writer, "response_writer");
-                                stdout.write_all(frame.as_bytes())?;
-                                stdout.flush()?;
-                            }
-                        }
-                    } else {
-                        eprintln!(
-                            "Failed to parse DAP message: {}",
-                            String::from_utf8_lossy(&buffer)
-                        );
-                    }
-                } else {
-                    eprintln!("Invalid Content-Length header: {}", content_length);
+            let mut buffer = vec![0u8; length];
+            reader.read_exact(&mut buffer)?;
+
+            let msg = match serde_json::from_slice::<DapMessage>(&buffer) {
+                Ok(msg) => msg,
+                Err(_) => {
+                    eprintln!("Failed to parse DAP message: {}", String::from_utf8_lossy(&buffer));
+                    continue;
                 }
-            }
+            };
+
+            let DapMessage::Request { seq, command, arguments } = msg else {
+                continue;
+            };
+
+            let response = self.handle_request(seq, &command, arguments);
+            let payload = match serde_json::to_string(&response) {
+                Ok(payload) => payload,
+                Err(e) => {
+                    eprintln!("Failed to serialize DAP response: {}", e);
+                    continue;
+                }
+            };
+
+            let frame = format!("Content-Length: {}\r\n\r\n{}", payload.len(), payload);
+            let mut writer = lock_or_recover(&shared_writer, "response_writer");
+            writer.write_all(frame.as_bytes())?;
+            writer.flush()?;
         }
     }
 
@@ -1389,7 +1406,7 @@ impl DebugAdapter {
     ///
     /// Attaches to a running Perl process. Supports two modes:
     /// 1. TCP attachment - Connect to Perl::LanguageServer DAP via host:port
-    /// 2. Process ID attachment - Attach to local Perl process (future implementation)
+    /// 2. Process ID attachment - Signal-control mode for local Perl process
     ///
     /// For TCP attachment, the arguments should contain:
     /// - `host`: Hostname or IP address (default: "localhost")
@@ -1398,85 +1415,134 @@ impl DebugAdapter {
     ///
     /// # Current Implementation
     ///
-    /// TCP attachment is now fully implemented with socket support.
-    /// Process ID attachment will be added in a future phase.
+    /// TCP attachment is implemented with socket support.
+    /// Process ID attachment is implemented in signal-control mode (pause/continue
+    /// signaling and thread identity), with limited stack/evaluate capabilities
+    /// unless a debugger transport is active.
     fn handle_attach(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
         // Parse attach arguments
         if let Some(args) = arguments {
-            // Extract host and port for TCP attachment
-            let host = args.get("host").and_then(|h| h.as_str()).unwrap_or("localhost");
-            let port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603) as u16;
-            let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
             let process_id = args.get("processId").and_then(|p| p.as_u64()).map(|p| p as u32);
 
-            // Validate arguments
-            if host.trim().is_empty() {
-                return DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "attach".to_string(),
-                    body: None,
-                    message: Some("Host cannot be empty".to_string()),
-                };
-            }
-
-            if port == 0 {
-                return DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "attach".to_string(),
-                    body: None,
-                    message: Some("Port must be in range 1-65535".to_string()),
-                };
-            }
-
-            if let Some(t) = timeout {
-                if t == 0 {
-                    return DapMessage::Response {
-                        seq,
-                        request_seq,
-                        success: false,
-                        command: "attach".to_string(),
-                        body: None,
-                        message: Some("Timeout must be greater than 0 milliseconds".to_string()),
-                    };
-                }
-                if t > 300_000 {
-                    return DapMessage::Response {
-                        seq,
-                        request_seq,
-                        success: false,
-                        command: "attach".to_string(),
-                        body: None,
-                        message: Some(
-                            "Timeout cannot exceed 300000 milliseconds (5 minutes)".to_string(),
-                        ),
-                    };
-                }
-            }
-
-            // Determine attachment mode
+            // PID attachment mode: best-effort process control without requiring TCP shim transport.
             if let Some(pid) = process_id {
-                // Process ID attachment mode (future implementation)
+                if pid == 0 {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some("processId must be greater than zero".to_string()),
+                    };
+                }
+
+                // Reset existing process/tcp attachment state before switching to PID mode.
+                if let Ok(mut guard) = self.session.lock()
+                    && let Some(mut existing) = guard.take()
+                {
+                    let _ = existing.process.kill();
+                }
+                if let Ok(mut guard) = self.tcp_session.lock()
+                    && let Some(ref mut tcp_session) = *guard
+                {
+                    let _ = tcp_session.disconnect();
+                }
+                if let Ok(mut guard) = self.tcp_session.lock() {
+                    *guard = None;
+                }
+
+                if let Ok(mut guard) = self.attached_pid.lock() {
+                    *guard = Some(pid);
+                }
+
+                let thread_id = Self::i64_to_i32_saturating(i64::from(pid));
+                self.send_event(
+                    "stopped",
+                    Some(json!({
+                        "reason": "attach",
+                        "threadId": thread_id,
+                        "allThreadsStopped": true
+                    })),
+                );
+
                 eprintln!(
-                    "Attach request: Process ID attachment to PID {} (not yet implemented)",
+                    "Attach request: Process ID attachment to PID {} (signal-control mode)",
                     pid
                 );
+
                 DapMessage::Response {
                     seq,
                     request_seq,
-                    success: false,
+                    success: true,
                     command: "attach".to_string(),
-                    body: None,
-                    message: Some(format!(
-                        "Process ID attachment not yet implemented (PID: {}). \
-                         Use TCP attachment with host/port for Perl::LanguageServer compatibility.",
-                        pid
-                    )),
+                    body: Some(json!({
+                        "threadId": thread_id,
+                        "processId": pid,
+                        "mode": "processId"
+                    })),
+                    message: Some(
+                        "Attached in signal-control mode. Stack/evaluate are limited without a \
+                         debugger transport."
+                            .to_string(),
+                    ),
                 }
             } else {
+                // Extract host and port for TCP attachment.
+                let host = args.get("host").and_then(|h| h.as_str()).unwrap_or("localhost");
+                let port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603) as u16;
+                let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
+
+                // Validate arguments.
+                if host.trim().is_empty() {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some("Host cannot be empty".to_string()),
+                    };
+                }
+
+                if port == 0 {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some("Port must be in range 1-65535".to_string()),
+                    };
+                }
+
+                if let Some(t) = timeout {
+                    if t == 0 {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "attach".to_string(),
+                            body: None,
+                            message: Some(
+                                "Timeout must be greater than 0 milliseconds".to_string(),
+                            ),
+                        };
+                    }
+                    if t > 300_000 {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "attach".to_string(),
+                            body: None,
+                            message: Some(
+                                "Timeout cannot exceed 300000 milliseconds (5 minutes)".to_string(),
+                            ),
+                        };
+                    }
+                }
+
                 // TCP attachment mode (IMPLEMENTED)
                 let mut config = TcpAttachConfig::new(host.to_string(), port);
                 if let Some(t) = timeout {
@@ -1667,6 +1733,14 @@ impl DebugAdapter {
         {
             let _ = tcp_session.disconnect();
         }
+        if let Ok(mut guard) = self.tcp_session.lock() {
+            *guard = None;
+        }
+
+        // Clear PID attach mode.
+        if let Ok(mut guard) = self.attached_pid.lock() {
+            *guard = None;
+        }
 
         // Send terminated event
         self.send_event("terminated", None);
@@ -1779,15 +1853,22 @@ impl DebugAdapter {
 
     /// Handle threads request
     fn handle_threads(&self, seq: i64, request_seq: i64) -> DapMessage {
-        let threads =
-            if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-                vec![json!({
-                    "id": session.thread_id,
-                    "name": "Main Thread"
-                })]
-            } else {
-                vec![]
-            };
+        let threads = if let Some(ref session) =
+            *lock_or_recover(&self.session, "debug_adapter.session")
+        {
+            vec![json!({
+                "id": session.thread_id,
+                "name": "Main Thread"
+            })]
+        } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        {
+            vec![json!({
+                "id": Self::i64_to_i32_saturating(i64::from(pid)),
+                "name": format!("Attached Process ({pid})")
+            })]
+        } else {
+            vec![]
+        };
 
         DapMessage::Response {
             seq,
@@ -1834,6 +1915,21 @@ impl DebugAdapter {
             parsed_frames
         } else if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
             Self::filter_user_visible_frames(session.stack_frames.clone())
+        } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        {
+            vec![StackFrame {
+                id: Self::i64_to_i32_saturating(i64::from(pid)),
+                name: format!("attached::process::{pid}"),
+                source: Source {
+                    name: Some(format!("pid:{pid}")),
+                    path: format!("pid://{pid}"),
+                    source_reference: None,
+                },
+                line: 1,
+                column: 1,
+                end_line: None,
+                end_column: None,
+            }]
         } else {
             // No session - return placeholder frame for testing
             vec![StackFrame {
@@ -2038,6 +2134,10 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             thread_id = session.thread_id;
+        } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        {
+            let _ = self.send_continue_signal(pid);
+            thread_id = Self::i64_to_i32_saturating(i64::from(pid));
         }
 
         // AC9.4: Proper DAP event emission: continued
@@ -2147,14 +2247,18 @@ impl DebugAdapter {
 
     /// Handle pause request
     fn handle_pause(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        let success =
-            if let Some(ref session) = *lock_or_recover(&self.session, "debug_adapter.session") {
-                let pid = session.process.id();
-                self.send_interrupt_signal(pid)
-            } else {
-                eprintln!("No active debug session to pause");
-                false
-            };
+        let success = if let Some(ref session) =
+            *lock_or_recover(&self.session, "debug_adapter.session")
+        {
+            let pid = session.process.id();
+            self.send_interrupt_signal(pid)
+        } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        {
+            self.send_interrupt_signal(pid)
+        } else {
+            eprintln!("No active debug session to pause");
+            false
+        };
 
         DapMessage::Response {
             seq,
@@ -2522,6 +2626,30 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
 }
 
 impl DebugAdapter {
+    /// Send continue/resume signal to process (Unix only)
+    #[allow(unused_variables)]
+    fn send_continue_signal(&self, pid: u32) -> bool {
+        #[cfg(unix)]
+        {
+            let pid = pid as i32;
+            match signal::kill(Pid::from_raw(pid), Signal::SIGCONT) {
+                Ok(()) => {
+                    eprintln!("Sent SIGCONT to process {}", pid);
+                    true
+                }
+                Err(e) => {
+                    eprintln!("Failed to send SIGCONT to process {}: {}", pid, e);
+                    false
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            eprintln!("Continue signal not supported on this platform");
+            false
+        }
+    }
+
     /// Send interrupt signal to process (cross-platform)
     #[allow(unused_variables)] // pid unused on non-unix/non-windows platforms (e.g., wasm32)
     fn send_interrupt_signal(&self, pid: u32) -> bool {
@@ -2670,6 +2798,19 @@ impl DebugAdapter {
                         message: Some("No debugger session active".to_string()),
                     };
                 }
+            } else if let Some(pid) =
+                *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+            {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "evaluate".to_string(),
+                    body: None,
+                    message: Some(format!(
+                        "Evaluate is unavailable for processId attach (PID {pid}) without an active debugger transport"
+                    )),
+                };
             } else {
                 return DapMessage::Response {
                     seq,
@@ -2895,13 +3036,15 @@ mod tests {
         let response = adapter.handle_request(1, "attach", Some(args));
 
         match response {
-            DapMessage::Response { success, command, message, .. } => {
-                assert!(!success); // Not yet implemented
+            DapMessage::Response { success, command, body, message, .. } => {
+                assert!(success);
                 assert_eq!(command, "attach");
+                assert!(body.is_some());
+                let body = body.ok_or("Expected body")?;
+                assert_eq!(body.get("processId").and_then(|v| v.as_u64()), Some(12345));
                 assert!(message.is_some());
                 let msg = message.ok_or("Expected message")?;
-                assert!(msg.contains("Process ID attachment"));
-                assert!(msg.contains("12345"));
+                assert!(msg.contains("signal-control mode"));
             }
             _ => return Err("Expected response".into()),
         }

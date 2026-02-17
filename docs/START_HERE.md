@@ -16,7 +16,7 @@ Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 - Fast native Rust parser with near-complete Perl 5 coverage
 - Production-grade LSP server with broad feature support (tracked in `features.toml`)
-- DAP support with native CLI + BridgeAdapter (Phase 1)
+- DAP support with native preview adapter + BridgeAdapter compatibility path
 - Quality gates: tests, fuzzing/mutation hardening, missing_docs enforcement (see `CURRENT_STATUS.md`)
 
 ### Current Focus
@@ -31,7 +31,7 @@ perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 - Upgrade notes from v0.8.x → v1.0
 
 **Later (post v1.0)**
-- Native DAP completeness (attach, variables/evaluate, safe eval)
+- DAP preview -> GA hardening (runtime variable/evaluate depth + packaging)
 - Full LSP 3.18 compliance
 - Package manager distribution
 
@@ -74,7 +74,7 @@ perl-lsp/
 ├── crates/
 │   ├── perl-parser/      ⭐ Main crate - Parser
 │   ├── perl-lsp/          LSP server binary + LSP logic
-│   ├── perl-dap/          Debug Adapter Protocol (Phase 1 complete)
+│   ├── perl-dap/          Debug Adapter Protocol (native preview + bridge fallback)
 │   ├── perl-lexer/        Context-aware tokenizer
 │   ├── perl-corpus/       Test corpus (see CURRENT_STATUS for counts)
 │   └── perl-parser-pest/  Legacy Pest parser
@@ -193,6 +193,6 @@ The perl-lsp project has clear paths to both MVP and Production v1.0. Your contr
 
 ---
 
-*This guide is kept up-to-date as the project evolves. Last updated: 2026-01-27*
+*This guide is kept up-to-date as the project evolves. Last updated: 2026-02-17*
 
 *For detailed status, see: [CURRENT_STATUS.md](CURRENT_STATUS.md)*

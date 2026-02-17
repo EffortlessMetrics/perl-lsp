@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Performance caps validated**: workspace index benchmarks confirm wide margin to targets (`~368.7us` initial small, `~721.1us` initial medium, `~212.6us` incremental)
 - **Documentation hardening completed**: `cargo test -p perl-parser --features doc-coverage --test missing_docs_ac_tests` and `cargo doc --no-deps -p perl-parser` both clean
 - **Milestone docs aligned**: `START_HERE.md`, `CURRENT_STATUS.md`, `ROADMAP.md`, and `TODO.md` now reflect the same post-close-out status
+- **Native DAP preview expanded**: stdio+socket transport loop, PID/TCP attach handling, control-flow routing, and safe-eval mode behavior integrated in `perl-dap`
+- **Breakpoint validation microcrated**: `perl-dap` now delegates AST breakpoint checks to `perl-dap-breakpoint` for shared validation logic
+- **Phase 2/3 DAP suites implemented**: feature-gated adapter/golden/performance/dependency/packaging tests now run real assertions instead of placeholder stubs
+- **Capability metadata updated**: DAP features remain non-GA but are now tracked as `maturity = "preview"` in `features.toml`
 
 ## [1.0.0] - 2026-02-13
 

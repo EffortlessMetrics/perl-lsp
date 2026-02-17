@@ -385,21 +385,21 @@ description = "Notebook cell execution summary tracking (LSP does not execute ce
 id = "dap.inline_values"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "planned"
+maturity = "preview"
 advertised = false
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs"]
-description = "Inline variable values while debugging (scaffolded, not yet functional)"
+description = "Inline variable values while debugging (native adapter preview)"
 
 [[feature]]
 id = "dap.breakpoints"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "planned"
+maturity = "preview"
 advertised = false
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs"]
-description = "Breakpoint support (data structures exist, native setting not yet functional; Phase 1 bridge delegates to Perl::LanguageServer)"
+description = "Breakpoint support with AST validation in native adapter (preview)"
 
 # Protocol / Lifecycle Features
 

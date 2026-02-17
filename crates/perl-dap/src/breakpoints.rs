@@ -16,132 +16,41 @@
 //! - [DAP Implementation Spec](../../docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management)
 
 use crate::protocol::{Breakpoint, SetBreakpointsArguments};
-use perl_parser::Parser;
-use perl_parser::ast::{Node, NodeKind};
-use ropey::Rope;
+use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 // ============= AST Validation Utilities (AC7) =============
 
-/// Check if a line contains only comments or whitespace
-fn is_comment_or_blank_line(ast: &Node, line_start: usize, line_end: usize, source: &str) -> bool {
-    // Fast path: Check if blank (only whitespace)
-    let line_text = &source[line_start..line_end.min(source.len())];
-    if line_text.trim().is_empty() {
-        return true;
-    }
-
-    // Fast path: Check if comment (starts with # after whitespace)
-    if line_text.trim_start().starts_with('#') {
-        return true;
-    }
-
-    // AST-based validation: Check if line contains only comment nodes
-    has_only_comments_in_range(ast, line_start, line_end)
-}
-
-/// Check if all nodes in a range are comments
+/// Validate a breakpoint against source using the dedicated breakpoint microcrate.
 ///
-/// Note: Comments are stripped during lexing and not represented in the AST.
-/// The fast path in `is_comment_or_blank_line` handles comment detection.
-/// This function checks if there are no executable nodes in the range.
-fn has_only_comments_in_range(node: &Node, start: usize, end: usize) -> bool {
-    // Check if node overlaps with line range
-    if node.location.start >= end || node.location.end <= start {
-        return false;
-    }
-
-    match &node.kind {
-        NodeKind::Program { statements } => {
-            // Get all nodes that overlap with the line range
-            let nodes_in_range: Vec<_> = statements
-                .iter()
-                .filter(|s| s.location.start < end && s.location.end > start)
-                .collect();
-
-            // If no AST nodes in range, it's a blank/comment line
-            // (comments are stripped during lexing and not in AST)
-            nodes_in_range.is_empty()
-        }
-        // Any other node type means there's executable code
-        _ => false,
-    }
-}
-
-/// Check if a byte offset is inside a heredoc interior (body content)
-fn is_inside_heredoc_interior(node: &Node, byte_offset: usize) -> bool {
-    // Check if this is a heredoc with a body span containing the offset
-    if let NodeKind::Heredoc { body_span: Some(span), .. } = &node.kind {
-        if byte_offset >= span.start && byte_offset < span.end {
-            return true;
-        }
-    }
-
-    // Recursively check all children
-    let mut found = false;
-    node.for_each_child(|child| {
-        if !found && is_inside_heredoc_interior(child, byte_offset) {
-            found = true;
-        }
-    });
-    found
-}
-
-/// Validate a breakpoint against the AST
-///
-/// Returns (verified, message) where:
-/// - verified: true if the breakpoint is valid
-/// - message: error/warning message if not verified
-fn validate_breakpoint_line(source: &str, line: i64) -> (bool, Option<String>) {
-    // Parse the source file
-    let mut parser = Parser::new(source);
-    let ast = match parser.parse() {
-        Ok(ast) => ast,
-        Err(_) => {
-            // Parse error - allow breakpoint but mark as unverified
-            return (false, Some("Unable to parse source file".to_string()));
-        }
-    };
-
-    // Build rope for line mapping
-    let rope = Rope::from_str(source);
-
-    // AC7: Reject non-positive line numbers
+/// Returns `(verified, resolved_line, message)` where `resolved_line` may differ from
+/// the requested line if the validator adjusts the location.
+#[cfg(test)]
+fn validate_breakpoint_line_with_column(
+    source: &str,
+    line: i64,
+    column: Option<i64>,
+) -> (bool, i64, Option<String>) {
     if line <= 0 {
-        return (false, Some("Line number must be positive".to_string()));
+        return (false, line, Some("Line number must be positive".to_string()));
     }
 
-    // Convert 1-based line to 0-based
-    let line_idx = (line - 1) as usize;
-
-    // Check if line is valid
-    if line_idx >= rope.len_lines() {
-        return (false, Some("Line number exceeds file length".to_string()));
+    match AstBreakpointValidator::new(source) {
+        Ok(validator) => {
+            let result = validator.validate_with_column(line, column);
+            (result.verified, result.line, result.message)
+        }
+        Err(error) => (false, line, Some(error.to_string())),
     }
+}
 
-    // Get byte range for the line
-    let line_start = rope.line_to_byte(line_idx);
-    let line_end = if line_idx + 1 < rope.len_lines() {
-        rope.line_to_byte(line_idx + 1)
-    } else {
-        rope.len_bytes()
-    };
-
-    // Validation 1: Inside heredoc interior
-    // Check BEFORE comment/blank check because heredoc interior lines have no AST nodes
-    // and would otherwise be incorrectly classified as blank/comment lines
-    if is_inside_heredoc_interior(&ast, line_start) {
-        return (false, Some("Breakpoint set inside heredoc content".to_string()));
-    }
-
-    // Validation 2: Comment or blank line
-    if is_comment_or_blank_line(&ast, line_start, line_end, source) {
-        return (false, Some("Breakpoint set on comment or blank line".to_string()));
-    }
-
-    // Breakpoint is valid
-    (true, None)
+/// Backward-compatible helper used by unit tests in this module.
+#[cfg(test)]
+fn validate_breakpoint_line(source: &str, line: i64) -> (bool, Option<String>) {
+    let (verified, _resolved_line, message) =
+        validate_breakpoint_line_with_column(source, line, None);
+    (verified, message)
 }
 
 /// Individual breakpoint record
@@ -259,14 +168,29 @@ impl BreakpointStore {
         // Clear existing breakpoints for this source (REPLACE semantics)
         breakpoints_map.remove(&source_path);
 
-        // Read source file for AST validation (AC7)
+        // Read source file and parse once for AST validation (AC7).
         let source_content = std::fs::read_to_string(&source_path).ok();
+        let validator = source_content
+            .as_ref()
+            .map(|content| AstBreakpointValidator::new(content).map_err(|e| e.to_string()));
 
         let mut records = Vec::new();
         // Create new breakpoint records
         for bp in &source_breakpoints {
             let id = *next_id;
             *next_id += 1;
+
+            if bp.line <= 0 {
+                records.push(BreakpointRecord {
+                    id,
+                    line: bp.line,
+                    column: bp.column,
+                    condition: bp.condition.clone(),
+                    verified: false,
+                    message: Some("Line number must be positive".to_string()),
+                });
+                continue;
+            }
 
             // AC7: Security validation - Reject conditions with newlines
             // The Perl debugger protocol is line-based, so a newline in a condition
@@ -286,17 +210,22 @@ impl BreakpointStore {
                 }
             }
 
-            // AC7: AST-based breakpoint validation
-            let (verified, message) = if let Some(ref content) = source_content {
-                validate_breakpoint_line(content, bp.line)
-            } else {
-                // Can't read file - mark as unverified but still create breakpoint
-                (false, Some("Unable to read source file".to_string()))
+            // AC7: AST-based breakpoint validation via `perl-dap-breakpoint` microcrate.
+            let (verified, resolved_line, message) = match &validator {
+                Some(Ok(v)) => {
+                    let result = v.validate_with_column(bp.line, bp.column);
+                    (result.verified, result.line, result.message)
+                }
+                Some(Err(error)) => (false, bp.line, Some(error.clone())),
+                None => {
+                    // Can't read file - mark as unverified but still create breakpoint.
+                    (false, bp.line, Some("Unable to read source file".to_string()))
+                }
             };
 
             let record = BreakpointRecord {
                 id,
-                line: bp.line,
+                line: resolved_line,
                 column: bp.column,
                 condition: bp.condition.clone(),
                 verified,

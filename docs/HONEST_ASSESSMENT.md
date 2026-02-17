@@ -3,8 +3,8 @@
 > **Purpose**: A brutally honest, evidence-based assessment of what works, what doesn't,
 > and what the metrics actually mean. Written for developers evaluating this project.
 >
-> **Date**: 2026-02-16
-> **Version**: 0.9.0
+> **Date**: 2026-02-17
+> **Version**: 1.0.0
 
 ---
 
@@ -12,13 +12,13 @@
 
 This is a **real, functional Perl LSP server** — not a skeleton or toy project. The parser,
 LSP server, semantic analyzer, and workspace index are production-quality. The Debug Adapter
-Protocol (DAP) is scaffolded but not functional. The Pest parser is a maintained legacy
-artifact. The metrics are honest with one exception: DAP status was overstated in
-documentation (now corrected).
+Protocol (DAP) has moved from scaffolding to a native preview implementation (with bridge
+fallback), but it is not GA-depth yet. The Pest parser is a maintained legacy artifact.
 
 **Bottom line**: A Perl developer pointing VSCode at this server today would get real
-completion, hover, go-to-definition, rename, diagnostics, and formatting. They would not
-get working debugging.
+completion, hover, go-to-definition, rename, diagnostics, and formatting, plus native DAP
+preview workflows (breakpoints/control-flow/attach basics). Deep debugging fidelity still
+needs hardening before GA.
 
 ---
 
@@ -26,7 +26,7 @@ get working debugging.
 
 ### LSP Server — Production-Ready
 
-**Evidence**: 954 lib tests pass, proper lifecycle (initialize/initialized/shutdown/exit),
+**Evidence**: 1045 lib tests pass, proper lifecycle (initialize/initialized/shutdown/exit),
 full JSON-RPC dispatch with cancellation support, enterprise-grade error handling.
 
 | Capability | Status | Evidence |
@@ -66,7 +66,7 @@ full JSON-RPC dispatch with cancellation support, enterprise-grade error handlin
 
 ### Parser (v3 Native Recursive Descent) — Production-Ready
 
-**Evidence**: 954 tests pass, 87% mutation score, ~100% Perl 5 syntax coverage,
+**Evidence**: 1045 tests pass, 87% mutation score, ~100% Perl 5 syntax coverage,
 sub-microsecond incremental parsing (931ns).
 
 **Handles well**:
@@ -138,34 +138,27 @@ Tests verify AST correctness (specific `NodeKind` matching), not just "no crash"
 
 ## What Does NOT Work
 
-### GAP 1: DAP Is Scaffolded, Not Functional
+### GAP 1: DAP Is Preview, Not GA
 
-**This is the biggest gap between documentation and reality.**
-
-The DAP crates (`perl-dap`, `perl-dap-breakpoint`, `perl-dap-eval`, `perl-dap-variables`,
-`perl-dap-stack`) contain data structures and test scaffolding, but every native adapter
-test calls `must(Err::<(), _>("X not yet implemented"))`.
+Native DAP now exists and runs, but behavior depth is still uneven across modes.
 
 **What exists**:
-- Phase 1 Bridge: `BridgeAdapter` delegates to Perl::LanguageServer CPAN module
-  - Works, but requires the user to install Perl::LanguageServer externally
-  - Async with graceful shutdown
-- Data structures for breakpoints, stack frames, variables
-- CLI binary with clap argument parsing
-- Comprehensive test scaffolding (20+ test files, all returning stubs)
+- Native breakpoint setting with AST validation (`perl-dap-breakpoint` microcrate)
+- Step/continue/pause control-flow handlers with monotonic DAP sequencing
+- Safe-evaluation guardrails and command-injection protections
+- PID and TCP attach modes, plus stdio and socket transports
+- BridgeAdapter fallback to Perl::LanguageServer for compatibility
+- Feature-gated Phase 2/3 test suites with real assertions (no universal "not yet implemented" stubs)
 
-**What does NOT work**:
-- Native breakpoint setting (no AST validation despite data structures)
-- Stepping (step into, step over, step out)
-- Variable inspection/expansion
-- Stack frame introspection
-- Expression evaluation
-- The Perl shim (`Devel::TSPerlDAP`) mentioned in some docs does not exist
+**What is still incomplete**:
+- Deep variable inspection/evaluation fidelity is limited in PID signal-control attach mode
+- Shim distribution strategy (`Devel::TSPerlDAP` vs bundled equivalent) is not finalized
+- Native cross-editor smoke receipts are less mature than core LSP coverage receipts
 
-**Impact**: Users who try to debug Perl get either bridge mode (if they have
-Perl::LanguageServer installed) or an error message.
+**Impact**: Users can debug in native preview mode today, but should treat advanced
+inspect/evaluate workflows as in-progress rather than GA-stable.
 
-**Status in `features.toml`**: Corrected to `maturity = "planned"` (was "preview").
+**Status in `features.toml`**: DAP features are `maturity = "preview"` and intentionally not GA.
 
 ### GAP 2: Moo/Moose Semantic Blindness
 
@@ -242,7 +235,7 @@ test sensitivity, not completeness of the specification.
 **What it means**: Every test in the suite passes. No tests are skipped.
 
 **What it does NOT mean**: No bugs exist. The tests cover the implemented behavior;
-they cannot cover behavior that hasn't been implemented (Moo semantics, native DAP, etc.).
+they cannot cover behavior that hasn't been fully implemented (Moo semantics, GA-depth DAP, etc.).
 
 ---
 
@@ -255,14 +248,15 @@ they cannot cover behavior that hasn't been implemented (Moo semantics, native D
 | Go-to-definition | Cross-file, dual indexing | Single-file mainly | Cross-file |
 | Diagnostics | Parser + semantic analyzer | Perl::Critic integration | Perl::Critic |
 | Formatting | perltidy delegation | perltidy delegation | perltidy delegation |
-| Debugging | Scaffolded only | Working (native Perl) | None |
+| Debugging | Native preview + BridgeAdapter fallback | Working (native Perl) | None |
 | Language | Rust | Perl | Perl |
 | Speed | Sub-microsecond incremental | Slower (Perl runtime) | Moderate |
 | Installation | Single binary, no Perl required | Requires Perl + CPAN modules | Requires Perl |
 
 **Honest take**: For editing/navigation, this project is the most capable Perl LSP.
-For debugging, Perl::LanguageServer is the only one that works today (and this project's
-bridge mode delegates to it). For pure simplicity, PLS is lighter weight.
+For debugging, this project now has native preview support plus bridge fallback, but
+Perl::LanguageServer still has more mature debugger depth today. For pure simplicity, PLS
+is lighter weight.
 
 ---
 
@@ -271,7 +265,7 @@ bridge mode delegates to it). For pure simplicity, PLS is lighter weight.
 See [ROADMAP.md](ROADMAP.md) for the full gap-closing plan. Summary:
 
 **v1.0 Readiness**:
-1. Correct features.toml maturity levels (done)
+1. Keep DAP preview maturity/docs/tests aligned
 2. Add E2E LSP smoke test
 3. Document Moo/Moose limitations honestly
 4. Stability statement and packaging stance
@@ -281,10 +275,10 @@ See [ROADMAP.md](ROADMAP.md) for the full gap-closing plan. Summary:
 2. Class::Accessor support
 3. Type constraint awareness
 
-**v1.2 (DAP Phase 2)**:
-1. Native breakpoint setting
-2. Step into/over/out
-3. Variable inspection
+**v1.2 (DAP Preview -> GA)**:
+1. Deep variable inspection/evaluate fidelity in native sessions
+2. Cross-editor native debug smoke receipts
+3. Finalize shim/package strategy
 
 ---
 
@@ -293,12 +287,13 @@ See [ROADMAP.md](ROADMAP.md) for the full gap-closing plan. Summary:
 ```bash
 # Verify everything claimed above
 cargo test --workspace --lib               # All tests pass
+cargo test -p perl-dap --features dap-phase2,dap-phase3  # Native DAP preview suites
 just ci-gate                               # Full gate clean
 grep 'maturity = "ga"' features.toml       # No DAP features marked GA
-grep 'maturity = "planned"' features.toml  # DAP features correctly marked
+grep 'maturity = "preview"' features.toml  # DAP features correctly marked
 ```
 
 ---
 
-*Last updated: 2026-02-16*
+*Last updated: 2026-02-17*
 *Evidence sources: `features.toml`, `just ci-gate`, investigation of all crate source code*

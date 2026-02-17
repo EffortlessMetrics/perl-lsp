@@ -444,4 +444,11 @@ impl DapServer {
     pub fn run(&mut self) -> anyhow::Result<()> {
         self.adapter.run().map_err(Into::into)
     }
+
+    /// Run the DAP server over TCP socket transport.
+    ///
+    /// This binds to `127.0.0.1:<port>` and serves one DAP client session.
+    pub fn run_socket(&mut self, port: u16) -> anyhow::Result<()> {
+        self.adapter.run_socket(port).map_err(Into::into)
+    }
 }
