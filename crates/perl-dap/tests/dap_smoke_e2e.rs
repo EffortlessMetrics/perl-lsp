@@ -225,6 +225,15 @@ print "$x\n";
     let frames =
         stack.get("stackFrames").and_then(Value::as_array).ok_or("stackTrace frames missing")?;
     assert!(!frames.is_empty(), "expected at least one stack frame");
+    let top_line = frames
+        .first()
+        .and_then(|frame| frame.get("line"))
+        .and_then(Value::as_i64)
+        .ok_or("stackTrace first frame missing line")?;
+    assert!(
+        (3..=5).contains(&top_line),
+        "expected top frame line to be near breakpoint line (4), got: {top_line}"
+    );
     let frame_id = frames
         .first()
         .and_then(|frame| frame.get("id"))
@@ -265,16 +274,20 @@ print "$x\n";
     let vars_arr =
         variables.get("variables").and_then(Value::as_array).ok_or("variables array missing")?;
     assert!(!vars_arr.is_empty(), "expected variables response to include entries");
-    let mut var_names = vars_arr
+    let var_names = vars_arr
         .iter()
         .filter_map(|var| var.get("name").and_then(Value::as_str))
         .collect::<Vec<_>>();
-    var_names.sort_unstable();
+    let mut sorted_names = var_names.clone();
+    sorted_names.sort_unstable();
     assert!(
-        var_names.windows(2).all(|window| window[0] <= window[1]),
-        "expected sorted variable names, got: {var_names:?}"
+        var_names == sorted_names,
+        "expected adapter to return deterministically sorted variable names, got: {var_names:?}"
     );
-    assert!(!var_names.is_empty(), "expected at least one variable name in locals scope");
+    assert!(
+        var_names.iter().any(|name| ["$x", "$self", "@_"].contains(name)),
+        "expected locals to include `$x` (live) or deterministic fallback names, got: {var_names:?}"
+    );
 
     response_success(
         adapter.handle_request(request_seq, "next", Some(json!({"threadId": 1}))),
