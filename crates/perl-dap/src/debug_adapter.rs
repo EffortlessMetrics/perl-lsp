@@ -5,11 +5,13 @@
 
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
+use crate::security::validate_path;
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
@@ -260,6 +262,8 @@ pub struct DebugAdapter {
     thread_counter: Arc<Mutex<i32>>,
     /// Output channel for sending events to client
     event_sender: Option<Sender<DapMessage>>,
+    /// Workspace root for security validation
+    workspace_root: Arc<Mutex<Option<PathBuf>>>,
 }
 
 /// Active debug session
@@ -385,6 +389,7 @@ impl DebugAdapter {
             breakpoints: BreakpointStore::new(),
             thread_counter: Arc::new(Mutex::new(0)),
             event_sender: None,
+            workspace_root: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -615,8 +620,41 @@ impl DebugAdapter {
         &self,
         seq: i64,
         request_seq: i64,
-        _arguments: Option<Value>,
+        arguments: Option<Value>,
     ) -> DapMessage {
+        // Parse rootPath or rootUri if available for security validation
+        if let Some(ref args) = arguments {
+            let mut root_set = false;
+            // Try rootPath first (VSCode sends this even though not in official DAP spec for initialize)
+            if let Some(root_path) = args.get("rootPath").and_then(|v| v.as_str()) {
+                if let Ok(mut guard) = self.workspace_root.lock() {
+                    *guard = Some(PathBuf::from(root_path));
+                    root_set = true;
+                }
+            }
+
+            // Fallback to rootUri
+            if !root_set {
+                if let Some(root_uri) = args.get("rootUri").and_then(|v| v.as_str()) {
+                    if root_uri.starts_with("file://") {
+                        // Very basic URI parsing for file:// scheme
+                        // In a real implementation, use a proper URI parser crate
+                        #[cfg(windows)]
+                        let path_str = root_uri.trim_start_matches("file:///");
+                        #[cfg(not(windows))]
+                        let path_str = root_uri.trim_start_matches("file://");
+
+                        // Handle URL decoding if needed (basic %20 replacement for now)
+                        let path_str = path_str.replace("%20", " ");
+
+                        if let Ok(mut guard) = self.workspace_root.lock() {
+                            *guard = Some(PathBuf::from(path_str));
+                        }
+                    }
+                }
+            }
+        }
+
         let capabilities = json!({
             "supportsConfigurationDoneRequest": true,
             "supportsFunctionBreakpoints": false,
@@ -674,6 +712,22 @@ impl DebugAdapter {
     ) -> DapMessage {
         if let Some(args) = arguments {
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
+
+            // Set workspace root if not already set by initialize
+            // Launch args often contain 'cwd' which is a good fallback for workspace root
+            let cwd = args.get("cwd").and_then(|c| c.as_str()).map(PathBuf::from);
+            if let Ok(mut guard) = self.workspace_root.lock() {
+                if guard.is_none() {
+                    if let Some(cwd_path) = cwd {
+                        *guard = Some(cwd_path);
+                    } else {
+                        // Fallback to program's parent directory
+                        if let Some(parent) = Path::new(program).parent() {
+                            *guard = Some(parent.to_path_buf());
+                        }
+                    }
+                }
+            }
 
             let perl_args = args
                 .get("args")
@@ -2509,6 +2563,34 @@ impl DebugAdapter {
                 message: Some("inlineValues requires source.path".to_string()),
             };
         };
+
+        // Security: Validate source path to prevent path traversal (LFI)
+        // Ensure we only read files within the workspace
+        let workspace_root = {
+            let guard = lock_or_recover(&self.workspace_root, "handle_inline_values");
+            guard.clone()
+        };
+
+        let path_check = if let Some(root) = workspace_root {
+            validate_path(Path::new(&source_path), &root)
+        } else {
+            // Default to CWD if no workspace root set (e.g. single file debug)
+            // This is safer than no validation, as it prevents absolute paths like /etc/passwd
+            // unless CWD is /etc/
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+            validate_path(Path::new(&source_path), &cwd)
+        };
+
+        if let Err(e) = path_check {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "inlineValues".to_string(),
+                body: None,
+                message: Some(format!("Security Error: {}", e)),
+            };
+        }
 
         if args.start_line <= 0 || args.end_line <= 0 {
             return DapMessage::Response {

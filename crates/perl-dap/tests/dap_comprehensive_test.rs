@@ -155,6 +155,16 @@ fn test_dap_inline_values() -> TestResult {
     write(&script_path, "my $x = 1;\nmy $y = $x + 2;\nmy $z = $y + 3;\n")?;
 
     let mut adapter = DebugAdapter::new();
+
+    // Initialize with workspace root to pass security validation
+    adapter.handle_request(
+        0,
+        "initialize",
+        Some(json!({
+            "rootPath": dir.path().to_str().unwrap()
+        })),
+    );
+
     let response = adapter.handle_request(
         1,
         "inlineValues",
