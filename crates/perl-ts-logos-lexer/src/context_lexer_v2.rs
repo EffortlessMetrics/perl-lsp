@@ -84,6 +84,9 @@ impl<'source> ContextLexerV2<'source> {
         let token = self.current.take()?;
         self.position = self.lexer.span().start;
 
+        // Track whether skip_to_position already set self.current
+        let mut already_advanced = false;
+
         // Handle special tokens
         let result = match token {
             Token::Divide => {
@@ -91,7 +94,10 @@ impl<'source> ContextLexerV2<'source> {
                     SlashContext::ExpectOperand => {
                         // Parse as regex
                         match self.parse_bare_regex() {
-                            Ok(construct) => EnhancedToken::Regex(construct),
+                            Ok(construct) => {
+                                already_advanced = true;
+                                EnhancedToken::Regex(construct)
+                            }
                             Err(_) => EnhancedToken::Simple(Token::Divide),
                         }
                     }
@@ -106,6 +112,7 @@ impl<'source> ContextLexerV2<'source> {
                 if self.source[self.position..].starts_with("m")
                     && self.is_quote_operator_start(self.position + 1) =>
             {
+                already_advanced = true;
                 self.parse_match_operator()
             }
             // Handle s/// operator
@@ -113,6 +120,7 @@ impl<'source> ContextLexerV2<'source> {
                 if self.source[self.position..].starts_with("s")
                     && self.is_quote_operator_start(self.position + 1) =>
             {
+                already_advanced = true;
                 self.parse_substitute_operator()
             }
             _ => EnhancedToken::Simple(token.clone()),
@@ -121,8 +129,10 @@ impl<'source> ContextLexerV2<'source> {
         // Update context based on the original token
         self.update_context(&token);
 
-        // Advance to next token
-        self.current = Self::next_raw_token(&mut self.lexer);
+        // Advance to next token (unless skip_to_position already did it)
+        if !already_advanced {
+            self.current = Self::next_raw_token(&mut self.lexer);
+        }
 
         Some(result)
     }

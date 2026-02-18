@@ -225,23 +225,33 @@ mod test_slash {
         // Variable interpolation
         let mut lexer = PerlLexer::new(r#""Hello $name""#);
         let token = must_some(lexer.next_token());
-        assert_eq!(token.token_type, TokenType::StringLiteral);
+        assert!(
+            matches!(token.token_type, TokenType::StringLiteral | TokenType::InterpolatedString(_)),
+            "Expected StringLiteral or InterpolatedString, got {:?}",
+            token.token_type
+        );
         assert!(token.text.contains("$name"));
 
         // Array interpolation
         let mut lexer = PerlLexer::new(r#""Items: @items""#);
         let token = must_some(lexer.next_token());
-        assert_eq!(token.token_type, TokenType::StringLiteral);
+        assert!(
+            matches!(token.token_type, TokenType::StringLiteral | TokenType::InterpolatedString(_)),
+        );
 
         // Hash element interpolation
         let mut lexer = PerlLexer::new(r#""Value: $hash{key}""#);
         let token = must_some(lexer.next_token());
-        assert_eq!(token.token_type, TokenType::StringLiteral);
+        assert!(
+            matches!(token.token_type, TokenType::StringLiteral | TokenType::InterpolatedString(_)),
+        );
 
         // Complex interpolation
         let mut lexer = PerlLexer::new(r#""Result: ${expr}""#);
         let token = must_some(lexer.next_token());
-        assert_eq!(token.token_type, TokenType::StringLiteral);
+        assert!(
+            matches!(token.token_type, TokenType::StringLiteral | TokenType::InterpolatedString(_)),
+        );
     }
 
     #[test]

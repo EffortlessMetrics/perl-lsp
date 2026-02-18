@@ -253,22 +253,30 @@ attribute_list = { attribute ~ (":" ~ attribute)* }
 attribute = { identifier ~ ("(" ~ attribute_args ~ ")")? }
 attribute_args = { (!(")" | ",") ~ ANY)+ }
 
-// Format declarations  
-format_declaration = {
-    "format" ~ !(ASCII_ALPHANUMERIC | "_") ~ format_name? ~ "=" ~ ("\n" | "\r\n") ~
-    format_lines ~
-    format_end
+// Format declarations - fully atomic because WHITESPACE includes newlines,
+// and format syntax requires literal newline matching between "=" and "."
+format_declaration = @{
+    "format" ~ !(ASCII_ALPHANUMERIC | "_") ~
+    (" " | "\t")* ~
+    format_name_inner? ~
+    (" " | "\t")* ~ "=" ~ (" " | "\t")* ~ ("\n" | "\r\n") ~
+    (!("." ~ ("\n" | "\r\n" | EOI)) ~ ANY)* ~
+    "." ~ ("\n" | "\r\n" | EOI)
+}
+
+format_name_inner = @{
+    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
 }
 
 format_name = { filehandle | identifier }
-filehandle = { 
-    "STDOUT" | "STDERR" | "STDIN" | "ARGV" | "DATA" | 
+filehandle = {
+    "STDOUT" | "STDERR" | "STDIN" | "ARGV" | "DATA" |
     "ARGVOUT" | identifier
 }
 
 format_lines = { format_line* }
 
-format_line = { 
+format_line = {
     !format_end ~ (!("\n" | "\r\n") ~ ANY)* ~ ("\n" | "\r\n")
 }
 

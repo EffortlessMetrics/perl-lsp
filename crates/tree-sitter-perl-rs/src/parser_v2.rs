@@ -510,6 +510,12 @@ impl<'a> ParserV2<'a> {
 
             let value = self.parse_expression()?;
 
+            // Consume optional trailing semicolon
+            self.skip_whitespace();
+            if self.check(&TokenType::Semicolon) {
+                self.advance();
+            }
+
             // If single variable, convert to assignment
             if variables.len() == 1 {
                 let var =
@@ -537,6 +543,12 @@ impl<'a> ParserV2<'a> {
                     SourceLocation { start, end: self.current_pos() },
                 ));
             }
+        }
+
+        // Consume optional trailing semicolon
+        self.skip_whitespace();
+        if self.check(&TokenType::Semicolon) {
+            self.advance();
         }
 
         let end = self.current_pos();
@@ -1321,6 +1333,12 @@ impl<'a> ParserV2<'a> {
             Some(Box::new(self.parse_expression()?))
         };
 
+        // Consume optional trailing semicolon
+        self.skip_whitespace();
+        if self.check(&TokenType::Semicolon) {
+            self.advance();
+        }
+
         let end = self.current_pos();
         Ok(Node::new(NodeKind::Return { value }, SourceLocation { start, end }))
     }
@@ -1335,6 +1353,12 @@ impl<'a> ParserV2<'a> {
         } else {
             None
         };
+
+        // Consume optional trailing semicolon
+        self.skip_whitespace();
+        if self.check(&TokenType::Semicolon) {
+            self.advance();
+        }
 
         let end = self.current_pos();
         Ok(Node::new(NodeKind::LoopControl { control_type, label }, SourceLocation { start, end }))

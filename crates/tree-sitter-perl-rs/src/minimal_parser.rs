@@ -34,7 +34,7 @@ impl MinimalParser {
 
             // Create simple nodes for demonstration
             let node = match &token.token_type {
-                TokenType::Identifier(name) if name.as_ref() == "my" => {
+                TokenType::Keyword(name) if name.as_ref() == "my" => {
                     // Variable declaration
                     let mut var_name = Arc::from("$unknown");
                     let mut value_node = None;
@@ -113,7 +113,9 @@ impl MinimalParser {
                     }
                 }
 
-                TokenType::Identifier(name) if name.as_ref() == "print" => {
+                TokenType::Keyword(name) | TokenType::Identifier(name)
+                    if name.as_ref() == "print" =>
+                {
                     // Print statement
                     let mut args = Vec::new();
                     let mut end_pos = token.end;
@@ -121,7 +123,7 @@ impl MinimalParser {
                     // Collect arguments
                     while let Some(arg_token) = lexer.next_token() {
                         match &arg_token.token_type {
-                            TokenType::StringLiteral => {
+                            TokenType::StringLiteral | TokenType::InterpolatedString(_) => {
                                 args.push(Node::new(
                                     NodeKind::String { value: arg_token.text.clone() },
                                     SourceLocation { start: arg_token.start, end: arg_token.end },

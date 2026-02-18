@@ -2,6 +2,7 @@
 //!
 //! This version is compatible with the existing simple_token definitions
 
+use crate::regex_parser::RegexParser;
 use crate::simple_token::Token;
 use logos::Logos;
 
@@ -16,6 +17,7 @@ pub enum SlashContext {
 
 /// Context-aware lexer that wraps logos lexer
 pub struct ContextLexer<'source> {
+    source: &'source str,
     lexer: logos::Lexer<'source, Token>,
     current: Option<Token>,
     context: SlashContext,
@@ -27,7 +29,7 @@ impl<'source> ContextLexer<'source> {
         let mut lexer = Token::lexer(source);
         let current = Self::next_raw_token(&mut lexer);
 
-        Self { lexer, current, context: SlashContext::ExpectOperand, position: 0 }
+        Self { source, lexer, current, context: SlashContext::ExpectOperand, position: 0 }
     }
 
     /// Get next raw token from logos lexer
@@ -52,7 +54,7 @@ impl<'source> ContextLexer<'source> {
 
             // After these tokens, we expect an operator (so / is division)
             RParen | RBracket | RBrace | Identifier | ScalarVar | ArrayVar | HashVar
-            | IntegerLiteral | FloatLiteral | StringLiteral | Backtick => {
+            | IntegerLiteral | FloatLiteral | StringLiteral | Backtick | Regex => {
                 SlashContext::ExpectOperator
             }
 
@@ -69,15 +71,21 @@ impl<'source> ContextLexer<'source> {
     pub fn next(&mut self) -> Option<Token> {
         let token = self.current.take()?;
 
-        // Update position
-        self.position = self.lexer.span().end;
+        // Update position (start of the token we're about to return)
+        self.position = self.lexer.span().start;
+
+        // Track whether skip_to_position already set self.current
+        let mut already_advanced = false;
 
         // Handle slash disambiguation
         let result = if token == Token::Divide {
             match self.context {
                 SlashContext::ExpectOperand => {
-                    // Parse as regex - for now, return Regex token
-                    self.parse_regex()
+                    let regex_result = self.parse_regex();
+                    if regex_result == Token::Regex {
+                        already_advanced = true;
+                    }
+                    regex_result
                 }
                 SlashContext::ExpectOperator => {
                     // It's division
@@ -91,18 +99,36 @@ impl<'source> ContextLexer<'source> {
         // Update context for next token
         self.update_context(&result);
 
-        // Advance to next token
-        self.current = Self::next_raw_token(&mut self.lexer);
+        // Advance to next token (unless skip_to_position already did it)
+        if !already_advanced {
+            self.current = Self::next_raw_token(&mut self.lexer);
+        }
 
         Some(result)
     }
 
     /// Parse a regex literal starting after the initial /
     fn parse_regex(&mut self) -> Token {
-        // For now, just return Regex token
-        // A full implementation would need to properly parse the regex
-        // and advance the lexer past it, but that's complex
-        Token::Regex
+        let mut parser = RegexParser::new(self.source, self.position);
+        match parser.parse_bare_regex() {
+            Ok(_construct) => {
+                let new_position = parser.position();
+                self.skip_to_position(new_position);
+                Token::Regex
+            }
+            Err(_) => Token::Divide,
+        }
+    }
+
+    /// Skip lexer to a specific position
+    fn skip_to_position(&mut self, target_position: usize) {
+        while self.lexer.span().end < target_position {
+            if Self::next_raw_token(&mut self.lexer).is_none() {
+                break;
+            }
+        }
+        self.position = target_position;
+        self.current = Self::next_raw_token(&mut self.lexer);
     }
 
     pub fn peek(&self) -> Option<&Token> {

@@ -444,7 +444,7 @@ impl<'source> SimpleParser<'source> {
                             value: None,
                             children: vec![expr, key],
                         };
-                    } else if self.check(&Token::Identifier) {
+                    } else if self.check(&Token::Identifier) || self.check(&Token::Method) {
                         let method = self.next();
 
                         expr = AstNode {
