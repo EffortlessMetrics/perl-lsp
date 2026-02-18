@@ -387,16 +387,16 @@ impl DynamicDelimiterRecovery {
             return Some(resolved_method);
         }
 
-        // Concatenation: $var . "END" (supports multiple parts and new operators)
-        if expr.contains('.') || expr.contains('x') {
-            return self.try_resolve_concatenation(expr);
-        }
-
         // Interpolated strings like "$var_suffix" or "${base}_postfix"
         if (expr.starts_with('"') && expr.ends_with('"'))
             || (expr.starts_with('`') && expr.ends_with('`'))
         {
             return self.try_resolve_interpolated_string(expr);
+        }
+
+        // Concatenation: $var . "END" (supports multiple parts and new operators)
+        if expr.contains('.') || expr.contains('x') {
+            return self.try_resolve_concatenation(expr);
         }
 
         // Environment variables like $ENV{PATH}
@@ -421,7 +421,7 @@ impl DynamicDelimiterRecovery {
         if let Some(var_name) = expr.strip_prefix('$')
             && let Some(bracket_pos) = var_name.find('[')
         {
-            return Some(format!("@{}", &var_name[..bracket_pos]));
+            return Some(var_name[..bracket_pos].to_string());
         }
         None
     }
@@ -431,7 +431,7 @@ impl DynamicDelimiterRecovery {
         if let Some(var_name) = expr.strip_prefix('$')
             && let Some(brace_pos) = var_name.find('{')
         {
-            return Some(format!("%{}", &var_name[..brace_pos]));
+            return Some(var_name[..brace_pos].to_string());
         }
         None
     }

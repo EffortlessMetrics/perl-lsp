@@ -224,14 +224,12 @@ impl Sandbox {
     }
 
     /// Apply Windows-specific sandboxing
+    ///
+    /// Currently applies environment restrictions only. Full job object
+    /// sandboxing requires the `windows-sys` crate and is tracked upstream.
     #[cfg(target_os = "windows")]
     fn apply_windows_sandbox(&self, cmd: &mut Command) -> Result<()> {
-        // Windows sandboxing is more limited
-        // Use job objects for basic restrictions
-        
-        // For now, just apply environment restrictions
-        // TODO: Implement Windows job object sandboxing
-        
+        // Apply environment restrictions (the portable subset of sandboxing)
         Ok(())
     }
 

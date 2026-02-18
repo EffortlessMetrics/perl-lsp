@@ -71,6 +71,15 @@ impl RuntimeHeredocHandler {
             result = self.handle_nested_heredocs(&result, context)?;
         }
 
+        // Perform variable interpolation when enabled
+        if context.interpolation {
+            for (var_name, var_value) in &context.variables {
+                // Replace ${var} before $var to avoid partial matches
+                result = result.replace(&format!("${{{}}}", var_name), var_value);
+                result = result.replace(&format!("${}", var_name), var_value);
+            }
+        }
+
         Ok(result)
     }
 

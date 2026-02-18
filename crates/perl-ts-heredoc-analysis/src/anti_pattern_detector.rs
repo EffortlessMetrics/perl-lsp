@@ -318,7 +318,7 @@ struct EvalHeredocDetector;
 
 /// Pattern for identifying heredocs inside eval strings
 static EVAL_HEREDOC_PATTERN: LazyLock<Regex> =
-    LazyLock::new(|| match Regex::new(r#"eval\s+(?:'[^']*<<'[^']*'|"[^"]*<<"[^"]*")"#) {
+    LazyLock::new(|| match Regex::new(r#"eval\s+(?:'[^']*<<[^']*'|"[^"]*<<[^"]*")"#) {
         Ok(re) => re,
         Err(_) => unreachable!("EVAL_HEREDOC_PATTERN regex failed to compile"),
     });
@@ -365,7 +365,7 @@ impl PatternDetector for EvalHeredocDetector {
 struct TiedHandleDetector;
 
 /// Pattern for identifying tie statements
-static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"tie\s+([*\$\w+])") {
+static TIE_PATTERN: LazyLock<Regex> = LazyLock::new(|| match Regex::new(r"tie\s+([*$]\w+)") {
     Ok(re) => re,
     Err(_) => unreachable!("TIE_PATTERN regex failed to compile"),
 });

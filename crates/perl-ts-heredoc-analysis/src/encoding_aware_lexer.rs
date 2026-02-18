@@ -170,6 +170,17 @@ impl EncodingAwareLexer {
         });
 
         self.context.current_encoding = new_encoding;
+
+        self.warnings.push(EncodingWarning {
+            line,
+            message: if is_use {
+                "use utf8 enabled - source is UTF-8 encoded, heredoc delimiters may use Unicode"
+                    .to_string()
+            } else {
+                "no utf8 - source reverts to byte semantics for heredoc delimiters".to_string()
+            },
+            severity: WarningSeverity::Info,
+        });
     }
 
     /// Handle use locale pragma

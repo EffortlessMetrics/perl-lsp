@@ -1360,7 +1360,7 @@ ci-dead-code:
 # CI Gate Execution with Receipt Generation (Issue #210)
 # ============================================================================
 
-# CI gate: check TODO compliance
+# CI gate: check unlinked-item compliance
 ci-check-todos:
     @bash ci/check_todos.sh
 
