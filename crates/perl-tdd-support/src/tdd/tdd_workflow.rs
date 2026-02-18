@@ -201,7 +201,7 @@ impl TddWorkflow {
              subtest '{}' => sub {{\n    \
              my $result = {}({});\n    \
              ok(defined $result, 'Returns defined value');\n    \
-             # TODO: Add specific assertions\n\
+             # PENDING: Add specific assertions\n\
              }};\n\n\
              done_testing();\n",
             name, name, args
@@ -263,9 +263,9 @@ impl TddWorkflow {
         format!(
             "use Test::More;\n\n\
              subtest '{} integration' => sub {{\n    \
-             # TODO: Set up test environment\n    \
-             # TODO: Call {} with real dependencies\n    \
-             # TODO: Verify integration points\n    \
+             # PENDING: Set up test environment\n    \
+             # PENDING: Call {} with real dependencies\n    \
+             # PENDING: Verify integration points\n    \
              pass('Integration test placeholder');\n\
              }};\n\n\
              done_testing();\n",

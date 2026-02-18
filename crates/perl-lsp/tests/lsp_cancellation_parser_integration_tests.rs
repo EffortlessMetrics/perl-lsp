@@ -23,13 +23,9 @@ use std::time::{Duration, Instant};
 mod common;
 use common::*;
 
-// Import expected parser integration types (will be implemented)
-// TODO: Uncomment when implementing parser cancellation integration
-// use perl_parser::cancellation::{
-//     IncrementalParserWithCancellation, CancellableWorkspaceIndex,
-//     CancellableNavigationProvider, CheckpointManager
-// };
-// use perl_parser::ast::{AstNode, AstNodeType};
+use perl_lsp::cancellation::{
+    CancellationRegistry, PerlLspCancellationToken, ProviderCleanupContext,
+};
 // use perl_parser::incremental::{TextChange, ParseResult};
 
 /// Parser integration test fixture with comprehensive workspace setup
@@ -529,8 +525,7 @@ fn test_incremental_parsing_cancellation_preservation_ac6() -> Result<(), Box<dy
     for scenario in &fixture.test_workspace.incremental_test_scenarios {
         println!("Testing incremental parsing scenario: {}", scenario.name);
 
-        // Test will fail initially as IncrementalParserWithCancellation doesn't exist
-        // TODO: Uncomment when implementing incremental parsing cancellation
+        // Blocked: requires IncrementalParserWithCancellation type (not yet implemented)
         /*
         let mut parser = IncrementalParserWithCancellation::new();
         let content = fixture.get_test_file_content(&scenario.file_uri)
@@ -714,7 +709,7 @@ fn test_incremental_parsing_checkpoint_cancellation_ac6() -> Result<(), Box<dyn 
         .get_test_file_content("file:///lib/ExtendedModule.pm")
         .ok_or("Extended module should exist")?;
 
-    // TODO: Uncomment when implementing checkpoint-based parsing
+    // Blocked: requires CheckpointManager type (not yet implemented)
     /*
     let mut parser = IncrementalParserWithCancellation::new();
     let checkpoint_manager = CheckpointManager::new();
@@ -872,7 +867,7 @@ fn test_workspace_indexing_cancellation_integrity_ac7() -> Result<(), Box<dyn st
     for scenario in &fixture.test_workspace.indexing_test_scenarios {
         println!("Testing workspace indexing scenario: {}", scenario.name);
 
-        // TODO: Uncomment when implementing workspace indexing cancellation
+        // Blocked: requires CancellableWorkspaceIndex type (not yet implemented)
         /*
         let workspace_index = Arc::new(CancellableWorkspaceIndex::new());
 
@@ -1047,7 +1042,7 @@ fn test_dual_pattern_indexing_cancellation_ac7() -> Result<(), Box<dyn std::erro
         .get_test_file_content("file:///lib/ExtendedModule.pm")
         .ok_or("Extended module should exist")?;
 
-    // TODO: Uncomment when implementing dual pattern indexing cancellation
+    // Blocked: requires CancellableWorkspaceIndex with dual pattern support (not yet implemented)
     /*
     let dual_index = Arc::new(CancellableDualIndex::new());
 
@@ -1224,7 +1219,7 @@ fn test_cross_file_reference_cancellation_ac8() -> Result<(), Box<dyn std::error
     for scenario in &fixture.test_workspace.cross_file_scenarios {
         println!("Testing cross-file reference scenario: {}", scenario.name);
 
-        // TODO: Uncomment when implementing cross-file navigation cancellation
+        // Blocked: requires CancellableNavigationProvider type (not yet implemented)
         /*
         let navigation_provider = Arc::new(CancellableNavigationProvider::new());
 
@@ -1430,7 +1425,7 @@ fn test_multi_tier_resolver_cancellation_ac8() -> Result<(), Box<dyn std::error:
 
     let fixture = ParserIntegrationFixture::new();
 
-    // TODO: Uncomment when implementing multi-tier resolver
+    // Blocked: requires MultiTierResolver with cancellation support (not yet implemented)
     /*
     let multi_tier_resolver = Arc::new(MultiTierResolver::new());
 

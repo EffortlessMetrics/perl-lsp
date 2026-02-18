@@ -1055,6 +1055,7 @@ impl CommandExecutor {
 mod tests {
     use super::*;
     use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn test_supported_commands_includes_run_critic() {
@@ -1067,6 +1068,9 @@ mod tests {
 
     #[test]
     fn test_execute_command_run_critic_builtin() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempdir()?;
+        let temp_file = temp_dir.path().join("test_violations_unit.pl");
+
         // Create a temporary file with violations
         let test_content = r#"#!/usr/bin/perl
 # Test file with policy violations
@@ -1074,15 +1078,14 @@ my $variable = 42;
 print "Value: $variable\n";
 "#;
 
-        let temp_file = "/tmp/test_violations_unit.pl";
-        fs::write(temp_file, test_content)?;
+        fs::write(&temp_file, test_content)?;
 
-        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
-        let result =
-            provider.execute_command("perl.runCritic", vec![Value::String(temp_file.to_string())]);
-
-        // Clean up
-        fs::remove_file(temp_file).ok();
+        let provider =
+            ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+        let result = provider.execute_command(
+            "perl.runCritic",
+            vec![Value::String(temp_file.display().to_string())],
+        );
 
         // Verify result
         assert!(result.is_ok(), "perl.runCritic command should execute successfully");
@@ -1154,18 +1157,17 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+        let temp_dir = tempdir()?;
+        let temp_file = temp_dir.path().join("test_run_tests.pl");
 
         // Create a test file to ensure we get a specific result
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test';\n";
-        let temp_file = "/tmp/test_run_tests.pl";
-        fs::write(temp_file, test_content)?;
+        fs::write(&temp_file, test_content)?;
 
-        let result =
-            provider.execute_command("perl.runTests", vec![Value::String(temp_file.to_string())]);
-
-        // Clean up
-        fs::remove_file(temp_file).ok();
+        let provider =
+            ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+        let result = provider
+            .execute_command("perl.runTests", vec![Value::String(temp_file.display().to_string())]);
 
         // Verify the command was routed correctly and executed
         assert!(result.is_ok(), "perl.runTests should execute successfully");
@@ -1178,18 +1180,17 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_file() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+        let temp_dir = tempdir()?;
+        let temp_file = temp_dir.path().join("test_run_file.pl");
 
         // Create a test file
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'hello world';\n";
-        let temp_file = "/tmp/test_run_file.pl";
-        fs::write(temp_file, test_content)?;
+        fs::write(&temp_file, test_content)?;
 
-        let result =
-            provider.execute_command("perl.runFile", vec![Value::String(temp_file.to_string())]);
-
-        // Clean up
-        fs::remove_file(temp_file).ok();
+        let provider =
+            ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+        let result = provider
+            .execute_command("perl.runFile", vec![Value::String(temp_file.display().to_string())]);
 
         // Verify the command was routed correctly
         assert!(result.is_ok(), "perl.runFile should execute successfully");
@@ -1202,20 +1203,22 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_run_test_sub() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+        let temp_dir = tempdir()?;
+        let temp_file = temp_dir.path().join("test_run_test_sub.pl");
 
         // Create a test file with a subroutine
         let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nsub test_sub { print 'test executed'; }\n";
-        let temp_file = "/tmp/test_run_test_sub.pl";
-        fs::write(temp_file, test_content)?;
+        fs::write(&temp_file, test_content)?;
 
+        let provider =
+            ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
         let result = provider.execute_command(
             "perl.runTestSub",
-            vec![Value::String(temp_file.to_string()), Value::String("test_sub".to_string())],
+            vec![
+                Value::String(temp_file.display().to_string()),
+                Value::String("test_sub".to_string()),
+            ],
         );
-
-        // Clean up
-        fs::remove_file(temp_file).ok();
 
         // Verify the command was routed correctly
         assert!(result.is_ok(), "perl.runTestSub should execute successfully");
@@ -1228,17 +1231,16 @@ print "Value: $variable\n";
 
     #[test]
     fn test_command_routing_perl_debug_tests() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+        let temp_dir = tempdir()?;
+        let temp_file = temp_dir.path().join("test_debug.pl");
+        fs::write(&temp_file, "print 'debug';")?;
 
-        // Create a dummy file
-        let temp_file = "/tmp/test_debug.pl";
-        fs::write(temp_file, "print 'debug';")?;
-
-        let result =
-            provider.execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
-
-        // Clean up
-        fs::remove_file(temp_file).ok();
+        let provider =
+            ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+        let result = provider.execute_command(
+            "perl.debugTests",
+            vec![Value::String(temp_file.display().to_string())],
+        );
 
         // Verify the command was routed correctly
         assert!(result.is_ok(), "perl.debugTests should execute successfully");
@@ -1273,15 +1275,17 @@ print "Value: $variable\n";
     #[test]
     fn test_parameter_validation_missing_subroutine_name() -> Result<(), Box<dyn std::error::Error>>
     {
-        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+        let temp_dir = tempdir()?;
+        let temp_file = temp_dir.path().join("test_missing_sub.pl");
+        fs::write(&temp_file, "sub test {}")?;
 
-        // Create a dummy file
-        let temp_file = "/tmp/test_missing_sub.pl";
-        fs::write(temp_file, "sub test {}")?;
+        let provider =
+            ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
+        let file_arg = temp_file.display().to_string();
 
         // Test runTestSub with only file path, missing subroutine name
         let result =
-            provider.execute_command("perl.runTestSub", vec![Value::String(temp_file.to_string())]);
+            provider.execute_command("perl.runTestSub", vec![Value::String(file_arg.clone())]);
 
         assert!(result.is_err(), "Should fail with missing subroutine name");
         // It might fail with path resolution if file doesn't exist, but here it exists
@@ -1289,12 +1293,8 @@ print "Value: $variable\n";
         assert!(err.contains("Missing subroutine name argument"));
 
         // Test with null second argument
-        let result = provider.execute_command(
-            "perl.runTestSub",
-            vec![Value::String(temp_file.to_string()), Value::Null],
-        );
-
-        fs::remove_file(temp_file).ok();
+        let result =
+            provider.execute_command("perl.runTestSub", vec![Value::String(file_arg), Value::Null]);
 
         assert!(result.is_err(), "Should fail with null subroutine name");
         let err = result.err().ok_or("expected error")?;
@@ -1530,19 +1530,19 @@ print "Value: $variable\n";
 
     #[test]
     fn test_execute_command_return_value_mutations() -> Result<(), Box<dyn std::error::Error>> {
-        let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
+        let temp_dir = tempdir()?;
+        let temp_file = temp_dir.path().join("test_mutations.pl");
+        fs::write(&temp_file, "print 'test';")?;
 
-        // Create a dummy file
-        let temp_file = "/tmp/test_mutations.pl";
-        fs::write(temp_file, "print 'test';")?;
+        let provider =
+            ExecuteCommandProvider::with_workspace_roots(vec![temp_dir.path().to_path_buf()]);
 
         // This test ensures that execute_command cannot return Ok(Default::default())
         // when it should return meaningful data
-        let result =
-            provider.execute_command("perl.debugTests", vec![Value::String(temp_file.to_string())]);
-
-        // Clean up
-        fs::remove_file(temp_file).ok();
+        let result = provider.execute_command(
+            "perl.debugTests",
+            vec![Value::String(temp_file.display().to_string())],
+        );
 
         assert!(result.is_ok(), "Should return Ok");
         let result_value = result?;
@@ -1569,32 +1569,30 @@ print "Value: $variable\n";
 
     #[test]
     fn test_run_tests_logic_operators() -> Result<(), Box<dyn std::error::Error>> {
+        let temp_dir = tempdir()?;
         let provider = ExecuteCommandProvider::new();
 
         // Create test files to test is_test_file && command_exists logic
-        let test_file_t = "/tmp/mutation_test.t";
-        let non_test_file = "/tmp/mutation_test.pl";
+        let test_file_t = temp_dir.path().join("mutation_test.t");
+        let non_test_file = temp_dir.path().join("mutation_test.pl");
 
-        fs::write(test_file_t, "use Test::More; ok(1); done_testing();")?;
-        fs::write(non_test_file, "print 'hello world';")?;
+        fs::write(&test_file_t, "use Test::More; ok(1); done_testing();")?;
+        fs::write(&non_test_file, "print 'hello world';")?;
 
         // Test with .t file (should attempt to use prove if available)
-        let result = provider.run_tests(Path::new(test_file_t));
+        let result = provider.run_tests(&test_file_t);
         assert!(result.is_ok(), "Should handle .t files");
         let result_value = result?;
         assert!(result_value["success"].is_boolean(), "Should have boolean success");
         assert!(result_value["output"].is_string(), "Should have string output");
 
         // Test with non-test file (should use perl directly)
-        let result = provider.run_tests(Path::new(non_test_file));
+        let result = provider.run_tests(&non_test_file);
         assert!(result.is_ok(), "Should handle .pl files");
         let result_value = result?;
         assert!(result_value["success"].is_boolean(), "Should have boolean success");
         assert!(result_value["output"].is_string(), "Should have string output");
 
-        // Clean up
-        fs::remove_file(test_file_t).ok();
-        fs::remove_file(non_test_file).ok();
         Ok(())
     }
 
