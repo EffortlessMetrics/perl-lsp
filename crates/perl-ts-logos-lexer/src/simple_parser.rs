@@ -403,4 +403,50 @@ mod tests {
         assert_eq!(ast.children.len(), 1);
         assert_eq!(ast.children[0].node_type, "if_statement");
     }
+
+    #[test]
+    fn parse_variable_declaration_returns_error_for_unexpected_token() {
+        // Call parse_variable_declaration directly with a non-keyword token
+        // to exercise the error path at the match arm
+        let mut parser = SimpleParser::new("; $var = 1;");
+        let result = parser.parse_variable_declaration();
+        assert!(result.is_err(), "Must return Err, not panic");
+
+        let error = result.unwrap_err();
+        assert!(error.contains("Expected"), "Error must mention expectation: {}", error);
+        assert!(
+            error.contains("my") && error.contains("our") && error.contains("local"),
+            "Error must list valid keywords: {}",
+            error
+        );
+        assert!(error.contains("position"), "Error must include position: {}", error);
+    }
+
+    #[test]
+    fn parse_variable_declaration_error_for_multiple_invalid_inputs() {
+        let cases = [
+            ("; $x = 1;", "semicolon"),
+            ("123 $x = 1;", "numeric literal"),
+            ("+ $x = 1;", "operator"),
+        ];
+        for (input, desc) in cases {
+            let mut parser = SimpleParser::new(input);
+            let result = parser.parse_variable_declaration();
+            assert!(result.is_err(), "Must error for {}: {}", desc, input);
+            assert!(!result.unwrap_err().is_empty(), "Error not empty for {}", desc);
+        }
+    }
+
+    #[test]
+    fn parse_returns_error_for_invalid_statement_starts() {
+        let cases = [
+            ("; $x = 1;", "semicolon at statement start"),
+            ("123 $x = 1;", "numeric literal at statement start"),
+        ];
+        for (input, desc) in cases {
+            let mut parser = SimpleParser::new(input);
+            let result = parser.parse();
+            assert!(result.is_err(), "Must error for {}: {}", desc, input);
+        }
+    }
 }
