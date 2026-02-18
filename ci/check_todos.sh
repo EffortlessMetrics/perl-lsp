@@ -15,21 +15,38 @@ for dir in "${EXCLUDE_DIRS[@]}"; do
     EXCLUDE_ARGS+=("-g" "!$dir")
 done
 
-# Comment-line pattern: matches TODO/FIXME only on lines that look like comments.
-# Anchors to Rust comments (// /// //!), shell/Perl comments (#), or block-comment
-# continuation (*).  This filters out $TODO inside Rust string literals and embedded
-# Perl fixture code.
-COMMENT_LINE='^\s*(?://[!/]?\s*|#\s*|\*\s*).*'
-UNLINKED_TODO='(?:TODO(?!\(#\d+\))|FIXME(?!\(#\d+\)))'
+# Split-by-filetype scanning: Rust files use // and /* */ comments,
+# script/config files use # comments. This prevents false positives from
+# # TODO inside Perl fixtures embedded in Rust raw strings.
+UNLINKED_RE='(?:TODO(?!\(#\d+\))|FIXME(?!\(#\d+\)))'
+
+# Rust: // comments (inline or start-of-line), /* block start, * block continuation
+# (?:^|\s)// ensures we don't match http:// or similar URLs
+RUST_RE="(?:(?:^|\\s)//[/!]?|^\\s*/\\*|^\\s*\\*\\s).*${UNLINKED_RE}"
+
+# Scripts/config: # comments (start-of-line or inline after whitespace)
+HASH_RE="(?:^|\\s)#\\s.*${UNLINKED_RE}"
+
+# File globs for hash-comment languages
+HASH_GLOBS=(-g'*.sh' -g'*.bash' -g'*.pl' -g'*.pm' -g'*.t' \
+            -g'Justfile' -g'justfile' -g'*.just' -g'*.yaml' -g'*.yml' -g'*.toml')
 
 # Function to count unlinked TODOs
 count_unlinked() {
-    (rg --pcre2 "${EXCLUDE_ARGS[@]}" "${COMMENT_LINE}${UNLINKED_TODO}" . || true) | wc -l | xargs
+    local rust_count hash_count
+    rust_count=$(rg --type rust --pcre2 "${EXCLUDE_ARGS[@]}" "${RUST_RE}" . 2>/dev/null | wc -l)
+    hash_count=$(rg --pcre2 "${EXCLUDE_ARGS[@]}" \
+        "${HASH_GLOBS[@]}" \
+        "${HASH_RE}" . 2>/dev/null | wc -l)
+    echo $(( rust_count + hash_count ))
 }
 
 # Function to list unlinked TODOs
 list_unlinked() {
-    rg --pcre2 -n --no-heading "${EXCLUDE_ARGS[@]}" "${COMMENT_LINE}${UNLINKED_TODO}" . || true
+    rg --type rust --pcre2 -n --no-heading "${EXCLUDE_ARGS[@]}" "${RUST_RE}" . 2>/dev/null || true
+    rg --pcre2 -n --no-heading "${EXCLUDE_ARGS[@]}" \
+        "${HASH_GLOBS[@]}" \
+        "${HASH_RE}" . 2>/dev/null || true
 }
 
 # Initial baseline creation if missing

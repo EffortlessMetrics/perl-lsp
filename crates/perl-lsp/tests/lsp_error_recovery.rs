@@ -693,6 +693,11 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     let mut attempt = 0;
     let max_attempts = 5;
     let mut final_count = symbols.len();
+    let mut last_names: Vec<String> = symbols
+        .iter()
+        .filter_map(|s| s["name"].as_str())
+        .map(String::from)
+        .collect();
 
     while final_count != 3 && attempt < max_attempts {
         attempt += 1;
@@ -718,15 +723,20 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
 
         if let Some(arr) = retry_response["result"].as_array() {
             final_count = arr.len();
+            last_names = arr
+                .iter()
+                .filter_map(|s| s["name"].as_str())
+                .map(String::from)
+                .collect();
         }
     }
 
     assert_eq!(
         final_count, 3,
         "FAIL(#307): documentSymbol never converged to 3 symbols after {} attempts. \
-         Last count: {}. This indicates a real bug in incremental text sync, \
+         Last count: {}. Symbols: {:?}. This indicates a real bug in incremental text sync, \
          not a timing flake.",
-        max_attempts, final_count
+        max_attempts, final_count, last_names
     );
 
     shutdown_and_exit(&mut server);
