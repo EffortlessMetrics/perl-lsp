@@ -96,6 +96,13 @@ pub struct StatementTracker {
 }
 
 #[allow(dead_code)]
+impl Default for StatementTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[allow(dead_code)]
 impl StatementTracker {
     pub fn new() -> Self {
         Self {

@@ -15,6 +15,11 @@ find crates -path '*/src/*.rs' -type f \
   ! -path '*/tree-sitter-perl-c/*' \
   ! -path '*/perl-parser-pest/*' \
   ! -path '*/perl-tdd-support/*' \
+  ! -path '*/perl-ts-heredoc-analysis/*' \
+  ! -path '*/perl-ts-logos-lexer/*' \
+  ! -path '*/perl-ts-heredoc-parser/*' \
+  ! -path '*/perl-ts-partial-ast/*' \
+  ! -path '*/perl-ts-advanced-parsers/*' \
   ! -path '*/tests/*' \
   ! -name '*_test.rs' \
   ! -name '*_tests.rs' \

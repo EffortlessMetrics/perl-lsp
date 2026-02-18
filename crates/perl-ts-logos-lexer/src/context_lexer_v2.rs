@@ -128,6 +128,7 @@ impl<'source> ContextLexerV2<'source> {
     }
 
     /// Get the next token as a simple token
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<Token> {
         match self.next_enhanced() {
             Some(EnhancedToken::Simple(token)) => Some(token),

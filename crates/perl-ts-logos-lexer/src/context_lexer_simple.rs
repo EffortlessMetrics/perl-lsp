@@ -65,6 +65,7 @@ impl<'source> ContextLexer<'source> {
     }
 
     /// Get the next token, handling slash disambiguation
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Option<Token> {
         let token = self.current.take()?;
 
