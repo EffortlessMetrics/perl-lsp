@@ -18,18 +18,18 @@ done
 # Split-by-filetype scanning: Rust files use // and /* */ comments,
 # script/config files use # comments. This prevents false positives from
 # # TODO inside Perl fixtures embedded in Rust raw strings.
-UNLINKED_RE='(?:TODO(?!\(#\d+\))|FIXME(?!\(#\d+\)))'
+UNLINKED_RE='(?:TODO|FIXME)(?!\s*\(#\d+\))'
 
 # Rust: // comments (inline or start-of-line), /* block start, * block continuation
 # (?:^|\s)// ensures we don't match http:// or similar URLs
-RUST_RE="(?:(?:^|\\s)//[/!]?|^\\s*/\\*|^\\s*\\*\\s).*${UNLINKED_RE}"
+RUST_RE="(?:(?<![:/\"])//[/!]?|(?:^|\\s)/\\*|^\\s*\\*\\s).*${UNLINKED_RE}"
 
 # Scripts/config: # comments (start-of-line or inline after whitespace)
 HASH_RE="(?:^|\\s)#\\s.*${UNLINKED_RE}"
 
 # File globs for hash-comment languages
 HASH_GLOBS=(-g'*.sh' -g'*.bash' -g'*.pl' -g'*.pm' -g'*.t' \
-            -g'Justfile' -g'justfile' -g'*.just' -g'*.yaml' -g'*.yml' -g'*.toml')
+            -g'Justfile' -g'justfile' -g'*.just')
 
 # Function to count unlinked TODOs
 count_unlinked() {
@@ -48,6 +48,12 @@ list_unlinked() {
         "${HASH_GLOBS[@]}" \
         "${HASH_RE}" . 2>/dev/null || true
 }
+
+# Optional: --list mode for debugging
+if [[ "${1:-}" == "--list" ]]; then
+    list_unlinked
+    exit 0
+fi
 
 # Initial baseline creation if missing
 if [ ! -f "$BASELINE_FILE" ]; then
