@@ -235,23 +235,26 @@ mod test_slash {
         // Array interpolation
         let mut lexer = PerlLexer::new(r#""Items: @items""#);
         let token = must_some(lexer.next_token());
-        assert!(
-            matches!(token.token_type, TokenType::StringLiteral | TokenType::InterpolatedString(_)),
-        );
+        assert!(matches!(
+            token.token_type,
+            TokenType::StringLiteral | TokenType::InterpolatedString(_)
+        ),);
 
         // Hash element interpolation
         let mut lexer = PerlLexer::new(r#""Value: $hash{key}""#);
         let token = must_some(lexer.next_token());
-        assert!(
-            matches!(token.token_type, TokenType::StringLiteral | TokenType::InterpolatedString(_)),
-        );
+        assert!(matches!(
+            token.token_type,
+            TokenType::StringLiteral | TokenType::InterpolatedString(_)
+        ),);
 
         // Complex interpolation
         let mut lexer = PerlLexer::new(r#""Result: ${expr}""#);
         let token = must_some(lexer.next_token());
-        assert!(
-            matches!(token.token_type, TokenType::StringLiteral | TokenType::InterpolatedString(_)),
-        );
+        assert!(matches!(
+            token.token_type,
+            TokenType::StringLiteral | TokenType::InterpolatedString(_)
+        ),);
     }
 
     #[test]

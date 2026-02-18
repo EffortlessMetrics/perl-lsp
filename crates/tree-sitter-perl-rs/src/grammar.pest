@@ -253,19 +253,15 @@ attribute_list = { attribute ~ (":" ~ attribute)* }
 attribute = { identifier ~ ("(" ~ attribute_args ~ ")")? }
 attribute_args = { (!(")" | ",") ~ ANY)+ }
 
-// Format declarations - fully atomic because WHITESPACE includes newlines,
+// Format declarations — fully atomic because WHITESPACE includes newlines,
 // and format syntax requires literal newline matching between "=" and "."
 format_declaration = @{
     "format" ~ !(ASCII_ALPHANUMERIC | "_") ~
     (" " | "\t")* ~
-    format_name_inner? ~
+    ((ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*)? ~
     (" " | "\t")* ~ "=" ~ (" " | "\t")* ~ ("\n" | "\r\n") ~
     (!("." ~ ("\n" | "\r\n" | EOI)) ~ ANY)* ~
     "." ~ ("\n" | "\r\n" | EOI)
-}
-
-format_name_inner = @{
-    (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")*
 }
 
 format_name = { filehandle | identifier }
@@ -535,9 +531,15 @@ single_string_content = @{ (!"'" ~ (escape_sequence | ANY))* }
 double_quoted_string = { "\"" ~ double_string_content ~ "\"" }
 double_string_content = { double_string_part* }
 double_string_part = {
-    interpolation
+    dollar_before_dquote
+    | at_before_dquote
+    | interpolation
     | double_string_chars
 }
+
+// Prevent $" and @" from being parsed as interpolation — the " closes the string
+dollar_before_dquote = @{ "$" ~ &"\"" }
+at_before_dquote = @{ "@" ~ &"\"" }
 double_string_chars = @{ 
     (
         !( "\"" | "$" | "@" | "\\" ) ~ ANY

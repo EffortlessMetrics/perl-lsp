@@ -340,15 +340,35 @@ impl PureRustPerlParser {
         let mut statements = Vec::new();
         let lines: Vec<&str> = source.lines().collect();
         let mut current_block = String::new();
-        let mut brace_count = 0;
+        let mut brace_count: i32 = 0;
+        let mut in_single_quote = false;
+        let mut in_double_quote = false;
 
         for line in lines {
             current_block.push_str(line);
             current_block.push('\n');
 
-            // Count braces to handle multi-line statements
-            brace_count += line.chars().filter(|&c| c == '{').count() as i32;
-            brace_count -= line.chars().filter(|&c| c == '}').count() as i32;
+            // Count braces outside of string literals (state persists across lines)
+            {
+                let mut escaped = false;
+                for ch in line.chars() {
+                    if escaped {
+                        escaped = false;
+                        continue;
+                    }
+                    if ch == '\\' {
+                        escaped = true;
+                        continue;
+                    }
+                    match ch {
+                        '\'' if !in_double_quote => in_single_quote = !in_single_quote,
+                        '"' if !in_single_quote => in_double_quote = !in_double_quote,
+                        '{' if !in_single_quote && !in_double_quote => brace_count += 1,
+                        '}' if !in_single_quote && !in_double_quote => brace_count -= 1,
+                        _ => {}
+                    }
+                }
+            }
 
             // Try to parse when we have balanced braces or at semicolons
             if (brace_count == 0 && (line.trim().ends_with(';') || line.trim().ends_with('}')))
@@ -374,9 +394,13 @@ impl PureRustPerlParser {
                             }
                         }
                         current_block.clear();
+                        in_single_quote = false;
+                        in_double_quote = false;
                     } else {
                         // If that fails, skip and continue
                         current_block.clear();
+                        in_single_quote = false;
+                        in_double_quote = false;
                     }
                 } else if trimmed.starts_with('#') {
                     // Handle comments

@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generated_at": "2026-02-18T00:05:33.932093033+00:00",
+    "generated_at": "2026-02-18T23:32:04.826843511+00:00",
     "version": "0.1.0",
     "duration_secs": 0
   },
@@ -8,12 +8,12 @@
     "total_files": 96,
     "files_by_layer": [
       {
-        "layer": "TestCorpus",
-        "count": 74
-      },
-      {
         "layer": "PerlCorpus",
         "count": 22
+      },
+      {
+        "layer": "TestCorpus",
+        "count": 74
       }
     ],
     "total_size_bytes": 616043,
@@ -34,10 +34,10 @@
     "coverage_percentage": 91.17647058823529,
     "never_seen": [
       "MissingBlock",
-      "HeredocDepthLimit",
-      "UnknownRest",
-      "MissingIdentifier",
       "MissingExpression",
+      "MissingIdentifier",
+      "UnknownRest",
+      "HeredocDepthLimit",
       "MissingStatement"
     ],
     "at_risk": [
@@ -47,42 +47,12 @@
         "risk_level": "High"
       },
       {
-        "name": "When",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "Default",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "NamedParameter",
+        "name": "VariableWithAttributes",
         "count": 1,
         "risk_level": "High"
       },
       {
-        "name": "Untie",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "Diamond",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "Class",
-        "count": 3,
-        "risk_level": "Medium"
-      },
-      {
         "name": "LabeledStatement",
-        "count": 2,
-        "risk_level": "High"
-      },
-      {
-        "name": "Method",
         "count": 2,
         "risk_level": "High"
       },
@@ -92,74 +62,104 @@
         "risk_level": "Medium"
       },
       {
-        "name": "VariableWithAttributes",
+        "name": "Untie",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "Default",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "When",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "Method",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "Class",
+        "count": 3,
+        "risk_level": "Medium"
+      },
+      {
+        "name": "Diamond",
+        "count": 2,
+        "risk_level": "High"
+      },
+      {
+        "name": "NamedParameter",
         "count": 1,
         "risk_level": "High"
       }
     ],
     "frequency": {
-      "Do": 18,
-      "DataSection": 7,
-      "Regex": 22,
-      "Return": 58,
-      "Ellipsis": 6,
-      "Substitution": 13,
-      "Prototype": 16,
-      "Heredoc": 9,
-      "Eval": 23,
-      "Readline": 6,
-      "Package": 44,
-      "ArrayLiteral": 61,
-      "OptionalParameter": 14,
-      "Try": 7,
-      "IndirectCall": 17,
-      "Match": 17,
-      "Given": 2,
-      "Use": 91,
-      "Error": 79,
-      "PhaseBlock": 7,
-      "VariableListDeclaration": 53,
-      "Signature": 16,
-      "Typeglob": 14,
+      "Undef": 54,
       "ExpressionStatement": 94,
-      "Block": 76,
-      "Variable": 70,
-      "Assignment": 58,
-      "Foreach": 25,
+      "Subroutine": 61,
+      "Match": 17,
+      "Ternary": 29,
+      "Transliteration": 9,
+      "Try": 7,
+      "VariableListDeclaration": 53,
+      "Given": 2,
+      "VariableWithAttributes": 1,
       "MethodCall": 32,
-      "When": 2,
+      "OptionalParameter": 14,
+      "LabeledStatement": 2,
+      "Tie": 3,
+      "Error": 79,
+      "MandatoryParameter": 15,
+      "Use": 91,
+      "Format": 8,
+      "Return": 58,
+      "Untie": 2,
+      "VariableDeclaration": 67,
+      "DataSection": 7,
+      "While": 17,
+      "Default": 2,
+      "No": 28,
+      "PhaseBlock": 7,
+      "Readline": 6,
       "HashLiteral": 53,
       "StatementModifier": 48,
-      "String": 81,
-      "Program": 96,
-      "Subroutine": 61,
-      "VariableDeclaration": 67,
-      "Format": 8,
-      "Default": 2,
-      "Undef": 54,
-      "Ternary": 29,
-      "Glob": 8,
-      "NamedParameter": 1,
-      "If": 28,
-      "SlurpyParameter": 14,
-      "MandatoryParameter": 15,
-      "Untie": 2,
-      "No": 28,
-      "Transliteration": 9,
-      "FunctionCall": 87,
-      "Unary": 60,
-      "LoopControl": 20,
-      "Diamond": 2,
-      "Binary": 80,
-      "Class": 3,
-      "LabeledStatement": 2,
+      "IndirectCall": 17,
+      "Block": 76,
+      "Do": 18,
       "Identifier": 81,
+      "FunctionCall": 87,
+      "Program": 96,
+      "LoopControl": 20,
+      "Heredoc": 9,
       "For": 7,
+      "Regex": 22,
+      "Unary": 60,
+      "Ellipsis": 6,
+      "SlurpyParameter": 14,
+      "Package": 44,
+      "When": 2,
+      "Signature": 16,
+      "Prototype": 16,
       "Method": 2,
-      "Tie": 3,
+      "Binary": 80,
+      "Foreach": 25,
+      "Glob": 8,
+      "Substitution": 13,
+      "Class": 3,
+      "ArrayLiteral": 61,
+      "String": 81,
+      "Eval": 23,
+      "Typeglob": 14,
+      "Diamond": 2,
+      "NamedParameter": 1,
+      "Variable": 70,
+      "If": 28,
       "Number": 72,
-      "VariableWithAttributes": 1,
-      "While": 17
+      "Assignment": 58
     }
   },
   "ga_coverage": {
