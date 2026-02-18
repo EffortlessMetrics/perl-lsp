@@ -693,11 +693,15 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     let mut attempt = 0;
     let max_attempts = 5;
     let mut final_count = symbols.len();
-    let mut last_names: Vec<String> = symbols
-        .iter()
-        .filter_map(|s| s["name"].as_str())
-        .map(String::from)
-        .collect();
+    let summarize_symbol = |s: &serde_json::Value| -> String {
+        let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("<unnamed>");
+        let sl = s.pointer("/range/start/line").and_then(|v| v.as_u64()).unwrap_or(0);
+        let sc = s.pointer("/range/start/character").and_then(|v| v.as_u64()).unwrap_or(0);
+        let el = s.pointer("/range/end/line").and_then(|v| v.as_u64()).unwrap_or(0);
+        let ec = s.pointer("/range/end/character").and_then(|v| v.as_u64()).unwrap_or(0);
+        format!("{name} [{sl}:{sc}-{el}:{ec}]")
+    };
+    let mut last_summaries: Vec<String> = symbols.iter().map(&summarize_symbol).collect();
 
     while final_count != 3 && attempt < max_attempts {
         attempt += 1;
@@ -723,11 +727,7 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
 
         if let Some(arr) = retry_response["result"].as_array() {
             final_count = arr.len();
-            last_names = arr
-                .iter()
-                .filter_map(|s| s["name"].as_str())
-                .map(String::from)
-                .collect();
+            last_summaries = arr.iter().map(&summarize_symbol).collect();
         }
     }
 
@@ -736,7 +736,7 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
         "FAIL(#307): documentSymbol never converged to 3 symbols after {} attempts. \
          Last count: {}. Symbols: {:?}. This indicates a real bug in incremental text sync, \
          not a timing flake.",
-        max_attempts, final_count, last_names
+        max_attempts, final_count, last_summaries
     );
 
     shutdown_and_exit(&mut server);
