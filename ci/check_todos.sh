@@ -15,16 +15,21 @@ for dir in "${EXCLUDE_DIRS[@]}"; do
     EXCLUDE_ARGS+=("-g" "!$dir")
 done
 
+# Comment-line pattern: matches TODO/FIXME only on lines that look like comments.
+# Anchors to Rust comments (// /// //!), shell/Perl comments (#), or block-comment
+# continuation (*).  This filters out $TODO inside Rust string literals and embedded
+# Perl fixture code.
+COMMENT_LINE='^\s*(?://[!/]?\s*|#\s*|\*\s*).*'
+UNLINKED_TODO='(?:TODO(?!\(#\d+\))|FIXME(?!\(#\d+\)))'
+
 # Function to count unlinked TODOs
 count_unlinked() {
-    # Matches TODO or FIXME NOT followed by (#number)
-    # Using PCRE2 for negative lookahead
-    (rg --pcre2 "${EXCLUDE_ARGS[@]}" "TODO(?!\(#\d+\))|FIXME(?!\(#\d+\))" . || true) | wc -l | xargs
+    (rg --pcre2 "${EXCLUDE_ARGS[@]}" "${COMMENT_LINE}${UNLINKED_TODO}" . || true) | wc -l | xargs
 }
 
 # Function to list unlinked TODOs
 list_unlinked() {
-    rg --pcre2 -n --no-heading "${EXCLUDE_ARGS[@]}" "TODO(!\(#\d+\))|FIXME(!\(#\d+\))" . || true
+    rg --pcre2 -n --no-heading "${EXCLUDE_ARGS[@]}" "${COMMENT_LINE}${UNLINKED_TODO}" . || true
 }
 
 # Initial baseline creation if missing

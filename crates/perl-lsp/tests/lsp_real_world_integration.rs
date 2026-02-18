@@ -458,8 +458,8 @@ SKIP: {
     ok($obj->query('SELECT 1'), 'Simple query');
 }
 
-PENDING: {
-    local $PENDING = "Feature not implemented yet";
+TODO: {
+    local $TODO = "Feature not implemented yet";
 
     ok($obj->new_feature, 'New feature works');
 }
