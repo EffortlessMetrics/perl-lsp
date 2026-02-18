@@ -687,38 +687,23 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     assert!(response["result"].is_array());
     let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
 
-    // FLAKY (#307): Under CI load, incremental didChange notifications may not all be
-    // processed before the documentSymbol request. The server is single-threaded
-    // (processes stdin messages sequentially), but the subprocess stdin buffer may
-    // not be flushed/read in time. Recovery: send a full document replacement to
-    // ensure consistent state, then retry the symbol request.
-    if symbols.len() != 3 {
+    // #307: Under CI load, incremental didChange notifications may not all be
+    // processed before the documentSymbol request. Retry with a convergence
+    // loop instead of accepting degraded behavior.
+    let mut attempt = 0;
+    let max_attempts = 5;
+    let mut final_count = symbols.len();
+
+    while final_count != 3 && attempt < max_attempts {
+        attempt += 1;
         eprintln!(
-            "WARN(#307): Expected 3 symbols but got {} after incremental changes. \
-             Retrying with full document replacement.",
-            symbols.len()
+            "INFO(#307): Expected 3 symbols but got {} (attempt {}/{}). Waiting for convergence.",
+            final_count, attempt, max_attempts
         );
 
-        // Recovery: send full document content to bypass incremental change issues
-        send_notification(
-            &mut server,
-            json!({
-                "jsonrpc": "2.0",
-                "method": "textDocument/didChange",
-                "params": {
-                    "textDocument": {
-                        "uri": uri,
-                        "version": 5
-                    },
-                    "contentChanges": [{
-                        "text": "my $x = 1;\nmy $y = 2;\nmy $z = 3;"
-                    }]
-                }
-            }),
-        );
-
+        // Wait for server to process buffered notifications
+        std::thread::sleep(Duration::from_millis(200 * attempt as u64));
         common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
-        std::thread::sleep(Duration::from_millis(200));
 
         let retry_response = send_request(
             &mut server,
@@ -726,33 +711,24 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
                 "jsonrpc": "2.0",
                 "method": "textDocument/documentSymbol",
                 "params": {
-                    "textDocument": {
-                        "uri": uri
-                    }
+                    "textDocument": { "uri": uri }
                 }
             }),
         );
 
-        if retry_response["result"].is_array() {
-            let retry_symbols = retry_response["result"]
-                .as_array()
-                .ok_or("Expected 'result' to be an array on retry")?;
-            if retry_symbols.len() == 3 {
-                eprintln!("INFO(#307): Full replacement recovered to 3 symbols.");
-            } else {
-                eprintln!(
-                    "WARN(#307): Full replacement still got {} symbols (expected 3). \
-                     Accepting degraded behavior: server responds without crash.",
-                    retry_symbols.len()
-                );
-            }
+        if let Some(arr) = retry_response["result"].as_array() {
+            final_count = arr.len();
         }
-
-        shutdown_and_exit(&mut server);
-        return Ok(());
     }
 
-    assert_eq!(symbols.len(), 3);
+    assert_eq!(
+        final_count, 3,
+        "FAIL(#307): documentSymbol never converged to 3 symbols after {} attempts. \
+         Last count: {}. This indicates a real bug in incremental text sync, \
+         not a timing flake.",
+        max_attempts, final_count
+    );
+
     shutdown_and_exit(&mut server);
     Ok(())
 }
