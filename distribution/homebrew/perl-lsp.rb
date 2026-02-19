@@ -1,6 +1,6 @@
 class PerlLsp < Formula
   desc "High-performance Perl Language Server with 100% syntax coverage"
-  homepage "https://github.com/tree-sitter/tree-sitter-perl"
+  homepage "https://github.com/EffortlessMetrics/perl-lsp"
   url "https://github.com/EffortlessMetrics/perl-lsp/archive/v1.0.0.tar.gz"
   sha256 "PLACEHOLDER_SHA256"  # Update with actual SHA256 after release
   license "MIT"
