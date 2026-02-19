@@ -3,6 +3,10 @@
 //! This module handles routing of incoming DAP requests to appropriate handlers
 //! and constructs responses following the JSON-RPC 2.0 protocol.
 //!
+//! **Deprecated**: Use [`DebugAdapter`](crate::DebugAdapter) directly.
+//! This dispatcher is kept for backward compatibility and protocol conformance tests.
+#![allow(deprecated)]
+//!
 //! # Architecture
 //!
 //! - **DapDispatcher**: Central message router with handler registry
@@ -33,10 +37,11 @@
 //! - [DAP Spec - Initialization](https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Initialize)
 
 use crate::breakpoints::BreakpointStore;
+use crate::feature_catalog::has_feature as catalog_has_feature;
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{
-    Breakpoint, Capabilities, Event, InitializeRequestArguments, InlineValuesArguments,
-    InlineValuesResponseBody, Request, Response, SetBreakpointsArguments,
+    Breakpoint, Capabilities, Event, ExceptionBreakpointFilter, InitializeRequestArguments,
+    InlineValuesArguments, InlineValuesResponseBody, Request, Response, SetBreakpointsArguments,
     SetBreakpointsResponseBody,
 };
 use anyhow::{Context, Result};
@@ -46,6 +51,10 @@ use std::sync::{Arc, Mutex};
 /// Result of dispatching a request
 ///
 /// Contains the response and any events that should be sent to the client.
+#[deprecated(
+    since = "0.2.0",
+    note = "Use DebugAdapter directly; DapDispatcher will be removed in a future release"
+)]
 pub struct DispatchResult {
     /// The response to send
     pub response: Response,
@@ -57,6 +66,14 @@ pub struct DispatchResult {
 ///
 /// Routes incoming requests to command handlers and manages session state
 /// including breakpoint storage and sequence number tracking.
+///
+/// **Deprecated**: Use [`DebugAdapter`](crate::DebugAdapter) directly. `DapDispatcher` handles
+/// only 4 commands and maintains its own state separate from the main adapter. It will be
+/// removed in a future release.
+#[deprecated(
+    since = "0.2.0",
+    note = "Use DebugAdapter directly; DapDispatcher will be removed in a future release"
+)]
 #[derive(Debug, Clone)]
 pub struct DapDispatcher {
     /// Breakpoint storage (shared across session)
@@ -234,17 +251,38 @@ impl DapDispatcher {
                 path_format: None,
             });
 
-        // Return adapter capabilities
+        // Return adapter capabilities using the feature catalog for runtime gating
+        let supports_breakpoints = catalog_has_feature("dap.breakpoints.basic");
+        let supports_hit_conditions = catalog_has_feature("dap.breakpoints.hit_condition");
+        let supports_log_points = catalog_has_feature("dap.breakpoints.logpoints");
+        let supports_exceptions = catalog_has_feature("dap.exceptions.die");
+        let supports_inline_values = catalog_has_feature("dap.inline_values");
+
         let capabilities = Capabilities {
             supports_configuration_done_request: Some(true),
             supports_evaluate_for_hovers: Some(true),
-            supports_conditional_breakpoints: Some(false), // Phase 2 (AC7) - See #450
-            supports_hit_conditional_breakpoints: Some(false),
-            supports_log_points: Some(false),
-            supports_exception_options: Some(false),
-            supports_exception_filter_options: Some(false),
+            supports_conditional_breakpoints: Some(supports_breakpoints),
+            supports_hit_conditional_breakpoints: Some(supports_hit_conditions),
+            supports_log_points: Some(supports_log_points),
+            supports_exception_options: Some(supports_exceptions),
+            supports_exception_filter_options: Some(supports_exceptions),
             supports_terminate_request: Some(true),
-            supports_inline_values: Some(true),
+            supports_inline_values: Some(supports_inline_values),
+            supports_function_breakpoints: Some(supports_breakpoints),
+            supports_set_variable: Some(true),
+            supports_value_formatting_options: Some(false),
+            support_terminate_debuggee: Some(true),
+            supports_step_back: Some(false),
+            supports_data_breakpoints: Some(false),
+            exception_breakpoint_filters: if supports_exceptions {
+                Some(vec![ExceptionBreakpointFilter {
+                    filter: "die".to_string(),
+                    label: "Break on die/croak".to_string(),
+                    default: Some(false),
+                }])
+            } else {
+                None
+            },
         };
 
         serde_json::to_value(&capabilities).context("Failed to serialize capabilities")

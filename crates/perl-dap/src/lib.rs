@@ -392,36 +392,54 @@ pub use debug_adapter::{DapMessage, DebugAdapter};
 
 // Re-export Phase 2 public types
 pub use breakpoints::{BreakpointRecord, BreakpointStore};
+#[allow(deprecated)]
 pub use dispatcher::{DapDispatcher, DispatchResult};
 pub use protocol::{
-    AttachRequestArguments, Breakpoint, Capabilities, Event, InitializeRequestArguments,
-    LaunchRequestArguments, Request, Response, SetBreakpointsArguments, SetBreakpointsResponseBody,
-    Source, SourceBreakpoint,
+    AttachRequestArguments, Breakpoint, Capabilities, ContinueArguments, ContinueResponseBody,
+    DisconnectArguments, EvaluateArguments, EvaluateResponseBody, Event, ExceptionBreakpointFilter,
+    ExceptionFilterOption, FunctionBreakpoint, InitializeRequestArguments, LaunchRequestArguments,
+    NextArguments, PauseArguments, ProtocolStackFrame, ProtocolVariable, Request, Response, Scope,
+    ScopesArguments, ScopesResponseBody, SetBreakpointsArguments, SetBreakpointsResponseBody,
+    SetExceptionBreakpointsArguments, SetFunctionBreakpointsArguments, SetVariableArguments,
+    SetVariableResponseBody, Source, SourceBreakpoint, StackTraceArguments, StackTraceResponseBody,
+    StepInArguments, StepOutArguments, TerminateArguments, Thread, ThreadsResponseBody,
+    VariablesArguments, VariablesResponseBody,
 };
 
-/// DAP server configuration (Phase 2 placeholder)
+/// Debug adapter operating mode
 ///
-/// This configuration structure will be enhanced in Phase 2 (AC5-AC12) to support:
-/// - Session management settings
-/// - Breakpoint validation options
-/// - Performance tuning parameters
-/// - Security constraints
+/// Controls whether the DAP server uses its native `perl -d` adapter
+/// or proxies to Perl::LanguageServer's DAP implementation.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum DapMode {
+    /// Native adapter using `perl -d` directly
+    #[default]
+    Native,
+    /// Bridge adapter proxying to Perl::LanguageServer
+    Bridge,
+}
+
+/// DAP server configuration
+///
+/// Controls the operating mode, logging, and workspace context for the DAP server.
 pub struct DapConfig {
     /// Logging level for DAP operations
     pub log_level: String,
+    /// Operating mode (native or bridge)
+    pub mode: DapMode,
+    /// Workspace root directory
+    pub workspace_root: Option<std::path::PathBuf>,
 }
 
-/// DAP server (Phase 2 placeholder)
+/// DAP server
 ///
-/// This server will be fully implemented in Phase 2 (AC5-AC12) with:
-/// - Native Rust DAP protocol implementation
-/// - AST-based breakpoint validation
-/// - Lazy variable expansion
-/// - Safe evaluation context
+/// Supports two operating modes:
+/// - **Native** (default): Uses the built-in [`DebugAdapter`] with `perl -d`
+/// - **Bridge**: Proxies DAP messages to Perl::LanguageServer via [`BridgeAdapter`]
 pub struct DapServer {
     /// Server configuration
     pub config: DapConfig,
-    /// The underlying debug adapter
+    /// The underlying debug adapter (used in Native mode)
     adapter: DebugAdapter,
 }
 
@@ -430,7 +448,7 @@ impl DapServer {
     ///
     /// # Arguments
     ///
-    /// * `config` - Server configuration
+    /// * `config` - Server configuration including operating mode
     ///
     /// # Errors
     ///
@@ -441,15 +459,39 @@ impl DapServer {
 
     /// Run the DAP server
     ///
-    /// This method starts the stdio transport loop and blocks until the session ends.
+    /// Dispatches to the appropriate transport based on the configured [`DapMode`]:
+    /// - [`DapMode::Native`]: Starts the stdio transport loop via [`DebugAdapter::run`]
+    /// - [`DapMode::Bridge`]: Spawns Perl::LanguageServer and proxies DAP messages
+    ///   via [`BridgeAdapter`] using a tokio async runtime
     pub fn run(&mut self) -> anyhow::Result<()> {
-        self.adapter.run().map_err(Into::into)
+        match self.config.mode {
+            DapMode::Native => self.adapter.run().map_err(Into::into),
+            DapMode::Bridge => {
+                tracing::info!("Starting DAP server in bridge mode");
+                let rt = tokio::runtime::Runtime::new()?;
+                rt.block_on(async {
+                    let mut bridge = BridgeAdapter::new();
+                    bridge.spawn_pls_dap().await?;
+                    bridge.proxy_messages().await?;
+                    bridge.shutdown().await?;
+                    Ok(())
+                })
+            }
+        }
     }
 
     /// Run the DAP server over TCP socket transport.
     ///
     /// This binds to `127.0.0.1:<port>` and serves one DAP client session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if bridge mode is selected, since socket transport
+    /// is only supported for native mode.
     pub fn run_socket(&mut self, port: u16) -> anyhow::Result<()> {
+        if self.config.mode == DapMode::Bridge {
+            anyhow::bail!("Socket transport is not supported in bridge mode");
+        }
         self.adapter.run_socket(port).map_err(Into::into)
     }
 }

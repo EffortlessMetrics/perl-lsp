@@ -5,7 +5,13 @@
 
 use crate::feature_catalog::has_feature as catalog_has_feature;
 use crate::inline_values::collect_inline_values;
-use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
+use crate::protocol::{
+    ContinueArguments, ContinueResponseBody, DisconnectArguments, EvaluateArguments,
+    EvaluateResponseBody, InlineValuesArguments, InlineValuesResponseBody, NextArguments,
+    PauseArguments, Scope, ScopesArguments, ScopesResponseBody, SetExceptionBreakpointsArguments,
+    SetFunctionBreakpointsArguments, SetVariableArguments, SetVariableResponseBody,
+    StackTraceArguments, StepInArguments, StepOutArguments, TerminateArguments, VariablesArguments,
+};
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use perl_dap_eval::SafeEvaluator;
 use perl_dap_stack::PerlStackParser;
@@ -40,6 +46,20 @@ fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<
             poisoned.into_inner()
         }
     }
+}
+
+/// Send a DAP event through the event channel with poison-safe sequence numbering.
+///
+/// Returns `true` if the event was successfully sent, `false` otherwise.
+fn emit_event_safe(
+    sender: &Sender<DapMessage>,
+    seq: &Mutex<i64>,
+    event: &str,
+    body: Option<Value>,
+) -> bool {
+    let mut seq_lock = lock_or_recover(seq, "emit_event_safe.seq");
+    *seq_lock += 1;
+    sender.send(DapMessage::Event { seq: *seq_lock, event: event.to_string(), body }).is_ok()
 }
 
 /// Compiled regex patterns for debugger output parsing
@@ -1385,19 +1405,12 @@ impl DebugAdapter {
                 eprintln!("No debugger output stream available - output reader thread exiting");
                 // Send termination event
                 if let Some(ref sender) = sender {
-                    let mut seq_lock = match seq.lock() {
-                        Ok(lock) => lock,
-                        Err(poisoned) => {
-                            eprintln!("Sequence lock poisoned, recovering");
-                            poisoned.into_inner()
-                        }
-                    };
-                    *seq_lock += 1;
-                    let _ = sender.send(DapMessage::Event {
-                        seq: *seq_lock,
-                        event: "terminated".to_string(),
-                        body: Some(json!({"reason": "no_debugger_stream"})),
-                    });
+                    emit_event_safe(
+                        sender,
+                        &seq,
+                        "terminated",
+                        Some(json!({"reason": "no_debugger_stream"})),
+                    );
                 }
                 return;
             };
@@ -1432,43 +1445,19 @@ impl DebugAdapter {
                         }
 
                         // Send all output to client with error handling
-                        if let Some(ref sender) = sender {
-                            match seq.lock() {
-                                Ok(mut seq_lock) => {
-                                    *seq_lock += 1;
-                                    if sender
-                                        .send(DapMessage::Event {
-                                            seq: *seq_lock,
-                                            event: "output".to_string(),
-                                            body: Some(json!({
-                                                "category": "stdout",
-                                                "output": format!("{}\n", text)
-                                            })),
-                                        })
-                                        .is_err()
-                                    {
-                                        eprintln!(
-                                            "Failed to send output event - client may have disconnected"
-                                        );
-                                        break; // Exit the loop if client is gone
-                                    }
-                                }
-                                Err(poisoned) => {
-                                    eprintln!(
-                                        "Sequence lock poisoned in output reader, attempting recovery"
-                                    );
-                                    let mut seq_lock = poisoned.into_inner();
-                                    *seq_lock += 1;
-                                    let _ = sender.send(DapMessage::Event {
-                                        seq: *seq_lock,
-                                        event: "output".to_string(),
-                                        body: Some(json!({
-                                            "category": "stdout",
-                                            "output": format!("{}\n", text)
-                                        })),
-                                    });
-                                }
-                            }
+                        if let Some(ref sender) = sender
+                            && !emit_event_safe(
+                                sender,
+                                &seq,
+                                "output",
+                                Some(json!({
+                                    "category": "stdout",
+                                    "output": format!("{}\n", text)
+                                })),
+                            )
+                        {
+                            eprintln!("Failed to send output event - client may have disconnected");
+                            break; // Exit the loop if client is gone
                         }
 
                         // Enhanced context information parsing with multiple patterns
@@ -1524,18 +1513,16 @@ impl DebugAdapter {
                             context_updated = true;
 
                             // Send error event to client
-                            if let Some(ref sender) = sender
-                                && let Ok(mut seq_lock) = seq.lock()
-                            {
-                                *seq_lock += 1;
-                                let _ = sender.send(DapMessage::Event {
-                                    seq: *seq_lock,
-                                    event: "output".to_string(),
-                                    body: Some(json!({
+                            if let Some(ref sender) = sender {
+                                emit_event_safe(
+                                    sender,
+                                    &seq,
+                                    "output",
+                                    Some(json!({
                                         "category": "stderr",
                                         "output": format!("Error: {}\n", text)
                                     })),
-                                });
+                                );
                             }
                         }
 
@@ -1636,31 +1623,15 @@ impl DebugAdapter {
 
                             if let Some(ref sender) = sender {
                                 for message in logpoint_messages {
-                                    match seq.lock() {
-                                        Ok(mut seq_lock) => {
-                                            *seq_lock += 1;
-                                            let _ = sender.send(DapMessage::Event {
-                                                seq: *seq_lock,
-                                                event: "output".to_string(),
-                                                body: Some(json!({
-                                                    "category": "console",
-                                                    "output": format!("{message}\n")
-                                                })),
-                                            });
-                                        }
-                                        Err(poisoned) => {
-                                            let mut seq_lock = poisoned.into_inner();
-                                            *seq_lock += 1;
-                                            let _ = sender.send(DapMessage::Event {
-                                                seq: *seq_lock,
-                                                event: "output".to_string(),
-                                                body: Some(json!({
-                                                    "category": "console",
-                                                    "output": format!("{message}\n")
-                                                })),
-                                            });
-                                        }
-                                    }
+                                    emit_event_safe(
+                                        sender,
+                                        &seq,
+                                        "output",
+                                        Some(json!({
+                                            "category": "console",
+                                            "output": format!("{message}\n")
+                                        })),
+                                    );
                                 }
                             }
 
@@ -1668,45 +1639,21 @@ impl DebugAdapter {
                                 continue;
                             }
 
-                            if should_emit_stopped && let Some(ref sender) = sender {
-                                match seq.lock() {
-                                    Ok(mut seq_lock) => {
-                                        *seq_lock += 1;
-                                        if sender
-                                            .send(DapMessage::Event {
-                                                seq: *seq_lock,
-                                                event: "stopped".to_string(),
-                                                body: Some(json!({
-                                                    "reason": stop_reason,
-                                                    "threadId": thread_id,
-                                                    "allThreadsStopped": true
-                                                })),
-                                            })
-                                            .is_err()
-                                        {
-                                            eprintln!(
-                                                "Failed to send stopped event - client disconnected"
-                                            );
-                                            return;
-                                        }
-                                    }
-                                    Err(poisoned) => {
-                                        eprintln!(
-                                            "Sequence lock poisoned when sending stopped event, recovering"
-                                        );
-                                        let mut seq_lock = poisoned.into_inner();
-                                        *seq_lock += 1;
-                                        let _ = sender.send(DapMessage::Event {
-                                            seq: *seq_lock,
-                                            event: "stopped".to_string(),
-                                            body: Some(json!({
-                                                "reason": stop_reason,
-                                                "threadId": thread_id,
-                                                "allThreadsStopped": true
-                                            })),
-                                        });
-                                    }
-                                }
+                            if should_emit_stopped
+                                && let Some(ref sender) = sender
+                                && !emit_event_safe(
+                                    sender,
+                                    &seq,
+                                    "stopped",
+                                    Some(json!({
+                                        "reason": stop_reason,
+                                        "threadId": thread_id,
+                                        "allThreadsStopped": true
+                                    })),
+                                )
+                            {
+                                eprintln!("Failed to send stopped event - client disconnected");
+                                return;
                             }
                             continue;
                         }
@@ -1776,45 +1723,20 @@ impl DebugAdapter {
                             };
 
                             // Send stopped event with robust error handling
-                            if let Some(ref sender) = sender {
-                                match seq.lock() {
-                                    Ok(mut seq_lock) => {
-                                        *seq_lock += 1;
-                                        if sender
-                                            .send(DapMessage::Event {
-                                                seq: *seq_lock,
-                                                event: "stopped".to_string(),
-                                                body: Some(json!({
-                                                    "reason": "step",
-                                                    "threadId": thread_id,
-                                                    "allThreadsStopped": true
-                                                })),
-                                            })
-                                            .is_err()
-                                        {
-                                            eprintln!(
-                                                "Failed to send stopped event - client disconnected"
-                                            );
-                                            return; // Exit thread
-                                        }
-                                    }
-                                    Err(poisoned) => {
-                                        eprintln!(
-                                            "Sequence lock poisoned when sending stopped event, recovering"
-                                        );
-                                        let mut seq_lock = poisoned.into_inner();
-                                        *seq_lock += 1;
-                                        let _ = sender.send(DapMessage::Event {
-                                            seq: *seq_lock,
-                                            event: "stopped".to_string(),
-                                            body: Some(json!({
-                                                "reason": "step",
-                                                "threadId": thread_id,
-                                                "allThreadsStopped": true
-                                            })),
-                                        });
-                                    }
-                                }
+                            if let Some(ref sender) = sender
+                                && !emit_event_safe(
+                                    sender,
+                                    &seq,
+                                    "stopped",
+                                    Some(json!({
+                                        "reason": "step",
+                                        "threadId": thread_id,
+                                        "allThreadsStopped": true
+                                    })),
+                                )
+                            {
+                                eprintln!("Failed to send stopped event - client disconnected");
+                                return; // Exit thread
                             }
                         }
                     }
@@ -1822,29 +1744,12 @@ impl DebugAdapter {
                         eprintln!("Error reading from debugger: {}", e);
                         // Send termination event before exiting
                         if let Some(ref sender) = sender {
-                            match seq.lock() {
-                                Ok(mut seq_lock) => {
-                                    *seq_lock += 1;
-                                    let _ = sender.send(DapMessage::Event {
-                                        seq: *seq_lock,
-                                        event: "terminated".to_string(),
-                                        body: Some(
-                                            json!({"reason": "read_error", "error": e.to_string()}),
-                                        ),
-                                    });
-                                }
-                                Err(poisoned) => {
-                                    let mut seq_lock = poisoned.into_inner();
-                                    *seq_lock += 1;
-                                    let _ = sender.send(DapMessage::Event {
-                                        seq: *seq_lock,
-                                        event: "terminated".to_string(),
-                                        body: Some(
-                                            json!({"reason": "read_error", "error": e.to_string()}),
-                                        ),
-                                    });
-                                }
-                            }
+                            emit_event_safe(
+                                sender,
+                                &seq,
+                                "terminated",
+                                Some(json!({"reason": "read_error", "error": e.to_string()})),
+                            );
                         }
                         break;
                     }
@@ -2205,8 +2110,11 @@ impl DebugAdapter {
         &mut self,
         seq: i64,
         request_seq: i64,
-        _arguments: Option<Value>,
+        arguments: Option<Value>,
     ) -> DapMessage {
+        let _args: Option<DisconnectArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
         self.clear_active_session_state();
 
         // Send terminated event
@@ -2229,8 +2137,10 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
-        let restart =
-            arguments.as_ref().and_then(|args| args.get("restart")).and_then(Value::as_bool);
+        let args: Option<TerminateArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
+        let restart = args.and_then(|a| a.restart);
 
         self.clear_active_session_state();
 
@@ -2280,6 +2190,14 @@ impl DebugAdapter {
                 }
             };
 
+        // Snapshot old breakpoints for this file before replacing them,
+        // so we can clear only per-file breakpoints instead of global `B *`.
+        let old_breakpoints = if let Some(ref source_path) = args.source.path {
+            self.breakpoints.get_breakpoints(source_path)
+        } else {
+            Vec::new()
+        };
+
         // AC7: AST-based breakpoint validation via BreakpointStore
         let verified_breakpoints = self.breakpoints.set_breakpoints(&args);
 
@@ -2288,9 +2206,14 @@ impl DebugAdapter {
             && let Some(ref mut session) = *guard
         {
             if let Some(stdin) = session.process.stdin.as_mut() {
-                // Clear breakpoints in file (Perl debugger 'B' command)
-                let _ = stdin.write_all(b"B *\n");
-                let _ = stdin.flush();
+                // Clear only the old breakpoints for this specific file
+                for old_bp in &old_breakpoints {
+                    if old_bp.verified {
+                        let cmd = format!("B {}\n", old_bp.line);
+                        let _ = stdin.write_all(cmd.as_bytes());
+                        let _ = stdin.flush();
+                    }
+                }
 
                 // Set new breakpoints that were successfully verified
                 for bp in &verified_breakpoints {
@@ -2334,25 +2257,28 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
-        let Some(args) = arguments else {
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "setFunctionBreakpoints".to_string(),
-                body: None,
-                message: Some("Missing arguments".to_string()),
+        let args: SetFunctionBreakpointsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "setFunctionBreakpoints".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
             };
-        };
 
-        let requested =
-            args.get("breakpoints").and_then(Value::as_array).cloned().unwrap_or_default();
+        let requested = args.breakpoints;
 
         let mut validated_names = Vec::with_capacity(requested.len());
         let mut response_breakpoints = Vec::with_capacity(requested.len());
 
         for entry in requested {
-            let name = entry.get("name").and_then(Value::as_str).unwrap_or("").trim().to_string();
+            let name = entry.name.trim().to_string();
 
             let id = {
                 let mut next = lock_or_recover(
@@ -2422,22 +2348,20 @@ impl DebugAdapter {
     ) -> DapMessage {
         let mut break_on_die = false;
 
-        if let Some(args) = arguments {
-            if let Some(filters) = args.get("filters").and_then(Value::as_array) {
-                break_on_die = filters.iter().filter_map(Value::as_str).any(|filter| {
-                    filter.eq_ignore_ascii_case("die") || filter.eq_ignore_ascii_case("all")
-                });
-            }
+        if let Some(args) = arguments
+            .and_then(|v| serde_json::from_value::<SetExceptionBreakpointsArguments>(v).ok())
+        {
+            break_on_die = args.filters.iter().any(|filter| {
+                filter.eq_ignore_ascii_case("die") || filter.eq_ignore_ascii_case("all")
+            });
 
-            if !break_on_die
-                && let Some(filter_options) = args.get("filterOptions").and_then(Value::as_array)
-            {
-                break_on_die = filter_options
-                    .iter()
-                    .filter_map(|entry| entry.get("filterId").and_then(Value::as_str))
-                    .any(|filter| {
-                        filter.eq_ignore_ascii_case("die") || filter.eq_ignore_ascii_case("all")
+            if !break_on_die {
+                if let Some(filter_options) = args.filter_options {
+                    break_on_die = filter_options.iter().any(|entry| {
+                        entry.filter_id.eq_ignore_ascii_case("die")
+                            || entry.filter_id.eq_ignore_ascii_case("all")
                     });
+                }
             }
         }
 
@@ -2533,8 +2457,10 @@ impl DebugAdapter {
         &self,
         seq: i64,
         request_seq: i64,
-        _arguments: Option<Value>,
+        arguments: Option<Value>,
     ) -> DapMessage {
+        let _args: Option<StackTraceArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
         let mut framed_output_lines = None;
 
         // Ask the debugger for an explicit stack snapshot when a live session is present.
@@ -2640,78 +2566,81 @@ impl DebugAdapter {
 
     /// Handle scopes request
     fn handle_scopes(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
-        if let Some(args) = arguments {
-            let frame_id = args.get("frameId").and_then(|f| f.as_i64()).unwrap_or(0) as i32;
-
-            // AC8.3: Hierarchical scope inspection
-            // Use bit-shifting or offsets to distinguish between scope types for the same frame
-            let locals_ref = frame_id * 10 + 1;
-            let package_ref = frame_id * 10 + 2;
-            let globals_ref = frame_id * 10 + 3;
-
-            let scopes = vec![
-                json!({
-                    "name": "Locals",
-                    "presentationHint": "locals",
-                    "variablesReference": locals_ref,
-                    "expensive": false
-                }),
-                json!({
-                    "name": "Package",
-                    "variablesReference": package_ref,
-                    "expensive": true
-                }),
-                json!({
-                    "name": "Globals",
-                    "variablesReference": globals_ref,
-                    "expensive": true
-                }),
-            ];
-
-            DapMessage::Response {
-                seq,
-                request_seq,
-                success: true,
-                command: "scopes".to_string(),
-                body: Some(json!({
-                    "scopes": scopes
-                })),
-                message: None,
+        let args: ScopesArguments = match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "scopes".to_string(),
+                    body: None,
+                    message: Some("Missing frameId".to_string()),
+                };
             }
-        } else {
-            DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "scopes".to_string(),
-                body: None,
-                message: Some("Missing frameId".to_string()),
-            }
+        };
+
+        let frame_id = args.frame_id as i32;
+
+        // AC8.3: Hierarchical scope inspection
+        // Use bit-shifting or offsets to distinguish between scope types for the same frame
+        let locals_ref = frame_id * 10 + 1;
+        let package_ref = frame_id * 10 + 2;
+        let globals_ref = frame_id * 10 + 3;
+
+        let scopes_body = ScopesResponseBody {
+            scopes: vec![
+                Scope {
+                    name: "Locals".to_string(),
+                    presentation_hint: Some("locals".to_string()),
+                    variables_reference: i64::from(locals_ref),
+                    expensive: false,
+                },
+                Scope {
+                    name: "Package".to_string(),
+                    presentation_hint: None,
+                    variables_reference: i64::from(package_ref),
+                    expensive: true,
+                },
+                Scope {
+                    name: "Globals".to_string(),
+                    presentation_hint: None,
+                    variables_reference: i64::from(globals_ref),
+                    expensive: true,
+                },
+            ],
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "scopes".to_string(),
+            body: serde_json::to_value(&scopes_body).ok(),
+            message: None,
         }
     }
 
     /// Handle variables request
     fn handle_variables(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
-        let Some(args) = arguments else {
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "variables".to_string(),
-                body: None,
-                message: Some("Missing arguments".to_string()),
-            };
+        let args: VariablesArguments = match arguments.and_then(|v| serde_json::from_value(v).ok())
+        {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "variables".to_string(),
+                    body: None,
+                    message: Some("Missing arguments".to_string()),
+                };
+            }
         };
 
-        let variables_ref =
-            args.get("variablesReference").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-        let start = args.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let count = args
-            .get("count")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(256)
-            .clamp(1, 1024);
+        let variables_ref = args.variables_reference as i32;
+        let start = args.start.unwrap_or(0) as usize;
+        let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);
 
         if variables_ref == 0 {
             return DapMessage::Response {
@@ -2867,18 +2796,22 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
-        let Some(args) = arguments else {
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "setVariable".to_string(),
-                body: None,
-                message: Some("Missing arguments".to_string()),
+        let args: SetVariableArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "setVariable".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
             };
-        };
 
-        let variables_ref = args.get("variablesReference").and_then(Value::as_i64).unwrap_or(0);
+        let variables_ref = args.variables_reference;
         if variables_ref <= 0 {
             return DapMessage::Response {
                 seq,
@@ -2890,8 +2823,10 @@ impl DebugAdapter {
             };
         }
 
-        let name = args.get("name").and_then(Value::as_str).unwrap_or("").trim();
-        let value = args.get("value").and_then(Value::as_str).unwrap_or("").trim();
+        let name = args.name.trim().to_string();
+        let value = args.value.trim().to_string();
+        let name = name.as_str();
+        let value = value.as_str();
 
         if name.is_empty() {
             return DapMessage::Response {
@@ -3015,22 +2950,27 @@ impl DebugAdapter {
             };
         };
 
+        let set_var_body = SetVariableResponseBody {
+            value: rendered_value,
+            type_: Some(rendered_type),
+            variables_reference: 0,
+        };
+
         DapMessage::Response {
             seq,
             request_seq,
             success: true,
             command: "setVariable".to_string(),
-            body: Some(json!({
-                "value": rendered_value,
-                "type": rendered_type,
-                "variablesReference": 0
-            })),
+            body: serde_json::to_value(&set_var_body).ok(),
             message: None,
         }
     }
 
     /// Handle continue request
-    fn handle_continue(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_continue(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<ContinueArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
         let mut thread_id = 1;
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
@@ -3039,6 +2979,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Continue;
+            session.variables.clear();
             thread_id = session.thread_id;
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
@@ -3055,20 +2996,21 @@ impl DebugAdapter {
             })),
         );
 
+        let continue_body = ContinueResponseBody { all_threads_continued: true };
+
         DapMessage::Response {
             seq,
             request_seq,
             success: true,
             command: "continue".to_string(),
-            body: Some(json!({
-                "allThreadsContinued": true
-            })),
+            body: serde_json::to_value(&continue_body).ok(),
             message: None,
         }
     }
 
     /// Handle next request
-    fn handle_next(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_next(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<NextArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
         {
@@ -3076,6 +3018,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Next;
+            session.variables.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -3097,7 +3040,8 @@ impl DebugAdapter {
     }
 
     /// Handle stepIn request
-    fn handle_step_in(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_step_in(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<StepInArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
         {
@@ -3105,6 +3049,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepIn;
+            session.variables.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -3126,7 +3071,9 @@ impl DebugAdapter {
     }
 
     /// Handle stepOut request
-    fn handle_step_out(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_step_out(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<StepOutArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
         {
@@ -3134,6 +3081,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepOut;
+            session.variables.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -3155,7 +3103,8 @@ impl DebugAdapter {
     }
 
     /// Handle pause request
-    fn handle_pause(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_pause(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<PauseArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
         let success = if let Some(ref session) =
             *lock_or_recover(&self.session, "debug_adapter.session")
         {
@@ -3626,8 +3575,22 @@ impl DebugAdapter {
     /// AC10.2: Safe evaluation mode (non-mutating) by default
     /// AC10.3: Timeout enforcement (5s default, 30s hard limit)
     fn handle_evaluate(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
-        if let Some(args) = arguments {
-            let expression = args.get("expression").and_then(|e| e.as_str()).unwrap_or("");
+        let args: EvaluateArguments = match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "evaluate".to_string(),
+                    body: None,
+                    message: Some("Missing arguments".to_string()),
+                };
+            }
+        };
+
+        {
+            let expression = &args.expression;
 
             if expression.is_empty() {
                 return DapMessage::Response {
@@ -3653,8 +3616,7 @@ impl DebugAdapter {
             }
 
             // AC10.2: Safe evaluation mode (non-mutating) by default
-            let allow_side_effects =
-                args.get("allowSideEffects").and_then(|v| v.as_bool()).unwrap_or(false);
+            let allow_side_effects = args.allow_side_effects.unwrap_or(false);
 
             // Validate expression safety if side effects are not allowed
             if !allow_side_effects {
@@ -3683,54 +3645,34 @@ impl DebugAdapter {
                     };
                 }
             }
+        }
 
-            // AC10.3: Get timeout configuration (5s default, 30s hard limit)
-            let timeout_ms =
-                args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32).unwrap_or(5000);
-            let timeout_ms = timeout_ms.min(30000); // Enforce 30s hard limit
-            // Send evaluation command to debugger
-            let output_frame_markers = if let Some(ref mut session) =
-                *lock_or_recover(&self.session, "debug_adapter.session")
-            {
-                if let Some(stdin) = session.process.stdin.as_mut() {
-                    // Frame debugger output so evaluate parsing only considers this request's output.
-                    let commands = vec![format!("x {expression}")];
-                    match self.send_framed_debugger_commands(stdin, &commands) {
-                        Ok(markers) => Some(markers),
-                        Err(error) => {
-                            return DapMessage::Response {
-                                seq,
-                                request_seq,
-                                success: false,
-                                command: "evaluate".to_string(),
-                                body: None,
-                                message: Some(format!("Failed to send evaluate command: {error}")),
-                            };
-                        }
+        let expression = &args.expression;
+
+        // AC10.3: Get timeout configuration (5s default, 30s hard limit)
+        let timeout_ms = 5000u32;
+        let timeout_ms = timeout_ms.min(30000); // Enforce 30s hard limit
+
+        // Send evaluation command to debugger
+        let output_frame_markers = if let Some(ref mut session) =
+            *lock_or_recover(&self.session, "debug_adapter.session")
+        {
+            if let Some(stdin) = session.process.stdin.as_mut() {
+                // Frame debugger output so evaluate parsing only considers this request's output.
+                let commands = vec![format!("x {expression}")];
+                match self.send_framed_debugger_commands(stdin, &commands) {
+                    Ok(markers) => Some(markers),
+                    Err(error) => {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "evaluate".to_string(),
+                            body: None,
+                            message: Some(format!("Failed to send evaluate command: {error}")),
+                        };
                     }
-                } else {
-                    return DapMessage::Response {
-                        seq,
-                        request_seq,
-                        success: false,
-                        command: "evaluate".to_string(),
-                        body: None,
-                        message: Some("No debugger session active".to_string()),
-                    };
                 }
-            } else if let Some(pid) =
-                *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
-            {
-                return DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "evaluate".to_string(),
-                    body: None,
-                    message: Some(format!(
-                        "Evaluate is unavailable for processId attach (PID {pid}) without an active debugger transport"
-                    )),
-                };
             } else {
                 return DapMessage::Response {
                     seq,
@@ -3738,47 +3680,58 @@ impl DebugAdapter {
                     success: false,
                     command: "evaluate".to_string(),
                     body: None,
-                    message: Some("No debugger session".to_string()),
+                    message: Some("No debugger session active".to_string()),
                 };
-            };
-
-            let framed_lines = output_frame_markers.as_ref().and_then(|(begin, end)| {
-                self.capture_framed_debugger_output(begin, end, u64::from(timeout_ms))
-            });
-
-            let parsed = framed_lines
-                .as_ref()
-                .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
-                .or_else(|| self.parse_evaluate_result_from_output(expression));
-
-            let (result, result_type) = parsed.unwrap_or_else(|| {
-                (
-                    format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms),
-                    "string".to_string(),
-                )
-            });
-
-            DapMessage::Response {
-                seq,
-                request_seq,
-                success: true,
-                command: "evaluate".to_string(),
-                body: Some(json!({
-                    "result": result,
-                    "type": result_type,
-                    "variablesReference": 0
-                })),
-                message: None,
             }
-        } else {
-            DapMessage::Response {
+        } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        {
+            return DapMessage::Response {
                 seq,
                 request_seq,
                 success: false,
                 command: "evaluate".to_string(),
                 body: None,
-                message: Some("Missing arguments".to_string()),
-            }
+                message: Some(format!(
+                    "Evaluate is unavailable for processId attach (PID {pid}) without an active debugger transport"
+                )),
+            };
+        } else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "evaluate".to_string(),
+                body: None,
+                message: Some("No debugger session".to_string()),
+            };
+        };
+
+        let framed_lines = output_frame_markers.as_ref().and_then(|(begin, end)| {
+            self.capture_framed_debugger_output(begin, end, u64::from(timeout_ms))
+        });
+
+        let parsed = framed_lines
+            .as_ref()
+            .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
+            .or_else(|| self.parse_evaluate_result_from_output(expression));
+
+        let (result, result_type) = parsed.unwrap_or_else(|| {
+            (
+                format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms),
+                "string".to_string(),
+            )
+        });
+
+        let eval_body =
+            EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "evaluate".to_string(),
+            body: serde_json::to_value(&eval_body).ok(),
+            message: None,
         }
     }
 

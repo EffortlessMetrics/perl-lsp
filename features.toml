@@ -405,8 +405,8 @@ description = "Verified/unverified source breakpoints with replace semantics and
 id = "dap.breakpoints.hit_condition"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "preview"
-advertised = false
+maturity = "ga"
+advertised = true
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
 description = "Hit-count breakpoints (e.g., >= N, == N, %N) with runtime counter gating"
@@ -415,8 +415,8 @@ description = "Hit-count breakpoints (e.g., >= N, == N, %N) with runtime counter
 id = "dap.breakpoints.logpoints"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "preview"
-advertised = false
+maturity = "ga"
+advertised = true
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
 description = "Logpoint breakpoints (`logMessage`) emit output events and continue execution"

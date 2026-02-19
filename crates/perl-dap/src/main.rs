@@ -4,7 +4,7 @@
 //! It follows the TDD approach with comprehensive test scaffolding for 19 acceptance criteria.
 
 use clap::Parser;
-use perl_dap::{DapConfig, DapServer};
+use perl_dap::{DapConfig, DapMode, DapServer};
 use std::io;
 use tracing_subscriber::{EnvFilter, fmt};
 
@@ -23,6 +23,10 @@ struct Args {
     /// Port to listen on (for socket mode)
     #[arg(long, default_value_t = 13603)]
     port: u16,
+
+    /// Use bridge mode (proxy to Perl::LanguageServer)
+    #[arg(long)]
+    bridge: bool,
 
     /// Logging level (error, warn, info, debug, trace)
     #[arg(long, default_value = "info")]
@@ -43,7 +47,11 @@ fn main() -> anyhow::Result<()> {
     init_logging(&args.log_level);
     tracing::info!("perl-dap: Debug Adapter Protocol server starting");
 
-    let config = DapConfig { log_level: args.log_level };
+    let config = DapConfig {
+        log_level: args.log_level,
+        mode: if args.bridge { DapMode::Bridge } else { DapMode::Native },
+        workspace_root: None,
+    };
 
     let mut server = DapServer::new(config)?;
 

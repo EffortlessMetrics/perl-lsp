@@ -257,6 +257,27 @@ pub struct Capabilities {
     /// Supports custom inlineValues request for inline debug hints
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports_inline_values: Option<bool>,
+    /// Supports function breakpoints
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_function_breakpoints: Option<bool>,
+    /// Supports setting variables
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_set_variable: Option<bool>,
+    /// Supports value formatting options
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_value_formatting_options: Option<bool>,
+    /// Supports terminating the debuggee on disconnect
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub support_terminate_debuggee: Option<bool>,
+    /// Supports stepping backwards
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_step_back: Option<bool>,
+    /// Supports data breakpoints
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_data_breakpoints: Option<bool>,
+    /// Exception breakpoint filters
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exception_breakpoint_filters: Option<Vec<ExceptionBreakpointFilter>>,
 }
 
 // ============================================================================
@@ -306,4 +327,356 @@ pub struct AttachRequestArguments {
     /// Connection timeout in milliseconds
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout: Option<u32>,
+}
+
+// ============================================================================
+// Stack/Variables/Scopes Request Arguments (AC8)
+// ============================================================================
+
+/// Arguments for stackTrace request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StackTraceArguments {
+    /// Thread to retrieve the stack trace for
+    pub thread_id: i64,
+    /// Index of the first frame to return (0-based)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_frame: Option<i64>,
+    /// Maximum number of frames to return
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub levels: Option<i64>,
+}
+
+/// Arguments for scopes request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopesArguments {
+    /// Frame identifier to retrieve scopes for
+    pub frame_id: i64,
+}
+
+/// Arguments for variables request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VariablesArguments {
+    /// Reference to the variable container
+    pub variables_reference: i64,
+    /// Optional filter ("indexed" or "named")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<String>,
+    /// Start index of variables to return
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<i64>,
+    /// Number of variables to return
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<i64>,
+}
+
+/// Arguments for evaluate request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvaluateArguments {
+    /// Expression to evaluate
+    pub expression: String,
+    /// Stack frame context for evaluation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_id: Option<i64>,
+    /// Evaluation context ("watch", "repl", "hover", "clipboard")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+    /// Whether side effects are allowed during evaluation
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_side_effects: Option<bool>,
+}
+
+// ============================================================================
+// Control Flow Request Arguments (AC9)
+// ============================================================================
+
+/// Arguments for continue request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContinueArguments {
+    /// Thread to continue
+    pub thread_id: i64,
+}
+
+/// Arguments for next (step over) request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NextArguments {
+    /// Thread to step
+    pub thread_id: i64,
+}
+
+/// Arguments for stepIn request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepInArguments {
+    /// Thread to step into
+    pub thread_id: i64,
+}
+
+/// Arguments for stepOut request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepOutArguments {
+    /// Thread to step out of
+    pub thread_id: i64,
+}
+
+/// Arguments for pause request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PauseArguments {
+    /// Thread to pause
+    pub thread_id: i64,
+}
+
+// ============================================================================
+// Variable Modification Request Arguments (AC8)
+// ============================================================================
+
+/// Arguments for setVariable request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetVariableArguments {
+    /// Reference to the variable container
+    pub variables_reference: i64,
+    /// Name of the variable to set
+    pub name: String,
+    /// New value for the variable
+    pub value: String,
+}
+
+// ============================================================================
+// Session Lifecycle Request Arguments (AC5)
+// ============================================================================
+
+/// Arguments for disconnect request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DisconnectArguments {
+    /// Whether to restart the debug session
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restart: Option<bool>,
+    /// Whether to terminate the debuggee process
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub terminate_debuggee: Option<bool>,
+}
+
+/// Arguments for terminate request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminateArguments {
+    /// Whether to restart after termination
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restart: Option<bool>,
+}
+
+// ============================================================================
+// Extended Breakpoint Request Arguments (AC7)
+// ============================================================================
+
+/// Arguments for setFunctionBreakpoints request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetFunctionBreakpointsArguments {
+    /// Function breakpoints to set
+    pub breakpoints: Vec<FunctionBreakpoint>,
+}
+
+/// Arguments for setExceptionBreakpoints request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetExceptionBreakpointsArguments {
+    /// Exception filter IDs to activate
+    pub filters: Vec<String>,
+    /// Additional exception filter options
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter_options: Option<Vec<ExceptionFilterOption>>,
+}
+
+// ============================================================================
+// Supporting Types
+// ============================================================================
+
+/// Function breakpoint specification
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FunctionBreakpoint {
+    /// Name of the function to break on
+    pub name: String,
+    /// Breakpoint condition expression
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
+    /// Hit-condition expression
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hit_condition: Option<String>,
+}
+
+/// Exception filter option for fine-grained exception breakpoints
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExceptionFilterOption {
+    /// ID of the exception filter
+    pub filter_id: String,
+    /// Condition expression for the filter
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
+}
+
+/// Exception breakpoint filter descriptor (reported in capabilities)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExceptionBreakpointFilter {
+    /// Unique filter identifier
+    pub filter: String,
+    /// Human-readable label for the filter
+    pub label: String,
+    /// Whether this filter is enabled by default
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default: Option<bool>,
+}
+
+/// A thread in the debuggee
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Thread {
+    /// Thread identifier
+    pub id: i64,
+    /// Human-readable thread name
+    pub name: String,
+}
+
+/// A scope within a stack frame
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Scope {
+    /// Scope name (e.g., "Locals", "Globals")
+    pub name: String,
+    /// Presentation hint ("arguments", "locals", "registers")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub presentation_hint: Option<String>,
+    /// Reference to the variables in this scope
+    pub variables_reference: i64,
+    /// Whether fetching variables is expensive
+    pub expensive: bool,
+}
+
+/// A variable in the debuggee
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolVariable {
+    /// Variable name
+    pub name: String,
+    /// String representation of the variable value
+    pub value: String,
+    /// Type of the variable
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub type_: Option<String>,
+    /// Reference for child variables (0 means no children)
+    pub variables_reference: i64,
+    /// Number of named child variables
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub named_variables: Option<i64>,
+    /// Number of indexed child variables
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub indexed_variables: Option<i64>,
+}
+
+/// A stack frame in the call stack
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProtocolStackFrame {
+    /// Frame identifier
+    pub id: i64,
+    /// Name of the frame (typically the function name)
+    pub name: String,
+    /// Source location of the frame
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<Source>,
+    /// Line number (1-based)
+    pub line: i64,
+    /// Column number (1-based)
+    pub column: i64,
+    /// End line number (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<i64>,
+    /// End column number (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_column: Option<i64>,
+}
+
+// ============================================================================
+// Response Body Types
+// ============================================================================
+
+/// Response body for threads request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThreadsResponseBody {
+    /// All threads in the debuggee
+    pub threads: Vec<Thread>,
+}
+
+/// Response body for stackTrace request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StackTraceResponseBody {
+    /// Stack frames in the call stack
+    pub stack_frames: Vec<ProtocolStackFrame>,
+    /// Total number of frames available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_frames: Option<i64>,
+}
+
+/// Response body for scopes request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopesResponseBody {
+    /// Scopes in the specified stack frame
+    pub scopes: Vec<Scope>,
+}
+
+/// Response body for variables request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VariablesResponseBody {
+    /// Variables in the specified scope or container
+    pub variables: Vec<ProtocolVariable>,
+}
+
+/// Response body for continue request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContinueResponseBody {
+    /// Whether all threads were continued
+    pub all_threads_continued: bool,
+}
+
+/// Response body for evaluate request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EvaluateResponseBody {
+    /// String representation of the evaluation result
+    pub result: String,
+    /// Type of the result
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub type_: Option<String>,
+    /// Reference for structured result (0 means no children)
+    pub variables_reference: i64,
+}
+
+/// Response body for setVariable request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetVariableResponseBody {
+    /// New string representation of the variable value
+    pub value: String,
+    /// Type of the variable after setting
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub type_: Option<String>,
+    /// Reference for child variables (0 means no children)
+    pub variables_reference: i64,
 }
