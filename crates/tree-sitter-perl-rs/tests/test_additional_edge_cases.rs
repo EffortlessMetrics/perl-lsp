@@ -37,10 +37,10 @@ fn test_unicode_identifiers() {
 
         while let Some(token) = lexer.next_token() {
             println!("Token: {:?}", token);
-            if let TokenType::Identifier(id) = &token.token_type {
-                if id.chars().any(|c| !c.is_ascii()) {
-                    found_unicode = true;
-                }
+            if let TokenType::Identifier(id) = &token.token_type
+                && !id.is_ascii()
+            {
+                found_unicode = true;
             }
         }
 

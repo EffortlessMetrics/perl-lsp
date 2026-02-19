@@ -17,6 +17,7 @@
 //! ```
 
 #![allow(dead_code)]
+#![allow(clippy::assertions_on_constants)]
 
 use perl_tdd_support::must_some;
 use serde_json::Value;

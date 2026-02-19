@@ -233,7 +233,7 @@ print $result;"#;
     #[test]
     fn test_heredoc_error_recovery() {
         // Test various edge cases and potential error conditions
-        let test_cases = vec![
+        let test_cases = [
             // Empty heredoc
             r#"my $x = <<'';
 

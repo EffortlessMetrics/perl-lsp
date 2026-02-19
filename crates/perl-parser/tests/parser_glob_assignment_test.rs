@@ -301,14 +301,12 @@ fn parser_glob_vs_multiplication() {
         assert_eq!(statements.len(), 1, "Expected 1 statement");
         let stmt = &statements[0];
 
-        if let NodeKind::VariableDeclaration { initializer, .. } = &stmt.kind {
-            if let Some(init) = initializer {
-                // Should be Binary with * operator, not Typeglob
-                let is_binary = matches!(init.kind, NodeKind::Binary { .. });
-                assert!(is_binary, "Expected Binary multiplication, got {:?}", init.kind);
-                if let NodeKind::Binary { op, .. } = &init.kind {
-                    assert_eq!(op, "*", "Expected multiplication operator");
-                }
+        if let NodeKind::VariableDeclaration { initializer: Some(init), .. } = &stmt.kind {
+            // Should be Binary with * operator, not Typeglob
+            let is_binary = matches!(init.kind, NodeKind::Binary { .. });
+            assert!(is_binary, "Expected Binary multiplication, got {:?}", init.kind);
+            if let NodeKind::Binary { op, .. } = &init.kind {
+                assert_eq!(op, "*", "Expected multiplication operator");
             }
         }
     }
@@ -327,18 +325,16 @@ fn parser_glob_in_context() {
         assert_eq!(statements.len(), 1, "Expected 1 statement");
         let stmt = &statements[0];
 
-        if let NodeKind::VariableDeclaration { initializer, .. } = &stmt.kind {
-            if let Some(init) = initializer {
-                // Should be Unary (\) with Typeglob operand
-                let is_unary = matches!(init.kind, NodeKind::Unary { .. });
-                assert!(is_unary, "Expected Unary reference, got {:?}", init.kind);
-                if let NodeKind::Unary { op, operand } = &init.kind {
-                    assert!(op.contains("\\"), "Expected backslash reference operator");
-                    let is_typeglob = matches!(operand.kind, NodeKind::Typeglob { .. });
-                    assert!(is_typeglob, "Expected Typeglob operand, got {:?}", operand.kind);
-                    if let NodeKind::Typeglob { name } = &operand.kind {
-                        assert_eq!(name, "STDOUT", "Expected STDOUT typeglob");
-                    }
+        if let NodeKind::VariableDeclaration { initializer: Some(init), .. } = &stmt.kind {
+            // Should be Unary (\) with Typeglob operand
+            let is_unary = matches!(init.kind, NodeKind::Unary { .. });
+            assert!(is_unary, "Expected Unary reference, got {:?}", init.kind);
+            if let NodeKind::Unary { op, operand } = &init.kind {
+                assert!(op.contains("\\"), "Expected backslash reference operator");
+                let is_typeglob = matches!(operand.kind, NodeKind::Typeglob { .. });
+                assert!(is_typeglob, "Expected Typeglob operand, got {:?}", operand.kind);
+                if let NodeKind::Typeglob { name } = &operand.kind {
+                    assert_eq!(name, "STDOUT", "Expected STDOUT typeglob");
                 }
             }
         }

@@ -3,6 +3,7 @@
 //! Provides a test harness that communicates with the LSP server using real JSON-RPC protocol.
 
 #![allow(dead_code)]
+#![allow(clippy::assertions_on_constants)]
 #![allow(clippy::collapsible_if)]
 
 use parking_lot::Mutex;

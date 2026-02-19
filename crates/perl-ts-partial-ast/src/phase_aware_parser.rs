@@ -403,7 +403,7 @@ DONE
                 assert!(reason.contains("BEGIN"));
                 assert_eq!(severity, Severity::Warning);
             }
-            _ => assert!(false, "Expected Defer action"),
+            _ => panic!("Expected Defer action"),
         }
     }
 
@@ -420,7 +420,7 @@ DONE
                 assert!(warning.contains("END block"));
                 assert!(warning.contains("program termination"));
             }
-            _ => assert!(false, "Expected PartialParse action for END phase"),
+            _ => panic!("Expected PartialParse action for END phase"),
         }
     }
 
@@ -437,7 +437,7 @@ DONE
                 assert!(reason.contains("eval"));
                 assert_eq!(severity, Severity::Warning);
             }
-            _ => assert!(false, "Expected Defer action for eval phase"),
+            _ => panic!("Expected Defer action for eval phase"),
         }
 
         // Verify eval heredoc was added to deferred list
@@ -448,7 +448,7 @@ DONE
         // Generate diagnostics and verify eval-specific suggestion
         let diagnostics = parser.generate_phase_diagnostics();
         assert_eq!(diagnostics.len(), 1);
-        let fix = diagnostics[0].suggested_fix.as_ref().map(|s| s.as_str()).unwrap_or("");
+        let fix = diagnostics[0].suggested_fix.as_deref().unwrap_or("");
         assert!(fix.contains("regular string"));
     }
 }

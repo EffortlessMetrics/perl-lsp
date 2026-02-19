@@ -234,10 +234,10 @@ fn test_file_size_boundaries() {
 
     // Test various file sizes
     let test_sizes = vec![
-        (1 * 1024, "1KB"),
+        (1024, "1KB"),
         (10 * 1024, "10KB"),
         (100 * 1024, "100KB"),
-        (1 * 1024 * 1024, "1MB"),
+        (1024 * 1024, "1MB"),
         (5 * 1024 * 1024, "5MB"),
     ];
 
@@ -359,7 +359,7 @@ fn test_ast_node_boundaries() {
                 // Should be reasonably close to target
                 let ratio = actual_nodes as f64 / target_nodes as f64;
                 assert!(
-                    ratio >= 0.5 && ratio <= 2.0,
+                    (0.5..=2.0).contains(&ratio),
                     "Node count ratio {:.1} should be between 0.5 and 2.0",
                     ratio
                 );
@@ -608,7 +608,7 @@ fn test_boundary_edge_cases() {
         println!("Testing edge case: {}", case_name);
 
         let start_time = Instant::now();
-        let mut parser = Parser::new(&code);
+        let mut parser = Parser::new(code);
         let result = parser.parse();
         let parse_time = start_time.elapsed();
 
@@ -647,13 +647,13 @@ fn generate_nested_code(depth: usize) -> String {
     code.push_str("my $result = ");
 
     for _ in 0..depth {
-        code.push_str("(");
+        code.push('(');
     }
 
     code.push_str("42");
 
     for _ in 0..depth {
-        code.push_str(")");
+        code.push(')');
     }
 
     code.push_str(";\n");

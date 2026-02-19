@@ -136,14 +136,14 @@ fn test_error_token_generation() {
     let mut error_found = false;
 
     while let Some(token) = lexer.next_token() {
-        if let TokenType::Error(msg) = &token.token_type {
-            if msg.contains("heredoc") {
-                error_found = true;
-                // Should provide helpful error message
-                assert!(msg.contains("Unresolved") || msg.contains("dynamic"));
-                // Should suggest alternatives
-                assert!(msg.contains("possible") || msg.contains("EOF"));
-            }
+        if let TokenType::Error(msg) = &token.token_type
+            && msg.contains("heredoc")
+        {
+            error_found = true;
+            // Should provide helpful error message
+            assert!(msg.contains("Unresolved") || msg.contains("dynamic"));
+            // Should suggest alternatives
+            assert!(msg.contains("possible") || msg.contains("EOF"));
         }
         if matches!(token.token_type, TokenType::EOF) {
             break;

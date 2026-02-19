@@ -169,7 +169,9 @@ fn test_invalid_uri_format() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     } else {
-        must(Err::<(), _>(format!("Expected either error or result in response for invalid URI")));
+        must(Err::<(), _>(
+            "Expected either error or result in response for invalid URI".to_string(),
+        ));
     }
 
     shutdown_and_exit(&mut server);
@@ -223,9 +225,9 @@ fn test_document_not_found() -> Result<(), Box<dyn std::error::Error>> {
             assert!(result.is_null(), "Expected null or items array for completion result");
         }
     } else {
-        must(Err::<(), _>(format!(
-            "Expected either error or result in response for missing document"
-        )));
+        must(Err::<(), _>(
+            "Expected either error or result in response for missing document".to_string(),
+        ));
     }
 
     shutdown_and_exit(&mut server);
@@ -297,9 +299,9 @@ fn test_out_of_bounds_position() -> Result<(), Box<dyn std::error::Error>> {
             assert!(result.is_null(), "Expected null or items array for completion result");
         }
     } else {
-        must(Err::<(), _>(format!(
-            "Expected either error or result in response for out-of-bounds position"
-        )));
+        must(Err::<(), _>(
+            "Expected either error or result in response for out-of-bounds position".to_string(),
+        ));
     }
 
     shutdown_and_exit(&mut server);

@@ -343,6 +343,6 @@ EOF
         let ast = result.unwrap();
         // Just verify the AST was created successfully
         // Content preservation is handled internally
-        assert!(format!("{:?}", ast).len() > 0);
+        assert!(!format!("{:?}", ast).is_empty());
     }
 }

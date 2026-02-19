@@ -391,7 +391,7 @@ my $y = $x / 2;"#;
                 assert!(result.contains("binary_expression"));
             }
             Err(e) => {
-                assert!(false, "Failed to parse: {:?}", e);
+                panic!("Failed to parse: {:?}", e);
             }
         }
     }
