@@ -164,3 +164,27 @@ GITHUB_ISSUES_*.md
 temp_issue_work/
 
 /.runs/
+
+# mdbook build output (regenerated with `mdbook build`)
+book/book/
+
+# Old build artifacts
+artifacts/
+Cargo.toml.backup*
+
+# Stale root-level scripts and test files
+/*.rs
+!build.rs
+
+# Agent status files
+.agent/
+agents/
+
+# Old review/planning artifacts
+review/
+plans/
+scanner_comparison/
+issue_updates/
+
+# Generated audit data
+corpus_audit_report.json

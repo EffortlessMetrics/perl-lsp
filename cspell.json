@@ -1,0 +1,35 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "clippy",
+    "codecov",
+    "crates",
+    "eglot",
+    "elisp",
+    "heredoc",
+    "heredocs",
+    "lspconfig",
+    "mdbook",
+    "neovim",
+    "nvim",
+    "perl",
+    "perlcritic",
+    "perltidy",
+    "psgi",
+    "rustfmt",
+    "semver",
+    "sexp",
+    "stdio",
+    "tokenizer",
+    "trivy",
+    "xtask"
+  ],
+  "ignorePaths": [
+    "target/",
+    "book/book/",
+    "Cargo.lock",
+    "*.json",
+    "*.toml"
+  ]
+}
