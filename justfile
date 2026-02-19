@@ -362,12 +362,17 @@ ci-gate:
     just ci-clippy-lib && \
     just clippy-prod-no-unwrap && \
     just clippy-no-unwrap-all && \
+    just ci-unwrap-panic-ratchet && \
+    just ci-unsafe-ratchet && \
     just ci-forbid-fatal && \
     just ci-test-lib && \
     just ci-policy && \
     just ci-v2-bundle-sync && \
     just ci-v2-parity && \
     just ci-lsp-def && \
+    just ci-lsp-smoke-e2e && \
+    just ci-semantic-frameworks && \
+    just ci-dap-smoke-e2e && \
     just ci-parser-features-check && \
     just ci-features-invariants
     # @START=$$(date +%s); \
@@ -436,6 +441,18 @@ clippy-no-unwrap-all:
     cargo clippy --workspace --all-targets -- -D clippy::unwrap_used -D clippy::expect_used
     @echo "✅ Production code is panic-safe (no unwrap/expect)"
 
+# Unwrap/panic-family ratchet (production source only)
+ci-unwrap-panic-ratchet:
+    @echo "🛡️  Checking unwrap/panic-family ratchet..."
+    @bash ci/check_unwraps_prod.sh
+    @echo "✅ Unwrap/panic-family ratchet passed"
+
+# Unsafe syntax ratchet (production source only)
+ci-unsafe-ratchet:
+    @echo "🛡️  Checking unsafe syntax ratchet..."
+    @bash ci/check_unsafe_prod.sh
+    @echo "✅ Unsafe syntax ratchet passed"
+
 # Forbid fatal constructs gate - catches abort/exit/panic that Clippy misses
 ci-forbid-fatal:
     @echo "🚫 Checking for forbidden fatal constructs..."
@@ -493,6 +510,29 @@ ci-lsp-def:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp --test semantic_definition -- --test-threads=1
     @echo "✅ LSP semantic definition tests passed"
+
+# LSP process-level smoke receipt (initialize/open/completion/hover/definition/shutdown)
+ci-lsp-smoke-e2e:
+    @echo "💨 Running LSP stdio smoke E2E test..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --test lsp_smoke_e2e -- --test-threads=1
+    @echo "✅ LSP smoke E2E passed"
+
+# Framework semantic depth receipts (Moo/Moose/Class::Accessor)
+ci-semantic-frameworks:
+    @echo "🧠 Running framework semantic tests..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-semantic-analyzer --test frameworks_moo -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --test moo_semantics_e2e -- --test-threads=1
+    @echo "✅ Framework semantic tests passed"
+
+# DAP smoke receipt (launch/breakpoint/step/stack/evaluate/disconnect)
+ci-dap-smoke-e2e:
+    @echo "🐞 Running DAP smoke E2E test..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-dap --test dap_smoke_e2e -- --test-threads=1
+    @echo "✅ DAP smoke E2E passed"
 
 # Documentation build (no deps)
 ci-docs:
@@ -1320,7 +1360,7 @@ ci-dead-code:
 # CI Gate Execution with Receipt Generation (Issue #210)
 # ============================================================================
 
-# CI gate: check TODO compliance
+# CI gate: check unlinked-item compliance
 ci-check-todos:
     @bash ci/check_todos.sh
 

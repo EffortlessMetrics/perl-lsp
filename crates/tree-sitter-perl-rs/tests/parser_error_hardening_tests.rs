@@ -1,3 +1,4 @@
+#![allow(clippy::assertions_on_constants)]
 //! Parser Mutation Hardening Tests for Issue #178
 //!
 //! This test suite provides comprehensive mutation hardening tests using property-based

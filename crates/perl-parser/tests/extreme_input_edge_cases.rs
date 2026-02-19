@@ -404,7 +404,7 @@ fn test_memory_pressure_with_extreme_inputs() {
     println!("Testing memory pressure with extreme inputs...");
 
     // Simulate memory pressure by parsing multiple extreme inputs sequentially
-    let test_cases = vec![
+    let test_cases = [
         generate_large_array(50_000),
         generate_large_hash(25_000),
         generate_nested_structure(5_000),
@@ -508,7 +508,7 @@ fn generate_excessive_alternation(count: usize) -> String {
     let mut result = String::from("/(?:");
     for i in 0..count {
         if i > 0 {
-            result.push_str("|");
+            result.push('|');
         }
         result.push_str(&format!("pattern{}", i));
     }
@@ -523,9 +523,9 @@ fn generate_nested_regex_groups(depth: usize) -> String {
     }
     result.push_str("test");
     for _ in 0..depth {
-        result.push_str(")");
+        result.push(')');
     }
-    result.push_str("/");
+    result.push('/');
     result
 }
 
@@ -567,9 +567,9 @@ fn generate_nested_ternary(depth: usize) -> String {
     }
     result.push_str("42");
     for _ in 0..depth {
-        result.push_str(")");
+        result.push(')');
     }
-    result.push_str(";");
+    result.push(';');
     result
 }
 
@@ -578,7 +578,7 @@ fn generate_massive_method_chain(length: usize) -> String {
     for i in 0..length {
         result.push_str(&format!("->method{}", i));
     }
-    result.push_str(";");
+    result.push(';');
     result
 }
 
@@ -587,7 +587,7 @@ fn generate_complex_dereference(depth: usize) -> String {
     for i in 0..depth {
         result.push_str(&format!("->{{nested}}{{key{}}}{{subkey{}}}[{}]", i, i, i));
     }
-    result.push_str(";");
+    result.push(';');
     result
 }
 
@@ -599,7 +599,7 @@ fn generate_operator_precedence_mess(count: usize) -> String {
         }
         result.push_str(&format!("$var{} * $val{} / $div{} % $mod{}", i, i, i, i));
     }
-    result.push_str(";");
+    result.push(';');
     result
 }
 

@@ -49,7 +49,8 @@ fn main() -> anyhow::Result<()> {
 
     if args.socket {
         tracing::info!("Starting DAP server on port {}", args.port);
-        anyhow::bail!("Socket transport mode is not yet implemented. Use --stdio (default).");
+        server.run_socket(args.port)?;
+        return Ok(());
     }
 
     tracing::info!("Starting DAP server on stdio");

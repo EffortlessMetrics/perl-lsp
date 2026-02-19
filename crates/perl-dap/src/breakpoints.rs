@@ -16,132 +16,42 @@
 //! - [DAP Implementation Spec](../../docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management)
 
 use crate::protocol::{Breakpoint, SetBreakpointsArguments};
-use perl_parser::Parser;
-use perl_parser::ast::{Node, NodeKind};
-use ropey::Rope;
+use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 // ============= AST Validation Utilities (AC7) =============
 
-/// Check if a line contains only comments or whitespace
-fn is_comment_or_blank_line(ast: &Node, line_start: usize, line_end: usize, source: &str) -> bool {
-    // Fast path: Check if blank (only whitespace)
-    let line_text = &source[line_start..line_end.min(source.len())];
-    if line_text.trim().is_empty() {
-        return true;
-    }
-
-    // Fast path: Check if comment (starts with # after whitespace)
-    if line_text.trim_start().starts_with('#') {
-        return true;
-    }
-
-    // AST-based validation: Check if line contains only comment nodes
-    has_only_comments_in_range(ast, line_start, line_end)
-}
-
-/// Check if all nodes in a range are comments
+/// Validate a breakpoint against source using the dedicated breakpoint microcrate.
 ///
-/// Note: Comments are stripped during lexing and not represented in the AST.
-/// The fast path in `is_comment_or_blank_line` handles comment detection.
-/// This function checks if there are no executable nodes in the range.
-fn has_only_comments_in_range(node: &Node, start: usize, end: usize) -> bool {
-    // Check if node overlaps with line range
-    if node.location.start >= end || node.location.end <= start {
-        return false;
-    }
-
-    match &node.kind {
-        NodeKind::Program { statements } => {
-            // Get all nodes that overlap with the line range
-            let nodes_in_range: Vec<_> = statements
-                .iter()
-                .filter(|s| s.location.start < end && s.location.end > start)
-                .collect();
-
-            // If no AST nodes in range, it's a blank/comment line
-            // (comments are stripped during lexing and not in AST)
-            nodes_in_range.is_empty()
-        }
-        // Any other node type means there's executable code
-        _ => false,
-    }
-}
-
-/// Check if a byte offset is inside a heredoc interior (body content)
-fn is_inside_heredoc_interior(node: &Node, byte_offset: usize) -> bool {
-    // Check if this is a heredoc with a body span containing the offset
-    if let NodeKind::Heredoc { body_span: Some(span), .. } = &node.kind {
-        if byte_offset >= span.start && byte_offset < span.end {
-            return true;
-        }
-    }
-
-    // Recursively check all children
-    let mut found = false;
-    node.for_each_child(|child| {
-        if !found && is_inside_heredoc_interior(child, byte_offset) {
-            found = true;
-        }
-    });
-    found
-}
-
-/// Validate a breakpoint against the AST
-///
-/// Returns (verified, message) where:
-/// - verified: true if the breakpoint is valid
-/// - message: error/warning message if not verified
-fn validate_breakpoint_line(source: &str, line: i64) -> (bool, Option<String>) {
-    // Parse the source file
-    let mut parser = Parser::new(source);
-    let ast = match parser.parse() {
-        Ok(ast) => ast,
-        Err(_) => {
-            // Parse error - allow breakpoint but mark as unverified
-            return (false, Some("Unable to parse source file".to_string()));
-        }
-    };
-
-    // Build rope for line mapping
-    let rope = Rope::from_str(source);
-
-    // AC7: Reject non-positive line numbers
+/// Returns `(verified, resolved_line, message)` where `resolved_line` may differ from
+/// the requested line if the validator adjusts the location.
+#[cfg(test)]
+fn validate_breakpoint_line_with_column(
+    source: &str,
+    line: i64,
+    column: Option<i64>,
+) -> (bool, i64, Option<String>) {
     if line <= 0 {
-        return (false, Some("Line number must be positive".to_string()));
+        return (false, line, Some("Line number must be positive".to_string()));
     }
 
-    // Convert 1-based line to 0-based
-    let line_idx = (line - 1) as usize;
-
-    // Check if line is valid
-    if line_idx >= rope.len_lines() {
-        return (false, Some("Line number exceeds file length".to_string()));
+    match AstBreakpointValidator::new(source) {
+        Ok(validator) => {
+            let result = validator.validate_with_column(line, column);
+            (result.verified, result.line, result.message)
+        }
+        Err(error) => (false, line, Some(error.to_string())),
     }
+}
 
-    // Get byte range for the line
-    let line_start = rope.line_to_byte(line_idx);
-    let line_end = if line_idx + 1 < rope.len_lines() {
-        rope.line_to_byte(line_idx + 1)
-    } else {
-        rope.len_bytes()
-    };
-
-    // Validation 1: Inside heredoc interior
-    // Check BEFORE comment/blank check because heredoc interior lines have no AST nodes
-    // and would otherwise be incorrectly classified as blank/comment lines
-    if is_inside_heredoc_interior(&ast, line_start) {
-        return (false, Some("Breakpoint set inside heredoc content".to_string()));
-    }
-
-    // Validation 2: Comment or blank line
-    if is_comment_or_blank_line(&ast, line_start, line_end, source) {
-        return (false, Some("Breakpoint set on comment or blank line".to_string()));
-    }
-
-    // Breakpoint is valid
-    (true, None)
+/// Backward-compatible helper used by unit tests in this module.
+#[cfg(test)]
+fn validate_breakpoint_line(source: &str, line: i64) -> (bool, Option<String>) {
+    let (verified, _resolved_line, message) =
+        validate_breakpoint_line_with_column(source, line, None);
+    (verified, message)
 }
 
 /// Individual breakpoint record
@@ -158,6 +68,12 @@ pub struct BreakpointRecord {
     pub column: Option<i64>,
     /// Breakpoint condition (e.g., "$x > 10")
     pub condition: Option<String>,
+    /// Breakpoint hit-count condition (e.g., ">= 5", "%2")
+    pub hit_condition: Option<String>,
+    /// Logpoint message. When present, hit events log output and continue.
+    pub log_message: Option<String>,
+    /// Number of times this breakpoint has been hit in the current session.
+    pub hit_count: u64,
     /// Whether breakpoint was successfully verified
     pub verified: bool,
     /// Verification message (error/warning if not verified or adjusted)
@@ -175,6 +91,75 @@ impl BreakpointRecord {
             message: self.message.clone(),
         }
     }
+}
+
+/// Result of applying a runtime breakpoint hit to stored breakpoint metadata.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BreakpointHitOutcome {
+    /// True when at least one verified breakpoint matched the file/line location.
+    pub matched: bool,
+    /// True when execution should stop and emit a `stopped` event.
+    pub should_stop: bool,
+    /// Logpoint messages to emit as `output` events.
+    pub log_messages: Vec<String>,
+}
+
+fn parse_hit_condition_operand(raw: &str) -> Option<u64> {
+    raw.trim().parse::<u64>().ok()
+}
+
+fn is_valid_hit_condition(raw: &str) -> bool {
+    evaluate_hit_condition(Some(raw), 1).is_some()
+}
+
+fn evaluate_hit_condition(raw: Option<&str>, hit_count: u64) -> Option<bool> {
+    let Some(raw) = raw else {
+        return Some(true);
+    };
+
+    let expr = raw.trim();
+    if expr.is_empty() {
+        return Some(true);
+    }
+
+    if let Some(rest) = expr.strip_prefix(">=") {
+        return parse_hit_condition_operand(rest).map(|n| hit_count >= n);
+    }
+    if let Some(rest) = expr.strip_prefix("<=") {
+        return parse_hit_condition_operand(rest).map(|n| hit_count <= n);
+    }
+    if let Some(rest) = expr.strip_prefix("==") {
+        return parse_hit_condition_operand(rest).map(|n| hit_count == n);
+    }
+    if let Some(rest) = expr.strip_prefix('=') {
+        return parse_hit_condition_operand(rest).map(|n| hit_count == n);
+    }
+    if let Some(rest) = expr.strip_prefix('>') {
+        return parse_hit_condition_operand(rest).map(|n| hit_count > n);
+    }
+    if let Some(rest) = expr.strip_prefix('<') {
+        return parse_hit_condition_operand(rest).map(|n| hit_count < n);
+    }
+    if let Some(rest) = expr.strip_prefix('%') {
+        return parse_hit_condition_operand(rest)
+            .and_then(|n| if n == 0 { None } else { Some(hit_count.is_multiple_of(n)) });
+    }
+
+    parse_hit_condition_operand(expr).map(|n| hit_count == n)
+}
+
+fn file_paths_match(stored: &str, observed: &str) -> bool {
+    if stored == observed {
+        return true;
+    }
+    if stored.ends_with(observed) || observed.ends_with(stored) {
+        return true;
+    }
+
+    let stored_name = Path::new(stored).file_name().and_then(|name| name.to_str());
+    let observed_name = Path::new(observed).file_name().and_then(|name| name.to_str());
+
+    matches!((stored_name, observed_name), (Some(left), Some(right)) if left == right)
 }
 
 /// Thread-safe breakpoint storage
@@ -230,8 +215,8 @@ impl BreakpointStore {
     ///         name: Some("script.pl".to_string()),
     ///     },
     ///     breakpoints: Some(vec![
-    ///         SourceBreakpoint { line: 10, column: None, condition: None },
-    ///         SourceBreakpoint { line: 25, column: None, condition: None },
+    ///         SourceBreakpoint { line: 10, column: None, condition: None, hit_condition: None, log_message: None },
+    ///         SourceBreakpoint { line: 25, column: None, condition: None, hit_condition: None, log_message: None },
     ///     ]),
     ///     source_modified: None,
     /// };
@@ -259,14 +244,32 @@ impl BreakpointStore {
         // Clear existing breakpoints for this source (REPLACE semantics)
         breakpoints_map.remove(&source_path);
 
-        // Read source file for AST validation (AC7)
+        // Read source file and parse once for AST validation (AC7).
         let source_content = std::fs::read_to_string(&source_path).ok();
+        let validator = source_content
+            .as_ref()
+            .map(|content| AstBreakpointValidator::new(content).map_err(|e| e.to_string()));
 
         let mut records = Vec::new();
         // Create new breakpoint records
         for bp in &source_breakpoints {
             let id = *next_id;
             *next_id += 1;
+
+            if bp.line <= 0 {
+                records.push(BreakpointRecord {
+                    id,
+                    line: bp.line,
+                    column: bp.column,
+                    condition: bp.condition.clone(),
+                    hit_condition: bp.hit_condition.clone(),
+                    log_message: bp.log_message.clone(),
+                    hit_count: 0,
+                    verified: false,
+                    message: Some("Line number must be positive".to_string()),
+                });
+                continue;
+            }
 
             // AC7: Security validation - Reject conditions with newlines
             // The Perl debugger protocol is line-based, so a newline in a condition
@@ -278,6 +281,9 @@ impl BreakpointStore {
                         line: bp.line,
                         column: bp.column,
                         condition: bp.condition.clone(),
+                        hit_condition: bp.hit_condition.clone(),
+                        log_message: bp.log_message.clone(),
+                        hit_count: 0,
                         verified: false,
                         message: Some("Breakpoint condition cannot contain newlines".to_string()),
                     };
@@ -286,19 +292,63 @@ impl BreakpointStore {
                 }
             }
 
-            // AC7: AST-based breakpoint validation
-            let (verified, message) = if let Some(ref content) = source_content {
-                validate_breakpoint_line(content, bp.line)
-            } else {
-                // Can't read file - mark as unverified but still create breakpoint
-                (false, Some("Unable to read source file".to_string()))
+            if let Some(ref hit_condition) = bp.hit_condition {
+                let hit_condition = hit_condition.trim();
+                if hit_condition.contains('\n') || hit_condition.contains('\r') {
+                    let record = BreakpointRecord {
+                        id,
+                        line: bp.line,
+                        column: bp.column,
+                        condition: bp.condition.clone(),
+                        hit_condition: bp.hit_condition.clone(),
+                        log_message: bp.log_message.clone(),
+                        hit_count: 0,
+                        verified: false,
+                        message: Some("Hit condition cannot contain newlines".to_string()),
+                    };
+                    records.push(record);
+                    continue;
+                }
+                if !is_valid_hit_condition(hit_condition) {
+                    let record = BreakpointRecord {
+                        id,
+                        line: bp.line,
+                        column: bp.column,
+                        condition: bp.condition.clone(),
+                        hit_condition: bp.hit_condition.clone(),
+                        log_message: bp.log_message.clone(),
+                        hit_count: 0,
+                        verified: false,
+                        message: Some(format!(
+                            "Invalid hitCondition `{hit_condition}` (expected numeric expression like `10`, `>= 5`, `%2`)"
+                        )),
+                    };
+                    records.push(record);
+                    continue;
+                }
+            }
+
+            // AC7: AST-based breakpoint validation via `perl-dap-breakpoint` microcrate.
+            let (verified, resolved_line, message) = match &validator {
+                Some(Ok(v)) => {
+                    let result = v.validate_with_column(bp.line, bp.column);
+                    (result.verified, result.line, result.message)
+                }
+                Some(Err(error)) => (false, bp.line, Some(error.clone())),
+                None => {
+                    // Can't read file - mark as unverified but still create breakpoint.
+                    (false, bp.line, Some("Unable to read source file".to_string()))
+                }
             };
 
             let record = BreakpointRecord {
                 id,
-                line: bp.line,
+                line: resolved_line,
                 column: bp.column,
                 condition: bp.condition.clone(),
+                hit_condition: bp.hit_condition.clone(),
+                log_message: bp.log_message.clone(),
+                hit_count: 0,
                 verified,
                 message,
             };
@@ -368,6 +418,45 @@ impl BreakpointStore {
             }
         }
         None
+    }
+
+    /// Register a runtime breakpoint hit and return stop/logpoint behavior.
+    ///
+    /// This method updates per-breakpoint hit counters and evaluates DAP hit
+    /// conditions. For logpoints, execution continues after emitting output.
+    pub fn register_breakpoint_hit(&self, source_path: &str, line: i64) -> BreakpointHitOutcome {
+        let mut breakpoints_map = self.breakpoints.lock().unwrap_or_else(|e| e.into_inner());
+        let mut outcome = BreakpointHitOutcome::default();
+
+        for (stored_path, records) in &mut *breakpoints_map {
+            if !file_paths_match(stored_path, source_path) {
+                continue;
+            }
+
+            for record in records {
+                if !record.verified || record.line != line {
+                    continue;
+                }
+
+                outcome.matched = true;
+                record.hit_count = record.hit_count.saturating_add(1);
+
+                let hit_condition_match =
+                    evaluate_hit_condition(record.hit_condition.as_deref(), record.hit_count)
+                        .unwrap_or(false);
+                if !hit_condition_match {
+                    continue;
+                }
+
+                if let Some(message) = record.log_message.clone() {
+                    outcome.log_messages.push(message);
+                } else {
+                    outcome.should_stop = true;
+                }
+            }
+        }
+
+        outcome
     }
 
     /// AC7.4: Adjust breakpoints for a file edit
@@ -472,11 +561,19 @@ print "result: $final\n";
         let args = SetBreakpointsArguments {
             source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 10, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
                 SourceBreakpoint {
                     line: 25,
                     column: Some(5),
                     condition: Some("$x > 10".to_string()),
+                    hit_condition: None,
+                    log_message: None,
                 },
             ]),
             source_modified: None,
@@ -500,7 +597,13 @@ print "result: $final\n";
         // Set initial breakpoints
         let args1 = SetBreakpointsArguments {
             source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
-            breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
         store.set_breakpoints(&args1);
@@ -509,8 +612,20 @@ print "result: $final\n";
         let args2 = SetBreakpointsArguments {
             source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 20, column: None, condition: None },
-                SourceBreakpoint { line: 26, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 20,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 26,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
             ]),
             source_modified: None,
         };
@@ -533,8 +648,20 @@ print "result: $final\n";
         let args = SetBreakpointsArguments {
             source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 10, column: None, condition: None },
-                SourceBreakpoint { line: 20, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 20,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
             ]),
             source_modified: None,
         };
@@ -553,9 +680,27 @@ print "result: $final\n";
             source: Source { path: Some(source_path), name: Some("script.pl".to_string()) },
             // Use lines within our 30-line test file, but out of order
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 25, column: None, condition: None },
-                SourceBreakpoint { line: 10, column: None, condition: None },
-                SourceBreakpoint { line: 15, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 25,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 15,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
             ]),
             source_modified: None,
         };
@@ -578,7 +723,13 @@ print "result: $final\n";
                 path: Some(source_path.to_string()),
                 name: Some("script.pl".to_string()),
             },
-            breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
         store.set_breakpoints(&args);
@@ -601,7 +752,13 @@ print "result: $final\n";
                 path: Some("/workspace/file1.pl".to_string()),
                 name: Some("file1.pl".to_string()),
             },
-            breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
         store.set_breakpoints(&args1);
@@ -611,7 +768,13 @@ print "result: $final\n";
                 path: Some("/workspace/file2.pl".to_string()),
                 name: Some("file2.pl".to_string()),
             },
-            breakpoints: Some(vec![SourceBreakpoint { line: 20, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 20,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
         store.set_breakpoints(&args2);
@@ -633,8 +796,20 @@ print "result: $final\n";
                 name: Some("script.pl".to_string()),
             },
             breakpoints: Some(vec![
-                SourceBreakpoint { line: 10, column: None, condition: None },
-                SourceBreakpoint { line: 25, column: None, condition: None },
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 25,
+                    column: None,
+                    condition: None,
+                    hit_condition: None,
+                    log_message: None,
+                },
             ]),
             source_modified: None,
         };
@@ -674,7 +849,13 @@ print "result: $final\n";
         let store = BreakpointStore::new();
         let args = SetBreakpointsArguments {
             source: Source { path: None, name: Some("script.pl".to_string()) },
-            breakpoints: Some(vec![SourceBreakpoint { line: 10, column: None, condition: None }]),
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 10,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
             source_modified: None,
         };
 
@@ -694,6 +875,9 @@ print "result: $final\n";
             line: 10,
             column: None,
             condition: None,
+            hit_condition: None,
+            log_message: None,
+            hit_count: 0,
             verified: true,
             message: None,
         };
@@ -714,6 +898,69 @@ print "result: $final\n";
         // 3. Edit after breakpoint (no shift)
         store.adjust_breakpoints_for_edit(source_path, 20, 10);
         assert_eq!(store.get_breakpoints(source_path)[0].line, 12);
+    }
+
+    #[test]
+    fn test_hit_condition_parser_variants() {
+        assert_eq!(evaluate_hit_condition(None, 1), Some(true));
+        assert_eq!(evaluate_hit_condition(Some(""), 1), Some(true));
+        assert_eq!(evaluate_hit_condition(Some("3"), 3), Some(true));
+        assert_eq!(evaluate_hit_condition(Some("=3"), 2), Some(false));
+        assert_eq!(evaluate_hit_condition(Some(">= 2"), 2), Some(true));
+        assert_eq!(evaluate_hit_condition(Some(">2"), 2), Some(false));
+        assert_eq!(evaluate_hit_condition(Some("%2"), 4), Some(true));
+        assert_eq!(evaluate_hit_condition(Some("%0"), 4), None);
+        assert_eq!(evaluate_hit_condition(Some("invalid"), 1), None);
+    }
+
+    #[test]
+    fn test_register_breakpoint_hit_respects_hit_conditions_and_logpoints() {
+        let (_file, source_path) = create_test_perl_file();
+        let store = BreakpointStore::new();
+
+        let args = SetBreakpointsArguments {
+            source: Source { path: Some(source_path.clone()), name: Some("script.pl".to_string()) },
+            breakpoints: Some(vec![
+                SourceBreakpoint {
+                    line: 10,
+                    column: None,
+                    condition: None,
+                    hit_condition: Some(">= 2".to_string()),
+                    log_message: None,
+                },
+                SourceBreakpoint {
+                    line: 15,
+                    column: None,
+                    condition: None,
+                    hit_condition: Some("%2".to_string()),
+                    log_message: Some("loop tick".to_string()),
+                },
+            ]),
+            source_modified: None,
+        };
+        let responses = store.set_breakpoints(&args);
+        assert_eq!(responses.len(), 2);
+        assert!(responses.iter().all(|bp| bp.verified));
+
+        let first_hit = store.register_breakpoint_hit(&source_path, 10);
+        assert!(first_hit.matched);
+        assert!(!first_hit.should_stop);
+        assert!(first_hit.log_messages.is_empty());
+
+        let second_hit = store.register_breakpoint_hit(&source_path, 10);
+        assert!(second_hit.matched);
+        assert!(second_hit.should_stop);
+        assert!(second_hit.log_messages.is_empty());
+
+        let logpoint_first = store.register_breakpoint_hit(&source_path, 15);
+        assert!(logpoint_first.matched);
+        assert!(!logpoint_first.should_stop);
+        assert!(logpoint_first.log_messages.is_empty());
+
+        let logpoint_second = store.register_breakpoint_hit(&source_path, 15);
+        assert!(logpoint_second.matched);
+        assert!(!logpoint_second.should_stop);
+        assert_eq!(logpoint_second.log_messages, vec!["loop tick".to_string()]);
     }
 
     #[test]

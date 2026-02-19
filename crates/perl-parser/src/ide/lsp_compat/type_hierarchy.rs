@@ -12,6 +12,13 @@
 //! 4. **Complete**: Context-aware completion using type information
 //! 5. **Analyze**: Cross-reference analysis and refactoring
 //!
+//! # Protocol and Client Capabilities
+//!
+//! - **Client capabilities**: Uses negotiated type-hierarchy capabilities to
+//!   control preparation and traversal responses.
+//! - **Protocol compliance**: Implements `textDocument/typeHierarchy` methods
+//!   from the LSP 3.17 specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Hierarchy building**: O(n) where n is type definitions
@@ -41,17 +48,6 @@
 //! # Ok(())
 //! # }
 //! ```
-
-use std::sync::LazyLock;
-
-static UNKNOWN_URI: LazyLock<Url> = LazyLock::new(|| {
-    Url::parse("file:///unknown").unwrap_or_else(|_| {
-        Url::parse("file:///").unwrap_or_else(|_| {
-            // Truly catastrophic if this fails, but it's a constant
-            unreachable!("Failed to parse constant fallback URIs")
-        })
-    })
-});
 
 /// Provides type hierarchy analysis for Perl projects
 ///
@@ -518,7 +514,7 @@ impl TypeHierarchyProvider {
                 "Class with {} methods",
                 type_info.methods.len()
             )),
-            uri: Some(Url::parse(&type_info.file_path).unwrap_or_else(|_| UNKNOWN_URI.clone())),
+            uri: Url::parse(&type_info.file_path).ok(),
             range: type_info.definition_range,
             selection_range: type_info.definition_range,
             data: None,

@@ -59,7 +59,7 @@
 //!
 //! ### LSP Integration
 //!
-//! Use as a library for LSP features (see [`perl_lsp`] for the standalone server):
+//! Use as a library for LSP features (see `perl-lsp` for the standalone server):
 //!
 //! ```rust
 //! use perl_parser::{Parser, SemanticAnalyzer};
@@ -89,13 +89,15 @@
 //! - **[`quote_parser`]**: Specialized parser for quote-like operators
 //! - **[`heredoc_collector`]**: FIFO heredoc collection with indent stripping
 //!
-//! ### IDE Integration ([`ide`])
+//! ### IDE Integration (LSP Provider Modules)
 //!
-//! - **[`lsp`]**: Core LSP protocol types and message handling
-//! - **[`lsp_compat`]**: LSP feature providers (completion, hover, etc.)
-//! - **[`diagnostics_catalog`]**: Stable diagnostic codes and messages
-//! - **[`cancellation`]**: Request cancellation infrastructure
-//! - **[`call_hierarchy_provider`]**: Function call navigation
+//! - **[`completion`]**: Context-aware completion providers
+//! - **[`diagnostics`]**: Diagnostics generation and formatting
+//! - **[`references`]**: Reference search providers
+//! - **[`rename`]**: Rename providers with validation
+//! - **[`semantic_tokens`]**: Semantic token generation
+//! - **[`type_definition`]**: Type definition providers
+//! - **[`workspace_symbols`]**: Workspace symbol search
 //!
 //! ### Analysis ([`analysis`])
 //!
@@ -125,7 +127,7 @@
 //!
 //! ## LSP Feature Support
 //!
-//! This crate provides the engine for LSP features. The standalone server is in [`perl_lsp`].
+//! This crate provides the engine for LSP features. The standalone server is in `perl-lsp`.
 //!
 //! ### Implemented Features
 //!
@@ -205,7 +207,7 @@
 //!
 //! ## Testing with perl-corpus
 //!
-//! The parser is tested against the comprehensive [`perl_corpus`] test suite:
+//! The parser is tested against the comprehensive `perl-corpus` test suite:
 //!
 //! ```bash
 //! # Run parser tests with full corpus coverage
@@ -273,10 +275,10 @@
 //!
 //! ## Related Crates
 //!
-//! - [`perl_lsp`]: Standalone LSP server runtime (moved from this crate)
-//! - [`perl_lexer`]: Context-aware Perl tokenizer
-//! - [`perl_corpus`]: Comprehensive test corpus and generators
-//! - [`perl_dap`]: Debug Adapter Protocol implementation
+//! - `perl-lsp`: Standalone LSP server runtime (moved from this crate)
+//! - `perl-lexer`: Context-aware Perl tokenizer
+//! - `perl-corpus`: Comprehensive test corpus and generators
+//! - `perl-dap`: Debug Adapter Protocol implementation
 //!
 //! ## Documentation
 //!

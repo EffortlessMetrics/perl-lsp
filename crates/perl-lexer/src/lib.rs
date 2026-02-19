@@ -683,10 +683,20 @@ impl<'a> PerlLexer<'a> {
 
     #[allow(clippy::inline_always)] // Performance critical in lexer hot path
     #[inline(always)]
+    fn byte_at(bytes: &[u8], index: usize) -> u8 {
+        debug_assert!(index < bytes.len());
+        match bytes.get(index) {
+            Some(&byte) => byte,
+            None => 0,
+        }
+    }
+
+    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
+    #[inline(always)]
     fn current_char(&self) -> Option<char> {
         if self.position < self.input_bytes.len() {
             // For ASCII, direct access is safe
-            let byte = unsafe { *self.input_bytes.get_unchecked(self.position) };
+            let byte = Self::byte_at(self.input_bytes, self.position);
             if byte < 128 {
                 Some(byte as char)
             } else {
@@ -703,7 +713,7 @@ impl<'a> PerlLexer<'a> {
         let pos = self.position + offset;
         if pos < self.input_bytes.len() {
             // For ASCII, direct access is safe
-            let byte = unsafe { *self.input_bytes.get_unchecked(pos) };
+            let byte = Self::byte_at(self.input_bytes, pos);
             if byte < 128 {
                 Some(byte as char)
             } else {
@@ -719,7 +729,7 @@ impl<'a> PerlLexer<'a> {
     #[inline(always)]
     fn advance(&mut self) {
         if self.position < self.input_bytes.len() {
-            let byte = unsafe { *self.input_bytes.get_unchecked(self.position) };
+            let byte = Self::byte_at(self.input_bytes, self.position);
             if byte < 128 {
                 // ASCII fast path
                 self.position += 1;
@@ -756,14 +766,14 @@ impl<'a> PerlLexer<'a> {
         }
 
         while self.position < self.input_bytes.len() {
-            let byte = unsafe { *self.input_bytes.get_unchecked(self.position) };
+            let byte = Self::byte_at(self.input_bytes, self.position);
             match byte {
                 // Fast path for ASCII whitespace - batch process
                 b' ' => {
                     // Batch skip spaces for better cache efficiency
                     let start = self.position;
                     while self.position < self.input_bytes.len()
-                        && unsafe { *self.input_bytes.get_unchecked(self.position) } == b' '
+                        && Self::byte_at(self.input_bytes, self.position) == b' '
                     {
                         self.position += 1;
                     }
@@ -776,7 +786,7 @@ impl<'a> PerlLexer<'a> {
                     // Batch skip tabs
                     let start = self.position;
                     while self.position < self.input_bytes.len()
-                        && unsafe { *self.input_bytes.get_unchecked(self.position) } == b'\t'
+                        && Self::byte_at(self.input_bytes, self.position) == b'\t'
                     {
                         self.position += 1;
                     }
@@ -1016,16 +1026,14 @@ impl<'a> PerlLexer<'a> {
 
         // Fast byte check for digits - optimized bounds checking
         let bytes = self.input_bytes;
-        if self.position >= bytes.len()
-            || !unsafe { bytes.get_unchecked(self.position) }.is_ascii_digit()
-        {
+        if self.position >= bytes.len() || !Self::byte_at(bytes, self.position).is_ascii_digit() {
             return None;
         }
 
         // Consume initial digits - unrolled for better performance
         let mut pos = self.position;
         while pos < bytes.len() {
-            let byte = unsafe { *bytes.get_unchecked(pos) };
+            let byte = Self::byte_at(bytes, pos);
             if byte.is_ascii_digit() || byte == b'_' {
                 pos += 1;
             } else {
@@ -1035,7 +1043,7 @@ impl<'a> PerlLexer<'a> {
         self.position = pos;
 
         // Check for decimal point - optimized with single bounds check
-        if pos < bytes.len() && unsafe { *bytes.get_unchecked(pos) } == b'.' {
+        if pos < bytes.len() && Self::byte_at(bytes, pos) == b'.' {
             // Peek ahead to see what follows the dot
             let has_following_digit = pos + 1 < bytes.len() && bytes[pos + 1].is_ascii_digit();
 

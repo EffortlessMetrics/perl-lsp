@@ -109,6 +109,12 @@ pub struct SourceBreakpoint {
     /// Breakpoint condition (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub condition: Option<String>,
+    /// Hit-condition expression (optional), e.g. `>= 10` or `%2`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hit_condition: Option<String>,
+    /// Logpoint message (optional). When present, breakpoint logs and continues.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub log_message: Option<String>,
 }
 
 /// Arguments for setBreakpoints request
@@ -233,9 +239,24 @@ pub struct Capabilities {
     /// Supports conditional breakpoints
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports_conditional_breakpoints: Option<bool>,
+    /// Supports hit-conditional breakpoints
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_hit_conditional_breakpoints: Option<bool>,
+    /// Supports logpoints
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_log_points: Option<bool>,
+    /// Supports exception breakpoint options
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_exception_options: Option<bool>,
+    /// Supports exception filter options
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_exception_filter_options: Option<bool>,
     /// Supports terminate request
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supports_terminate_request: Option<bool>,
+    /// Supports custom inlineValues request for inline debug hints
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supports_inline_values: Option<bool>,
 }
 
 // ============================================================================

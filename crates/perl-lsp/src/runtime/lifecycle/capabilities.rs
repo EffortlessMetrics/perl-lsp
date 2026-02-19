@@ -256,16 +256,15 @@ impl LspServer {
             capabilities["notebookDocumentSync"] = json!({
                 "notebookSelector": [
                     {
-                        "notebook": {
-                            "notebookType": "jupyter-notebook"
-                        },
+                        "notebook": "jupyter-notebook",
                         "cells": [
                             {
                                 "language": "perl"
                             }
                         ]
                     }
-                ]
+                ],
+                "save": true
             });
         }
 

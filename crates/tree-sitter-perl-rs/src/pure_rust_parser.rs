@@ -340,15 +340,35 @@ impl PureRustPerlParser {
         let mut statements = Vec::new();
         let lines: Vec<&str> = source.lines().collect();
         let mut current_block = String::new();
-        let mut brace_count = 0;
+        let mut brace_count: i32 = 0;
+        let mut in_single_quote = false;
+        let mut in_double_quote = false;
 
         for line in lines {
             current_block.push_str(line);
             current_block.push('\n');
 
-            // Count braces to handle multi-line statements
-            brace_count += line.chars().filter(|&c| c == '{').count() as i32;
-            brace_count -= line.chars().filter(|&c| c == '}').count() as i32;
+            // Count braces outside of string literals (state persists across lines)
+            {
+                let mut escaped = false;
+                for ch in line.chars() {
+                    if escaped {
+                        escaped = false;
+                        continue;
+                    }
+                    if ch == '\\' {
+                        escaped = true;
+                        continue;
+                    }
+                    match ch {
+                        '\'' if !in_double_quote => in_single_quote = !in_single_quote,
+                        '"' if !in_single_quote => in_double_quote = !in_double_quote,
+                        '{' if !in_single_quote && !in_double_quote => brace_count += 1,
+                        '}' if !in_single_quote && !in_double_quote => brace_count -= 1,
+                        _ => {}
+                    }
+                }
+            }
 
             // Try to parse when we have balanced braces or at semicolons
             if (brace_count == 0 && (line.trim().ends_with(';') || line.trim().ends_with('}')))
@@ -374,9 +394,13 @@ impl PureRustPerlParser {
                             }
                         }
                         current_block.clear();
+                        in_single_quote = false;
+                        in_double_quote = false;
                     } else {
                         // If that fails, skip and continue
                         current_block.clear();
+                        in_single_quote = false;
+                        in_double_quote = false;
                     }
                 } else if trimmed.starts_with('#') {
                     // Handle comments
@@ -2673,10 +2697,10 @@ impl Default for PureRustPerlParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_basic_parsing() {
-        use perl_tdd_support::must;
         let mut parser = PureRustPerlParser::new();
         let source = "$var";
         let result = parser.parse(source);
@@ -2704,17 +2728,10 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         let source = "my $var = 42;";
         let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("Success! AST: {:?}", ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
-            }
-        }
+        let ast = must(result);
+        let sexp = parser.to_sexp(&ast);
+        println!("Success! AST: {:?}", ast);
+        println!("S-expression: {}", sexp);
     }
 
     #[test]
@@ -2722,16 +2739,9 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         let source = "sub hello { print 'Hello'; }";
         let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
-            }
-        }
+        let ast = must(result);
+        let sexp = parser.to_sexp(&ast);
+        println!("S-expression: {}", sexp);
     }
 
     #[test]
@@ -2739,16 +2749,9 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         let source = "if ($x > 0) { print 'positive'; }";
         let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
-            }
-        }
+        let ast = must(result);
+        let sexp = parser.to_sexp(&ast);
+        println!("S-expression: {}", sexp);
     }
 
     #[test]
@@ -2756,17 +2759,10 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         let source = "@array = (1, 2, 3);";
         let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("Array assignment AST: {:?}", ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
-            }
-        }
+        let ast = must(result);
+        let sexp = parser.to_sexp(&ast);
+        println!("Array assignment AST: {:?}", ast);
+        println!("S-expression: {}", sexp);
     }
 
     #[test]
@@ -2774,16 +2770,9 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         let source = "%hash = (a => 1, b => 2);";
         let result = parser.parse(source);
-        match result {
-            Ok(ast) => {
-                let sexp = parser.to_sexp(&ast);
-                println!("Hash assignment AST: {:?}", ast);
-                println!("S-expression: {}", sexp);
-            }
-            Err(e) => {
-                println!("Parse error: {}", e);
-                assert!(false, "Parse should succeed");
-            }
-        }
+        let ast = must(result);
+        let sexp = parser.to_sexp(&ast);
+        println!("Hash assignment AST: {:?}", ast);
+        println!("S-expression: {}", sexp);
     }
 }

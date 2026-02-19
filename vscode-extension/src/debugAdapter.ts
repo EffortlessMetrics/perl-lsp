@@ -11,7 +11,7 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
         
         if (!dapPath) {
             vscode.window.showErrorMessage(
-                'Perl Debug Adapter not found. Please install it with: cargo install --path crates/perl-parser --bin perl-dap'
+                'Perl Debug Adapter not found. Please install it with: cargo install --path crates/perl-dap --bin perl-dap'
             );
             return undefined;
         }
@@ -29,12 +29,14 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
         }
 
         // Otherwise, check common installation locations
-        const possiblePaths = [
-            path.join(process.env.HOME || '', '.cargo', 'bin', 'perl-dap'),
-            path.join(process.env.CARGO_HOME || '', 'bin', 'perl-dap'),
-            '/usr/local/bin/perl-dap',
-            '/usr/bin/perl-dap',
+        const binary = process.platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
+        const possiblePaths: string[] = [
+            path.join(process.env.HOME || '', '.cargo', 'bin', binary),
+            path.join(process.env.CARGO_HOME || '', 'bin', binary),
         ];
+        if (process.platform !== 'win32') {
+            possiblePaths.push('/usr/local/bin/perl-dap', '/usr/bin/perl-dap');
+        }
 
         for (const p of possiblePaths) {
             if (this.isExecutable(p)) {
@@ -110,8 +112,21 @@ export class PerlDebugConfigurationProvider implements vscode.DebugConfiguration
             }
         }
 
+        if (config.request === 'attach') {
+            // Attach supports either processId or host/port.
+            if (config.processId === undefined || config.processId === null) {
+                if (!config.host) {
+                    config.host = 'localhost';
+                }
+                if (config.port === undefined || config.port === null) {
+                    config.port = 13603;
+                }
+            }
+            return config;
+        }
+
         if (!config.program) {
-            return vscode.window.showInformationMessage('Cannot find a Perl file to debug').then(_ => {
+            return vscode.window.showInformationMessage('Cannot find a Perl file to debug').then(() => {
                 return undefined;
             });
         }
@@ -142,6 +157,20 @@ export class PerlDebugConfigurationProvider implements vscode.DebugConfiguration
                 env: {
                     'PERL_TEST_HARNESS_DUMP_TAP': '1'
                 }
+            },
+            {
+                type: 'perl',
+                request: 'attach',
+                name: 'Attach by TCP',
+                host: 'localhost',
+                port: 13603,
+                timeout: 5000
+            },
+            {
+                type: 'perl',
+                request: 'attach',
+                name: 'Attach by Process ID',
+                processId: 12345
             }
         ];
     }

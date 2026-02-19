@@ -1667,7 +1667,11 @@ fn test_dollar_prefixed_request_method_not_found() -> TestResult {
 #[test]
 fn test_notebook_document_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let init = harness.initialize(None)?;
+    assert!(
+        init["capabilities"]["notebookDocumentSync"].is_object(),
+        "notebookDocumentSync capability should be advertised"
+    );
 
     // didOpen notebook
     harness.notify(
@@ -1689,10 +1693,24 @@ fn test_notebook_document_3_17() -> TestResult {
                     "uri": "file:///test.ipynb#cell1",
                     "languageId": "perl",
                     "version": 1,
-                    "text": "print 'Hello from notebook'"
+                    "text": "sub from_notebook_cell { return 1; }\n"
                 }
             ]
         }),
+    );
+
+    let cell1_symbols = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": {
+                "uri": "file:///test.ipynb#cell1"
+            }
+        }),
+    )?;
+    let cell1_symbols = cell1_symbols.as_array().ok_or("cell1 symbols should be an array")?;
+    assert!(
+        cell1_symbols.iter().any(|symbol| symbol["name"].as_str() == Some("from_notebook_cell")),
+        "Expected symbol from_notebook_cell in notebook cell document symbols"
     );
 
     // didChange notebook
@@ -1721,13 +1739,27 @@ fn test_notebook_document_3_17() -> TestResult {
                                 "uri": "file:///test.ipynb#cell2",
                                 "languageId": "perl",
                                 "version": 1,
-                                "text": "my $x = 42;"
+                                "text": "sub second_notebook_cell { return 42; }\n"
                             }
                         ]
                     }
                 }
             }
         }),
+    );
+
+    let cell2_symbols = harness.request(
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": {
+                "uri": "file:///test.ipynb#cell2"
+            }
+        }),
+    )?;
+    let cell2_symbols = cell2_symbols.as_array().ok_or("cell2 symbols should be an array")?;
+    assert!(
+        cell2_symbols.iter().any(|symbol| symbol["name"].as_str() == Some("second_notebook_cell")),
+        "Expected symbol second_notebook_cell in newly opened notebook cell"
     );
 
     // didSave notebook
@@ -1759,7 +1791,11 @@ fn test_notebook_document_3_17() -> TestResult {
 #[test]
 fn test_notebook_execution_summary_3_17() -> TestResult {
     let mut harness = LspHarness::new();
-    harness.initialize(None)?;
+    let init = harness.initialize(None)?;
+    assert!(
+        init["capabilities"]["notebookDocumentSync"].is_object(),
+        "notebookDocumentSync capability should be advertised"
+    );
 
     // didOpen notebook with a single cell
     harness.notify(

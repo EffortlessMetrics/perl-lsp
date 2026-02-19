@@ -9,7 +9,7 @@
 # Categories tracked:
 #   - brokenpipe: BrokenPipe/transport flakes
 #   - feature: Feature-gated/not implemented
-#   - infra: Infrastructure/TODO items
+#   - infra: Infrastructure/pending items
 #   - protocol: Protocol compliance issues
 #   - manual: Manual helper tests (snapshot regen, etc.)
 #   - stress: Stress tests (run with --features stress-tests)
@@ -80,8 +80,8 @@ categorize_ignore() {
     # Check for known bugs that need fixing (explicit BUG: prefix FIRST)
     elif [[ "$lower_reason" =~ ^bug:|bug:\ |known.bug|regression|incorrect.behavior|parser.bug|missing.*notification|missing.*initialize|server.returns.*instead|exposes.*|will.kill|mut_[0-9]+|known.inconsistencies|matching.issue|investigate|instead.of.expected|different.error.format|expects.*but.implementation ]]; then
         echo "bug"
-    # Check for infrastructure/TODO (explicit TODO: prefix BEFORE brokenpipe patterns)
-    # Also match TODO anywhere in the string for inline TODOs like "edge case - TODO: fix later"
+    # Check for infrastructure/pending (explicit prefix BEFORE brokenpipe patterns)
+    # Also match inline pending markers like "edge case - needs fix later"
     elif [[ "$lower_reason" =~ ^todo:|^infra:|infra\ |todo:|fixme|needs|requires|setup|config|environment|run.with|only.run.after|only.run.when ]]; then
         echo "infra"
     # Check for feature-gated/not implemented (before brokenpipe)

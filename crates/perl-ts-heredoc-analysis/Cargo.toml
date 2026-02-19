@@ -1,0 +1,31 @@
+[package]
+name = "perl-ts-heredoc-analysis"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+description = "Standalone heredoc analysis tools for Perl parsing"
+publish = false
+license = "Apache-2.0 OR MIT"
+
+[dependencies]
+regex = "1.12.2"
+encoding_rs = "0.8.35"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.17"
+
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+
+[lints.rust]
+unused_imports = "warn"
+dead_code = "warn"
+
+[lints.clippy]
+collapsible_if = "warn"
+manual_strip = "warn"
+unnecessary_map_or = "warn"
+redundant_closure = "warn"
+while_let_on_iterator = "warn"
+len_zero = "warn"
+only_used_in_recursion = "warn"
+ptr_arg = "warn"

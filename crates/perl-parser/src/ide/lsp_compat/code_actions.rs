@@ -12,12 +12,24 @@
 //! 4. **Complete**: Context-aware completion
 //! 5. **Analyze**: Code actions and refactoring with this module
 //!
+//! # Protocol and Client Capabilities
+//!
+//! - **Client capabilities**: Adapts returned actions to advertised client
+//!   code-action and resolve capabilities.
+//! - **Protocol compliance**: Implements the `textDocument/codeAction`
+//!   request/response flow from the LSP 3.17 specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Action detection**: O(n) where n is AST nodes
 //! - **Code analysis**: <5ms for typical files
 //! - **Memory usage**: ~200KB for 100 code actions
 //! - **Workspace actions**: <50μs for cross-file operations
+//!
+//! # See Also
+//!
+//! - [`crate::ide::lsp_compat::diagnostics::DiagnosticProvider`]
+//! - [`crate::ide::lsp_compat::references::ReferenceProvider`]
 //!
 //! # Usage Examples
 //!

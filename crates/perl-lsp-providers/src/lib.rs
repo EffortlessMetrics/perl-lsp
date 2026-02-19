@@ -61,13 +61,26 @@ pub use perl_parser_core::{Parser, ast, position};
 pub mod ide;
 
 /// Re-exports from `perl_lsp_tooling` for backward compatibility.
-pub mod tooling_export {
+pub mod tooling {
     pub use perl_lsp_tooling::*;
+}
+
+/// Deprecated alias for [`tooling`].
+///
+/// Use `perl_lsp_providers::tooling` instead.
+#[deprecated(since = "0.9.0", note = "Use perl_lsp_providers::tooling instead")]
+pub mod tooling_export {
+    pub use super::tooling::*;
 }
 
 /// Re-exports from `perl_lsp_diagnostics` for backward compatibility.
 pub mod diagnostics {
     pub use perl_lsp_diagnostics::*;
+}
+
+/// Re-exports from `perl_lsp_formatting` for backward compatibility.
+pub mod formatting {
+    pub use perl_lsp_formatting::*;
 }
 
 /// Re-exports from `perl_lsp_semantic_tokens` for backward compatibility.

@@ -6,6 +6,7 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_tdd_support::must;
 use std::hint::black_box;
+#[cfg(not(feature = "pure-rust"))]
 use tree_sitter::Parser;
 
 // Import the language function based on features

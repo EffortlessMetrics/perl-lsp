@@ -6,7 +6,7 @@ Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 
 ## 📍 You Are Here
 
-**Project Status**: v0.9.0 released; v0.9.1 close-out in progress; v1.0 planning underway
+**Project Status**: v0.9.1 close-out receipts captured; v1.0.x hardening underway
 **Open Issues**: See GitHub milestones/issues for live counts
 
 ## 🎯 5-Minute Orientation
@@ -16,14 +16,14 @@ Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 - Fast native Rust parser with near-complete Perl 5 coverage
 - Production-grade LSP server with broad feature support (tracked in `features.toml`)
-- DAP support with native CLI + BridgeAdapter (Phase 1)
+- DAP support with native preview adapter + BridgeAdapter compatibility path
 - Quality gates: tests, fuzzing/mutation hardening, missing_docs enforcement (see `CURRENT_STATUS.md`)
 
 ### Current Focus
 
-**Now (v0.9.1 close-out)**
-- Workspace index state machine verification + receipts (phase transitions, early-exit caps)
-- Documentation cleanup (`missing_docs`)
+**Now (post v0.9.1 close-out)**
+- Keep close-out receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
+- Publish benchmark outputs under `benchmarks/results/`
 
 **Next (v1.0.0)**
 - Stability statement + packaging stance
@@ -31,7 +31,7 @@ perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 - Upgrade notes from v0.8.x → v1.0
 
 **Later (post v1.0)**
-- Native DAP completeness (attach, variables/evaluate, safe eval)
+- DAP preview -> GA hardening (runtime variable/evaluate depth + packaging)
 - Full LSP 3.18 compliance
 - Package manager distribution
 
@@ -54,10 +54,10 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 
 ## 🚨 What Needs Attention RIGHT NOW
 
-### Now (as of 2026-01-27)
-1. 🔴 **Index state machine verification** - confirm transitions, early-exit caps, and receipts
-2. 🔴 **Documentation cleanup** - reduce `missing_docs` violations + module-level docs
-3. 🟡 **v0.9.1 release notes + doc alignment** - CHANGELOG/ROADMAP/CURRENT_STATUS in sync
+### Now (as of 2026-02-16)
+1. 🟡 **Benchmark publication** - commit canonical benchmark outputs under `benchmarks/results/`
+2. 🟡 **v1.0.x packaging stance** - finalize supported platforms and shipping model
+3. 🟡 **Upgrade notes polish** - ensure v0.8.x → v1.0 path is explicit
 4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/LSP_MISSING_FEATURES_REPORT.md`
 
 ### Next
@@ -74,7 +74,7 @@ perl-lsp/
 ├── crates/
 │   ├── perl-parser/      ⭐ Main crate - Parser
 │   ├── perl-lsp/          LSP server binary + LSP logic
-│   ├── perl-dap/          Debug Adapter Protocol (Phase 1 complete)
+│   ├── perl-dap/          Debug Adapter Protocol (native preview + bridge fallback)
 │   ├── perl-lexer/        Context-aware tokenizer
 │   ├── perl-corpus/       Test corpus (see CURRENT_STATUS for counts)
 │   └── perl-parser-pest/  Legacy Pest parser
@@ -115,8 +115,8 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp  # With adaptive threading
 
 ## 💡 Where to Start Contributing
 
-- Check the active milestone (v0.9.1) and the `good first issue` / `help wanted` labels
-- Near-term work: index state machine + documentation cleanup (see ROADMAP)
+- Check the active milestone and the `good first issue` / `help wanted` labels
+- Near-term work: benchmark publication + v1.0.x packaging/readiness (see ROADMAP)
 - Larger efforts: v1.0 milestone and `phase:*` labels
 - See [CONTRIBUTING.md](../CONTRIBUTING.md) for workflow details
 
@@ -193,6 +193,6 @@ The perl-lsp project has clear paths to both MVP and Production v1.0. Your contr
 
 ---
 
-*This guide is kept up-to-date as the project evolves. Last updated: 2026-01-27*
+*This guide is kept up-to-date as the project evolves. Last updated: 2026-02-17*
 
 *For detailed status, see: [CURRENT_STATUS.md](CURRENT_STATUS.md)*

@@ -12,6 +12,13 @@
 //! 4. **Complete**: Context-aware completion
 //! 5. **Analyze**: Inlay hints with this module
 //!
+//! # Protocol and Client Capabilities
+//!
+//! - **Client capabilities**: Adapts hint labels and presentation based on
+//!   advertised inlay-hint capabilities from the client.
+//! - **Protocol compliance**: Implements `textDocument/inlayHint` behavior
+//!   from the LSP 3.17 specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Hint generation**: O(n) where n is AST nodes

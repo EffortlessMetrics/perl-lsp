@@ -128,10 +128,7 @@ pub struct IndexMetrics {
     /// Parse storm threshold
     parse_storm_threshold: usize,
 
-    /// Last successful index time
-    ///
-    /// TODO: Future use - telemetry reporting and cache invalidation timestamps
-    #[allow(dead_code)]
+    /// Last successful index time (epoch millis)
     last_indexed: std::sync::atomic::AtomicU64,
 }
 
@@ -142,6 +139,20 @@ impl IndexMetrics {
             parse_storm_threshold,
             last_indexed: std::sync::atomic::AtomicU64::new(0),
         }
+    }
+
+    /// Record the current time as the last indexed timestamp
+    fn record_indexed(&self) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        self.last_indexed.store(now, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Return the last indexed timestamp (epoch millis), or 0 if never indexed
+    fn last_indexed_at(&self) -> u64 {
+        self.last_indexed.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -263,6 +274,9 @@ impl IndexCoordinator {
         // Update internal counters
         self.current_file_count.store(file_count, std::sync::atomic::Ordering::SeqCst);
         self.current_symbol_count.store(symbol_count, std::sync::atomic::Ordering::SeqCst);
+
+        // Record index timestamp
+        self.metrics.record_indexed();
     }
 
     /// Notify of file change (may trigger state transition)
@@ -325,6 +339,13 @@ impl IndexCoordinator {
         *state = IndexState::Ready { file_count, symbol_count, completed_at: Instant::now() };
     }
 
+    /// Return the last indexed timestamp (epoch millis), or 0 if never indexed
+    ///
+    /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#indexmetrics
+    pub fn last_indexed_at(&self) -> u64 {
+        self.metrics.last_indexed_at()
+    }
+
     /// Index a file (may trigger resource limit degradation)
     ///
     /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#test_max_files_triggers_degradation
@@ -332,6 +353,9 @@ impl IndexCoordinator {
         use std::sync::atomic::Ordering;
 
         let new_count = self.current_file_count.fetch_add(1, Ordering::SeqCst) + 1;
+
+        // Record index timestamp
+        self.metrics.record_indexed();
 
         // Check resource limit
         if new_count > self.limits.max_files {
@@ -717,6 +741,38 @@ mod tests {
             coord.metrics.pending_parses.load(Ordering::SeqCst),
             2,
             "Pending parses should decrement with notify_parse_complete"
+        );
+    }
+
+    /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#indexmetrics
+    ///
+    /// Validates that last_indexed timestamp is updated during lifecycle
+    /// transitions: initial scan completion and file indexing.
+    #[test]
+    fn test_last_indexed_timestamp() {
+        let coord = IndexCoordinator::new();
+
+        // Before any indexing, timestamp should be 0
+        assert_eq!(coord.last_indexed_at(), 0, "last_indexed_at should be 0 before any indexing");
+
+        // Complete initial scan
+        coord.complete_initial_scan(10, 500);
+
+        let after_scan = coord.last_indexed_at();
+        assert!(after_scan > 0, "last_indexed_at should be set after complete_initial_scan");
+
+        // Small sleep to ensure timestamps differ
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        // Index a new file
+        coord.index_file("new_file.pm", "package Foo;");
+
+        let after_index = coord.last_indexed_at();
+        assert!(
+            after_index >= after_scan,
+            "last_indexed_at should update after index_file (got {} >= {})",
+            after_index,
+            after_scan
         );
     }
 }

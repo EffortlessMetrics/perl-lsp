@@ -210,9 +210,9 @@ graph TB
 
 #### Gap 3: Microcrating Completion
 
-**Current State**: Partially complete, several microcrates extracted
+**Current State**: Microcrate extraction complete with compatibility hardening
 
-**Remaining Work**:
+**Coverage Matrix**:
 Based on [`microcrate_architecture_design.md`](microcrate_architecture_design.md):
 
 | Proposed Crate | Status | Priority | Complexity |
@@ -227,10 +227,11 @@ Based on [`microcrate_architecture_design.md`](microcrate_architecture_design.md
 | `perl-lsp-code-actions` | ✅ Complete | P1 | Medium |
 | `perl-lsp-navigation` | ✅ Complete | P1 | Medium |
 
-**Note**: Most microcrates are already complete. Remaining work is:
-- Ensure re-export strategy is working
-- Verify backward compatibility
-- Update documentation
+**Close-out status**:
+- ✅ Re-export strategy validated (`perl_lsp_providers::{tooling,formatting,...}`)
+- ✅ Backward compatibility validated (legacy `ide::lsp_compat::*` shims)
+- ✅ Documentation updated (`crates/perl-lsp-providers/README.md`)
+- ✅ Compatibility tests added (`crates/perl-lsp-providers/tests/microcrate_reexports_compatibility.rs`)
 
 ---
 

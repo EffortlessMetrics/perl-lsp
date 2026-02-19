@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 description = "Text edit representation and helpers for incremental Perl parsing"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

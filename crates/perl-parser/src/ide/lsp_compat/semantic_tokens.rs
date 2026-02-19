@@ -12,6 +12,13 @@
 //! 4. **Complete**: Context-aware completion
 //! 5. **Analyze**: Semantic highlighting with this module
 //!
+//! # Protocol and Client Capabilities
+//!
+//! - **Client capabilities**: Respects semantic token capability negotiation
+//!   (token types, modifiers, and delta/full support).
+//! - **Protocol compliance**: Implements `textDocument/semanticTokens`
+//!   endpoints from the LSP 3.17 specification.
+//!
 //! # Performance Characteristics
 //!
 //! - **Token generation**: O(n) where n is AST nodes

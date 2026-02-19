@@ -9,7 +9,6 @@
 use anyhow::Result;
 use perl_dap::breakpoints::BreakpointStore;
 use perl_dap::protocol::{SetBreakpointsArguments, Source, SourceBreakpoint};
-use perl_tdd_support::must;
 use std::io::Write;
 use tempfile::NamedTempFile;
 
@@ -36,7 +35,13 @@ fn create_test_file_and_set_breakpoints(
     // Create breakpoint arguments
     let source_breakpoints: Vec<SourceBreakpoint> = lines
         .iter()
-        .map(|&line| SourceBreakpoint { line, column: None, condition: None })
+        .map(|&line| SourceBreakpoint {
+            line,
+            column: None,
+            condition: None,
+            hit_condition: None,
+            log_message: None,
+        })
         .collect();
 
     let args = SetBreakpointsArguments {
@@ -240,7 +245,13 @@ my $y = 100;
     // Set initial breakpoints
     let args1 = SetBreakpointsArguments {
         source: Source { path: Some(path.clone()), name: Some("test.pl".to_string()) },
-        breakpoints: Some(vec![SourceBreakpoint { line: 2, column: None, condition: None }]),
+        breakpoints: Some(vec![SourceBreakpoint {
+            line: 2,
+            column: None,
+            condition: None,
+            hit_condition: None,
+            log_message: None,
+        }]),
         source_modified: None,
     };
     store.set_breakpoints(&args1);
@@ -249,8 +260,20 @@ my $y = 100;
     let args2 = SetBreakpointsArguments {
         source: Source { path: Some(path.clone()), name: Some("test.pl".to_string()) },
         breakpoints: Some(vec![
-            SourceBreakpoint { line: 1, column: None, condition: None },
-            SourceBreakpoint { line: 3, column: None, condition: None },
+            SourceBreakpoint {
+                line: 1,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            },
+            SourceBreakpoint {
+                line: 3,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            },
         ]),
         source_modified: None,
     };
@@ -277,7 +300,13 @@ fn test_breakpoint_file_not_found() -> Result<()> {
             path: Some("/nonexistent/file.pl".to_string()),
             name: Some("file.pl".to_string()),
         },
-        breakpoints: Some(vec![SourceBreakpoint { line: 1, column: None, condition: None }]),
+        breakpoints: Some(vec![SourceBreakpoint {
+            line: 1,
+            column: None,
+            condition: None,
+            hit_condition: None,
+            log_message: None,
+        }]),
         source_modified: None,
     };
 
@@ -297,13 +326,50 @@ fn test_breakpoint_file_not_found() -> Result<()> {
 #[cfg(feature = "dap-phase2")]
 mod dap_breakpoint_matrix_phase2 {
     use super::*;
+    use std::path::PathBuf;
+    use std::time::{Duration, Instant};
+
+    fn fixture_path(name: &str) -> String {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures")
+            .join(name)
+            .to_string_lossy()
+            .to_string()
+    }
+
+    fn set_breakpoints(path: &str, lines: &[i64]) -> Vec<perl_dap::protocol::Breakpoint> {
+        let store = BreakpointStore::new();
+        let args = SetBreakpointsArguments {
+            source: Source { path: Some(path.to_string()), name: None },
+            breakpoints: Some(
+                lines
+                    .iter()
+                    .map(|line| SourceBreakpoint {
+                        line: *line,
+                        column: None,
+                        condition: None,
+                        hit_condition: None,
+                        log_message: None,
+                    })
+                    .collect(),
+            ),
+            source_modified: None,
+        };
+        store.set_breakpoints(&args)
+    }
 
     /// Tests feature spec: DAP_BREAKPOINT_VALIDATION_GUIDE.md#file-boundaries
     #[tokio::test]
     // AC:14
     async fn test_breakpoints_file_boundaries() -> Result<()> {
-        // First/last line breakpoint behavior
-        must(Err::<(), _>("File boundary breakpoints not yet implemented (AC14)"));
+        let path = fixture_path("breakpoints_file_boundaries.pl");
+        let breakpoints = set_breakpoints(&path, &[1, 7, 10, 21]);
+
+        assert_eq!(breakpoints.len(), 4);
+        assert!(!breakpoints[0].verified, "shebang line should not be executable");
+        assert!(breakpoints[1].verified, "use strict line should be executable");
+        assert!(breakpoints[2].verified, "function declaration line should be executable");
+        assert!(!breakpoints[3].verified, "EOF comment line should not be executable");
         Ok(())
     }
 
@@ -311,8 +377,14 @@ mod dap_breakpoint_matrix_phase2 {
     #[tokio::test]
     // AC:14
     async fn test_breakpoints_begin_end_blocks() -> Result<()> {
-        // BEGIN/END block breakpoint validation
-        must(Err::<(), _>("BEGIN/END block breakpoints not yet implemented (AC14)"));
+        let path = fixture_path("breakpoints_begin_end.pl");
+        let breakpoints = set_breakpoints(&path, &[10, 11, 28, 29]);
+
+        assert_eq!(breakpoints.len(), 4);
+        assert!(breakpoints[0].verified, "BEGIN block header should be executable");
+        assert!(!breakpoints[1].verified, "comment in BEGIN block should be rejected");
+        assert!(breakpoints[2].verified, "END block header should be executable");
+        assert!(!breakpoints[3].verified, "comment in END block should be rejected");
         Ok(())
     }
 
@@ -320,8 +392,14 @@ mod dap_breakpoint_matrix_phase2 {
     #[tokio::test]
     // AC:14
     async fn test_breakpoints_multiline_statements() -> Result<()> {
-        // Multi-line statement breakpoint behavior
-        must(Err::<(), _>("Multiline statement breakpoints not yet implemented (AC14)"));
+        let path = fixture_path("breakpoints_multiline.pl");
+        let breakpoints = set_breakpoints(&path, &[6, 7, 8, 9, 10, 17]);
+
+        assert_eq!(breakpoints.len(), 6);
+        assert!(
+            breakpoints.iter().all(|bp| bp.verified),
+            "multiline expression lines should remain breakpoint-capable"
+        );
         Ok(())
     }
 
@@ -329,8 +407,15 @@ mod dap_breakpoint_matrix_phase2 {
     #[tokio::test]
     // AC:14
     async fn test_breakpoints_in_pod_documentation() -> Result<()> {
-        // POD documentation breakpoint behavior
-        must(Err::<(), _>("POD documentation breakpoints not yet implemented (AC14)"));
+        let path = fixture_path("breakpoints_pod.pl");
+        let breakpoints = set_breakpoints(&path, &[5, 7, 18, 23, 31]);
+
+        assert_eq!(breakpoints.len(), 5);
+        assert!(!breakpoints[0].verified, "POD opening should not be executable");
+        assert!(!breakpoints[1].verified, "POD content should not be executable");
+        assert!(breakpoints[2].verified, "documented function should be executable");
+        assert!(!breakpoints[3].verified, "second POD section should not be executable");
+        assert!(breakpoints[4].verified, "post-POD executable statement should be executable");
         Ok(())
     }
 
@@ -338,8 +423,17 @@ mod dap_breakpoint_matrix_phase2 {
     #[tokio::test]
     // AC:14
     async fn test_breakpoints_in_string_literals() -> Result<()> {
-        // String literal breakpoint behavior
-        must(Err::<(), _>("String literal breakpoints not yet implemented (AC14)"));
+        let source = r#"my $x = qq(
+multi-line
+string
+);
+print $x;
+"#;
+        let breakpoints = create_test_file_and_set_breakpoints(source, vec![1, 2, 3, 4, 5])?;
+        assert_eq!(breakpoints.len(), 5);
+        // Current parser marks string interior lines as part of executable statement context.
+        assert!(breakpoints[0].verified);
+        assert!(breakpoints[4].verified);
         Ok(())
     }
 
@@ -347,8 +441,24 @@ mod dap_breakpoint_matrix_phase2 {
     #[test]
     // AC:14
     fn test_performance_benchmark_baselines() -> Result<()> {
-        // Benchmark suite: small (100 lines), medium (1000 lines), large (10K+ lines)
-        must(Err::<(), _>("Performance benchmark baselines not yet implemented (AC14)"));
+        let fixtures = [
+            ("performance/small_file.pl", vec![5, 10, 20]),
+            ("performance/medium_file.pl", vec![10, 50, 100]),
+            ("performance/large_file.pl", vec![10, 100, 500]),
+        ];
+
+        for (fixture, lines) in fixtures {
+            let path = fixture_path(fixture);
+            let start = Instant::now();
+            let breakpoints = set_breakpoints(&path, &lines);
+            let elapsed = start.elapsed();
+            assert_eq!(breakpoints.len(), lines.len());
+            assert!(
+                elapsed < Duration::from_millis(300),
+                "breakpoint baseline too slow for {fixture}: {:?}",
+                elapsed
+            );
+        }
         Ok(())
     }
 }

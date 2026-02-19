@@ -52,8 +52,8 @@ Key terms:
 
 | Metric | Value | Target | Status |
 | --- | --- | --- | --- |
-| **Tier A Tests** | 1221 lib tests (discovered), 161 ignores (tracked) | 100% pass | PASS |
-| **Tracked Test Debt** | 2 (1 bug, 1 manual) | 0 | Near-zero |
+| **Tier A Tests** | 1218 lib tests (discovered), 0 ignores (tracked) | 100% pass | PASS |
+| **Tracked Test Debt** | 0 (0 bug, 0 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
 | **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 93%+ | In progress |
 <!-- END: STATUS_METRICS_TABLE -->
@@ -72,16 +72,18 @@ Key terms:
 - **Refactoring Engine**: `perform_inline` and `perform_move_code` implemented
 - **Test Infrastructure**: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)
 - **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups
+- **Safety Ratchets**: production baseline currently at `unwrap/expect=0`, panic-family macros (`panic!/todo!/unimplemented!/unreachable!`) = `0`, explicit `unsafe` syntax = `0`
 - **Security**: Comprehensive hardening complete (path traversal, command injection, DAP evaluate, perldoc/perlcritic argument injection)
-- **DAP Server**: Native adapter CLI (launch/step/breakpoints), async BridgeAdapter with graceful shutdown; attach/variables/evaluate pending
+- **DAP Server**: Native adapter preview is implemented (breakpoints with AST validation via `perl-dap-breakpoint`, step/pause/continue handlers, safe-eval guards, stdio+socket transport, PID/TCP attach modes); BridgeAdapter remains available for Perl::LanguageServer interoperability
+- **Index State Machine Receipts (2026-02-16)**: `just ci-gate` + targeted state-machine tests and workspace benchmarks validated transitions, instrumentation, and caps (`~368.7us` initial small index, `~721.1us` initial medium index, `~212.6us` incremental update)
 
 ### Computed Metrics (auto-updated by `just status-update`)
 
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
 - **LSP Coverage**: 100% user-visible feature coverage (53/53 advertised features from `features.toml`)
-- **Protocol Compliance**: 100% overall LSP protocol support (89/89 including plumbing)
+- **Protocol Compliance**: 100% overall LSP protocol support (93/93 including plumbing)
 - **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~611 sections) + `test_corpus/` (78 `.pl` files)
-- **Test Status**: 1221 lib tests (Tier A), 161 ignores tracked (2 total tracked debt: 1 bug, 1 manual)
+- **Test Status**: 1218 lib tests (Tier A), 0 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
 - **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server production-ready (`just ci-gate` passing)
@@ -93,9 +95,9 @@ Key terms:
 
 ## What's Next
 
-**Now (v0.9.1 close-out)**
-- Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)
-- Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
+**Now (post v0.9.1 close-out)**
+- Keep verification receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
+- Publish benchmark outputs under `benchmarks/results/` for v1.0.x evidence trail
 
 **Next (v1.0.0 readiness)**
 - Stability statement (GA-lock + versioning rules)
@@ -105,7 +107,7 @@ Key terms:
 - Merge gates (#210) after CI pipeline cleanup (#211)
 
 **Later (post v1.0)**
-- Native DAP completeness (attach, variables/evaluate, safe eval)
+- DAP preview -> GA hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)
 - Full LSP 3.18 compliance
 - Package manager distribution (Homebrew/apt/etc.)
 
@@ -118,7 +120,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 - **Tracked test debt**: see `scripts/ignored-test-count.sh`; feature-gated ignores are by design
 - **CI Pipeline (#211)**: Blocks merge-blocking gates (#210)
 - **Docs scope**: perl-parser missing_docs is ratcheted (see `ci/check_missing_docs.sh`); workspace-wide enforcement is a separate decision
-- **Index State Machine**: Verification pending (run `just ci-gate` + targeted tests/benchmarks)
+- **Index State Machine**: Verification complete (2026-02-16 receipts captured with `just ci-gate` + targeted tests/benchmarks)
 
 ---
 
@@ -128,7 +130,7 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 | --- | --- | --- |
 | perl-parser | Production | ~100% Perl 5, 87% mutation score |
 | perl-lsp | Production | Coverage tracked via `features.toml` |
-| perl-dap | Phase 1 | Native adapter CLI; BridgeAdapter library available |
+| perl-dap | Preview (Native + Bridge) | Native adapter implemented/tested (phase2+phase3 suites); BridgeAdapter retained for compatibility |
 | perl-lexer | Production | Context-aware, sub-microsecond |
 | perl-corpus | Production | Corpus counts tracked in computed metrics |
 
@@ -144,5 +146,5 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 ---
 
-*Last Updated: 2026-01-28 (narrative sections only; run `just status-update` to refresh metrics)*
+*Last Updated: 2026-02-17 (narrative sections only; run `just status-update` to refresh metrics)*
 *Canonical docs: [ROADMAP.md](ROADMAP.md), [features.toml](../features.toml)*

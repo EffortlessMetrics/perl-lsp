@@ -367,22 +367,23 @@ fn test_dap_malformed_requests() -> TestResult {
 }
 
 #[test]
-fn test_dap_attach_not_implemented() -> TestResult {
+fn test_dap_attach_process_id_mode() -> TestResult {
     let mut adapter = DebugAdapter::new();
 
-    // Test attach command which is not yet implemented
+    // PID attach should succeed in signal-control mode.
     let attach_args = json!({
         "processId": 12345
     });
 
     let response = adapter.handle_request(1, "attach", Some(attach_args));
     match response {
-        DapMessage::Response { success, command, message, .. } => {
+        DapMessage::Response { success, command, body, message, .. } => {
             assert_eq!(command, "attach");
-            assert!(!success, "Attach should not be implemented yet");
-            if let Some(msg) = message {
-                assert!(msg.contains("not yet implemented") || msg.contains("not implemented"));
-            }
+            assert!(success, "PID attach should succeed");
+            let body = body.ok_or("Expected attach body")?;
+            assert_eq!(body.get("processId").and_then(|v| v.as_u64()), Some(12345));
+            let msg = message.ok_or("Expected attach message")?;
+            assert!(msg.contains("signal-control mode"));
         }
         _ => return Err("Expected attach response".into()),
     }

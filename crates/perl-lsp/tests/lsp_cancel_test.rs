@@ -163,7 +163,7 @@ fn test_cancel_request_handling() {
             // For hover, completing is acceptable since it's fast
         }
     } else if has_test_endpoint {
-        must(Err::<(), _>(format!("Expected a response for slow operation")));
+        must(Err::<(), _>("Expected a response for slow operation".to_string()));
     }
     // No response for hover is acceptable (cancelled before processing)
 }

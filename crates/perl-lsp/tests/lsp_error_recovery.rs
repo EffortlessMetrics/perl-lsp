@@ -668,8 +668,8 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     // Wait for all changes to be processed
     common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
 
-    // All diagnostics should be cleared
-    std::thread::sleep(Duration::from_millis(100));
+    // Extra settle time for the server to complete async processing
+    std::thread::sleep(Duration::from_millis(200));
 
     // Document should be fully functional now
     let response = send_request(
@@ -687,25 +687,58 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     assert!(response["result"].is_array());
     let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
 
-    // FLAKY: Incremental document updates may not apply correctly under race conditions.
-    // Root cause is unknown but could be:
-    // - UTF-16/UTF-8 position conversion edge cases
-    // - Race between document state update and symbol request
-    // - Deserialization failures (now logged to stderr via text_sync.rs)
-    //
-    // TODO(#307): Investigate why incremental updates fail intermittently.
-    //             Check stderr for "ERROR: Failed to deserialize change" messages.
-    if symbols.len() != 3 {
+    // #307: Under CI load, incremental didChange notifications may not all be
+    // processed before the documentSymbol request. Retry with a convergence
+    // loop instead of accepting degraded behavior.
+    let mut attempt = 0;
+    let max_attempts = 5;
+    let mut final_count = symbols.len();
+    let summarize_symbol = |s: &serde_json::Value| -> String {
+        let name = s.get("name").and_then(|v| v.as_str()).unwrap_or("<unnamed>");
+        let sl = s.pointer("/range/start/line").and_then(|v| v.as_u64()).unwrap_or(0);
+        let sc = s.pointer("/range/start/character").and_then(|v| v.as_u64()).unwrap_or(0);
+        let el = s.pointer("/range/end/line").and_then(|v| v.as_u64()).unwrap_or(0);
+        let ec = s.pointer("/range/end/character").and_then(|v| v.as_u64()).unwrap_or(0);
+        format!("{name} [{sl}:{sc}-{el}:{ec}]")
+    };
+    let mut last_summaries: Vec<String> = symbols.iter().map(&summarize_symbol).collect();
+
+    while final_count != 3 && attempt < max_attempts {
+        attempt += 1;
         eprintln!(
-            "WARN: Expected 3 symbols but got {}. Incremental update may have failed; check logs.",
-            symbols.len()
+            "INFO(#307): Expected 3 symbols but got {} (attempt {}/{}). Waiting for convergence.",
+            final_count, attempt, max_attempts
         );
-        // Accept degraded behavior: server responds without crash
-        shutdown_and_exit(&mut server);
-        return Ok(());
+
+        // Wait for server to process buffered notifications
+        std::thread::sleep(Duration::from_millis(200 * attempt as u64));
+        common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
+
+        let retry_response = send_request(
+            &mut server,
+            json!({
+                "jsonrpc": "2.0",
+                "method": "textDocument/documentSymbol",
+                "params": {
+                    "textDocument": { "uri": uri }
+                }
+            }),
+        );
+
+        if let Some(arr) = retry_response["result"].as_array() {
+            final_count = arr.len();
+            last_summaries = arr.iter().map(&summarize_symbol).collect();
+        }
     }
 
-    assert_eq!(symbols.len(), 3);
+    assert_eq!(
+        final_count, 3,
+        "FAIL(#307): documentSymbol never converged to 3 symbols after {} attempts. \
+         Last count: {}. Symbols: {:?}. This indicates a real bug in incremental text sync, \
+         not a timing flake.",
+        max_attempts, final_count, last_summaries
+    );
+
     shutdown_and_exit(&mut server);
     Ok(())
 }

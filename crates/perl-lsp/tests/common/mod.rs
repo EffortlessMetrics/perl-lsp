@@ -273,17 +273,17 @@ pub fn start_lsp_server() -> LspServer {
 
     let stdin = match process.stdin.take() {
         Some(s) => s,
-        None => must(Err::<std::process::ChildStdin, _>(format!(
-            "child stdin should be available after spawn"
-        ))),
+        None => must(Err::<std::process::ChildStdin, _>(
+            "child stdin should be available after spawn".to_string(),
+        )),
     };
 
     // -------- stderr drain thread (prevents child from blocking on logs) --------
     let stderr = match process.stderr.take() {
         Some(s) => s,
-        None => {
-            must(Err::<std::process::ChildStderr, _>(format!("stderr should be piped after spawn")))
-        }
+        None => must(Err::<std::process::ChildStderr, _>(
+            "stderr should be piped after spawn".to_string(),
+        )),
     };
     let echo = std::env::var_os("LSP_TEST_ECHO_STDERR").is_some();
     let _stderr_thread =
@@ -306,9 +306,9 @@ pub fn start_lsp_server() -> LspServer {
     // -------- stdout LSP reader thread --------
     let stdout = match process.stdout.take() {
         Some(s) => s,
-        None => {
-            must(Err::<std::process::ChildStdout, _>(format!("stdout should be piped after spawn")))
-        }
+        None => must(Err::<std::process::ChildStdout, _>(
+            "stdout should be piped after spawn".to_string(),
+        )),
     };
     let (tx, rx) = mpsc::channel::<Value>();
     let debug_reader = std::env::var_os("LSP_TEST_DEBUG_READER").is_some();
@@ -764,9 +764,7 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
                         "Check if server started properly and is responding to JSON-RPC requests"
                     );
                     eprintln!("Server process alive: {}", server.is_alive());
-                    must(Err::<(), _>(format!(
-                        "initialize response timeout - server may have crashed or is not responding"
-                    )))
+                    must(Err::<(), _>("initialize response timeout - server may have crashed or is not responding".to_string()))
                 } else {
                     eprintln!(
                         "Initialize timeout attempt {}/{}, retrying with fresh request...",

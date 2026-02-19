@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-01-28)**: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.
+> **Status (2026-02-17)**: v0.9.1 close-out verification completed with receipts; v1.0.x hardening underway with native DAP preview validated.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -36,7 +36,7 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 | **perl-lexer** | Production | `just ci-gate` | Tokenization stable |
 | **perl-corpus** | Production | `just ci-gate` | Regression corpus + mutation hardening inputs |
 | **perl-lsp** | Production (advertised subset) | capability snapshots + targeted tests | Advertise only what's tested; keep GA-lock stable |
-| **perl-dap** | Experimental (native adapter) | manual smoke | CLI uses native adapter; BridgeAdapter library available (Perl::LanguageServer) |
+| **perl-dap** | Preview (Native + Bridge) | `cargo test -p perl-dap --features dap-phase2,dap-phase3` | Native adapter implemented (breakpoints/control-flow/attach paths) with BridgeAdapter interoperability fallback |
 | **perl-parser-pest** (v2) | Legacy | N/A | Optional crate; keep out of default gate |
 | **Semantic Analyzer** | Phase 2-6 Complete | `just ci-gate` | All NodeKind handlers; full semantic analysis pipeline |
 
@@ -46,18 +46,18 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 
 ## Now / Next / Later (Summary)
 
-**Now (v0.9.1 close-out)**
-- Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)
-- Documentation cleanup: reduce `missing_docs` violations and complete module-level docs
+**Now (post v0.9.1 close-out)**
+- Keep close-out receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
+- Publish benchmark outputs under `benchmarks/results/` for durable v1.0.x evidence
 
 **Next (v1.0.0)**
 - Stability statement (GA-lock + versioning rules)
 - Packaging stance (what ships; supported platforms)
-- Benchmark publication with receipts under `benchmarks/results/`
+- Benchmark publication with receipts under `benchmarks/results/` (in progress)
 - Upgrade notes from v0.8.x → v1.0
 
 **Later (post v1.0)**
-- Native DAP completeness (attach, variables/evaluate, safe eval)
+- DAP preview -> GA hardening (deeper variables/evaluate fidelity, shim distribution strategy, cross-editor receipts)
 - Full LSP 3.18 compliance
 - Package manager distribution (Homebrew/apt/etc.)
 
@@ -73,7 +73,7 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 | **perl-lsp** | v0.8.8 | Production | LSP server (see `features.toml` for GA coverage) |
 | **perl-lexer** | v0.8.8 | Production | Context-aware tokenizer |
 | **perl-corpus** | v0.8.8 | Production | Test corpus (see `just status-check` for counts) |
-| **perl-dap** | v0.1.0 | Phase 1 | Debug Adapter Protocol (native adapter CLI; BridgeAdapter library) |
+| **perl-dap** | v0.1.0 | Preview (Native + Bridge) | Debug Adapter Protocol (native preview adapter + BridgeAdapter compatibility path) |
 | **perl-parser-pest** | v0.8.8 | Legacy | Pest-based parser (maintained) |
 
 ---
@@ -128,7 +128,7 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 ### v0.9.1: Post-Release Optimization (January 2026)
 
-**Status**: In Progress
+**Status**: Close-Out Complete (receipts captured on 2026-02-16)
 
 **Goal**: Performance optimization, semantic analyzer completion, and refactoring infrastructure.
 
@@ -187,21 +187,21 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
     - Settings with code references (PR #468)
     - Command palette filtering for Perl files (PR #470)
 
-**Remaining Deliverables**:
+**Close-Out Receipts**:
 
-1. **Index State Machine Verification** (deferred from v0.9.0)
-   - Validate transitions and early-exit caps with receipts
-   - Confirm instrumentation output for state/phase durations
-   - Verify performance caps: <100ms initial index, <10ms incremental
+1. **Index State Machine Verification** ✓
+   - Transition and instrumentation tests passed in `perl-workspace-index`
+   - Early-exit and transition receipts validated via targeted tests
+   - Benchmarks confirm caps with large margin (`~368.7us` initial small, `~721.1us` initial medium, `~212.6us` incremental)
 
-2. **Documentation Cleanup**
-   - Address remaining violations flagged by `missing_docs`
-   - Public API documentation coverage to 95%+
-   - Module-level documentation for all crates
+2. **Documentation Cleanup** ✓
+   - `cargo test -p perl-parser --features doc-coverage --test missing_docs_ac_tests` passed (25/25)
+   - `cargo doc --no-deps -p perl-parser` clean (no rustdoc warnings)
+   - LSP compatibility module docs and cross-links aligned to current module layout
 
 **Exit criteria**:
-- Index state machine implemented with performance benchmarks
-- Documentation violations < 200
+- Index state machine verified with receipts and benchmark caps
+- `missing_docs` ratchet clean for perl-parser (baseline 0)
 - LSP coverage maintained at 100% ✓
 - Tracked test debt ≤ 2 ✓
 - Security hardening complete ✓
@@ -212,7 +212,6 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 These items are explicitly deferred:
 - Full LSP 3.18 compliance (see CURRENT_STATUS.md for current coverage)
-- Native DAP completeness (attach, variables/evaluate, safe eval; bridge wiring decision)
 - Benchmark result publication (framework exists, results not committed)
 - Package manager distribution (Homebrew, apt, etc.)
 
@@ -220,7 +219,7 @@ These items are explicitly deferred:
 
 ### v1.0.0: "Boring Promises" (sequence after v0.9.1)
 
-**Goal**: Freeze the surfaces you're willing to support.
+**Goal**: Freeze the surfaces you're willing to support. Close known gaps honestly.
 
 **Deliverables**:
 
@@ -236,28 +235,97 @@ These items are explicitly deferred:
    - One canonical benchmark run committed under `benchmarks/results/`
    - Remove "UNVERIFIED" tags where you now have receipts
 
+4. **Gap closing (honest assessment items)**
+   - ~~Fix execute_command test failures (7 tests)~~ ✓ Fixed: workspace root security boundary was not set in integration tests
+   - ~~Correct `features.toml` DAP maturity levels~~ ✓ Fixed: DAP features are tracked as `maturity = "preview"` with implemented native paths
+   - ~~Fix `CURRENT_STATUS.md` DAP narrative~~ ✓ Fixed: now describes native preview + bridge interoperability reality
+   - Add E2E LSP smoke test (send initialize→didOpen→completion→shutdown, verify responses)
+   - Document Moo/Moose limitations honestly in user-facing docs
+
 **Exit criteria**:
 - Capability snapshot + docs aligned
 - Benchmarks published
 - Upgrade notes exist from v0.8.x → v1.0
+- Honest assessment document (`docs/HONEST_ASSESSMENT.md`) exists and is current
+- No DAP features marked as GA in `features.toml`
 
 ---
 
-## Known Gaps (v0.9.1 Hardening)
+### v1.1: Semantic Depth
 
-These gaps are tracked in [`docs/issues/`](issues/) and need closure before v0.9.1 close-out:
+**Goal**: Close the Moo/Moose gap — the #1 real-world limitation.
 
-### Corpus Coverage Gaps
-- See `docs/issues/corpus/` for NodeKind reachability and GA feature alignment
+**Deliverables**:
 
-### Hang/Bounds Risks (P0)
-- Deep nesting boundedness
-- Slash ambiguity (division vs regex)
-- Regex literal handling
+1. **Moo/Moose `has` attribute recognition**
+   - Semantic analyzer recognizes `has` as a field declaration
+   - Hover on Moo attributes shows field type, default, documentation
+   - Completion inside `has` blocks suggests type constraints, `is`, `isa`, `default`, etc.
+
+2. **Class::Accessor support**
+   - Auto-generated accessor methods visible in completion and go-to-definition
+
+3. **Role composition tracking**
+   - `with 'Role'` connects role methods to consuming class
+   - Go-to-definition resolves role methods
+
+**Exit criteria**:
+- Hover on `has 'name'` in a Moo class returns field information
+- Completion inside `has` blocks works
+- `features.toml` updated with Moo/Moose semantic coverage
+
+---
+
+### v1.2: DAP Preview -> GA
+
+**Goal**: Harden native debugging from preview to GA without requiring Perl::LanguageServer.
+
+**Deliverables**:
+
+1. **Promote preview breakpoints/inline values** to GA-quality behavior and receipts
+2. **Deep variable inspection + evaluate context** in active debugger sessions
+3. **Attach stability** across PID and TCP modes with consistent stack/thread semantics
+4. **Finalize shim/package strategy** (`Devel::TSPerlDAP` or bundled equivalent) and editor defaults
+
+**Exit criteria**:
+- Set breakpoint, step, inspect variables, evaluate expressions — works natively with reliable receipts
+- DAP features promoted from `maturity = "preview"` to `maturity = "ga"` where warranted
+- VSCode extension debug configuration works out of the box
+
+---
+
+### v2.0: DAP Phase 3 + Polish
+
+**Goal**: Full debugging experience and ecosystem polish.
+
+**Deliverables**:
+
+1. Multi-process attach and child-process tracking
+2. Watch expressions and richer evaluation UX
+3. Full debug console parity + transcript conformance coverage
+4. Pest parser decision: archive to `archive/` or maintain for benchmark comparison
+5. Package manager distribution (Homebrew, apt, etc.)
+
+---
+
+## Known Gaps
+
+> For the full honest assessment, see [`docs/HONEST_ASSESSMENT.md`](HONEST_ASSESSMENT.md).
+
+### Resolved (v0.9.1)
+- ~~Corpus coverage gaps~~ ✓ Comprehensive corpus (732KB, 78 files, 611+ sections)
+- ~~Hang/bounds risks~~ ✓ Budget-protected lexer, recursion limits, fuzz testing
+- ~~Execute command test failures~~ ✓ Fixed workspace root security boundary
+
+### Open Gaps
+- **DAP is preview, not GA**: Native adapter now covers breakpoint/control-flow/attach foundations, but deep runtime variable/evaluate fidelity and packaging strategy still need hardening. `features.toml` keeps DAP at `maturity = "preview"`.
+- **Moo/Moose semantic blindness**: Parser tokenizes correctly but semantic analyzer doesn't understand `has` as field declaration. #1 real-world gap.
+- **No E2E LSP smoke test**: All testing is unit/integration; no automated test that starts the server and sends real LSP messages end-to-end.
+- **Pest parser orphaned**: Compiles and works but excluded from CI, not used in production, 10-100x slower than v3. Maintained for reference only.
 
 ### Known Constraints
 - **CI Pipeline**: Issue #211 blocks merge-blocking gates (#210)
-- **Native DAP completeness**: Attach/variables/evaluate deferred (see "Not Before v1.0")
+- **DAP GA promotion**: Depends on shim distribution decision and cross-editor native debugging receipts
 
 ---
 
@@ -308,13 +376,13 @@ The LSP compliance table is now auto-generated. Source of truth: `features.toml`
 <!-- BEGIN: COMPLIANCE_TABLE -->
 | Area | Implemented | Total | Coverage |
 |------|-------------|-------|----------|
-| debug | 2 | 2 | 100% |
+| debug | 6 | 6 | 100% |
 | notebook | 2 | 2 | 100% |
 | protocol | 9 | 9 | 100% |
 | text_document | 41 | 41 | 100% |
 | window | 9 | 9 | 100% |
 | workspace | 26 | 26 | 100% |
-| **Overall** | **89** | **89** | **100%** |
+| **Overall** | **93** | **93** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->
 
 **v0.9.0 Metrics**:
@@ -357,4 +425,4 @@ Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - What went wrong and what changed
 
-<!-- Last Updated: 2026-01-28 -->
+<!-- Last Updated: 2026-02-17 -->

@@ -363,8 +363,8 @@ description = "Detailed work progress"
 id = "lsp.notebook_document_sync"
 spec = "LSP 3.17"
 area = "notebook"
-maturity = "preview"
-advertised = false
+maturity = "ga"
+advertised = true
 counts_in_coverage = false
 tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Notebook document synchronization (didOpen/didChange/didSave/didClose handlers)"
@@ -373,7 +373,7 @@ description = "Notebook document synchronization (didOpen/didChange/didSave/didC
 id = "lsp.notebook_cell_execution"
 spec = "LSP 3.17"
 area = "notebook"
-maturity = "preview"
+maturity = "ga"
 advertised = false
 counts_in_coverage = false
 tests = ["tests/lsp_comprehensive_3_17_test.rs"]
@@ -382,24 +382,64 @@ description = "Notebook cell execution summary tracking (LSP does not execute ce
 # Debug Features (DAP)
 
 [[feature]]
+id = "dap.core"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_smoke_e2e.rs", "crates/perl-dap/tests/session_lifecycle_tests.rs"]
+description = "Core VS Code debug loop: initialize/launch/configurationDone, break/step, stack/scopes/variables, evaluate/setVariable, disconnect/terminate"
+
+[[feature]]
+id = "dap.breakpoints.basic"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_smoke_e2e.rs", "crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs"]
+description = "Verified/unverified source breakpoints with replace semantics and deterministic stopped(reason=breakpoint) behavior"
+
+[[feature]]
+id = "dap.breakpoints.hit_condition"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "preview"
+advertised = false
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
+description = "Hit-count breakpoints (e.g., >= N, == N, %N) with runtime counter gating"
+
+[[feature]]
+id = "dap.breakpoints.logpoints"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "preview"
+advertised = false
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
+description = "Logpoint breakpoints (`logMessage`) emit output events and continue execution"
+
+[[feature]]
+id = "dap.exceptions.die"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "preview"
+advertised = false
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
+description = "Exception breakpoint handling for `die`/uncaught exception categories"
+
+[[feature]]
 id = "dap.inline_values"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "preview"
-advertised = false
+maturity = "ga"
+advertised = true
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs"]
-description = "Inline variable values while debugging via custom inlineValues request"
-
-[[feature]]
-id = "dap.breakpoints"
-spec = "DAP 1.0"
-area = "debug"
-maturity = "preview"
-advertised = false
-counts_in_coverage = false
-tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs"]
-description = "Breakpoint support (setBreakpoints with REPLACE semantics, BreakpointStore)"
+description = "Inline variable values while debugging (native adapter)"
 
 # Protocol / Lifecycle Features
 

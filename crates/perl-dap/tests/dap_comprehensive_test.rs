@@ -67,6 +67,10 @@ fn test_dap_initialize() {
             assert!(
                 body.get("supportsEvaluateForHovers").and_then(|v| v.as_bool()).unwrap_or(false)
             );
+            assert!(
+                body.get("supportsFunctionBreakpoints").and_then(|v| v.as_bool()).unwrap_or(false)
+            );
+            assert!(body.get("supportsInlineValues").and_then(|v| v.as_bool()).unwrap_or(false));
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
@@ -243,6 +247,74 @@ fn test_dap_breakpoints_invalid_line() {
         }
         _ => must(Err::<(), _>("Expected response message")),
     }
+}
+
+#[test]
+fn test_dap_set_exception_breakpoints() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+
+    let response = adapter.handle_request(
+        1,
+        "setExceptionBreakpoints",
+        Some(json!({
+            "filters": ["uncaught", "all"]
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, body, message, .. } => {
+            assert!(success);
+            assert_eq!(command, "setExceptionBreakpoints");
+            assert!(message.is_none());
+            let body = body.ok_or("Expected response body")?;
+            let breakpoints = body
+                .get("breakpoints")
+                .and_then(|v| v.as_array())
+                .ok_or("Missing breakpoints field")?;
+            assert!(breakpoints.is_empty());
+        }
+        _ => must(Err::<(), _>("Expected response message")),
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_dap_set_function_breakpoints_validation() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+
+    let response = adapter.handle_request(
+        1,
+        "setFunctionBreakpoints",
+        Some(json!({
+            "breakpoints": [
+                { "name": "main::entry" },
+                { "name": "Foo::bar" },
+                { "name": "Invalid Name With Spaces" },
+                { "name": "bad\ninjection" }
+            ]
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, body, .. } => {
+            assert!(success);
+            assert_eq!(command, "setFunctionBreakpoints");
+            let body = body.ok_or("Expected response body")?;
+            let breakpoints = body
+                .get("breakpoints")
+                .and_then(|v| v.as_array())
+                .ok_or("Missing breakpoints field")?;
+            assert_eq!(breakpoints.len(), 4);
+            assert_eq!(breakpoints[0].get("verified").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(breakpoints[1].get("verified").and_then(|v| v.as_bool()), Some(true));
+            assert_eq!(breakpoints[2].get("verified").and_then(|v| v.as_bool()), Some(false));
+            assert_eq!(breakpoints[3].get("verified").and_then(|v| v.as_bool()), Some(false));
+        }
+        _ => must(Err::<(), _>("Expected response message")),
+    }
+
+    Ok(())
 }
 
 #[test]

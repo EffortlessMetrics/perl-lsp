@@ -370,7 +370,12 @@ impl CompletionProvider {
         let mut completions = Vec::new();
 
         // Determine what kind of completions to provide based on context
-        if context.prefix.starts_with('$') {
+        if self.is_has_options_key_context(source, position) {
+            self.add_has_option_completions(&mut completions, &context);
+        } else if context.trigger_character == Some('>') && context.prefix.ends_with("->") {
+            // Method completion must run before sigil-prefixed variable completion.
+            methods::add_method_completions(&mut completions, &context, source, &self.symbol_table);
+        } else if context.prefix.starts_with('$') {
             // Scalar variable completion
             variables::add_variable_completions(
                 &mut completions,
@@ -412,9 +417,6 @@ impl CompletionProvider {
         } else if context.trigger_character == Some(':') && context.prefix.ends_with("::") {
             // Package member completion
             packages::add_package_completions(&mut completions, &context, &self.workspace_index);
-        } else if context.trigger_character == Some('>') && context.prefix.ends_with("->") {
-            // Method completion
-            methods::add_method_completions(&mut completions, &context, source);
         } else if context.in_string {
             // String interpolation or file path
             let line_prefix = &source[..context.position];
@@ -662,6 +664,130 @@ impl CompletionProvider {
         let _ = (completions, context, _is_cancelled);
     }
 
+    /// Check whether the cursor is inside a Moo/Moose `has (...)` option-key context.
+    fn is_has_options_key_context(&self, source: &str, position: usize) -> bool {
+        if position > source.len() {
+            return false;
+        }
+
+        let prefix = &source[..position];
+        let statement_start = prefix.rfind(';').map(|idx| idx + 1).unwrap_or(0);
+        let statement = &prefix[statement_start..];
+
+        let Some(has_idx) = Self::find_keyword(statement, "has") else {
+            return false;
+        };
+        let after_has = &statement[has_idx + 3..];
+
+        let Some(arrow_idx) = after_has.find("=>") else {
+            return false;
+        };
+        let after_arrow = &after_has[arrow_idx + 2..];
+
+        let Some(open_idx) = after_arrow.find('(') else {
+            return false;
+        };
+        let options_text = &after_arrow[open_idx + 1..];
+
+        // Must still be inside the `(` ... `)` option list.
+        let mut paren_depth = 1i32;
+        for ch in options_text.chars() {
+            if ch == '(' {
+                paren_depth += 1;
+            } else if ch == ')' {
+                paren_depth -= 1;
+                if paren_depth <= 0 {
+                    return false;
+                }
+            }
+        }
+
+        // Find the current top-level option segment (after last comma).
+        let mut depth = 1i32;
+        let mut segment_start = 0usize;
+        for (idx, ch) in options_text.char_indices() {
+            if ch == '(' {
+                depth += 1;
+            } else if ch == ')' {
+                depth -= 1;
+            } else if ch == ',' && depth == 1 {
+                segment_start = idx + 1;
+            }
+        }
+
+        let segment = options_text[segment_start..].trim_start();
+        if segment.is_empty() {
+            return true;
+        }
+
+        // If `=>` is already present in this segment, we're in value context.
+        if segment.contains("=>") {
+            return false;
+        }
+
+        segment
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch.is_ascii_whitespace())
+    }
+
+    /// Find a keyword in source text using ASCII identifier boundaries.
+    fn find_keyword(text: &str, keyword: &str) -> Option<usize> {
+        let mut start = 0usize;
+        while let Some(rel_idx) = text[start..].find(keyword) {
+            let idx = start + rel_idx;
+            let before = text[..idx].chars().next_back();
+            let after = text[idx + keyword.len()..].chars().next();
+
+            let before_ok = before.is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_');
+            let after_ok = after.is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_');
+            if before_ok && after_ok {
+                return Some(idx);
+            }
+
+            start = idx + keyword.len();
+        }
+        None
+    }
+
+    /// Add common Moo/Moose `has` option-key completions.
+    fn add_has_option_completions(
+        &self,
+        completions: &mut Vec<CompletionItem>,
+        context: &CompletionContext,
+    ) {
+        let prefix = context.prefix.trim();
+        let options = [
+            ("is", "Accessor mode (`ro`, `rw`, or `rwp`)"),
+            ("isa", "Type constraint for this attribute"),
+            ("default", "Default value or builder closure"),
+            ("required", "Require attribute during construction"),
+            ("lazy", "Delay default computation until first access"),
+            ("builder", "Method name used to build the default value"),
+            ("reader", "Custom reader method name"),
+            ("writer", "Custom writer method name"),
+            ("accessor", "Custom combined read/write accessor"),
+            ("predicate", "Method name to test if attribute is set"),
+            ("clearer", "Method name to clear attribute value"),
+            ("handles", "Delegated methods for referenced object"),
+        ];
+
+        for (label, doc) in options {
+            if prefix.is_empty() || label.starts_with(prefix) {
+                completions.push(CompletionItem {
+                    label: label.to_string(),
+                    kind: CompletionItemKind::Property,
+                    detail: Some("Moo/Moose option".to_string()),
+                    documentation: Some(doc.to_string()),
+                    insert_text: Some(format!("{label} => ")),
+                    sort_text: Some(format!("0_{label}")),
+                    filter_text: Some(label.to_string()),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                });
+            }
+        }
+    }
+
     /// Check if prefix could be a keyword
     fn could_be_keyword(
         &self,
@@ -872,6 +998,64 @@ sub internal_sub { }
         assert!(
             completions.iter().any(|c| c.label == "exported_sub"),
             "should suggest exported_sub"
+        );
+    }
+
+    #[test]
+    fn test_moo_accessor_method_completion() {
+        let code = r#"
+package Example::User;
+use Moo;
+
+has 'name' => (is => 'ro', isa => 'Str');
+
+sub greet {
+    my $self = shift;
+    return $self->name;
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let synthesized = provider
+            .symbol_table
+            .symbols
+            .get("name")
+            .map(|symbols| symbols.iter().any(|symbol| symbol.kind == SymbolKind::Subroutine))
+            .unwrap_or(false);
+        assert!(synthesized, "expected synthesized `name` subroutine symbol in symbol table");
+
+        let pos = must_some(code.find("$self->name")) + "$self->".len();
+        let completions = provider.get_completions(code, pos);
+
+        assert!(
+            completions.iter().any(|item| item.label == "name"),
+            "expected synthesized Moo accessor `name` in method completion"
+        );
+    }
+
+    #[test]
+    fn test_moo_has_option_key_completion() {
+        let code = r#"
+use Moo;
+has 'name' => (re
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|item| item.label == "required"),
+            "expected `required` option completion inside has(...) context"
+        );
+        assert!(
+            completions.iter().any(|item| item.label == "reader"),
+            "expected `reader` option completion inside has(...) context"
         );
     }
 }

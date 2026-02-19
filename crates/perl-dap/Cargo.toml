@@ -58,6 +58,10 @@ ropey = "1.6.1"
 
 # Perl parser for AST breakpoint validation
 perl-parser = { path = "../perl-parser" }
+perl-dap-breakpoint = { workspace = true }
+perl-dap-eval = { workspace = true }
+perl-dap-variables = { workspace = true }
+perl-dap-stack = { workspace = true }
 
 # Process management
 # Note: tokio-process not needed (using tokio::process)
@@ -73,6 +77,10 @@ criterion = "0.8.1"
 tempfile = "3.24.0"
 
 perl-tdd-support = { workspace = true }
+
+[build-dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "0.9.12"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.1", features = ["signal"] }  # For SIGINT handling (AC9)

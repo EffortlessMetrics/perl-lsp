@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 description = "Perl quote-like operator parsing helpers"
+readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true

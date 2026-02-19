@@ -65,8 +65,6 @@ pub mod working_parser;
 
 #[cfg(feature = "pure-rust")]
 pub mod benchmark_parser;
-#[cfg(feature = "pure-rust")]
-pub mod perl_lexer;
 #[cfg(feature = "pure-rust-standalone")]
 pub mod pest_only;
 #[cfg(all(feature = "pure-rust", feature = "v2-pest-microcrate"))]
@@ -82,34 +80,93 @@ pub use parser::Parser;
 #[cfg(all(feature = "pure-rust", not(feature = "pure-rust-standalone")))]
 pub use parser_v2::ParserV2;
 
+// ── Re-exports from perl-ts-heredoc-analysis ──
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_analysis::anti_pattern_detector;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_analysis::context_sensitive;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_analysis::dynamic_delimiter_recovery;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_analysis::encoding_aware_lexer;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_analysis::runtime_heredoc_handler;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_analysis::statement_tracker;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_analysis::string_utils;
+
+// ── Re-exports from perl-ts-logos-lexer ──
 #[cfg(feature = "token-parser")]
-pub mod simple_token;
-
+pub use perl_ts_logos_lexer::context_lexer_simple;
 #[cfg(feature = "token-parser")]
-pub mod token_ast;
-
+pub use perl_ts_logos_lexer::context_lexer_v2;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_logos_lexer::regex_parser;
 #[cfg(feature = "token-parser")]
-pub mod context_lexer_simple;
-
-pub mod regex_parser;
-
+pub use perl_ts_logos_lexer::simple_parser;
 #[cfg(feature = "token-parser")]
-pub mod context_lexer_v2;
-
+pub use perl_ts_logos_lexer::simple_parser_v2;
 #[cfg(feature = "token-parser")]
-pub mod simple_parser;
-
+pub use perl_ts_logos_lexer::simple_token;
 #[cfg(feature = "token-parser")]
-pub mod simple_parser_v2;
+pub use perl_ts_logos_lexer::token_ast;
 
-#[cfg(all(feature = "token-parser", test))]
-pub mod test_token_parser;
+// ── Re-exports from perl-ts-heredoc-parser ──
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_parser::enhanced_heredoc_lexer;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_parser::heredoc_parser;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_parser::heredoc_recovery;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_parser::lexer_adapter;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_heredoc_parser::perl_lexer;
 
-#[cfg(all(feature = "token-parser", test))]
-pub mod test_debug;
+// ── Re-exports from perl-ts-partial-ast ──
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_partial_ast::edge_case_handler;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_partial_ast::partial_parse_ast;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_partial_ast::phase_aware_parser;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_partial_ast::tree_sitter_adapter;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_partial_ast::understanding_parser;
 
+// ── Re-exports from perl-ts-advanced-parsers ──
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::context_aware_parser;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::disambiguated_parser;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::enhanced_full_parser;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::enhanced_parser;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::error_recovery;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::full_parser;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::incremental_parser;
+#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
+pub use perl_ts_advanced_parsers::iterative_parser;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::lsp_server;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::stateful_parser;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_advanced_parsers::streaming_parser;
+
+// ── Test modules (not moved) ──
 #[cfg(all(feature = "token-parser", test))]
 pub mod demo_token_parser;
+#[cfg(all(feature = "token-parser", test))]
+pub mod test_debug;
+#[cfg(all(feature = "token-parser", test))]
+pub mod test_token_parser;
 
 // Re-export the main parser and types for convenience
 #[cfg(feature = "pure-rust-standalone")]
@@ -121,68 +178,14 @@ pub use pure_rust_parser::PureRustPerlParser as PureRustParser; // Original for 
 #[cfg(feature = "pure-rust")]
 pub use pure_rust_parser::{AstNode, PerlParser};
 
-#[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
-pub mod iterative_parser;
-
-#[cfg(feature = "pure-rust")]
-pub mod string_utils;
-
 #[cfg(all(feature = "pure-rust", test))]
 pub mod parser_benchmark;
-
-#[cfg(feature = "pure-rust")]
-pub mod context_aware_parser;
-
-#[cfg(feature = "pure-rust")]
-pub mod runtime_heredoc_handler;
-
-#[cfg(feature = "pure-rust")]
-pub mod anti_pattern_detector;
-
-#[cfg(feature = "pure-rust")]
-pub mod partial_parse_ast;
-
-#[cfg(feature = "pure-rust")]
-pub mod understanding_parser;
-
-#[cfg(feature = "pure-rust")]
-pub mod phase_aware_parser;
-
-#[cfg(feature = "pure-rust")]
-pub mod dynamic_delimiter_recovery;
-
-#[cfg(feature = "pure-rust")]
-pub mod edge_case_handler;
-
-#[cfg(feature = "pure-rust")]
-pub mod encoding_aware_lexer;
-
-#[cfg(feature = "pure-rust")]
-pub mod tree_sitter_adapter;
 
 #[cfg(all(test, feature = "pure-rust"))]
 mod pure_rust_parser_tests;
 
 #[cfg(all(test, feature = "pure-rust"))]
 mod fuzz_tests;
-
-#[cfg(feature = "pure-rust")]
-pub mod stateful_parser;
-
-#[cfg(feature = "pure-rust")]
-pub mod context_sensitive;
-
-#[cfg(feature = "pure-rust")]
-pub mod enhanced_parser;
-
-#[cfg(feature = "pure-rust")]
-pub mod lexer_adapter;
-
-#[cfg(feature = "pure-rust")]
-pub mod heredoc_recovery;
-
-#[cfg(feature = "pure-rust")]
-pub mod disambiguated_parser;
 
 #[cfg(all(test, feature = "pure-rust"))]
 mod test_slash;
@@ -193,41 +196,14 @@ pub mod pratt_parser;
 #[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod pratt_parser;
 
-#[cfg(feature = "pure-rust")]
-pub mod heredoc_parser;
-
-#[cfg(feature = "pure-rust")]
-pub mod full_parser;
-
-#[cfg(feature = "pure-rust")]
-pub mod enhanced_heredoc_lexer;
-
-#[cfg(feature = "pure-rust")]
-pub mod enhanced_full_parser;
-
 #[cfg(all(feature = "pure-rust", feature = "v2-pest-microcrate"))]
 #[path = "sexp_formatter_bridge.rs"]
 pub mod sexp_formatter;
 #[cfg(all(feature = "pure-rust", not(feature = "v2-pest-microcrate")))]
 pub mod sexp_formatter;
 
-#[cfg(feature = "pure-rust")]
-pub mod streaming_parser;
-
-#[cfg(feature = "pure-rust")]
-pub mod error_recovery;
-
-#[cfg(feature = "pure-rust")]
-pub mod incremental_parser;
-
 // #[cfg(feature = "pure-rust")]
 // pub mod language_binding;
-
-#[cfg(feature = "pure-rust")]
-pub mod lsp_server;
-
-#[cfg(feature = "pure-rust")]
-mod statement_tracker;
 
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
 pub mod comparison_harness;
@@ -288,13 +264,13 @@ pub fn parse_with_tree(
 // Rule is available as a type inside pure_rust_parser module when using PerlParser
 
 #[cfg(feature = "pure-rust")]
-pub use enhanced_parser::EnhancedPerlParser;
+pub use perl_ts_advanced_parsers::enhanced_parser::EnhancedPerlParser;
 
 #[cfg(feature = "pure-rust")]
-pub use full_parser::FullPerlParser;
+pub use perl_ts_advanced_parsers::full_parser::FullPerlParser;
 
 #[cfg(feature = "pure-rust")]
-pub use enhanced_full_parser::EnhancedFullParser;
+pub use perl_ts_advanced_parsers::enhanced_full_parser::EnhancedFullParser;
 
 #[cfg(all(test, feature = "c-parser"))]
 mod test {

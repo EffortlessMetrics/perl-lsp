@@ -1537,6 +1537,10 @@ dependencies = [
  "lsp-types",
  "nix",
  "once_cell",
+ "perl-dap-breakpoint",
+ "perl-dap-eval",
+ "perl-dap-stack",
+ "perl-dap-variables",
  "perl-parser",
  "perl-tdd-support",
  "proptest",
@@ -1547,9 +1551,55 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml",
  "tracing",
  "tracing-subscriber",
  "winapi",
+]
+
+[[package]]
+name = "perl-dap-breakpoint"
+version = "0.1.0"
+dependencies = [
+ "perl-parser",
+ "perl-tdd-support",
+ "ropey",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-dap-eval"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "perl-tdd-support",
+ "regex",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-dap-stack"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "perl-tdd-support",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-dap-variables"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "perl-tdd-support",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -2009,6 +2059,65 @@ dependencies = [
  "perl-position-tracking",
  "perl-tdd-support",
  "perl-token",
+]
+
+[[package]]
+name = "perl-ts-advanced-parsers"
+version = "0.1.0"
+dependencies = [
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "perl-ts-heredoc-analysis",
+ "perl-ts-heredoc-parser",
+ "perl-ts-partial-ast",
+ "pest",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "perl-ts-heredoc-analysis"
+version = "0.1.0"
+dependencies = [
+ "encoding_rs",
+ "perl-tdd-support",
+ "regex",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-ts-heredoc-parser"
+version = "0.1.0"
+dependencies = [
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "perl-ts-heredoc-analysis",
+ "regex",
+]
+
+[[package]]
+name = "perl-ts-logos-lexer"
+version = "0.1.0"
+dependencies = [
+ "chumsky",
+ "logos",
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "regex",
+]
+
+[[package]]
+name = "perl-ts-partial-ast"
+version = "0.1.0"
+dependencies = [
+ "perl-parser-pest",
+ "perl-tdd-support",
+ "perl-ts-heredoc-analysis",
+ "pest",
+ "regex",
+ "serde_json",
 ]
 
 [[package]]
@@ -3192,6 +3301,11 @@ dependencies = [
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",
+ "perl-ts-advanced-parsers",
+ "perl-ts-heredoc-analysis",
+ "perl-ts-heredoc-parser",
+ "perl-ts-logos-lexer",
+ "perl-ts-partial-ast",
  "pest",
  "pest_derive",
  "postcard",

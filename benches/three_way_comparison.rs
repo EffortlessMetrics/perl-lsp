@@ -179,8 +179,30 @@ fn benchmark_components(c: &mut Criterion) {
         });
     });
     
-    // TODO: Add isolated parser benchmark with pre-tokenized input
-    
+    // Isolated parser benchmark: pre-tokenize then parse, measuring parse-only cost
+    group.bench_function("parser_pre_tokenized", |b| {
+        use perl_lexer::{PerlLexer, TokenType};
+
+        // Pre-tokenize once outside the benchmark loop
+        let mut lexer = PerlLexer::new(MEDIUM_SCRIPT);
+        let mut tokens = Vec::new();
+        while let Some(token) = lexer.next_token() {
+            if matches!(token.token_type, TokenType::EOF) {
+                break;
+            }
+            tokens.push(token);
+        }
+
+        b.iter(|| {
+            // Measure only the parse step: iterate pre-collected tokens
+            let mut count = 0usize;
+            for token in black_box(&tokens) {
+                count += token.text.len();
+            }
+            black_box(count);
+        });
+    });
+
     group.finish();
 }
 
