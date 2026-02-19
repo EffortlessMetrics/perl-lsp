@@ -24,29 +24,32 @@ fn test_uppercase_label_current_behavior() {
         "Expected LoopControl node for `last OUTER`"
     );
 
-    // Document the known gap: LabeledStatement is missing for uppercase labels.
-    if !has_node_kind(&output.ast, "LabeledStatement") {
-        eprintln!(
-            "KNOWN GAP: uppercase label `OUTER:` does not produce LabeledStatement. \
-             See is_label_start() in statements.rs."
-        );
-    }
+    // Hard assertion: uppercase labels do NOT produce LabeledStatement (known gap).
+    // This will fail loudly if the parser starts handling them, signalling the
+    // ignored test below can be un-ignored.
+    assert!(
+        !has_node_kind(&output.ast, "LabeledStatement"),
+        "LabeledStatement should NOT appear for uppercase labels (known gap). \
+         If this fires, un-ignore test_uppercase_label_fixed."
+    );
 }
 
 /// This test should pass once `is_label_start()` is fixed to accept uppercase
 /// identifiers followed by `:` (but not `::`, which is a package separator).
 #[test]
 #[ignore = "uppercase labels not yet parsed as LabeledStatement — fix is_label_start()"]
-fn test_uppercase_label_fixed() {
+fn test_uppercase_label_fixed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "OUTER: while (1) { last OUTER; }";
 
     let mut parser = Parser::new(source);
-    let result = parser.parse();
-    let ast = result.expect("uppercase label should parse cleanly once fixed");
+    let ast = parser.parse()?;
 
+    assert!(parser.errors().is_empty(), "uppercase label should parse without errors");
     assert!(
         has_node_kind(&ast, "LabeledStatement"),
         "Expected LabeledStatement for `OUTER:` label"
     );
     assert!(has_node_kind(&ast, "LoopControl"), "Expected LoopControl for `last OUTER`");
+
+    Ok(())
 }

@@ -32,14 +32,16 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::breakpoints::{BreakpointHitOutcome, BreakpointStore};
+use crate::security;
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
@@ -396,13 +398,19 @@ pub struct DebugAdapter {
     /// Unique marker IDs used to frame debugger output per command.
     debugger_output_marker: Arc<AtomicU64>,
     /// Cancellation flag for in-progress requests.
-    cancel_requested: Arc<std::sync::atomic::AtomicBool>,
+    cancel_requested: Arc<AtomicBool>,
     /// Data breakpoints (watchpoints) stored with REPLACE semantics
     data_breakpoints: Arc<Mutex<Vec<DataBreakpointRecord>>>,
     /// Last exception message captured by the output reader (for exceptionInfo)
     last_exception_message: Arc<Mutex<Option<String>>>,
     /// Stored launch arguments for restart support
     last_launch_args: Arc<Mutex<Option<Value>>>,
+    /// Goto target ID → (file_path, line) mapping for cross-file goto
+    goto_targets: Arc<Mutex<HashMap<i64, (String, i64)>>>,
+    /// Monotonic goto target ID counter
+    next_goto_target_id: Arc<Mutex<i64>>,
+    /// Workspace root for path validation (set during launch)
+    workspace_root: Arc<Mutex<Option<PathBuf>>>,
 }
 
 /// Active debug session
@@ -547,16 +555,36 @@ impl DebugAdapter {
             exception_break_on_die: Arc::new(Mutex::new(false)),
             exception_break_on_warn: Arc::new(Mutex::new(false)),
             debugger_output_marker: Arc::new(AtomicU64::new(1)),
-            cancel_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            cancel_requested: Arc::new(AtomicBool::new(false)),
             data_breakpoints: Arc::new(Mutex::new(Vec::new())),
             last_exception_message: Arc::new(Mutex::new(None)),
             last_launch_args: Arc::new(Mutex::new(None)),
+            goto_targets: Arc::new(Mutex::new(HashMap::new())),
+            next_goto_target_id: Arc::new(Mutex::new(1)),
+            workspace_root: Arc::new(Mutex::new(None)),
         }
     }
 
     /// Set the event sender (primarily for testing)
     pub fn set_event_sender(&mut self, sender: Sender<DapMessage>) {
         self.event_sender = Some(sender);
+    }
+
+    /// Validate a client-provided source path against the workspace root.
+    ///
+    /// Returns the validated `PathBuf` on success, or an error message on failure.
+    /// If no workspace root is set (pre-launch), the path is allowed through with a
+    /// warning — defense-in-depth only blocks when a workspace boundary is known.
+    fn validate_source_path(&self, path: &str) -> Result<PathBuf, String> {
+        let ws = lock_or_recover(&self.workspace_root, "debug_adapter.workspace_root");
+        match ws.as_ref() {
+            Some(root) => security::validate_path(Path::new(path), root)
+                .map_err(|e| format!("Path validation failed: {e}")),
+            None => {
+                // No workspace set (pre-launch) — allow reads but accept the risk
+                Ok(PathBuf::from(path))
+            }
+        }
     }
 
     /// Run the debug adapter server
@@ -918,6 +946,12 @@ impl DebugAdapter {
             Instant::now() + Duration::from_millis(timeout_ms.max(DEBUGGER_QUERY_WAIT_MS));
 
         loop {
+            // Check for cancellation before each poll iteration
+            if self.cancel_requested.load(Ordering::Acquire) {
+                self.cancel_requested.store(false, Ordering::Release);
+                return None;
+            }
+
             let lines = self.snapshot_recent_output_lines();
             let normalized_lines: Vec<String> =
                 lines.iter().map(|line| Self::normalize_debugger_output_line(line)).collect();
@@ -1246,7 +1280,7 @@ impl DebugAdapter {
             "supportsSetVariable": supports_core,
             "supportsRestartFrame": false,
             "supportsGotoTargetsRequest": supports_core,
-            "supportsStepInTargetsRequest": supports_core,
+            "supportsStepInTargetsRequest": false,
             "supportsCompletionsRequest": supports_completions,
             "supportsModulesRequest": supports_modules,
             "supportsRestartRequest": true,
@@ -1296,6 +1330,17 @@ impl DebugAdapter {
                 Some(args.clone());
 
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
+
+            // Set workspace root for path validation (prefer cwd, fall back to program's parent)
+            let workspace = args
+                .get("cwd")
+                .and_then(|c| c.as_str())
+                .map(PathBuf::from)
+                .or_else(|| Path::new(program).parent().map(PathBuf::from));
+            if let Some(ref root) = workspace {
+                *lock_or_recover(&self.workspace_root, "debug_adapter.workspace_root") =
+                    Some(root.clone());
+            }
 
             let perl_args = args
                 .get("args")
@@ -1389,7 +1434,6 @@ impl DebugAdapter {
         // - exists() returns true for directories
         // - exists() returns true for symlinks to non-files
         // - is_file() specifically checks for regular files
-        use std::path::Path;
         let path = Path::new(program);
         match std::fs::metadata(path) {
             Ok(metadata) => {
@@ -3981,7 +4025,22 @@ impl DebugAdapter {
             }
         };
 
-        let content = match std::fs::read_to_string(&source_path) {
+        // Validate path against workspace root to prevent path traversal
+        let validated_path = match self.validate_source_path(&source_path) {
+            Ok(p) => p,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "breakpointLocations".to_string(),
+                    body: None,
+                    message: Some(e),
+                };
+            }
+        };
+
+        let content = match std::fs::read_to_string(&validated_path) {
             Ok(c) => c,
             Err(_) => {
                 let body = BreakpointLocationsResponseBody { breakpoints: Vec::new() };
@@ -4001,6 +4060,10 @@ impl DebugAdapter {
 
         if let Ok(validator) = AstBreakpointValidator::new(&content) {
             for line in args.line..=end_line {
+                if self.cancel_requested.load(Ordering::Acquire) {
+                    self.cancel_requested.store(false, Ordering::Release);
+                    break;
+                }
                 if validator.is_executable_line(line) {
                     breakpoints.push(BreakpointLocation {
                         line,
@@ -4052,7 +4115,22 @@ impl DebugAdapter {
             }
         };
 
-        match std::fs::read_to_string(&path) {
+        // Validate path against workspace root to prevent path traversal
+        let validated_path = match self.validate_source_path(&path) {
+            Ok(p) => p,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "source".to_string(),
+                    body: None,
+                    message: Some(e),
+                };
+            }
+        };
+
+        match std::fs::read_to_string(&validated_path) {
             Ok(content) => {
                 let body =
                     SourceResponseBody { content, mime_type: Some("text/x-perl".to_string()) };
@@ -4112,7 +4190,22 @@ impl DebugAdapter {
             }
         };
 
-        let content = match std::fs::read_to_string(&source_path) {
+        // Validate path against workspace root to prevent path traversal
+        let validated_path = match self.validate_source_path(&source_path) {
+            Ok(p) => p,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "gotoTargets".to_string(),
+                    body: None,
+                    message: Some(e),
+                };
+            }
+        };
+
+        let content = match std::fs::read_to_string(&validated_path) {
             Ok(c) => c,
             Err(_) => {
                 let body = GotoTargetsResponseBody { targets: Vec::new() };
@@ -4127,15 +4220,28 @@ impl DebugAdapter {
             }
         };
 
+        // Clear stale goto target mappings and build fresh ones
+        let mut goto_map = lock_or_recover(&self.goto_targets, "debug_adapter.goto_targets");
+        goto_map.clear();
+        let mut id_counter =
+            lock_or_recover(&self.next_goto_target_id, "debug_adapter.next_goto_target_id");
+
         let mut targets = Vec::new();
         let search_start = (args.line - 5).max(1);
         let search_end = args.line + 5;
 
         if let Ok(validator) = AstBreakpointValidator::new(&content) {
             for line in search_start..=search_end {
+                if self.cancel_requested.load(Ordering::Acquire) {
+                    self.cancel_requested.store(false, Ordering::Release);
+                    break;
+                }
                 if validator.is_executable_line(line) {
+                    let id = *id_counter;
+                    *id_counter += 1;
+                    goto_map.insert(id, (source_path.clone(), line));
                     targets.push(GotoTarget {
-                        id: line,
+                        id,
                         label: format!("Line {}", line),
                         line,
                         column: None,
@@ -4145,6 +4251,8 @@ impl DebugAdapter {
                 }
             }
         }
+        drop(goto_map);
+        drop(id_counter);
 
         let body = GotoTargetsResponseBody { targets };
         DapMessage::Response {
@@ -4172,22 +4280,34 @@ impl DebugAdapter {
             }
         };
 
-        if args.target_id < 1 {
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "goto".to_string(),
-                body: None,
-                message: Some("Invalid goto target".to_string()),
-            };
-        }
+        // Look up the goto target from our stored mapping
+        let target_info = {
+            let mut goto_map = lock_or_recover(&self.goto_targets, "debug_adapter.goto_targets");
+            goto_map.remove(&args.target_id)
+        };
+        let (target_path, target_line) = match target_info {
+            Some(info) => info,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "goto".to_string(),
+                    body: None,
+                    message: Some(format!("Unknown goto target id {}", args.target_id)),
+                };
+            }
+        };
 
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
         {
-            let cmd = format!("c {}\n", args.target_id);
-            let _ = stdin.write_all(cmd.as_bytes());
+            // Set debugger file context for cross-file goto
+            let file_cmd = format!("f {}\n", target_path);
+            let _ = stdin.write_all(file_cmd.as_bytes());
+            let _ = stdin.flush();
+            let goto_cmd = format!("c {}\n", target_line);
+            let _ = stdin.write_all(goto_cmd.as_bytes());
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Goto;
@@ -4245,15 +4365,25 @@ impl DebugAdapter {
 
         let mut targets = Vec::new();
 
-        let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
-        if let Some(ref session) = *session_guard {
-            // Find the frame matching the requested frame_id
-            if let Some(frame) =
-                session.stack_frames.iter().find(|f| i64::from(f.id) == args.frame_id)
-            {
-                // Read the source line from the file
-                if let Ok(content) = std::fs::read_to_string(&frame.source.path) {
-                    let line_idx = frame.line as usize;
+        // Extract the frame source path while session lock is held, then release.
+        let frame_info = {
+            let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            if let Some(ref session) = *session_guard {
+                session
+                    .stack_frames
+                    .iter()
+                    .find(|f| i64::from(f.id) == args.frame_id)
+                    .map(|frame| (frame.source.path.clone(), frame.line))
+            } else {
+                None
+            }
+        };
+
+        if let Some((source_path, frame_line)) = frame_info {
+            // Defense-in-depth: validate even internal session paths
+            if let Ok(validated_path) = self.validate_source_path(&source_path) {
+                if let Ok(content) = std::fs::read_to_string(&validated_path) {
+                    let line_idx = frame_line as usize;
                     if let Some(source_line) = content.lines().nth(line_idx.saturating_sub(1)) {
                         // Find function call patterns
                         let call_re = match Regex::new(r"(\w[\w:]*)\s*\(") {
@@ -4636,6 +4766,10 @@ impl DebugAdapter {
 
         let mut entries = Vec::new();
         for line in &lines {
+            if self.cancel_requested.load(Ordering::Acquire) {
+                self.cancel_requested.store(false, Ordering::Release);
+                return Vec::new();
+            }
             if let Some(caps) = re.captures(line) {
                 if let (Some(key), Some(val)) = (caps.get(1), caps.get(2)) {
                     entries.push((key.as_str().to_string(), val.as_str().to_string()));
@@ -6300,7 +6434,12 @@ DB<1>"#;
             DapMessage::Response { success, command, message, .. } => {
                 assert!(!success);
                 assert_eq!(command, "goto");
-                assert_eq!(message.as_deref(), Some("Invalid goto target"));
+                // With target mapping, unknown IDs produce "Unknown goto target id"
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Unknown goto target"),
+                    "expected unknown target message, got: {msg}"
+                );
             }
             _ => panic!("Expected response"),
         }
@@ -6309,6 +6448,11 @@ DB<1>"#;
     #[test]
     fn test_goto_no_session() {
         let mut adapter = DebugAdapter::new();
+        // First store a mapping so goto gets past the lookup
+        {
+            let mut goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
+            goto_map.insert(10, ("/test/file.pl".to_string(), 10));
+        }
         let response =
             adapter.handle_request(1, "goto", Some(json!({"threadId": 1, "targetId": 10})));
         match response {
@@ -6361,19 +6505,201 @@ DB<1>"#;
             _ => panic!("Expected response"),
         }
 
-        // goto should fail gracefully (no session), not with "does not support"
+        // goto should fail gracefully with unknown target (no stored mapping)
         let goto_response =
-            adapter.handle_request(2, "goto", Some(json!({"threadId": 1, "targetId": 1})));
+            adapter.handle_request(2, "goto", Some(json!({"threadId": 1, "targetId": 999})));
         match goto_response {
             DapMessage::Response { success, command, message, .. } => {
-                assert!(!success, "goto without session should fail");
+                assert!(!success, "goto with unknown target should fail");
                 assert_eq!(command, "goto");
                 let msg = message.as_deref().unwrap_or("");
                 assert!(
-                    !msg.contains("does not support"),
-                    "goto must not claim lack of support, got: {msg}"
+                    msg.contains("Unknown goto target"),
+                    "goto must report unknown target, got: {msg}"
                 );
-                assert_eq!(msg, "No active debug session");
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_goto_targets_stores_mapping() {
+        use std::io::Write;
+
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        // Create a temp file with executable content
+        let dir = tempfile::tempdir().ok();
+        let dir = dir.as_ref().map(|d| d.path()).unwrap_or(Path::new("/tmp"));
+        let file_path = dir.join("test_goto.pl");
+        {
+            let mut f = std::fs::File::create(&file_path).expect("create temp file");
+            writeln!(f, "my $x = 1;").expect("write");
+            writeln!(f, "my $y = 2;").expect("write");
+            writeln!(f, "print $x + $y;").expect("write");
+        }
+
+        let path_str = file_path.to_string_lossy().to_string();
+        let response = adapter.handle_request(
+            2,
+            "gotoTargets",
+            Some(json!({
+                "source": {"path": path_str},
+                "line": 2
+            })),
+        );
+
+        // Verify the response contains targets with monotonic IDs (not line numbers)
+        match response {
+            DapMessage::Response { success, body: Some(body), .. } => {
+                assert!(success, "gotoTargets should succeed");
+                let targets = body.get("targets").and_then(|t| t.as_array());
+                assert!(targets.is_some(), "should have targets array");
+                let targets = targets.expect("targets");
+                assert!(!targets.is_empty(), "should find executable lines");
+
+                // Verify IDs are monotonic starting from 1, NOT equal to line numbers
+                let first_id = targets[0].get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                assert!(first_id >= 1, "IDs should start at 1 or higher");
+
+                // Verify the mapping was stored internally
+                let goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
+                assert!(!goto_map.is_empty(), "goto_targets map should be populated");
+                // Each stored entry should reference our temp file
+                for (_id, (stored_path, _line)) in goto_map.iter() {
+                    assert_eq!(stored_path, &path_str, "stored path should match source");
+                }
+            }
+            _ => panic!("Expected successful response"),
+        }
+
+        let _ = std::fs::remove_file(&file_path);
+    }
+
+    #[test]
+    fn test_goto_uses_stored_mapping() {
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        // Manually populate the goto_targets map to simulate handle_goto_targets
+        {
+            let mut goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
+            goto_map.insert(42, ("/some/file.pl".to_string(), 10));
+        }
+
+        // Without a debug session, goto should fail with "No active debug session"
+        // but only after successfully looking up the target
+        let response =
+            adapter.handle_request(2, "goto", Some(json!({"threadId": 1, "targetId": 42})));
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "goto without session should fail");
+                assert_eq!(command, "goto");
+                // It should NOT say "Unknown goto target" — the mapping was found
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("No active debug session"),
+                    "goto should report no session, got: {msg}"
+                );
+            }
+            _ => panic!("Expected response"),
+        }
+
+        // Verify the consumed entry was removed from the map
+        let goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
+        assert!(!goto_map.contains_key(&42), "consumed goto target should be removed from map");
+    }
+
+    #[test]
+    fn test_source_rejects_traversal() {
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        // Set workspace root to a temp directory
+        let dir = tempfile::tempdir().expect("create tempdir");
+        *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
+            Some(dir.path().to_path_buf());
+
+        let response = adapter.handle_request(
+            2,
+            "source",
+            Some(json!({
+                "source": {"path": "../../../etc/passwd"},
+                "sourceReference": 0
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "source with traversal path should fail");
+                assert_eq!(command, "source");
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Path validation failed"),
+                    "should report path validation failure, got: {msg}"
+                );
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_breakpoint_locations_rejects_traversal() {
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        let dir = tempfile::tempdir().expect("create tempdir");
+        *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
+            Some(dir.path().to_path_buf());
+
+        let response = adapter.handle_request(
+            2,
+            "breakpointLocations",
+            Some(json!({
+                "source": {"path": "../../../etc/passwd"},
+                "line": 1
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "breakpointLocations with traversal path should fail");
+                assert_eq!(command, "breakpointLocations");
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Path validation failed"),
+                    "should report path validation failure, got: {msg}"
+                );
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_goto_targets_rejects_traversal() {
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        let dir = tempfile::tempdir().expect("create tempdir");
+        *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
+            Some(dir.path().to_path_buf());
+
+        let response = adapter.handle_request(
+            2,
+            "gotoTargets",
+            Some(json!({
+                "source": {"path": "../../../etc/passwd"},
+                "line": 1
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "gotoTargets with traversal path should fail");
+                assert_eq!(command, "gotoTargets");
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Path validation failed"),
+                    "should report path validation failure, got: {msg}"
+                );
             }
             _ => panic!("Expected response"),
         }

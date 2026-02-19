@@ -87,6 +87,13 @@ fn test_corpus_nodekind_coverage() {
         );
     }
 
+    // Ratchet metric: recovery-only kind count for burn-down visibility
+    eprintln!(
+        "RATCHET: {} recovery-only kind(s): {:?}",
+        recovery_only.len(),
+        recovery_only
+    );
+
     // Hard gate: all required kinds must appear somewhere
     let mut missing: Vec<&str> =
         required.iter().copied().filter(|k| !observed.contains(k)).collect();
@@ -180,6 +187,19 @@ fn test_corpus_nodekind_angles() {
             "  {kind}: {angle} angle(s) ({file_count} file(s), {parent_count} parent(s)){clean_marker}"
         );
     }
+    // Ratchet metric: kinds whose angles come only from recovery parses
+    let recovery_only_angles: Vec<&str> = required
+        .iter()
+        .copied()
+        .filter(|k| {
+            kind_to_files.contains_key(k) && clean_kind_to_files.get(k).map_or(0, |s| s.len()) == 0
+        })
+        .collect();
+    eprintln!(
+        "RATCHET: {} recovery-only angle(s): {:?}",
+        recovery_only_angles.len(),
+        recovery_only_angles
+    );
     eprintln!("==============================\n");
 
     assert!(
