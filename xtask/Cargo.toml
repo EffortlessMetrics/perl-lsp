@@ -11,7 +11,7 @@ keywords = ["perl", "parser", "lsp", "tasks"]
 categories = ["development-tools"]
 
 [dependencies]
-clap = { version = "4.5.55", features = ["derive"] }
+clap = { version = "4.5.59", features = ["derive"] }
 color-eyre = "0.6.5"
 similar = "2.7.0"
 duct = "1.1.1"
@@ -20,7 +20,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 toml = "0.9.8"
 anyhow = "1.0.100"
-indicatif = "0.18.3"
+indicatif = "0.18.4"
 console = "0.16.2"
 chrono = { version = "0.4.43", features = ["serde"] }
 perl-parser = { workspace = true }

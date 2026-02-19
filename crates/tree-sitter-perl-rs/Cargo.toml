@@ -36,7 +36,7 @@ encoding_rs = "0.8.35"
 serde_json = "1.0.148"
 once_cell = "1.21.3"
 lazy_static = "1.5.0"
-clap = { version = "4.5.53", features = ["derive"] }
+clap = { version = "4.5.59", features = ["derive"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 perl-tdd-support = { path = "../perl-tdd-support" }
 perl-ts-heredoc-analysis = { path = "../perl-ts-heredoc-analysis", optional = true }
@@ -210,5 +210,5 @@ path = "../../benches/edge_case_benchmarks.rs"
 harness = false
 
 [build-dependencies]
-cc = { version = "1.2.51", optional = true }
+cc = { version = "1.2.56", optional = true }
 bindgen = { version = "0.72.1", optional = true } 
