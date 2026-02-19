@@ -1,6 +1,6 @@
 [package]
 name = "perl-dap"
-version = "0.1.0"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -57,7 +57,7 @@ clap = { version = "4.5.59", features = ["derive"] }
 ropey = "1.6.1"
 
 # Perl parser for AST breakpoint validation
-perl-parser = { path = "../perl-parser" }
+perl-parser = { path = "../perl-parser", version = "0.9.1" }
 perl-dap-breakpoint = { workspace = true }
 perl-dap-eval = { workspace = true }
 perl-dap-variables = { workspace = true }

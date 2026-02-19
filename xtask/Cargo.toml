@@ -3,6 +3,7 @@ name = "xtask"
 version = "0.8.3"
 edition.workspace = true
 rust-version.workspace = true
+publish = false
 license = "MIT OR Apache-2.0"
 description = "Task runner for Perl LSP workspace"
 repository = "https://github.com/EffortlessMetrics/perl-lsp"

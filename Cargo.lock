@@ -1529,7 +1529,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap"
-version = "0.1.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -1559,7 +1559,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-breakpoint"
-version = "0.1.0"
+version = "0.9.1"
 dependencies = [
  "perl-parser",
  "perl-tdd-support",
@@ -1570,7 +1570,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-eval"
-version = "0.1.0"
+version = "0.9.1"
 dependencies = [
  "once_cell",
  "perl-tdd-support",
@@ -1580,7 +1580,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-stack"
-version = "0.1.0"
+version = "0.9.1"
 dependencies = [
  "once_cell",
  "perl-tdd-support",
@@ -1592,7 +1592,7 @@ dependencies = [
 
 [[package]]
 name = "perl-dap-variables"
-version = "0.1.0"
+version = "0.9.1"
 dependencies = [
  "once_cell",
  "perl-tdd-support",

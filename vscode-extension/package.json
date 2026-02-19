@@ -1,7 +1,7 @@
 {
   "name": "perl-lsp",
   "displayName": "Perl Language Server",
-  "description": "Comprehensive Perl language support powered by tree-sitter-perl LSP",
+  "description": "Comprehensive Perl language support powered by perl-lsp",
   "version": "0.9.1",
   "publisher": "effortlesssteven",
   "engines": {
@@ -18,8 +18,7 @@
     "perl5",
     "language-server",
     "lsp",
-    "tree-sitter",
-    "intellisense"
+    "tree-sitter"
   ],
   "extensionKind": [
     "workspace"

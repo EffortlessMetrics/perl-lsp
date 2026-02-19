@@ -40,6 +40,10 @@ members = [
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
+    "crates/perl-dap-breakpoint",
+    "crates/perl-dap-eval",
+    "crates/perl-dap-stack",
+    "crates/perl-dap-variables",
     "crates/tree-sitter-perl-rs",
     "crates/perl-ts-heredoc-analysis",
     "crates/perl-ts-logos-lexer",
@@ -86,11 +90,11 @@ perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.9.1" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.9.1" }
 perl-uri = { path = "crates/perl-uri", version = "0.9.1" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.9.1" }
-perl-dap = { path = "crates/perl-dap", version = "0.1.0" }
-perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.1.0" }
-perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.1.0" }
-perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.1.0" }
-perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.1.0" }
+perl-dap = { path = "crates/perl-dap", version = "0.9.1" }
+perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.9.1" }
+perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.9.1" }
+perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.9.1" }
+perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.9.1" }
 
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.9.1" }
@@ -127,11 +131,6 @@ tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
 tree-sitter = "0.26.3"
 ropey = "1.6.1"
-
-[patch.crates-io]
-perl-lexer = { path = "crates/perl-lexer" }
-perl-parser = { path = "crates/perl-parser" }
-perl-corpus = { path = "crates/perl-corpus" }
 
 # Profile for development - slightly optimized for better performance
 [profile.dev]
