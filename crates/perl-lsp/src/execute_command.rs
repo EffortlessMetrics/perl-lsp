@@ -795,6 +795,14 @@ impl ExecuteCommandProvider {
         Ok(canonical_path)
     }
 
+    /// Resolve a debug file path with the same workspace security as other commands.
+    ///
+    /// Wraps `resolve_path_from_args` for a single string path argument,
+    /// providing the same path traversal protection and workspace enforcement.
+    pub fn resolve_debug_file_path(&self, file_path: &str) -> Result<PathBuf, String> {
+        self.resolve_path_from_args(&[Value::String(file_path.to_string())])
+    }
+
     /// Normalize file path by handling URI schemes and path formats (legacy method - deprecated)
     ///
     /// # Security Warning

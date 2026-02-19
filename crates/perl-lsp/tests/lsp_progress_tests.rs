@@ -30,8 +30,7 @@ fn test_work_done_progress_cancel_with_string_token() -> TestResult {
     );
 
     // Server should handle the cancel gracefully. No crash, remains responsive.
-    let _result = harness.request("workspace/symbol", json!({"query": ""}))
-        .unwrap_or(json!(null));
+    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
     Ok(())
 }
 
@@ -53,8 +52,7 @@ fn test_work_done_progress_cancel_with_number_token() -> TestResult {
     );
 
     // Verify server is still responsive
-    let _result = harness.request("workspace/symbol", json!({"query": ""}))
-        .unwrap_or(json!(null));
+    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
     Ok(())
 }
 
@@ -132,8 +130,7 @@ fn test_progress_value_begin_report_end_structure() -> TestResult {
     assert!(begin["title"].is_string(), "begin must have a title");
     assert!(begin["cancellable"].is_boolean());
     assert!(begin["message"].is_string());
-    let pct = begin["percentage"].as_u64()
-        .ok_or("percentage must be a number")?;
+    let pct = begin["percentage"].as_u64().ok_or("percentage must be a number")?;
     assert!(pct <= 100, "percentage must be in 0..=100");
 
     let report = json!({
@@ -145,8 +142,7 @@ fn test_progress_value_begin_report_end_structure() -> TestResult {
 
     // report: all fields optional except kind
     assert_eq!(report["kind"], "report");
-    let rpt_pct = report["percentage"].as_u64()
-        .ok_or("percentage must be a number")?;
+    let rpt_pct = report["percentage"].as_u64().ok_or("percentage must be a number")?;
     assert!(rpt_pct <= 100);
 
     let end = json!({

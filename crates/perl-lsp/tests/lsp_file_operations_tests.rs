@@ -18,10 +18,8 @@ fn test_will_rename_files_single_module() -> TestResult {
     harness.initialize(None)?;
 
     // Open a file that references the module being renamed
-    harness.open_document(
-        "file:///workspace/app.pl",
-        "use MyModule;\nmy $obj = MyModule->new();\n",
-    )?;
+    harness
+        .open_document("file:///workspace/app.pl", "use MyModule;\nmy $obj = MyModule->new();\n")?;
 
     // Send willRenameFiles request for a module rename
     let result = harness.request(
@@ -164,7 +162,6 @@ fn test_did_rename_files_notification() -> TestResult {
     );
 
     // Notifications have no response. Verify the server is still responsive.
-    let _result = harness.request("workspace/symbol", json!({"query": ""}))
-        .unwrap_or(json!(null));
+    let _result = harness.request("workspace/symbol", json!({"query": ""})).unwrap_or(json!(null));
     Ok(())
 }

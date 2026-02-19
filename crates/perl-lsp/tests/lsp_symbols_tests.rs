@@ -42,11 +42,7 @@ sub farewell {
         }),
     )?;
 
-    assert!(
-        response.is_array(),
-        "documentSymbol should return an array, got: {:?}",
-        response
-    );
+    assert!(response.is_array(), "documentSymbol should return an array, got: {:?}", response);
 
     let symbols = response.as_array().ok_or("response is not an array")?;
     assert!(!symbols.is_empty(), "Should return at least one symbol");
@@ -117,8 +113,11 @@ sub load {
         let name = s["name"].as_str().unwrap_or("");
         name == "MyApp::Util" || name == "MyApp/Util" || name.contains("Util")
     });
-    assert!(util_pkg.is_some(), "Should find MyApp::Util package symbol. Symbols: {:?}",
-        symbols.iter().map(|s| s["name"].as_str().unwrap_or("?")).collect::<Vec<_>>());
+    assert!(
+        util_pkg.is_some(),
+        "Should find MyApp::Util package symbol. Symbols: {:?}",
+        symbols.iter().map(|s| s["name"].as_str().unwrap_or("?")).collect::<Vec<_>>()
+    );
     let util_pkg = util_pkg.ok_or("MyApp::Util not found")?;
     // Package kind is 4 or Module kind is 2
     let kind = util_pkg["kind"].as_i64().unwrap_or(0);

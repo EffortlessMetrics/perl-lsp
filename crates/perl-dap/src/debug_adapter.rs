@@ -10,8 +10,8 @@ use crate::protocol::{
     CompletionItem, CompletionsArguments, CompletionsResponseBody, ContinueArguments,
     ContinueResponseBody, DataBreakpointInfoArguments, DataBreakpointInfoResponseBody,
     DisconnectArguments, EvaluateArguments, EvaluateResponseBody, ExceptionDetails,
-    ExceptionInfoArguments, ExceptionInfoResponseBody, GotoTarget, GotoTargetsArguments,
-    GotoTargetsResponseBody, InlineValuesArguments, InlineValuesResponseBody,
+    ExceptionInfoArguments, ExceptionInfoResponseBody, GotoArguments, GotoTarget,
+    GotoTargetsArguments, GotoTargetsResponseBody, InlineValuesArguments, InlineValuesResponseBody,
     LoadedSourcesResponseBody, Module, ModulesArguments, ModulesResponseBody, NextArguments,
     PauseArguments, RestartArguments, Scope, ScopesArguments, ScopesResponseBody,
     SetDataBreakpointsArguments, SetDataBreakpointsResponseBody, SetExceptionBreakpointsArguments,
@@ -432,6 +432,7 @@ enum DebugState {
 #[derive(Debug, Clone, PartialEq)]
 enum ResumeMode {
     Continue,
+    Goto,
     Next,
     StepIn,
     StepOut,
@@ -1256,7 +1257,7 @@ impl DebugAdapter {
             "supportsDelayedStackTraceLoading": false,
             "supportsLoadedSourcesRequest": true,
             "supportsLogPoints": supports_log_points,
-            "supportsTerminateThreadsRequest": supports_core,
+            "supportsTerminateThreadsRequest": false,
             "supportsSetExpression": supports_core,
             "supportsTerminateRequest": supports_core,
             "supportsDataBreakpoints": supports_watchpoints,
@@ -1622,8 +1623,7 @@ impl DebugAdapter {
                                 exception_break_on_warn.lock().map(|guard| *guard).unwrap_or(false);
                             let is_exception_line =
                                 exception_re().is_some_and(|re| re.is_match(&text));
-                            let is_warning_line =
-                                warning_re().is_some_and(|re| re.is_match(&text));
+                            let is_warning_line = warning_re().is_some_and(|re| re.is_match(&text));
                             let exception_match = break_on_die && is_exception_line;
                             let warning_match =
                                 break_on_warn && is_warning_line && !is_exception_line;
@@ -2459,10 +2459,8 @@ impl DebugAdapter {
         {
             let matches_filter = |id: &str| -> (bool, bool) {
                 let all = id.eq_ignore_ascii_case("all");
-                let die = supports_die
-                    && (id.eq_ignore_ascii_case("die") || all);
-                let warn = supports_warn
-                    && (id.eq_ignore_ascii_case("warn") || all);
+                let die = supports_die && (id.eq_ignore_ascii_case("die") || all);
+                let warn = supports_warn && (id.eq_ignore_ascii_case("warn") || all);
                 (die, warn)
             };
 
@@ -4159,14 +4157,68 @@ impl DebugAdapter {
         }
     }
 
-    fn handle_goto(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
-        DapMessage::Response {
-            seq,
-            request_seq,
-            success: false,
-            command: "goto".to_string(),
-            body: None,
-            message: Some("Perl debugger does not support arbitrary goto".to_string()),
+    fn handle_goto(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let args: GotoArguments = match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "goto".to_string(),
+                    body: None,
+                    message: Some("Missing or invalid arguments".to_string()),
+                };
+            }
+        };
+
+        if args.target_id < 1 {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "goto".to_string(),
+                body: None,
+                message: Some("Invalid goto target".to_string()),
+            };
+        }
+
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && let Some(stdin) = session.process.stdin.as_mut()
+        {
+            let cmd = format!("c {}\n", args.target_id);
+            let _ = stdin.write_all(cmd.as_bytes());
+            let _ = stdin.flush();
+            session.state = DebugState::Running;
+            session.last_resume_mode = ResumeMode::Goto;
+            session.variables.clear();
+            let t_id = session.thread_id;
+
+            self.send_event(
+                "continued",
+                Some(json!({
+                    "threadId": t_id,
+                    "allThreadsContinued": true
+                })),
+            );
+
+            DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "goto".to_string(),
+                body: None,
+                message: None,
+            }
+        } else {
+            DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "goto".to_string(),
+                body: None,
+                message: Some("No active debug session".to_string()),
+            }
         }
     }
 
@@ -4985,9 +5037,11 @@ mod tests {
             ("supportsValueFormattingOptions", crate::feature_catalog::has_feature("dap.core")),
             ("supportTerminateDebuggee", crate::feature_catalog::has_feature("dap.core")),
             ("supportsLogPoints", crate::feature_catalog::has_feature("dap.breakpoints.logpoints")),
-            ("supportsExceptionOptions",
+            (
+                "supportsExceptionOptions",
                 crate::feature_catalog::has_feature("dap.exceptions.die")
-                    || crate::feature_catalog::has_feature("dap.exceptions.warn")),
+                    || crate::feature_catalog::has_feature("dap.exceptions.warn"),
+            ),
             (
                 "supportsExceptionFilterOptions",
                 crate::feature_catalog::has_feature("dap.exceptions.die")
@@ -4998,6 +5052,8 @@ mod tests {
             ("supportsCompletionsRequest", crate::feature_catalog::has_feature("dap.completions")),
             ("supportsModulesRequest", crate::feature_catalog::has_feature("dap.modules")),
             ("supportsDataBreakpoints", crate::feature_catalog::has_feature("dap.watchpoints")),
+            ("supportsTerminateThreadsRequest", false),
+            ("supportsGotoTargetsRequest", crate::feature_catalog::has_feature("dap.core")),
         ];
 
         for (capability, expected) in expectations {
@@ -5017,24 +5073,33 @@ mod tests {
             .ok_or("exceptionBreakpointFilters must be present as an array")?;
 
         let has_filter = |id: &str| -> bool {
-            exception_filters
-                .iter()
-                .any(|f| f.get("filter").and_then(Value::as_str) == Some(id))
+            exception_filters.iter().any(|f| f.get("filter").and_then(Value::as_str) == Some(id))
         };
 
         let die_enabled = crate::feature_catalog::has_feature("dap.exceptions.die");
         let warn_enabled = crate::feature_catalog::has_feature("dap.exceptions.warn");
 
-        assert_eq!(has_filter("die"), die_enabled,
-            "die filter presence must match dap.exceptions.die");
-        assert_eq!(has_filter("all"), die_enabled,
-            "all filter presence must match dap.exceptions.die");
-        assert_eq!(has_filter("warn"), warn_enabled,
-            "warn filter presence must match dap.exceptions.warn");
+        assert_eq!(
+            has_filter("die"),
+            die_enabled,
+            "die filter presence must match dap.exceptions.die"
+        );
+        assert_eq!(
+            has_filter("all"),
+            die_enabled,
+            "all filter presence must match dap.exceptions.die"
+        );
+        assert_eq!(
+            has_filter("warn"),
+            warn_enabled,
+            "warn filter presence must match dap.exceptions.warn"
+        );
 
         if !die_enabled && !warn_enabled {
-            assert!(exception_filters.is_empty(),
-                "exceptionBreakpointFilters must be empty when no exception features are enabled");
+            assert!(
+                exception_filters.is_empty(),
+                "exceptionBreakpointFilters must be empty when no exception features are enabled"
+            );
         }
 
         Ok(())
@@ -5168,6 +5233,13 @@ mod tests {
                 _ => return Err(format!("Expected response for `{command}`").into()),
             }
         }
+
+        // supportsTerminateThreadsRequest must be false (Perl limitation)
+        assert_eq!(
+            capability_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
+            Some(false),
+            "supportsTerminateThreadsRequest must be false — Perl has no thread termination"
+        );
 
         Ok(())
     }
@@ -6202,6 +6274,108 @@ DB<1>"#;
                 }
                 _ => {}
             }
+        }
+    }
+
+    #[test]
+    fn test_goto_missing_arguments() {
+        let mut adapter = DebugAdapter::new();
+        let response = adapter.handle_request(1, "goto", None);
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "goto");
+                assert_eq!(message.as_deref(), Some("Missing or invalid arguments"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_goto_invalid_target() {
+        let mut adapter = DebugAdapter::new();
+        let response =
+            adapter.handle_request(1, "goto", Some(json!({"threadId": 1, "targetId": -1})));
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "goto");
+                assert_eq!(message.as_deref(), Some("Invalid goto target"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_goto_no_session() {
+        let mut adapter = DebugAdapter::new();
+        let response =
+            adapter.handle_request(1, "goto", Some(json!({"threadId": 1, "targetId": 10})));
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "goto");
+                assert_eq!(message.as_deref(), Some("No active debug session"));
+            }
+            _ => panic!("Expected response"),
+        }
+    }
+
+    #[test]
+    fn test_terminate_threads_capability_is_false() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let init = adapter.handle_request(1, "initialize", None);
+        let capabilities = match init {
+            DapMessage::Response { success: true, body: Some(body), .. } => body,
+            _ => return Err("Expected successful initialize response".into()),
+        };
+        let cap_map = capabilities.as_object().ok_or("body must be object")?;
+        assert_eq!(
+            cap_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
+            Some(false),
+            "supportsTerminateThreadsRequest must be false"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_goto_targets_then_goto_flow() {
+        let mut adapter = DebugAdapter::new();
+
+        // gotoTargets should succeed (even with no file — returns empty targets)
+        let gt_response = adapter.handle_request(
+            1,
+            "gotoTargets",
+            Some(json!({"source": {"path": "/tmp/nonexistent.pl"}, "line": 1})),
+        );
+        match gt_response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(success, "gotoTargets should succeed");
+                assert_eq!(command, "gotoTargets");
+                // Must NOT say "does not support"
+                assert!(
+                    !message.as_deref().unwrap_or("").contains("does not support"),
+                    "gotoTargets must not claim lack of support"
+                );
+            }
+            _ => panic!("Expected response"),
+        }
+
+        // goto should fail gracefully (no session), not with "does not support"
+        let goto_response =
+            adapter.handle_request(2, "goto", Some(json!({"threadId": 1, "targetId": 1})));
+        match goto_response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "goto without session should fail");
+                assert_eq!(command, "goto");
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    !msg.contains("does not support"),
+                    "goto must not claim lack of support, got: {msg}"
+                );
+                assert_eq!(msg, "No active debug session");
+            }
+            _ => panic!("Expected response"),
         }
     }
 }

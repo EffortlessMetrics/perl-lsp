@@ -4,9 +4,9 @@
 
 use super::super::*;
 use lsp_types::{
-    notification::{DidChangeWatchedFiles, Notification},
     DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
     RegistrationParams, WatchKind,
+    notification::{DidChangeWatchedFiles, Notification},
 };
 use serde_json::json;
 

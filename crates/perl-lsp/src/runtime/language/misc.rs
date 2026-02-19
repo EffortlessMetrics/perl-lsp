@@ -21,7 +21,7 @@ static INLINE_VALUE_REGEX: OnceLock<Result<regex::Regex, regex::Error>> = OnceLo
 
 fn get_inline_value_regex() -> Option<&'static regex::Regex> {
     INLINE_VALUE_REGEX
-        .get_or_init(|| regex::Regex::new(r"\$([a-zA-Z_][a-zA-Z0-9_]*)"))
+        .get_or_init(|| regex::Regex::new(r"([$@%])([a-zA-Z_][a-zA-Z0-9_]*)"))
         .as_ref()
         .ok()
 }
@@ -449,31 +449,43 @@ impl LspServer {
                     .and_then(|k| k.as_str())
                     .unwrap_or("unknown");
 
-                // Take a snapshot of all documents - lock is released after this line
-                // This allows other LSP operations to proceed while we do CPU-intensive
-                // reference counting across the workspace
-                let snapshot = self.documents_scan_snapshot();
+                // Fast path: use workspace index if available (more accurate,
+                // excludes references in comments/strings)
+                #[cfg(feature = "workspace")]
+                let index_count = self
+                    .coordinator()
+                    .map(|coord| coord.index().find_references(symbol_name).len());
+                #[cfg(not(feature = "workspace"))]
+                let index_count: Option<usize> = None;
 
-                // Now iterate without holding the lock
-                let mut total_references = 0;
-                for (scanned_docs, view) in snapshot.iter().enumerate() {
-                    // Check deadline periodically (every 10 documents)
-                    if scanned_docs % 10 == 0 && start.elapsed() >= deadline {
-                        eprintln!(
-                            "CodeLensResolve: deadline exceeded after {} docs, returning partial count {}",
-                            scanned_docs, total_references
-                        );
-                        break;
-                    }
+                let total_references = if let Some(count) = index_count {
+                    count
+                } else {
+                    // Slow path: scan all documents with AST/text fallback
+                    let snapshot = self.documents_scan_snapshot();
+                    let mut count = 0;
+                    for (scanned_docs, view) in snapshot.iter().enumerate() {
+                        // Check deadline periodically (every 10 documents)
+                        if scanned_docs % 10 == 0 && start.elapsed() >= deadline {
+                            eprintln!(
+                                "CodeLensResolve: deadline exceeded after {} docs, returning partial count {}",
+                                scanned_docs, count
+                            );
+                            break;
+                        }
 
-                    if let Some(ref ast) = view.ast {
-                        total_references += self.count_references(ast, symbol_name, symbol_kind);
-                    } else {
-                        // Text-based fallback when AST is not available
-                        total_references +=
-                            self.count_references_text_based(&view.text, symbol_name, symbol_kind);
+                        if let Some(ref ast) = view.ast {
+                            count += self.count_references(ast, symbol_name, symbol_kind);
+                        } else {
+                            count += self.count_references_text_based(
+                                &view.text,
+                                symbol_name,
+                                symbol_kind,
+                            );
+                        }
                     }
-                }
+                    count
+                };
 
                 let resolved = resolve_code_lens(lens, total_references);
                 return Ok(Some(json!(resolved)));
@@ -513,6 +525,10 @@ impl LspServer {
     }
 
     /// Handle textDocument/inlineValue request
+    ///
+    /// Returns `InlineValueVariableLookup` items so the debug client resolves
+    /// actual variable values via DAP, rather than displaying placeholder text.
+    /// Supports scalar ($), array (@), and hash (%) variables.
     pub(crate) fn handle_inline_value(
         &self,
         params: Option<Value>,
@@ -521,26 +537,33 @@ impl LspServer {
         if let Some(params) = params {
             let uri = req_uri(&params)?;
             let ((start_line, _start_char), (end_line, _end_char)) = req_range(&params)?;
-            let _context = &params["context"]; // Debug context (stopped at breakpoint, etc)
+
+            // Use stoppedLocation from debug context to limit scope when available
+            let context = &params["context"];
+            let effective_end = context
+                .get("stoppedLocation")
+                .and_then(|loc| loc.get("end"))
+                .and_then(|end| end.get("line"))
+                .and_then(|l| l.as_u64())
+                .and_then(|v| u32::try_from(v).ok())
+                .map(|stopped_line| stopped_line.min(end_line))
+                .unwrap_or(end_line);
 
             let documents = self.documents_guard();
             if let Some(doc) = self.get_document(&documents, uri) {
-                // Extract visible scalar variables in the range
                 use super::super::byte_to_utf16_col;
 
                 let mut inline_values = Vec::new();
 
-                // Simple implementation: find scalar variables in the visible range
                 let lines: Vec<&str> = doc.text.lines().collect();
-                // Use pre-compiled regex
                 let Some(re) = get_inline_value_regex() else {
                     return Ok(Some(json!([])));
                 };
 
-                for line_num in start_line..=end_line.min((lines.len() - 1) as u32) {
+                for line_num in start_line..=effective_end.min((lines.len() - 1) as u32) {
                     let line_text = lines[line_num as usize];
 
-                    // Find scalar variables using regex
+                    // Find $scalar, @array, and %hash variables
                     for cap in re.captures_iter(line_text) {
                         if let Some(m) = cap.get(0) {
                             let var_text = m.as_str();
@@ -548,13 +571,15 @@ impl LspServer {
                             let start_utf16 = byte_to_utf16_col(line_text, m.start());
                             let end_utf16 = byte_to_utf16_col(line_text, m.end());
 
-                            // Create inline value text hint (showing the variable name as placeholder)
+                            // Use InlineValueVariableLookup so the debug client resolves
+                            // actual values via DAP rather than showing placeholder text
                             inline_values.push(json!({
                                 "range": {
                                     "start": { "line": line_num, "character": start_utf16 as u32 },
                                     "end": { "line": line_num, "character": end_utf16 as u32 }
                                 },
-                                "text": format!("{} = ?", var_text)
+                                "variableName": var_text,
+                                "caseSensitiveLookup": true
                             }));
                         }
                     }
@@ -635,6 +660,21 @@ impl LspServer {
                             }));
                         }
 
+                        // For subroutines in packages with base/parent,
+                        // add monikers pointing to potential parent definitions
+                        if key.kind == crate::workspace_index::SymKind::Sub {
+                            for parent_pkg in Self::find_base_parents(ast) {
+                                let parent_id =
+                                    format!("{}.{}", parent_pkg.replace("::", "."), key.name);
+                                monikers.push(json!({
+                                    "scheme": "perl",
+                                    "identifier": parent_id,
+                                    "unique": "global",
+                                    "kind": "local"
+                                }));
+                            }
+                        }
+
                         return Ok(Some(json!(monikers)));
                     }
                 }
@@ -651,8 +691,10 @@ impl LspServer {
         text: &str,
         key: &crate::workspace_index::SymbolKey,
     ) -> (&'static str, &'static str) {
-        // Check if symbol is exported via @EXPORT or @EXPORT_OK
-        let is_exported = self.is_symbol_exported(text, &key.name);
+        // Check if symbol is exported via @EXPORT or @EXPORT_OK (AST-first, regex fallback)
+        let uses_exporter = Self::has_use_exporter(ast);
+        let is_exported =
+            self.is_symbol_exported_ast(ast, &key.name) || self.is_symbol_exported(text, &key.name);
 
         // Check if symbol is imported from another module
         let is_imported = self.is_symbol_imported(ast, &key.name);
@@ -672,6 +714,9 @@ impl LspServer {
             crate::workspace_index::SymKind::Sub => {
                 if is_exported {
                     "global"
+                } else if uses_exporter && key.pkg.as_ref() != "main" {
+                    // Module uses Exporter — subs are at least project-visible
+                    "project"
                 } else if key.pkg.as_ref() != "main" {
                     "project"
                 } else {
@@ -686,7 +731,122 @@ impl LspServer {
         (kind, unique)
     }
 
-    /// Check if a symbol name appears in @EXPORT or @EXPORT_OK
+    /// Check if the AST contains `use Exporter` (or `use parent 'Exporter'`)
+    fn has_use_exporter(ast: &crate::ast::Node) -> bool {
+        use perl_parser::ast::NodeKind;
+
+        fn check(node: &crate::ast::Node) -> bool {
+            match &node.kind {
+                NodeKind::Use { module, .. } if module == "Exporter" => true,
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    statements.iter().any(check)
+                }
+                _ => false,
+            }
+        }
+        check(ast)
+    }
+
+    /// AST-based export detection: walk Assignment nodes to find
+    /// `@EXPORT = (...)` or `@EXPORT_OK = (...)` containing the symbol.
+    fn is_symbol_exported_ast(&self, ast: &crate::ast::Node, symbol_name: &str) -> bool {
+        use perl_parser::ast::NodeKind;
+
+        fn check(node: &crate::ast::Node, name: &str) -> bool {
+            match &node.kind {
+                NodeKind::Assignment { lhs, rhs, .. } => {
+                    // Check if lhs is @EXPORT or @EXPORT_OK
+                    let is_export_var = match &lhs.kind {
+                        NodeKind::Variable { name: var_name, sigil } => {
+                            sigil.starts_with('@')
+                                && (var_name == "EXPORT" || var_name == "EXPORT_OK")
+                        }
+                        _ => false,
+                    };
+                    if is_export_var {
+                        // Search rhs for the symbol name in string/identifier nodes
+                        return contains_symbol_name(rhs, name);
+                    }
+                    // Recurse into lhs/rhs for nested assignments
+                    check(lhs, name) || check(rhs, name)
+                }
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    statements.iter().any(|s| check(s, name))
+                }
+                NodeKind::Subroutine { body, .. } => check(body, name),
+                NodeKind::ExpressionStatement { expression } => check(expression, name),
+                _ => false,
+            }
+        }
+
+        fn contains_symbol_name(node: &crate::ast::Node, name: &str) -> bool {
+            match &node.kind {
+                NodeKind::String { value, .. } => {
+                    // Check if the string contains the symbol name as a word
+                    value.split_whitespace().any(|w| w == name)
+                }
+                NodeKind::Identifier { name: id } => id == name,
+                NodeKind::ArrayLiteral { elements } => {
+                    elements.iter().any(|e| contains_symbol_name(e, name))
+                }
+                _ => {
+                    let mut found = false;
+                    node.for_each_child(|child| {
+                        if !found && contains_symbol_name(child, name) {
+                            found = true;
+                        }
+                    });
+                    found
+                }
+            }
+        }
+
+        check(ast, symbol_name)
+    }
+
+    /// Detect `use base 'Foo'` or `use parent 'Foo'` and return parent packages
+    fn find_base_parents(ast: &crate::ast::Node) -> Vec<String> {
+        use perl_parser::ast::NodeKind;
+
+        fn collect(node: &crate::ast::Node, out: &mut Vec<String>) {
+            match &node.kind {
+                NodeKind::Use { module, args, .. } if module == "base" || module == "parent" => {
+                    for arg in args {
+                        // Handle qw(...) style: "qw(Foo::Bar Baz::Qux)"
+                        if arg.starts_with("qw") {
+                            let content = arg
+                                .trim_start_matches("qw")
+                                .trim_start_matches(|c: char| "([{/<|!".contains(c))
+                                .trim_end_matches(|c: char| ")]}/|!>".contains(c));
+                            for parent in content.split_whitespace() {
+                                if !parent.is_empty() {
+                                    out.push(parent.to_string());
+                                }
+                            }
+                        } else if !arg.starts_with('-') && !arg.starts_with("qw") {
+                            // Bare string arg: use base 'Foo::Bar'
+                            let cleaned = arg.trim_matches(|c: char| c == '\'' || c == '"');
+                            if !cleaned.is_empty() {
+                                out.push(cleaned.to_string());
+                            }
+                        }
+                    }
+                }
+                NodeKind::Program { statements } | NodeKind::Block { statements } => {
+                    for stmt in statements {
+                        collect(stmt, out);
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut parents = Vec::new();
+        collect(ast, &mut parents);
+        parents
+    }
+
+    /// Check if a symbol name appears in @EXPORT or @EXPORT_OK (regex fallback)
     fn is_symbol_exported(&self, text: &str, symbol_name: &str) -> bool {
         use std::sync::OnceLock;
 
@@ -1113,13 +1273,66 @@ impl LspServer {
                         }
                     }
                 }
-                // Debug commands (stub implementation for now)
+                // Debug file: validate path and launch perl -d
                 "perl.debugFile" => {
-                    eprintln!("Debug command requested: {}", command);
-                    // Return a success status - actual DAP integration can be added later
-                    return Ok(Some(
-                        json!({"status": "started", "message": format!("Debug session {} initiated", command)}),
-                    ));
+                    let file_path =
+                        arguments.first().and_then(|v| v.as_str()).ok_or_else(|| {
+                            invalid_params("Missing file path argument for perl.debugFile")
+                        })?;
+
+                    // Validate file extension
+                    let is_perl_file = file_path.ends_with(".pl")
+                        || file_path.ends_with(".pm")
+                        || file_path.ends_with(".t")
+                        || file_path.ends_with(".psgi");
+                    if !is_perl_file {
+                        return Err(JsonRpcError {
+                            code: -32602,
+                            message: "File must have a Perl extension (.pl, .pm, .t, .psgi)"
+                                .to_string(),
+                            data: Some(json!({"file": file_path})),
+                        });
+                    }
+
+                    // Security: use the same workspace-rooted path resolution
+                    let resolved =
+                        provider.resolve_debug_file_path(file_path).map_err(|e| JsonRpcError {
+                            code: -32603,
+                            message: format!("Path validation failed: {}", e),
+                            data: Some(json!({"file": file_path})),
+                        })?;
+
+                    // Launch perl -d as a detached child process
+                    match std::process::Command::new("perl")
+                        .arg("-d")
+                        .arg("--")
+                        .arg(&resolved)
+                        .stdin(std::process::Stdio::null())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .spawn()
+                    {
+                        Ok(child) => {
+                            let pid = child.id();
+                            eprintln!(
+                                "Debug session started: perl -d {} (pid {})",
+                                resolved.display(),
+                                pid
+                            );
+                            return Ok(Some(json!({
+                                "status": "started",
+                                "pid": pid,
+                                "file": resolved.display().to_string()
+                            })));
+                        }
+                        Err(e) => {
+                            return Err(JsonRpcError {
+                                code: -32603,
+                                message: format!("Failed to launch debugger: {}", e),
+                                data: Some(json!({"file": resolved.display().to_string()})),
+                            });
+                        }
+                    }
                 }
                 _ => {
                     return Err(JsonRpcError {

@@ -43,7 +43,8 @@ fn test_register_capability_request_contract() -> TestResult {
     });
 
     // Validate required fields
-    let registrations = register_request["params"]["registrations"].as_array()
+    let registrations = register_request["params"]["registrations"]
+        .as_array()
         .ok_or("registrations must be an array")?;
     assert!(!registrations.is_empty(), "registrations must not be empty");
 
@@ -53,18 +54,14 @@ fn test_register_capability_request_contract() -> TestResult {
     assert!(reg["registerOptions"].is_object(), "registration must have registerOptions");
 
     // Validate file watcher options
-    let watchers = reg["registerOptions"]["watchers"].as_array()
-        .ok_or("watchers must be an array")?;
+    let watchers =
+        reg["registerOptions"]["watchers"].as_array().ok_or("watchers must be an array")?;
     assert_eq!(watchers.len(), 2);
 
     for watcher in watchers {
-        assert!(
-            watcher["globPattern"].is_string(),
-            "each watcher must have a globPattern string"
-        );
+        assert!(watcher["globPattern"].is_string(), "each watcher must have a globPattern string");
         // kind is a bitmask: 1=Create, 2=Change, 4=Delete; 7 = all
-        let kind = watcher["kind"].as_u64()
-            .ok_or("kind must be a number")?;
+        let kind = watcher["kind"].as_u64().ok_or("kind must be a number")?;
         assert!(kind > 0 && kind <= 7, "kind must be a valid WatchKind bitmask (1..=7)");
     }
 
@@ -101,7 +98,8 @@ fn test_unregister_capability_request_contract() -> TestResult {
     });
 
     // Note: the LSP spec uses "unregisterations" (with the typo), not "unregistrations"
-    let unregs = unregister_request["params"]["unregisterations"].as_array()
+    let unregs = unregister_request["params"]["unregisterations"]
+        .as_array()
         .ok_or("unregisterations must be an array")?;
     assert!(!unregs.is_empty(), "unregisterations must not be empty");
 
@@ -167,15 +165,14 @@ fn test_register_multiple_capabilities_at_once() -> TestResult {
         }
     });
 
-    let registrations = multi_register["params"]["registrations"].as_array()
+    let registrations = multi_register["params"]["registrations"]
+        .as_array()
         .ok_or("registrations must be an array")?;
     assert_eq!(registrations.len(), 2, "must have two registrations");
 
     // Each registration must have a unique id
-    let id0 = registrations[0]["id"].as_str()
-        .ok_or("id must be a string")?;
-    let id1 = registrations[1]["id"].as_str()
-        .ok_or("id must be a string")?;
+    let id0 = registrations[0]["id"].as_str().ok_or("id must be a string")?;
+    let id1 = registrations[1]["id"].as_str().ok_or("id must be a string")?;
     assert_ne!(id0, id1, "registration ids must be unique");
 
     // Each has its own method
@@ -217,12 +214,8 @@ fn test_file_watcher_glob_pattern_variants() -> TestResult {
 
     // Validate each watcher has required fields
     for watcher in watchers {
-        assert!(
-            watcher["globPattern"].is_string(),
-            "each watcher must specify a globPattern"
-        );
-        let kind = watcher["kind"].as_u64()
-            .ok_or("kind must be present")?;
+        assert!(watcher["globPattern"].is_string(), "each watcher must specify a globPattern");
+        let kind = watcher["kind"].as_u64().ok_or("kind must be present")?;
         // kind must be a valid WatchKind bitmask (1=Create, 2=Change, 4=Delete)
         assert!(kind >= 1 && kind <= 7, "kind {kind} is not a valid WatchKind bitmask");
     }

@@ -4,10 +4,10 @@
 //! including multiple error conditions, parser recovery, malformed inputs,
 //! ambiguous syntax, and resource limits.
 
-use perl_parser::{
-    Parser,
-    ast::{Node, NodeKind},
-};
+use perl_parser::Parser;
+
+mod nodekind_helpers;
+use nodekind_helpers::has_node_kind;
 
 /// Test multiple error conditions in single constructs
 #[test]
@@ -167,32 +167,25 @@ my $hash_deref = %$undefined_ref;  # Hash dereference of undefined
     let ast = must(parser.parse());
 
     // Verify error nodes
-    let error_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Error { .. }));
-    assert!(!error_nodes.is_empty(), "Should have error nodes");
+    assert!(has_node_kind(&ast, "Error"), "Should have error nodes");
 
     // Verify missing nodes
-    let missing_nodes = find_nodes_of_kind(&ast, |k| {
-        matches!(
-            k,
-            NodeKind::MissingExpression
-                | NodeKind::MissingStatement
-                | NodeKind::MissingIdentifier
-                | NodeKind::MissingBlock
-        )
-    });
-    assert!(!missing_nodes.is_empty(), "Should have missing nodes");
+    assert!(
+        has_node_kind(&ast, "MissingExpression")
+            || has_node_kind(&ast, "MissingStatement")
+            || has_node_kind(&ast, "MissingIdentifier")
+            || has_node_kind(&ast, "MissingBlock"),
+        "Should have missing nodes"
+    );
 
     // Verify eval blocks for error handling
-    let eval_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Eval { .. }));
-    assert!(!eval_nodes.is_empty(), "Should have eval blocks");
+    assert!(has_node_kind(&ast, "Eval"), "Should have eval blocks");
 
     // Verify die/warn operations
-    let function_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::FunctionCall { .. }));
-    assert!(!function_calls.is_empty(), "Should have function calls for die/warn");
+    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls for die/warn");
 
     // Verify conditional statements with error conditions
-    let if_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::If { .. }));
-    assert!(!if_nodes.is_empty(), "Should have conditional statements");
+    assert!(has_node_kind(&ast, "If"), "Should have conditional statements");
 }
 
 /// Test parser recovery with various malformed inputs
@@ -336,32 +329,25 @@ print "Recovered: $recovered\n";
     let ast = must(parser.parse());
 
     // Verify error nodes for malformed inputs
-    let error_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Error { .. }));
-    assert!(!error_nodes.is_empty(), "Should have error nodes");
+    assert!(has_node_kind(&ast, "Error"), "Should have error nodes");
 
     // Verify missing nodes for incomplete structures
-    let missing_nodes = find_nodes_of_kind(&ast, |k| {
-        matches!(
-            k,
-            NodeKind::MissingExpression
-                | NodeKind::MissingStatement
-                | NodeKind::MissingIdentifier
-                | NodeKind::MissingBlock
-        )
-    });
-    assert!(!missing_nodes.is_empty(), "Should have missing nodes");
+    assert!(
+        has_node_kind(&ast, "MissingExpression")
+            || has_node_kind(&ast, "MissingStatement")
+            || has_node_kind(&ast, "MissingIdentifier")
+            || has_node_kind(&ast, "MissingBlock"),
+        "Should have missing nodes"
+    );
 
     // Verify that some valid structures still parse
-    let sub_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Subroutine { .. }));
-    assert!(!sub_nodes.is_empty(), "Should have some valid subroutine nodes");
+    assert!(has_node_kind(&ast, "Subroutine"), "Should have some valid subroutine nodes");
 
     // Verify variable declarations
-    let var_decls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::VariableDeclaration { .. }));
-    assert!(!var_decls.is_empty(), "Should have variable declarations");
+    assert!(has_node_kind(&ast, "VariableDeclaration"), "Should have variable declarations");
 
     // Verify function calls
-    let function_calls = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::FunctionCall { .. }));
-    assert!(!function_calls.is_empty(), "Should have function calls");
+    assert!(has_node_kind(&ast, "FunctionCall"), "Should have function calls");
 }
 
 // /// Test behavior with incomplete or ambiguous syntax
@@ -757,31 +743,24 @@ my $boundary_results = test_boundaries("test_input");
     let ast = must(parser.parse());
 
     // Verify that large structures are parsed
-    let hash_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::HashLiteral { .. }));
-    assert!(!hash_literals.is_empty(), "Should have hash literals");
+    assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals");
 
-    let array_literals = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::ArrayLiteral { .. }));
-    assert!(!array_literals.is_empty(), "Should have array literals");
+    assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals");
 
     // Verify complex expressions
-    let binary_ops = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Binary { .. }));
-    assert!(!binary_ops.is_empty(), "Should have binary operations");
+    assert!(has_node_kind(&ast, "Binary"), "Should have binary operations");
 
     // Verify subroutine declarations with many parameters
-    let sub_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Subroutine { .. }));
-    assert!(!sub_nodes.is_empty(), "Should have subroutine declarations");
+    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine declarations");
 
     // Verify try-catch blocks
-    let try_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Try { .. }));
-    assert!(!try_nodes.is_empty(), "Should have try-catch blocks");
+    assert!(has_node_kind(&ast, "Try"), "Should have try-catch blocks");
 
     // Verify regex operations
-    let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
-    assert!(!regex_nodes.is_empty(), "Should have regex operations");
+    assert!(has_node_kind(&ast, "Regex"), "Should have regex operations");
 
     // Verify string literals
-    let string_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::String { .. }));
-    assert!(!string_nodes.is_empty(), "Should have string literals");
+    assert!(has_node_kind(&ast, "String"), "Should have string literals");
 }
 
 /// Test parser edge cases with unusual constructs
@@ -969,292 +948,27 @@ my $complex_shift = shift @$array_ref;
     let ast = must(parser.parse());
 
     // Verify that edge case constructs are parsed
-    let sub_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Subroutine { .. }));
-    assert!(!sub_nodes.is_empty(), "Should have subroutine nodes");
+    assert!(has_node_kind(&ast, "Subroutine"), "Should have subroutine nodes");
 
     // Verify format declarations
-    let format_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Format { .. }));
-    assert!(!format_nodes.is_empty(), "Should have format nodes");
+    assert!(has_node_kind(&ast, "Format"), "Should have format nodes");
 
     // Verify heredoc nodes
-    let heredoc_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Heredoc { .. }));
-    assert!(!heredoc_nodes.is_empty(), "Should have heredoc nodes");
+    assert!(has_node_kind(&ast, "Heredoc"), "Should have heredoc nodes");
 
     // Verify regex operations
-    let regex_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Regex { .. }));
-    assert!(!regex_nodes.is_empty(), "Should have regex nodes");
+    assert!(has_node_kind(&ast, "Regex"), "Should have regex nodes");
 
     // Verify substitution operations
-    let substitution_nodes =
-        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Substitution { .. }));
-    assert!(!substitution_nodes.is_empty(), "Should have substitution nodes");
+    assert!(has_node_kind(&ast, "Substitution"), "Should have substitution nodes");
 
     // Verify transliteration operations
-    let transliteration_nodes =
-        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Transliteration { .. }));
-    assert!(!transliteration_nodes.is_empty(), "Should have transliteration nodes");
+    assert!(has_node_kind(&ast, "Transliteration"), "Should have transliteration nodes");
 
     // Verify package declarations
-    let package_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Package { .. }));
-    assert!(!package_nodes.is_empty(), "Should have package nodes");
+    assert!(has_node_kind(&ast, "Package"), "Should have package nodes");
 
     // Verify use/no statements
-    let use_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Use { .. }));
-    let no_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::No { .. }));
-    assert!(!use_nodes.is_empty(), "Should have use nodes");
-    assert!(!no_nodes.is_empty(), "Should have no nodes");
-}
-
-/// Helper function to find nodes of specific kinds
-fn find_nodes_of_kind<F>(node: &Node, predicate: F) -> Vec<&Node>
-where
-    F: Fn(&NodeKind) -> bool,
-{
-    let mut results = Vec::new();
-    find_nodes_recursive(node, &predicate, &mut results);
-    results
-}
-
-/// Recursive helper to find nodes matching predicate
-fn find_nodes_recursive<'a, F>(node: &'a Node, predicate: &F, results: &mut Vec<&'a Node>)
-where
-    F: Fn(&NodeKind) -> bool,
-{
-    if predicate(&node.kind) {
-        results.push(node);
-    }
-
-    // Recurse into child nodes based on node type
-    match &node.kind {
-        NodeKind::Program { statements } => {
-            for stmt in statements {
-                find_nodes_recursive(stmt, predicate, results);
-            }
-        }
-        NodeKind::Block { statements } => {
-            for stmt in statements {
-                find_nodes_recursive(stmt, predicate, results);
-            }
-        }
-        NodeKind::ExpressionStatement { expression } => {
-            find_nodes_recursive(expression, predicate, results);
-        }
-        NodeKind::VariableDeclaration { initializer, .. } => {
-            if let Some(init) = initializer {
-                find_nodes_recursive(init, predicate, results);
-            }
-        }
-        NodeKind::VariableListDeclaration { initializer, .. } => {
-            if let Some(init) = initializer {
-                find_nodes_recursive(init, predicate, results);
-            }
-        }
-        NodeKind::Assignment { lhs, rhs, .. } => {
-            find_nodes_recursive(lhs, predicate, results);
-            find_nodes_recursive(rhs, predicate, results);
-        }
-        NodeKind::Binary { left, right, .. } => {
-            find_nodes_recursive(left, predicate, results);
-            find_nodes_recursive(right, predicate, results);
-        }
-        NodeKind::Unary { operand, .. } => {
-            find_nodes_recursive(operand, predicate, results);
-        }
-        NodeKind::Ternary { condition, then_expr, else_expr } => {
-            find_nodes_recursive(condition, predicate, results);
-            find_nodes_recursive(then_expr, predicate, results);
-            find_nodes_recursive(else_expr, predicate, results);
-        }
-        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
-            find_nodes_recursive(condition, predicate, results);
-            find_nodes_recursive(then_branch, predicate, results);
-            for (_, branch) in elsif_branches {
-                find_nodes_recursive(branch, predicate, results);
-            }
-            if let Some(else_branch) = else_branch {
-                find_nodes_recursive(else_branch, predicate, results);
-            }
-        }
-        NodeKind::While { condition, body, continue_block } => {
-            find_nodes_recursive(condition, predicate, results);
-            find_nodes_recursive(body, predicate, results);
-            if let Some(cont) = continue_block {
-                find_nodes_recursive(cont, predicate, results);
-            }
-        }
-        NodeKind::For { init, condition, update, body, continue_block } => {
-            if let Some(init) = init {
-                find_nodes_recursive(init, predicate, results);
-            }
-            if let Some(cond) = condition {
-                find_nodes_recursive(cond, predicate, results);
-            }
-            if let Some(upd) = update {
-                find_nodes_recursive(upd, predicate, results);
-            }
-            find_nodes_recursive(body, predicate, results);
-            if let Some(cont) = continue_block {
-                find_nodes_recursive(cont, predicate, results);
-            }
-        }
-        NodeKind::Foreach { variable, list, body, continue_block } => {
-            find_nodes_recursive(variable, predicate, results);
-            find_nodes_recursive(list, predicate, results);
-            find_nodes_recursive(body, predicate, results);
-            if let Some(cont) = continue_block {
-                find_nodes_recursive(cont, predicate, results);
-            }
-        }
-        NodeKind::Try { body, catch_blocks, finally_block } => {
-            find_nodes_recursive(body, predicate, results);
-            for (_, catch_body) in catch_blocks {
-                find_nodes_recursive(catch_body, predicate, results);
-            }
-            if let Some(final_body) = finally_block {
-                find_nodes_recursive(final_body, predicate, results);
-            }
-        }
-        NodeKind::Given { expr, body } => {
-            find_nodes_recursive(expr, predicate, results);
-            find_nodes_recursive(body, predicate, results);
-        }
-        NodeKind::When { condition, body } => {
-            find_nodes_recursive(condition, predicate, results);
-            find_nodes_recursive(body, predicate, results);
-        }
-        NodeKind::Default { body } => {
-            find_nodes_recursive(body, predicate, results);
-        }
-        NodeKind::Subroutine { body, .. } => {
-            find_nodes_recursive(body, predicate, results);
-        }
-        NodeKind::Method { body, .. } => {
-            find_nodes_recursive(body, predicate, results);
-        }
-        NodeKind::Class { body, name: _ } => {
-            find_nodes_recursive(body, predicate, results);
-        }
-        NodeKind::FunctionCall { args, name: _ } => {
-            for arg in args {
-                find_nodes_recursive(arg, predicate, results);
-            }
-        }
-        NodeKind::MethodCall { object, args, .. } => {
-            find_nodes_recursive(object, predicate, results);
-            for arg in args {
-                find_nodes_recursive(arg, predicate, results);
-            }
-        }
-        NodeKind::ArrayLiteral { elements } => {
-            for element in elements {
-                find_nodes_recursive(element, predicate, results);
-            }
-        }
-        NodeKind::HashLiteral { pairs } => {
-            for (key, value) in pairs {
-                find_nodes_recursive(key, predicate, results);
-                find_nodes_recursive(value, predicate, results);
-            }
-        }
-        NodeKind::StatementModifier { statement, condition, .. } => {
-            find_nodes_recursive(statement, predicate, results);
-            find_nodes_recursive(condition, predicate, results);
-        }
-        NodeKind::LabeledStatement { statement, .. } => {
-            find_nodes_recursive(statement, predicate, results);
-        }
-        NodeKind::Eval { block } => {
-            find_nodes_recursive(block, predicate, results);
-        }
-        NodeKind::Do { block } => {
-            find_nodes_recursive(block, predicate, results);
-        }
-        NodeKind::Return { value } => {
-            if let Some(val) = value {
-                find_nodes_recursive(val, predicate, results);
-            }
-        }
-        NodeKind::LoopControl { .. } => {} // No children
-        NodeKind::Tie { variable, package, args } => {
-            find_nodes_recursive(variable, predicate, results);
-            find_nodes_recursive(package, predicate, results);
-            for arg in args {
-                find_nodes_recursive(arg, predicate, results);
-            }
-        }
-        NodeKind::Untie { variable } => {
-            find_nodes_recursive(variable, predicate, results);
-        }
-        NodeKind::Readline { .. } => {} // No complex children
-        NodeKind::Diamond => {}         // No children
-        NodeKind::Glob { .. } => {}     // No children
-        NodeKind::Typeglob { .. } => {} // No children
-        NodeKind::Number { .. } => {}   // No children
-        NodeKind::String { .. } => {}   // No children
-        NodeKind::Heredoc { .. } => {}  // No children
-        NodeKind::Undef => {}           // No children
-        NodeKind::Ellipsis => {}        // No children
-        NodeKind::Regex { .. } => {}    // No children
-        NodeKind::Match { expr, .. } => {
-            find_nodes_recursive(expr, predicate, results);
-        }
-        NodeKind::Substitution { expr, .. } => {
-            find_nodes_recursive(expr, predicate, results);
-        }
-        NodeKind::Transliteration { expr, .. } => {
-            find_nodes_recursive(expr, predicate, results);
-        }
-        NodeKind::Package { block, .. } => {
-            if let Some(b) = block {
-                find_nodes_recursive(b, predicate, results);
-            }
-        }
-        NodeKind::Use { .. } => {} // No complex children
-        NodeKind::No { .. } => {}  // No complex children
-        NodeKind::PhaseBlock { block, .. } => {
-            find_nodes_recursive(block, predicate, results);
-        }
-        NodeKind::DataSection { .. } => {} // No children
-        NodeKind::Format { .. } => {}      // No children
-        NodeKind::Identifier { .. } => {}  // No children
-        NodeKind::Variable { .. } => {}    // No children
-        NodeKind::VariableWithAttributes { variable, .. } => {
-            find_nodes_recursive(variable, predicate, results);
-        }
-        NodeKind::Prototype { .. } => {} // No children
-        NodeKind::Signature { parameters } => {
-            for param in parameters {
-                find_nodes_recursive(param, predicate, results);
-            }
-        }
-        NodeKind::MandatoryParameter { variable } => {
-            find_nodes_recursive(variable, predicate, results);
-        }
-        NodeKind::OptionalParameter { variable, default_value } => {
-            find_nodes_recursive(variable, predicate, results);
-            find_nodes_recursive(default_value, predicate, results);
-        }
-        NodeKind::SlurpyParameter { variable } => {
-            find_nodes_recursive(variable, predicate, results);
-        }
-        NodeKind::NamedParameter { variable } => {
-            find_nodes_recursive(variable, predicate, results);
-        }
-        NodeKind::IndirectCall { object, args, .. } => {
-            find_nodes_recursive(object, predicate, results);
-            for arg in args {
-                find_nodes_recursive(arg, predicate, results);
-            }
-        }
-        NodeKind::Error { partial, .. } => {
-            if let Some(p) = partial {
-                find_nodes_recursive(p, predicate, results);
-            }
-        }
-        NodeKind::MissingExpression
-        | NodeKind::MissingStatement
-        | NodeKind::MissingIdentifier
-        | NodeKind::MissingBlock => {} // No children
-        NodeKind::UnknownRest => {} // No children
-    }
+    assert!(has_node_kind(&ast, "Use"), "Should have use nodes");
+    assert!(has_node_kind(&ast, "No"), "Should have no nodes");
 }

@@ -31,17 +31,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Helper to validate a Location object has proper structure.
 fn assert_valid_location(location: &serde_json::Value) {
-    assert!(
-        location.get("uri").is_some(),
-        "Location must have 'uri' field, got: {:?}",
-        location
-    );
+    assert!(location.get("uri").is_some(), "Location must have 'uri' field, got: {:?}", location);
     let range = location.get("range");
-    assert!(
-        range.is_some(),
-        "Location must have 'range' field, got: {:?}",
-        location
-    );
+    assert!(range.is_some(), "Location must have 'range' field, got: {:?}", location);
     let range = range.unwrap_or(&json!(null));
     assert!(range.get("start").is_some(), "Range must have 'start' position");
     assert!(range.get("end").is_some(), "Range must have 'end' position");
@@ -106,9 +98,7 @@ my $output = process(42);
 
             // The definition should point to line 1 where "sub process" is declared
             let first = &locations[0];
-            let target_line = first
-                .pointer("/range/start/line")
-                .and_then(|l| l.as_u64());
+            let target_line = first.pointer("/range/start/line").and_then(|l| l.as_u64());
             if let Some(line) = target_line {
                 assert_eq!(
                     line, 1,
@@ -158,9 +148,7 @@ print "Count: $counter\n";
                 assert_valid_location(&locations[0]);
 
                 // Definition should point to line 1 where "my $counter" is declared
-                let def_line = locations[0]
-                    .pointer("/range/start/line")
-                    .and_then(|l| l.as_u64());
+                let def_line = locations[0].pointer("/range/start/line").and_then(|l| l.as_u64());
                 if let Some(line) = def_line {
                     assert_eq!(
                         line, 1,
@@ -250,14 +238,9 @@ my $greeting = "Hi $name";
                 assert_valid_location(&locations[0]);
 
                 // Declaration should point back to line 1 where "my $name" is
-                let decl_line = locations[0]
-                    .pointer("/range/start/line")
-                    .and_then(|l| l.as_u64());
+                let decl_line = locations[0].pointer("/range/start/line").and_then(|l| l.as_u64());
                 if let Some(line) = decl_line {
-                    assert_eq!(
-                        line, 1,
-                        "Declaration should point to 'my $name' on line 1"
-                    );
+                    assert_eq!(line, 1, "Declaration should point to 'my $name' on line 1");
                 }
             }
         } else if result.is_object() {
@@ -291,10 +274,7 @@ fn test_definition_on_empty_file() -> TestResult {
     if !result.is_null() {
         if result.is_array() {
             let locations = result.as_array().ok_or("Expected array")?;
-            assert!(
-                locations.is_empty(),
-                "Definition on empty file should return empty array"
-            );
+            assert!(locations.is_empty(), "Definition on empty file should return empty array");
         }
     }
 
@@ -313,10 +293,7 @@ fn test_definition_capability_advertised() -> TestResult {
 
     // Definition provider should be advertised
     let has_definition = capabilities.get("definitionProvider").is_some();
-    assert!(
-        has_definition,
-        "definitionProvider should be advertised in capabilities"
-    );
+    assert!(has_definition, "definitionProvider should be advertised in capabilities");
 
     let def_provider = &capabilities["definitionProvider"];
     assert!(

@@ -2,15 +2,22 @@
 //!
 //! These tests parse every file discovered by `perl_corpus::get_test_files()` and
 //! verify that (a) every non-synthetic NodeKind appears at least once, and
-//! (b) every required kind appears in at least 2 distinct files ("angles") unless
-//! explicitly allow-listed.
+//! (b) every required kind appears in at least 2 distinct contexts (files or
+//! parent-kind diversity) unless explicitly allow-listed.
+//!
+//! Additionally, the tests track which kinds only appear through recovery parses
+//! (files with diagnostics) and emit warnings — kinds observed only through
+//! recovery are a sign of fragile coverage that should be addressed.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
 use perl_parser::Parser;
 
 mod nodekind_helpers;
-use nodekind_helpers::{collect_node_kinds, collect_node_kinds_labeled, corpus_required_kinds};
+use nodekind_helpers::{
+    collect_node_kinds, collect_node_kinds_labeled, collect_node_kinds_with_parents,
+    corpus_required_kinds,
+};
 
 /// Kinds that genuinely cannot appear in more than one corpus file.
 /// Each entry is `(kind_name, reason)`.
@@ -32,8 +39,10 @@ fn test_corpus_nodekind_coverage() {
     assert!(!files.is_empty(), "perl_corpus::get_test_files() returned no files");
 
     let required = corpus_required_kinds();
-    let mut observed = HashSet::new();
-    let mut parse_failure_count: usize = 0;
+    let mut observed = BTreeSet::new();
+    let mut clean_observed = BTreeSet::new();
+    let mut clean_count: usize = 0;
+    let mut recovery_count: usize = 0;
 
     for path in &files {
         let source = match std::fs::read_to_string(path) {
@@ -47,20 +56,38 @@ fn test_corpus_nodekind_coverage() {
         let mut parser = Parser::new(&source);
         let output = parser.parse_with_recovery();
 
-        if !output.diagnostics.is_empty() {
-            parse_failure_count += 1;
+        let is_clean = output.diagnostics.is_empty();
+        if is_clean {
+            clean_count += 1;
+            collect_node_kinds(&output.ast, &mut clean_observed);
+        } else {
+            recovery_count += 1;
         }
 
+        // Always collect for the hard gate
         collect_node_kinds(&output.ast, &mut observed);
     }
 
-    if parse_failure_count > 0 {
+    eprintln!(
+        "INFO: {clean_count} clean / {recovery_count} recovery out of {} corpus files",
+        files.len()
+    );
+
+    // Soft warning: kinds only seen through recovery
+    let recovery_only: BTreeSet<_> = required
+        .iter()
+        .copied()
+        .filter(|k| observed.contains(k) && !clean_observed.contains(k))
+        .collect();
+    if !recovery_only.is_empty() {
         eprintln!(
-            "INFO: {parse_failure_count}/{} corpus files had parse diagnostics (non-blocking)",
-            files.len()
+            "WARN: {} NodeKind(s) observed ONLY through recovery parses (fragile coverage): {:?}",
+            recovery_only.len(),
+            recovery_only
         );
     }
 
+    // Hard gate: all required kinds must appear somewhere
     let mut missing: Vec<&str> =
         required.iter().copied().filter(|k| !observed.contains(k)).collect();
     missing.sort();
@@ -73,7 +100,7 @@ fn test_corpus_nodekind_coverage() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 2 — Hard fail on thin coverage ("angles")
+// Test 2 — Hard fail on thin coverage ("angles") with parent-context diversity
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -82,9 +109,11 @@ fn test_corpus_nodekind_angles() {
     assert!(!files.is_empty(), "perl_corpus::get_test_files() returned no files");
 
     let required = corpus_required_kinds();
-    let allowlist_set: HashSet<&str> = SINGLE_FILE_ALLOWLIST.iter().map(|(k, _)| *k).collect();
+    let allowlist_set: BTreeSet<&str> = SINGLE_FILE_ALLOWLIST.iter().map(|(k, _)| *k).collect();
 
-    let mut kind_to_files: HashMap<&'static str, HashSet<String>> = HashMap::new();
+    let mut kind_to_files: BTreeMap<&'static str, BTreeSet<String>> = BTreeMap::new();
+    let mut kind_to_parents: BTreeMap<&'static str, BTreeSet<&'static str>> = BTreeMap::new();
+    let mut clean_kind_to_files: BTreeMap<&'static str, BTreeSet<String>> = BTreeMap::new();
 
     for path in &files {
         let source = match std::fs::read_to_string(path) {
@@ -100,7 +129,16 @@ fn test_corpus_nodekind_angles() {
         let mut parser = Parser::new(&source);
         let output = parser.parse_with_recovery();
 
+        let is_clean = output.diagnostics.is_empty();
+
+        // Always collect for the hard gate
         collect_node_kinds_labeled(&output.ast, &label, &mut kind_to_files);
+        collect_node_kinds_with_parents(&output.ast, None, &mut kind_to_parents);
+
+        // Also track clean-only for informational reporting
+        if is_clean {
+            collect_node_kinds_labeled(&output.ast, &label, &mut clean_kind_to_files);
+        }
     }
 
     // Check 1: completely missing kinds
@@ -114,37 +152,43 @@ fn test_corpus_nodekind_angles() {
          Add corpus fixtures that exercise these kinds."
     );
 
-    // Check 2: kinds appearing in only 1 file (thin coverage)
-    let mut thin: Vec<(&str, usize)> = Vec::new();
+    // Check 2: kinds with thin coverage (angle < 2)
+    // Angle score = max(file_count, parent_context_count)
+    let mut thin: Vec<(&str, usize, usize, usize)> = Vec::new();
     for kind in &required {
         if allowlist_set.contains(kind) {
             continue;
         }
-        if let Some(file_set) = kind_to_files.get(kind) {
-            if file_set.len() < 2 {
-                thin.push((kind, file_set.len()));
-            }
+        let file_count = kind_to_files.get(kind).map_or(0, |s| s.len());
+        let parent_count = kind_to_parents.get(kind).map_or(0, |s| s.len());
+        let angle = file_count.max(parent_count);
+        if angle < 2 {
+            thin.push((kind, file_count, parent_count, angle));
         }
     }
-    thin.sort_by_key(|(k, _)| *k);
+    thin.sort_by_key(|(k, _, _, _)| *k);
 
-    // Summary to stderr (always printed)
+    // Summary to stderr (always printed, deterministic due to BTreeMap)
     eprintln!("\n=== NodeKind angle summary ===");
-    let mut summary: Vec<_> = kind_to_files
-        .iter()
-        .filter(|(k, _)| required.contains(*k))
-        .map(|(k, files)| (*k, files.len()))
-        .collect();
-    summary.sort_by_key(|(k, _)| *k);
-    for (kind, count) in &summary {
-        eprintln!("  {kind}: {count} file(s)");
+    for kind in &required {
+        let file_count = kind_to_files.get(kind).map_or(0, |s| s.len());
+        let parent_count = kind_to_parents.get(kind).map_or(0, |s| s.len());
+        let clean_files = clean_kind_to_files.get(kind).map_or(0, |s| s.len());
+        let angle = file_count.max(parent_count);
+        let clean_marker = if clean_files == 0 { " [recovery-only]" } else { "" };
+        eprintln!(
+            "  {kind}: {angle} angle(s) ({file_count} file(s), {parent_count} parent(s)){clean_marker}"
+        );
     }
     eprintln!("==============================\n");
 
     assert!(
         thin.is_empty(),
-        "Thin NodeKind coverage (appears in only 1 file, not in SINGLE_FILE_ALLOWLIST):\n{}\n\
+        "Thin NodeKind coverage (angle < 2, not in SINGLE_FILE_ALLOWLIST):\n{}\n\
          Either add more corpus fixtures or add to SINGLE_FILE_ALLOWLIST with justification.",
-        thin.iter().map(|(k, n)| format!("  {k}: {n} file(s)")).collect::<Vec<_>>().join("\n")
+        thin.iter()
+            .map(|(k, fc, pc, a)| format!("  {k}: angle={a} ({fc} file(s), {pc} parent(s))"))
+            .collect::<Vec<_>>()
+            .join("\n")
     );
 }

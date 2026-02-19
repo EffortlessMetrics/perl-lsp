@@ -81,10 +81,7 @@ my $result = process(42);
                 );
             }
             let value = contents.get("value").and_then(|v| v.as_str());
-            assert!(
-                value.is_some(),
-                "MarkupContent should have a 'value' field"
-            );
+            assert!(value.is_some(), "MarkupContent should have a 'value' field");
         }
 
         // If range is present, validate it
@@ -129,10 +126,7 @@ print $count;
 
         if contents.is_object() {
             let value = contents.get("value").and_then(|v| v.as_str());
-            assert!(
-                value.is_some(),
-                "Hover contents should have a value string"
-            );
+            assert!(value.is_some(), "Hover contents should have a value string");
         } else if contents.is_string() {
             // Plain string contents are also valid per LSP spec
             assert!(
@@ -177,10 +171,7 @@ push @items, 9;
         let contents = result.get("contents").ok_or("Expected contents in hover response")?;
         if contents.is_object() {
             let value = contents.get("value").and_then(|v| v.as_str());
-            assert!(
-                value.is_some(),
-                "Builtin hover should have content value"
-            );
+            assert!(value.is_some(), "Builtin hover should have content value");
         }
     }
 
@@ -238,10 +229,7 @@ print $variable;
     // Some implementations may provide comment content; accept both
     if !result.is_null() {
         // If non-null, it should still be a valid hover structure
-        assert!(
-            result.get("contents").is_some(),
-            "Non-null hover must have contents field"
-        );
+        assert!(result.get("contents").is_some(), "Non-null hover must have contents field");
     }
 
     // Hover on blank line
@@ -256,11 +244,7 @@ print $variable;
         .unwrap_or(json!(null));
 
     // Blank line should return null
-    assert!(
-        result.is_null(),
-        "Hover on blank line should return null, got: {:?}",
-        result
-    );
+    assert!(result.is_null(), "Hover on blank line should return null, got: {:?}", result);
 
     Ok(())
 }
@@ -308,10 +292,7 @@ $log->info("Application started");
     if !result.is_null() {
         let contents = result.get("contents").ok_or("Expected contents in hover response")?;
         if contents.is_object() {
-            assert!(
-                contents.get("value").is_some(),
-                "Method hover content should have value"
-            );
+            assert!(contents.get("value").is_some(), "Method hover content should have value");
         }
     }
 
@@ -330,10 +311,7 @@ fn test_hover_capability_advertised() -> TestResult {
 
     // Hover should be advertised
     let has_capability = capabilities.get("hoverProvider").is_some();
-    assert!(
-        has_capability,
-        "hoverProvider should be advertised in capabilities"
-    );
+    assert!(has_capability, "hoverProvider should be advertised in capabilities");
 
     // If present, should be true or an object
     let provider = &capabilities["hoverProvider"];

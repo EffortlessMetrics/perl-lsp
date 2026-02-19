@@ -40,11 +40,7 @@ fn test_selection_range_on_variable() -> TestResult {
         }),
     )?;
 
-    assert!(
-        response.is_array(),
-        "selectionRange should return an array, got: {:?}",
-        response
-    );
+    assert!(response.is_array(), "selectionRange should return an array, got: {:?}", response);
 
     let ranges = response.as_array().ok_or("response is not an array")?;
     assert_eq!(ranges.len(), 1, "Should return one SelectionRange for one position");
@@ -52,14 +48,8 @@ fn test_selection_range_on_variable() -> TestResult {
     let sel = &ranges[0];
     // The innermost range should cover the variable or its immediate context
     assert!(sel["range"].is_object(), "SelectionRange should have a 'range' field");
-    assert!(
-        sel["range"]["start"]["line"].is_number(),
-        "Range start line should be a number"
-    );
-    assert!(
-        sel["range"]["end"]["line"].is_number(),
-        "Range end line should be a number"
-    );
+    assert!(sel["range"]["start"]["line"].is_number(), "Range start line should be a number");
+    assert!(sel["range"]["end"]["line"].is_number(), "Range end line should be a number");
 
     Ok(())
 }
@@ -102,10 +92,7 @@ fn test_selection_range_on_sub_body() -> TestResult {
     // The parent field is optional but if present should be a nested SelectionRange
     if sel.get("parent").is_some() && !sel["parent"].is_null() {
         let parent = &sel["parent"];
-        assert!(
-            parent["range"].is_object(),
-            "Parent SelectionRange should also have a range"
-        );
+        assert!(parent["range"].is_object(), "Parent SelectionRange should also have a range");
         // Parent range should be at least as large as the inner range
         let inner_start = sel["range"]["start"]["line"].as_u64().unwrap_or(0);
         let inner_end = sel["range"]["end"]["line"].as_u64().unwrap_or(0);
@@ -114,7 +101,10 @@ fn test_selection_range_on_sub_body() -> TestResult {
         assert!(
             parent_start <= inner_start && parent_end >= inner_end,
             "Parent range ({}-{}) should encompass inner range ({}-{})",
-            parent_start, parent_end, inner_start, inner_end
+            parent_start,
+            parent_end,
+            inner_start,
+            inner_end
         );
     }
 
@@ -174,11 +164,7 @@ sub method {
     }
 
     // We expect at least 2 levels: the variable context and some outer scope
-    assert!(
-        depth >= 2,
-        "Should have at least 2 levels of nesting, got {}",
-        depth
-    );
+    assert!(depth >= 2, "Should have at least 2 levels of nesting, got {}", depth);
 
     Ok(())
 }
@@ -261,11 +247,7 @@ sub total {
 
     // Each result should have a valid range
     for (i, sel) in ranges.iter().enumerate() {
-        assert!(
-            sel["range"].is_object(),
-            "SelectionRange at index {} should have a range",
-            i
-        );
+        assert!(sel["range"].is_object(), "SelectionRange at index {} should have a range", i);
     }
 
     Ok(())

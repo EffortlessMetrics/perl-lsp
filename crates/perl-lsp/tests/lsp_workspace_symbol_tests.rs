@@ -62,10 +62,7 @@ sub delete_user {
         let symbols = response.as_array().ok_or("response is not an array")?;
         // Should find at least find_user and find_all_users
         if !symbols.is_empty() {
-            let names: Vec<&str> = symbols
-                .iter()
-                .filter_map(|s| s["name"].as_str())
-                .collect();
+            let names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
             assert!(
                 names.iter().any(|n| n.contains("find")),
                 "Should find symbols matching 'find', got: {:?}",
@@ -206,9 +203,7 @@ sub target_function {
     });
 
     // Resolve the symbol for additional detail
-    let response = harness
-        .request("workspaceSymbol/resolve", basic_symbol)
-        .unwrap_or(json!(null));
+    let response = harness.request("workspaceSymbol/resolve", basic_symbol).unwrap_or(json!(null));
 
     if !response.is_null() {
         // Resolved symbol should retain the original fields
@@ -217,20 +212,13 @@ sub target_function {
             Some("target_function"),
             "Resolved symbol should keep its name"
         );
-        assert_eq!(
-            response["kind"].as_i64(),
-            Some(12),
-            "Resolved symbol should keep its kind"
-        );
+        assert_eq!(response["kind"].as_i64(), Some(12), "Resolved symbol should keep its kind");
 
         // May have additional detail
         if let Some(detail) = response.get("detail") {
             if detail.is_string() {
                 let detail_str = detail.as_str().ok_or("detail should be a string")?;
-                assert!(
-                    !detail_str.is_empty(),
-                    "detail should not be empty if provided"
-                );
+                assert!(!detail_str.is_empty(), "detail should not be empty if provided");
             }
         }
 
@@ -334,18 +322,13 @@ sub shared_utility {
             let uris: Vec<&str> = symbols
                 .iter()
                 .filter_map(|s| {
-                    s.get("location")
-                        .and_then(|loc| loc.get("uri"))
-                        .and_then(|u| u.as_str())
+                    s.get("location").and_then(|loc| loc.get("uri")).and_then(|u| u.as_str())
                 })
                 .collect();
 
             // Should potentially find symbols from both documents
             let has_any = !uris.is_empty();
-            assert!(
-                has_any,
-                "Should find at least one symbol matching 'shared'"
-            );
+            assert!(has_any, "Should find at least one symbol matching 'shared'");
         }
     }
 

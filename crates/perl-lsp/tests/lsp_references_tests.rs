@@ -30,17 +30,9 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Helper to validate a Location object has proper structure.
 fn assert_valid_location(location: &serde_json::Value) {
-    assert!(
-        location.get("uri").is_some(),
-        "Location must have 'uri' field, got: {:?}",
-        location
-    );
+    assert!(location.get("uri").is_some(), "Location must have 'uri' field, got: {:?}", location);
     let range = location.get("range");
-    assert!(
-        range.is_some(),
-        "Location must have 'range' field, got: {:?}",
-        location
-    );
+    assert!(range.is_some(), "Location must have 'range' field, got: {:?}", location);
     let range = range.unwrap_or(&json!(null));
     assert!(range.get("start").is_some(), "Range must have 'start' position");
     assert!(range.get("end").is_some(), "Range must have 'end' position");
@@ -79,10 +71,7 @@ $count++;
         assert!(result.is_array(), "References should return an array");
 
         let references = result.as_array().ok_or("Expected array result")?;
-        assert!(
-            !references.is_empty(),
-            "Should find references for $count variable"
-        );
+        assert!(!references.is_empty(), "Should find references for $count variable");
 
         // Validate structure of each returned location
         for reference in references {
@@ -90,11 +79,7 @@ $count++;
 
             // URI should match our document
             let uri = reference.get("uri").and_then(|u| u.as_str());
-            assert_eq!(
-                uri,
-                Some("file:///refs.pl"),
-                "Reference URI should match the document"
-            );
+            assert_eq!(uri, Some("file:///refs.pl"), "Reference URI should match the document");
         }
 
         // $count appears on lines 1, 2 (twice), 3, 4, 5 = at least 6 occurrences
@@ -305,10 +290,7 @@ fn test_references_on_empty_file() -> TestResult {
     if !result.is_null() {
         if result.is_array() {
             let references = result.as_array().ok_or("Expected array result")?;
-            assert!(
-                references.is_empty(),
-                "References on empty file should return empty array"
-            );
+            assert!(references.is_empty(), "References on empty file should return empty array");
         }
     }
 
@@ -327,10 +309,7 @@ fn test_references_capability_advertised() -> TestResult {
 
     // References provider should be advertised
     let has_capability = capabilities.get("referencesProvider").is_some();
-    assert!(
-        has_capability,
-        "referencesProvider should be advertised in capabilities"
-    );
+    assert!(has_capability, "referencesProvider should be advertised in capabilities");
 
     let provider = &capabilities["referencesProvider"];
     assert!(

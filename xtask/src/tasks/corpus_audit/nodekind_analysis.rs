@@ -145,84 +145,9 @@ fn collect_nodekinds_recursive(node: &perl_parser::ast::Node, out: &mut HashSet<
     });
 }
 
-/// Get all NodeKinds from the parser
-///
-/// This is a placeholder. In a real implementation,
-/// this would use reflection or a predefined list from the parser.
+/// Get all NodeKinds from the parser's canonical list.
 fn get_all_nodekinds() -> HashSet<String> {
-    // Comprehensive list of NodeKinds from crates/perl-ast/src/ast.rs
-    let nodekinds = vec![
-        "Program",
-        "ExpressionStatement",
-        "VariableDeclaration",
-        "VariableListDeclaration",
-        "Variable",
-        "VariableWithAttributes",
-        "Assignment",
-        "Binary",
-        "Ternary",
-        "Unary",
-        "Diamond",
-        "Ellipsis",
-        "Undef",
-        "Readline",
-        "Glob",
-        "Typeglob",
-        "Number",
-        "String",
-        "Heredoc",
-        "ArrayLiteral",
-        "HashLiteral",
-        "Block",
-        "Eval",
-        "Do",
-        "Try",
-        "If",
-        "LabeledStatement",
-        "While",
-        "Tie",
-        "Untie",
-        "For",
-        "Foreach",
-        "Given",
-        "When",
-        "Default",
-        "StatementModifier",
-        "Subroutine",
-        "Prototype",
-        "Signature",
-        "MandatoryParameter",
-        "OptionalParameter",
-        "SlurpyParameter",
-        "NamedParameter",
-        "Method",
-        "Return",
-        "LoopControl",
-        "MethodCall",
-        "FunctionCall",
-        "IndirectCall",
-        "Regex",
-        "Match",
-        "Substitution",
-        "Transliteration",
-        "Package",
-        "Use",
-        "No",
-        "PhaseBlock",
-        "DataSection",
-        "Class",
-        "Format",
-        "Identifier",
-        "Error",
-        "HeredocDepthLimit",
-        "MissingExpression",
-        "MissingStatement",
-        "MissingIdentifier",
-        "MissingBlock",
-        "UnknownRest",
-    ];
-
-    nodekinds.into_iter().map(|s| s.to_string()).collect()
+    perl_parser::ast::NodeKind::ALL_KIND_NAMES.iter().map(|s| (*s).to_string()).collect()
 }
 
 #[cfg(test)]

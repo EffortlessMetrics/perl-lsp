@@ -1,117 +1,61 @@
 //! Shared constants and helpers for NodeKind coverage tests.
 //!
-//! Extracted from `semantic_nodekind_coverage_tests.rs` so that both the semantic
-//! inline-snippet tests and the corpus-level coverage tests share a single
-//! source-of-truth list.
+//! All canonical lists are re-exported from `perl_parser::ast::NodeKind` — there
+//! is exactly one source-of-truth (in `perl-ast`).
 
-// Not every helper is used by every test binary that includes this module.
-#![allow(dead_code)]
+// This module is included in multiple test binaries, each of which uses a
+// different subset of helpers.  Individual items carry `#[allow(dead_code)]`
+// where they are only consumed by some binaries.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 
-use perl_parser::ast::Node;
+use perl_parser::ast::{Node, NodeKind};
 
-/// Source-of-truth list: update ONLY when NodeKind changes.
-/// (Do not include HeredocDepthLimit — that is a lexer/token budget error path, not a NodeKind.)
-pub const ALL_NODE_KIND_NAMES: &[&str] = &[
-    "Program",
-    "ExpressionStatement",
-    "VariableDeclaration",
-    "VariableListDeclaration",
-    "Variable",
-    "VariableWithAttributes",
-    "Assignment",
-    "Binary",
-    "Ternary",
-    "Unary",
-    "Diamond",
-    "Ellipsis",
-    "Undef",
-    "Readline",
-    "Glob",
-    "Typeglob",
-    "Number",
-    "String",
-    "Heredoc",
-    "ArrayLiteral",
-    "HashLiteral",
-    "Block",
-    "Eval",
-    "Do",
-    "Try",
-    "If",
-    "LabeledStatement",
-    "While",
-    "Tie",
-    "Untie",
-    "For",
-    "Foreach",
-    "Given",
-    "When",
-    "Default",
-    "StatementModifier",
-    "Subroutine",
-    "Prototype",
-    "Signature",
-    "MandatoryParameter",
-    "OptionalParameter",
-    "SlurpyParameter",
-    "NamedParameter",
-    "Method",
-    "Return",
-    "LoopControl",
-    "MethodCall",
-    "FunctionCall",
-    "IndirectCall",
-    "Regex",
-    "Match",
-    "Substitution",
-    "Transliteration",
-    "Package",
-    "Use",
-    "No",
-    "PhaseBlock",
-    "DataSection",
-    "Class",
-    "Format",
-    "Identifier",
-    "Error",
-    "MissingExpression",
-    "MissingStatement",
-    "MissingIdentifier",
-    "MissingBlock",
-    "UnknownRest",
-];
+/// Re-export: canonical list of **all** `kind_name()` strings.
+#[allow(dead_code)]
+pub const ALL_NODE_KIND_NAMES: &[&str] = NodeKind::ALL_KIND_NAMES;
 
-/// Synthetic/recovery NodeKinds that cannot be reliably produced by parsing
-/// well-formed corpus files. These are covered by a manual AST fixture instead.
-pub const SYNTHETIC_NODE_KIND_NAMES: &[&str] = &[
-    "Error",
-    "MissingExpression",
-    "MissingStatement",
-    "MissingIdentifier",
-    "MissingBlock",
-    "UnknownRest",
-];
+/// Re-export: synthetic/recovery NodeKinds.
+#[allow(dead_code)]
+pub const SYNTHETIC_NODE_KIND_NAMES: &[&str] = NodeKind::RECOVERY_KIND_NAMES;
 
 /// Recursively collect all NodeKind names present in an AST.
-pub fn collect_node_kinds(node: &Node, out: &mut HashSet<&'static str>) {
+#[allow(dead_code)]
+pub fn collect_node_kinds(node: &Node, out: &mut BTreeSet<&'static str>) {
     out.insert(node.kind.kind_name());
     node.for_each_child(|child| collect_node_kinds(child, out));
 }
 
 /// Recursively collect NodeKind names, recording which label (e.g. file name)
 /// produced each kind.
+#[allow(dead_code)]
 pub fn collect_node_kinds_labeled(
     node: &Node,
     label: &str,
-    out: &mut HashMap<&'static str, HashSet<String>>,
+    out: &mut BTreeMap<&'static str, BTreeSet<String>>,
 ) {
     out.entry(node.kind.kind_name()).or_default().insert(label.to_string());
     node.for_each_child(|child| collect_node_kinds_labeled(child, label, out));
 }
 
+/// Recursively collect NodeKind names together with their parent kind name.
+///
+/// For the root node the parent is `None`.
+#[allow(dead_code)]
+pub fn collect_node_kinds_with_parents(
+    node: &Node,
+    parent_kind: Option<&'static str>,
+    out: &mut BTreeMap<&'static str, BTreeSet<&'static str>>,
+) {
+    let kind = node.kind.kind_name();
+    if let Some(pk) = parent_kind {
+        out.entry(kind).or_default().insert(pk);
+    }
+    node.for_each_child(|child| collect_node_kinds_with_parents(child, Some(kind), out));
+}
+
 /// Return `true` if the AST contains a node with the given kind name.
+#[allow(dead_code)]
 pub fn has_node_kind(ast: &Node, expected: &str) -> bool {
     if ast.kind.kind_name() == expected {
         return true;
@@ -126,6 +70,7 @@ pub fn has_node_kind(ast: &Node, expected: &str) -> bool {
 }
 
 /// Find the first node with the given kind name (depth-first).
+#[allow(dead_code)]
 pub fn find_first_node_of_kind<'a>(node: &'a Node, expected: &str) -> Option<&'a Node> {
     if node.kind.kind_name() == expected {
         return Some(node);
@@ -141,6 +86,7 @@ pub fn find_first_node_of_kind<'a>(node: &'a Node, expected: &str) -> Option<&'a
 
 /// Return the set of NodeKind names that MUST appear in the corpus
 /// (all kinds minus synthetic/recovery kinds).
-pub fn corpus_required_kinds() -> HashSet<&'static str> {
+#[allow(dead_code)]
+pub fn corpus_required_kinds() -> BTreeSet<&'static str> {
     ALL_NODE_KIND_NAMES.iter().copied().filter(|k| !SYNTHETIC_NODE_KIND_NAMES.contains(k)).collect()
 }

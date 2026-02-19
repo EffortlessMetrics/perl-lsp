@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use perl_parser::{
@@ -212,7 +212,7 @@ $name, $age, $salary
         ),
     ];
 
-    let mut observed = HashSet::new();
+    let mut observed = BTreeSet::new();
 
     for (name, source) in cases {
         let ast = parse_ast(source);

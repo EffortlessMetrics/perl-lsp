@@ -66,10 +66,7 @@ fn test_rename_variable() -> TestResult {
             if let Some(uri_edits) = changes.get(doc_uri) {
                 let edits = uri_edits.as_array().ok_or("edits should be an array")?;
                 // Should have multiple edits (one for each occurrence of $count)
-                assert!(
-                    !edits.is_empty(),
-                    "Should have at least one edit for renamed variable"
-                );
+                assert!(!edits.is_empty(), "Should have at least one edit for renamed variable");
                 for edit in edits {
                     assert!(edit["range"].is_object(), "Each edit should have a range");
                     let new_text = edit["newText"].as_str().ok_or("newText should be a string")?;
@@ -251,21 +248,14 @@ sub caller {
         .unwrap_or(json!(null));
 
     if !response.is_null() {
-        assert!(
-            response.is_object(),
-            "rename should return a WorkspaceEdit, got: {:?}",
-            response
-        );
+        assert!(response.is_object(), "rename should return a WorkspaceEdit, got: {:?}", response);
 
         // If changes exist, verify the edit structure
         if let Some(changes) = response.get("changes") {
             if let Some(uri_edits) = changes.get(doc_uri) {
                 let edits = uri_edits.as_array().ok_or("edits should be an array")?;
                 // Should rename both the declaration and the call site
-                assert!(
-                    !edits.is_empty(),
-                    "Should have edits for subroutine rename"
-                );
+                assert!(!edits.is_empty(), "Should have edits for subroutine rename");
             }
         }
     }
