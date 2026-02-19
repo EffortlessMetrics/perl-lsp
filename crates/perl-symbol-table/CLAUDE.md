@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Central data structure for tracking Perl symbols, references, and lexical scopes for IDE features like go-to-definition, find-all-references, and semantic highlighting.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

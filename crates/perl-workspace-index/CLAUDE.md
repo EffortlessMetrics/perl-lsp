@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Crate Overview
 
 - **Crate**: `perl-workspace-index`
-- **Version**: 0.9.0
+- **Version**: 0.9.1
 - **Tier**: 3 (two-level internal dependencies)
 - **Purpose**: Central workspace indexing engine providing cross-file symbol lookup, document management, lifecycle state machine, bounded caching, and SLO monitoring for the Perl LSP server.
 

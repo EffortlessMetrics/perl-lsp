@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Walks an AST to build a range-indexed map of `use strict`, `no strict`, `use warnings`, and `no warnings` effects, enabling scope-aware pragma queries at any byte offset.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

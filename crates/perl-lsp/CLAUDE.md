@@ -3,7 +3,7 @@
 ## Crate Overview
 
 - **Name**: `perl-lsp`
-- **Version**: 0.9.0
+- **Version**: 0.9.1
 - **Tier**: 6 (executable / application crate)
 - **Purpose**: Standalone LSP server binary and library for Perl. Provides the `perl-lsp` binary (stdio and TCP modes) and a public library API (`LspServer`, `run_stdio()`, JSON-RPC types). Delegates parsing to `perl-parser` and dispatches LSP features through dedicated provider crates.
 

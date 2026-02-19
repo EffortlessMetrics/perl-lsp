@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Wraps perltidy execution behind a generic `SubprocessRuntime` trait, producing LSP-compatible text edits for full-document and range formatting.
 
-**Version**: 0.9.0 (workspace-inherited)
+**Version**: 0.9.1 (workspace-inherited)
 
 ## Commands
 

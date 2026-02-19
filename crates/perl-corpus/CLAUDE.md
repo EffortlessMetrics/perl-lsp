@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Crate Overview
 
 - **Tier**: 7 (testing/legacy crate)
-- **Version**: 0.9.0
+- **Version**: 0.9.1
 - **Purpose**: Test corpus management, property-based generators, and edge case fixtures for Perl parsers and LSP/DAP testing.
 
 ## Commands

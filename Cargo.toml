@@ -58,7 +58,7 @@ exclude = [
 
 # Workspace-level package metadata
 [workspace.package]
-version = "0.9.0"
+version = "0.9.1"
 edition = "2024"
 rust-version = "1.92"
 authors = ["Steven Zimmerman, CPA <git@effortlesssteven.com>"]
@@ -69,23 +69,23 @@ homepage = "https://github.com/EffortlessMetrics/perl-lsp"
 
 [workspace.dependencies]
 # Tier 1: Leaf crates (no internal dependencies)
-perl-token = { path = "crates/perl-token", version = "0.9.0" }
-perl-quote = { path = "crates/perl-quote", version = "0.9.0" }
-perl-edit = { path = "crates/perl-edit", version = "0.9.0" }
-perl-builtins = { path = "crates/perl-builtins", version = "0.9.0" }
-perl-regex = { path = "crates/perl-regex", version = "0.9.0" }
-perl-pragma = { path = "crates/perl-pragma", version = "0.9.0" }
-perl-lexer = { path = "crates/perl-lexer", version = "0.9.0" }
-perl-ast = { path = "crates/perl-ast", version = "0.9.0" }
-perl-heredoc = { path = "crates/perl-heredoc", version = "0.9.0" }
-perl-error = { path = "crates/perl-error", version = "0.9.0" }
-perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.9.0" }
-perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.9.0" }
-perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.9.0" }
-perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.9.0" }
-perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.9.0" }
-perl-uri = { path = "crates/perl-uri", version = "0.9.0" }
-perl-corpus = { path = "crates/perl-corpus", version = "0.9.0" }
+perl-token = { path = "crates/perl-token", version = "0.9.1" }
+perl-quote = { path = "crates/perl-quote", version = "0.9.1" }
+perl-edit = { path = "crates/perl-edit", version = "0.9.1" }
+perl-builtins = { path = "crates/perl-builtins", version = "0.9.1" }
+perl-regex = { path = "crates/perl-regex", version = "0.9.1" }
+perl-pragma = { path = "crates/perl-pragma", version = "0.9.1" }
+perl-lexer = { path = "crates/perl-lexer", version = "0.9.1" }
+perl-ast = { path = "crates/perl-ast", version = "0.9.1" }
+perl-heredoc = { path = "crates/perl-heredoc", version = "0.9.1" }
+perl-error = { path = "crates/perl-error", version = "0.9.1" }
+perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.9.1" }
+perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.9.1" }
+perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.9.1" }
+perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.9.1" }
+perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.9.1" }
+perl-uri = { path = "crates/perl-uri", version = "0.9.1" }
+perl-corpus = { path = "crates/perl-corpus", version = "0.9.1" }
 perl-dap = { path = "crates/perl-dap", version = "0.1.0" }
 perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.1.0" }
 perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.1.0" }
@@ -93,34 +93,34 @@ perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.1.0" }
 perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.1.0" }
 
 # Tier 2: Single-level dependencies
-perl-parser-core = { path = "crates/perl-parser-core", version = "0.9.0" }
-perl-lsp-transport = { path = "crates/perl-lsp-transport", version = "0.9.0" }
-perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.9.0" }
-perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.9.0" }
-perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.9.0" }
-perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.9.0" }
-perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.9.0" }
-perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.9.0" }
-perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.9.0" }
-perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.9.0" }
-perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.9.0" }
-perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.9.0" }
-perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.9.0" }
+perl-parser-core = { path = "crates/perl-parser-core", version = "0.9.1" }
+perl-lsp-transport = { path = "crates/perl-lsp-transport", version = "0.9.1" }
+perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.9.1" }
+perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.9.1" }
+perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.9.1" }
+perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.9.1" }
+perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.9.1" }
+perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.9.1" }
+perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.9.1" }
+perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.9.1" }
+perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.9.1" }
+perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.9.1" }
+perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.9.1" }
 
 # Tier 3: Two-level dependencies
-perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.9.0" }
-perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.9.0" }
-perl-refactoring = { path = "crates/perl-refactoring", version = "0.9.0" }
+perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.9.1" }
+perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.9.1" }
+perl-refactoring = { path = "crates/perl-refactoring", version = "0.9.1" }
 
 # Tier 4: Three-level dependencies
-perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.9.0" }
-perl-lsp-providers = { path = "crates/perl-lsp-providers", version = "0.9.0", default-features = false }
+perl-semantic-analyzer = { path = "crates/perl-semantic-analyzer", version = "0.9.1" }
+perl-lsp-providers = { path = "crates/perl-lsp-providers", version = "0.9.1", default-features = false }
 
 # Tier 5: Application crates
-perl-parser = { path = "crates/perl-parser", version = "0.9.0" }
+perl-parser = { path = "crates/perl-parser", version = "0.9.1" }
 
 # Legacy/Compatibility crates
-perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.9.0" }
+perl-parser-pest = { path = "crates/perl-parser-pest", version = "0.9.1" }
 
 # External dependencies
 tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust"] }

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Mode-based Perl lexer that disambiguates context-sensitive tokens (division vs regex, modulo vs hash sigil, heredocs, quote-like operators) and supports checkpointing for incremental parsing.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

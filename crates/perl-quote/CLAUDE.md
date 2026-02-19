@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Parse regex (`qr//`, `m//`), substitution (`s///`), and transliteration (`tr///`, `y///`) operators, handling all Perl delimiter styles and modifier validation.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

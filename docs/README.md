@@ -1,6 +1,6 @@
 # Perl LSP Documentation
 
-Documentation for Perl LSP v0.9.0 — a Language Server Protocol implementation for Perl.
+Documentation for Perl LSP v0.9.1 — a Language Server Protocol implementation for Perl.
 
 ## Use it
 
@@ -52,4 +52,4 @@ nix develop -c just status-check  # Verify metrics haven't drifted
 
 ---
 
-Version: v0.9.0
+Version: v0.9.1

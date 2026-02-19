@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 ## Crate Overview
 
 - **Name**: `perl-lsp-inlay-hints`
-- **Version**: 0.9.0 (workspace)
+- **Version**: 0.9.1 (workspace)
 - **Tier**: LSP feature crate (depends on Tier 4 `perl-semantic-analyzer`)
 - **Purpose**: Generates LSP inlay hints for Perl -- parameter name hints on built-in function calls and lightweight type hints on literals.
 

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Detect dangerous or expensive regex constructs (nested quantifiers, embedded code, excessive nesting/branching) and report offset-aware diagnostics for IDE integration.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

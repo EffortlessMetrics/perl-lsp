@@ -92,7 +92,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -103,7 +103,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -673,7 +673,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1394,7 +1394,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1440,7 +1440,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1496,7 +1496,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "perl-ast"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-position-tracking",
  "perl-token",
@@ -1504,14 +1504,14 @@ dependencies = [
 
 [[package]]
 name = "perl-builtins"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "phf",
 ]
 
 [[package]]
 name = "perl-corpus"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1604,14 +1604,14 @@ dependencies = [
 
 [[package]]
 name = "perl-diagnostics-codes"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "perl-edit"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-position-tracking",
  "perl-tdd-support",
@@ -1619,7 +1619,7 @@ dependencies = [
 
 [[package]]
 name = "perl-error"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-ast",
  "perl-lexer",
@@ -1630,14 +1630,14 @@ dependencies = [
 
 [[package]]
 name = "perl-heredoc"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-position-tracking",
 ]
 
 [[package]]
 name = "perl-incremental-parsing"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "lsp-types",
@@ -1652,7 +1652,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lexer"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "criterion",
  "memchr",
@@ -1665,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1711,7 +1711,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-code-actions"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-lsp-diagnostics",
  "perl-lsp-rename",
@@ -1727,7 +1727,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-completion"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lsp-types",
  "perl-parser-core",
@@ -1742,7 +1742,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-diagnostics"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lsp-types",
  "perl-diagnostics-codes",
@@ -1758,7 +1758,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-formatting"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lsp-types",
  "perl-lsp-tooling",
@@ -1770,7 +1770,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-inlay-hints"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lsp-types",
  "perl-parser-core",
@@ -1783,7 +1783,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-navigation"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lsp-types",
  "perl-parser-core",
@@ -1799,7 +1799,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-protocol"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lsp-types",
  "serde",
@@ -1808,7 +1808,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-providers"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lsp-types",
  "md5",
@@ -1840,7 +1840,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-rename"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-parser-core",
  "perl-semantic-analyzer",
@@ -1849,7 +1849,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-semantic-tokens"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lsp-types",
  "perl-lexer",
@@ -1863,7 +1863,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-tooling"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "criterion",
  "lsp-types",
@@ -1875,7 +1875,7 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-transport"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-lsp-protocol",
  "serde_json",
@@ -1883,7 +1883,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1926,7 +1926,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-core"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-ast",
  "perl-builtins",
@@ -1946,7 +1946,7 @@ dependencies = [
 
 [[package]]
 name = "perl-parser-pest"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lazy_static",
  "once_cell",
@@ -1963,7 +1963,7 @@ dependencies = [
 
 [[package]]
 name = "perl-position-tracking"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "lsp-types",
  "ropey",
@@ -1974,18 +1974,18 @@ dependencies = [
 
 [[package]]
 name = "perl-pragma"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-ast",
 ]
 
 [[package]]
 name = "perl-quote"
-version = "0.9.0"
+version = "0.9.1"
 
 [[package]]
 name = "perl-refactoring"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-parser-core",
  "perl-tdd-support",
@@ -1999,14 +1999,14 @@ dependencies = [
 
 [[package]]
 name = "perl-regex"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "perl-semantic-analyzer"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-parser-core",
  "perl-symbol-types",
@@ -2019,7 +2019,7 @@ dependencies = [
 
 [[package]]
 name = "perl-symbol-table"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-position-tracking",
  "perl-symbol-types",
@@ -2028,14 +2028,14 @@ dependencies = [
 
 [[package]]
 name = "perl-symbol-types"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "perl-tdd-support"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "lsp-types",
@@ -2047,11 +2047,11 @@ dependencies = [
 
 [[package]]
 name = "perl-token"
-version = "0.9.0"
+version = "0.9.1"
 
 [[package]]
 name = "perl-tokenizer"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-ast",
  "perl-error",
@@ -2122,7 +2122,7 @@ dependencies = [
 
 [[package]]
 name = "perl-uri"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "perl-tdd-support",
  "tempfile",
@@ -2131,7 +2131,7 @@ dependencies = [
 
 [[package]]
 name = "perl-workspace-index"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "criterion",
@@ -2642,7 +2642,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3006,7 +3006,7 @@ dependencies = [
  "getrandom 0.4.1",
  "once_cell",
  "rustix",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3284,7 +3284,7 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-perl"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "bindgen",
@@ -3607,7 +3607,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

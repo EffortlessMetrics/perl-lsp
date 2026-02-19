@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 `perl-uri` is a **Tier 1 leaf crate** providing URI-to-filesystem-path conversion and normalization utilities for the Perl LSP ecosystem.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

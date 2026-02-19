@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Combines lexer token classification with AST overlays to produce delta-encoded semantic tokens per the LSP 3.17+ specification.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

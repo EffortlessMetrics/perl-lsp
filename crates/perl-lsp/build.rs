@@ -286,7 +286,7 @@ fn generate_feature_catalog() -> Result<(), Box<dyn std::error::Error>> {
             );
             code.push_str("pub struct Feature { }\n");
             code.push_str("/// Fallback parser version when features.toml is not available\n");
-            code.push_str("pub const VERSION: &str = \"0.9.0\";\n");
+            code.push_str("pub const VERSION: &str = \"0.9.1\";\n");
             code.push_str("/// Fallback LSP version when features.toml is not available\n");
             code.push_str("pub const LSP_VERSION: &str = \"3.18\";\n");
             code.push_str(

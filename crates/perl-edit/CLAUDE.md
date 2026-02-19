@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Represents text edits with byte and line/column coordinates, computes positional shifts, and applies edits to positions and ranges.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

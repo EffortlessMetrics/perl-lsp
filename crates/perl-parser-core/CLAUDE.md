@@ -3,7 +3,7 @@
 ## Crate Overview
 
 - **Name**: `perl-parser-core`
-- **Version**: 0.9.0
+- **Version**: 0.9.1
 - **Tier**: 2 (aggregates Tier 1 leaf crates into the core parsing engine)
 - **Purpose**: Recursive descent parser with IDE-friendly error recovery, AST construction, token stream utilities, and UTF-8/UTF-16 position mapping. Used by `perl-parser` and higher-level analysis/LSP crates.
 

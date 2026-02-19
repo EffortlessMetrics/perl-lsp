@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Given a queue of `PendingHeredoc` declarations and source bytes, walks lines from a starting offset, matches terminators, and returns span-based content with indentation stripping and CRLF normalization.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

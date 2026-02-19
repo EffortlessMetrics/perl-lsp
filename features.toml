@@ -3,7 +3,7 @@
 # Used to generate capabilities, documentation, and compliance reports
 
 [meta]
-version = "0.9.0"
+version = "0.9.1"
 lsp_version = "3.18"
 compliance_percent = 65  # Auto-calculated in future
 

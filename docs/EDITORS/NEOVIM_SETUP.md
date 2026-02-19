@@ -80,7 +80,7 @@ perl-lsp --version
 
 # Quick health check
 perl-lsp --health
-# Should output: ok 0.9.0
+# Should output: ok 0.9.1
 ```
 
 ### Install Required Plugins
