@@ -1,102 +1,82 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code when working with code in this repository.
+# CLAUDE.md — perl-diagnostics-codes
 
 ## Crate Overview
 
-`perl-diagnostics-codes` is a **Tier 1 leaf crate** providing stable diagnostic codes and severity levels for Perl LSP.
-
-**Purpose**: Stable diagnostic codes and severity levels for Perl LSP — ensures consistent error/warning identification across versions.
-
-**Version**: 0.8.8
+- **Tier**: 1 (leaf crate, no internal workspace dependencies)
+- **Version**: 0.9.0
+- **Purpose**: Defines stable diagnostic codes, severity levels, tags, and categories for the Perl LSP ecosystem. All codes have fixed string representations that persist across versions.
 
 ## Commands
 
 ```bash
-cargo build -p perl-diagnostics-codes        # Build this crate
+cargo build -p perl-diagnostics-codes        # Build
 cargo test -p perl-diagnostics-codes         # Run tests
 cargo clippy -p perl-diagnostics-codes       # Lint
-cargo doc -p perl-diagnostics-codes --open   # View documentation
+cargo doc -p perl-diagnostics-codes --open   # View docs
 ```
 
 ## Architecture
 
 ### Dependencies
 
-- `serde` (optional) - Serialization
+- `serde` (optional, behind `serde` feature) — derive `Serialize`/`Deserialize` on all public types
 
 ### Key Types
 
 | Type | Purpose |
 |------|---------|
-| `DiagnosticCode` | Unique diagnostic identifier |
-| `Severity` | Error, Warning, Info, Hint |
-| `Category` | Diagnostic category |
+| `DiagnosticCode` | Enum of all diagnostic codes (e.g., `ParseError`, `MissingStrict`, `CriticSeverity1`) |
+| `DiagnosticSeverity` | `Error`, `Warning`, `Information`, `Hint` — maps to LSP values 1-4 via `to_lsp_value()` |
+| `DiagnosticTag` | `Unnecessary`, `Deprecated` — maps to LSP tag values via `to_lsp_value()` |
+| `DiagnosticCategory` | `Parser`, `StrictWarnings`, `PackageModule`, `Subroutine`, `BestPractices`, `PerlCritic` |
 
-### Diagnostic Code Format
+### DiagnosticCode Methods
 
-```
-PL-XXXX
-│  └─── 4-digit number
-└────── "PL" prefix for Perl
-```
+| Method | Returns |
+|--------|---------|
+| `as_str()` | Stable string code (e.g., `"PL001"`, `"PC003"`) |
+| `severity()` | Default `DiagnosticSeverity` for this code |
+| `category()` | `DiagnosticCategory` classification |
+| `tags()` | `&[DiagnosticTag]` (e.g., `UnusedVariable` returns `[Unnecessary]`) |
+| `documentation_url()` | `Option<&str>` link to docs (None for Perl::Critic codes) |
+| `parse_code(code)` | Parse `"PL001"` string into `Option<DiagnosticCode>` |
+| `from_message(msg)` | Infer code from error message text |
 
 ### Code Ranges
 
-| Range | Category |
-|-------|----------|
-| PL-0001 to PL-0999 | Syntax errors |
-| PL-1000 to PL-1999 | Semantic errors |
-| PL-2000 to PL-2999 | Warnings |
-| PL-3000 to PL-3999 | Style hints |
-| PL-4000 to PL-4999 | Deprecations |
-
-### Common Codes
-
-```rust
-// Syntax errors
-PL_0001  // Unexpected token
-PL_0002  // Unterminated string
-PL_0003  // Unbalanced delimiter
-
-// Semantic errors
-PL_1001  // Undefined variable
-PL_1002  // Undefined subroutine
-PL_1003  // Type mismatch
-
-// Warnings
-PL_2001  // Unused variable
-PL_2002  // Redefining subroutine
-PL_2003  // Missing strict/warnings
-```
+| Range | Category | Examples |
+|-------|----------|----------|
+| PL001-PL099 | Parser | `ParseError`, `SyntaxError`, `UnexpectedEof` |
+| PL100-PL199 | Strict/warnings | `MissingStrict`, `MissingWarnings`, `UnusedVariable`, `UndefinedVariable` |
+| PL200-PL299 | Package/module | `MissingPackageDeclaration`, `DuplicatePackage` |
+| PL300-PL399 | Subroutine | `DuplicateSubroutine`, `MissingReturn` |
+| PL400-PL499 | Best practices | `BarewordFilehandle`, `TwoArgOpen`, `ImplicitReturn` |
+| PC001-PC005 | Perl::Critic | `CriticSeverity1` through `CriticSeverity5` |
 
 ## Usage
 
 ```rust
-use perl_diagnostics_codes::{DiagnosticCode, Severity};
+use perl_diagnostics_codes::{DiagnosticCode, DiagnosticSeverity, DiagnosticCategory};
 
-let code = DiagnosticCode::UNDEFINED_VARIABLE;
-assert_eq!(code.as_str(), "PL-1001");
-assert_eq!(code.severity(), Severity::Error);
-assert_eq!(code.message(), "Undefined variable");
-```
+let code = DiagnosticCode::ParseError;
+assert_eq!(code.as_str(), "PL001");
+assert_eq!(code.severity(), DiagnosticSeverity::Error);
+assert_eq!(code.category(), DiagnosticCategory::Parser);
 
-### Integration with LSP
+// Parse from string
+let code = DiagnosticCode::parse_code("PL102");
+assert_eq!(code, Some(DiagnosticCode::UnusedVariable));
 
-```rust
-use lsp_types::Diagnostic;
-
-let diagnostic = Diagnostic {
-    code: Some(NumberOrString::String(code.as_str().to_string())),
-    severity: Some(code.severity().into()),
-    message: format!("{}: {}", code.as_str(), code.message()),
-    ..
-};
+// Infer from message
+let code = DiagnosticCode::from_message("Missing 'use strict' pragma");
+assert_eq!(code, Some(DiagnosticCode::MissingStrict));
 ```
 
 ## Important Notes
 
-- Codes are stable across versions (don't renumber)
-- New codes are added at the end of each range
-- Deprecated codes are kept but marked deprecated
-- Used by `perl-lsp-diagnostics` for reporting
+- Diagnostic codes are **stable across versions** — never renumber existing codes
+- New codes are appended at the end of their respective range
+- The crate has **zero required dependencies** (`serde` is optional)
+- All public enums implement `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`, `Hash`, and `Display` (where applicable)
+- Used by `perl-lsp-diagnostics` for diagnostic reporting in the LSP server
+- Source is a single file: `src/lib.rs`

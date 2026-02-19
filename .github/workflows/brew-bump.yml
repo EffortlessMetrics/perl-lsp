@@ -128,7 +128,7 @@ jobs:
           body: |
             Bump perl-lsp to version ${{ steps.tag.outputs.version }}
 
-            Created by automated workflow from [EffortlessMetrics/tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs).
+            Created by automated workflow from [EffortlessMetrics/perl-lsp](https://github.com/EffortlessMetrics/perl-lsp).
           commit-message: "perl-lsp ${{ steps.tag.outputs.version }}"
           labels: automated-pr
           repository: Homebrew/homebrew-core

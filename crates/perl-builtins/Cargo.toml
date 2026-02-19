@@ -10,8 +10,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-builtins"
-keywords = ["perl", "builtins", "parser", "lsp"]
-categories = ["parsing", "development-tools"]
+keywords = ["perl", "builtins", "parser", "lsp", "signatures"]
+categories = ["development-tools", "text-processing"]
 
 [dependencies]
 phf = { version = "0.13.1", features = ["macros"] }

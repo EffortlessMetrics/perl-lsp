@@ -10,7 +10,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-quote"
-keywords = ["perl", "quote", "parser", "lexer"]
+keywords = ["perl", "quote", "parser", "delimiter", "substitution"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]

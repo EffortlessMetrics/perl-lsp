@@ -1,5 +1,0 @@
-   Compiling perl-parser v0.8.8 (/home/steven/code/Rust/perl-lsp/review/crates/perl-parser)
-   Compiling perl-lsp v0.8.8 (/home/steven/code/Rust/perl-lsp/review/crates/perl-lsp)
- Documenting perl-lsp v0.8.8 (/home/steven/code/Rust/perl-lsp/review/crates/perl-lsp)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 4.30s
-   Generated /home/steven/code/Rust/perl-lsp/review/target/doc/perl_lsp/index.html

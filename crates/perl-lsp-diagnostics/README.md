@@ -1,23 +1,33 @@
 # perl-lsp-diagnostics
 
-Diagnostics and linting providers for Perl LSP.
+LSP diagnostics provider for Perl. Generates editor-visible diagnostics from
+parse errors, scope analysis, lint checks, and workspace-wide dead code detection.
 
-## Scope
+## Features
 
-- Converts parser and semantic issues into LSP diagnostics.
-- Runs lint passes (common mistakes, deprecated patterns, strict warnings).
-- Supports dead-code detection and diagnostic deduplication.
+- **Parse error diagnostics** -- converts parser errors into positioned diagnostics
+- **Scope analysis** -- undeclared variables, unused variables/parameters, shadowing, redeclaration
+- **Lint passes** -- common mistakes (assignment in condition, numeric undef), deprecated syntax (`defined @array`, `$[`), missing `use strict`/`use warnings`
+- **Dead code detection** -- workspace-wide unused subroutine/variable/constant/package detection (non-WASM only)
+- **Deduplication** -- removes duplicate diagnostics by range, severity, code, and message
+- **ERROR node classification** -- classifies AST error nodes with suggestions and explanations
 
-## Public Surface
+## Public API
 
-- Core diagnostics provider/types from `diagnostics` and `types` modules.
-- Lint entry points under `lints::*`.
-- `detect_dead_code` for dead-code analysis.
+| Export | Description |
+|--------|-------------|
+| `DiagnosticsProvider` | Core provider -- builds diagnostics from AST and parse errors |
+| `Diagnostic`, `DiagnosticSeverity`, `DiagnosticTag`, `RelatedInformation` | Diagnostic types |
+| `common_mistakes::check_common_mistakes` | Assignment-in-condition and numeric-undef checks |
+| `deprecated::check_deprecated_syntax` | Deprecated syntax detection |
+| `strict_warnings::check_strict_warnings` | Missing pragma advisories |
+| `detect_dead_code` | Workspace-wide dead code detection (non-WASM) |
 
 ## Workspace Role
 
-Internal feature crate used by `perl-lsp` publish-diagnostics flow.
+Internal feature crate consumed by `perl-lsp` to publish diagnostics to editors.
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## License
 
-MIT OR Apache-2.0.
+MIT OR Apache-2.0

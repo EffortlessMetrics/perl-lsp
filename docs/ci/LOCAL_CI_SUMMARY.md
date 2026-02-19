@@ -168,7 +168,7 @@ All future work will use `just ci-gate` before merge.
 
 ### For PR #214
 
-Already posted to PR: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/pull/214#issuecomment-3524660653
+Already posted to PR: https://github.com/EffortlessMetrics/perl-lsp/pull/214#issuecomment-3524660653
 
 ### For Future PRs
 

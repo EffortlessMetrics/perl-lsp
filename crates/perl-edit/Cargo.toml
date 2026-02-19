@@ -10,7 +10,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-edit"
-keywords = ["perl", "edit", "incremental", "lsp"]
+keywords = ["perl", "edit", "incremental", "lsp", "parsing"]
 categories = ["development-tools", "text-editors"]
 
 [dependencies]

@@ -6,10 +6,10 @@ rust-version.workspace = true
 license = "MIT OR Apache-2.0"
 description = "Test corpus management and generators for Perl parsers"
 readme = "README.md"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
 documentation = "https://docs.rs/perl-corpus"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-keywords = ["perl", "corpus", "proptest", "testing"]
+homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+keywords = ["perl", "corpus", "proptest", "testing", "parser"]
 categories = ["development-tools", "testing"]
 include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 

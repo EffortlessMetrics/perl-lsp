@@ -633,7 +633,7 @@ Beyond Issue #182, the enhanced statement tracker could enable:
 
 ## References
 
-- **Issue #182**: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/182
+- **Issue #182**: https://github.com/EffortlessMetrics/perl-lsp/issues/182
 - **Issue #183**: Heredoc declaration parsing (dependency)
 - **Issue #184**: Heredoc content collector (dependency)
 - **Current Implementation**: `crates/tree-sitter-perl-rs/src/statement_tracker.rs`

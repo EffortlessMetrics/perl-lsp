@@ -4,11 +4,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-ast` is a **Tier 1 leaf crate** providing AST (Abstract Syntax Tree) node definitions for the Perl parser.
+`perl-ast` is a **Tier 1 leaf crate** providing AST (Abstract Syntax Tree) node definitions for the Perl parser ecosystem.
 
-**Purpose**: AST definitions for Perl parser — typed representation of Perl syntax constructs.
+**Purpose**: Typed representation of Perl syntax constructs used by the parser, semantic analyzer, and LSP server.
 
-**Version**: 0.8.8
+**Version**: 0.9.0
 
 ## Commands
 
@@ -23,51 +23,66 @@ cargo doc -p perl-ast --open         # View documentation
 
 ### Dependencies
 
-- `perl-position-tracking` - Span/position types
-- `perl-token` - Token definitions
+- `perl-position-tracking` -- Span/position types (`SourceLocation`, `Range`, `Position`)
+- `perl-token` -- Token definitions (`Token`, `TokenKind`)
+
+### Source Modules
+
+| File | Purpose |
+|------|---------|
+| `lib.rs` | Re-exports `Node`, `NodeKind`, `SourceLocation` |
+| `ast.rs` | Primary AST: `Node` struct (kind + location), `NodeKind` enum (50+ variants), S-expression output |
+| `v2.rs` | Enhanced AST for incremental parsing: `Node` with `NodeId` + `Range`, `NodeIdGenerator`, `MissingKind`, `DiagnosticId` |
 
 ### Key Types
 
-| Type | Purpose |
-|------|---------|
-| `Node` | Base AST node trait |
-| `Statement` | Statement-level constructs |
-| `Expression` | Expression-level constructs |
-| `Block` | Code blocks |
-| `Subroutine` | Subroutine definitions |
-| `Package` | Package declarations |
+| Type | Module | Purpose |
+|------|--------|---------|
+| `ast::Node` | `ast` | Primary AST node: `kind: NodeKind` + `location: SourceLocation` |
+| `ast::NodeKind` | `ast` | Enum with 50+ variants (Program, Subroutine, If, Variable, FunctionCall, etc.) |
+| `v2::Node` | `v2` | Enhanced node with `id: NodeId`, `kind: NodeKind`, `range: Range` |
+| `v2::NodeKind` | `v2` | Subset of node kinds for incremental parsing |
+| `v2::NodeIdGenerator` | `v2` | Sequential unique ID generator for v2 nodes |
+| `v2::MissingKind` | `v2` | Enum for specific kinds of missing syntax (Expression, Block, Semicolon, etc.) |
+| `v2::DiagnosticId` | `v2` | Type alias (`u32`) for lightweight error references |
 
-### Node Categories
+### NodeKind Categories (ast module)
 
-**Statements**:
-- Variable declarations (`my`, `our`, `local`, `state`)
-- Control flow (`if`, `unless`, `while`, `for`, `foreach`)
-- Subroutine definitions
-- Package/module declarations
-- Use/require statements
-
-**Expressions**:
-- Literals (numbers, strings, regex)
-- Variables (scalars, arrays, hashes)
-- Operators (binary, unary, ternary)
-- Function calls
-- Method calls
-- Anonymous subs/closures
+**Declarations**: `VariableDeclaration`, `VariableListDeclaration`, `Subroutine`, `Method`, `Package`, `Class`, `Format`
+**Control flow**: `If`, `While`, `For`, `Foreach`, `Given`, `When`, `Default`, `StatementModifier`, `LabeledStatement`
+**Expressions**: `Binary`, `Unary`, `Ternary`, `Assignment`, `FunctionCall`, `MethodCall`, `IndirectCall`
+**Literals**: `Number`, `String`, `Heredoc`, `ArrayLiteral`, `HashLiteral`, `Regex`
+**Variables**: `Variable`, `VariableWithAttributes`, `Typeglob`
+**Modules**: `Use`, `No`, `PhaseBlock`, `DataSection`
+**Error recovery**: `Error`, `MissingExpression`, `MissingStatement`, `MissingIdentifier`, `MissingBlock`, `UnknownRest`
+**Other**: `Program`, `Block`, `ExpressionStatement`, `Return`, `LoopControl`, `Eval`, `Do`, `Try`, `Diamond`, `Ellipsis`, `Undef`, `Readline`, `Glob`, `Identifier`, `Prototype`, `Signature`, `MandatoryParameter`, `OptionalParameter`, `SlurpyParameter`, `NamedParameter`
 
 ## Usage
 
 ```rust
-use perl_ast::{Node, Statement, Expression};
+use perl_ast::{Node, NodeKind, SourceLocation};
 
-fn visit_node(node: &dyn Node) {
-    // Common node operations
-    let span = node.span();
-    let children = node.children();
+// Construct a node
+let loc = SourceLocation { start: 0, end: 10 };
+let node = Node::new(
+    NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+    loc,
+);
+
+// S-expression output
+assert_eq!(node.to_sexp(), "(variable $ x)");
+
+// Pattern match on kind
+match &node.kind {
+    NodeKind::Variable { sigil, name } => { /* ... */ }
+    _ => {}
 }
 ```
 
 ## Important Notes
 
-- AST nodes should be immutable after construction
-- Each node type includes position information for LSP features
-- Adding new node types requires updating visitors in dependent crates
+- `ast::Node` is a concrete struct, not a trait -- work with it via pattern matching on `NodeKind`
+- `Node::to_sexp()` produces tree-sitter-compatible S-expressions for test comparison
+- `NodeKind::kind_name()` returns a static string name; `NodeKind::ALL_KIND_NAMES` lists all names
+- Adding new `NodeKind` variants requires updating `to_sexp()`, `to_sexp_inner()`, `kind_name()`, `ALL_KIND_NAMES`, and the `visit_children()` method
+- Dependents: `perl-parser-core`, `perl-tokenizer`, `perl-pragma`, `perl-error`

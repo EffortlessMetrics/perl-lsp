@@ -1,16 +1,16 @@
 [package]
 name = "perl-parser"
-version = "0.9.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
-description = "Native Perl parser (v3) — Tree-sitter-compatible kinds/fields/points; stable byte↔UTF-16 conversions"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+authors.workspace = true
+description = "Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/perl-parser"
-keywords = ["perl", "parser", "tree-sitter", "lsp", "ast"]
+keywords = ["perl", "parser", "ast", "lsp", "semantic-analysis"]
 categories = ["parsing", "development-tools", "text-editors"]
 include = [
   "src/**",

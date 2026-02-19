@@ -1,23 +1,39 @@
 # tree-sitter-perl-c
 
-Legacy Tree-sitter Perl bindings using the C scanner implementation.
+Tree-sitter Perl grammar with C scanner -- legacy FFI bindings for benchmarking.
 
-## Scope
+## Overview
 
-- Exposes the C-based Tree-sitter Perl language and parser constructors.
-- Provides simple helpers to parse Perl strings/files with the legacy scanner.
-- Preserved for compatibility and comparative benchmarking.
+This crate compiles the C-based tree-sitter Perl grammar (parser.c + scanner.c)
+via `cc` and generates Rust bindings with `bindgen`. It is excluded from the
+default workspace build because it requires `libclang-dev`.
 
-## Public Surface
+## Public API
 
-- `language`, `try_create_parser`, `create_parser`.
-- `parse_perl_code`, `parse_perl_file`.
-- `get_scanner_config`.
+- `language()` -- returns the tree-sitter `Language` for Perl
+- `try_create_parser()` -- creates a `tree_sitter::Parser` (returns `Result`)
+- `create_parser()` -- creates a parser, ignoring language-set errors
+- `parse_perl_code(code)` -- parses a `&str` into a `tree_sitter::Tree`
+- `parse_perl_file(path)` -- reads and parses a file
+- `get_scanner_config()` -- returns `"c-scanner"`
 
-## Status
+## Binaries
 
-Legacy crate. New parser and LSP development is centered on Rust-native workspace crates.
+- `parse_c` -- parse a Perl file and exit
+- `bench_parser_c` -- parse a Perl file and print timing (requires `test-utils` feature)
+
+## Build Requirements
+
+Requires a C compiler and `libclang` headers for `bindgen`:
+
+```bash
+# Debian/Ubuntu
+apt install build-essential libclang-dev
+
+# macOS
+xcode-select --install
+```
 
 ## License
 
-Apache-2.0 OR MIT.
+MIT OR Apache-2.0

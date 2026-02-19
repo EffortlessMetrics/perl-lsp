@@ -1009,7 +1009,7 @@ LSP operations slower than v0.8.x
 
 ### Support Channels
 
-- **GitHub Issues**: [tree-sitter-perl-rs/issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues)
+- **GitHub Issues**: [tree-sitter-perl-rs/issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
   - Tag with `upgrade`, `v1.0`, or `migration`
   - Include version numbers and error messages
   - Provide minimal reproduction if possible

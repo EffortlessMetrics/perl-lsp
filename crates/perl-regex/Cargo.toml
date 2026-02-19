@@ -10,7 +10,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-regex"
-keywords = ["perl", "regex", "parser"]
+keywords = ["perl", "regex", "validation", "security", "backtracking"]
 categories = ["parsing", "text-processing"]
 
 [dependencies]

@@ -114,7 +114,7 @@ export async function activate(context: vscode.ExtensionContext) {
             'View Roadmap'
         );
         if (selection === 'View Roadmap') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessSteven/tree-sitter-perl'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp'));
         }
     };
 

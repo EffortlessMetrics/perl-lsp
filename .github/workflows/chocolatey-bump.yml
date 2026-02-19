@@ -93,7 +93,7 @@ jobs:
           sed -i "s/<version>[^<]*<\/version>/<version>${VERSION}<\/version>/" distribution/chocolatey/perl-lsp.nuspec
 
           # Update URL and checksum in install script
-          sed -i "s|url           = '[^']*'|url           = 'https:\/\/github.com\/EffortlessMetrics\/tree-sitter-perl-rs\/releases\/download\/v${VERSION}\/perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip'|" distribution/chocolatey/tools/chocolateyinstall.ps1
+          sed -i "s|url           = '[^']*'|url           = 'https:\/\/github.com\/EffortlessMetrics\/perl-lsp\/releases\/download\/v${VERSION}\/perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip'|" distribution/chocolatey/tools/chocolateyinstall.ps1
           sed -i "s/  checksum      = '[^']*'/  checksum      = '${SHA}'/" distribution/chocolatey/tools/chocolateyinstall.ps1
           sed -i "s/perl-lsp-[0-9.]*/perl-lsp-${VERSION}/g" distribution/chocolatey/tools/chocolateyinstall.ps1
 
@@ -114,7 +114,7 @@ jobs:
           body: |
             Bump perl-lsp to version ${{ steps.tag.outputs.version }}
 
-            Created by automated workflow from [EffortlessMetrics/tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs).
+            Created by automated workflow from [EffortlessMetrics/perl-lsp](https://github.com/EffortlessMetrics/perl-lsp).
 
             ### Changes
             - Updated version to ${{ steps.tag.outputs.version }}

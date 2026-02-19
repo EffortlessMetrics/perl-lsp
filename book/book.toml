@@ -10,7 +10,7 @@ description = "Comprehensive documentation for the perl-lsp project - a producti
 build-dir = "book"
 
 [output.html]
-git-repository-url = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+git-repository-url = "https://github.com/EffortlessMetrics/perl-lsp"
 git-repository-icon = "fa-github"
 site-url = "/tree-sitter-perl-rs/"
 default-theme = "light"

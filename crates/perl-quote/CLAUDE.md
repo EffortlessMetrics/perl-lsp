@@ -4,11 +4,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-quote` is a **Tier 1 leaf crate** providing quote operator handling for Perl parsing.
+`perl-quote` is a **Tier 1 leaf crate** that extracts patterns, bodies, and modifiers from Perl quote-like operator token text.
 
-**Purpose**: Quote operator handling — parses and validates Perl's complex quoting constructs (`q//`, `qq//`, `qw//`, `qr//`, `qx//`, heredocs).
+**Purpose**: Parse regex (`qr//`, `m//`), substitution (`s///`), and transliteration (`tr///`, `y///`) operators, handling all Perl delimiter styles and modifier validation.
 
-**Version**: 0.8.8
+**Version**: 0.9.0
 
 ## Commands
 
@@ -23,63 +23,60 @@ cargo doc -p perl-quote --open       # View documentation
 
 ### Dependencies
 
-**None** — pure Rust with no external dependencies.
+**None** -- pure Rust, zero external dependencies. Only imports `std::borrow::Cow`.
 
-### Quote Operators
+### Key Public API
 
-| Operator | Purpose | Interpolation |
-|----------|---------|---------------|
-| `q//` | Single-quoted string | No |
-| `qq//` | Double-quoted string | Yes |
-| `qw//` | Word list | No |
-| `qr//` | Compiled regex | Yes |
-| `qx//` | Command execution | Yes |
-| `tr///` | Transliteration | No |
-| `y///` | Transliteration (alias) | No |
-| `s///` | Substitution | Yes/No |
-| `m//` | Match | Yes |
+| Function / Type | Purpose |
+|----------------|---------|
+| `extract_regex_parts(text)` | Parse `qr//`, `m//`, bare `//` into (pattern, body, modifiers) |
+| `extract_substitution_parts(text)` | Lenient `s///` parsing -- silently filters invalid modifiers |
+| `extract_substitution_parts_strict(text)` | Strict `s///` parsing -- returns `SubstitutionError` on invalid input |
+| `extract_transliteration_parts(text)` | Parse `tr///` and `y///` into (search, replacement, modifiers) |
+| `validate_substitution_modifiers(text)` | Validate modifier string, returns `Err(char)` on first invalid char |
+| `SubstitutionError` | Error enum: `InvalidModifier`, `MissingDelimiter`, `MissingPattern`, `MissingReplacement`, `MissingClosingDelimiter` |
+
+### Internal Helpers
+
+- `get_closing_delimiter(open)` -- maps `{`->`}`, `[`->`]`, `(`->`)`, `<`->`>`, or same char
+- `extract_delimited_content(text, open, close)` -- balanced delimiter extraction with escape handling
+- `extract_delimited_content_strict(...)` -- same but tracks whether closing delimiter was found
+- `extract_unpaired_body(text, closing)` -- extract body for non-paired delimiters
+- `extract_substitution_pattern_with_replacement_hint(...)` -- paired-delimiter substitution with lookahead for replacement section
+- `split_unclosed_substitution_pattern(...)` / `split_on_last_paired_delimiter(...)` -- fallback parsing for edge cases
 
 ### Delimiter Handling
 
-Perl allows various delimiters for quote operators:
+Supports paired delimiters (`{}`, `[]`, `()`, `<>`) with nested depth counting, and non-paired delimiters (any non-alphanumeric character like `/`, `!`, `#`). Backslash escapes are respected in all modes.
 
-```perl
-q/string/          # Forward slash
-q{string}          # Braces (paired)
-q[string]          # Brackets (paired)
-q<string>          # Angle brackets (paired)
-q(string)          # Parentheses (paired)
-q!string!          # Any non-alphanumeric
-```
+### Valid Modifiers
 
-### Key Functions
-
-```rust
-// Check if a character is a valid quote delimiter
-is_valid_delimiter(ch: char) -> bool
-
-// Find matching closing delimiter
-matching_delimiter(open: char) -> Option<char>
-
-// Parse quote operator content
-parse_quoted_content(input: &str, delimiter: char) -> Result<...>
-```
+- **Substitution**: `g`, `i`, `m`, `s`, `x`, `o`, `e`, `r`, `a`, `d`, `l`, `u`, `n`, `p`, `c`
+- **Transliteration**: `c`, `d`, `s`, `r`
 
 ## Usage
 
 ```rust
-use perl_quote::{QuoteKind, parse_quote};
+use perl_quote::{extract_regex_parts, extract_substitution_parts, extract_transliteration_parts};
 
-let result = parse_quote("qq{hello $world}");
-match result.kind {
-    QuoteKind::DoubleQuote => { /* interpolated */ },
-    QuoteKind::SingleQuote => { /* literal */ },
-    // ...
-}
+let (pattern, body, mods) = extract_regex_parts("qr{foo|bar}ix");
+assert_eq!(body, "foo|bar");
+assert_eq!(mods, "ix");
+
+let (pat, repl, mods) = extract_substitution_parts("s/foo/bar/gi");
+assert_eq!(pat, "foo");
+assert_eq!(repl, "bar");
+assert_eq!(mods, "gi");
+
+let (search, repl, mods) = extract_transliteration_parts("tr/a-z/A-Z/");
+assert_eq!(search, "a-z");
+assert_eq!(repl, "A-Z");
 ```
 
 ## Important Notes
 
-- Nested delimiters (e.g., `q{a{b}c}`) require balanced counting
-- Escape sequences differ by quote type
-- Heredoc handling is in `perl-heredoc` crate
+- This crate operates on raw token text (the `s`, `tr`, `qr` prefix is expected in the input)
+- Paired delimiters support nesting: `s{a{b}c}{replacement}`
+- For substitution with paired delimiters, pattern and replacement may use different delimiters: `s[pattern]{replacement}`
+- Heredoc handling is in the separate `perl-heredoc` crate
+- Only `perl-parser-core` depends on this crate in the workspace

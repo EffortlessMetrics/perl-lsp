@@ -38,7 +38,8 @@ scripts/__pycache__/
 *.pyc
 releases/
 
-# Claude
+# Claude — agents/ is gitignored to allow swapping the active agents symlink.
+# agents2/, agents3/, agents4/ etc. are version-tracked.
 /.claude/agents/
 
 # Mutation testing artifacts
@@ -137,6 +138,10 @@ benchmarks/results/
 # Archive directories (keep organized)
 archive/
 
+# Old root benchmark directory (superseded by benchmarks/ and crates/*/benches/)
+# Anchored so crate-local benches/ remain trackable.
+/benches/
+
 # Large binary executables (should be built, not committed)
 test_perf
 test_day5_heredoc
@@ -164,3 +169,27 @@ GITHUB_ISSUES_*.md
 temp_issue_work/
 
 /.runs/
+
+# mdbook build output (regenerated with `mdbook build`)
+book/book/
+
+# Old build artifacts
+artifacts/
+Cargo.toml.backup*
+
+# Stale root-level scripts and test files
+/*.rs
+!build.rs
+
+# Agent status files
+.agent/
+agents/
+
+# Old review/planning artifacts
+review/
+plans/
+scanner_comparison/
+issue_updates/
+
+# Generated audit data
+corpus_audit_report.json

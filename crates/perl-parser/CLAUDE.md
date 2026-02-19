@@ -1,113 +1,111 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code when working with code in this repository.
+# CLAUDE.md — perl-parser
 
 ## Crate Overview
 
-`perl-parser` is the **central hub crate** providing the main Perl parser interface. It aggregates and re-exports functionality from most other crates in the workspace.
-
-**Purpose**: Native Perl parser (v3) with Tree-sitter-compatible kinds/fields/points and stable byte↔UTF-16 conversions.
-
-**Version**: 0.8.8
+- **Tier**: 6 (application/composition crate)
+- **Version**: 0.9.0
+- **Purpose**: Central hub crate that aggregates and re-exports the core parser, semantic analyzer, workspace indexer, refactoring engine, TDD support, and all LSP provider crates into a single public API surface. Also provides the `perl-parse` CLI binary.
 
 ## Commands
 
 ```bash
-cargo build -p perl-parser            # Build this crate
-cargo build -p perl-parser --release  # Build optimized
-cargo test -p perl-parser             # Run tests
-cargo clippy -p perl-parser           # Lint
-cargo doc -p perl-parser --open       # View documentation
+cargo build -p perl-parser                # Build library
+cargo build -p perl-parser --release      # Build optimized
+cargo test -p perl-parser                 # Run all tests
+cargo test -p perl-parser -- test_name    # Run a single test
+cargo clippy -p perl-parser              # Lint
+cargo doc -p perl-parser --no-deps       # Generate docs
+cargo bench -p perl-parser               # Parser benchmarks
 ```
 
 ## Architecture
 
-### Role in Workspace
+### Dependencies (re-export sources)
 
-This is a **Tier 6 composition crate** that aggregates most workspace functionality:
+| Internal crate | Re-exported via |
+|----------------|-----------------|
+| `perl-parser-core` | `engine`, `tokens`, `builtins`, `util`, `line_index` |
+| `perl-lexer` | direct (tokenization) |
+| `perl-semantic-analyzer` | `analysis` (scope, type inference, symbols, dead code) |
+| `perl-workspace-index` | `workspace` (cross-file indexing, document store, rename) |
+| `perl-refactoring` | `refactor` (import optimizer, modernize, refactoring engine, workspace refactor) |
+| `perl-tdd-support` | `tdd` (test generator, test runner, TDD workflow) |
+| `perl-incremental-parsing` | `incremental` (feature-gated behind `incremental`) |
+| `perl-lsp-providers` | `ide` module |
+| `perl-lsp-code-actions` | `code_actions` module |
+| `perl-lsp-completion` | `completion` module |
+| `perl-lsp-diagnostics` | `diagnostics` module |
+| `perl-lsp-inlay-hints` | `inlay_hints` module |
+| `perl-lsp-navigation` | `references`, `document_links`, `type_definition`, `type_hierarchy`, `workspace_symbols`, `implementation_provider` modules |
+| `perl-lsp-rename` | `rename` module |
+| `perl-lsp-semantic-tokens` | `semantic_tokens` module |
+| `perl-lsp-tooling` | `tooling` (perltidy, perl_critic, performance) |
 
-- Re-exports from `perl-parser-core` (parsing engine)
-- Re-exports from `perl-semantic-analyzer` (semantic analysis)
-- Re-exports from `perl-workspace-index` (workspace indexing)
-- Re-exports from `perl-refactoring` (refactoring utilities)
-- Re-exports from all `perl-lsp-*` providers
+### Key types and modules
 
-### Key Internal Dependencies
+- `Parser` — main recursive-descent parser (from `perl-parser-core`)
+- `Node`, `NodeKind`, `SourceLocation` — AST types
+- `ParseError`, `ParseResult` — error types
+- `SemanticAnalyzer`, `SemanticModel`, `HoverInfo` — semantic analysis
+- `ScopeAnalyzer`, `TypeInferenceEngine`, `SymbolTable` — analysis primitives
+- `TestGenerator`, `TddWorkflow` — TDD support
+- `RefactoringEngine`, `ImportOptimizer` — refactoring
+- `PositionMapper` — byte/UTF-16 offset conversions for LSP
+- `TokenStream`, `Token`, `TokenKind` — token layer
+- `RecoveryParser` — error-recovery wrapper
 
-**Core Dependencies**:
-- `perl-lexer` - Tokenization
-- `perl-parser-core` - Core parsing engine
-- `perl-semantic-analyzer` - Semantic analysis
-- `perl-workspace-index` - Cross-file indexing
-- `perl-refactoring` - Refactoring support
-- `perl-incremental-parsing` - Incremental updates
+### Source layout
 
-**LSP Provider Dependencies**:
-- `perl-lsp-providers` - Provider aggregation
-- `perl-lsp-code-actions` - Quick fixes
-- `perl-lsp-completion` - Auto-completion
-- `perl-lsp-diagnostics` - Error reporting
-- `perl-lsp-inlay-hints` - Type hints
-- `perl-lsp-navigation` - Go-to definitions
-- `perl-lsp-rename` - Rename refactoring
-- `perl-lsp-semantic-tokens` - Syntax highlighting
-- `perl-lsp-tooling` - External tool integration
+```
+src/
+  lib.rs          # Re-exports and public API surface
+  engine.rs       # Re-export from perl-parser-core::engine
+  tokens.rs       # Re-export from perl-parser-core::tokens
+  analysis.rs     # Re-export from perl-semantic-analyzer
+  workspace.rs    # Re-export from perl-workspace-index + perl-refactoring
+  refactor.rs     # Re-export from perl-refactoring
+  tdd.rs          # Re-export from perl-tdd-support
+  builtins.rs     # Re-export from perl-parser-core::builtins
+  tooling.rs      # Re-export from perl-lsp-tooling (perltidy, critic, perf)
+  ide.rs          # Re-export from perl-lsp-providers
+  incremental.rs  # Re-export from perl-incremental-parsing (feature-gated)
+  bin/perl-parse.rs  # CLI binary (feature: cli)
+```
 
-### Main Modules
+### Feature flags
 
-| Module | Purpose |
-|--------|---------|
-| `lib.rs` | Main library entry and re-exports |
-| `engine.rs` | Core parsing engine interface |
-| `tokens.rs` | Token management |
-| `incremental.rs` | Incremental parsing support |
-| `builtins.rs` | Built-in function handling |
-| `analysis.rs` | Parser analysis integration |
-| `workspace.rs` | Workspace indexing interface |
-| `refactor.rs` | Refactoring integration |
-| `ide.rs` | IDE/LSP integration |
-| `tooling.rs` | External tooling integration |
-| `tdd.rs` | Test-driven development support |
+| Feature | Effect |
+|---------|--------|
+| `workspace` (default) | Enables cross-file indexing via `perl-workspace-index` |
+| `lsp-compat` (default) | Pulls in `lsp-types` and LSP compatibility shims |
+| `cli` | Builds the `perl-parse` binary |
+| `incremental` | Enables incremental parsing module |
+| `workspace_refactor` | Workspace-wide refactoring capabilities |
+| `modernize` | Code modernization transformations |
 
-## Features
-
-| Feature | Purpose |
-|---------|---------|
-| `test-performance` | Enable performance testing |
-| `workspace` | Workspace indexing support |
-| `lsp-compat` | LSP type compatibility |
-
-## Usage Patterns
-
-### Basic Parsing
+## Usage examples
 
 ```rust
 use perl_parser::Parser;
 
-let source = "print 'Hello, World!';";
-let result = Parser::parse(source);
+// Parse Perl source
+let mut parser = Parser::new("sub greet { print 'hello'; }");
+let ast = parser.parse().expect("parse failed");
+println!("{}", ast.to_sexp());
+
+// Check for errors without failing
+let errors = parser.errors();
+
+// Semantic analysis
+use perl_parser::SemanticAnalyzer;
+let analyzer = SemanticAnalyzer::new();
+let model = analyzer.analyze(&ast);
 ```
 
-### With Semantic Analysis
+## Important notes
 
-```rust
-use perl_parser::{Parser, SemanticAnalyzer};
-
-let source = "my $x = 42;";
-let ast = Parser::parse(source)?;
-let analysis = SemanticAnalyzer::analyze(&ast)?;
-```
-
-## Testing
-
-The crate has extensive tests covering:
-- Parser behavior and edge cases
-- UTF-16 position handling
-- Integration with semantic analysis
-- Workspace indexing
-
-## Important Notes
-
-- This crate is the main entry point for most Perl parsing needs
-- For lower-level parsing access, use `perl-parser-core` directly
-- For specific LSP features, consider using the individual `perl-lsp-*` crates
+- This crate is a **composition layer**; almost all logic lives in the upstream microcrates. Edits to parser behaviour belong in `perl-parser-core`, semantic logic in `perl-semantic-analyzer`, etc.
+- `#![deny(unsafe_code)]` and `#![warn(missing_docs)]` are enforced.
+- The LSP server runtime has moved to the `perl-lsp` crate; this crate keeps engine and provider re-exports.
+- `doctest = false` in `[lib]` — doc examples are validated through dedicated test files, not rustdoc.
+- WASM target excludes `walkdir`, `dead_code_detector`, `workspace_refactor`, and `error_classifier`.

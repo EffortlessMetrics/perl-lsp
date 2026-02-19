@@ -1,6 +1,6 @@
-# tree-sitter-perl PR Agent Workflow
+# perl-lsp PR Agent Workflow
 
-This directory contains specialized agents for managing the complete PR lifecycle in the tree-sitter-perl repository. The agents work together to provide automated review, testing, cleanup, and merge processes while maintaining the high quality standards required for the Perl parser ecosystem.
+This directory contains specialized agents for managing the complete PR lifecycle in the perl-lsp repository. The agents work together to provide automated review, testing, cleanup, and merge processes while maintaining the high quality standards required for the Perl parser ecosystem.
 
 ## Workflow Overview
 

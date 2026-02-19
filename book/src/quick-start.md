@@ -19,7 +19,7 @@ cargo install perl-lsp
 ### From Source
 
 ```bash
-git clone https://github.com/EffortlessMetrics/tree-sitter-perl.git
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd tree-sitter-perl
 cargo build --release -p perl-lsp
 ```
@@ -137,12 +137,12 @@ Now that you have perl-lsp running:
 
 - [Troubleshooting Guide](./user-guides/troubleshooting.md)
 - [Known Limitations](./user-guides/known-limitations.md)
-- [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl/issues)
+- [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
 
 ## Useful Resources
 
 - [LSP Specification](https://microsoft.github.io/language-server-protocol/)
 - [Perl Documentation](https://perldoc.perl.org/)
-- [Project README](https://github.com/EffortlessMetrics/tree-sitter-perl)
+- [Project README](https://github.com/EffortlessMetrics/perl-lsp)
 
 Happy coding with perl-lsp!

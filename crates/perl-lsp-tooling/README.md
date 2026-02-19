@@ -1,23 +1,28 @@
 # perl-lsp-tooling
 
-External tooling runtime adapters for Perl LSP.
+External tool integration and performance infrastructure for the Perl LSP ecosystem.
 
-## Scope
+## Features
 
-- Abstracts subprocess execution for formatter/linter integrations.
-- Provides production runtime (`OsSubprocessRuntime`) and test mocks.
-- Implements integrations for `perltidy` and `perlcritic`.
-
-## Public Surface
-
-- Runtime interfaces: `SubprocessRuntime`, `SubprocessOutput`, `SubprocessError`.
-- Runtime implementation: `OsSubprocessRuntime`.
-- Modules: `perltidy`, `perl_critic`, `performance`, and `mock`.
+- **Subprocess abstraction**: `SubprocessRuntime` trait with `OsSubprocessRuntime` (non-WASM) and test mocks
+- **Perltidy integration**: `PerlTidyFormatter` for code formatting with caching, range formatting, and a `BuiltInFormatter` fallback
+- **Perlcritic integration**: `CriticAnalyzer` for static analysis with `BuiltInAnalyzer` and `Policy` trait for custom policies
+- **Performance**: `AstCache` (moka-based concurrent cache with TTL), `IncrementalParser`, `SymbolIndex` (trie + fuzzy), parallel file processing
+- **LSP compatibility**: Optional `lsp-compat` feature for `lsp_types` diagnostic conversion
 
 ## Workspace Role
 
-Internal infrastructure crate used by formatting, diagnostics, and command execution layers.
+Tier 2 infrastructure crate in the `tree-sitter-perl-rs` workspace. Used by formatting, diagnostics, and code analysis layers of the Perl LSP server.
+
+## Quick Start
+
+```rust
+use perl_lsp_tooling::{SubprocessRuntime, OsSubprocessRuntime};
+
+let runtime = OsSubprocessRuntime::new();
+let output = runtime.run_command("perltidy", &["-st"], Some(b"my $x=1;"))?;
+```
 
 ## License
 
-MIT OR Apache-2.0.
+MIT OR Apache-2.0

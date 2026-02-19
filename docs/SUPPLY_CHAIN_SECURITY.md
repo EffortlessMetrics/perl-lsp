@@ -268,7 +268,7 @@ Security advisories are tracked via:
 
 ### Support
 
-- Issue Tracker: https://github.com/EffortlessMetrics/tree-sitter-perl/issues
+- Issue Tracker: https://github.com/EffortlessMetrics/perl-lsp/issues
 - Security Policy: See SECURITY.md
 - Discussions: GitHub Discussions
 

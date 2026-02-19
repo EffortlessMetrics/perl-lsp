@@ -4,7 +4,7 @@ Architecture Decision Records document significant architectural decisions made 
 
 ## Available ADRs
 
-See the [adr/ directory](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/tree/master/docs/adr) for all ADRs.
+See the [adr/ directory](https://github.com/EffortlessMetrics/perl-lsp/tree/master/docs/adr) for all ADRs.
 
 Key ADRs:
 

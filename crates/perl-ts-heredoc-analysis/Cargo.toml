@@ -6,6 +6,12 @@ rust-version = "1.92"
 description = "Standalone heredoc analysis tools for Perl parsing"
 publish = false
 license = "Apache-2.0 OR MIT"
+readme = "README.md"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
+homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+documentation = "https://github.com/EffortlessMetrics/perl-lsp"
+keywords = ["perl", "heredoc", "parser", "analysis", "lsp"]
+categories = ["parsing", "development-tools", "text-processing"]
 
 [dependencies]
 regex = "1.12.2"

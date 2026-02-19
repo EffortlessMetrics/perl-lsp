@@ -4,16 +4,15 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-semantic-analyzer` is a **Tier 3 core analysis crate** providing semantic analysis and symbol extraction for Perl.
-
-**Purpose**: Semantic analysis and symbol extraction for Perl — performs scope analysis, type inference, and dead code detection.
-
-**Version**: 0.8.8
+- **Name**: `perl-semantic-analyzer`
+- **Version**: 0.9.0
+- **Tier**: 4 (three-level internal dependencies)
+- **Purpose**: Semantic analysis, symbol extraction, type inference, scope analysis, and dead code detection for Perl source code. Provides the core analysis layer consumed by LSP provider crates.
 
 ## Commands
 
 ```bash
-cargo build -p perl-semantic-analyzer        # Build this crate
+cargo build -p perl-semantic-analyzer        # Build
 cargo test -p perl-semantic-analyzer         # Run tests
 cargo clippy -p perl-semantic-analyzer       # Lint
 cargo doc -p perl-semantic-analyzer --open   # View documentation
@@ -23,75 +22,79 @@ cargo doc -p perl-semantic-analyzer --open   # View documentation
 
 ### Dependencies
 
-- `perl-parser-core` - AST and parsing
-- `perl-workspace-index` - Cross-file references
-- `perl-symbol-types` - Symbol taxonomy
+| Crate | Role |
+|-------|------|
+| `perl-parser-core` | AST nodes (`Node`, `NodeKind`), `Parser`, source locations |
+| `perl-workspace-index` | Cross-file workspace index, `SymKind`, `SymbolKey` |
+| `perl-symbol-types` | Shared `SymbolKind`, `VarKind` enums |
+| `regex` | Pattern matching in semantic classification |
+| `rustc-hash` | `FxHashMap` for fast scope/parent-map lookups |
+| `serde` | Serialization for dead code analysis results |
 
-### Main Modules
+### Modules (`src/analysis/`)
 
-| File | Size | Purpose |
-|------|------|---------|
-| `analysis/semantic.rs` | 77KB | Core semantic analysis |
-| `analysis/scope_analyzer.rs` | 50KB | Scope and variable analysis |
-| `analysis/declaration.rs` | 43KB | Symbol declaration tracking |
-| `analysis/symbol.rs` | 34KB | Symbol table management |
-| `analysis/type_inference.rs` | 41KB | Type inference logic |
-| `analysis/dead_code_detector.rs` | - | Dead code analysis |
-| `analysis/index.rs` | - | Index structure |
+| Module | Key Types | Purpose |
+|--------|-----------|---------|
+| `semantic` | `SemanticAnalyzer`, `SemanticToken`, `SemanticTokenType`, `SemanticTokenModifier`, `HoverInfo` | Semantic token classification and hover info for LSP |
+| `symbol` | `SymbolExtractor`, `SymbolTable`, `Symbol`, `SymbolReference`, `Scope`, `ScopeKind`, `ScopeId` | Symbol extraction and symbol table construction from AST |
+| `scope_analyzer` | `ScopeAnalyzer`, `ScopeIssue`, `IssueKind` | Scope issue detection (unused/undeclared/shadowed variables) |
+| `type_inference` | `TypeInferenceEngine`, `TypeEnvironment`, `PerlType`, `ScalarType`, `TypeConstraint` | Type inference with scoped environments |
+| `declaration` | `DeclarationProvider`, `LocationLink`, `ParentMap` | Go-to-declaration with parent-map AST traversal |
+| `dead_code_detector` | `DeadCodeDetector`, `DeadCode`, `DeadCodeType`, `DeadCodeAnalysis`, `DeadCodeStats` | Workspace-level dead code detection (non-WASM only) |
+| `index` | `WorkspaceIndex`, `SymbolDef` | Local cross-file symbol index (non-WASM only) |
 
-### Analysis Passes
+### Re-exports from `lib.rs`
 
-1. **Scope Analysis** — Build lexical scope tree
-2. **Declaration Tracking** — Record variable/subroutine declarations
-3. **Reference Resolution** — Link references to declarations
-4. **Type Inference** — Infer variable types where possible
-5. **Dead Code Detection** — Find unreachable/unused code
+The crate re-exports core types from `perl-parser-core` (`Node`, `NodeKind`, `SourceLocation`, `Parser`, `ast`, `error`, etc.) and `perl-workspace-index::workspace_index`, so downstream crates can use a single import.
 
-### Key Types
+## Usage Examples
 
-| Type | Purpose |
-|------|---------|
-| `SemanticAnalyzer` | Main analysis entry point |
-| `Scope` | Lexical scope representation |
-| `Symbol` | Declared symbol with metadata |
-| `Reference` | Reference to a symbol |
-| `TypeInfo` | Inferred type information |
-
-## Usage
+### Symbol Extraction
 
 ```rust
-use perl_semantic_analyzer::{SemanticAnalyzer, AnalysisResult};
-use perl_parser_core::Parser;
+use perl_semantic_analyzer::{Parser, analysis::symbol::SymbolExtractor};
 
-let ast = Parser::parse(source)?;
-let result = SemanticAnalyzer::analyze(&ast)?;
+let mut parser = Parser::new("sub hello { my $x = 1; }");
+let ast = parser.parse()?;
+let table = SymbolExtractor::new().extract(&ast);
+assert!(table.symbols.contains_key("hello"));
+```
 
-// Access symbols
-for symbol in result.symbols() {
-    println!("Symbol: {} at {:?}", symbol.name, symbol.span);
-}
+### Semantic Analysis
 
-// Access references
-for reference in result.references() {
-    if let Some(decl) = reference.declaration() {
-        println!("Reference to {}", decl.name);
-    }
-}
+```rust
+use perl_semantic_analyzer::analysis::semantic::SemanticAnalyzer;
+
+let analyzer = SemanticAnalyzer::analyze(&ast);
+let tokens = analyzer.semantic_tokens();  // For LSP highlighting
+let hover = analyzer.hover_at(offset);    // For LSP hover
 ```
 
 ### Scope Analysis
 
 ```rust
-// Find all variables in scope at a position
-let scope = result.scope_at(position);
-for var in scope.visible_variables() {
-    println!("In scope: {}", var.name);
+use perl_semantic_analyzer::analysis::scope_analyzer::{ScopeAnalyzer, IssueKind};
+
+let analyzer = ScopeAnalyzer::new();
+let issues = analyzer.analyze(&ast, source, &pragma_map);
+for issue in &issues {
+    // IssueKind: UnusedVariable, VariableShadowing, UndeclaredVariable, etc.
 }
+```
+
+### Type Inference
+
+```rust
+use perl_semantic_analyzer::analysis::type_inference::{TypeInferenceEngine, TypeEnvironment};
+
+let mut engine = TypeInferenceEngine::new();
+let result = engine.infer(&ast);
 ```
 
 ## Important Notes
 
-- Large source files (~50-77KB modules) reflect complexity of Perl semantics
-- Analysis is incremental where possible
-- Cross-file references require `perl-workspace-index`
-- Type inference is best-effort (Perl is dynamically typed)
+- Modules `dead_code_detector` and `index` are gated behind `#[cfg(not(target_arch = "wasm32"))]`.
+- Source files are large (40-80KB) reflecting the complexity of Perl semantics; this is intentional.
+- `SymbolKind` and `VarKind` are re-exported from `perl-symbol-types` (shared across the workspace).
+- The crate bans `unwrap()`, `expect()`, `panic!()`, `todo!()` in non-test code via workspace lints.
+- Doctests are disabled (`doctest = false` in Cargo.toml).

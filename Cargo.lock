@@ -1630,7 +1630,7 @@ dependencies = [
 
 [[package]]
 name = "perl-heredoc"
-version = "0.0.1"
+version = "0.9.0"
 dependencies = [
  "perl-position-tracking",
 ]
@@ -3284,7 +3284,7 @@ checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
 name = "tree-sitter-perl"
-version = "0.8.3"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "bindgen",

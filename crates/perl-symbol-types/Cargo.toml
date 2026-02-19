@@ -3,15 +3,15 @@ name = "perl-symbol-types"
 version = "0.9.0"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "Unified Perl symbol taxonomy for LSP tooling"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/perl-symbol-types"
 readme = "README.md"
-keywords = ["perl", "lsp", "symbols"]
-categories = ["parsing", "development-tools"]
+keywords = ["perl", "lsp", "symbols", "taxonomy", "language-server"]
+categories = ["development-tools", "data-structures"]
 include = [
   "src/**",
   "Cargo.toml",

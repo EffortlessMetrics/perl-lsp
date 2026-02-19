@@ -4,11 +4,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-regex` is a **Tier 1 leaf crate** providing regex operator validation and parsing for Perl.
+`perl-regex` is a **Tier 1 leaf crate** that validates Perl regular expressions for security and performance risks.
 
-**Purpose**: Regex operator validation and parsing — handles Perl regex syntax, modifiers, and special constructs.
+**Purpose**: Detect dangerous or expensive regex constructs (nested quantifiers, embedded code, excessive nesting/branching) and report offset-aware diagnostics for IDE integration.
 
-**Version**: 0.8.8
+**Version**: 0.9.0
 
 ## Commands
 
@@ -23,52 +23,54 @@ cargo doc -p perl-regex --open       # View documentation
 
 ### Dependencies
 
-- `thiserror` - Error definitions
-
-### Regex Modifiers
-
-| Modifier | Purpose |
-|----------|---------|
-| `i` | Case-insensitive |
-| `m` | Multi-line mode |
-| `s` | Single-line mode (`.` matches newline) |
-| `x` | Extended mode (whitespace ignored) |
-| `g` | Global matching |
-| `e` | Evaluate replacement as code |
-| `o` | Compile once |
-| `p` | Preserve match variables |
+- `thiserror` - Derive macro for `RegexError`
 
 ### Key Types
 
 | Type | Purpose |
 |------|---------|
-| `RegexFlags` | Parsed modifier flags |
-| `RegexError` | Validation errors |
+| `RegexValidator` | Main validator struct; holds configurable limits (`max_nesting`, `max_unicode_properties`) |
+| `RegexError` | Error enum with `Syntax { message, offset }` variant |
+| `GroupType` | Internal enum tracking group kinds during parsing (Normal, Lookbehind, BranchReset) |
 
-### Validation
+### RegexValidator Methods
 
-The crate validates:
-- Modifier combinations (some are mutually exclusive)
-- Balanced delimiters in regex patterns
-- Escape sequences
-- Character class syntax
+| Method | Purpose |
+|--------|---------|
+| `new()` | Constructor with default limits (nesting: 10, unicode properties: 50) |
+| `validate(pattern, start_pos)` | Full validation pass returning `Result<(), RegexError>` |
+| `detects_code_execution(pattern)` | Returns `true` if pattern contains `(?{...})` or `(??{...})` |
+| `detect_nested_quantifiers(pattern)` | Returns `true` if pattern has nested quantifiers like `(a+)+` |
+
+### What It Checks
+
+- Nested quantifiers that cause catastrophic backtracking (e.g. `(a+)+`, `(a*)*`)
+- Lookbehind nesting depth (max 10)
+- Branch reset group nesting depth (max 10)
+- Branch count within branch reset groups (max 50)
+- Unicode property count via `\p{...}` / `\P{...}` (max 50)
+- Embedded code execution via `(?{...})` and `(??{...})`
 
 ## Usage
 
 ```rust
-use perl_regex::{validate_regex, RegexFlags};
+use perl_regex::{RegexValidator, RegexError};
 
-// Validate regex pattern
-let result = validate_regex("/pattern/imsx");
+let validator = RegexValidator::new();
 
-// Parse modifiers
-let flags = RegexFlags::parse("imsx")?;
-assert!(flags.case_insensitive);
-assert!(flags.multiline);
+// Full validation
+let result = validator.validate("(a+)+", 0);
+assert!(result.is_err()); // nested quantifiers detected
+
+// Check for embedded code
+assert!(validator.detects_code_execution("(?{ print 'hi' })"));
+assert!(!validator.detects_code_execution("(?:foo)"));
 ```
 
 ## Important Notes
 
-- This crate validates syntax, not regex semantics
+- This crate validates regex safety/complexity, not full Perl regex syntax
 - Actual regex execution is handled by Perl at runtime
-- Focus is on providing IDE feedback for invalid patterns
+- Nested quantifier detection is heuristic-based, not a full regex parse
+- `RegexValidator` implements `Default` (delegates to `new()`)
+- No internal workspace dependencies -- only external dep is `thiserror`

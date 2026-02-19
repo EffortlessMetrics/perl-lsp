@@ -3,15 +3,15 @@ name = "perl-workspace-index"
 version = "0.9.0"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "Workspace indexing and refactoring orchestration for Perl"
 readme = "README.md"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/perl-workspace-index"
-keywords = ["perl", "workspace", "index", "lsp"]
-categories = ["parsing", "development-tools", "text-editors"]
+keywords = ["perl", "workspace", "index", "lsp", "symbol"]
+categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
   "Cargo.toml",

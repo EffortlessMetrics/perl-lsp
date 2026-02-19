@@ -3,15 +3,15 @@ name = "perl-dap-eval"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "Safe expression evaluation validation for Perl DAP"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
+homepage = "https://github.com/EffortlessMetrics/perl-lsp"
 documentation = "https://docs.rs/perl-dap-eval"
 readme = "README.md"
 keywords = ["perl", "dap", "debug", "eval", "security"]
-categories = ["development-tools"]
+categories = ["development-tools", "development-tools::debugging"]
 
 [dependencies]
 # Regex for pattern matching

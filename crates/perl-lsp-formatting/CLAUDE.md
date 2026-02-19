@@ -4,11 +4,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-lsp-formatting` is a **Tier 4 LSP feature crate** providing code formatting via perltidy integration.
+`perl-lsp-formatting` is a **Tier 2 LSP feature crate** providing code formatting via perltidy integration.
 
-**Purpose**: LSP formatting provider with perltidy integration — formats Perl code according to style rules.
+**Purpose**: Wraps perltidy execution behind a generic `SubprocessRuntime` trait, producing LSP-compatible text edits for full-document and range formatting.
 
-**Version**: 0.8.8
+**Version**: 0.9.0 (workspace-inherited)
 
 ## Commands
 
@@ -23,76 +23,52 @@ cargo doc -p perl-lsp-formatting --open  # View documentation
 
 ### Dependencies
 
-- `perl-lsp-tooling` - Tool execution
-- `perl-parser-core` - AST access
-- `lsp-types` - LSP formatting types
+- `perl-lsp-tooling` -- `SubprocessRuntime` trait used to execute perltidy
+- `perl-parser-core` -- declared but currently unused in source
+- `lsp-types` -- LSP protocol types (declared dependency, not directly imported in formatting.rs)
+- `serde` / `thiserror` -- serialization and error handling
 
-### LSP Capabilities
+### Key Types (all in `formatting.rs`, re-exported from `lib.rs`)
 
-| Method | Purpose |
-|--------|---------|
-| `textDocument/formatting` | Format entire document |
-| `textDocument/rangeFormatting` | Format selection |
-| `textDocument/onTypeFormatting` | Format on type |
+| Type | Role |
+|------|------|
+| `FormattingProvider<R>` | Generic formatter; `R: SubprocessRuntime`. Methods: `format_document`, `format_range` |
+| `FormattingOptions` | Tab size, insert-spaces, trim-trailing-whitespace, final-newline settings |
+| `FormattingError` | `PerltidyNotFound`, `PerltidyError`, `IoError` |
+| `FormattedDocument` | Result containing formatted text and `Vec<FormatTextEdit>` |
+| `FormatTextEdit` | Range + new text |
+| `FormatRange` / `FormatPosition` | Document coordinates (UTF-16, 0-based) |
 
-### Formatting Backend
+### How Formatting Works
 
-The primary backend is **perltidy**:
-
-```bash
-# perltidy is invoked with:
-perltidy --standard-output --standard-error-output < input.pl
-```
-
-### Configuration
-
-Perltidy configuration is read from:
-
-1. `.perltidyrc` in project root
-2. `~/.perltidyrc` in home directory
-3. Default perltidy settings
+1. `FormattingProvider::format_document` or `format_range` is called.
+2. Internally calls `run_perltidy`, which builds args (`-st`, `-se`, indent/tab flags) and invokes perltidy via `SubprocessRuntime::run_command`.
+3. If output differs from input, returns a single `FormatTextEdit` covering the affected range.
+4. Custom perltidy path supported via `with_perltidy_path` builder method.
 
 ## Usage
 
 ```rust
-use perl_lsp_formatting::FormattingProvider;
+use perl_lsp_formatting::{FormattingProvider, FormattingOptions};
+use perl_lsp_tooling::OsSubprocessRuntime;
 
-let provider = FormattingProvider::new(tooling);
-
-// Format document
-let edits = provider.format(document, options)?;
-
-// Format range
-let edits = provider.format_range(document, range, options)?;
-```
-
-### Formatting Options
-
-```rust
-FormattingOptions {
+let runtime = OsSubprocessRuntime::new();
+let provider = FormattingProvider::new(runtime);
+let options = FormattingOptions {
     tab_size: 4,
     insert_spaces: true,
-    // Additional perltidy options can be configured
-}
-```
-
-### Result
-
-Returns `Vec<TextEdit>` representing changes:
-
-```rust
-vec![TextEdit {
-    range: Range {
-        start: Position { line: 0, character: 0 },
-        end: Position { line: 100, character: 0 },
-    },
-    new_text: formatted_content,
-}]
+    trim_trailing_whitespace: Some(true),
+    insert_final_newline: Some(true),
+    trim_final_newlines: Some(true),
+};
+let doc = provider.format_document(source, &options)?;
+// doc.edits contains the text edits to apply
 ```
 
 ## Important Notes
 
-- Requires perltidy to be installed and in PATH
-- Respects project `.perltidyrc` configuration
-- Falls back gracefully if perltidy unavailable
-- On-type formatting triggered by `;`, `}`, etc.
+- Requires `perltidy` installed and on PATH (or set via `with_perltidy_path`).
+- Perltidy is invoked with `-st` (stdout) and `-se` (stderr) flags; indent options are derived from `FormattingOptions`.
+- Returns empty edits when formatting produces no changes.
+- `FormatRange::whole_document` computes full-document range from content.
+- Tests cover options construction, position/range creation; perltidy execution requires the binary installed.

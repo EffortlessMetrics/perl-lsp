@@ -5,8 +5,8 @@ set -euo pipefail
 # Usage:
 #   scripts/inject-sha-assets.sh \
 #     --version v0.8.3 \
-#     --owner EffortlessSteven \
-#     --repo tree-sitter-perl \
+#     --owner EffortlessMetrics \
+#     --repo perl-lsp \
 #     --prefix perl-lsp \
 #     --checksums target/release-v0.8.3/checksums.json \
 #     --brew-out Formula/perl-lsp.rb \

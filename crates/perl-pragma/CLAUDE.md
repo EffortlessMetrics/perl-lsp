@@ -4,11 +4,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-pragma` is a **Tier 1 leaf crate** providing pragma (use/no) handling and validation.
+`perl-pragma` is a **Tier 1 leaf crate** that tracks pragma state across Perl source files.
 
-**Purpose**: Pragma handling and validation — recognizes and validates Perl pragmas like `use strict`, `use warnings`, `use feature`.
+**Purpose**: Walks an AST to build a range-indexed map of `use strict`, `no strict`, `use warnings`, and `no warnings` effects, enabling scope-aware pragma queries at any byte offset.
 
-**Version**: 0.8.8
+**Version**: 0.9.0
 
 ## Commands
 
@@ -23,57 +23,44 @@ cargo doc -p perl-pragma --open      # View documentation
 
 ### Dependencies
 
-- `perl-ast` - AST node types
+- `perl-ast` -- AST node types (`Node`, `NodeKind`)
 
-### Common Pragmas
+### Key Types
 
-| Pragma | Purpose |
-|--------|---------|
-| `strict` | Enable strict variable checking |
-| `warnings` | Enable runtime warnings |
-| `feature` | Enable language features |
-| `utf8` | Enable UTF-8 source |
-| `vars` | Pre-declare global variables |
-| `constant` | Define constants |
-| `lib` | Modify @INC |
-| `parent` | Establish ISA relationship |
-| `base` | Legacy parent pragma |
+| Type | Description |
+|------|-------------|
+| `PragmaState` | Boolean flags: `strict_vars`, `strict_subs`, `strict_refs`, `warnings` |
+| `PragmaTracker` | Stateless struct with `build()` and `state_for_offset()` methods |
 
-### Feature Bundles
+### How It Works
 
-```perl
-use feature ':5.10';    # Enable 5.10 features
-use feature ':5.36';    # Enable 5.36 features
-use v5.36;              # Same as above
-```
+1. `PragmaTracker::build(ast)` recursively walks an AST `Node`.
+2. `NodeKind::Use { module: "strict" | "warnings", .. }` and `NodeKind::No { .. }` toggle flags on a running `PragmaState`.
+3. `NodeKind::Block` saves/restores state to model lexical scoping.
+4. The result is a sorted `Vec<(Range<usize>, PragmaState)>`.
+5. `state_for_offset()` performs a binary search (`partition_point`) to return the effective state at any byte offset.
 
-### Key Functions
+### Downstream Consumers
 
-```rust
-// Check if a module is a pragma
-is_pragma(module_name: &str) -> bool
-
-// Get pragma effects
-pragma_effects(name: &str, args: &[...]) -> PragmaEffects
-```
+- `perl-parser-core` -- uses pragma state during parsing
+- `perl-lsp-diagnostics` -- pragma-aware diagnostic reporting
 
 ## Usage
 
 ```rust
-use perl_pragma::{is_pragma, PragmaKind};
+use perl_pragma::{PragmaState, PragmaTracker};
 
-if is_pragma("strict") {
-    // Handle pragma import
-}
-
-match PragmaKind::from_name("warnings") {
-    Some(PragmaKind::Warnings) => { /* ... */ },
-    _ => { /* regular module */ },
+let pragma_map = PragmaTracker::build(&ast);
+let state = PragmaTracker::state_for_offset(&pragma_map, byte_offset);
+if state.strict_vars {
+    // strict vars is in effect at this offset
 }
 ```
 
 ## Important Notes
 
-- Pragmas affect lexical scope
-- Some pragmas have arguments that modify their behavior
-- The `no` keyword disables pragmas
+- Pragmas are lexically scoped; `Block` nodes save/restore state
+- `use strict` with no args enables all three categories; with args only the named ones
+- `no strict` / `no warnings` disable the corresponding flags
+- Unrecognized modules in `use`/`no` are silently ignored
+- No tests directory exists yet; the crate is exercised through downstream integration tests

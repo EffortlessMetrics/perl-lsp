@@ -61,11 +61,11 @@ exclude = [
 version = "0.9.0"
 edition = "2024"
 rust-version = "1.92"
-authors = ["Tree-sitter Perl Contributors"]
+authors = ["Steven Zimmerman, CPA <git@effortlesssteven.com>"]
 description = "Production-ready Perl parser, LSP, and DAP ecosystem in Rust"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
+homepage = "https://github.com/EffortlessMetrics/perl-lsp"
 
 [workspace.dependencies]
 # Tier 1: Leaf crates (no internal dependencies)
@@ -77,7 +77,7 @@ perl-regex = { path = "crates/perl-regex", version = "0.9.0" }
 perl-pragma = { path = "crates/perl-pragma", version = "0.9.0" }
 perl-lexer = { path = "crates/perl-lexer", version = "0.9.0" }
 perl-ast = { path = "crates/perl-ast", version = "0.9.0" }
-perl-heredoc = { path = "crates/perl-heredoc", version = "0.0.1" }
+perl-heredoc = { path = "crates/perl-heredoc", version = "0.9.0" }
 perl-error = { path = "crates/perl-error", version = "0.9.0" }
 perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.9.0" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.9.0" }

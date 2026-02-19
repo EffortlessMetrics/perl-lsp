@@ -304,7 +304,7 @@ High variance (> 10% stddev) indicates:
 
 ## Adding New Benchmarks
 
-1. Add benchmark function to appropriate `benches/*.rs` file
+1. Add benchmark function to the appropriate `crates/*/benches/*.rs` file
 2. Register in `criterion_group!` macro
 3. Add target performance to this README
 4. Update baseline after review

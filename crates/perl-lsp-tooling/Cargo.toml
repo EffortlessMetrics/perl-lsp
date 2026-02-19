@@ -3,14 +3,14 @@ name = "perl-lsp-tooling"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
-description = "Tooling integration for Perl LSP (perltidy, perlcritic)"
+authors.workspace = true
+description = "Tooling integration for Perl LSP (perltidy, perlcritic, subprocess abstraction)"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-tooling"
-keywords = ["perl", "lsp", "tooling", "perltidy", "perlcritic"]
+keywords = ["perl", "lsp", "perltidy", "perlcritic", "tooling"]
 categories = ["development-tools", "text-editors"]
 
 [lib]

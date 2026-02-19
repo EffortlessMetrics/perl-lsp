@@ -14,7 +14,7 @@ code --install-extension tree-sitter-perl.perl-lsp
 ```
 
 ### Manual Installation
-Download the `.vsix` file from [releases](https://github.com/EffortlessMetrics/tree-sitter-perl/releases) and install:
+Download the `.vsix` file from [releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and install:
 ```bash
 code --install-extension perl-lsp-*.vsix
 ```
@@ -67,7 +67,7 @@ The extension automatically downloads the correct LSP binary for your platform:
 ### Server Not Starting
 1. Check Output panel (View → Output → Perl LSP)
 2. Verify server path: `which perl-lsp`
-3. Try manual download: [releases](https://github.com/EffortlessMetrics/tree-sitter-perl/releases)
+3. Try manual download: [releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 4. Disable auto-download and set custom path
 
 ### CRLF Line Endings
@@ -98,7 +98,7 @@ The LSP handles CRLF correctly but some edge cases exist:
 ### Building from Source
 ```bash
 # Clone repository
-git clone https://github.com/EffortlessMetrics/tree-sitter-perl
+git clone https://github.com/EffortlessMetrics/perl-lsp
 cd tree-sitter-perl/vscode-extension
 
 # Install dependencies
@@ -118,6 +118,6 @@ vsce package
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/EffortlessMetrics/tree-sitter-perl/discussions)
+- **Issues**: [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/EffortlessMetrics/perl-lsp/discussions)
 - **Updates**: Watch the repository for releases

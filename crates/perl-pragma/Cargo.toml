@@ -10,8 +10,8 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-pragma"
-keywords = ["perl", "pragma", "parser", "ast"]
-categories = ["parsing", "development-tools"]
+keywords = ["perl", "pragma", "strict", "warnings", "static-analysis"]
+categories = ["development-tools", "parser-implementations"]
 
 [dependencies]
 perl-ast = { workspace = true }

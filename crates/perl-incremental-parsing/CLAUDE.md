@@ -1,14 +1,14 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this crate.
 
 ## Crate Overview
 
-`perl-incremental-parsing` is a **Tier 3 optimization crate** providing incremental parsing support for efficient document updates.
+`perl-incremental-parsing` is a **Tier 3 crate** (two-level internal dependencies) providing incremental parsing infrastructure for efficient document updates in the LSP server.
 
-**Purpose**: Incremental parsing support for Perl — enables efficient re-parsing of only changed portions of documents.
+**Purpose**: Minimize re-parsing overhead when Perl documents change by reusing unaffected AST subtrees, lexer checkpoints, and cached token streams.
 
-**Version**: 0.8.8
+**Version**: 0.9.0
 
 ## Commands
 
@@ -21,79 +21,66 @@ cargo doc -p perl-incremental-parsing --open   # View documentation
 
 ## Architecture
 
-### Dependencies
+### Internal Dependencies
 
-- `perl-parser-core` - Full parsing capability
-- `perl-edit` - Edit operations
-- `perl-lexer` - Tokenization
+- `perl-parser-core` -- Parser, Node, NodeKind, SourceLocation, position types
+- `perl-edit` -- Edit/EditSet types (re-exported as `edit`)
+- `perl-lexer` -- PerlLexer, Token, TokenType, LexerMode, Checkpointable, CheckpointCache
 
 ### External Dependencies
 
-- `anyhow` - Error handling
-- `lsp-types` - LSP change events
-- `ropey` - Efficient text rope
-- `serde_json` - Serialization
-- `tracing` - Logging
+- `anyhow` -- Error handling in `apply_edits`
+- `lsp-types` -- `TextDocumentContentChangeEvent`, `Diagnostic`, `Range`
+- `ropey` -- Rope text buffer for UTF-16 position conversion
+- `serde_json` -- LSP JSON change event parsing in integration module
+- `tracing` -- Debug-level logging for cache eviction
 
-### Key Types
+### Key Types and Modules
 
-| Type | Purpose |
-|------|---------|
-| `IncrementalParser` | Manages incremental parse state |
-| `ParseCache` | Cached parse results |
-| `ChangeSet` | Accumulated document changes |
+| Type / Module | File | Purpose |
+|---|---|---|
+| `IncrementalState` | `incremental/mod.rs` | Rope-backed state with lex/parse checkpoints; `apply_edits()` entry point |
+| `LineIndex` | `incremental/mod.rs` | Byte-to-(line,col) mapping via binary search |
+| `LexCheckpoint` / `ParseCheckpoint` / `ScopeSnapshot` | `incremental/mod.rs` | Checkpoint types for resuming lexing/parsing |
+| `Edit` / `ReparseResult` | `incremental/mod.rs` | LSP change conversion and reparse result |
+| `IncrementalDocument` | `incremental_document.rs` | `Arc<Node>` document with `SubtreeCache`, priority eviction, `ParseMetrics` |
+| `SubtreeCache` / `SymbolPriority` | `incremental_document.rs` | LRU cache with content-hash and range-based lookup; priority-aware eviction |
+| `SimpleIncrementalParser` | `incremental_simple.rs` | Lightweight parser tracking reused vs reparsed node counts |
+| `CheckpointedIncrementalParser` | `incremental_checkpoint.rs` | Lexer-checkpoint parser with `TokenCache` and `IncrementalStats` |
+| `AdvancedReuseAnalyzer` | `incremental_advanced_reuse.rs` | Multi-strategy reuse analysis (direct, position-shift, content-update, aggressive) |
+| `ReuseConfig` / `ReuseAnalysisResult` | `incremental_advanced_reuse.rs` | Configuration and result types for reuse analysis |
+| `IncrementalEdit` / `IncrementalEditSet` | `incremental_edit.rs` | Edit with byte-shift arithmetic and batch application |
+| `DocumentParser` | `incremental_integration.rs` | `Full` / `Incremental` enum for transparent LSP integration |
+| `IncrementalConfig` | `incremental_integration.rs` | Runtime config; reads `PERL_LSP_INCREMENTAL` env var |
+| `IncrementalParserV2` | `incremental_v2.rs` | Production-grade parser with comprehensive tree reuse and metrics |
+| (stub) | `incremental_handler_v2.rs` | Deprecated; handler moved to `perl-lsp` |
 
-### Incremental Strategy
+### Re-exports from `lib.rs`
 
-1. **Change Detection** — Identify modified regions
-2. **Invalidation** — Mark affected AST nodes as stale
-3. **Re-parse** — Parse only invalidated regions
-4. **Merge** — Combine new nodes with cached nodes
+- `perl_edit` as `edit`
+- `Node`, `NodeKind`, `SourceLocation`, `Parser`, `ast`, `error`, `parser`, `position` from `perl-parser-core`
+- Everything from `incremental` module (glob re-export)
 
 ## Usage
 
 ```rust
-use perl_incremental_parsing::IncrementalParser;
+use perl_incremental_parsing::{IncrementalState, Edit, apply_edits};
 
-let mut parser = IncrementalParser::new(source);
-let ast = parser.parse()?;
+// Create state from source
+let mut state = IncrementalState::new(source.to_string());
 
-// Apply incremental change
-parser.apply_change(TextDocumentContentChangeEvent {
-    range: Some(Range { start, end }),
-    text: "new text".to_string(),
-    ..
-});
-
-// Re-parse incrementally
-let updated_ast = parser.parse()?;  // Only re-parses affected regions
-```
-
-### LSP Integration
-
-```rust
-// Handle textDocument/didChange notification
-fn on_change(params: DidChangeTextDocumentParams) {
-    for change in params.content_changes {
-        parser.apply_change(change);
-    }
-    let ast = parser.parse()?;
-    // Update diagnostics, etc.
+// Convert LSP change to Edit, then apply
+let edit = Edit::from_lsp_change(&change, &state.line_index, &state.source);
+if let Some(edit) = edit {
+    let result = apply_edits(&mut state, &[edit])?;
+    // result.changed_ranges, result.reparsed_bytes
 }
 ```
 
-## Performance Characteristics
-
-| Change Type | Re-parse Scope |
-|-------------|----------------|
-| Single character | Statement only |
-| Line edit | Block scope |
-| Multi-line | Affected scopes |
-| Structural | Full re-parse |
-
 ## Important Notes
 
-- Incremental parsing is optional (can always fall back to full parse)
-- Trade-off between complexity and performance gain
-- Most effective for large files with small edits
-- Enabled via `incremental` feature in `perl-lsp`
+- Falls back to full reparse for edits > 64KB, multi-line edits > 10 lines, or multiple simultaneous edits
+- `IncrementalDocument` uses `SymbolPriority` (Critical > High > Medium > Low) for cache eviction -- package/use/sub nodes are evicted last
+- `incremental_handler_v2.rs` is a deprecated stub; actual LSP handler lives in `perl-lsp`
+- Incremental mode in `DocumentParser` is gated by the `PERL_LSP_INCREMENTAL` environment variable
+- All tests are inline (`#[cfg(test)]` modules); no separate `tests/` directory

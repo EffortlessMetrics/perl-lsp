@@ -135,7 +135,7 @@ When using perl-lsp:
 ### v1.0 Security Update Process
 
 **Notification Channels**:
-1. **GitHub Security Advisories**: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/security/advisories
+1. **GitHub Security Advisories**: https://github.com/EffortlessMetrics/perl-lsp/security/advisories
 2. **GitHub Releases**: Tagged with `[SECURITY]` prefix
 3. **CHANGELOG.md**: With `[SECURITY]` section and CVE references
 4. **RustSec Database**: Critical vulnerabilities reported to RustSec

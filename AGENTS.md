@@ -58,7 +58,7 @@ This repository contains **six published crates** forming a complete Perl develo
 cargo install perl-lsp
 
 # Or quick install (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 ```
 
 ### Usage
@@ -544,8 +544,8 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 **📚 Comprehensive Documentation**:
 - **[Issue Status Report](docs/ISSUE_STATUS_2025-11-12.md)** - Complete analysis of all 30 open issues with priorities, timelines, and recommendations
 - **[Current Status Snapshot](docs/CURRENT_STATUS.md)** - Real-time project health dashboard with metrics and milestones
-- **[Production Roadmap (#196)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/196)** - 6-10 month plan to full production
-- **[MVP Roadmap (#195)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/195)** - 2-3 week plan to minimum viable product
+- **[Production Roadmap (#196)](https://github.com/EffortlessMetrics/perl-lsp/issues/196)** - 6-10 month plan to full production
+- **[MVP Roadmap (#195)](https://github.com/EffortlessMetrics/perl-lsp/issues/195)** - 2-3 week plan to minimum viable product
 
 **🚨 Critical Blockers (Immediate Action Required)**:
 1. **Issue #211**: CI Pipeline Cleanup - $720/year savings opportunity, 3-week timeline

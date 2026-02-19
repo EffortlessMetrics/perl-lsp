@@ -29,7 +29,7 @@ Complete setup instructions for each major editor.
 cargo install perl-lsp
 
 # Or download pre-built binary
-curl -fsSL https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/latest/download/perl-lsp-$(uname -s)-$(uname -m) -o ~/.local/bin/perl-lsp
+curl -fsSL https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-$(uname -s)-$(uname -m) -o ~/.local/bin/perl-lsp
 chmod +x ~/.local/bin/perl-lsp
 ```
 
@@ -379,9 +379,9 @@ case "$ARCH" in
 esac
 
 if [ "$VERSION" = "latest" ]; then
-  URL="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/latest/download/perl-lsp-${OS}-${ARCH}"
+  URL="https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-${OS}-${ARCH}"
 else
-  URL="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/${VERSION}/perl-lsp-${OS}-${ARCH}"
+  URL="https://github.com/EffortlessMetrics/perl-lsp/releases/download/${VERSION}/perl-lsp-${OS}-${ARCH}"
 fi
 
 echo "Installing perl-lsp to $INSTALL_DIR..."

@@ -1,23 +1,23 @@
 # perl-lsp-code-actions
 
-Code action providers for Perl LSP quick fixes and refactorings.
+LSP code actions provider for the Perl LSP ecosystem. Generates quick fixes
+driven by diagnostic codes and refactoring actions driven by AST analysis.
 
-## Scope
+## Public API
 
-- Produces LSP code actions from AST, diagnostics, and workspace context.
-- Supports quick fixes and higher-level refactors (extract/import/modernization flows).
-- Integrates with rename and diagnostics crates for cross-feature actions.
-
-## Public Surface
-
-- `CodeActionsProvider`, `CodeAction`, `CodeActionKind`.
-- `EnhancedCodeActionsProvider` for advanced refactors.
-- `CodeActionEdit` payload type.
+- `CodeActionsProvider` -- diagnostic-driven quick fixes (declare variable,
+  add pragmas, fix parse errors, fix barewords, handle unused variables).
+- `EnhancedCodeActionsProvider` -- AST-driven refactorings (extract variable,
+  extract subroutine, loop conversion, import management, postfix conversion,
+  error-checking insertion).
+- `CodeAction`, `CodeActionKind`, `CodeActionEdit` -- result types.
 
 ## Workspace Role
 
-Internal feature crate consumed by `perl-lsp` request dispatch.
+Internal feature crate in the `tree-sitter-perl-rs` workspace, consumed by
+`perl-lsp` for `textDocument/codeAction` request dispatch. Not intended for
+standalone use outside the workspace.
 
 ## License
 
-MIT OR Apache-2.0.
+MIT OR Apache-2.0

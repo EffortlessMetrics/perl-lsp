@@ -41,8 +41,8 @@ tree-sitter-perl/
 │   │   ├── edge_case_handler.rs  # Edge case handling system
 │   │   ├── tree_sitter_adapter.rs # S-expression output
 │   │   └── lib.rs                # Public API
-│   ├── tests/                    # Integration tests
-│   └── benches/                  # Performance benchmarks
+│   └── tests/                    # Integration tests
+├── benchmarks/                   # Performance benchmarks
 ├── xtask/                        # Development automation
 ├── docs/                         # Architecture documentation
 └── tree-sitter-perl/             # Legacy C implementation (reference only)

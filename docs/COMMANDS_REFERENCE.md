@@ -7,7 +7,7 @@
 ### LSP Server
 ```bash
 # Quick install (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 
 # Homebrew (macOS)
 brew tap tree-sitter-perl/tap

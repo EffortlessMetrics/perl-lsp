@@ -235,7 +235,7 @@ When intentional performance improvements are made:
 
 ### Adding New Benchmarks
 
-1. Add benchmark function to appropriate `benches/*.rs` file
+1. Add benchmark function to the appropriate `crates/*/benches/*.rs` file
 2. Follow Criterion harness structure
 3. Use `black_box()` to prevent compiler optimization
 4. Document expected performance targets

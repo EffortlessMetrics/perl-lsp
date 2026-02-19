@@ -1,41 +1,22 @@
 # perl-lsp-protocol
 
-JSON-RPC/LSP protocol types and capability configuration for the Perl Language Server.
+JSON-RPC 2.0 message types, LSP error codes, method name constants, and server capability configuration for `perl-lsp`.
 
-## Overview
+## Public API
 
-This crate provides the foundational protocol layer for `perl-lsp`, including:
-
-- **JSON-RPC 2.0** message types and serialization
-- **LSP protocol** type definitions and extensions
-- **Server capabilities** configuration and negotiation
-- **Error handling** for protocol-level failures
-
-## Usage
-
-```rust
-use perl_lsp_protocol::{
-    capabilities::ServerCapabilities,
-    jsonrpc::{Request, Response},
-    methods::LspMethod,
-};
-```
-
-This crate is primarily intended for use within the `perl-lsp` server implementation.
+- **`jsonrpc`** -- `JsonRpcRequest`, `JsonRpcResponse`, `JsonRpcError` structs for JSON-RPC 2.0 communication
+- **`errors`** -- Standard JSON-RPC/LSP error codes (`PARSE_ERROR`, `METHOD_NOT_FOUND`, `REQUEST_CANCELLED`, etc.) and builder helpers (`cancelled_response`, `method_not_found`, `internal_error`, `req_uri`, `req_position`, `req_range`)
+- **`methods`** -- `&str` constants for every LSP 3.17 method name (lifecycle, text document, workspace, window)
+- **`capabilities`** -- `BuildFlags`, `AdvertisedFeatures`, `capabilities_for()`, `default_capabilities()` for constructing `lsp_types::ServerCapabilities`
 
 ## Features
 
-- `lsp-ga-lock`: Enable LSP global allocator locking (optional)
+- `lsp-ga-lock` -- Use conservative GA-lock capability set instead of the full production set
+
+## Role in the workspace
+
+Tier 1 leaf crate with no internal workspace dependencies. Consumed by `perl-lsp`, `perl-lsp-providers`, `perl-lsp-transport`, and other `perl-lsp-*` crates to share protocol definitions without pulling in the full LSP runtime.
 
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
-
-## Contributing
-
-See the main [perl-lsp repository](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) for contribution guidelines.
+Licensed under MIT OR Apache-2.0 at your option. See the [repository](https://github.com/EffortlessMetrics/perl-lsp) for details.

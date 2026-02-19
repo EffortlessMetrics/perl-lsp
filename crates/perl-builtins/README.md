@@ -1,22 +1,29 @@
 # perl-builtins
 
-Builtin symbol metadata and signatures for Perl analysis.
+Builtin function signatures and metadata for Perl parser and LSP tooling.
 
-## Scope
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
-- Provides builtin function metadata used by parser and LSP features.
-- Exposes static signature data for completion and semantic workflows.
-- Uses generated/static lookup tables for fast access.
+## Overview
 
-## Public Surface
+Provides two complementary lookup mechanisms for 200+ Perl built-in functions (including file test operators):
 
-- `builtin_signatures` module.
-- `builtin_signatures_phf` module.
+- **`builtin_signatures`** -- `HashMap`-based store with `OnceLock` lazy init. Each entry carries multiple signature variants and a documentation string (`BuiltinSignature`). Used for signature help and hover.
+- **`builtin_signatures_phf`** -- Compile-time `phf::Map` tables (`BUILTIN_SIGS`, `BUILTIN_FULL_SIGS`) for O(1) lookups with zero runtime allocation. Exposes `get_param_names`, `is_builtin`, and `builtin_count` helpers. Used for inlay hints and completion.
 
-## Workspace Role
+## Categories covered
 
-Internal utility crate consumed by completion, diagnostics, and parser-facing components.
+I/O, strings, arrays, hashes, file/directory ops, file test operators (`-e`, `-f`, ...), processes, math, sockets/network, IPC, user/group, time, modules, control flow, tied variables, and more.
+
+## Usage
+
+```rust
+use perl_builtins::builtin_signatures_phf::{is_builtin, get_param_names};
+
+assert!(is_builtin("print"));
+assert_eq!(get_param_names("open"), &["FILEHANDLE", "MODE", "FILENAME"]);
+```
 
 ## License
 
-MIT OR Apache-2.0.
+MIT OR Apache-2.0

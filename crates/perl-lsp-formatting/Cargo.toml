@@ -3,14 +3,14 @@ name = "perl-lsp-formatting"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "LSP formatting provider for Perl with perltidy integration"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-formatting"
-keywords = ["perl", "lsp", "formatting", "perltidy"]
+keywords = ["perl", "lsp", "formatting", "perltidy", "code-formatting"]
 categories = ["development-tools", "text-editors"]
 
 [lib]

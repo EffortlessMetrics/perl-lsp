@@ -1,6 +1,6 @@
 # Milestones
 
-> **Source of Truth**: GitHub Milestones at https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestones
+> **Source of Truth**: GitHub Milestones at https://github.com/EffortlessMetrics/perl-lsp/milestones
 >
 > This document provides context and links. For live issue counts, check GitHub directly.
 
@@ -39,7 +39,7 @@
 
 **Effort Estimate**: ~40-80 hours after v0.9.1
 
-[View all v1.0.0 issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestone/2)
+[View all v1.0.0 issues](https://github.com/EffortlessMetrics/perl-lsp/milestone/2)
 
 ---
 
@@ -59,11 +59,11 @@
 - Release notes match advertised capabilities
 
 **Historical blockers**:
-- [#211](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/211) - CI Pipeline Cleanup
-- [#210](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/210) - Merge-Blocking Gates
-- [#143](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/143) - unwrap() panic safety
+- [#211](https://github.com/EffortlessMetrics/perl-lsp/issues/211) - CI Pipeline Cleanup
+- [#210](https://github.com/EffortlessMetrics/perl-lsp/issues/210) - Merge-Blocking Gates
+- [#143](https://github.com/EffortlessMetrics/perl-lsp/issues/143) - unwrap() panic safety
 
-[View all v0.9.0 issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestone/1)
+[View all v0.9.0 issues](https://github.com/EffortlessMetrics/perl-lsp/milestone/1)
 
 ---
 

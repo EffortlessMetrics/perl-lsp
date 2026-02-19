@@ -1,103 +1,72 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with code in this repository.
+This file provides guidance to Claude Code when working with code in this crate.
 
 ## Crate Overview
 
-`perl-symbol-types` is a **Tier 1 leaf crate** providing unified Perl symbol taxonomy for LSP tooling.
-
-**Purpose**: Unified Perl symbol taxonomy for LSP tooling — defines symbol kinds, visibility, and metadata types.
-
-**Version**: 0.8.8
+- **Tier**: 1 (leaf crate, no internal workspace dependencies)
+- **Purpose**: Single source of truth for Perl symbol classification across the perl-lsp ecosystem
+- **Version**: 0.9.0
 
 ## Commands
 
 ```bash
-cargo build -p perl-symbol-types         # Build this crate
+cargo build -p perl-symbol-types         # Build
 cargo test -p perl-symbol-types          # Run tests
 cargo clippy -p perl-symbol-types        # Lint
-cargo doc -p perl-symbol-types --open    # View documentation
+cargo doc -p perl-symbol-types --open    # View docs
 ```
 
 ## Architecture
 
 ### Dependencies
 
-- `serde` - Serialization (optional)
+- `serde` (with `derive` feature) -- serialization support for all types
 
-### Key Types
+### Downstream Consumers
+
+- `perl-symbol-table` -- symbol table storage
+- `perl-workspace-index` -- workspace-wide symbol indexing
+- `perl-semantic-analyzer` -- semantic analysis
+
+### Key Types (all in `src/lib.rs`)
 
 | Type | Purpose |
 |------|---------|
-| `SymbolKind` | Kind of symbol (variable, sub, package, etc.) |
-| `Visibility` | Symbol visibility (lexical, package, global) |
-| `SigilType` | Variable sigil ($, @, %, *, &) |
-| `DeclarationKind` | How symbol was declared (my, our, local, state) |
+| `VarKind` | Variable sigil classification: `Scalar`, `Array`, `Hash` |
+| `SymbolKind` | Unified symbol taxonomy: `Package`, `Class`, `Role`, `Subroutine`, `Method`, `Variable(VarKind)`, `Constant`, `Import`, `Export`, `Label`, `Format` |
 
-### Symbol Kinds
+### Key Methods on `SymbolKind`
 
-```rust
-pub enum SymbolKind {
-    // Variables
-    Scalar,      // $x
-    Array,       // @arr
-    Hash,        // %hash
-    Glob,        // *foo
-
-    // Code
-    Subroutine,  // sub foo {}
-    Method,      // Method in a class
-    Constant,    // use constant
-
-    // Structural
-    Package,     // package Foo;
-    Module,      // .pm file
-    Class,       // class Foo {} (Perl 5.38+)
-
-    // Other
-    Label,       // LABEL:
-    Format,      // format NAME =
-    TypeGlob,    // typeglob assignment
-}
-```
-
-### Visibility Levels
-
-```rust
-pub enum Visibility {
-    Lexical,    // my - visible in current scope
-    Package,    // our - visible in current package
-    Local,      // local - dynamic scope
-    State,      // state - persistent lexical
-    Global,     // No declaration - fully qualified
-}
-```
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `to_lsp_kind()` | `u32` | Generic LSP symbol kind mapping (all variables map to 13) |
+| `to_lsp_kind_document_symbol()` | `u32` | Richer mapping distinguishing `$`=13, `@`=18, `%`=19 |
+| `sigil()` | `Option<&str>` | Returns sigil for variable kinds, `None` otherwise |
+| `is_variable()` | `bool` | True for any `Variable(_)` variant |
+| `is_callable()` | `bool` | True for `Subroutine` or `Method` |
+| `is_namespace()` | `bool` | True for `Package`, `Class`, or `Role` |
+| `scalar()` / `array()` / `hash()` | `Self` | Convenience constructors |
 
 ## Usage
 
 ```rust
-use perl_symbol_types::{SymbolKind, Visibility, SigilType};
+use perl_symbol_types::{SymbolKind, VarKind};
 
-let symbol = Symbol {
-    name: "count".to_string(),
-    kind: SymbolKind::Scalar,
-    visibility: Visibility::Lexical,
-    sigil: SigilType::Scalar,
-    // ...
-};
+let var = SymbolKind::Variable(VarKind::Scalar);
+assert_eq!(var.sigil(), Some("$"));
+assert!(var.is_variable());
 
-// Pattern matching on kind
-match symbol.kind {
-    SymbolKind::Subroutine => { /* ... */ },
-    SymbolKind::Scalar | SymbolKind::Array | SymbolKind::Hash => {
-        // Variable
-    },
-    _ => { /* ... */ },
-}
+// LSP protocol mapping
+assert_eq!(SymbolKind::Subroutine.to_lsp_kind(), 12);
+
+// Richer document symbol mapping
+assert_eq!(SymbolKind::Variable(VarKind::Array).to_lsp_kind_document_symbol(), 18);
 ```
 
 ## Important Notes
 
-- This crate defines types only — no logic
-- Used consistently across semantic analyzer and LSP providers
-- Changes affect symbol reporting throughout the system
+- This crate defines **types and classification logic only** -- no parsing or analysis
+- All types derive `Copy`, `Eq`, `Hash`, `Serialize`, `Deserialize`
+- Doctests are disabled (`doctest = false` in Cargo.toml); examples in doc comments are for documentation only
+- Changes to symbol variants or LSP mappings affect symbol reporting across the entire workspace

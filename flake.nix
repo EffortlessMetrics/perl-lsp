@@ -211,7 +211,7 @@
 
             meta = with pkgs.lib; {
               description = "Lightning-fast Perl LSP server";
-              homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs";
+              homepage = "https://github.com/EffortlessMetrics/perl-lsp";
               license = licenses.mit;
               mainProgram = "perl-lsp";
             };

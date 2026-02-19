@@ -308,7 +308,7 @@ Note: It does not require or use a Perl interpreter for parsing - the parser is 
 
 ### How do I report a bug?
 
-Open an issue at [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues) with:
+Open an issue at [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues) with:
 - perl-lsp version (`perl-lsp --version`)
 - Editor and OS
 - Minimal code reproduction
@@ -324,7 +324,7 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for full guidelines.
 
 ### Where is the source code?
 
-Repository: [github.com/EffortlessMetrics/tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs)
+Repository: [github.com/EffortlessMetrics/perl-lsp](https://github.com/EffortlessMetrics/perl-lsp)
 
 Key directories:
 - `crates/perl-lsp/` - LSP server binary

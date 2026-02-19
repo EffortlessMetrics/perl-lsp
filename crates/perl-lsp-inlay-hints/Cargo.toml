@@ -3,14 +3,14 @@ name = "perl-lsp-inlay-hints"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "LSP inlay hints provider for Perl"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-inlay-hints"
-keywords = ["perl", "lsp", "inlay-hints", "type-hints"]
+keywords = ["perl", "lsp", "inlay-hints", "type-hints", "ide"]
 categories = ["development-tools", "text-editors"]
 
 [lib]

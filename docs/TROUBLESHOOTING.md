@@ -301,7 +301,7 @@ chmod +x ~/.cargo/bin/perl-lsp
    perl-lsp --parse test.pl
    ```
 
-3. File an issue at: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues
+3. File an issue at: https://github.com/EffortlessMetrics/perl-lsp/issues
 
 ### Heredoc Issues
 
@@ -419,7 +419,7 @@ For detailed editor configuration and troubleshooting:
 
 ## Getting Help
 
-1. Check existing issues: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues
+1. Check existing issues: https://github.com/EffortlessMetrics/perl-lsp/issues
 
 2. Enable debug logging and include logs in bug reports:
    ```bash

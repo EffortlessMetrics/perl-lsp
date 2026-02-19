@@ -4,11 +4,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-tdd-support` is a **Tier 3 testing utility crate** providing test-driven development helpers for the Perl LSP workspace.
+`perl-tdd-support` is a **Tier 2 testing utility crate** (single-level dependency on `perl-parser-core`) providing TDD helpers, test generation, and safe assertion utilities for the Perl LSP workspace.
 
-**Purpose**: Test-driven development helpers for Perl — provides testing utilities, assertions, and fixtures used across the workspace.
+**Purpose**: Safe unwrap replacements (`must`/`must_some`/`must_err`), Perl test code generation from ASTs, test discovery/execution with TAP parsing, TDD workflow state management, refactoring analysis, and ignored test governance.
 
-**Version**: 0.8.8
+**Version**: 0.9.0
 
 ## Commands
 
@@ -23,98 +23,88 @@ cargo doc -p perl-tdd-support --open     # View documentation
 
 ### Dependencies
 
-- `perl-parser-core` - Parsing access
-- `serde`, `serde_json` - Test data serialization
+- `perl-parser-core` -- Core parser types (`Node`, `NodeKind`, `Parser`, `ParseResult`)
+- `serde`, `serde_json` -- Serialization for governance types and test JSON output
+- `anyhow` -- Error handling
 
-### Optional Dependencies (with `lsp-compat`)
+### Optional Dependencies (feature `lsp-compat`)
 
-- `lsp-types` - LSP type testing
-- `url` - URI handling
+- `lsp-types` -- LSP code actions and diagnostics conversion
+- `url` -- URI handling for LSP integration
+
+### Key Modules
+
+| Module | Purpose |
+|--------|---------|
+| `must` | `must()`, `must_some()`, `must_err()` -- safe unwrap replacements using `#[track_caller]` |
+| `tdd::test_generator` | `TestGenerator` (multi-framework), `TestRunner` (prove/perl), `RefactoringSuggester` |
+| `tdd::tdd_basic` | Simplified `TestGenerator`, `RefactoringAnalyzer`, `TddWorkflow` state machine |
+| `tdd::tdd_workflow` | Full TDD workflow manager with coverage tracking, config, and LSP integration |
+| `tdd::test_runner` | `TestRunner` for AST-based test discovery and TAP execution |
+| `governance` | `IgnoredTestGuardian`, baseline tracking, quality gates, trend reporting |
+
+### Re-exports from `perl-parser-core`
+
+The crate re-exports `Node`, `NodeKind`, `SourceLocation`, `ParseError`, `ParseResult`, `Parser`, `ast`, `position`, `error`, `parser` at the crate root.
 
 ### Features
 
 | Feature | Purpose |
 |---------|---------|
-| `lsp-compat` | LSP type compatibility (optional) |
-
-### Key Functions
-
-| Function | Purpose |
-|----------|---------|
-| `must` | Assert Result is Ok, panic with context |
-| `must_some` | Assert Option is Some, panic with context |
-| `parse_fixture` | Parse a test fixture file |
-| `assert_parse_ok` | Assert parsing succeeds |
-| `assert_parse_err` | Assert parsing fails |
+| `default` | Core TDD functionality |
+| `lsp-compat` | Enables `lsp-types` and `url` for LSP code action/diagnostic conversion |
 
 ## Usage
 
-### Result/Option Assertions
+### Safe unwrap replacements (used across workspace tests)
 
 ```rust
-use perl_tdd_support::{must, must_some};
+use perl_tdd_support::{must, must_some, must_err};
 
 #[test]
-fn test_parsing() -> Result<()> {
-    // Instead of .unwrap() which doesn't show context
-    let ast = must(parser.parse())?;
-    let symbol = must_some(ast.find_symbol("foo"))?;
-    Ok(())
+fn test_example() {
+    let ast = must(parser.parse());
+    let symbol = must_some(ast.find_symbol("foo"));
+    let err = must_err(parser.parse_bad_input());
 }
 ```
 
-### Parse Testing
+### Test generation from AST
 
 ```rust
-use perl_tdd_support::{assert_parse_ok, assert_parse_err};
+use perl_tdd_support::test_generator::{TestGenerator, TestFramework};
 
-#[test]
-fn test_valid_perl() {
-    assert_parse_ok("my $x = 42;");
-}
-
-#[test]
-fn test_invalid_perl() {
-    assert_parse_err("my $x = ;");  // Missing expression
-}
+let generator = TestGenerator::new(TestFramework::TestMore);
+let test_cases = generator.generate_tests(&ast, source);
 ```
 
-### Fixture Loading
+### TDD workflow state machine
 
 ```rust
-use perl_tdd_support::parse_fixture;
+use perl_tdd_support::tdd_basic::{TddWorkflow, TddState};
 
-#[test]
-fn test_from_fixture() {
-    let (source, expected) = parse_fixture("tests/fixtures/complex.pl");
-    let result = analyze(source);
-    assert_eq!(result, expected);
-}
+let mut workflow = TddWorkflow::new("Test::More");
+workflow.start_cycle("add");        // -> Red
+workflow.run_tests(true);           // -> Green
+workflow.start_refactor();          // -> Refactor
+workflow.complete_cycle();          // -> Idle
 ```
 
-## Test Patterns
-
-### Avoiding `unwrap()` and `expect()`
-
-Per coding standards, use this crate's helpers instead:
+### Test discovery and execution
 
 ```rust
-// Bad
-let result = parse().unwrap();
+use perl_tdd_support::test_runner::TestRunner;
 
-// Good
-let result = must(parse())?;
-
-// Bad
-let item = vec.first().expect("should have item");
-
-// Good
-let item = must_some(vec.first())?;
+let runner = TestRunner::new(source, uri);
+let tests = runner.discover_tests(&ast);  // finds test_* functions
+let results = runner.run_test("file:///t/basic.t");  // runs with prove/perl, parses TAP
 ```
 
 ## Important Notes
 
-- Used throughout workspace for consistent test patterns
-- Provides better error messages than raw `unwrap()`
-- Integrates with workspace coding standards
-- Test-only dependency (not included in production builds)
+- The `must` module has `#![allow(clippy::panic)]` since these helpers intentionally panic in tests
+- The crate re-exports core parser types so test files can import from one place
+- `test_generator` contains two parallel implementations: a full one with `TestFramework` enum and `RefactoringSuggester`, and a simplified one in `tdd_basic`
+- `test_runner::TestRunner` requires source+URI at construction; `test_generator::TestRunner` is command-based
+- The `governance` module is data-model heavy (serializable structs for CI integration)
+- Used as a `dev-dependency` or test utility across the workspace

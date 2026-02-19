@@ -2,69 +2,31 @@
 
 Symbol table and scope management for the Perl LSP ecosystem.
 
+Part of [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp).
+
+## Public API
+
+- **`SymbolTable`** -- central registry of symbols, references, and scopes with hierarchical lookup
+- **`Symbol`** -- a symbol definition with name, qualified name, kind, location, scope, documentation, and attributes
+- **`SymbolReference`** -- a reference to a symbol with usage context and write tracking
+- **`Scope`** -- a lexical scope boundary (Global, Package, Subroutine, Block, Eval)
+- **`ScopeKind`** -- classification of scope types
+- **`ScopeId`** -- unique scope identifier (`usize`)
+
+Re-exports `SymbolKind` and `VarKind` from `perl-symbol-types`.
+
 ## Features
 
-- **Symbol tracking**: Track symbol definitions with metadata (name, kind, location, scope, documentation)
-- **Reference tracking**: Track symbol usages for find-all-references
-- **Scope management**: Hierarchical scope tracking with Perl scoping rules
-- **LSP integration**: Designed for go-to-definition, find-references, rename refactoring
+| Feature | Purpose |
+|---------|---------|
+| `serde` | Optional serialization via `serde::Serialize` / `Deserialize` |
 
-## Core Types
+## Dependencies
 
-- `Symbol` - A symbol definition with metadata
-- `SymbolReference` - A reference to a symbol
-- `SymbolTable` - Central registry of symbols, references, and scopes
-- `Scope` - A lexical scope boundary
-- `ScopeKind` - Classification of scope types (Global, Package, Subroutine, Block, Eval)
-- `ScopeId` - Unique identifier for a scope
-
-## Usage
-
-```rust
-use perl_symbol_table::{Symbol, SymbolTable, ScopeKind};
-use perl_symbol_types::SymbolKind;
-use perl_position_tracking::SourceLocation;
-
-let mut table = SymbolTable::new();
-
-// Add a subroutine symbol
-let symbol = Symbol {
-    name: "process".to_string(),
-    qualified_name: "MyPackage::process".to_string(),
-    kind: SymbolKind::Subroutine,
-    location: SourceLocation { start: 0, end: 100 },
-    scope_id: table.current_scope(),
-    declaration: None,
-    documentation: Some("Process data".to_string()),
-    attributes: vec![],
-};
-
-table.add_symbol(symbol);
-
-// Create a scope for function body
-let sub_scope = table.push_scope(
-    ScopeKind::Subroutine,
-    SourceLocation { start: 10, end: 90 }
-);
-
-// Add local variable
-let var = Symbol {
-    name: "data".to_string(),
-    qualified_name: "data".to_string(),
-    kind: SymbolKind::scalar(),
-    location: SourceLocation { start: 20, end: 30 },
-    scope_id: sub_scope,
-    declaration: Some("my".to_string()),
-    documentation: None,
-    attributes: vec![],
-};
-
-table.add_symbol(var);
-
-// Pop scope when done
-table.pop_scope();
-```
+- `perl-symbol-types` -- symbol kind taxonomy
+- `perl-position-tracking` -- source location tracking
 
 ## License
 
-Licensed under either of Apache License, Version 2.0 or MIT license at your option.
+Licensed under either of [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
+or [MIT license](http://opensource.org/licenses/MIT) at your option.

@@ -6,8 +6,8 @@ set -e
 VERSION="1.0.0"
 PACKAGE_NAME="perl-lsp"
 DESCRIPTION="High-performance Perl Language Server with 100% syntax coverage"
-MAINTAINER="Tree-sitter Perl Contributors <dev@example.com>"
-HOMEPAGE="https://github.com/tree-sitter/tree-sitter-perl"
+MAINTAINER="Steven Zimmerman, CPA <git@effortlesssteven.com>"
+HOMEPAGE="https://github.com/EffortlessMetrics/perl-lsp"
 
 # Colors for output
 RED='\033[0;31m'
@@ -80,9 +80,9 @@ Start the server for editor integration:
 Start with debug logging:
 .B perl-lsp --stdio --log
 .SH AUTHOR
-Tree-sitter Perl Contributors
+Steven Zimmerman, CPA
 .SH BUGS
-Report bugs at https://github.com/tree-sitter/tree-sitter-perl/issues
+Report bugs at https://github.com/EffortlessMetrics/perl-lsp/issues
 EOF
 gzip -9 "$MAN_DIR/perl-lsp.1"
 
@@ -249,7 +249,7 @@ Configure your editor to use \`perl-lsp --stdio\`
 
 ## Documentation
 
-See https://github.com/tree-sitter/tree-sitter-perl
+See https://github.com/EffortlessMetrics/perl-lsp
 EOF
     
     # Create the archive

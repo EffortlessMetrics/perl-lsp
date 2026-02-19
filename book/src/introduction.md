@@ -85,7 +85,7 @@ Ready to dive in? Here's where to go next:
 
 ## Need Help?
 
-- **Issues**: Report bugs or request features on [GitHub](https://github.com/EffortlessMetrics/tree-sitter-perl/issues)
+- **Issues**: Report bugs or request features on [GitHub](https://github.com/EffortlessMetrics/perl-lsp/issues)
 - **Troubleshooting**: See the [Troubleshooting Guide](./user-guides/troubleshooting.md)
 - **Contributing**: Read the [Contributing Guide](./developer/contributing.md)
 

@@ -23,12 +23,12 @@ This guide provides copy/paste ready configurations for setting up the Perl LSP 
 cargo install perl-lsp
 
 # Option 2: Install from source
-git clone https://github.com/EffortlessMetrics/tree-sitter-perl-rs.git
-cd tree-sitter-perl-rs
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
+cd perl-lsp
 cargo install --path crates/perl-lsp
 
 # Option 3: Download pre-built binary
-# See https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases
+# See https://github.com/EffortlessMetrics/perl-lsp/releases
 ```
 
 ### Verify Installation
@@ -471,7 +471,7 @@ limits.referencesCap = 500
    perl-lsp --stdio --log 2>perl-lsp.log
    ```
 
-3. Report issues with reproduction steps on [GitHub](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues)
+3. Report issues with reproduction steps on [GitHub](https://github.com/EffortlessMetrics/perl-lsp/issues)
 
 ---
 

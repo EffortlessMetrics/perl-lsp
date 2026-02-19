@@ -337,9 +337,9 @@ These issues had to resolve before the v0.9.0 release. Listed in dependency orde
 
 | Order | Issue | Category | Rationale |
 | ----- | ----- | -------- | --------- |
-| 1 | [#211](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/211) | Trust Surface | CI pipeline cleanup - establishes trusted baseline for enforcement |
-| 2 | [#210](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/210) | Enforcement | Merge-blocking gates - depends on #211 for clean CI foundation |
-| 3 | [#143](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/143) | Integrity | unwrap()/panic safety - can proceed in parallel with above |
+| 1 | [#211](https://github.com/EffortlessMetrics/perl-lsp/issues/211) | Trust Surface | CI pipeline cleanup - establishes trusted baseline for enforcement |
+| 2 | [#210](https://github.com/EffortlessMetrics/perl-lsp/issues/210) | Enforcement | Merge-blocking gates - depends on #211 for clean CI foundation |
+| 3 | [#143](https://github.com/EffortlessMetrics/perl-lsp/issues/143) | Integrity | unwrap()/panic safety - can proceed in parallel with above |
 
 **Dependency rationale**: Trust surface (#211) must be established before enforcement (#210) can be meaningful. Without a clean CI pipeline, merge-blocking gates would be built on unreliable infrastructure. Safety cleanup (#143) is independent and can proceed in parallel with the CI/enforcement work.
 

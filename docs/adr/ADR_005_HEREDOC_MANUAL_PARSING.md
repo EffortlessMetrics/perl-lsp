@@ -4,7 +4,7 @@
 **Date**: 2025-11-05
 **Decision Makers**: Parser Team, LSP Architecture Committee
 **Related Specifications**: [SPEC-183](../SPEC_183_HEREDOC_DECLARATION_PARSER.md)
-**Related Issues**: [Issue #183 - Handle backreferences in heredoc parsing](https://github.com/EffortlessMetrics/tree-sitter-perl/issues/183)
+**Related Issues**: [Issue #183 - Handle backreferences in heredoc parsing](https://github.com/EffortlessMetrics/perl-lsp/issues/183)
 
 ---
 

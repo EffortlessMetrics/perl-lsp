@@ -1,6 +1,6 @@
 #!/bin/bash
 # Perl LSP installer for Linux and macOS
-# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/tree-sitter-perl-rs/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 
 set -e
 
@@ -14,7 +14,7 @@ NC='\033[0m' # No Color
 # Default values
 VERSION="${1:-latest}"
 INSTALL_DIR="${2:-$HOME/.local/bin}"
-REPO="EffortlessMetrics/tree-sitter-perl-rs"
+REPO="EffortlessMetrics/perl-lsp"
 NAME="perl-lsp"
 
 # Functions

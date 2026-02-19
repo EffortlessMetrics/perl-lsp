@@ -2,42 +2,32 @@
 
 Stable diagnostic codes and severity levels for the Perl LSP ecosystem.
 
-## Features
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
-- **Type-safe diagnostic codes**: Enum-based codes with stable string representations
-- **Severity levels**: Error, Warning, Information, Hint
-- **Diagnostic tags**: Unnecessary, Deprecated
-- **Categories**: Parser, StrictWarnings, PackageModule, Subroutine, BestPractices, PerlCritic
-- **Message inference**: Infer diagnostic codes from error messages
+## Overview
+
+This crate defines the canonical `DiagnosticCode` enum, `DiagnosticSeverity` levels, `DiagnosticTag` values, and `DiagnosticCategory` classifications used across the Perl LSP toolchain. Codes are stable across versions and map directly to LSP protocol values.
 
 ## Code Ranges
 
-| Range       | Category                  |
+| Range | Category |
 |-------------|---------------------------|
-| PL001-PL099 | Parser diagnostics        |
-| PL100-PL199 | Strict/warnings           |
-| PL200-PL299 | Package/module            |
-| PL300-PL399 | Subroutine                |
-| PL400-PL499 | Best practices            |
-| PC001-PC005 | Perl::Critic violations   |
+| PL001-PL099 | Parser diagnostics |
+| PL100-PL199 | Strict/warnings |
+| PL200-PL299 | Package/module |
+| PL300-PL399 | Subroutine |
+| PL400-PL499 | Best practices |
+| PC001-PC005 | Perl::Critic violations |
 
 ## Usage
 
 ```rust
 use perl_diagnostics_codes::{DiagnosticCode, DiagnosticSeverity};
 
-// Get code information
 let code = DiagnosticCode::ParseError;
 assert_eq!(code.as_str(), "PL001");
 assert_eq!(code.severity(), DiagnosticSeverity::Error);
-
-// Infer code from message
-let code = DiagnosticCode::from_message("Missing 'use strict' pragma");
-assert_eq!(code, Some(DiagnosticCode::MissingStrict));
-
-// Parse code string
-let code = DiagnosticCode::parse_code("PL102");
-assert_eq!(code, Some(DiagnosticCode::UnusedVariable));
+assert_eq!(code.category(), perl_diagnostics_codes::DiagnosticCategory::Parser);
 ```
 
 ## License

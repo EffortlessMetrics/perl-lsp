@@ -116,4 +116,4 @@ sort_commits = "oldest"
 # GitHub integration (commented out - enable if needed with valid token)
 # [remote.github]
 # owner = "EffortlessMetrics"
-# repo = "tree-sitter-perl-rs"
+# repo = "perl-lsp"

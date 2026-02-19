@@ -1,114 +1,76 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with code in this repository.
+This file provides guidance to Claude Code when working with this directory.
 
-## Crate Overview
+## Directory Overview
 
-`tree-sitter-perl` is a **Tier 7 validation harness crate** for Tree-sitter Perl integration.
+`crates/tree-sitter-perl/` is a **non-Rust data directory** containing tree-sitter
+highlight test fixtures for Perl. It has no `Cargo.toml` and is not a Rust crate.
 
-**Purpose**: Tree-sitter Perl validation harness (internal only) — provides benchmarking, validation, and comparison tools.
+**Purpose**: Provide annotated Perl source files that the xtask highlight runner
+uses to validate tree-sitter highlight queries.
 
-**Version**: 0.8.3
-**Edition**: 2024
-**publish**: false (not published to crates.io)
+**publish**: N/A (not a crate)
 
-## Commands
+## Contents
+
+```
+test/highlight/
+  complex_constructs.pm   # Regex, heredocs, array slicing, special variables
+  comprehensive.pm        # Scalars, arrays, hashes, control structures, subroutines
+  debug.pm                # Minimal variable-declaration fixture
+  simple.pm               # Arithmetic and simple assignment
+  working_examples.pm     # Variables, numbers, use-statements, hashes
+```
+
+Each `.pm` file contains Perl source lines interleaved with comment annotations
+that declare expected tree-sitter capture scopes:
+
+```perl
+my $scalar = "hello world";
+# <- keyword
+#    ^ punctuation.special
+#     ^ variable
+#            ^ operator
+#              ^ string
+```
+
+## How the fixtures are consumed
+
+The **xtask highlight task** (`xtask/src/tasks/highlight.rs`) is the only consumer:
+
+1. It walks `crates/tree-sitter-perl/test/highlight/` for `.pm` files.
+2. Each file is parsed into test cases (source + expected scopes).
+3. Source is parsed with `tree-sitter-perl` and the `queries/highlights.scm` query.
+4. Actual captures are compared against the annotated expectations.
+
+### Running the tests
 
 ```bash
-cargo build -p tree-sitter-perl          # Build this crate
-cargo test -p tree-sitter-perl           # Run tests
-cargo clippy -p tree-sitter-perl         # Lint
-cargo doc -p tree-sitter-perl --open     # View documentation
+# From the workspace root
+cd xtask && cargo run highlight
+
+# With an explicit path
+cd xtask && cargo run highlight -- --path ../crates/tree-sitter-perl/test/highlight
 ```
 
-### Binaries
+## Workspace integration
 
-```bash
-# Run benchmarks
-cargo run -p tree-sitter-perl --bin bench_parser
+- **Not a workspace member** -- excluded from the Cargo workspace.
+- **`.gitattributes`** marks the directory `linguist-vendored`.
+- **`.trivyignore`** excludes `tree-sitter-perl/test/corpus/**` from security scans.
+- The workspace `Cargo.toml` alias `tree-sitter-perl` resolves to `crates/tree-sitter-perl-rs`
+  (the Rust bindings crate), not this directory.
 
-# Parse single file
-cargo run -p tree-sitter-perl --bin parse_file -- input.pl
+## Adding new highlight tests
 
-# Additional utilities
-cargo run -p tree-sitter-perl --bin <utility>
-```
+1. Create a new `.pm` file under `test/highlight/`.
+2. Write Perl source lines followed by comment annotations using `# <- scope`
+   (column 1) or `# ^ scope` (caret at the target column).
+3. Run `cd xtask && cargo run highlight` to verify.
 
-## Architecture
+## Important notes
 
-### Dependencies
-
-**Internal (local paths)**:
-- `perl-lexer` - Tokenization
-- `perl-parser` - Native v3 parser
-
-**External**:
-- `tree-sitter` - Tree-sitter runtime
-- `proptest` - Property-based testing
-- `walkdir` - Directory traversal
-
-**Parser Implementations**:
-- `pest`, `pest_derive` - PEG parser
-- `logos` - Lexer generator
-- `chumsky` - Parser combinator
-
-### Features
-
-| Feature | Purpose |
-|---------|---------|
-| `pure-rust` | Pure Rust implementation (default) |
-| `pure-rust-standalone` | Standalone pure Rust |
-| `token-parser` | Token-based parsing |
-| `test-utils` | Testing utilities |
-| `c-scanner` | C scanner integration |
-| `rust-scanner` | Rust scanner integration |
-
-### Purpose
-
-This crate is for **internal validation and benchmarking**:
-
-1. **Parser Comparison** — Compare v3 native with tree-sitter
-2. **Benchmarking** — Performance measurement across implementations
-3. **Corpus Validation** — Test against tree-sitter test corpus
-4. **Compatibility** — Ensure AST compatibility
-
-### Corpus Location
-
-```
-tree-sitter-perl/test/corpus/
-```
-
-## Usage
-
-```rust
-use tree_sitter_perl::validate;
-
-// Validate parser output against tree-sitter
-let result = validate::compare_parsers(source)?;
-
-if result.matches {
-    println!("Parsers agree");
-} else {
-    println!("Differences: {:?}", result.differences);
-}
-```
-
-### Benchmarking
-
-```rust
-use tree_sitter_perl::bench;
-
-// Benchmark parsing performance
-let results = bench::run_benchmarks(&corpus)?;
-
-for result in results {
-    println!("{}: {:?}", result.parser, result.duration);
-}
-```
-
-## Important Notes
-
-- **NOT published** — internal use only
-- Used for parser validation, not production
-- Contains multiple parser implementations for comparison
-- Test corpus in `tree-sitter-perl/test/corpus/`
+- This directory is **data only** -- no Rust source, no `Cargo.toml`, no binaries.
+- Do not confuse with `crates/tree-sitter-perl-rs/` (the Rust crate) or
+  `tree-sitter-perl/` (the vendored upstream C grammar at the repo root).

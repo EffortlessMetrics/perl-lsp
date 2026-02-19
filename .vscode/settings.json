@@ -45,6 +45,5 @@
     "editor.rulers": [79, 100],
     "editor.wordBasedSuggestions": "off",
     "editor.semanticHighlighting.enabled": true
-  },
-  "cmake.sourceDirectory": "/home/steven/code/Rust/perl-lsp/generative/tree-sitter-perl"
+  }
 }

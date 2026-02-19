@@ -1495,7 +1495,7 @@ export class DapBinaryManager {
 
         // Download from GitHub Releases
         const version = '0.1.0';
-        const downloadUrl = `https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v${version}/${binaryName}`;
+        const downloadUrl = `https://github.com/EffortlessMetrics/perl-lsp/releases/download/v${version}/${binaryName}`;
 
         console.log(`Downloading ${binaryName} from ${downloadUrl}...`);
         await this.downloadFile(downloadUrl, binaryPath);

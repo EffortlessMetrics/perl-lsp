@@ -453,4 +453,4 @@ Potential improvements:
 - [cargo-udeps](https://github.com/est31/cargo-udeps) - Unused dependency detection
 - [cargo-machete](https://github.com/bnjbvr/cargo-machete) - Alternative tool
 - [Clippy Lints](https://rust-lang.github.io/rust-clippy/master/index.html) - All clippy lints
-- Issue [#284](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/284) - Original request
+- Issue [#284](https://github.com/EffortlessMetrics/perl-lsp/issues/284) - Original request

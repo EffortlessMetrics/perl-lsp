@@ -12,13 +12,13 @@ cargo install perl-lsp
 
 ### Pre-compiled Binaries
 
-1. Download the appropriate binary for your system from [GitHub Releases](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases)
+1. Download the appropriate binary for your system from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
 2. Extract the archive
 3. Move the `perl-lsp` binary to a directory in your PATH
 
 #### Linux x86_64
 ```bash
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
 tar xzf perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
 sudo cp perl-lsp-0.9.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
@@ -26,7 +26,7 @@ chmod +x /usr/local/bin/perl-lsp
 
 #### Linux aarch64
 ```bash
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-aarch64-unknown-linux-gnu.tar.gz
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.9.0/perl-lsp-0.9.0-aarch64-unknown-linux-gnu.tar.gz
 tar xzf perl-lsp-0.9.0-aarch64-unknown-linux-gnu.tar.gz
 sudo cp perl-lsp-0.9.0-aarch64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
@@ -34,7 +34,7 @@ chmod +x /usr/local/bin/perl-lsp
 
 #### macOS x86_64
 ```bash
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-apple-darwin.tar.gz
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-apple-darwin.tar.gz
 tar xzf perl-lsp-0.9.0-x86_64-apple-darwin.tar.gz
 sudo cp perl-lsp-0.9.0-x86_64-apple-darwin/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
@@ -42,7 +42,7 @@ chmod +x /usr/local/bin/perl-lsp
 
 #### macOS aarch64 (Apple Silicon)
 ```bash
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-aarch64-apple-darwin.tar.gz
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.9.0/perl-lsp-0.9.0-aarch64-apple-darwin.tar.gz
 tar xzf perl-lsp-0.9.0-aarch64-apple-darwin.tar.gz
 sudo cp perl-lsp-0.9.0-aarch64-apple-darwin/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
@@ -50,7 +50,7 @@ chmod +x /usr/local/bin/perl-lsp
 
 #### Windows x86_64
 ```powershell
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-pc-windows-msvc.zip
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-pc-windows-msvc.zip
 Expand-Archive perl-lsp-0.9.0-x86_64-pc-windows-msvc.zip
 Copy-Item perl-lsp-0.9.0-x86_64-pc-windows-msvc\perl-lsp.exe C:\Program Files\perl-lsp\
 ```
@@ -62,8 +62,8 @@ Copy-Item perl-lsp-0.9.0-x86_64-pc-windows-msvc\perl-lsp.exe C:\Program Files\pe
 3. Build the release binary
 
 ```bash
-git clone https://github.com/EffortlessMetrics/tree-sitter-perl-rs.git
-cd tree-sitter-perl-rs
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
+cd perl-lsp
 cargo build --release --bin perl-lsp -p perl-lsp
 cp target/release/perl-lsp ~/.local/bin/
 ```
@@ -184,14 +184,14 @@ export PATH="$PATH:$HOME/.local/bin"
 #### Incomplete syntax coverage
 1. Verify you're using a supported Perl version (5.10+)
 2. Check for syntax errors in your Perl files
-3. Report issues at [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues)
+3. Report issues at [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
 
 ## Getting Help
 
-- **Documentation**: [Full Documentation](https://github.com/EffortlessMetrics/tree-sitter-perl-rs)
-- **Issues**: [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/discussions)
-- **Changelog**: [Release Notes](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases)
+- **Documentation**: [Full Documentation](https://github.com/EffortlessMetrics/perl-lsp)
+- **Issues**: [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/EffortlessMetrics/perl-lsp/discussions)
+- **Changelog**: [Release Notes](https://github.com/EffortlessMetrics/perl-lsp/releases)
 
 ## Supported Platforms
 

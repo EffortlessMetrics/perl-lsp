@@ -2,9 +2,9 @@
 set -euo pipefail
 
 # Perl LSP installer script
-# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 
-REPO="${REPO:-EffortlessSteven/tree-sitter-perl}"
+REPO="${REPO:-EffortlessMetrics/perl-lsp}"
 NAME="perl-lsp"
 VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
