@@ -1941,7 +1941,18 @@ impl DebugAdapter {
             } else {
                 // Extract host and port for TCP attachment.
                 let host = args.get("host").and_then(|h| h.as_str()).unwrap_or("localhost");
-                let port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603) as u16;
+                let raw_port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603);
+                if raw_port > 65535 {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some(format!("Port {raw_port} out of range (must be 1-65535)")),
+                    };
+                }
+                let port = raw_port as u16;
                 let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
 
                 // Validate arguments.
@@ -2499,6 +2510,8 @@ impl DebugAdapter {
                 "id": Self::i64_to_i32_saturating(i64::from(pid)),
                 "name": format!("Attached Process ({pid})")
             })]
+        } else if lock_or_recover(&self.tcp_session, "debug_adapter.tcp_session").is_some() {
+            vec![json!({ "id": 1, "name": "TCP Attached Thread" })]
         } else {
             vec![]
         };
@@ -5038,6 +5051,71 @@ DB<1>"#;
         for expr in blocked {
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
+        }
+    }
+
+    #[test]
+    fn test_tcp_session_threads_non_empty() {
+        let adapter = DebugAdapter::new();
+        // Inject a TcpAttachSession so handle_threads sees it
+        {
+            let mut guard = lock_or_recover(&adapter.tcp_session, "test.tcp_session");
+            *guard = Some(TcpAttachSession::new());
+        }
+        let response = adapter.handle_threads(1, 1);
+        match response {
+            DapMessage::Response { success, body: Some(body), .. } => {
+                assert!(success);
+                let threads = body["threads"].as_array().expect("threads must be array");
+                assert!(!threads.is_empty(), "TCP attach should return non-empty threads");
+                assert_eq!(threads[0]["id"], 1);
+                assert_eq!(threads[0]["name"], "TCP Attached Thread");
+            }
+            _ => panic!("Expected successful response with body"),
+        }
+    }
+
+    #[test]
+    fn test_attach_port_out_of_range() {
+        let mut adapter = DebugAdapter::new();
+        // Initialize first so attach is allowed
+        let _ = adapter.handle_request(1, "initialize", None);
+
+        for port in [65536_u64, 70000, u64::MAX] {
+            let args = json!({ "port": port });
+            let response = adapter.handle_request(2, "attach", Some(args));
+            match response {
+                DapMessage::Response { success, message, .. } => {
+                    assert!(!success, "port {port} should be rejected");
+                    assert!(
+                        message.as_ref().is_some_and(|m| m.contains("out of range")),
+                        "expected 'out of range' error for port {port}, got: {message:?}"
+                    );
+                }
+                _ => panic!("Expected error response for port {port}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_attach_port_valid_boundary() {
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", None);
+
+        // Port 1 and 65535 should pass port validation (may fail later at TCP connect)
+        for port in [1_u64, 65535] {
+            let args = json!({ "port": port });
+            let response = adapter.handle_request(2, "attach", Some(args));
+            match response {
+                DapMessage::Response { message, .. } => {
+                    // Should NOT contain "out of range" — it passed validation
+                    assert!(
+                        !message.as_ref().is_some_and(|m| m.contains("out of range")),
+                        "port {port} should pass range validation, got: {message:?}"
+                    );
+                }
+                _ => {}
+            }
         }
     }
 }

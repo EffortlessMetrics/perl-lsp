@@ -18,7 +18,6 @@
 use crate::protocol::{Breakpoint, SetBreakpointsArguments};
 use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 // ============= AST Validation Utilities (AC7) =============
@@ -155,11 +154,7 @@ fn file_paths_match(stored: &str, observed: &str) -> bool {
     if stored.ends_with(observed) || observed.ends_with(stored) {
         return true;
     }
-
-    let stored_name = Path::new(stored).file_name().and_then(|name| name.to_str());
-    let observed_name = Path::new(observed).file_name().and_then(|name| name.to_str());
-
-    matches!((stored_name, observed_name), (Some(left), Some(right)) if left == right)
+    false
 }
 
 /// Thread-safe breakpoint storage
@@ -1006,5 +1001,85 @@ EOF
         // If parser supports it, it should be invalid.
         // For now we just verify it doesn't panic.
         let _ = v8;
+    }
+
+    #[test]
+    fn test_file_paths_match_no_basename_cross_match() {
+        // Same basename in different directories must NOT match
+        assert!(!file_paths_match("/a/main.pl", "/b/main.pl"));
+        assert!(!file_paths_match("/workspace/a/lib.pm", "/workspace/b/lib.pm"));
+    }
+
+    #[test]
+    fn test_file_paths_match_suffix_still_works() {
+        // Suffix matching handles relative-vs-absolute
+        assert!(file_paths_match("/workspace/lib/main.pl", "lib/main.pl"));
+        assert!(file_paths_match("lib/main.pl", "/workspace/lib/main.pl"));
+    }
+
+    #[test]
+    fn test_file_paths_match_exact() {
+        assert!(file_paths_match("/workspace/main.pl", "/workspace/main.pl"));
+    }
+
+    #[test]
+    fn test_breakpoint_hit_count_isolated_by_directory() {
+        // Integration: two temp files with same basename in different dirs
+        let dir_a = must(tempfile::tempdir());
+        let dir_b = must(tempfile::tempdir());
+
+        let file_a = dir_a.path().join("main.pl");
+        let file_b = dir_b.path().join("main.pl");
+
+        let perl_code = "#!/usr/bin/perl\nuse strict;\nmy $x = 1;\nmy $y = 2;\nmy $z = 3;\n\
+            print $x;\nprint $y;\nprint $z;\nmy $a = 4;\nmy $b = 5;\n\
+            my $c = 6;\nmy $d = 7;\nmy $e = 8;\nmy $f = 9;\nmy $g = 10;\n";
+        must(std::fs::write(&file_a, perl_code));
+        must(std::fs::write(&file_b, perl_code));
+
+        let path_a = file_a.to_string_lossy().to_string();
+        let path_b = file_b.to_string_lossy().to_string();
+
+        let store = BreakpointStore::new();
+
+        // Set breakpoints on both files at line 5
+        let args_a = SetBreakpointsArguments {
+            source: Source { path: Some(path_a.clone()), name: Some("main.pl".to_string()) },
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 5,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
+            source_modified: None,
+        };
+        let args_b = SetBreakpointsArguments {
+            source: Source { path: Some(path_b.clone()), name: Some("main.pl".to_string()) },
+            breakpoints: Some(vec![SourceBreakpoint {
+                line: 5,
+                column: None,
+                condition: None,
+                hit_condition: None,
+                log_message: None,
+            }]),
+            source_modified: None,
+        };
+
+        store.set_breakpoints(&args_a);
+        store.set_breakpoints(&args_b);
+
+        // Record a hit on file_a's breakpoint
+        store.register_breakpoint_hit(&path_a, 5);
+
+        // file_a's breakpoint should have hit_count=1
+        let bps_a = store.get_breakpoints(&path_a);
+        let bp_a = bps_a.iter().find(|bp| bp.line == 5).expect("breakpoint in file_a");
+        assert_eq!(bp_a.hit_count, 1);
+
+        // file_b's breakpoint should still have hit_count=0
+        let bps_b = store.get_breakpoints(&path_b);
+        let bp_b = bps_b.iter().find(|bp| bp.line == 5).expect("breakpoint in file_b");
+        assert_eq!(bp_b.hit_count, 0);
     }
 }

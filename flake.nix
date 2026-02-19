@@ -41,7 +41,7 @@
           cargo-audit       # Security vulnerability scanner
           gh                # GitHub CLI for PR operations
           jq                # JSON processing for scripts
-          python3           # Used by CI scripts
+          (python3.withPackages (ps: [ ps.pyyaml ]))  # Used by CI scripts
         ];
 
         # Optional expensive CI tools (available but not required)
