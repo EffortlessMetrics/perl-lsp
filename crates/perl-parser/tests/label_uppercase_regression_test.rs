@@ -1,44 +1,19 @@
 //! Regression tests for uppercase label parsing.
 //!
-//! Perl convention uses uppercase labels (`OUTER:`, `LINE:`, `LOOP:`), but the
-//! parser's `is_label_start()` heuristic currently rejects uppercase identifiers.
-//! These tests document the current behaviour and gate the fix.
+//! Perl convention uses uppercase labels (`OUTER:`, `LINE:`, `LOOP:`).
+//! The parser correctly recognises these as `LabeledStatement` nodes
+//! because `::` tokenizes as `DoubleColon`, making single-colon
+//! `IDENTIFIER:` unambiguously a label.
 
 use perl_parser::Parser;
 
 mod nodekind_helpers;
 use nodekind_helpers::has_node_kind;
 
-/// Current behaviour: uppercase label is NOT recognised as `LabeledStatement`,
-/// but LoopControl's `last OUTER` still works through recovery.
+/// Uppercase labels (OUTER:, LOOP:, LINE:) are idiomatic Perl and are now
+/// correctly recognised as `LabeledStatement` by the parser.
 #[test]
-fn test_uppercase_label_current_behavior() {
-    let source = "OUTER: while (1) { last OUTER; }";
-
-    let mut parser = Parser::new(source);
-    let output = parser.parse_with_recovery();
-
-    // LoopControl should exist regardless
-    assert!(
-        has_node_kind(&output.ast, "LoopControl"),
-        "Expected LoopControl node for `last OUTER`"
-    );
-
-    // Hard assertion: uppercase labels do NOT produce LabeledStatement (known gap).
-    // This will fail loudly if the parser starts handling them, signalling the
-    // ignored test below can be un-ignored.
-    assert!(
-        !has_node_kind(&output.ast, "LabeledStatement"),
-        "LabeledStatement should NOT appear for uppercase labels (known gap). \
-         If this fires, un-ignore test_uppercase_label_fixed."
-    );
-}
-
-/// This test should pass once `is_label_start()` is fixed to accept uppercase
-/// identifiers followed by `:` (but not `::`, which is a package separator).
-#[test]
-#[ignore = "uppercase labels not yet parsed as LabeledStatement — fix is_label_start()"]
-fn test_uppercase_label_fixed() -> Result<(), Box<dyn std::error::Error>> {
+fn test_uppercase_label_parsed() -> Result<(), Box<dyn std::error::Error>> {
     let source = "OUTER: while (1) { last OUTER; }";
 
     let mut parser = Parser::new(source);

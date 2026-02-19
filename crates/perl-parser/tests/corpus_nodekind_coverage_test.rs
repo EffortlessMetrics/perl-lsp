@@ -88,11 +88,7 @@ fn test_corpus_nodekind_coverage() {
     }
 
     // Ratchet metric: recovery-only kind count for burn-down visibility
-    eprintln!(
-        "RATCHET: {} recovery-only kind(s): {:?}",
-        recovery_only.len(),
-        recovery_only
-    );
+    eprintln!("RATCHET: {} recovery-only kind(s): {:?}", recovery_only.len(), recovery_only);
 
     // Hard gate: all required kinds must appear somewhere
     let mut missing: Vec<&str> =

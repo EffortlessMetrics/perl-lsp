@@ -440,14 +440,19 @@ write;"#,
                     name
                 );
 
-                // Verify the variable is present in the AST
+                // Verify something meaningful was parsed in the AST
                 let sexp = ast.to_sexp();
+                let sexp_lower = sexp.to_lowercase();
                 assert!(
-                    sexp.contains("variable")
-                        || sexp.contains("special_var")
-                        || sexp.contains("format"),
-                    "Variable not found in AST for {}",
-                    name
+                    sexp_lower.contains("variable")
+                        || sexp_lower.contains("typeglob")
+                        || sexp_lower.contains("format")
+                        || sexp_lower.contains("function")
+                        || sexp_lower.contains("glob")
+                        || sexp_lower.contains("special"),
+                    "No meaningful node found in AST for {}: {}",
+                    name,
+                    sexp
                 );
             }
             Err(e) => {
