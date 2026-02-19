@@ -4,6 +4,7 @@ version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
 description = "Tree-sitter Perl grammar with C scanner (legacy implementation)"
+publish = false
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessMetrics/perl-lsp"

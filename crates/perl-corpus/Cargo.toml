@@ -3,6 +3,7 @@ name = "perl-corpus"
 version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
 license = "MIT OR Apache-2.0"
 description = "Test corpus management and generators for Perl parsers"
 readme = "README.md"
