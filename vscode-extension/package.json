@@ -33,12 +33,12 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/EffortlessMetrics/tree-sitter-perl"
+    "url": "https://github.com/EffortlessMetrics/perl-lsp"
   },
   "bugs": {
-    "url": "https://github.com/EffortlessMetrics/tree-sitter-perl/issues"
+    "url": "https://github.com/EffortlessMetrics/perl-lsp/issues"
   },
-  "homepage": "https://github.com/EffortlessMetrics/tree-sitter-perl#readme",
+  "homepage": "https://github.com/EffortlessMetrics/perl-lsp#readme",
   "galleryBanner": {
     "color": "#1e3a8a",
     "theme": "dark"

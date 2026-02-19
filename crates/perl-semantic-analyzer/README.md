@@ -1,6 +1,6 @@
 # perl-semantic-analyzer
 
-Semantic analysis, symbol extraction, and type inference for Perl source code. Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Semantic analysis, symbol extraction, and type inference for Perl source code. Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Features
 

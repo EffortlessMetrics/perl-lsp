@@ -2,7 +2,7 @@
 
 URI-to-filesystem-path conversion and normalization utilities for the Perl LSP ecosystem.
 
-Part of the [`tree-sitter-perl-rs`](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Part of the [`tree-sitter-perl-rs`](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Public API
 

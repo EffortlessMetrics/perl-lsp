@@ -26,7 +26,7 @@ assert_eq!(tok.kind, TokenKind::Identifier);
 
 Foundational crate consumed by `perl-lexer`, `perl-tokenizer`, `perl-parser-core`,
 and downstream parser/LSP crates. Part of the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## License
 

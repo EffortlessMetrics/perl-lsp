@@ -327,4 +327,4 @@ Potential improvements:
 - [ ] Multi-version support (v0.9, v1.0, etc.)
 - [ ] Localization (i18n)
 
-See [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl/issues) for tracking.
+See [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues) for tracking.

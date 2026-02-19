@@ -21,7 +21,7 @@ VSCode and other DAP-compatible editors.
 
 Internal support crate consumed by `perl-dap` for variable inspection and
 evaluate responses. Part of the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs)
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
 workspace.
 
 ## License

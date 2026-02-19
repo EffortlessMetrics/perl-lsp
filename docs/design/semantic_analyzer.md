@@ -726,7 +726,7 @@ Parse → Index → Navigate → Complete → Analyze
 
 ## References
 
-- Issue #188: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/188
+- Issue #188: https://github.com/EffortlessMetrics/perl-lsp/issues/188
 - Sprint B Meta: Issue #213
 - LSP Specification: https://microsoft.github.io/language-server-protocol/
 - AST Definition: `crates/perl-parser/src/ast.rs`

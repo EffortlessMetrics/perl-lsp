@@ -2,7 +2,7 @@
 
 Safe expression evaluation validation for the Perl Debug Adapter Protocol (DAP).
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Overview
 

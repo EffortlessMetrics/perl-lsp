@@ -1,7 +1,7 @@
 # tree-sitter-perl
 
 Internal pure-Rust Perl parser and validation harness for the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs)
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
 workspace. **Not published to crates.io.**
 
 ## Purpose

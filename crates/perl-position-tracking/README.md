@@ -2,7 +2,7 @@
 
 UTF-8/UTF-16 position tracking and conversion for the Perl LSP ecosystem.
 
-Part of [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs).
+Part of [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp).
 
 ## Public API
 

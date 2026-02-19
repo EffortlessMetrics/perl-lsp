@@ -1,6 +1,6 @@
 # perl-parser-core
 
-Core parsing engine for the [perl-parser](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace. Provides a recursive descent parser with IDE-friendly error recovery, AST construction, token stream utilities, and position mapping for LSP integration.
+Core parsing engine for the [perl-parser](https://github.com/EffortlessMetrics/perl-lsp) workspace. Provides a recursive descent parser with IDE-friendly error recovery, AST construction, token stream utilities, and position mapping for LSP integration.
 
 ## Public API
 

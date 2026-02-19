@@ -18,7 +18,7 @@ boundary tracking.
 
 ## Part of the perl-lsp Workspace
 
-This crate is part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace and is not published to crates.io.
+This crate is part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace and is not published to crates.io.
 
 ## License
 

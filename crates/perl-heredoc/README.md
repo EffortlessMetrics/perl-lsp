@@ -23,7 +23,7 @@ collector works identically on Windows and Unix sources.
 ## Workspace Role
 
 Internal Tier 1 leaf crate in the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs)
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
 workspace. Used by lexer and parser pipelines to resolve heredoc bodies
 after scanning heredoc declarations.
 

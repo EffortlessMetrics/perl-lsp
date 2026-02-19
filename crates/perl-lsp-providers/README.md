@@ -2,7 +2,7 @@
 
 LSP provider aggregation and tooling integrations for Perl.
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace (Tier 4).
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace (Tier 4).
 
 ## Overview
 

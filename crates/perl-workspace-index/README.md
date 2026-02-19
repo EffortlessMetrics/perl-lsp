@@ -4,7 +4,7 @@ Workspace-wide symbol indexing and cross-file navigation for Perl LSP tooling.
 
 ## Overview
 
-`perl-workspace-index` is a Tier 3 crate in the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace. It provides the central indexing engine that powers cross-file operations such as go-to-definition, find-references, workspace symbol search, and rename refactoring.
+`perl-workspace-index` is a Tier 3 crate in the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace. It provides the central indexing engine that powers cross-file operations such as go-to-definition, find-references, workspace symbol search, and rename refactoring.
 
 ## Key Components
 

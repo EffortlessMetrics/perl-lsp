@@ -1,7 +1,7 @@
 # tree-sitter-perl (highlight test corpus)
 
 This directory contains **tree-sitter-style highlight test fixtures** for the
-[perl-lsp](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+[perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 It is **not** a Rust crate -- there is no `Cargo.toml`. It holds only Perl
 source files annotated with expected highlight scopes.
 

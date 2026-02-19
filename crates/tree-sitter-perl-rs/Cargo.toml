@@ -10,7 +10,7 @@ homepage.workspace = true
 description = "Pure-Rust Pest-based Perl parser with tree-sitter-compatible S-expression output (internal harness)"
 readme = "README.md"
 publish = false
-documentation = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs/tree/master/crates/tree-sitter-perl-rs"
+documentation = "https://github.com/EffortlessMetrics/perl-lsp/tree/master/crates/tree-sitter-perl-rs"
 keywords = ["tree-sitter", "perl", "parser", "pest", "s-expression"]
 categories = ["parsing", "development-tools"]
 

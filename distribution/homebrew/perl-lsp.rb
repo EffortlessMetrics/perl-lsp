@@ -1,10 +1,10 @@
 class PerlLsp < Formula
   desc "High-performance Perl Language Server with 100% syntax coverage"
   homepage "https://github.com/tree-sitter/tree-sitter-perl"
-  url "https://github.com/EffortlessMetrics/tree-sitter-perl-rs/archive/v1.0.0.tar.gz"
+  url "https://github.com/EffortlessMetrics/perl-lsp/archive/v1.0.0.tar.gz"
   sha256 "PLACEHOLDER_SHA256"  # Update with actual SHA256 after release
   license "MIT"
-  head "https://github.com/EffortlessMetrics/tree-sitter-perl-rs.git", branch: "main"
+  head "https://github.com/EffortlessMetrics/perl-lsp.git", branch: "main"
 
   depends_on "rust" => :build
 

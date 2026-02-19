@@ -1,7 +1,7 @@
 # perl-refactoring
 
 Refactoring and modernization utilities for Perl code, part of the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Features
 

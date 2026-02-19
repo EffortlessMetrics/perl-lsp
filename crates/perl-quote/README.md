@@ -20,7 +20,7 @@ balancing, and escape sequences.
 Tier 1 leaf crate with zero dependencies. Used by `perl-parser-core` for
 quote operator content extraction during parsing.
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## License
 

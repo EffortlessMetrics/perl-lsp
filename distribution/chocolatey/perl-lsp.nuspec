@@ -6,9 +6,9 @@
     <title>Perl Language Server</title>
     <authors>EffortlessMetrics</authors>
     <owners>EffortlessMetrics</owners>
-    <licenseUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/main/LICENSE-APACHE</licenseUrl>
-    <projectUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/EffortlessMetrics/tree-sitter-perl-rs/main/vscode-extension/images/icon.png</iconUrl>
+    <licenseUrl>https://github.com/EffortlessMetrics/perl-lsp/blob/main/LICENSE-APACHE</licenseUrl>
+    <projectUrl>https://github.com/EffortlessMetrics/perl-lsp</projectUrl>
+    <iconUrl>https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/vscode-extension/images/icon.png</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>
 perl-lsp is a high-performance Language Server Protocol implementation for Perl,
@@ -33,15 +33,15 @@ After installation, configure your editor to use `perl-lsp --stdio`.
 
 ## Documentation
 
-See https://github.com/EffortlessMetrics/tree-sitter-perl-rs for full documentation.
+See https://github.com/EffortlessMetrics/perl-lsp for full documentation.
     </description>
     <summary>High-performance Perl Language Server with 100% syntax coverage</summary>
-    <releaseNotes>https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases</releaseNotes>
+    <releaseNotes>https://github.com/EffortlessMetrics/perl-lsp/releases</releaseNotes>
     <copyright>2025 EffortlessMetrics</copyright>
     <tags>perl lsp language-server development ide</tags>
-    <packageSourceUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs</packageSourceUrl>
-    <docsUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/main/README.md</docsUrl>
-    <bugTrackerUrl>https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues</bugTrackerUrl>
+    <packageSourceUrl>https://github.com/EffortlessMetrics/perl-lsp</packageSourceUrl>
+    <docsUrl>https://github.com/EffortlessMetrics/perl-lsp/blob/main/README.md</docsUrl>
+    <bugTrackerUrl>https://github.com/EffortlessMetrics/perl-lsp/issues</bugTrackerUrl>
   </metadata>
   <files>
     <file src="tools\**" target="tools" />

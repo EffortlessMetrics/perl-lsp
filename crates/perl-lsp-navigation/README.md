@@ -12,7 +12,7 @@ LSP navigation providers for Perl: workspace symbols, type hierarchy, type defin
 
 ## Workspace Role
 
-Internal feature crate consumed by `perl-lsp` navigation request handlers. Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Internal feature crate consumed by `perl-lsp` navigation request handlers. Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Features
 

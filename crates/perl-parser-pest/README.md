@@ -1,6 +1,6 @@
 # perl-parser-pest
 
-Legacy Pest-based Perl parser (v2) for the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Legacy Pest-based Perl parser (v2) for the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Overview
 

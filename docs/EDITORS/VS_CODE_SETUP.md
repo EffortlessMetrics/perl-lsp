@@ -44,16 +44,16 @@ cargo install perl-lsp
 
 #### Option 2: Download Pre-built Binary
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases):
+Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases):
 
 ```bash
 # Linux (x86_64)
-curl -LO https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
+curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
 tar xzf perl-lsp-linux-x86_64.tar.gz
 sudo mv perl-lsp /usr/local/bin/
 
 # macOS (Apple Silicon)
-curl -LO https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
+curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
 tar xzf perl-lsp-darwin-aarch64.tar.gz
 sudo mv perl-lsp /usr/local/bin/
 
@@ -64,7 +64,7 @@ sudo mv perl-lsp /usr/local/bin/
 #### Option 3: Build from Source
 
 ```bash
-git clone https://github.com/EffortlessMetrics/tree-sitter-perl-rs.git
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd tree-sitter-perl-rs
 cargo install --path crates/perl-lsp
 ```

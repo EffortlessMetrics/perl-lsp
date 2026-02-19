@@ -147,7 +147,7 @@ Devel-TSPerlDAP/          # NEW - CPAN module (separate repo or subdir)
 name = "perl-dap"
 version = "0.1.0"
 edition = "2024"
-authors = ["Tree-sitter Perl Contributors"]
+authors = ["Steven Zimmerman, CPA"]
 description = "Debug Adapter Protocol server for Perl"
 license = "MIT OR Apache-2.0"
 
@@ -1175,7 +1175,7 @@ Adapter Protocol server.
 
 =head1 AUTHOR
 
-Tree-sitter Perl Contributors
+Steven Zimmerman, CPA
 
 =head1 LICENSE
 
@@ -1495,7 +1495,7 @@ export class DapBinaryManager {
 
         // Download from GitHub Releases
         const version = '0.1.0';
-        const downloadUrl = `https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v${version}/${binaryName}`;
+        const downloadUrl = `https://github.com/EffortlessMetrics/perl-lsp/releases/download/v${version}/${binaryName}`;
 
         console.log(`Downloading ${binaryName} from ${downloadUrl}...`);
         await this.downloadFile(downloadUrl, binaryPath);

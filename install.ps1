@@ -1,5 +1,5 @@
 # Perl LSP installer for Windows
-# Usage: irm https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.ps1 | iex
 
 param(
     [string]$Version = "latest",
@@ -9,7 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$Repo = "EffortlessMetrics/tree-sitter-perl-rs"
+$Repo = "EffortlessMetrics/perl-lsp"
 $Name = "perl-lsp"
 
 function Write-Info {

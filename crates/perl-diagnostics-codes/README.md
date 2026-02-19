@@ -2,7 +2,7 @@
 
 Stable diagnostic codes and severity levels for the Perl LSP ecosystem.
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Overview
 

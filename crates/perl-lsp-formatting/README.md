@@ -23,7 +23,7 @@ See `FormattingError::PerltidyNotFound` for per-platform install instructions.
 
 ## Workspace
 
-Part of [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs).
+Part of [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp).
 
 ## License
 

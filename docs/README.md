@@ -48,7 +48,7 @@ nix develop -c just status-check  # Verify metrics haven't drifted
 
 - [Documentation Standards](DOCUMENTATION_GUIDE.md) — Diataxis framework, feature index, learning paths
 - [Project Orientation](ORIENTATION.md) — What needs attention right now
-- [Documentation Site](https://effortlessmetrics.github.io/tree-sitter-perl-rs/) — Searchable mdBook site
+- [Documentation Site](https://effortlessmetrics.github.io/perl-lsp/) — Searchable mdBook site
 
 ---
 

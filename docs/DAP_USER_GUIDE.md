@@ -625,7 +625,7 @@ The CLI already uses the native adapter with launch + attach + evaluation suppor
 - **Documentation**: See [DAP Implementation Specification](DAP_IMPLEMENTATION_SPECIFICATION.md) for technical details
 - **Security**: See [DAP Security Specification](DAP_SECURITY_SPECIFICATION.md) for security considerations
 - **Architecture**: See [Crate Architecture Guide](CRATE_ARCHITECTURE_GUIDE.md) for DAP crate design
-- **Issues**: Report bugs at [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues)
+- **Issues**: Report bugs at [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
 
 ---
 

@@ -114,7 +114,7 @@ jobs:
           body: |
             Bump perl-lsp to version ${{ steps.tag.outputs.version }}
 
-            Created by automated workflow from [EffortlessMetrics/tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs).
+            Created by automated workflow from [EffortlessMetrics/perl-lsp](https://github.com/EffortlessMetrics/perl-lsp).
 
             ### Changes
             - Updated version to ${{ steps.tag.outputs.version }}

@@ -26,7 +26,7 @@ parse errors, scope analysis, lint checks, and workspace-wide dead code detectio
 ## Workspace Role
 
 Internal feature crate consumed by `perl-lsp` to publish diagnostics to editors.
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## License
 

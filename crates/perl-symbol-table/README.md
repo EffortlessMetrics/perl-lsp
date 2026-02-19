@@ -2,7 +2,7 @@
 
 Symbol table and scope management for the Perl LSP ecosystem.
 
-Part of [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs).
+Part of [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp).
 
 ## Public API
 

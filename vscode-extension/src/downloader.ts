@@ -23,8 +23,8 @@ interface Release {
 }
 
 export class BinaryDownloader {
-    private static readonly REPO_OWNER = 'EffortlessSteven';
-    private static readonly REPO_NAME = 'tree-sitter-perl';
+    private static readonly REPO_OWNER = 'EffortlessMetrics';
+    private static readonly REPO_NAME = 'perl-lsp';
     private static readonly BINARY_NAME = 'perl-lsp';
     
     constructor(
@@ -81,7 +81,7 @@ export class BinaryDownloader {
                     'Install Manually'
                 ).then(choice => {
                     if (choice === 'Install Manually') {
-                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/tree-sitter-perl#quick-install'));
+                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp#quick-install'));
                     }
                 });
             } else {

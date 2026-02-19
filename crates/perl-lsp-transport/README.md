@@ -1,7 +1,7 @@
 # perl-lsp-transport
 
 LSP transport layer with Content-Length message framing for
-[perl-lsp](https://github.com/EffortlessMetrics/tree-sitter-perl-rs).
+[perl-lsp](https://github.com/EffortlessMetrics/perl-lsp).
 
 ## Overview
 

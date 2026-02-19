@@ -2,7 +2,7 @@
 
 Test corpus management, property-based generators, and edge case fixtures for Perl parsers.
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Overview
 

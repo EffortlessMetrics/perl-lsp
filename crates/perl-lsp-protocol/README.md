@@ -19,4 +19,4 @@ Tier 1 leaf crate with no internal workspace dependencies. Consumed by `perl-lsp
 
 ## License
 
-Licensed under MIT OR Apache-2.0 at your option. See the [repository](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) for details.
+Licensed under MIT OR Apache-2.0 at your option. See the [repository](https://github.com/EffortlessMetrics/perl-lsp) for details.

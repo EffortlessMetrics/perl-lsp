@@ -18,7 +18,7 @@ Regex validation and safety analysis for Perl regular expression patterns.
 
 ## Workspace Role
 
-Tier 1 leaf crate in the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace. Used by parse-time validation logic to flag risky regex patterns for LSP diagnostics.
+Tier 1 leaf crate in the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace. Used by parse-time validation logic to flag risky regex patterns for LSP diagnostics.
 
 ## License
 

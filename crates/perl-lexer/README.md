@@ -1,7 +1,7 @@
 # perl-lexer
 
 Context-aware Perl lexer with mode-based tokenization for the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Overview
 

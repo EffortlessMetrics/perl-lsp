@@ -57,10 +57,10 @@ brew tap tree-sitter-perl/tap
 brew install perl-lsp
 
 # One-liner (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 
 # From source
-cargo install --git https://github.com/EffortlessMetrics/tree-sitter-perl --bin perl-lsp
+cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp
 ```
 
 ## ⚙️ Configuration
@@ -114,10 +114,10 @@ Works with any LSP-compatible editor:
 
 ## 📚 Resources
 
-- [Documentation](https://github.com/EffortlessMetrics/tree-sitter-perl#readme)
-- [Issue Tracker](https://github.com/EffortlessMetrics/tree-sitter-perl/issues)
-- [Changelog](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/CHANGELOG.md)
-- [Migration Guide](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/MIGRATION.md)
+- [Documentation](https://github.com/EffortlessMetrics/perl-lsp#readme)
+- [Issue Tracker](https://github.com/EffortlessMetrics/perl-lsp/issues)
+- [Changelog](https://github.com/EffortlessMetrics/perl-lsp/blob/master/CHANGELOG.md)
+- [Migration Guide](https://github.com/EffortlessMetrics/perl-lsp/blob/master/MIGRATION.md)
 
 ## 📄 License
 

@@ -26,7 +26,7 @@ compatibility.
 ## Workspace Role
 
 Internal microcrate in the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs)
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
 workspace. Depends on `perl-ts-heredoc-analysis` for statement tracking and
 `perl-parser-pest` for AST types used in postprocessing.
 

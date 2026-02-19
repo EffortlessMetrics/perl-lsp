@@ -128,7 +128,7 @@ cargo install perl-lsp
 cargo install perl-dap
 
 # Or quick install (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 ```
 
 ### Editor Configuration
@@ -348,7 +348,7 @@ We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ### Quick Start
 ```bash
 # Clone repository
-git clone https://github.com/EffortlessMetrics/tree-sitter-perl-rs.git
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd tree-sitter-perl-rs
 
 # Install development dependencies
@@ -384,8 +384,8 @@ nix develop -c just ci-gate
 ## 🎯 Support & Community
 
 ### Getting Help
-- **GitHub Issues**: [Report bugs and request features](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues)
-- **Discussions**: [Community discussions and Q&A](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/discussions)
+- **GitHub Issues**: [Report bugs and request features](https://github.com/EffortlessMetrics/perl-lsp/issues)
+- **Discussions**: [Community discussions and Q&A](https://github.com/EffortlessMetrics/perl-lsp/discussions)
 - **Documentation**: [Comprehensive guides and API docs](docs/)
 
 ### Commercial Support
@@ -423,4 +423,4 @@ Special thanks to the Perl community for decades of inspiration and to the Rust 
 
 **Download Perl LSP v1.0.0 today and experience the future of Perl development!**
 
-🚀 [Get Started Now](docs/GETTING_STARTED.md) | 📖 [Documentation](docs/INDEX.md) | 💬 [Community](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/discussions)
+🚀 [Get Started Now](docs/GETTING_STARTED.md) | 📖 [Documentation](docs/INDEX.md) | 💬 [Community](https://github.com/EffortlessMetrics/perl-lsp/discussions)

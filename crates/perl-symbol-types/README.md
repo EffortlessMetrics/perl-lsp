@@ -2,7 +2,7 @@
 
 Unified Perl symbol taxonomy for LSP tooling.
 
-Part of the [perl-lsp](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Public API
 

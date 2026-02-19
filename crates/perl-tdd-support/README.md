@@ -31,7 +31,7 @@ let item = must_some(some_option);
 let err = must_err(expected_err_result);
 ```
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## License
 

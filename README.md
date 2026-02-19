@@ -1,7 +1,7 @@
 # perl-lsp
 
 [![Crates.io](https://img.shields.io/crates/v/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
-[![codecov](https://codecov.io/gh/EffortlessMetrics/tree-sitter-perl-rs/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/tree-sitter-perl-rs)
+[![codecov](https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/perl-lsp)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
 A fast, native Perl language server and parser toolkit written in Rust.
@@ -26,17 +26,17 @@ cargo install perl-lsp
 ### From source
 
 ```bash
-git clone https://github.com/EffortlessMetrics/tree-sitter-perl-rs.git
+git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd tree-sitter-perl-rs
 cargo install --path crates/perl-lsp
 ```
 
 ### Pre-built binaries
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases), or use the installer script:
+Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), or use the installer script:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/tree-sitter-perl-rs/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 ## Editor Setup

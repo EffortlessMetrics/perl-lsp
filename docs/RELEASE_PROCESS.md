@@ -207,7 +207,7 @@ Binaries are published for all platforms:
 **Installation:**
 ```bash
 # Download and extract
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
 tar xzf perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
 sudo cp perl-lsp-0.9.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 ```
@@ -244,13 +244,13 @@ choco install perl-lsp
 
 Multi-arch Docker images are published to:
 
-- GitHub Container Registry: `ghcr.io/EffortlessMetrics/tree-sitter-perl-rs`
+- GitHub Container Registry: `ghcr.io/EffortlessMetrics/perl-lsp`
 - Docker Hub: `effortlessmetrics/perl-lsp`
 
 **Installation:**
 ```bash
 # From GitHub Container Registry
-docker pull ghcr.io/EffortlessMetrics/tree-sitter-perl-rs:latest
+docker pull ghcr.io/EffortlessMetrics/perl-lsp:latest
 
 # From Docker Hub
 docker pull effortlessmetrics/perl-lsp:latest
@@ -486,13 +486,13 @@ All binaries include SHA256 checksums in their packages.
 
 ### Downloads
 
-- [Linux x86_64 (GNU)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v{VERSION}/perl-lsp-{VERSION}-x86_64-unknown-linux-gnu.tar.gz)
-- [Linux aarch64 (GNU)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v{VERSION}/perl-lsp-{VERSION}-aarch64-unknown-linux-gnu.tar.gz)
-- [Linux x86_64 (musl)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v{VERSION}/perl-lsp-{VERSION}-x86_64-unknown-linux-musl.tar.gz)
-- [Linux aarch64 (musl)](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v{VERSION}/perl-lsp-{VERSION}-aarch64-unknown-linux-musl.tar.gz)
-- [macOS x86_64](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v{VERSION}/perl-lsp-{VERSION}-x86_64-apple-darwin.tar.gz)
-- [macOS aarch64](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v{VERSION}/perl-lsp-{VERSION}-aarch64-apple-darwin.tar.gz)
-- [Windows x86_64](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v{VERSION}/perl-lsp-{VERSION}-x86_64-pc-windows-msvc.zip)
+- [Linux x86_64 (GNU)](https://github.com/EffortlessMetrics/perl-lsp/releases/download/v{VERSION}/perl-lsp-{VERSION}-x86_64-unknown-linux-gnu.tar.gz)
+- [Linux aarch64 (GNU)](https://github.com/EffortlessMetrics/perl-lsp/releases/download/v{VERSION}/perl-lsp-{VERSION}-aarch64-unknown-linux-gnu.tar.gz)
+- [Linux x86_64 (musl)](https://github.com/EffortlessMetrics/perl-lsp/releases/download/v{VERSION}/perl-lsp-{VERSION}-x86_64-unknown-linux-musl.tar.gz)
+- [Linux aarch64 (musl)](https://github.com/EffortlessMetrics/perl-lsp/releases/download/v{VERSION}/perl-lsp-{VERSION}-aarch64-unknown-linux-musl.tar.gz)
+- [macOS x86_64](https://github.com/EffortlessMetrics/perl-lsp/releases/download/v{VERSION}/perl-lsp-{VERSION}-x86_64-apple-darwin.tar.gz)
+- [macOS aarch64](https://github.com/EffortlessMetrics/perl-lsp/releases/download/v{VERSION}/perl-lsp-{VERSION}-aarch64-apple-darwin.tar.gz)
+- [Windows x86_64](https://github.com/EffortlessMetrics/perl-lsp/releases/download/v{VERSION}/perl-lsp-{VERSION}-x86_64-pc-windows-msvc.zip)
 ```
 
 ## Additional Resources

@@ -50,7 +50,7 @@ git push origin v0.8.3
 
 ### 3. Monitor CI Release (10-15 min)
 
-1. Go to: https://github.com/EffortlessMetrics/tree-sitter-perl/actions
+1. Go to: https://github.com/EffortlessMetrics/perl-lsp/actions
 2. Watch the "Release" workflow triggered by the tag
 3. Verify all platform builds succeed
 4. Check that artifacts are attached to the release
@@ -59,7 +59,7 @@ git push origin v0.8.3
 
 Once the GitHub release is created:
 
-1. Go to: https://github.com/EffortlessMetrics/tree-sitter-perl/releases/tag/v0.8.3
+1. Go to: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.8.3
 2. Download `SHA256SUMS` file
 3. Extract checksums for each platform:
 
@@ -105,28 +105,28 @@ Create `Formula/perl-lsp.rb`:
 ```ruby
 class PerlLsp < Formula
   desc "Perl language server with 100% edge case coverage"
-  homepage "https://github.com/EffortlessMetrics/tree-sitter-perl"
+  homepage "https://github.com/EffortlessMetrics/perl-lsp"
   version "0.8.3"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-apple-darwin.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
     on_intel do
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-unknown-linux-musl.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-unknown-linux-musl.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
     on_intel do
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-musl.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-musl.tar.gz"
       sha256 "ACTUAL_SHA256_FROM_RELEASE"
     end
   end
@@ -179,12 +179,12 @@ Update README.md installation section:
 
 #### Unix (Linux/macOS)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 ```
 
 #### Windows PowerShell
 ```powershell
-irm https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.ps1 | iex
 ```
 
 #### Homebrew
@@ -195,7 +195,7 @@ brew install perl-lsp
 
 ### Manual Download
 
-Download the appropriate binary for your platform from the [releases page](https://github.com/EffortlessMetrics/tree-sitter-perl/releases/latest).
+Download the appropriate binary for your platform from the [releases page](https://github.com/EffortlessMetrics/perl-lsp/releases/latest).
 ```
 
 ### 9. Announce Release (10 min)
@@ -223,10 +223,10 @@ This release marks perl-lsp as production-ready with 100% edge case coverage and
 
 ```bash
 # Unix
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 
 # Windows
-irm https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.ps1 | iex
 
 # Homebrew
 brew tap effortlesssteven/tap
@@ -269,7 +269,7 @@ Twitter/X:
 🛠️ 35+ IDE features
 🧪 Property-based testing
 
-Install: curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+Install: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 
 #Perl #LSP #RustLang
 ```
@@ -287,9 +287,9 @@ Features:
 - Zero C dependencies
 
 Installation is now one line:
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 
-GitHub: https://github.com/EffortlessMetrics/tree-sitter-perl
+GitHub: https://github.com/EffortlessMetrics/perl-lsp
 ```
 
 ## Post-Release Checklist
@@ -324,7 +324,7 @@ git revert HEAD
 
 ## Contact for Issues
 
-- GitHub Issues: https://github.com/EffortlessMetrics/tree-sitter-perl/issues
+- GitHub Issues: https://github.com/EffortlessMetrics/perl-lsp/issues
 - Discord: [Create invite link]
 - Email: [Your email]
 

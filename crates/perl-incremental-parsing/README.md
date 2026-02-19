@@ -18,7 +18,7 @@ This crate provides multiple incremental parsing strategies that minimize re-par
 
 ## Part of the `perl-lsp` Workspace
 
-This crate is a Tier 3 member of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace. It depends on `perl-parser-core`, `perl-edit`, and `perl-lexer`.
+This crate is a Tier 3 member of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace. It depends on `perl-parser-core`, `perl-edit`, and `perl-lexer`.
 
 ## License
 

@@ -22,7 +22,7 @@
 
 ### 2. GitHub Issue Ledger ✅
 - **Issue**: #183 updated with Ledger tracking structure
-- **URL**: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/183
+- **URL**: https://github.com/EffortlessMetrics/perl-lsp/issues/183
 - **Structure**:
   - Gates table (8 quality gates: spec, format, clippy, tests, build, features, benchmarks, docs)
   - Hop log (3 entries documenting spec creation and file analysis)
@@ -220,7 +220,7 @@ heredoc_declaration_parser_tests.rs
 
 **Artifacts**:
 1. `/home/steven/code/Rust/perl-lsp/review/docs/issue-183-spec.md` (Feature spec)
-2. `https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/183` (Ledger tracking)
+2. `https://github.com/EffortlessMetrics/perl-lsp/issues/183` (Ledger tracking)
 3. `/home/steven/code/Rust/perl-lsp/review/SPRINT_A_DAY_1_PLAN.md` (Implementation plan)
 
 **Next Step**: Route to spec-analyzer for requirements validation.

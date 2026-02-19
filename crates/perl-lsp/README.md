@@ -24,7 +24,7 @@ perl-lsp --version        # version info
 
 The `perl_lsp` library re-exports `LspServer`, `JsonRpcRequest`, `JsonRpcResponse`, `JsonRpcError`, and a convenience `run_stdio()` entry point for embedding.
 
-## Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace
+## Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace
 
 Tier 6 executable crate. Delegates parsing to `perl-parser` and dispatches LSP features through dedicated provider crates (`perl-lsp-completion`, `perl-lsp-navigation`, `perl-lsp-diagnostics`, etc.).
 

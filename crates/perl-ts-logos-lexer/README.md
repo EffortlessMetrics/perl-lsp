@@ -1,7 +1,7 @@
 # perl-ts-logos-lexer
 
 Logos-based lexer and recursive descent parsers for Perl source code. Part of the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Overview
 
