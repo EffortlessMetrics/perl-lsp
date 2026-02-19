@@ -1211,6 +1211,7 @@ impl DebugAdapter {
         let supports_modules = catalog_has_feature("dap.modules");
         let supports_watchpoints = catalog_has_feature("dap.watchpoints");
         let supports_warn = catalog_has_feature("dap.exceptions.warn");
+        let supports_any_exception = supports_exceptions || supports_warn;
 
         let mut filters = Vec::new();
         if supports_exceptions {
@@ -1248,9 +1249,9 @@ impl DebugAdapter {
             "supportsCompletionsRequest": supports_completions,
             "supportsModulesRequest": supports_modules,
             "supportsRestartRequest": true,
-            "supportsExceptionOptions": supports_exceptions,
+            "supportsExceptionOptions": supports_any_exception,
             "supportsValueFormattingOptions": supports_core,
-            "supportsExceptionInfoRequest": supports_exceptions,
+            "supportsExceptionInfoRequest": supports_any_exception,
             "supportTerminateDebuggee": supports_core,
             "supportsDelayedStackTraceLoading": false,
             "supportsLoadedSourcesRequest": true,
@@ -1266,7 +1267,7 @@ impl DebugAdapter {
             "supportsClipboardContext": false,
             "supportsSteppingGranularity": false,
             "supportsInstructionBreakpoints": false,
-            "supportsExceptionFilterOptions": supports_exceptions,
+            "supportsExceptionFilterOptions": supports_any_exception,
             "supportsInlineValues": supports_inline_values,
             "exceptionBreakpointFilters": exception_breakpoint_filters
         });
@@ -1619,10 +1620,13 @@ impl DebugAdapter {
                                 exception_break_on_die.lock().map(|guard| *guard).unwrap_or(false);
                             let break_on_warn =
                                 exception_break_on_warn.lock().map(|guard| *guard).unwrap_or(false);
-                            let exception_match =
-                                break_on_die && exception_re().is_some_and(|re| re.is_match(&text));
+                            let is_exception_line =
+                                exception_re().is_some_and(|re| re.is_match(&text));
+                            let is_warning_line =
+                                warning_re().is_some_and(|re| re.is_match(&text));
+                            let exception_match = break_on_die && is_exception_line;
                             let warning_match =
-                                break_on_warn && warning_re().is_some_and(|re| re.is_match(&text));
+                                break_on_warn && is_warning_line && !is_exception_line;
 
                             // Store exception message for exceptionInfo request
                             if exception_match || warning_match {
@@ -2447,14 +2451,19 @@ impl DebugAdapter {
     ) -> DapMessage {
         let mut break_on_die = false;
         let mut break_on_warn = false;
+        let supports_die = catalog_has_feature("dap.exceptions.die");
+        let supports_warn = catalog_has_feature("dap.exceptions.warn");
 
         if let Some(args) = arguments
             .and_then(|v| serde_json::from_value::<SetExceptionBreakpointsArguments>(v).ok())
         {
             let matches_filter = |id: &str| -> (bool, bool) {
-                let is_die = id.eq_ignore_ascii_case("die") || id.eq_ignore_ascii_case("all");
-                let is_warn = id.eq_ignore_ascii_case("warn") || id.eq_ignore_ascii_case("all");
-                (is_die, is_warn)
+                let all = id.eq_ignore_ascii_case("all");
+                let die = supports_die
+                    && (id.eq_ignore_ascii_case("die") || all);
+                let warn = supports_warn
+                    && (id.eq_ignore_ascii_case("warn") || all);
+                (die, warn)
             };
 
             for filter in &args.filters {
@@ -4721,6 +4730,7 @@ impl DebugAdapter {
         // When a debug session is active, supplement with runtime data.
         let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
 
+        let runtime_start = targets.len();
         if has_session {
             // Add variable names from cached session scope.
             {
@@ -4763,6 +4773,9 @@ impl DebugAdapter {
                     });
                 }
             }
+
+            // Sort runtime completions for deterministic output.
+            targets[runtime_start..].sort_by(|a, b| a.label.cmp(&b.label));
         }
 
         let body = CompletionsResponseBody { targets };
@@ -4972,10 +4985,13 @@ mod tests {
             ("supportsValueFormattingOptions", crate::feature_catalog::has_feature("dap.core")),
             ("supportTerminateDebuggee", crate::feature_catalog::has_feature("dap.core")),
             ("supportsLogPoints", crate::feature_catalog::has_feature("dap.breakpoints.logpoints")),
-            ("supportsExceptionOptions", crate::feature_catalog::has_feature("dap.exceptions.die")),
+            ("supportsExceptionOptions",
+                crate::feature_catalog::has_feature("dap.exceptions.die")
+                    || crate::feature_catalog::has_feature("dap.exceptions.warn")),
             (
                 "supportsExceptionFilterOptions",
-                crate::feature_catalog::has_feature("dap.exceptions.die"),
+                crate::feature_catalog::has_feature("dap.exceptions.die")
+                    || crate::feature_catalog::has_feature("dap.exceptions.warn"),
             ),
             ("supportsInlineValues", crate::feature_catalog::has_feature("dap.inline_values")),
             ("supportsTerminateRequest", crate::feature_catalog::has_feature("dap.core")),
@@ -4999,26 +5015,26 @@ mod tests {
             .get("exceptionBreakpointFilters")
             .and_then(Value::as_array)
             .ok_or("exceptionBreakpointFilters must be present as an array")?;
-        if crate::feature_catalog::has_feature("dap.exceptions.die") {
-            assert!(
-                !exception_filters.is_empty(),
-                "Exception filters should be advertised when dap.exceptions.die is enabled"
-            );
-        }
 
-        let has_warn_filter = exception_filters
-            .iter()
-            .any(|f| f.get("filter").and_then(Value::as_str) == Some("warn"));
-        if crate::feature_catalog::has_feature("dap.exceptions.warn") {
-            assert!(
-                has_warn_filter,
-                "warn filter should be advertised when dap.exceptions.warn is enabled"
-            );
-        } else {
-            assert!(
-                !has_warn_filter,
-                "warn filter should not be present when dap.exceptions.warn is disabled"
-            );
+        let has_filter = |id: &str| -> bool {
+            exception_filters
+                .iter()
+                .any(|f| f.get("filter").and_then(Value::as_str) == Some(id))
+        };
+
+        let die_enabled = crate::feature_catalog::has_feature("dap.exceptions.die");
+        let warn_enabled = crate::feature_catalog::has_feature("dap.exceptions.warn");
+
+        assert_eq!(has_filter("die"), die_enabled,
+            "die filter presence must match dap.exceptions.die");
+        assert_eq!(has_filter("all"), die_enabled,
+            "all filter presence must match dap.exceptions.die");
+        assert_eq!(has_filter("warn"), warn_enabled,
+            "warn filter presence must match dap.exceptions.warn");
+
+        if !die_enabled && !warn_enabled {
+            assert!(exception_filters.is_empty(),
+                "exceptionBreakpointFilters must be empty when no exception features are enabled");
         }
 
         Ok(())
