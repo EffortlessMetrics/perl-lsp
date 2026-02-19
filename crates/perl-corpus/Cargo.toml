@@ -9,7 +9,7 @@ readme = "README.md"
 repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-corpus"
 homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-keywords = ["perl", "corpus", "proptest", "testing"]
+keywords = ["perl", "corpus", "proptest", "testing", "parser"]
 categories = ["development-tools", "testing"]
 include = ["src/**", "README.md", "LICENSE*", "Cargo.toml"]
 

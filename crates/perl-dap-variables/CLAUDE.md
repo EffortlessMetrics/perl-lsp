@@ -4,9 +4,9 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-dap-variables` is a **Tier 7 DAP feature module** providing variable rendering for debugging.
+`perl-dap-variables` is a **DAP feature module** providing variable parsing and rendering for Perl debugging.
 
-**Purpose**: Variable rendering for Perl DAP — formats Perl variables for display in debugger UI.
+**Purpose**: Parses Perl debugger text output into structured `PerlValue` representations, then renders them into DAP-compatible `RenderedVariable` structs for display in VSCode and other DAP-compatible editors.
 
 **Version**: 0.1.0
 
@@ -23,80 +23,78 @@ cargo doc -p perl-dap-variables --open   # View documentation
 
 ### Dependencies
 
-- `serde`, `serde_json` - Serialization
-- `regex` - Value parsing
-- `once_cell` - Lazy patterns
-- `thiserror` - Error definitions
+- `serde`, `serde_json` -- DAP protocol serialization
+- `regex` -- Compiled patterns for parsing debugger output
+- `once_cell` -- Lazy-initialized regex patterns via `Lazy<Result<Regex, regex::Error>>`
+- `thiserror` -- `VariableParseError` derivation
+
+### Modules
+
+| Module | File | Purpose |
+|--------|------|---------|
+| `lib` | `src/lib.rs` | `PerlValue` enum, re-exports public API |
+| `parser` | `src/parser.rs` | `VariableParser` for debugger output parsing |
+| `renderer` | `src/renderer.rs` | `VariableRenderer` trait, `PerlVariableRenderer`, `RenderedVariable` |
 
 ### Key Types
 
 | Type | Purpose |
 |------|---------|
-| `Variable` | Single variable representation |
-| `VariableContainer` | Expandable container (hash, array, object) |
-| `ValueRenderer` | Formats values for display |
+| `PerlValue` | Enum: `Undef`, `Scalar`, `Number`, `Integer`, `Array`, `Hash`, `Reference`, `Object`, `Code`, `Glob`, `Regex`, `Tied`, `Truncated`, `Error` |
+| `VariableParser` | Parses debugger text lines (e.g., `$x = 42`) into `(String, PerlValue)` pairs |
+| `VariableParseError` | Error enum: `UnrecognizedFormat`, `MaxDepthExceeded`, `UnterminatedString`, `UnterminatedCollection`, `RegexError` |
+| `VariableRenderer` | Trait with `render()`, `render_with_reference()`, `render_children()` |
+| `PerlVariableRenderer` | Default renderer with configurable `max_string_length`, `max_array_preview`, `max_hash_preview` |
+| `RenderedVariable` | DAP-compatible struct: `name`, `value`, `type_name`, `variables_reference`, `named_variables`, `indexed_variables`, `presentation_hint`, `memory_reference` |
+| `VariablePresentationHint` | DAP presentation hints: `kind`, `attributes`, `visibility` |
 
-### Variable Types
+### Parsing Flow
 
-| Type | Display | Expandable |
-|------|---------|------------|
-| Scalar | `$x = "value"` | No |
-| Array | `@arr = [3 items]` | Yes |
-| Hash | `%hash = {2 keys}` | Yes |
-| Reference | `$ref = \SCALAR(0x...)` | Yes |
-| Object | `$obj = MyClass=HASH(...)` | Yes |
-| Code | `$code = CODE(0x...)` | No |
+1. `VariableParser::parse_assignment("$x = 42")` splits name from value via regex
+2. `parse_value()` recursively matches against compiled regex patterns (undef, integer, float, quoted string, ARRAY/HASH/CODE refs, blessed objects, globs)
+3. Literal arrays `(1, 2, 3)` / `[1, 2, 3]` and hashes `{k => v}` are parsed with nesting-aware comma splitting
+4. `max_depth` (default 50) guards against excessive recursion
 
-### Variable Hierarchy
+### Rendering Flow
 
-```
-Locals
-├── $scalar = "hello"
-├── @array [3 items]
-│   ├── [0] = 1
-│   ├── [1] = 2
-│   └── [2] = 3
-└── %hash {2 keys}
-    ├── {foo} = "bar"
-    └── {baz} = "qux"
-```
+1. `PerlVariableRenderer::render(name, &value)` formats the value string and sets type/child counts
+2. `render_with_reference()` assigns a `variables_reference` ID for expandable values
+3. `render_children()` paginates child elements (array indices, hash keys, dereferenced values)
 
 ## Usage
 
 ```rust
-use perl_dap_variables::{Variable, ValueRenderer};
+use perl_dap_variables::{PerlValue, PerlVariableRenderer, VariableRenderer, VariableParser};
 
-let renderer = ValueRenderer::new();
+// Parse debugger output
+let parser = VariableParser::new();
+let (name, value) = parser.parse_assignment("$x = 42")?;
+assert_eq!(name, "$x");
+assert!(matches!(value, PerlValue::Integer(42)));
 
-// Render a scalar
-let var = renderer.render("$x", "42")?;
-assert_eq!(var.value, "42");
-assert_eq!(var.type_, Some("SCALAR".to_string()));
+// Render for DAP
+let renderer = PerlVariableRenderer::new();
+let rendered = renderer.render("$greeting", &PerlValue::Scalar("hello".to_string()));
+assert_eq!(rendered.name, "$greeting");
+assert_eq!(rendered.value, "\"hello\"");
+assert_eq!(rendered.type_name, Some("SCALAR".to_string()));
 
-// Render an array
-let var = renderer.render("@arr", "ARRAY(0x123)")?;
-assert!(var.variables_reference > 0);  // Expandable
-```
+// Render expandable array with reference ID
+let arr = PerlValue::Array(vec![PerlValue::Integer(1), PerlValue::Integer(2)]);
+let rendered = renderer.render_with_reference("@arr", &arr, 42);
+assert_eq!(rendered.variables_reference, 42);
+assert_eq!(rendered.indexed_variables, Some(2));
 
-### Lazy Loading
-
-Large structures are lazily loaded:
-
-```rust
-// Initial request returns summary
-// %hash = {1000 keys}
-
-// Expand request returns first N items
-// Request: variablesReference = 123
-// Response: first 100 key-value pairs
-
-// Pagination for remaining items
-// Request: variablesReference = 123, start = 100
+// Get children for expansion
+let children = renderer.render_children(&arr, 0, 10);
+assert_eq!(children[0].name, "[0]");
+assert_eq!(children[1].name, "[1]");
 ```
 
 ## Important Notes
 
-- Handles deeply nested structures
-- Circular reference detection
-- Truncation for large values
-- Object blessing displayed in type
+- Regex patterns are stored as `Lazy<Result<Regex, regex::Error>>` with accessor functions returning `Option<&Regex>`, treating compile failure as "no match" (graceful degradation per workspace policy)
+- `PerlValue::is_expandable()` returns true for `Array`, `Hash`, `Reference`, `Object`, and `Tied`
+- String truncation controlled by `PerlVariableRenderer::with_max_string_length()` (default 100 chars)
+- `RenderedVariable` uses `#[serde(rename_all = "camelCase")]` for DAP protocol JSON compatibility
+- Used by `perl-dap` for variable inspection and evaluate responses

@@ -3,14 +3,14 @@ name = "perl-lsp-rename"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "LSP rename provider for Perl"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-rename"
-keywords = ["perl", "lsp", "rename", "refactoring"]
+keywords = ["perl", "lsp", "rename", "refactoring", "ide"]
 categories = ["development-tools", "text-editors"]
 
 [lib]

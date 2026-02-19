@@ -1,94 +1,72 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with code in this repository.
-
 ## Crate Overview
 
-`perl-parser-core` is the **core parsing engine** providing the fundamental parsing machinery. It is a Tier 2 foundational crate used by `perl-parser` and higher-level analysis crates.
-
-**Purpose**: Core parser engine for perl-parser — provides AST construction, statement/expression parsing, and error recovery.
-
-**Version**: 0.8.8
+- **Name**: `perl-parser-core`
+- **Version**: 0.9.0
+- **Tier**: 2 (aggregates Tier 1 leaf crates into the core parsing engine)
+- **Purpose**: Recursive descent parser with IDE-friendly error recovery, AST construction, token stream utilities, and UTF-8/UTF-16 position mapping. Used by `perl-parser` and higher-level analysis/LSP crates.
 
 ## Commands
 
 ```bash
-cargo build -p perl-parser-core            # Build this crate
+cargo build -p perl-parser-core            # Build
 cargo test -p perl-parser-core             # Run tests
 cargo clippy -p perl-parser-core           # Lint
-cargo doc -p perl-parser-core --open       # View documentation
+cargo doc -p perl-parser-core --open       # View docs
 ```
 
 ## Architecture
 
-### Dependencies
+### Dependencies (all workspace Tier 1 crates)
 
-**Internal (Tier 1 leaf crates)**:
-- `perl-lexer` - Tokenization
-- `perl-token` - Token definitions
-- `perl-position-tracking` - UTF-8/UTF-16 positions
-- `perl-ast` - AST node definitions
-- `perl-quote` - Quote operator handling
-- `perl-pragma` - Pragma validation
-- `perl-edit` - Edit operations
-- `perl-builtins` - Built-in function metadata
-- `perl-regex` - Regex operator handling
-- `perl-heredoc` - Heredoc processing
-- `perl-error` - Error types
-- `perl-tokenizer` - Token stream utilities
+`perl-lexer`, `perl-token`, `perl-ast`, `perl-error`, `perl-position-tracking`, `perl-quote`, `perl-pragma`, `perl-edit`, `perl-builtins`, `perl-regex`, `perl-heredoc`, `perl-tokenizer`
 
-### Main Modules
+### Key Types and Modules
 
-| Path | Purpose |
-|------|---------|
-| `lib.rs` | Core engine interface |
-| `engine/` | Parsing logic subdirectory |
-| `tokens/` | Token stream handling |
+| Type / Module | Location | Purpose |
+|---------------|----------|---------|
+| `Parser` | `engine/parser/mod.rs` | Main recursive descent parser with `parse()` and `parse_with_recovery()` |
+| `ParserContext` | `engine/parser_context.rs` | Token-level context with budget-controlled error recovery |
+| `RecoveryParser` | `engine/error/recovery_parser.rs` | Error-tolerant parser producing partial ASTs with error nodes |
+| `Node`, `NodeKind`, `SourceLocation` | `engine/ast.rs` (re-exports `perl-ast`) | AST node types |
+| `TokenStream`, `Token`, `TokenKind` | `tokens/token_stream.rs` (re-exports `perl-tokenizer`) | Buffered token stream with lookahead |
+| `ParseError`, `ParseOutput`, `ParseResult` | `engine/error/mod.rs` (re-exports `perl-error`) | Error types and result wrappers |
+| `PositionMapper`, `LineIndex` | `engine/position/mod.rs` (re-exports `perl-position-tracking`) | UTF-8/UTF-16 position conversion |
+| `Trivia`, `TriviaPreservingParser` | `tokens/mod.rs` (re-exports `perl-tokenizer`) | Whitespace/comment preservation |
+| `BudgetTracker`, `ParseBudget` | via `perl-error` | Resource limits for error recovery |
 
-### Key Responsibilities
+### Module Layout
 
-1. **Recursive Descent Parsing**: Implements the v3 native parser
-2. **AST Construction**: Builds typed AST nodes from token streams
-3. **Error Recovery**: Provides graceful handling of malformed input
-4. **Position Tracking**: Maintains byte and UTF-16 positions
+- `lib.rs` -- public API surface, re-exports from submodules
+- `engine/` -- parser logic: `parser/` (recursive descent + helpers via `include!`), `error/` (recovery), `ast.rs`, `parser_context.rs`, `position/`
+- `tokens/` -- token stream and trivia facades over `perl-tokenizer`
 
-## Usage
+### Parser Design
 
-This crate is typically used indirectly through `perl-parser`. Direct usage:
+The parser in `engine/parser/mod.rs` uses `include!` macros to compose parsing logic from separate files: `helpers.rs`, `heredoc.rs`, `statements.rs`, `variables.rs`, `control_flow.rs`, `declarations.rs`, and `expressions/*.rs`. All included files are compiled as part of the `Parser` impl block.
+
+Error recovery returns `Ok(ast)` with ERROR nodes for most failures; `Err` is reserved for catastrophic conditions (recursion limit). This enables IDE features on incomplete code.
+
+## Usage Examples
 
 ```rust
-use perl_parser_core::Engine;
+use perl_parser_core::Parser;
 
-let source = "my $x = 1;";
-let engine = Engine::new(source);
-let ast = engine.parse()?;
-```
+// Basic parse
+let mut parser = Parser::new("my $x = 42;");
+let ast = parser.parse()?;
 
-## Design Patterns
-
-### Error Recovery
-
-The parser uses continuation-based error recovery to provide useful diagnostics even for incomplete or malformed code:
-
-```rust
-// Parser continues past errors, collecting diagnostics
-let result = engine.parse();
-for diagnostic in result.diagnostics() {
-    // Handle parser errors
-}
-```
-
-### Quote Context
-
-Special handling for Perl's complex quoting:
-
-```rust
-// Handles q//, qq//, qw//, qr//, etc.
-// Delegates to perl-quote for delimiter matching
+// Parse with recovery (preferred for LSP)
+let mut parser = Parser::new("my $x = ;");
+let output = parser.parse_with_recovery();
+// output.ast always available; output.diagnostics contains errors
 ```
 
 ## Important Notes
 
-- Prefer using `perl-parser` for typical use cases
-- This crate provides the low-level parsing API
-- Changes here affect all higher-level crates
+- Prefer `perl-parser` for end-user usage; this crate is the internal engine
+- `Parser` struct has a recursion depth limit of 128 to prevent stack overflow
+- `ParserContext` uses `ParseBudget` to cap errors and nesting depth
+- Changes to this crate affect all higher-level crates in the workspace
+- Doctests are disabled (`doctest = false` in Cargo.toml)

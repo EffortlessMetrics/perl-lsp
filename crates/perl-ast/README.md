@@ -1,23 +1,27 @@
 # perl-ast
 
-Abstract syntax tree node types for Perl parsing and analysis.
+AST (Abstract Syntax Tree) node definitions for the Perl parser ecosystem.
 
-## Scope
+## Overview
 
-- Defines the primary AST model used by `perl-parser`.
-- Provides an experimental `v2` AST for incremental parsing flows.
-- Re-exports common node and location types used across parser/LSP crates.
+`perl-ast` provides the typed node structures used to represent parsed Perl source code. It contains two AST modules:
 
-## Public Surface
+- **`ast`** -- The primary AST used by `perl-parser`. Defines `Node` (kind + `SourceLocation`) and the `NodeKind` enum with 50+ variants covering declarations, expressions, control flow, regex, OO constructs, and error recovery nodes. Includes S-expression serialization via `to_sexp()`.
+- **`v2`** -- An enhanced AST for incremental parsing. Nodes carry a unique `NodeId` and use `Range` (line/column) positions instead of byte offsets. Adds `NodeIdGenerator`, `MissingKind`, `DiagnosticId`, and lightweight `ErrorRef` nodes.
 
-- `ast` module for primary node structures.
-- `v2` module for alternate AST representation.
-- Re-exports: `Node`, `NodeKind`, `SourceLocation`.
+## Public API
+
+Re-exports from `lib.rs`: `Node`, `NodeKind`, `SourceLocation`.
 
 ## Workspace Role
 
-`perl-ast` is a foundational internal crate used by parser, semantic analysis, and LSP components.
+Tier 1 leaf crate. Depended on by `perl-parser-core`, `perl-tokenizer`, `perl-pragma`, and `perl-error`.
+
+## Dependencies
+
+- `perl-position-tracking` -- span and position types (`SourceLocation`, `Range`, `Position`)
+- `perl-token` -- token definitions (`Token`, `TokenKind`) used in error recovery nodes
 
 ## License
 
-MIT OR Apache-2.0.
+MIT OR Apache-2.0

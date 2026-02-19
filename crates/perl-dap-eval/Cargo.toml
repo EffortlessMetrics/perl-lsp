@@ -11,7 +11,7 @@ homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-dap-eval"
 readme = "README.md"
 keywords = ["perl", "dap", "debug", "eval", "security"]
-categories = ["development-tools"]
+categories = ["development-tools", "development-tools::debugging"]
 
 [dependencies]
 # Regex for pattern matching

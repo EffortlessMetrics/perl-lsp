@@ -10,8 +10,8 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-dap-variables"
-keywords = ["perl", "dap", "debug", "variables"]
-categories = ["development-tools"]
+keywords = ["perl", "dap", "debug", "variables", "rendering"]
+categories = ["development-tools::debugging", "development-tools"]
 
 [dependencies]
 # Serialization for DAP protocol

@@ -6,6 +6,12 @@ rust-version = "1.92"
 description = "Heredoc parsing pipeline for Perl"
 publish = false
 license = "Apache-2.0 OR MIT"
+readme = "README.md"
+repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+documentation = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+keywords = ["perl", "heredoc", "parser", "lexer", "lsp"]
+categories = ["parsing", "development-tools", "text-processing"]
 
 [dependencies]
 regex = "1.12.2"

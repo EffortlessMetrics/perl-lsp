@@ -4,16 +4,14 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-refactoring` is a **Tier 3 mid-tier crate** providing refactoring and modernization utilities for Perl.
-
-**Purpose**: Refactoring and modernization utilities for Perl — provides automated code transformations like rename, extract, and modernization fixes.
-
-**Version**: 0.8.8
+- **Tier**: 3 (two-level internal dependencies)
+- **Version**: 0.9.0
+- **Purpose**: Refactoring and modernization utilities for Perl -- provides automated code transformations including import optimization, symbol rename, module extraction, inline variable, and legacy code modernization.
 
 ## Commands
 
 ```bash
-cargo build -p perl-refactoring          # Build this crate
+cargo build -p perl-refactoring          # Build
 cargo test -p perl-refactoring           # Run tests
 cargo clippy -p perl-refactoring         # Lint
 cargo doc -p perl-refactoring --open     # View documentation
@@ -23,79 +21,56 @@ cargo doc -p perl-refactoring --open     # View documentation
 
 ### Dependencies
 
-- `perl-parser-core` - AST access
-- `perl-workspace-index` - Cross-file operations
+- `perl-parser-core` -- AST types, parser, `Node`, `NodeKind`, `SourceLocation`, `LineIndex`
+- `perl-workspace-index` -- `WorkspaceIndex`, `SymKind`, `SymbolKey`, URI/path helpers
 
 ### Features
 
-| Feature | Purpose |
-|---------|---------|
-| `workspace_refactor` | Workspace-wide refactoring (default) |
-| `modernize` | Code modernization transforms |
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `workspace_refactor` | yes | Enables `WorkspaceRefactor` in `RefactoringEngine` |
+| `modernize` | no | Enables `PerlModernizer` in `RefactoringEngine` |
+| `workspace-rename-tests` | no | Integration tests for workspace rename |
 
-### Main Modules
+### Key Types and Modules
 
-Located in `refactor/` subdirectory:
+| Module | Key Types | Purpose |
+|--------|-----------|---------|
+| `refactor::refactoring` | `RefactoringEngine`, `RefactoringConfig`, `RefactoringResult`, `RefactoringType`, `RefactoringScope`, `BackupInfo` | Unified engine coordinating all refactoring operations with backup/rollback |
+| `refactor::import_optimizer` | `ImportOptimizer`, `ImportAnalysis`, `UnusedImport`, `MissingImport`, `TextEdit` | Analyze and optimize Perl `use`/`require` statements |
+| `refactor::modernize` | `PerlModernizer`, `ModernizationSuggestion` | Legacy pattern detection (bareword filehandles, two-arg open, missing pragmas) |
+| `refactor::modernize_refactored` | `PerlModernizer`, `ModernizationSuggestion` | Structured pattern-based modernizer with explicit pattern metadata |
+| `refactor::workspace_refactor` | `WorkspaceRefactor`, `RefactorError`, `FileEdit`, `RefactorResult` | Cross-file rename, extract module, move subroutine, inline variable, optimize imports |
+| `refactor::workspace_rename` | `WorkspaceRename`, `WorkspaceRenameConfig`, `WorkspaceRenameResult`, `RenameStatistics` | Atomic workspace-wide symbol rename with progress reporting |
 
-| Module | Purpose |
-|--------|---------|
-| `rename.rs` | Variable/subroutine renaming |
-| `extract.rs` | Extract variable/subroutine |
-| `inline.rs` | Inline variable/subroutine |
-| `modernize.rs` | Modernization transforms |
+### Re-exports from lib.rs
 
-### Refactoring Operations
-
-| Operation | Description |
-|-----------|-------------|
-| **Rename** | Rename variable, subroutine, or package |
-| **Extract Variable** | Extract expression to variable |
-| **Extract Subroutine** | Extract code block to subroutine |
-| **Inline Variable** | Inline variable usage |
-| **Modernize** | Apply modern Perl idioms |
-
-### Modernization Transforms
-
-```perl
-# Before → After
-
-# Use say instead of print with newline
-print "hello\n";  →  say "hello";
-
-# Use // instead of defined-or
-defined $x ? $x : $default  →  $x // $default
-
-# Use state instead of persistent my
-my $count; BEGIN { $count = 0 }  →  state $count = 0;
-```
+The crate re-exports core types from `perl-parser-core` (`Node`, `NodeKind`, `Parser`, `ParseError`, etc.) and `perl-workspace-index` (`document_store`, `workspace_index`). Workspace modules (`workspace_refactor`, `workspace_rename`) are gated on `#[cfg(not(target_arch = "wasm32"))]`.
 
 ## Usage
 
 ```rust
-use perl_refactoring::{Refactor, RenameOptions};
+use perl_refactoring::import_optimizer::ImportOptimizer;
 
-// Rename a symbol
-let edits = Refactor::rename(
-    workspace,
-    "old_name",
-    "new_name",
-    RenameOptions::default(),
+let optimizer = ImportOptimizer::new();
+let analysis = optimizer.analyze_content(source_code)?;
+let edits = optimizer.generate_edits(source_code, &analysis);
+```
+
+```rust
+use perl_refactoring::refactoring::{RefactoringEngine, RefactoringType, RefactoringScope};
+
+let mut engine = RefactoringEngine::new();
+let result = engine.refactor(
+    RefactoringType::Rename { old_name: "foo".into(), new_name: "bar".into() },
+    RefactoringScope::File(path),
 )?;
-
-// Extract variable
-let edits = Refactor::extract_variable(
-    document,
-    selection,
-    "new_var_name",
-)?;
-
-// Modernize file
-let edits = Refactor::modernize(document)?;
 ```
 
 ## Important Notes
 
-- Refactoring produces `TextEdit` collections
-- Workspace-wide operations use `perl-workspace-index`
-- Modernization respects minimum Perl version
-- All operations preserve semantics
+- All refactoring operations return edit collections rather than mutating files directly (except `WorkspaceRename::apply_edits`)
+- `RefactoringEngine` keeps an operation history for rollback support
+- Workspace rename is atomic: all changes succeed or all are rolled back
+- `modernize` and `modernize_refactored` both expose a `PerlModernizer` struct with an `analyze(&str)` method but are separate implementations
+- No `unwrap()`/`expect()` in production code per workspace lint policy

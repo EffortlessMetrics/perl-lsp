@@ -4,11 +4,11 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-lexer` is a **Tier 1 leaf crate** providing high-performance, context-aware tokenization for Perl source code.
+`perl-lexer` is a **Tier 1 leaf crate** providing context-aware tokenization for Perl source code.
 
-**Purpose**: High-performance Perl lexer with context-aware tokenization — handles Perl's complex lexical grammar including sigils, quotes, and heredocs.
+**Purpose**: Mode-based Perl lexer that disambiguates context-sensitive tokens (division vs regex, modulo vs hash sigil, heredocs, quote-like operators) and supports checkpointing for incremental parsing.
 
-**Version**: 0.8.8
+**Version**: 0.9.0
 
 ## Commands
 
@@ -17,83 +17,98 @@ cargo build -p perl-lexer            # Build this crate
 cargo test -p perl-lexer             # Run tests
 cargo clippy -p perl-lexer           # Lint
 cargo doc -p perl-lexer --open       # View documentation
+cargo bench -p perl-lexer            # Run lexer benchmarks
+cargo test -p perl-lexer --features slow_tests  # Include slow stress tests
 ```
 
 ## Architecture
 
 ### Dependencies
 
-**External only** (plus `perl-position-tracking`):
-- `unicode-ident` - Unicode identifier validation
-- `memchr` - Fast byte scanning
-- `thiserror` - Error definitions
+- `perl-position-tracking` (workspace) - Line/column position tracking
+- `unicode-ident` - Unicode XID identifier validation
+- `memchr` - Fast byte scanning for delimiters
+- `thiserror` - Error type definitions
 
-### Main Modules
+### Key Types (public API)
 
-| File | Size | Purpose |
-|------|------|---------|
-| `lib.rs` | 118KB | Main lexer implementation |
-| `checkpoint.rs` | - | Lexer state checkpoints for backtracking |
-| `mode.rs` | - | Lexer mode management (string, regex, etc.) |
-| `quote_handler.rs` | - | Quote-aware tokenization |
-| `unicode.rs` | - | Unicode handling |
-| `token.rs` | - | Token definitions |
-| `error.rs` | - | Lexer error types |
+| Type | Module | Purpose |
+|------|--------|---------|
+| `PerlLexer<'a>` | `lib.rs` | Main lexer struct; call `next_token()` to iterate |
+| `Token` | `token.rs` | Token with `token_type`, `text`, `start`, `end` |
+| `TokenType` | `token.rs` | Enum of all token kinds (operators, keywords, literals, etc.) |
+| `StringPart` | `token.rs` | Parts of interpolated strings (Literal, Variable, Expression) |
+| `LexerMode` | `mode.rs` | ExpectTerm, ExpectOperator, ExpectDelimiter, InFormatBody, InDataSection |
+| `LexerConfig` | `lib.rs` | Configuration: `parse_interpolation`, `track_positions`, `max_lookahead` |
+| `LexerCheckpoint` | `checkpoint.rs` | Saved lexer state for backtracking |
+| `CheckpointCache` | `checkpoint.rs` | Cache of checkpoints for incremental parsing |
+| `Checkpointable` | `checkpoint.rs` | Trait: `checkpoint()`, `restore()`, `can_restore()` |
+| `LexerError` | `error.rs` | Error variants (UnterminatedString, UnterminatedRegex, etc.) |
 
-### Lexer Modes
+### Modules
 
-The lexer operates in different modes to handle Perl's context-sensitive grammar:
-
-| Mode | Purpose |
+| File | Purpose |
 |------|---------|
-| Normal | Standard Perl code |
-| String | Inside string literals |
-| Regex | Inside regex patterns |
-| Quote | Inside q/qq/qw operators |
-| Heredoc | Inside heredoc content |
+| `lib.rs` (~3K lines) | Main lexer: `PerlLexer`, mode transitions, all token-parsing methods |
+| `token.rs` | `Token`, `TokenType`, `StringPart` definitions |
+| `mode.rs` | `LexerMode` enum and context-sensitivity documentation |
+| `checkpoint.rs` | `LexerCheckpoint`, `CheckpointCache`, `Checkpointable` trait |
+| `quote_handler.rs` | Quote-operator helpers (delimiter pairing, modifier specs) |
+| `unicode.rs` | Unicode identifier classification (`is_perl_identifier_start/continue`) |
+| `error.rs` | `LexerError` enum and `Result` alias |
 
-## Key Features
+### Budget Limits
 
-### Context-Aware Tokenization
+Guards against pathological input; emits `UnknownRest` token on overflow:
+
+- `MAX_REGEX_BYTES`: 64 KB
+- `MAX_HEREDOC_BYTES`: 256 KB
+- `MAX_DELIM_NEST`: 128 levels
+- `MAX_HEREDOC_DEPTH`: 100 levels
+- `HEREDOC_TIMEOUT_MS`: 5 seconds
+
+## Usage Examples
+
+### Basic tokenization
 
 ```rust
-use perl_lexer::Lexer;
+use perl_lexer::{PerlLexer, TokenType};
 
-let source = r#"my $x = "hello $name";"#;
-let mut lexer = Lexer::new(source);
-
-// Lexer handles interpolation context automatically
-for token in lexer {
-    // Token includes context information
+let mut lexer = PerlLexer::new("my $x = 42;");
+while let Some(token) = lexer.next_token() {
+    if matches!(token.token_type, TokenType::EOF) { break; }
+    println!("{:?}: {}", token.token_type, token.text);
 }
+```
+
+### Custom configuration
+
+```rust
+use perl_lexer::{PerlLexer, LexerConfig};
+
+let config = LexerConfig {
+    parse_interpolation: true,
+    track_positions: true,
+    max_lookahead: 1024,
+};
+let mut lexer = PerlLexer::with_config("my $x = 1;", config);
 ```
 
 ### Checkpointing
 
 ```rust
-// Save lexer state for potential backtracking
-let checkpoint = lexer.checkpoint();
+use perl_lexer::{PerlLexer, Checkpointable};
 
-// Try parsing something
-if !successful {
-    lexer.restore(checkpoint);
-}
+let mut lexer = PerlLexer::new("my $x = 1;");
+let cp = lexer.checkpoint();
+let _ = lexer.next_token();
+lexer.restore(&cp); // backtrack
 ```
-
-### Unicode Support
-
-Full Unicode identifier support following Perl's rules:
-- Unicode letters for identifier starts
-- Unicode combining marks and digits for continuations
-
-## Performance Considerations
-
-- Uses `memchr` for fast delimiter scanning
-- Minimal allocations during tokenization
-- Checkpoint-based backtracking (no full rescan)
 
 ## Important Notes
 
-- This is the foundation for all parsing — changes here are high-impact
-- The `lib.rs` is intentionally large (118KB) to keep hot paths together
-- Test thoroughly when modifying quote or heredoc handling
+- This crate is the foundation for `perl-parser` and the LSP stack; changes are high-impact
+- `lib.rs` is intentionally large (~3K lines) to keep hot paths in a single compilation unit
+- `quote_handler.rs` is `pub(crate)` only; modifier validation lives in the parser layer
+- Test thoroughly when modifying quote, heredoc, or mode-transition logic
+- The `simd` feature flag is defined but currently a no-op placeholder

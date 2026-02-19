@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-diagnostics"
-keywords = ["perl", "lsp", "diagnostics", "linting"]
+keywords = ["perl", "lsp", "diagnostics", "linting", "static-analysis"]
 categories = ["development-tools", "text-editors"]
 
 [lib]

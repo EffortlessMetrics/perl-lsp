@@ -1,42 +1,38 @@
 # perl-tdd-support
 
-Test-driven development support utilities for the Perl parser ecosystem.
+Test-driven development helpers, test generators, and safe assertion utilities for the Perl LSP workspace.
 
-## Purpose
+## Overview
 
-This crate provides tools to support TDD workflows when working with Perl code, including test generation, execution runners, and validation utilities for Perl parser and LSP development. It helps maintain high code quality through systematic test-driven development practices.
+This crate provides TDD workflow support for Perl parser and LSP development:
 
-## Key Features
+- **`must` / `must_some` / `must_err`** -- Safe `unwrap` replacements that comply with the workspace "no unwrap/expect" policy
+- **Test generators** -- Generate Perl test cases (Test::More, Test2::V0, Test::Simple, Test::Class) from parsed ASTs
+- **Test runner** -- Discover and execute Perl `.t` files with TAP output parsing
+- **TDD workflow manager** -- Red-green-refactor cycle state machine with coverage tracking
+- **Refactoring analyzer** -- Detect high complexity, long methods, excessive parameters, and naming issues
+- **Ignored test governance** -- Baseline tracking, quality gates, and trend reporting for ignored tests
 
-- **Test Case Generators**: Generate test cases for Perl syntax patterns
-- **Test Execution Runners**: Execute tests with comprehensive result capture
-- **TDD Workflow Helpers**: Support iterative parser development with TDD practices
-- **Parser Validation**: Validate parser behavior against expected outcomes
-- **LSP Compatibility**: Optional LSP-compatible features for integration testing
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| `default` | Core TDD helpers and test generation |
+| `lsp-compat` | LSP type integration (`lsp-types`, `url`) for code actions and diagnostics |
 
 ## Usage
 
 ```rust
-use perl_tdd_support::tdd_basic;
+use perl_tdd_support::{must, must_some, must_err};
 
-// Use TDD helpers to validate parser behavior
-// (specific APIs depend on tdd module implementation)
+// Safe unwrap replacements for tests
+let value = must(some_result);
+let item = must_some(some_option);
+let err = must_err(expected_err_result);
 ```
 
-## Features
-
-- `default`: Basic TDD functionality
-- `lsp-compat`: Enable LSP types integration for LSP feature testing
-
-## Documentation
-
-For detailed API documentation, see [docs.rs/perl-tdd-support](https://docs.rs/perl-tdd-support).
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
 
 ## License
 
-Licensed under either of:
-
-- MIT License
-- Apache License, Version 2.0
-
-at your option.
+Licensed under either of MIT or Apache-2.0 at your option.

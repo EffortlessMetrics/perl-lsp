@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-position-tracking"
-keywords = ["perl", "position", "utf16", "lsp"]
+keywords = ["perl", "position", "utf16", "lsp", "utf8"]
 categories = ["development-tools", "text-editors"]
 include = [
   "src/**",

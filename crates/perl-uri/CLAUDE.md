@@ -4,11 +4,9 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-uri` is a **Tier 1 leaf crate** providing URI ↔ filesystem path conversion utilities.
+`perl-uri` is a **Tier 1 leaf crate** providing URI-to-filesystem-path conversion and normalization utilities for the Perl LSP ecosystem.
 
-**Purpose**: URI ↔ filesystem path conversion and normalization utilities for Perl LSP — handles file:// URLs and platform-specific paths.
-
-**Version**: 0.8.8
+**Version**: 0.9.0
 
 ## Commands
 
@@ -23,60 +21,52 @@ cargo doc -p perl-uri --open         # View documentation
 
 ### Dependencies
 
-- `url` - URL parsing and manipulation
+- `url` (external) -- URL parsing and manipulation
+- `perl-tdd-support` (dev) -- test assertion helpers (`must`, `must_some`)
+- `tempfile` (dev) -- temporary file utilities
 
 ### Key Functions
 
-| Function | Purpose |
-|----------|---------|
-| `uri_to_path` | Convert `file://` URI to filesystem path |
-| `path_to_uri` | Convert filesystem path to `file://` URI |
-| `normalize_uri` | Normalize URI for consistent comparison |
+| Function | Platform | Purpose |
+|----------|----------|---------|
+| `uri_to_fs_path` | non-wasm | Convert `file://` URI to `PathBuf` via `url::Url::to_file_path` |
+| `fs_path_to_uri` | non-wasm | Convert filesystem path to `file://` URI string; resolves relative paths |
+| `normalize_uri` | non-wasm | Normalize a URI or bare path to a consistent `file://` form |
+| `uri_key` | all | Normalize URI for map lookups (lowercases Windows drive letters) |
+| `is_file_uri` | all | Check if URI uses `file://` scheme |
+| `is_special_scheme` | all | Check if URI uses a non-file scheme (`untitled:`, `git:`, `vscode-notebook:`, `vscode-vfs:`) |
+| `uri_extension` | all | Extract file extension from a URI string |
 
 ### Platform Handling
 
-```rust
-// Unix
-// file:///home/user/code/script.pl → /home/user/code/script.pl
+Functions marked *non-wasm* are gated with `#[cfg(not(target_arch = "wasm32"))]`. A minimal wasm32 version of `normalize_uri` exists that performs parse-only normalization without filesystem access.
 
-// Windows
-// file:///C:/Users/code/script.pl → C:\Users\code\script.pl
-// file:///c%3A/Users/code/script.pl → C:\Users\code\script.pl (encoded colon)
-```
+### Windows Drive Letter Normalization
 
-### URI Normalization
-
-Normalization ensures consistent URI comparison:
-
-```rust
-use perl_uri::normalize_uri;
-
-// These should all normalize to the same URI:
-// file:///path/to/file.pl
-// file:///path/to/../to/file.pl
-// file:///path/to/./file.pl
-```
+`uri_key` normalizes uppercase drive letters so that `file:///C:/foo` and `file:///c:/foo` resolve to the same lookup key.
 
 ## Usage
 
 ```rust
-use perl_uri::{uri_to_path, path_to_uri};
-use std::path::Path;
+use perl_uri::{uri_to_fs_path, fs_path_to_uri, normalize_uri, uri_key};
 
 // URI to path
-let uri = "file:///home/user/script.pl";
-let path = uri_to_path(uri)?;
-assert_eq!(path, Path::new("/home/user/script.pl"));
+let path = uri_to_fs_path("file:///tmp/test.pl"); // Some(PathBuf)
 
 // Path to URI
-let path = Path::new("/home/user/script.pl");
-let uri = path_to_uri(path)?;
-assert_eq!(uri, "file:///home/user/script.pl");
+let uri = fs_path_to_uri("/tmp/test.pl"); // Ok("file:///tmp/test.pl")
+
+// Normalize arbitrary input
+let uri = normalize_uri("file:///tmp/test.pl"); // "file:///tmp/test.pl"
+
+// Consistent lookup key
+let key = uri_key("file:///C:/Users/test.pl"); // "file:///c:/Users/test.pl"
 ```
 
 ## Important Notes
 
-- Always use these functions for URI/path conversion (not manual string manipulation)
-- Handle percent-encoding of special characters
-- Windows paths require special handling for drive letters
-- Test on both Unix and Windows platforms
+- Always use these functions for URI/path conversion instead of manual string manipulation
+- `fs_path_to_uri` resolves relative paths via `std::env::current_dir` before conversion
+- Percent-encoding/decoding is handled automatically by the `url` crate
+- Tests use `perl_tdd_support::must` / `must_some` instead of `unwrap()` / `expect()`
+- The `#[allow(clippy::unwrap_used, clippy::expect_used)]` attribute is applied only to the test module

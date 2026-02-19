@@ -1,52 +1,26 @@
 # perl-dap-breakpoint
 
-AST-based breakpoint validation for Perl Debug Adapter Protocol (DAP).
+AST-based breakpoint validation for the Perl Debug Adapter Protocol (DAP).
+
+Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
 
 ## Features
 
-- **AST-Based Validation**: Uses the Perl parser AST to validate breakpoint locations
-- **Line Suggestion**: Suggests the nearest valid line when a breakpoint is on an invalid location
-- **Validation Reasons**: Provides detailed reasons for why a breakpoint was rejected or adjusted
+- **AST-based validation** -- uses `perl-parser` to determine whether a line contains executable code
+- **Line suggestion** -- finds the nearest valid line via `find_nearest_valid_line` with configurable search direction and max distance
+- **Detailed rejection reasons** -- distinguishes blank lines, comment lines, heredoc interiors, and out-of-range lines (`ValidationReason`)
 
-## Usage
+## Public API
 
-```rust
-use perl_dap_breakpoint::{BreakpointValidator, AstBreakpointValidator};
-
-let source = "# comment\nmy $x = 1;\n";
-let validator = AstBreakpointValidator::new(source)?;
-
-// Validate a breakpoint on line 1 (which is a comment)
-let result = validator.validate(1);
-assert!(!result.verified);
-
-// Validate a breakpoint on line 2 (which has code)
-let result = validator.validate(2);
-assert!(result.verified);
-```
-
-## Validation Types
-
-The validator detects the following invalid breakpoint locations:
-
-- **Blank Lines**: Lines containing only whitespace
-- **Comment Lines**: Lines containing only comments
-- **Heredoc Interior**: Lines inside heredoc content
-- **Out of Range**: Line numbers beyond the file length
-
-## Finding Nearest Valid Line
-
-```rust
-use perl_dap_breakpoint::{AstBreakpointValidator, find_nearest_valid_line};
-use perl_dap_breakpoint::suggestion::SearchDirection;
-
-let source = "# comment\n# comment\nmy $x = 1;\n";
-let validator = AstBreakpointValidator::new(source)?;
-
-// Find nearest valid line from line 1 (a comment)
-let nearest = find_nearest_valid_line(&validator, 1, SearchDirection::Forward, None);
-assert_eq!(nearest, Some(3)); // Line 3 has executable code
-```
+| Item | Kind | Description |
+|------|------|-------------|
+| `BreakpointValidator` | trait | `validate`, `validate_with_column`, `is_executable_line` |
+| `AstBreakpointValidator` | struct | Parses source with `perl-parser` and implements `BreakpointValidator` |
+| `BreakpointValidation` | struct | Result with `verified`, `line`, `column`, `reason`, `message` fields |
+| `ValidationReason` | enum | `BlankLine`, `CommentLine`, `HeredocInterior`, `LineOutOfRange`, `ParseError` |
+| `BreakpointError` | enum | `ParseError(String)`, `LineOutOfRange(i64, usize)` |
+| `find_nearest_valid_line` | fn | Searches forward, backward, or both for the nearest executable line |
+| `suggestion::SearchDirection` | enum | `Forward`, `Backward`, `Both` |
 
 ## License
 

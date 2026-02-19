@@ -3,15 +3,15 @@ name = "perl-tdd-support"
 version = "0.9.0"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
-description = "Test-driven development helpers for Perl"
+authors.workspace = true
+description = "Test-driven development helpers and test generation for the Perl LSP ecosystem"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/perl-tdd-support"
-keywords = ["perl", "tdd", "tests", "generator"]
-categories = ["development-tools", "text-editors"]
+keywords = ["perl", "tdd", "testing", "test-generation", "lsp"]
+categories = ["development-tools::testing", "development-tools"]
 include = [
   "src/**",
   "Cargo.toml",

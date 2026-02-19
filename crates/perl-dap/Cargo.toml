@@ -3,15 +3,15 @@ name = "perl-dap"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "Debug Adapter Protocol server for Perl"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/perl-dap"
 readme = "README.md"
-keywords = ["perl", "parser", "lsp", "dap", "debug"]
-categories = ["development-tools", "parsing"]
+keywords = ["perl", "dap", "debug", "debugger", "adapter"]
+categories = ["development-tools::debugging", "command-line-utilities"]
 include = [
   "src/**",
   "Cargo.toml",

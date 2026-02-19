@@ -1,22 +1,33 @@
 # perl-token
 
-Core token and token-kind definitions for Perl lexing/parsing.
+Core token type definitions for the Perl parser ecosystem.
 
-## Scope
+## Overview
 
-- Defines `Token` with source text and byte-span metadata.
-- Defines `TokenKind` classification used by parser/token stream layers.
-- Serves as the shared token contract across lexer/parser crates.
+`perl-token` is a Tier 1 leaf crate that defines the shared token types used
+across the lexer, tokenizer, and parser crates. It has zero external
+dependencies (only `std::sync::Arc`).
 
-## Public Surface
+## Public API
 
-- `Token`.
-- `TokenKind`.
+- **`Token`** -- a token with `kind: TokenKind`, `text: Arc<str>`, `start: usize`, `end: usize`
+- **`TokenKind`** -- enum classifying every Perl token: keywords, operators, delimiters, literals, sigils, and special tokens
+
+## Usage
+
+```rust
+use perl_token::{Token, TokenKind};
+
+let tok = Token::new(TokenKind::Identifier, "foo", 0, 3);
+assert_eq!(tok.kind, TokenKind::Identifier);
+```
 
 ## Workspace Role
 
-Foundational internal crate used by `perl-lexer`, `perl-tokenizer`, and parser crates.
+Foundational crate consumed by `perl-lexer`, `perl-tokenizer`, `perl-parser-core`,
+and downstream parser/LSP crates. Part of the
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
 
 ## License
 
-MIT OR Apache-2.0.
+MIT OR Apache-2.0

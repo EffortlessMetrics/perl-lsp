@@ -1,23 +1,28 @@
 # perl-dap-stack
 
-Stack trace parsing and frame classification utilities for Perl DAP.
+Stack trace parsing and frame classification for the Perl Debug Adapter Protocol.
 
-## Scope
+## Overview
 
-- Parses Perl debugger stack output into DAP-compatible `StackFrame` values.
-- Classifies frames (user code vs library/runtime code).
-- Provides shared frame/source model types for debug UI integration.
+This crate provides types and utilities for parsing Perl debugger stack trace
+output into DAP-compatible structures and classifying frames as user code,
+library code, or core Perl internals.
 
-## Public Surface
+## Public API
 
-- `PerlStackParser`, `StackParseError`.
-- `FrameClassifier`, `PerlFrameClassifier`, `FrameCategory`.
-- DAP model types: `StackFrame`, `Source`, and presentation hints.
+- **`StackFrame`** / **`Source`** -- DAP-compatible model types with builder methods
+- **`StackFramePresentationHint`** / **`SourcePresentationHint`** -- UI rendering hints
+- **`StackTraceProvider`** -- trait for stack trace retrieval implementations
+- **`PerlStackParser`** -- parses Perl debugger output (`T` command, context lines, eval frames)
+- **`StackParseError`** -- error type for parse failures
+- **`FrameClassifier`** / **`PerlFrameClassifier`** -- classifies frames by origin (user, library, core, eval)
+- **`FrameCategory`** -- classification result enum
 
 ## Workspace Role
 
-Internal support crate used by `perl-dap` request handlers.
+Internal support crate consumed by `perl-dap` request handlers. Provides the
+shared stack frame model and debugger output parsing used during debug sessions.
 
 ## License
 
-MIT OR Apache-2.0.
+MIT OR Apache-2.0

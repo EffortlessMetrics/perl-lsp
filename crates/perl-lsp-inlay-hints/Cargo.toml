@@ -10,7 +10,7 @@ license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-inlay-hints"
-keywords = ["perl", "lsp", "inlay-hints", "type-hints"]
+keywords = ["perl", "lsp", "inlay-hints", "type-hints", "ide"]
 categories = ["development-tools", "text-editors"]
 
 [lib]

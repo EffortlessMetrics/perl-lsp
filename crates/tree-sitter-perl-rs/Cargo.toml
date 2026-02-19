@@ -1,17 +1,18 @@
 [package]
 name = "tree-sitter-perl"
-rust-version = "1.92"
-version = "0.8.3"
-edition = "2024"
-description = "Tree-sitter Perl validation harness (internal only)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Pure-Rust Pest-based Perl parser with tree-sitter-compatible S-expression output (internal harness)"
 readme = "README.md"
 publish = false
-license = "Apache-2.0 OR MIT"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs/tree/master/crates/tree-sitter-perl-rs"
-keywords = ["tree-sitter", "perl", "parser", "grammar"]
-categories = ["parsing", "text-processing"]
+keywords = ["tree-sitter", "perl", "parser", "pest", "s-expression"]
+categories = ["parsing", "development-tools"]
 
 [dependencies]
 perl-lexer = { path = "../perl-lexer" }

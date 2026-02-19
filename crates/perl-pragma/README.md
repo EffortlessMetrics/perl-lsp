@@ -2,21 +2,27 @@
 
 Pragma state tracking for Perl source analysis.
 
-## Scope
+## Overview
 
-- Tracks `use` and `no` pragmas over source order.
-- Computes effective pragma state (strict/warnings and category toggles).
-- Supports scope-aware pragma analysis for parser and diagnostics flows.
+`perl-pragma` walks a `perl-ast` AST to track `use strict`, `no strict`,
+`use warnings`, and `no warnings` statements. It builds a range-indexed
+pragma map so callers can query the effective pragma state at any byte offset
+in the source.
 
-## Public Surface
+## Public API
 
-- `PragmaState`.
-- `PragmaTracker`.
+- **`PragmaState`** -- tracks `strict_vars`, `strict_subs`, `strict_refs`,
+  and `warnings` booleans. Provides `all_strict()` and `Default`.
+- **`PragmaTracker`** -- walks an AST via `build()` to produce a sorted
+  `Vec<(Range<usize>, PragmaState)>`, and offers `state_for_offset()` to
+  query it.
 
 ## Workspace Role
 
-Internal utility crate used by parser and semantic/diagnostic analyses.
+Tier 1 leaf crate. Depends only on `perl-ast`. Consumed by
+`perl-parser-core` and `perl-lsp-diagnostics` to provide scope-aware
+pragma analysis for parsing and diagnostic flows.
 
 ## License
 
-MIT OR Apache-2.0.
+MIT OR Apache-2.0

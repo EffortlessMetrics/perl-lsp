@@ -1,43 +1,31 @@
 # perl-semantic-analyzer
 
-Semantic analysis for Perl code, including symbol resolution and type inference.
+Semantic analysis, symbol extraction, and type inference for Perl source code. Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/tree-sitter-perl-rs) workspace.
 
-## Purpose
+## Features
 
-This crate provides semantic analysis and symbol extraction for Perl code, enabling advanced IDE features like symbol navigation, type inference, and dead code detection. It builds on the parser to provide deep understanding of Perl code semantics.
+- **Symbol extraction** -- `SymbolExtractor` builds a `SymbolTable` of definitions, references, and scopes from a parsed AST.
+- **Semantic tokens** -- `SemanticAnalyzer` classifies tokens (`SemanticTokenType`, `SemanticTokenModifier`) for LSP syntax highlighting and hover info.
+- **Scope analysis** -- `ScopeAnalyzer` detects unused variables, shadowing, undeclared variables, and other scope issues.
+- **Type inference** -- `TypeInferenceEngine` infers `PerlType` for variables and expressions with a scoped `TypeEnvironment`.
+- **Dead code detection** -- `DeadCodeDetector` identifies unused subroutines, variables, imports, and unreachable code (non-WASM only).
+- **Declaration provider** -- `DeclarationProvider` resolves go-to-declaration with `LocationLink` results and parent-map traversal.
+- **Workspace index** -- local `WorkspaceIndex` for cross-file symbol lookup by name, URI, or query.
 
-## Key Features
+## Dependencies
 
-- **Symbol Extraction**: Extract and categorize symbols (subs, packages, variables, etc.)
-- **Scope Analysis**: Analyze lexical scoping and variable visibility
-- **Type Inference**: Infer types for Perl variables and expressions
-- **Dead Code Detection**: Identify unused code and unreachable branches
-- **Declaration Analysis**: Track symbol declarations and their locations
-- **Workspace Integration**: Integrates with workspace index for cross-file analysis
+Builds on `perl-parser-core` (AST/parsing), `perl-workspace-index` (cross-file references), and `perl-symbol-types` (symbol taxonomy).
 
 ## Usage
 
 ```rust
-use perl_semantic_analyzer::analysis;
+use perl_semantic_analyzer::{Parser, analysis::symbol::SymbolExtractor};
 
-// Perform semantic analysis on Perl code
-// (specific APIs depend on analysis module implementation)
+let mut parser = Parser::new("sub hello { my $x = 1; }");
+let ast = parser.parse()?;
+let table = SymbolExtractor::new().extract(&ast);
 ```
-
-## Features
-
-- Platform-specific features are automatically disabled on WASM targets
-- Dead code detection and indexing are available on non-WASM platforms
-
-## Documentation
-
-For detailed API documentation, see [docs.rs/perl-semantic-analyzer](https://docs.rs/perl-semantic-analyzer).
 
 ## License
 
-Licensed under either of:
-
-- MIT License
-- Apache License, Version 2.0
-
-at your option.
+Licensed under MIT OR Apache-2.0 at your option.
