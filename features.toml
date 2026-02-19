@@ -123,7 +123,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["tests/lsp_on_type_formatting_tests.rs"]
+tests = ["tests/lsp_on_type_formatting.rs"]
 description = "On-type formatting with auto-indent"
 
 [[feature]]
@@ -141,7 +141,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["tests/lsp_document_link_tests.rs"]
+tests = ["tests/lsp_document_links_test.rs"]
 description = "Document links to modules and docs"
 
 [[feature]]
@@ -150,7 +150,7 @@ spec = "LSP 3.0"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["tests/lsp_folding_tests.rs"]
+tests = ["tests/lsp_folding_ranges_test.rs"]
 description = "Folding ranges with fallback"
 
 [[feature]]
@@ -168,7 +168,7 @@ spec = "LSP 3.16"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["tests/lsp_semantic_tokens_tests.rs"]
+tests = ["tests/lsp_semantic_tokens.rs"]
 description = "Enhanced syntax highlighting"
 
 [[feature]]
@@ -177,7 +177,7 @@ spec = "LSP 3.17"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["tests/lsp_inlay_hints_tests.rs"]
+tests = ["tests/lsp_inlay_hints.rs"]
 description = "Parameter names and type hints"
 
 [[feature]]
@@ -186,7 +186,7 @@ spec = "LSP 3.17"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["tests/lsp_type_hierarchy_tests.rs"]
+tests = ["tests/lsp_type_hierarchy_test.rs"]
 description = "Type hierarchy for classes/roles"
 
 [[feature]]
@@ -204,7 +204,7 @@ spec = "LSP 3.17"
 area = "text_document"
 maturity = "ga"
 advertised = true
-tests = ["tests/lsp_pull_diagnostics_tests.rs"]
+tests = ["tests/pull_diagnostics_tests.rs"]
 description = "Pull model diagnostics"
 
 [[feature]]
@@ -269,7 +269,7 @@ spec = "LSP 3.17"
 area = "workspace"
 maturity = "ga"
 advertised = true
-tests = ["tests/lsp_pull_diagnostics_tests.rs"]
+tests = ["tests/pull_diagnostics_tests.rs"]
 description = "Workspace-wide pull diagnostics"
 
 [[feature]]
@@ -445,31 +445,41 @@ description = "Inline variable values while debugging (native adapter)"
 id = "dap.completions"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "preview"
-advertised = false
+maturity = "ga"
+advertised = true
 counts_in_coverage = false
-tests = []
+tests = ["crates/perl-dap/tests/dap_completions_tests.rs"]
 description = "Debug console autocomplete with Perl keywords"
 
 [[feature]]
 id = "dap.modules"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "preview"
-advertised = false
+maturity = "ga"
+advertised = true
 counts_in_coverage = false
-tests = []
+tests = ["crates/perl-dap/tests/dap_modules_tests.rs"]
 description = "Loaded modules view via %INC inspection"
 
 [[feature]]
 id = "dap.watchpoints"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "preview"
-advertised = false
+maturity = "ga"
+advertised = true
 counts_in_coverage = false
-tests = []
+tests = ["crates/perl-dap/tests/dap_watchpoints_tests.rs"]
 description = "Data breakpoints (watchpoints) via Perl debugger w/W commands"
+
+[[feature]]
+id = "dap.exceptions.warn"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_warn_exception_tests.rs"]
+description = "Exception breakpoint handling for warn/carp/cluck warnings"
 
 # Protocol / Lifecycle Features
 
@@ -810,7 +820,7 @@ area = "text_document"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = ["tests/lsp_pull_diagnostics_tests.rs"]
+tests = ["tests/pull_diagnostics_tests.rs"]
 description = "Push diagnostics via textDocument/publishDiagnostics"
 
 # Window / Telemetry

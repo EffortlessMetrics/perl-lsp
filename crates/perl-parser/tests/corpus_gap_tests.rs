@@ -26,6 +26,46 @@ mod corpus_gap_tests {
         .into())
     }
 
+    fn resolve_corpus_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let candidate = Path::new("test_corpus");
+        if candidate.exists() {
+            return Ok(candidate.to_path_buf());
+        }
+
+        let fallback = Path::new("../../test_corpus");
+        if fallback.exists() {
+            return Ok(fallback.to_path_buf());
+        }
+
+        Err("Unable to locate test_corpus/ directory".into())
+    }
+
+    fn discover_corpus_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+        let corpus_dir = resolve_corpus_dir()?;
+        let mut files = Vec::new();
+        collect_pl_files(&corpus_dir, &mut files);
+        files.sort();
+        Ok(files)
+    }
+
+    fn collect_pl_files(dir: &Path, files: &mut Vec<PathBuf>) {
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if !name.starts_with('.') && !name.starts_with('_') {
+                    collect_pl_files(&path, files);
+                }
+            } else if path.extension().and_then(|e| e.to_str()) == Some("pl") {
+                files.push(path);
+            }
+        }
+    }
+
     fn read_corpus_file(filename: &str) -> Result<String, Box<dyn std::error::Error>> {
         let path = resolve_corpus_path(filename)?;
         Ok(fs::read_to_string(path)?)
@@ -137,30 +177,50 @@ mod corpus_gap_tests {
         }
     }
 
-    // Parse corpus files repeatedly to keep a lightweight performance guard in default CI.
+    /// Auto-discovery test: parse every .pl file in the corpus directory.
+    /// This ensures 100% corpus coverage without needing to list files individually.
+    #[test]
+    fn test_all_corpus_files() -> Result<(), Box<dyn std::error::Error>> {
+        let files = discover_corpus_files()?;
+        assert!(!files.is_empty(), "No .pl files found in test_corpus/");
+
+        let mut failures = Vec::new();
+
+        for path in &files {
+            let content = fs::read_to_string(path)?;
+            let mut parser = Parser::new(&content);
+
+            if let Err(e) = parser.parse() {
+                failures.push(format!("{}: {e}", path.display()));
+            }
+        }
+
+        assert!(
+            failures.is_empty(),
+            "Failed to parse {} of {} corpus files:\n  {}",
+            failures.len(),
+            files.len(),
+            failures.join("\n  ")
+        );
+
+        println!("Parsed all {} corpus files successfully", files.len());
+        Ok(())
+    }
+
+    // Parse all corpus files repeatedly to keep a lightweight performance guard in default CI.
     #[test]
     fn bench_corpus_files() -> Result<(), Box<dyn std::error::Error>> {
         use std::time::Instant;
 
-        let files = vec![
-            "source_filters.pl",
-            "xs_inline_ffi.pl",
-            "modern_perl_features.pl",
-            "advanced_regex.pl",
-            "data_end_sections.pl",
-            "packages_versions.pl",
-            "legacy_syntax.pl",
-            "continue_redo_statements.pl",
-            "format_statements.pl",
-            "glob_expressions.pl",
-            "tie_interface.pl",
-        ];
+        let files = discover_corpus_files()?;
+        assert!(!files.is_empty(), "No .pl files found in test_corpus/");
 
         const ITERATIONS: u32 = 3;
         const MAX_PER_PARSE_MS: u128 = 500;
 
-        for file in files {
-            let content = read_corpus_file(file)?;
+        for path in &files {
+            let content = fs::read_to_string(path)?;
+            let display = path.display().to_string();
 
             let start = Instant::now();
             for _ in 0..ITERATIONS {
@@ -169,18 +229,18 @@ mod corpus_gap_tests {
                 assert!(
                     parse_result.is_ok(),
                     "Failed to parse file {}: {:?}",
-                    file,
+                    display,
                     parse_result.err()
                 );
             }
             let duration = start.elapsed();
             let per_parse_ms = duration.as_millis() / u128::from(ITERATIONS);
 
-            println!("{}: {}ms per parse", file, per_parse_ms);
+            println!("{}: {}ms per parse", display, per_parse_ms);
             assert!(
                 per_parse_ms <= MAX_PER_PARSE_MS,
                 "Corpus parse regression for {}: {}ms per parse exceeds {}ms budget",
-                file,
+                display,
                 per_parse_ms,
                 MAX_PER_PARSE_MS
             );

@@ -87,6 +87,7 @@ static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ANSI_ESCAPE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SET_VARIABLE_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static FUNCTION_BREAKPOINT_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static WARNING_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static INC_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
@@ -138,6 +139,22 @@ fn exception_re() -> Option<&'static Regex> {
             //  - message text
             //  - `at /path/file.pl line N.`
             Regex::new(r"(?i)\b(?:died|uncaught exception|panic)\b|^\s*at\s+\S+?\s+line\s+\d+\.?$")
+        })
+        .as_ref()
+        .ok()
+}
+
+fn warning_re() -> Option<&'static Regex> {
+    WARNING_RE
+        .get_or_init(|| {
+            // Perl `warn`, `Carp::carp`, and `Carp::cluck` emit warning messages.
+            // Common patterns:
+            //  - "Something went wrong at script.pl line 42."
+            //  - "Use of uninitialized value..."
+            //  - Explicit warn/carp/cluck output
+            Regex::new(
+                r"(?i)\b(?:warn(?:ing)?|carp|cluck)\b.*\bat\s+\S+?\s+line\s+\d+|^.+\bat\s+\S+?\s+line\s+\d+\.?\s*$",
+            )
         })
         .as_ref()
         .ok()
@@ -374,6 +391,8 @@ pub struct DebugAdapter {
     next_function_breakpoint_id: Arc<Mutex<i64>>,
     /// Exception breakpoint policy: break on `die`/uncaught exception output.
     exception_break_on_die: Arc<Mutex<bool>>,
+    /// Exception breakpoint policy: break on `warn`/carp/cluck output.
+    exception_break_on_warn: Arc<Mutex<bool>>,
     /// Unique marker IDs used to frame debugger output per command.
     debugger_output_marker: Arc<AtomicU64>,
     /// Cancellation flag for in-progress requests.
@@ -525,6 +544,7 @@ impl DebugAdapter {
             function_breakpoints: Arc::new(Mutex::new(Vec::new())),
             next_function_breakpoint_id: Arc::new(Mutex::new(1)),
             exception_break_on_die: Arc::new(Mutex::new(false)),
+            exception_break_on_warn: Arc::new(Mutex::new(false)),
             debugger_output_marker: Arc::new(AtomicU64::new(1)),
             cancel_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             data_breakpoints: Arc::new(Mutex::new(Vec::new())),
@@ -1187,23 +1207,32 @@ impl DebugAdapter {
         let supports_log_points = catalog_has_feature("dap.breakpoints.logpoints");
         let supports_exceptions = catalog_has_feature("dap.exceptions.die");
         let supports_inline_values = catalog_has_feature("dap.inline_values");
+        let supports_completions = catalog_has_feature("dap.completions");
+        let supports_modules = catalog_has_feature("dap.modules");
+        let supports_watchpoints = catalog_has_feature("dap.watchpoints");
+        let supports_warn = catalog_has_feature("dap.exceptions.warn");
 
-        let exception_breakpoint_filters = if supports_exceptions {
-            json!([
-                {
-                    "filter": "die",
-                    "label": "Perl die() and uncaught exceptions",
-                    "default": true
-                },
-                {
-                    "filter": "all",
-                    "label": "All Perl exception events",
-                    "default": false
-                }
-            ])
-        } else {
-            json!([])
-        };
+        let mut filters = Vec::new();
+        if supports_exceptions {
+            filters.push(json!({
+                "filter": "die",
+                "label": "Perl die() and uncaught exceptions",
+                "default": true
+            }));
+            filters.push(json!({
+                "filter": "all",
+                "label": "All Perl exception events",
+                "default": false
+            }));
+        }
+        if supports_warn {
+            filters.push(json!({
+                "filter": "warn",
+                "label": "Perl warn() and Carp warnings",
+                "default": false
+            }));
+        }
+        let exception_breakpoint_filters = json!(filters);
 
         let capabilities = json!({
             "supportsConfigurationDoneRequest": supports_core,
@@ -1216,8 +1245,8 @@ impl DebugAdapter {
             "supportsRestartFrame": false,
             "supportsGotoTargetsRequest": supports_core,
             "supportsStepInTargetsRequest": supports_core,
-            "supportsCompletionsRequest": true,
-            "supportsModulesRequest": true,
+            "supportsCompletionsRequest": supports_completions,
+            "supportsModulesRequest": supports_modules,
             "supportsRestartRequest": true,
             "supportsExceptionOptions": supports_exceptions,
             "supportsValueFormattingOptions": supports_core,
@@ -1229,7 +1258,7 @@ impl DebugAdapter {
             "supportsTerminateThreadsRequest": supports_core,
             "supportsSetExpression": supports_core,
             "supportsTerminateRequest": supports_core,
-            "supportsDataBreakpoints": true,
+            "supportsDataBreakpoints": supports_watchpoints,
             "supportsReadMemoryRequest": false,
             "supportsDisassembleRequest": false,
             "supportsCancelRequest": supports_core,
@@ -1436,6 +1465,7 @@ impl DebugAdapter {
         let recent_output = self.recent_output.clone();
         let breakpoints = self.breakpoints.clone();
         let exception_break_on_die = self.exception_break_on_die.clone();
+        let exception_break_on_warn = self.exception_break_on_warn.clone();
         let last_exception_message = self.last_exception_message.clone();
 
         thread::spawn(move || {
@@ -1587,11 +1617,15 @@ impl DebugAdapter {
                         if context_updated {
                             let break_on_die =
                                 exception_break_on_die.lock().map(|guard| *guard).unwrap_or(false);
+                            let break_on_warn =
+                                exception_break_on_warn.lock().map(|guard| *guard).unwrap_or(false);
                             let exception_match =
                                 break_on_die && exception_re().is_some_and(|re| re.is_match(&text));
+                            let warning_match =
+                                break_on_warn && warning_re().is_some_and(|re| re.is_match(&text));
 
                             // Store exception message for exceptionInfo request
-                            if exception_match {
+                            if exception_match || warning_match {
                                 if let Ok(mut guard) = last_exception_message.lock() {
                                     *guard = Some(text.clone());
                                 }
@@ -1654,7 +1688,7 @@ impl DebugAdapter {
                                                 BreakpointHitOutcome::default()
                                             };
 
-                                        if exception_match {
+                                        if exception_match || warning_match {
                                             stop_reason = "exception".to_string();
                                             s.state = DebugState::Stopped;
                                         } else if breakpoint_outcome.matched {
@@ -2412,26 +2446,37 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         let mut break_on_die = false;
+        let mut break_on_warn = false;
 
         if let Some(args) = arguments
             .and_then(|v| serde_json::from_value::<SetExceptionBreakpointsArguments>(v).ok())
         {
-            break_on_die = args.filters.iter().any(|filter| {
-                filter.eq_ignore_ascii_case("die") || filter.eq_ignore_ascii_case("all")
-            });
+            let matches_filter = |id: &str| -> (bool, bool) {
+                let is_die = id.eq_ignore_ascii_case("die") || id.eq_ignore_ascii_case("all");
+                let is_warn = id.eq_ignore_ascii_case("warn") || id.eq_ignore_ascii_case("all");
+                (is_die, is_warn)
+            };
 
-            if !break_on_die {
-                if let Some(filter_options) = args.filter_options {
-                    break_on_die = filter_options.iter().any(|entry| {
-                        entry.filter_id.eq_ignore_ascii_case("die")
-                            || entry.filter_id.eq_ignore_ascii_case("all")
-                    });
+            for filter in &args.filters {
+                let (die, warn) = matches_filter(filter);
+                break_on_die |= die;
+                break_on_warn |= warn;
+            }
+
+            if let Some(filter_options) = args.filter_options {
+                for entry in &filter_options {
+                    let (die, warn) = matches_filter(&entry.filter_id);
+                    break_on_die |= die;
+                    break_on_warn |= warn;
                 }
             }
         }
 
         if let Ok(mut guard) = self.exception_break_on_die.lock() {
             *guard = break_on_die;
+        }
+        if let Ok(mut guard) = self.exception_break_on_warn.lock() {
+            *guard = break_on_warn;
         }
 
         DapMessage::Response {
@@ -4632,13 +4677,20 @@ impl DebugAdapter {
                 }
             };
 
-        let column = (args.column.max(0) as usize).min(args.text.len());
+        let byte_offset = (args.column.max(0) as usize).min(args.text.len());
+        // Clamp to a valid UTF-8 char boundary to avoid panics on multi-byte input.
+        let mut column = byte_offset;
+        while column > 0 && !args.text.is_char_boundary(column) {
+            column -= 1;
+        }
         let prefix = &args.text[..column];
 
         // Find the last word boundary to get the completion stem.
+        // rfind returns a byte position; we advance past the matched char (which may be multi-byte).
         let stem = prefix
-            .rfind(|c: char| !c.is_alphanumeric() && c != '_')
-            .map(|pos| &prefix[pos + 1..])
+            .rmatch_indices(|c: char| !c.is_alphanumeric() && c != '_')
+            .next()
+            .map(|(pos, matched)| &prefix[pos + matched.len()..])
             .unwrap_or(prefix);
 
         const PERL_KEYWORDS: &[&str] = &[
@@ -4652,7 +4704,7 @@ impl DebugAdapter {
             "unpack", "qw",
         ];
 
-        let targets: Vec<CompletionItem> = PERL_KEYWORDS
+        let mut targets: Vec<CompletionItem> = PERL_KEYWORDS
             .iter()
             .filter(|kw| stem.is_empty() || kw.starts_with(stem))
             .map(|kw| CompletionItem {
@@ -4665,6 +4717,53 @@ impl DebugAdapter {
                 length: None,
             })
             .collect();
+
+        // When a debug session is active, supplement with runtime data.
+        let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
+
+        if has_session {
+            // Add variable names from cached session scope.
+            {
+                let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+                if let Some(ref session) = *session_guard {
+                    let mut seen = std::collections::HashSet::new();
+                    for vars in session.variables.values() {
+                        for var in vars {
+                            if (stem.is_empty() || var.name.starts_with(stem))
+                                && seen.insert(var.name.clone())
+                            {
+                                targets.push(CompletionItem {
+                                    label: var.name.clone(),
+                                    type_: Some("variable".to_string()),
+                                    text: None,
+                                    sort_text: None,
+                                    detail: None,
+                                    start: None,
+                                    length: None,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Add loaded module names from %INC.
+            let modules = self.query_inc_entries();
+            for (key, _path) in &modules {
+                let name = key.replace('/', "::").trim_end_matches(".pm").to_string();
+                if stem.is_empty() || name.starts_with(stem) {
+                    targets.push(CompletionItem {
+                        label: name,
+                        type_: Some("module".to_string()),
+                        text: None,
+                        sort_text: None,
+                        detail: None,
+                        start: None,
+                        length: None,
+                    });
+                }
+            }
+        }
 
         let body = CompletionsResponseBody { targets };
         DapMessage::Response {
@@ -4880,6 +4979,9 @@ mod tests {
             ),
             ("supportsInlineValues", crate::feature_catalog::has_feature("dap.inline_values")),
             ("supportsTerminateRequest", crate::feature_catalog::has_feature("dap.core")),
+            ("supportsCompletionsRequest", crate::feature_catalog::has_feature("dap.completions")),
+            ("supportsModulesRequest", crate::feature_catalog::has_feature("dap.modules")),
+            ("supportsDataBreakpoints", crate::feature_catalog::has_feature("dap.watchpoints")),
         ];
 
         for (capability, expected) in expectations {
@@ -4902,10 +5004,20 @@ mod tests {
                 !exception_filters.is_empty(),
                 "Exception filters should be advertised when dap.exceptions.die is enabled"
             );
+        }
+
+        let has_warn_filter = exception_filters
+            .iter()
+            .any(|f| f.get("filter").and_then(Value::as_str) == Some("warn"));
+        if crate::feature_catalog::has_feature("dap.exceptions.warn") {
+            assert!(
+                has_warn_filter,
+                "warn filter should be advertised when dap.exceptions.warn is enabled"
+            );
         } else {
             assert!(
-                exception_filters.is_empty(),
-                "Exception filters should be empty when dap.exceptions.die is not advertised"
+                !has_warn_filter,
+                "warn filter should not be present when dap.exceptions.warn is disabled"
             );
         }
 

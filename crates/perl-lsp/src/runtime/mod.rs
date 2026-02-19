@@ -174,6 +174,8 @@ pub struct LspServer {
     refresh_controller: refresh::RefreshController,
     /// Notebook document store (LSP 3.17)
     pub(crate) notebook_store: notebook::NotebookStore,
+    /// Trace level set by client via $/setTrace (off, messages, verbose)
+    trace_level: Arc<Mutex<String>>,
 }
 
 // Note: DocumentState, ServerConfig, and normalize_package_separator are
@@ -219,6 +221,7 @@ impl LspServer {
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
         }
     }
 
@@ -293,6 +296,7 @@ impl LspServer {
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
         }
     }
 
@@ -336,6 +340,7 @@ impl LspServer {
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
         }
     }
 

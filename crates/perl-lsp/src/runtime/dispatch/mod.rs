@@ -301,6 +301,7 @@ impl LspServer {
             "workspace/textDocumentContent" => {
                 self.handle_text_document_content_dispatch(request.params)
             }
+            "$/setTrace" => self.handle_set_trace_dispatch(request.params),
             "$/test/slowOperation" => self.handle_slow_operation_dispatch(&id, request.params),
             _ => {
                 eprintln!("Method not implemented: {}", request.method);
