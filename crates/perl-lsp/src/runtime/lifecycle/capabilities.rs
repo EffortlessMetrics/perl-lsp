@@ -3,7 +3,7 @@
 //! Handles client capability parsing and server capabilities construction.
 
 use super::super::*;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 impl LspServer {
     /// Handle initialize request
@@ -242,12 +242,42 @@ impl LspServer {
                 "changeNotifications": true
             },
             "fileOperations": {
-                "willCreate": { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
-                "didCreate":  { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
-                "willRename": { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
-                "didRename":  { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
-                "willDelete": { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
-                "didDelete":  { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] }
+                "willCreate": { "filters": [
+                    { "pattern": { "glob": "**/*.pl" } },
+                    { "pattern": { "glob": "**/*.pm" } },
+                    { "pattern": { "glob": "**/*.t" } },
+                    { "pattern": { "glob": "**/*.psgi" } }
+                ]},
+                "didCreate": { "filters": [
+                    { "pattern": { "glob": "**/*.pl" } },
+                    { "pattern": { "glob": "**/*.pm" } },
+                    { "pattern": { "glob": "**/*.t" } },
+                    { "pattern": { "glob": "**/*.psgi" } }
+                ]},
+                "willRename": { "filters": [
+                    { "pattern": { "glob": "**/*.pl" } },
+                    { "pattern": { "glob": "**/*.pm" } },
+                    { "pattern": { "glob": "**/*.t" } },
+                    { "pattern": { "glob": "**/*.psgi" } }
+                ]},
+                "didRename": { "filters": [
+                    { "pattern": { "glob": "**/*.pl" } },
+                    { "pattern": { "glob": "**/*.pm" } },
+                    { "pattern": { "glob": "**/*.t" } },
+                    { "pattern": { "glob": "**/*.psgi" } }
+                ]},
+                "willDelete": { "filters": [
+                    { "pattern": { "glob": "**/*.pl" } },
+                    { "pattern": { "glob": "**/*.pm" } },
+                    { "pattern": { "glob": "**/*.t" } },
+                    { "pattern": { "glob": "**/*.psgi" } }
+                ]},
+                "didDelete": { "filters": [
+                    { "pattern": { "glob": "**/*.pl" } },
+                    { "pattern": { "glob": "**/*.pm" } },
+                    { "pattern": { "glob": "**/*.t" } },
+                    { "pattern": { "glob": "**/*.psgi" } }
+                ]}
             },
             "textDocumentContent": {
                 "schemes": ["perldoc"]

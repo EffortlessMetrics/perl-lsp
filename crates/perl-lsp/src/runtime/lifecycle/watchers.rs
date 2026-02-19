@@ -4,9 +4,9 @@
 
 use super::super::*;
 use lsp_types::{
+    notification::{DidChangeWatchedFiles, Notification},
     DidChangeWatchedFilesRegistrationOptions, FileSystemWatcher, GlobPattern, Registration,
     RegistrationParams, WatchKind,
-    notification::{DidChangeWatchedFiles, Notification},
 };
 use serde_json::json;
 
@@ -28,6 +28,10 @@ impl LspServer {
             },
             FileSystemWatcher {
                 glob_pattern: GlobPattern::String("**/*.t".into()),
+                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
+            },
+            FileSystemWatcher {
+                glob_pattern: GlobPattern::String("**/*.psgi".into()),
                 kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
             },
         ];
