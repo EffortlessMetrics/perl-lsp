@@ -1,7 +1,7 @@
-# Ignored test baseline - 2026-02-19T07:59:49Z
+# Ignored test baseline - 2026-02-19T18:40:58Z
 # Updated by: ignored-test-count.sh --update
 brokenpipe=0
-feature=0
+feature=2
 infra=0
 protocol=0
 manual=0
@@ -9,4 +9,4 @@ stress=0
 bug=0
 bare=0
 other=0
-total=0
+total=2

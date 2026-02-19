@@ -616,7 +616,7 @@ fn test_supported_commands_structure() -> TestResult {
 
     // MUTATION KILLER: Verify not empty/default list
     assert!(!commands.is_empty(), "Supported commands should not be empty");
-    assert_eq!(commands.len(), 5, "Should have exactly 5 supported commands");
+    assert_eq!(commands.len(), 8, "Should have exactly 8 supported commands");
 
     // Verify specific commands are present
     let expected_commands = vec![
@@ -625,6 +625,9 @@ fn test_supported_commands_structure() -> TestResult {
         "perl.runTestSub",
         "perl.debugTests",
         "perl.runCritic",
+        "perl.runTest",
+        "perl.runTestFile",
+        "perl.debugFile",
     ];
 
     for expected in &expected_commands {

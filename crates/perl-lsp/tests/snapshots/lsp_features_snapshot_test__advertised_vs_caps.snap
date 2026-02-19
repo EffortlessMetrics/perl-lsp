@@ -35,8 +35,15 @@ caps:
   - lsp.workspace_symbol
 catalog:
   - dap.breakpoints.basic
+  - dap.breakpoints.hit_condition
+  - dap.breakpoints.logpoints
+  - dap.completions
   - dap.core
+  - dap.exceptions.die
+  - dap.exceptions.warn
   - dap.inline_values
+  - dap.modules
+  - dap.watchpoints
   - lsp.apply_edit
   - lsp.call_hierarchy
   - lsp.cancel_request

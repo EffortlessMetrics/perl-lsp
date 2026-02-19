@@ -452,9 +452,8 @@ impl LspServer {
                 // Fast path: use workspace index if available (more accurate,
                 // excludes references in comments/strings)
                 #[cfg(feature = "workspace")]
-                let index_count = self
-                    .coordinator()
-                    .map(|coord| coord.index().find_references(symbol_name).len());
+                let index_count =
+                    self.coordinator().map(|coord| coord.index().count_usages(symbol_name));
                 #[cfg(not(feature = "workspace"))]
                 let index_count: Option<usize> = None;
 
