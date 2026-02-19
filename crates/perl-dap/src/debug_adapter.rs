@@ -7,19 +7,18 @@ use crate::feature_catalog::has_feature as catalog_has_feature;
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{
     BreakpointLocation, BreakpointLocationsArguments, BreakpointLocationsResponseBody,
-    ContinueArguments, ContinueResponseBody, DisconnectArguments, EvaluateArguments,
-    EvaluateResponseBody, ExceptionDetails, ExceptionInfoArguments, ExceptionInfoResponseBody,
-    GotoTarget, GotoTargetsArguments, GotoTargetsResponseBody, InlineValuesArguments,
-    InlineValuesResponseBody, NextArguments, PauseArguments, RestartArguments, Scope,
-    ScopesArguments, ScopesResponseBody, SetExceptionBreakpointsArguments,
+    CompletionItem, CompletionsArguments, CompletionsResponseBody, ContinueArguments,
+    ContinueResponseBody, DataBreakpointInfoArguments, DataBreakpointInfoResponseBody,
+    DisconnectArguments, EvaluateArguments, EvaluateResponseBody, ExceptionDetails,
+    ExceptionInfoArguments, ExceptionInfoResponseBody, GotoTarget, GotoTargetsArguments,
+    GotoTargetsResponseBody, InlineValuesArguments, InlineValuesResponseBody,
+    LoadedSourcesResponseBody, Module, ModulesArguments, ModulesResponseBody, NextArguments,
+    PauseArguments, RestartArguments, Scope, ScopesArguments, ScopesResponseBody,
+    SetDataBreakpointsArguments, SetDataBreakpointsResponseBody, SetExceptionBreakpointsArguments,
     SetExpressionArguments, SetExpressionResponseBody, SetFunctionBreakpointsArguments,
     SetVariableArguments, SetVariableResponseBody, SourceArguments, SourceResponseBody,
     StackTraceArguments, StepInArguments, StepInTarget, StepInTargetsArguments,
     StepInTargetsResponseBody, StepOutArguments, TerminateArguments, VariablesArguments,
-    CompletionItem, CompletionsArguments, CompletionsResponseBody,
-    DataBreakpointInfoArguments, DataBreakpointInfoResponseBody,
-    LoadedSourcesResponseBody, Module, ModulesArguments, ModulesResponseBody,
-    SetDataBreakpointsArguments, SetDataBreakpointsResponseBody,
 };
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
@@ -329,10 +328,7 @@ fn is_valid_function_breakpoint_name(name: &str) -> bool {
 }
 
 fn inc_re() -> Option<&'static Regex> {
-    INC_RE
-        .get_or_init(|| Regex::new(r"'([^']+)'\s*=>\s*'([^']+)'"))
-        .as_ref()
-        .ok()
+    INC_RE.get_or_init(|| Regex::new(r"'([^']+)'\s*=>\s*'([^']+)'")).as_ref().ok()
 }
 
 /// Stored data breakpoint record for watchpoint management
@@ -756,9 +752,7 @@ impl DebugAdapter {
             "pause" => self.handle_pause(seq, request_seq, arguments),
             "evaluate" => self.handle_evaluate(seq, request_seq, arguments),
             "inlineValues" => self.handle_inline_values(seq, request_seq, arguments),
-            "breakpointLocations" => {
-                self.handle_breakpoint_locations(seq, request_seq, arguments)
-            }
+            "breakpointLocations" => self.handle_breakpoint_locations(seq, request_seq, arguments),
             "source" => self.handle_source(seq, request_seq, arguments),
             "loadedSources" => self.handle_loaded_sources(seq, request_seq, arguments),
             "modules" => self.handle_modules(seq, request_seq, arguments),
@@ -766,20 +760,14 @@ impl DebugAdapter {
             "exceptionInfo" => self.handle_exception_info(seq, request_seq, arguments),
             "restart" => self.handle_restart(seq, request_seq, arguments),
             "setExpression" => self.handle_set_expression(seq, request_seq, arguments),
-            "dataBreakpointInfo" => {
-                self.handle_data_breakpoint_info(seq, request_seq, arguments)
-            }
-            "setDataBreakpoints" => {
-                self.handle_set_data_breakpoints(seq, request_seq, arguments)
-            }
+            "dataBreakpointInfo" => self.handle_data_breakpoint_info(seq, request_seq, arguments),
+            "setDataBreakpoints" => self.handle_set_data_breakpoints(seq, request_seq, arguments),
             "cancel" => self.handle_cancel(seq, request_seq, arguments),
             "stepInTargets" => self.handle_step_in_targets(seq, request_seq, arguments),
             "gotoTargets" => self.handle_goto_targets(seq, request_seq, arguments),
             "goto" => self.handle_goto(seq, request_seq, arguments),
             "restartFrame" => self.handle_restart_frame(seq, request_seq, arguments),
-            "terminateThreads" => {
-                self.handle_terminate_threads(seq, request_seq, arguments)
-            }
+            "terminateThreads" => self.handle_terminate_threads(seq, request_seq, arguments),
             _ => DapMessage::Response {
                 seq,
                 request_seq,
@@ -3929,9 +3917,7 @@ impl DebugAdapter {
         let source_path = match args.source.path {
             Some(ref p) => p.clone(),
             None => {
-                let body = BreakpointLocationsResponseBody {
-                    breakpoints: Vec::new(),
-                };
+                let body = BreakpointLocationsResponseBody { breakpoints: Vec::new() };
                 return DapMessage::Response {
                     seq,
                     request_seq,
@@ -3946,9 +3932,7 @@ impl DebugAdapter {
         let content = match std::fs::read_to_string(&source_path) {
             Ok(c) => c,
             Err(_) => {
-                let body = BreakpointLocationsResponseBody {
-                    breakpoints: Vec::new(),
-                };
+                let body = BreakpointLocationsResponseBody { breakpoints: Vec::new() };
                 return DapMessage::Response {
                     seq,
                     request_seq,
@@ -3987,26 +3971,20 @@ impl DebugAdapter {
         }
     }
 
-    fn handle_source(
-        &self,
-        seq: i64,
-        request_seq: i64,
-        arguments: Option<Value>,
-    ) -> DapMessage {
-        let args: SourceArguments =
-            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
-                Some(a) => a,
-                None => {
-                    return DapMessage::Response {
-                        seq,
-                        request_seq,
-                        success: false,
-                        command: "source".to_string(),
-                        body: None,
-                        message: Some("Missing or invalid arguments".to_string()),
-                    };
-                }
-            };
+    fn handle_source(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let args: SourceArguments = match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "source".to_string(),
+                    body: None,
+                    message: Some("Missing or invalid arguments".to_string()),
+                };
+            }
+        };
 
         let path = match args.source.and_then(|s| s.path) {
             Some(p) => p,
@@ -4024,10 +4002,8 @@ impl DebugAdapter {
 
         match std::fs::read_to_string(&path) {
             Ok(content) => {
-                let body = SourceResponseBody {
-                    content,
-                    mime_type: Some("text/x-perl".to_string()),
-                };
+                let body =
+                    SourceResponseBody { content, mime_type: Some("text/x-perl".to_string()) };
                 DapMessage::Response {
                     seq,
                     request_seq,
@@ -4072,9 +4048,7 @@ impl DebugAdapter {
         let source_path = match args.source.path {
             Some(ref p) => p.clone(),
             None => {
-                let body = GotoTargetsResponseBody {
-                    targets: Vec::new(),
-                };
+                let body = GotoTargetsResponseBody { targets: Vec::new() };
                 return DapMessage::Response {
                     seq,
                     request_seq,
@@ -4089,9 +4063,7 @@ impl DebugAdapter {
         let content = match std::fs::read_to_string(&source_path) {
             Ok(c) => c,
             Err(_) => {
-                let body = GotoTargetsResponseBody {
-                    targets: Vec::new(),
-                };
+                let body = GotoTargetsResponseBody { targets: Vec::new() };
                 return DapMessage::Response {
                     seq,
                     request_seq,
@@ -4133,21 +4105,14 @@ impl DebugAdapter {
         }
     }
 
-    fn handle_goto(
-        &self,
-        seq: i64,
-        request_seq: i64,
-        _arguments: Option<Value>,
-    ) -> DapMessage {
+    fn handle_goto(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
         DapMessage::Response {
             seq,
             request_seq,
             success: false,
             command: "goto".to_string(),
             body: None,
-            message: Some(
-                "Perl debugger does not support arbitrary goto".to_string(),
-            ),
+            message: Some("Perl debugger does not support arbitrary goto".to_string()),
         }
     }
 
@@ -4177,10 +4142,8 @@ impl DebugAdapter {
         let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
         if let Some(ref session) = *session_guard {
             // Find the frame matching the requested frame_id
-            if let Some(frame) = session
-                .stack_frames
-                .iter()
-                .find(|f| i64::from(f.id) == args.frame_id)
+            if let Some(frame) =
+                session.stack_frames.iter().find(|f| i64::from(f.id) == args.frame_id)
             {
                 // Read the source line from the file
                 if let Ok(content) = std::fs::read_to_string(&frame.source.path) {
@@ -4225,12 +4188,7 @@ impl DebugAdapter {
         }
     }
 
-    fn handle_cancel(
-        &self,
-        seq: i64,
-        request_seq: i64,
-        _arguments: Option<Value>,
-    ) -> DapMessage {
+    fn handle_cancel(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
         // cancel_requested field will be added by the integration task
         self.cancel_requested.store(true, Ordering::Release);
         DapMessage::Response {
@@ -4295,10 +4253,8 @@ impl DebugAdapter {
         let _args: Option<ExceptionInfoArguments> =
             arguments.and_then(|v| serde_json::from_value(v).ok());
 
-        let stored_message = lock_or_recover(
-            &self.last_exception_message,
-            "debug_adapter.last_exception_message",
-        );
+        let stored_message =
+            lock_or_recover(&self.last_exception_message, "debug_adapter.last_exception_message");
         let exception_text = stored_message.clone();
         drop(stored_message);
 
@@ -4416,8 +4372,7 @@ impl DebugAdapter {
             *lock_or_recover(&self.session, "debug_adapter.session")
         {
             if let Some(stdin) = session.process.stdin.as_mut() {
-                let commands =
-                    vec![format!("p {expression} = {value}"), format!("p {expression}")];
+                let commands = vec![format!("p {expression} = {value}"), format!("p {expression}")];
                 match self.send_framed_debugger_commands(stdin, &commands) {
                     Ok(markers) => Some(markers),
                     Err(error) => {
@@ -4427,9 +4382,7 @@ impl DebugAdapter {
                             success: false,
                             command: "setExpression".to_string(),
                             body: None,
-                            message: Some(format!(
-                                "Failed to send setExpression command: {error}"
-                            )),
+                            message: Some(format!("Failed to send setExpression command: {error}")),
                         };
                     }
                 }
@@ -4443,8 +4396,7 @@ impl DebugAdapter {
                     message: Some("No debugger session active".to_string()),
                 };
             }
-        } else if let Some(pid) =
-            *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
             return DapMessage::Response {
                 seq,
@@ -4514,8 +4466,7 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
-        let args: Option<RestartArguments> =
-            arguments.and_then(|v| serde_json::from_value(v).ok());
+        let args: Option<RestartArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
 
         // Determine launch args: prefer restart-provided args, then stored args
         let updated_args = args.and_then(|a| a.arguments);
@@ -4523,10 +4474,7 @@ impl DebugAdapter {
         let launch_args = if let Some(new_args) = updated_args {
             new_args
         } else {
-            let stored = lock_or_recover(
-                &self.last_launch_args,
-                "debug_adapter.last_launch_args",
-            );
+            let stored = lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args");
             match stored.clone() {
                 Some(args) => args,
                 None => {
@@ -4569,10 +4517,9 @@ impl DebugAdapter {
         };
         // Session guard dropped — safe to read output.
         let lines = match output_frame_markers {
-            Some((begin, end)) => {
-                self.capture_framed_debugger_output(&begin, &end, DEBUGGER_QUERY_WAIT_MS * 8)
-                    .unwrap_or_default()
-            }
+            Some((begin, end)) => self
+                .capture_framed_debugger_output(&begin, &end, DEBUGGER_QUERY_WAIT_MS * 8)
+                .unwrap_or_default(),
             None => return Vec::new(),
         };
 
@@ -4604,10 +4551,7 @@ impl DebugAdapter {
         let sources = if has_session {
             self.query_inc_entries()
                 .into_iter()
-                .map(|(key, path)| crate::protocol::Source {
-                    name: Some(key),
-                    path: Some(path),
-                })
+                .map(|(key, path)| crate::protocol::Source { name: Some(key), path: Some(path) })
                 .collect()
         } else {
             Vec::new()
@@ -4625,29 +4569,15 @@ impl DebugAdapter {
     }
 
     /// Handle modules request — returns Perl modules from `%INC` with pagination.
-    fn handle_modules(
-        &self,
-        seq: i64,
-        request_seq: i64,
-        arguments: Option<Value>,
-    ) -> DapMessage {
-        let args: Option<ModulesArguments> =
-            arguments.and_then(|v| serde_json::from_value(v).ok());
+    fn handle_modules(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let args: Option<ModulesArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
 
-        let start_module = args
-            .as_ref()
-            .and_then(|a| a.start_module)
-            .unwrap_or(0)
-            .max(0) as usize;
+        let start_module = args.as_ref().and_then(|a| a.start_module).unwrap_or(0).max(0) as usize;
         let module_count = args.as_ref().and_then(|a| a.module_count);
 
         let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
 
-        let all_entries = if has_session {
-            self.query_inc_entries()
-        } else {
-            Vec::new()
-        };
+        let all_entries = if has_session { self.query_inc_entries() } else { Vec::new() };
 
         let total = all_entries.len() as i64;
 
@@ -4657,29 +4587,18 @@ impl DebugAdapter {
             .enumerate()
             .map(|(idx, (key, path))| {
                 let name = key.replace('/', "::").trim_end_matches(".pm").to_string();
-                Module {
-                    id: idx.to_string(),
-                    name,
-                    path: Some(path),
-                }
+                Module { id: idx.to_string(), name, path: Some(path) }
             })
             .collect();
 
         // Apply pagination.
         let paginated: Vec<Module> = if let Some(count) = module_count {
-            all_modules
-                .into_iter()
-                .skip(start_module)
-                .take(count.max(0) as usize)
-                .collect()
+            all_modules.into_iter().skip(start_module).take(count.max(0) as usize).collect()
         } else {
             all_modules.into_iter().skip(start_module).collect()
         };
 
-        let body = ModulesResponseBody {
-            modules: paginated,
-            total_modules: Some(total),
-        };
+        let body = ModulesResponseBody { modules: paginated, total_modules: Some(total) };
 
         DapMessage::Response {
             seq,
@@ -4723,20 +4642,14 @@ impl DebugAdapter {
             .unwrap_or(prefix);
 
         const PERL_KEYWORDS: &[&str] = &[
-            "my", "our", "local", "sub", "use", "require", "package",
-            "if", "elsif", "else", "unless",
-            "while", "until", "for", "foreach", "do", "eval",
-            "return", "last", "next", "redo",
-            "die", "warn", "print", "say", "printf", "sprintf",
-            "open", "close", "chomp", "chop",
-            "push", "pop", "shift", "unshift", "splice", "join", "split",
-            "sort", "map", "grep",
-            "defined", "exists", "delete", "ref", "bless", "tie", "untie",
-            "scalar", "keys", "values", "each",
-            "length", "substr", "index", "rindex", "reverse",
-            "lc", "uc", "lcfirst", "ucfirst",
-            "hex", "oct", "int", "abs", "sqrt",
-            "chr", "ord", "pack", "unpack", "qw",
+            "my", "our", "local", "sub", "use", "require", "package", "if", "elsif", "else",
+            "unless", "while", "until", "for", "foreach", "do", "eval", "return", "last", "next",
+            "redo", "die", "warn", "print", "say", "printf", "sprintf", "open", "close", "chomp",
+            "chop", "push", "pop", "shift", "unshift", "splice", "join", "split", "sort", "map",
+            "grep", "defined", "exists", "delete", "ref", "bless", "tie", "untie", "scalar",
+            "keys", "values", "each", "length", "substr", "index", "rindex", "reverse", "lc", "uc",
+            "lcfirst", "ucfirst", "hex", "oct", "int", "abs", "sqrt", "chr", "ord", "pack",
+            "unpack", "qw",
         ];
 
         let targets: Vec<CompletionItem> = PERL_KEYWORDS
@@ -4878,9 +4791,7 @@ impl DebugAdapter {
             })
             .collect();
 
-        let body = SetDataBreakpointsResponseBody {
-            breakpoints: response_breakpoints,
-        };
+        let body = SetDataBreakpointsResponseBody { breakpoints: response_breakpoints };
 
         DapMessage::Response {
             seq,
@@ -5033,6 +4944,18 @@ mod tests {
             ("supportsInlineValues", "inlineValues"),
             ("supportsTerminateRequest", "terminate"),
             ("supportTerminateDebuggee", "terminate"),
+            ("supportsCompletionsRequest", "completions"),
+            ("supportsModulesRequest", "modules"),
+            ("supportsRestartRequest", "restart"),
+            ("supportsExceptionInfoRequest", "exceptionInfo"),
+            ("supportsBreakpointLocationsRequest", "breakpointLocations"),
+            ("supportsSetExpression", "setExpression"),
+            ("supportsDataBreakpoints", "setDataBreakpoints"),
+            ("supportsLoadedSourcesRequest", "loadedSources"),
+            ("supportsCancelRequest", "cancel"),
+            ("supportsStepInTargetsRequest", "stepInTargets"),
+            ("supportsGotoTargetsRequest", "gotoTargets"),
+            ("supportsTerminateThreadsRequest", "terminateThreads"),
         ];
 
         let mut mapped_commands = HashSet::new();
@@ -5078,6 +5001,24 @@ mod tests {
                     "endLine": 1
                 })),
                 "terminate" => Some(json!({"restart": false})),
+                "completions" => Some(json!({"text": "pr", "column": 2})),
+                "modules" => Some(json!({})),
+                "restart" => Some(json!({})),
+                "exceptionInfo" => Some(json!({"threadId": 1})),
+                "breakpointLocations" => Some(json!({
+                    "source": { "path": "/tmp/capability_honesty.pl" },
+                    "line": 1
+                })),
+                "setExpression" => Some(json!({"expression": "$x", "value": "1"})),
+                "setDataBreakpoints" => Some(json!({"breakpoints": []})),
+                "loadedSources" => Some(json!({})),
+                "cancel" => Some(json!({})),
+                "stepInTargets" => Some(json!({"frameId": 1})),
+                "gotoTargets" => Some(json!({
+                    "source": { "path": "/tmp/capability_honesty.pl" },
+                    "line": 1
+                })),
+                "terminateThreads" => Some(json!({})),
                 _ => None,
             };
 

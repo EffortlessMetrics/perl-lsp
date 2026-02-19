@@ -23,11 +23,20 @@
 //! # Usage Examples
 //!
 //! ```rust
-//! // Use the new module path for new code:
-//! use perl_lsp_providers::completion::CompletionProvider;
+//! use perl_parser::Parser;
 //!
-//! // Legacy path still works but is deprecated:
-//! use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
+//! let code = "my $x = 42;";
+//! let mut parser = Parser::new(code);
+//! match parser.parse() {
+//!     Ok(ast) => println!("Parsed successfully"),
+//!     Err(e) => eprintln!("Parse error: {}", e),
+//! }
 //! ```
+//!
+//! # See Also
+//!
+//! - [`crate::ide::lsp_compat::diagnostics`] for diagnostic publishing
+//! - [`crate::ide::lsp_compat::code_actions`] for code action support
+//! - [`perl_lsp_completion::CompletionProvider`] for the main completion implementation
 
 pub use perl_lsp_completion::*;

@@ -29,5 +29,11 @@
 //! // Legacy path still works but is deprecated:
 //! use perl_lsp_providers::ide::lsp_compat::code_actions::CodeActionProvider;
 //! ```
+//!
+//! # See Also
+//!
+//! - [`crate::ide::lsp_compat::completion`] for completion support
+//! - [`crate::ide::lsp_compat::diagnostics`] for diagnostic publishing
+//! - [`perl_lsp_code_actions::CodeActionProvider`] for the main implementation
 
 pub use perl_lsp_code_actions::*;

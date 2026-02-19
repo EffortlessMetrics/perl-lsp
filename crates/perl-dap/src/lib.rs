@@ -409,10 +409,10 @@ pub use protocol::{
     SetDataBreakpointsArguments, SetDataBreakpointsResponseBody, SetExceptionBreakpointsArguments,
     SetExpressionArguments, SetExpressionResponseBody, SetFunctionBreakpointsArguments,
     SetVariableArguments, SetVariableResponseBody, Source, SourceArguments, SourceBreakpoint,
-    SourceResponseBody, StackTraceArguments, StackTraceResponseBody, StepInArguments,
-    StepInTarget, StepInTargetsArguments, StepInTargetsResponseBody, StepOutArguments,
-    TerminateArguments, TerminateThreadsArguments, Thread, ThreadsResponseBody,
-    VariablesArguments, VariablesResponseBody,
+    SourceResponseBody, StackTraceArguments, StackTraceResponseBody, StepInArguments, StepInTarget,
+    StepInTargetsArguments, StepInTargetsResponseBody, StepOutArguments, TerminateArguments,
+    TerminateThreadsArguments, Thread, ThreadsResponseBody, VariablesArguments,
+    VariablesResponseBody,
 };
 
 /// Debug adapter operating mode
