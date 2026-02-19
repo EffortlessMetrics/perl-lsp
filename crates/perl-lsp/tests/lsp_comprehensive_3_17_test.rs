@@ -354,7 +354,7 @@ fn test_initialized_notification() -> TestResult {
 // ==================== TEXT SYNCHRONIZATION ====================
 
 #[test]
-fn test_text_document_sync_full() -> TestResult {
+fn test_text_document_sync_incremental() -> TestResult {
     let mut harness = LspHarness::new();
     harness.initialize(None)?;
 
@@ -371,7 +371,7 @@ fn test_text_document_sync_full() -> TestResult {
         }),
     );
 
-    // didChange (full sync)
+    // didChange (full content — still valid under incremental sync)
     harness.notify(
         "textDocument/didChange",
         json!({
@@ -381,6 +381,26 @@ fn test_text_document_sync_full() -> TestResult {
             },
             "contentChanges": [
                 { "text": "my $x = 43;\nmy $y = $x;\n" }
+            ]
+        }),
+    );
+
+    // didChange (incremental / range-based)
+    harness.notify(
+        "textDocument/didChange",
+        json!({
+            "textDocument": {
+                "uri": "file:///test.pl",
+                "version": 3
+            },
+            "contentChanges": [
+                {
+                    "range": {
+                        "start": { "line": 0, "character": 9 },
+                        "end": { "line": 0, "character": 11 }
+                    },
+                    "text": "99"
+                }
             ]
         }),
     );
@@ -411,7 +431,7 @@ fn test_text_document_sync_full() -> TestResult {
     harness.notify(
         "textDocument/didSave",
         json!({
-            "textDocument": { "uri": "file:///test.pl", "version": 3 },
+            "textDocument": { "uri": "file:///test.pl", "version": 4 },
             "text": "my $x = 43;\nmy $y = $x;\n"  // optional
         }),
     );

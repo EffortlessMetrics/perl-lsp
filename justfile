@@ -280,8 +280,8 @@ _check-tools-basic:
 # CI Validation Commands (Issue #211)
 # ============================================================================
 
-# MSRV: Rust 1.89 (for OpenAI Codex compatibility)
-# The rust-toolchain.toml pins to 1.89.0, so standard commands use MSRV by default.
+# MSRV: Rust 1.92 (for OpenAI Codex compatibility)
+# The rust-toolchain.toml pins to 1.92.0, so standard commands use MSRV by default.
 # Use these recipes to explicitly verify MSRV compliance:
 
 # Phase 0: publish receipts to review/receipts/YYYY-MM-DD/
@@ -296,10 +296,10 @@ ci-measure:
     @echo "Measuring CI lane runtimes..."
     @bash .ci/scripts/measure-ci-time.sh
 
-# Fast merge gate on MSRV (~2-5 min) - proves 1.89 compatibility
+# Fast merge gate on MSRV (~2-5 min) - proves 1.92 compatibility
 ci-gate-msrv:
-    @echo "🚪 Running fast merge gate on MSRV (Rust 1.89)..."
-    @RUSTUP_TOOLCHAIN=1.89.0 just ci-gate
+    @echo "🚪 Running fast merge gate on MSRV (Rust 1.92)..."
+    @RUSTUP_TOOLCHAIN=1.92.0 just ci-gate
 
 # Low-memory merge gate - for constrained environments (WSL, CI runners, low-RAM)
 # Forces single-threaded builds/tests to prevent OOM crashes
@@ -324,10 +324,10 @@ ci-gate-low-mem:
         just ci-features-invariants'
     @echo "✅ Low-memory merge gate passed!"
 
-# Full CI on MSRV (~10-20 min) - proves 1.89 compatibility for releases
+# Full CI on MSRV (~10-20 min) - proves 1.92 compatibility for releases
 ci-full-msrv:
-    @echo "🚀 Running full CI on MSRV (Rust 1.89)..."
-    @RUSTUP_TOOLCHAIN=1.89.0 just ci-full
+    @echo "🚀 Running full CI on MSRV (Rust 1.92)..."
+    @RUSTUP_TOOLCHAIN=1.92.0 just ci-full
 
 # Check for nested Cargo.lock files (footgun prevention)
 ci-check-no-nested-lock:

@@ -1,3 +1,5 @@
+> For the documentation hub, see [README.md](README.md). This page is a legacy index.
+
 # Documentation Index
 
 This is the front door. If you want X, read Y.

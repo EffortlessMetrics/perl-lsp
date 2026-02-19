@@ -144,11 +144,8 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
-                        </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/src/reference/current-status.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
-                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -224,14 +221,14 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <hr />
 <h2 id="at-a-glance"><a class="header" href="#at-a-glance">At a Glance</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Metric</th><th>Value</th><th>Target</th><th>Status</th></tr></thead><tbody>
-<tr><td><strong>Tier A Tests</strong></td><td>1002 lib tests (discovered), 163 ignores (tracked)</td><td>100% pass</td><td>PASS</td></tr>
-<tr><td><strong>Tracked Test Debt</strong></td><td>2 (1 bug, 1 manual)</td><td>0</td><td>Near-zero</td></tr>
+<tr><td><strong>Tier A Tests</strong></td><td>1218 lib tests (discovered), 0 ignores (tracked)</td><td>100% pass</td><td>PASS</td></tr>
+<tr><td><strong>Tracked Test Debt</strong></td><td>0 (0 bug, 0 manual)</td><td>0</td><td>Near-zero</td></tr>
 </tbody></table>
 </div><!-- BEGIN: STATUS_METRICS_TABLE -->
 <p>| <strong>LSP Coverage</strong> | 100% (53/53 advertised features, <code>features.toml</code>) | 93%+ | In progress |</p>
 <!-- END: STATUS_METRICS_TABLE -->
 <p>| <strong>Parser Coverage</strong> | ~100% | 100% | Complete |
-| <strong>Semantic Analyzer</strong> | Phase 2-6 Complete | Phase 3 | All NodeKind handlers |
+| <strong>Semantic Analyzer</strong> | Phase 1, 2, 3 Complete (100%) | Complete | All NodeKind handlers |
 | <strong>Mutation Score</strong> | 87% | 87%+ | Target met |
 | <strong>Documentation</strong> | perl-parser missing_docs = 0 (baseline 0) | 0 | Ratchet |</p>
 <hr />
@@ -239,20 +236,22 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <ul>
 <li><strong>Parser</strong>: Production-ready Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates</li>
 <li><strong>LSP Server</strong>: Capability catalog is <code>features.toml</code>; Tier A gate is <code>just ci-gate</code>; TCP socket mode available</li>
-<li><strong>Semantic Analyzer</strong>: Phase 2-6 complete with all NodeKind handlers, <code>textDocument/definition</code> integrated, uninitialized variable detection</li>
+<li><strong>Semantic Analyzer</strong>: Phase 1, 2, 3 complete with all NodeKind handlers (100% AST node coverage), <code>textDocument/definition</code> integrated, uninitialized variable detection</li>
 <li><strong>Refactoring Engine</strong>: <code>perform_inline</code> and <code>perform_move_code</code> implemented</li>
 <li><strong>Test Infrastructure</strong>: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)</li>
 <li><strong>Quality</strong>: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups</li>
+<li><strong>Safety Ratchets</strong>: production baseline currently at <code>unwrap/expect=0</code>, panic-family macros (<code>panic!/todo!/unimplemented!/unreachable!</code>) = <code>0</code>, explicit <code>unsafe</code> syntax = <code>0</code></li>
 <li><strong>Security</strong>: Comprehensive hardening complete (path traversal, command injection, DAP evaluate, perldoc/perlcritic argument injection)</li>
-<li><strong>DAP Server</strong>: Native adapter CLI (launch/step/breakpoints), async BridgeAdapter with graceful shutdown; attach/variables/evaluate pending</li>
+<li><strong>DAP Server</strong>: Native adapter preview is implemented (breakpoints with AST validation via <code>perl-dap-breakpoint</code>, step/pause/continue handlers, safe-eval guards, stdio+socket transport, PID/TCP attach modes); BridgeAdapter remains available for Perl::LanguageServer interoperability</li>
+<li><strong>Index State Machine Receipts (2026-02-16)</strong>: <code>just ci-gate</code> + targeted state-machine tests and workspace benchmarks validated transitions, instrumentation, and caps (<code>~368.7us</code> initial small index, <code>~721.1us</code> initial medium index, <code>~212.6us</code> incremental update)</li>
 </ul>
 <h3 id="computed-metrics-auto-updated-by-just-status-update"><a class="header" href="#computed-metrics-auto-updated-by-just-status-update">Computed Metrics (auto-updated by <code>just status-update</code>)</a></h3>
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
 <ul>
 <li><strong>LSP Coverage</strong>: 100% user-visible feature coverage (53/53 advertised features from <code>features.toml</code>)</li>
-<li><strong>Protocol Compliance</strong>: 100% overall LSP protocol support (89/89 including plumbing)</li>
-<li><strong>Parser Coverage</strong>: ~100% Perl 5 syntax via <code>tree-sitter-perl/test/corpus</code> (~611 sections) + <code>test_corpus/</code> (21 <code>.pl</code> files)</li>
-<li><strong>Test Status</strong>: 1002 lib tests (Tier A), 163 ignores tracked (2 total tracked debt: 1 bug, 1 manual)</li>
+<li><strong>Protocol Compliance</strong>: 100% overall LSP protocol support (93/93 including plumbing)</li>
+<li><strong>Parser Coverage</strong>: ~100% Perl 5 syntax via <code>tree-sitter-perl/test/corpus</code> (~611 sections) + <code>test_corpus/</code> (78 <code>.pl</code> files)</li>
+<li><strong>Test Status</strong>: 1218 lib tests (Tier A), 0 ignores tracked (0 total tracked debt: 0 bug, 0 manual)</li>
 <li><strong>Docs (perl-parser)</strong>: missing_docs warnings = 0 (baseline 0)</li>
 <li><strong>Quality Metrics</strong>: 87% mutation score, &lt;50ms LSP response times, 931ns incremental parsing</li>
 <li><strong>Production Status</strong>: LSP server production-ready (<code>just ci-gate</code> passing)</li>
@@ -261,10 +260,10 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <!-- END: STATUS_METRICS_BULLETS -->
 <hr />
 <h2 id="whats-next"><a class="header" href="#whats-next">What’s Next</a></h2>
-<p><strong>Now (v0.9.1 close-out)</strong></p>
+<p><strong>Now (post v0.9.1 close-out)</strong></p>
 <ul>
-<li>Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)</li>
-<li>Documentation cleanup: reduce <code>missing_docs</code> violations and complete module-level docs</li>
+<li>Keep verification receipts green (<code>just ci-gate</code>, targeted state-machine tests, benchmark checks)</li>
+<li>Publish benchmark outputs under <code>benchmarks/results/</code> for v1.0.x evidence trail</li>
 </ul>
 <p><strong>Next (v1.0.0 readiness)</strong></p>
 <ul>
@@ -276,7 +275,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 </ul>
 <p><strong>Later (post v1.0)</strong></p>
 <ul>
-<li>Native DAP completeness (attach, variables/evaluate, safe eval)</li>
+<li>DAP preview -&gt; GA hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)</li>
 <li>Full LSP 3.18 compliance</li>
 <li>Package manager distribution (Homebrew/apt/etc.)</li>
 </ul>
@@ -287,14 +286,14 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <li><strong>Tracked test debt</strong>: see <code>scripts/ignored-test-count.sh</code>; feature-gated ignores are by design</li>
 <li><strong>CI Pipeline (#211)</strong>: Blocks merge-blocking gates (#210)</li>
 <li><strong>Docs scope</strong>: perl-parser missing_docs is ratcheted (see <code>ci/check_missing_docs.sh</code>); workspace-wide enforcement is a separate decision</li>
-<li><strong>Index State Machine</strong>: Verification pending (run <code>just ci-gate</code> + targeted tests/benchmarks)</li>
+<li><strong>Index State Machine</strong>: Verification complete (2026-02-16 receipts captured with <code>just ci-gate</code> + targeted tests/benchmarks)</li>
 </ul>
 <hr />
 <h2 id="component-summary"><a class="header" href="#component-summary">Component Summary</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Component</th><th>Status</th><th>Notes</th></tr></thead><tbody>
 <tr><td>perl-parser</td><td>Production</td><td>~100% Perl 5, 87% mutation score</td></tr>
 <tr><td>perl-lsp</td><td>Production</td><td>Coverage tracked via <code>features.toml</code></td></tr>
-<tr><td>perl-dap</td><td>Phase 1</td><td>Native adapter CLI; BridgeAdapter library available</td></tr>
+<tr><td>perl-dap</td><td>Preview (Native + Bridge)</td><td>Native adapter implemented/tested (phase2+phase3 suites); BridgeAdapter retained for compatibility</td></tr>
 <tr><td>perl-lexer</td><td>Production</td><td>Context-aware, sub-microsecond</td></tr>
 <tr><td>perl-corpus</td><td>Production</td><td>Corpus counts tracked in computed metrics</td></tr>
 </tbody></table>
@@ -308,7 +307,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 </ol>
 <p><strong>Historical archives</strong>: See <code>docs/archive/status_snapshots/</code> for sprint logs and completion history.</p>
 <hr />
-<p><em>Last Updated: 2026-01-28 (narrative sections only; run <code>just status-update</code> to refresh metrics)</em>
+<p><em>Last Updated: 2026-02-17 (narrative sections only; run <code>just status-update</code> to refresh metrics)</em>
 <em>Canonical docs: <a href="ROADMAP.html">ROADMAP.md</a>, <a href="../features.toml">features.toml</a></em></p>
 
                     </main>

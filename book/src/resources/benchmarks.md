@@ -4,8 +4,8 @@ Performance benchmarks are tracked in the repository.
 
 ## Benchmark Reports
 
-- [Benchmark Framework](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/docs/benchmarks/BENCHMARK_FRAMEWORK.md)
-- [Benchmark Report](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/docs/benchmarks/BENCHMARK_REPORT.md)
+- [Benchmark Framework](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/master/docs/benchmarks/BENCHMARK_FRAMEWORK.md)
+- [Benchmark Report](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/master/docs/benchmarks/BENCHMARK_REPORT.md)
 
 ## Running Benchmarks
 

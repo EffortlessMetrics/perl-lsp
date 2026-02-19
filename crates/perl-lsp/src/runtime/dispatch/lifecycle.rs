@@ -29,6 +29,48 @@ impl LspServer {
         std::process::exit(exit_code);
     }
 
+    /// Handle $/setTrace notification
+    ///
+    /// Updates the server trace level. Valid values: "off", "messages", "verbose".
+    /// Invalid values default to "off" per LSP spec.
+    pub(super) fn handle_set_trace_dispatch(
+        &mut self,
+        params: Option<Value>,
+    ) -> Result<Option<Value>, JsonRpcError> {
+        if let Some(params) = params {
+            if let Some(value) = params.get("value").and_then(|v| v.as_str()) {
+                let level = match value {
+                    "off" | "messages" | "verbose" => value.to_string(),
+                    _ => "off".to_string(),
+                };
+                eprintln!("Trace level set to: {}", level);
+                *self.trace_level.lock() = level;
+            }
+        }
+        Ok(None) // Notification, no response
+    }
+
+    /// Send $/logTrace notification to client
+    ///
+    /// Only sends if trace level is "messages" or "verbose".
+    /// The verbose field is only included when trace level is "verbose".
+    #[allow(dead_code)]
+    pub(crate) fn send_log_trace(&self, message: &str, verbose: Option<&str>) {
+        let current_level = self.trace_level.lock().clone();
+        if current_level == "off" {
+            return;
+        }
+        let mut params = json!({
+            "message": message
+        });
+        if current_level == "verbose" {
+            if let Some(v) = verbose {
+                params["verbose"] = json!(v);
+            }
+        }
+        let _ = self.notify("$/logTrace", params);
+    }
+
     /// Handle initialized notification
     pub(super) fn handle_initialized_dispatch(&mut self) -> Result<Option<Value>, JsonRpcError> {
         self.initialized = true;

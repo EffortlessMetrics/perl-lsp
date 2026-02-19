@@ -39,7 +39,7 @@ global:
   # Toolchain requirements
   toolchain:
     # MSRV for the project (per rust-toolchain.toml)
-    msrv: "1.89.0"
+    msrv: "1.92.0"
     # Required components
     components:
       - rustfmt
@@ -440,7 +440,7 @@ gates:
         - macos-latest
       toolchain:
         - stable
-        - "1.89.0"  # MSRV
+        - "1.92.0"  # MSRV
         - beta
     tags:
       - matrix

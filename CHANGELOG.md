@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive Testing**: 535+ tests with 100% LSP coverage and mutation hardening
 
 ### Changed
-- **MSRV Updated**: Minimum Supported Rust Version bumped to 1.89 (Rust 2024 edition)
+- **MSRV Updated**: Minimum Supported Rust Version bumped to 1.92 (Rust 2024 edition)
 - **Parser Architecture**: Native recursive descent parser replaces legacy implementations
 - **Performance Model**: 4-19x faster parsing with 1-150μs typical parsing times
 - **LSP Wire Protocol**: Full LSP 3.18 compliance with GA-locked capability guarantees
@@ -143,7 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### From v0.9.x to v1.0.0
 
 **Breaking Changes:**
-- MSRV bumped to Rust 1.89 (2024 edition)
+- MSRV bumped to Rust 1.92 (2024 edition)
 - Legacy parser components deprecated
 
 **Migration Steps:**

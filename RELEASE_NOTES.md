@@ -194,7 +194,7 @@ nix develop -c just health
 
 ### From v0.9.x
 **Breaking Changes:**
-- MSRV bumped to Rust 1.89 (2024 edition)
+- MSRV bumped to Rust 1.92 (2024 edition)
 - Legacy parser components deprecated
 
 **Migration Steps:**

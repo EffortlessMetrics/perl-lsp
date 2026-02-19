@@ -179,8 +179,8 @@ fn benchmark_components(c: &mut Criterion) {
         });
     });
     
-    // Isolated parser benchmark: pre-tokenize then parse, measuring parse-only cost
-    group.bench_function("parser_pre_tokenized", |b| {
+    // Baseline: cost of iterating a pre-collected token vector (no parsing)
+    group.bench_function("token_iteration_baseline", |b| {
         use perl_lexer::{PerlLexer, TokenType};
 
         // Pre-tokenize once outside the benchmark loop

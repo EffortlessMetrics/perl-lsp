@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use perl_parser::{
@@ -8,91 +8,13 @@ use perl_parser::{
 };
 use perl_tdd_support::{must, must_some};
 
+mod nodekind_helpers;
+use nodekind_helpers::{
+    ALL_NODE_KIND_NAMES, SYNTHETIC_NODE_KIND_NAMES, collect_node_kinds, find_first_node_of_kind,
+    has_node_kind,
+};
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
-
-/// Source-of-truth list: update ONLY when NodeKind changes.
-/// (Do not include HeredocDepthLimit — that is a lexer/token budget error path, not a NodeKind.)
-const ALL_NODE_KIND_NAMES: &[&str] = &[
-    "Program",
-    "ExpressionStatement",
-    "VariableDeclaration",
-    "VariableListDeclaration",
-    "Variable",
-    "VariableWithAttributes",
-    "Assignment",
-    "Binary",
-    "Ternary",
-    "Unary",
-    "Diamond",
-    "Ellipsis",
-    "Undef",
-    "Readline",
-    "Glob",
-    "Typeglob",
-    "Number",
-    "String",
-    "Heredoc",
-    "ArrayLiteral",
-    "HashLiteral",
-    "Block",
-    "Eval",
-    "Do",
-    "Try",
-    "If",
-    "LabeledStatement",
-    "While",
-    "Tie",
-    "Untie",
-    "For",
-    "Foreach",
-    "Given",
-    "When",
-    "Default",
-    "StatementModifier",
-    "Subroutine",
-    "Prototype",
-    "Signature",
-    "MandatoryParameter",
-    "OptionalParameter",
-    "SlurpyParameter",
-    "NamedParameter",
-    "Method",
-    "Return",
-    "LoopControl",
-    "MethodCall",
-    "FunctionCall",
-    "IndirectCall",
-    "Regex",
-    "Match",
-    "Substitution",
-    "Transliteration",
-    "Package",
-    "Use",
-    "No",
-    "PhaseBlock",
-    "DataSection",
-    "Class",
-    "Format",
-    "Identifier",
-    "Error",
-    "MissingExpression",
-    "MissingStatement",
-    "MissingIdentifier",
-    "MissingBlock",
-    "UnknownRest",
-];
-
-/// These are intentionally covered by a manual AST fixture.
-/// (UnknownRest is lexer-budget driven and not a stable parser fixture; Missing* is not guaranteed to be
-/// produced by the v3 engine error recovery hot path.)
-const MANUAL_ONLY_NODE_KIND_NAMES: &[&str] = &[
-    "Error",
-    "MissingExpression",
-    "MissingStatement",
-    "MissingIdentifier",
-    "MissingBlock",
-    "UnknownRest",
-];
 
 fn parse_ast(source: &str) -> Node {
     let mut parser = Parser::new(source);
@@ -102,37 +24,6 @@ fn parse_ast(source: &str) -> Node {
 fn parse_ast_with_recovery(source: &str) -> Node {
     let mut parser = Parser::new(source);
     parser.parse_with_recovery().ast
-}
-
-fn collect_node_kinds(node: &Node, out: &mut HashSet<&'static str>) {
-    out.insert(node.kind.kind_name());
-    node.for_each_child(|child| collect_node_kinds(child, out));
-}
-
-fn has_node_kind(ast: &Node, expected: &str) -> bool {
-    if ast.kind.kind_name() == expected {
-        return true;
-    }
-    let mut found = false;
-    ast.for_each_child(|child| {
-        if !found && has_node_kind(child, expected) {
-            found = true;
-        }
-    });
-    found
-}
-
-fn find_first_node_of_kind<'a>(node: &'a Node, expected: &str) -> Option<&'a Node> {
-    if node.kind.kind_name() == expected {
-        return Some(node);
-    }
-    let mut found: Option<&'a Node> = None;
-    node.for_each_child(|child| {
-        if found.is_none() {
-            found = find_first_node_of_kind(child, expected);
-        }
-    });
-    found
 }
 
 fn manual_recovery_nodekind_fixture(location: SourceLocation) -> Node {
@@ -301,9 +192,27 @@ $name, $age, $salary
                 my $trans   = $subject =~ tr/hello/world/;
             "#,
         ),
+        (
+            "if_labeled_prototype_indirect",
+            r#"
+                if (1) { print "yes"; } elsif (0) { print "no"; } else { print "else"; }
+
+                loop_label: while (1) { last; }
+
+                sub proto_fn ($$) { 1 }
+
+                print STDERR "via indirect filehandle";
+            "#,
+        ),
+        (
+            "foreach_standalone",
+            r#"
+                foreach my $item (1, 2, 3) { print $item; }
+            "#,
+        ),
     ];
 
-    let mut observed = HashSet::new();
+    let mut observed = BTreeSet::new();
 
     for (name, source) in cases {
         let ast = parse_ast(source);
@@ -333,13 +242,13 @@ fn test_manual_only_nodekinds_exist_and_analyze_without_panic() {
     let location = SourceLocation { start: 0, end: 0 };
     let manual_ast = manual_recovery_nodekind_fixture(location);
 
-    // 1) Ensure the fixture still contains the intended manual-only kinds.
-    for kind in MANUAL_ONLY_NODE_KIND_NAMES {
+    // 1) Ensure the fixture still contains the intended synthetic kinds.
+    for kind in SYNTHETIC_NODE_KIND_NAMES {
         assert!(has_node_kind(&manual_ast, kind), "manual fixture must include NodeKind::{kind}");
     }
 
-    // 2) Ensure semantic analysis doesn't panic on any manual-only kind in isolation.
-    for kind in MANUAL_ONLY_NODE_KIND_NAMES {
+    // 2) Ensure semantic analysis doesn't panic on any synthetic kind in isolation.
+    for kind in SYNTHETIC_NODE_KIND_NAMES {
         let node = must_some(find_first_node_of_kind(&manual_ast, kind)).clone();
 
         let single = Node::new(NodeKind::Program { statements: vec![node] }, location);
@@ -361,7 +270,7 @@ fn test_parser_recovery_produces_error_nodes_and_does_not_panic_semantic() {
     // - semantic analysis does not panic
     let cases: &[(&str, &str)] = &[
         ("missing_expression", "my $x = ;"),
-        ("missing_identifier", "my $ = 1;"),
+        ("missing_identifier", "my = 1;"),
         ("unclosed_block", "if (1) {"),
     ];
 

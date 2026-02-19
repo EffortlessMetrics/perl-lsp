@@ -1,6 +1,6 @@
 [package]
 name = "tree-sitter-perl"
-rust-version = "1.89"
+rust-version = "1.92"
 version = "0.8.3"
 edition = "2024"
 description = "Tree-sitter Perl validation harness (internal only)"

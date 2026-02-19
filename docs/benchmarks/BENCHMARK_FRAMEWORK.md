@@ -473,7 +473,7 @@ The framework includes configurable performance gates that automatically detect 
   "metadata": {
     "generated_at": "1630000000",
     "parser_version": "0.8.9",
-    "rust_version": "1.89",
+    "rust_version": "1.92",
     "total_tests": 10,
     "total_iterations": 1000,
     "configuration": { ... }

@@ -1,6 +1,6 @@
 # PR Review Flow Orchestration Guide
 
-This document provides guidelines for the tree-sitter-perl PR review agent orchestration flow, designed for Rust 2024 parser development with MSRV 1.89+ compatibility, cargo-nextest parallel testing, and xtask automation.
+This document provides guidelines for the tree-sitter-perl PR review agent orchestration flow, designed for Rust 2024 parser development with MSRV 1.92+ compatibility, cargo-nextest parallel testing, and xtask automation.
 
 ## Flow Overview
 
@@ -67,7 +67,7 @@ This document provides guidelines for the tree-sitter-perl PR review agent orche
 **Capabilities**:
 - Fix failing tests with xtask automation
 - Implement reviewer suggestions maintaining parser coverage
-- Apply Rust 2024 standards with MSRV 1.89+ compatibility
+- Apply Rust 2024 standards with MSRV 1.92+ compatibility
 - GitHub status management and reviewer communication
 
 **Decision Matrix**:
@@ -84,7 +84,7 @@ This document provides guidelines for the tree-sitter-perl PR review agent orche
 **Validation Requirements**:
 - Complete test suite validation (nextest + xtask)
 - Performance regression checks via `cargo xtask compare`
-- Rust 2024 compliance with MSRV 1.89+
+- Rust 2024 compliance with MSRV 1.92+
 - Reviewer feedback resolution verification
 
 **Decision Matrix**:

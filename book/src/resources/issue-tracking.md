@@ -4,7 +4,7 @@ Issue status and tracking documentation.
 
 ## Current Issues
 
-See [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl/issues) for active issues.
+See [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues) for active issues.
 
 ## Milestones
 

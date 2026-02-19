@@ -30,6 +30,10 @@ impl LspServer {
                 glob_pattern: GlobPattern::String("**/*.t".into()),
                 kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
             },
+            FileSystemWatcher {
+                glob_pattern: GlobPattern::String("**/*.psgi".into()),
+                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
+            },
         ];
 
         let opts = DidChangeWatchedFilesRegistrationOptions { watchers };

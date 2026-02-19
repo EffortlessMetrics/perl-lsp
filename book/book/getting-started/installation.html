@@ -144,11 +144,8 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
-                        </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/src/getting-started/installation.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
-                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -181,33 +178,189 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
-<h2 id="from-cratesio"><a class="header" href="#from-cratesio">From crates.io</a></h2>
-<p>The recommended way to install perl-lsp is via crates.io:</p>
+                        <h1 id="getting-started-with-perl-lsp"><a class="header" href="#getting-started-with-perl-lsp">Getting Started with perl-lsp</a></h1>
+<p>This guide gets you from zero to a working Perl language server in your editor.</p>
+<h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
+<ul>
+<li><strong>Rust 1.89+</strong> (for building from source)</li>
+<li><strong>A supported editor</strong>: VS Code, Neovim, Emacs, Helix, or Sublime Text</li>
+</ul>
+<h2 id="installation"><a class="header" href="#installation">Installation</a></h2>
+<p>Choose one method:</p>
+<h3 id="option-1-install-from-cratesio-recommended"><a class="header" href="#option-1-install-from-cratesio-recommended">Option 1: Install from crates.io (Recommended)</a></h3>
 <pre><code class="language-bash">cargo install perl-lsp
 </code></pre>
-<h2 id="from-source"><a class="header" href="#from-source">From Source</a></h2>
-<p>Clone the repository and build:</p>
-<pre><code class="language-bash">git clone https://github.com/EffortlessMetrics/tree-sitter-perl.git
-cd tree-sitter-perl
-cargo build --release -p perl-lsp
+<h3 id="option-2-download-pre-built-binary"><a class="header" href="#option-2-download-pre-built-binary">Option 2: Download Pre-built Binary</a></h3>
+<p>Download from <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases">GitHub Releases</a>:</p>
+<pre><code class="language-bash"># Linux (x86_64)
+curl -LO https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
+tar xzf perl-lsp-linux-x86_64.tar.gz
+sudo mv perl-lsp /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -LO https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
+tar xzf perl-lsp-darwin-aarch64.tar.gz
+sudo mv perl-lsp /usr/local/bin/
 </code></pre>
-<p>The binary will be located at <code>target/release/perl-lsp</code>.</p>
-<h2 id="system-requirements"><a class="header" href="#system-requirements">System Requirements</a></h2>
+<h3 id="option-3-build-from-source"><a class="header" href="#option-3-build-from-source">Option 3: Build from Source</a></h3>
+<pre><code class="language-bash">git clone https://github.com/EffortlessMetrics/tree-sitter-perl-rs.git
+cd tree-sitter-perl-rs
+cargo install --path crates/perl-lsp
+</code></pre>
+<h2 id="verify-installation"><a class="header" href="#verify-installation">Verify Installation</a></h2>
+<pre><code class="language-bash"># Check binary is available
+perl-lsp --version
+
+# Quick health check
+perl-lsp --health
+# Should output: ok 0.9.0
+</code></pre>
+<h2 id="quick-editor-setup"><a class="header" href="#quick-editor-setup">Quick Editor Setup</a></h2>
+<h3 id="vs-code"><a class="header" href="#vs-code">VS Code</a></h3>
+<ol>
+<li>
+<p>Install the extension:</p>
+<pre><code class="language-bash">code --install-extension effortlesssteven.perl-lsp
+</code></pre>
+</li>
+<li>
+<p>Open a <code>.pl</code> or <code>.pm</code> file - the server starts automatically.</p>
+</li>
+</ol>
+<h3 id="neovim"><a class="header" href="#neovim">Neovim</a></h3>
+<p>Add to your <code>init.lua</code>:</p>
+<pre><code class="language-lua">local lspconfig = require('lspconfig')
+local configs = require('lspconfig.configs')
+
+if not configs.perl_lsp then
+  configs.perl_lsp = {
+    default_config = {
+      cmd = { 'perl-lsp', '--stdio' },
+      filetypes = { 'perl' },
+      root_dir = lspconfig.util.root_pattern('.git'),
+      single_file_support = true,
+    },
+  }
+end
+
+lspconfig.perl_lsp.setup({})
+</code></pre>
+<h3 id="emacs-with-eglot-emacs-29"><a class="header" href="#emacs-with-eglot-emacs-29">Emacs (with eglot, Emacs 29+)</a></h3>
+<pre><code class="language-elisp">(add-to-list 'eglot-server-programs
+             '((cperl-mode perl-mode) . ("perl-lsp" "--stdio")))
+</code></pre>
+<p>Then run <code>M-x eglot</code> in a Perl buffer.</p>
+<h3 id="helix"><a class="header" href="#helix">Helix</a></h3>
+<p>Add to <code>~/.config/helix/languages.toml</code>:</p>
+<pre><code class="language-toml">[[language]]
+name = "perl"
+language-servers = ["perl-lsp"]
+
+[language-server.perl-lsp]
+command = "perl-lsp"
+args = ["--stdio"]
+</code></pre>
+<h2 id="your-first-5-minutes"><a class="header" href="#your-first-5-minutes">Your First 5 Minutes</a></h2>
+<p>Once installed, open any Perl file and try these features:</p>
+<h3 id="1-hover-for-documentation"><a class="header" href="#1-hover-for-documentation">1. Hover for Documentation</a></h3>
+<p>Move your cursor over a function like <code>print</code> or <code>substr</code> and see documentation appear.</p>
+<h3 id="2-go-to-definition"><a class="header" href="#2-go-to-definition">2. Go to Definition</a></h3>
+<p>Click on a variable or function call and use your editor’s “Go to Definition” command:</p>
 <ul>
-<li>Rust toolchain 1.70 or later</li>
-<li>Perl 5 installation (for testing)</li>
-<li>Sufficient memory for workspace indexing (typically 512MB+)</li>
+<li>VS Code: <code>F12</code> or <code>Ctrl+Click</code></li>
+<li>Neovim: <code>gd</code></li>
+<li>Emacs: <code>M-.</code></li>
 </ul>
-<h2 id="verifying-installation"><a class="header" href="#verifying-installation">Verifying Installation</a></h2>
-<p>Check that perl-lsp is properly installed:</p>
-<pre><code class="language-bash">perl-lsp --version
+<h3 id="3-find-all-references"><a class="header" href="#3-find-all-references">3. Find All References</a></h3>
+<p>Find everywhere a symbol is used:</p>
+<ul>
+<li>VS Code: <code>Shift+F12</code></li>
+<li>Neovim: <code>gr</code></li>
+<li>Emacs: <code>M-?</code></li>
+</ul>
+<h3 id="4-code-completion"><a class="header" href="#4-code-completion">4. Code Completion</a></h3>
+<p>Type <code>$</code> to see variable completions, or start typing a function name:</p>
+<pre><code class="language-perl">my $name = "Alice";
+print $na  # Completes to $name
+prin       # Completes to print
 </code></pre>
+<h3 id="5-quick-fixes"><a class="header" href="#5-quick-fixes">5. Quick Fixes</a></h3>
+<p>The LSP suggests fixes for common issues. Look for the lightbulb icon (VS Code) or use:</p>
+<ul>
+<li>VS Code: <code>Ctrl+.</code></li>
+<li>Neovim: <code>&lt;leader&gt;ca</code></li>
+<li>Emacs: <code>C-c l a</code></li>
+</ul>
+<h2 id="what-you-get"><a class="header" href="#what-you-get">What You Get</a></h2>
+<p>perl-lsp provides:</p>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>What It Does</th></tr></thead><tbody>
+<tr><td><strong>Diagnostics</strong></td><td>Real-time syntax error detection</td></tr>
+<tr><td><strong>Completion</strong></td><td>Variables, functions, keywords, file paths</td></tr>
+<tr><td><strong>Hover</strong></td><td>Documentation for 150+ Perl built-ins</td></tr>
+<tr><td><strong>Definition</strong></td><td>Jump to where symbols are defined</td></tr>
+<tr><td><strong>References</strong></td><td>Find all uses of a symbol</td></tr>
+<tr><td><strong>Rename</strong></td><td>Safely rename variables across files</td></tr>
+<tr><td><strong>Formatting</strong></td><td>Format code with Perl::Tidy</td></tr>
+<tr><td><strong>Folding</strong></td><td>Collapse functions, blocks, POD</td></tr>
+<tr><td><strong>Symbols</strong></td><td>Document outline and workspace search</td></tr>
+</tbody></table>
+</div>
+<h2 id="project-configuration"><a class="header" href="#project-configuration">Project Configuration</a></h2>
+<p>For project-specific settings, the server reads configuration from your editor’s LSP settings.</p>
+<h3 id="example-configure-module-search-paths"><a class="header" href="#example-configure-module-search-paths">Example: Configure Module Search Paths</a></h3>
+<pre><code class="language-json">{
+  "perl": {
+    "workspace": {
+      "includePaths": ["lib", ".", "local/lib/perl5"]
+    }
+  }
+}
+</code></pre>
+<h3 id="example-tune-for-large-projects"><a class="header" href="#example-tune-for-large-projects">Example: Tune for Large Projects</a></h3>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "maxIndexedFiles": 50000,
+      "referencesCap": 1000
+    }
+  }
+}
+</code></pre>
+<p>See <a href="CONFIG.html">CONFIG.md</a> for all configuration options.</p>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="server-not-starting"><a class="header" href="#server-not-starting">Server Not Starting</a></h3>
+<pre><code class="language-bash"># Test if the binary works
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+</code></pre>
+<h3 id="no-diagnostics-appearing"><a class="header" href="#no-diagnostics-appearing">No Diagnostics Appearing</a></h3>
+<ol>
+<li>Ensure your file has a Perl extension (<code>.pl</code>, <code>.pm</code>, <code>.t</code>)</li>
+<li>Check your editor’s language mode is set to Perl</li>
+<li>Look at the LSP output log in your editor</li>
+</ol>
+<h3 id="slow-performance"><a class="header" href="#slow-performance">Slow Performance</a></h3>
+<p>Reduce indexed files and result caps in your settings:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "maxIndexedFiles": 5000,
+      "workspaceSymbolCap": 100
+    }
+  }
+}
+</code></pre>
+<p>See <a href="TROUBLESHOOTING.html">TROUBLESHOOTING.md</a> for more solutions.</p>
 <h2 id="next-steps"><a class="header" href="#next-steps">Next Steps</a></h2>
 <ul>
-<li><a href="./editor-setup.html">Editor Setup</a></li>
-<li><a href="./configuration.html">Configuration</a></li>
-<li><a href="./first-steps.html">First Steps</a></li>
+<li><strong><a href="EDITOR_SETUP.html">EDITOR_SETUP.md</a></strong> - Detailed editor configurations</li>
+<li><strong><a href="CONFIG.html">CONFIG.md</a></strong> - All configuration options</li>
+<li><strong><a href="LSP_FEATURES.html">LSP_FEATURES.md</a></strong> - Complete feature documentation</li>
+<li><strong><a href="FAQ.html">FAQ.md</a></strong> - Frequently asked questions</li>
+</ul>
+<h2 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h2>
+<ul>
+<li><strong>Issues</strong>: <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues">GitHub Issues</a></li>
+<li><strong>Documentation</strong>: <a href="INDEX.html">docs/INDEX.md</a></li>
 </ul>
 
                     </main>

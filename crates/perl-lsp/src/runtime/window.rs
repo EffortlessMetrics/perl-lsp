@@ -309,8 +309,19 @@ impl LspServer {
 
                 if removed {
                     eprintln!("Progress cancelled by client: {}", token);
-                    // Note: Actual task cancellation would be handled by the operation
-                    // using the token. This just tracks the token state.
+
+                    // Look up the request ID associated with this progress token
+                    // and signal cancellation via the global registry
+                    let request_id = self.progress_token_to_request.lock().remove(token);
+                    if let Some(req_id) = request_id {
+                        eprintln!(
+                            "Signalling cancellation for request {:?} via progress token {}",
+                            req_id, token
+                        );
+                        if let Err(e) = GLOBAL_CANCELLATION_REGISTRY.cancel_request(&req_id) {
+                            eprintln!("Failed to cancel request via registry: {}", e);
+                        }
+                    }
                 } else {
                     eprintln!("Progress cancel for unknown token: {}", token);
                 }
@@ -337,5 +348,82 @@ impl LspServer {
         let mut output = self.output.lock();
         write!(output, "Content-Length: {}\r\n\r\n{}", request_str.len(), request_str)?;
         output.flush()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
+    use serde_json::json;
+
+    #[test]
+    fn progress_cancel_signals_cancellation_registry() {
+        let server = LspServer::new();
+
+        // Set up: register a progress token and associate it with a request ID
+        let token_str = "test-progress-token-1";
+        let request_id = json!(42);
+
+        server.progress_tokens.lock().insert(token_str.to_string());
+        server.register_progress_request(token_str, request_id.clone());
+
+        // Register a cancellation token in the global registry for this request
+        let cancel_token =
+            PerlLspCancellationToken::new(request_id.clone(), "test-provider".to_string());
+        let _ = GLOBAL_CANCELLATION_REGISTRY.register_token(cancel_token.clone());
+
+        // Verify not cancelled yet
+        assert!(!GLOBAL_CANCELLATION_REGISTRY.is_cancelled(&request_id));
+
+        // Simulate client sending window/workDoneProgress/cancel
+        server.handle_progress_cancel(Some(json!({ "token": token_str })));
+
+        // Verify the cancellation was signalled through the registry
+        assert!(GLOBAL_CANCELLATION_REGISTRY.is_cancelled(&request_id));
+
+        // Verify token was removed from active set
+        assert!(!server.progress_tokens.lock().contains(token_str));
+
+        // Verify mapping was removed
+        assert!(!server.progress_token_to_request.lock().contains_key(token_str));
+
+        // Clean up global registry
+        GLOBAL_CANCELLATION_REGISTRY.remove_request(&request_id);
+    }
+
+    #[test]
+    fn progress_cancel_unknown_token_is_graceful() {
+        let server = LspServer::new();
+
+        // Cancel a token that was never registered - should not panic
+        server.handle_progress_cancel(Some(json!({ "token": "nonexistent-token" })));
+
+        // Verify no side effects
+        assert!(server.progress_tokens.lock().is_empty());
+        assert!(server.progress_token_to_request.lock().is_empty());
+    }
+
+    #[test]
+    fn progress_cancel_without_mapping_does_not_signal_registry() {
+        let server = LspServer::new();
+
+        // Register a progress token but do NOT register a request mapping
+        let token_str = "unmapped-token";
+        server.progress_tokens.lock().insert(token_str.to_string());
+
+        // Cancel should succeed (removing the token) without calling the registry
+        server.handle_progress_cancel(Some(json!({ "token": token_str })));
+
+        // Token should be removed from active set
+        assert!(!server.progress_tokens.lock().contains(token_str));
+    }
+
+    #[test]
+    fn progress_cancel_with_none_params_is_graceful() {
+        let server = LspServer::new();
+
+        // Passing None should not panic
+        server.handle_progress_cancel(None);
     }
 }

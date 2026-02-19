@@ -2,7 +2,7 @@
 name = "perl-ts-advanced-parsers"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.92"
 description = "Composed parser experiments for Perl"
 publish = false
 license = "Apache-2.0 OR MIT"

@@ -34,7 +34,7 @@ impl MockLspServer {
             "jsonrpc": "2.0",
             "result": {
                 "capabilities": {
-                    "textDocumentSync": 1,
+                    "textDocumentSync": 2,
                     "hoverProvider": true,
                     "completionProvider": {
                         "triggerCharacters": ["$", "@", "%"]

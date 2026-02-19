@@ -170,10 +170,14 @@ pub struct LspServer {
     next_request_id: Arc<AtomicI64>,
     /// Active progress tokens for work done progress tracking
     progress_tokens: Arc<Mutex<HashSet<String>>>,
+    /// Maps progress tokens to their originating request IDs for cancellation routing
+    progress_token_to_request: Arc<Mutex<HashMap<String, Value>>>,
     /// Refresh controller for debounced client refresh requests
     refresh_controller: refresh::RefreshController,
     /// Notebook document store (LSP 3.17)
     pub(crate) notebook_store: notebook::NotebookStore,
+    /// Trace level set by client via $/setTrace (off, messages, verbose)
+    trace_level: Arc<Mutex<String>>,
 }
 
 // Note: DocumentState, ServerConfig, and normalize_package_separator are
@@ -217,8 +221,10 @@ impl LspServer {
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
         }
     }
 
@@ -291,8 +297,10 @@ impl LspServer {
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
         }
     }
 
@@ -334,8 +342,10 @@ impl LspServer {
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
         }
     }
 
@@ -554,6 +564,15 @@ impl LspServer {
     fn is_cancelled(&self, id: &Value) -> bool {
         let set = self.cancelled.lock();
         set.contains(id)
+    }
+
+    /// Register a mapping from a progress token to its originating request ID
+    ///
+    /// When the client sends `window/workDoneProgress/cancel` for this token,
+    /// the server will look up the request ID and signal cancellation via the
+    /// global cancellation registry.
+    pub(crate) fn register_progress_request(&self, token: &str, request_id: Value) {
+        self.progress_token_to_request.lock().insert(token.to_string(), request_id);
     }
 
     // Note: handle_request is implemented in dispatch.rs

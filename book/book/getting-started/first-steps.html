@@ -144,11 +144,8 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
-                        </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/src/getting-started/first-steps.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
-                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -181,13 +178,16 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="-start-here---perl-lsp-quick-start-guide"><a class="header" href="#-start-here---perl-lsp-quick-start-guide">🚀 START HERE - perl-lsp Quick Start Guide</a></h1>
+                        <h1 id="project-orientation"><a class="header" href="#project-orientation">Project Orientation</a></h1>
 <blockquote>
-<p><strong>⚠️ SNAPSHOT DISCLAIMER</strong>: Orientation-only. For live status and metrics, see <code>docs/CURRENT_STATUS.md</code> and GitHub milestones/issues.</p>
+<p>For the documentation hub, see <a href="README.html">README.md</a>. This page provides project orientation for active contributors.</p>
+</blockquote>
+<blockquote>
+<p><strong>SNAPSHOT DISCLAIMER</strong>: Orientation-only. For live status and metrics, see <code>docs/CURRENT_STATUS.md</code> and GitHub milestones/issues.</p>
 </blockquote>
 <p>Welcome to the perl-lsp project! This guide will get you up to speed quickly.</p>
 <h2 id="-you-are-here"><a class="header" href="#-you-are-here">📍 You Are Here</a></h2>
-<p><strong>Project Status</strong>: v0.9.0 released; v0.9.1 close-out in progress; v1.0 planning underway
+<p><strong>Project Status</strong>: v0.9.1 close-out receipts captured; v1.0.x hardening underway
 <strong>Open Issues</strong>: See GitHub milestones/issues for live counts</p>
 <h2 id="-5-minute-orientation"><a class="header" href="#-5-minute-orientation">🎯 5-Minute Orientation</a></h2>
 <h3 id="what-is-this-project"><a class="header" href="#what-is-this-project">What Is This Project?</a></h3>
@@ -195,14 +195,14 @@
 <ul>
 <li>Fast native Rust parser with near-complete Perl 5 coverage</li>
 <li>Production-grade LSP server with broad feature support (tracked in <code>features.toml</code>)</li>
-<li>DAP support with native CLI + BridgeAdapter (Phase 1)</li>
+<li>DAP support with native preview adapter + BridgeAdapter compatibility path</li>
 <li>Quality gates: tests, fuzzing/mutation hardening, missing_docs enforcement (see <code>CURRENT_STATUS.md</code>)</li>
 </ul>
 <h3 id="current-focus"><a class="header" href="#current-focus">Current Focus</a></h3>
-<p><strong>Now (v0.9.1 close-out)</strong></p>
+<p><strong>Now (post v0.9.1 close-out)</strong></p>
 <ul>
-<li>Workspace index state machine verification + receipts (phase transitions, early-exit caps)</li>
-<li>Documentation cleanup (<code>missing_docs</code>)</li>
+<li>Keep close-out receipts green (<code>just ci-gate</code>, targeted state-machine tests, benchmark checks)</li>
+<li>Publish benchmark outputs under <code>benchmarks/results/</code></li>
 </ul>
 <p><strong>Next (v1.0.0)</strong></p>
 <ul>
@@ -212,7 +212,7 @@
 </ul>
 <p><strong>Later (post v1.0)</strong></p>
 <ul>
-<li>Native DAP completeness (attach, variables/evaluate, safe eval)</li>
+<li>DAP preview -&gt; GA hardening (runtime variable/evaluate depth + packaging)</li>
 <li>Full LSP 3.18 compliance</li>
 <li>Package manager distribution</li>
 </ul>
@@ -234,11 +234,11 @@
 <li><strong><a href="COMMANDS_REFERENCE.html">COMMANDS_REFERENCE.md</a></strong> - Build/test commands</li>
 </ol>
 <h2 id="-what-needs-attention-right-now"><a class="header" href="#-what-needs-attention-right-now">🚨 What Needs Attention RIGHT NOW</a></h2>
-<h3 id="now-as-of-2026-01-27"><a class="header" href="#now-as-of-2026-01-27">Now (as of 2026-01-27)</a></h3>
+<h3 id="now-as-of-2026-02-16"><a class="header" href="#now-as-of-2026-02-16">Now (as of 2026-02-16)</a></h3>
 <ol>
-<li>🔴 <strong>Index state machine verification</strong> - confirm transitions, early-exit caps, and receipts</li>
-<li>🔴 <strong>Documentation cleanup</strong> - reduce <code>missing_docs</code> violations + module-level docs</li>
-<li>🟡 <strong>v0.9.1 release notes + doc alignment</strong> - CHANGELOG/ROADMAP/CURRENT_STATUS in sync</li>
+<li>🟡 <strong>Benchmark publication</strong> - commit canonical benchmark outputs under <code>benchmarks/results/</code></li>
+<li>🟡 <strong>v1.0.x packaging stance</strong> - finalize supported platforms and shipping model</li>
+<li>🟡 <strong>Upgrade notes polish</strong> - ensure v0.8.x → v1.0 path is explicit</li>
 <li>📌 <strong>Expanded backlog</strong> - see <code>docs/TODO.md</code> + <code>docs/LSP_MISSING_FEATURES_REPORT.md</code></li>
 </ol>
 <h3 id="next"><a class="header" href="#next">Next</a></h3>
@@ -255,7 +255,7 @@
 ├── crates/
 │   ├── perl-parser/      ⭐ Main crate - Parser
 │   ├── perl-lsp/          LSP server binary + LSP logic
-│   ├── perl-dap/          Debug Adapter Protocol (Phase 1 complete)
+│   ├── perl-dap/          Debug Adapter Protocol (native preview + bridge fallback)
 │   ├── perl-lexer/        Context-aware tokenizer
 │   ├── perl-corpus/       Test corpus (see CURRENT_STATUS for counts)
 │   └── perl-parser-pest/  Legacy Pest parser
@@ -292,8 +292,8 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp  # With adaptive threading
 </code></pre>
 <h2 id="-where-to-start-contributing"><a class="header" href="#-where-to-start-contributing">💡 Where to Start Contributing</a></h2>
 <ul>
-<li>Check the active milestone (v0.9.1) and the <code>good first issue</code> / <code>help wanted</code> labels</li>
-<li>Near-term work: index state machine + documentation cleanup (see ROADMAP)</li>
+<li>Check the active milestone and the <code>good first issue</code> / <code>help wanted</code> labels</li>
+<li>Near-term work: benchmark publication + v1.0.x packaging/readiness (see ROADMAP)</li>
 <li>Larger efforts: v1.0 milestone and <code>phase:*</code> labels</li>
 <li>See <a href="../CONTRIBUTING.html">CONTRIBUTING.md</a> for workflow details</li>
 </ul>
@@ -365,7 +365,7 @@ Run <code>just status-check</code> for live numbers.</p>
 <p>The perl-lsp project has clear paths to both MVP and Production v1.0. Your contributions will help make Perl development smoother across editors.</p>
 <p><strong>Pick an issue, dive in, and let’s ship this! 🎉</strong></p>
 <hr />
-<p><em>This guide is kept up-to-date as the project evolves. Last updated: 2026-01-27</em></p>
+<p><em>This guide is kept up-to-date as the project evolves. Last updated: 2026-02-17</em></p>
 <p><em>For detailed status, see: <a href="CURRENT_STATUS.html">CURRENT_STATUS.md</a></em></p>
 
                     </main>

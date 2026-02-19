@@ -197,7 +197,7 @@ All agents are configured with deep knowledge of:
 - **perl-parser-pest**: Legacy Pest-based parser (deprecated)
 
 ### Development Standards
-- **Rust 2024** edition with MSRV 1.89+ compatibility
+- **Rust 2024** edition with MSRV 1.92+ compatibility
 - **Performance targets**: 1-150 µs parsing speeds, 4-19x improvement over legacy
 - **Test coverage**: ~100% Perl 5 syntax coverage including ALL edge cases
 - **LSP compliance**: LSP 3.18+ protocol, ~75% feature coverage

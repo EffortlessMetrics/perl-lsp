@@ -60,7 +60,7 @@ exclude = [
 [workspace.package]
 version = "0.9.0"
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.92"
 authors = ["Tree-sitter Perl Contributors"]
 description = "Production-ready Perl parser, LSP, and DAP ecosystem in Rust"
 license = "MIT OR Apache-2.0"

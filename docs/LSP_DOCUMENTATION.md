@@ -136,7 +136,7 @@ cargo build --release -p perl-lsp
 ```
 
 ### System Requirements
-- Rust 1.70 or later
+- Rust 1.92 or later
 - No runtime dependencies
 - Works on Linux, macOS, and Windows
 

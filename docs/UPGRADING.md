@@ -3,7 +3,7 @@
 This guide provides comprehensive upgrade instructions from v0.8.x to v1.0.
 
 **Quick Summary:**
-- **MSRV bumped**: Rust 1.89+ required (was 1.89+ in v0.8.x, unchanged)
+- **MSRV bumped**: Rust 1.92+ required (was 1.92+ in v0.8.x, unchanged)
 - **Rust Edition**: Rust 2024 Edition (was 2021 in v0.8.x)
 - **Breaking Changes**: Minimal - primarily internal API refinements
 - **New Features**: Semantic analyzer, refactoring engine, performance optimizations
@@ -39,7 +39,7 @@ This guide provides comprehensive upgrade instructions from v0.8.x to v1.0.
 # Update your Cargo.toml if depending on perl-lsp crates
 [package]
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.92"
 ```
 
 **Implications:**
@@ -491,17 +491,17 @@ perl-lsp = "1.0"
 # Update Rust edition
 [package]
 edition = "2024"
-rust-version = "1.89"
+rust-version = "1.92"
 ```
 
 ### Step 2: Update Rust Toolchain
 
 ```bash
-# Install Rust 1.89+ if needed
+# Install Rust 1.92+ if needed
 rustup update stable
 
 # Verify version
-rustc --version  # Should show 1.89 or higher
+rustc --version  # Should show 1.92 or higher
 ```
 
 ### Step 3: Fix Breaking Changes
@@ -850,11 +850,11 @@ error: edition '2024' is unstable and only available with -Z unstable-options
 
 **Solution:**
 ```bash
-# Update Rust to 1.89+
+# Update Rust to 1.92+
 rustup update stable
 
 # Verify version
-rustc --version  # Must be 1.89 or higher
+rustc --version  # Must be 1.92 or higher
 ```
 
 ### Issue: "unknown field `downloadBaseUrl`" in VS Code

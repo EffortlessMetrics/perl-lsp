@@ -108,10 +108,10 @@ This LSP server is built on top of the [perl-parser](https://crates.io/crates/pe
 - **textDocument/codeAction**: Quick fixes, refactoring, and import optimization ("Organize Imports")
 - **textDocument/semanticTokens**: Enhanced syntax highlighting
 
-### 🚧 Partial Implementation
+### Recently Graduated
 
-- **textDocument/codeLens**: ~20% functional
-- **callHierarchy/**: ~15% functional
+- **textDocument/codeLens**: Reference counting, well-tested
+- **callHierarchy/**: Call hierarchy support
 
 See the [LSP Capability Documentation](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/master/docs/LSP_ACTUAL_STATUS.md) for complete feature status.
 

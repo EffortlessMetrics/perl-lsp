@@ -144,11 +144,8 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
-                        </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/src/architecture/crate-structure.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
-                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -443,13 +440,10 @@ struct CorpusTestResults {
 <li><strong>Diagnostic Analysis</strong>: Detailed structural breakdown for debugging parser differences</li>
 </ul>
 <h4 id="usage-pattern-diataxis-how-to-guide---implementation-approach"><a class="header" href="#usage-pattern-diataxis-how-to-guide---implementation-approach"><strong>Usage Pattern</strong> (<em>Diataxis: How-to Guide</em> - Implementation approach)</a></h4>
-<pre><code class="language-bash"># From project root, navigate to xtask directory
-cd xtask
-
-# Run dual-scanner comparison (requires libclang-dev)
-cargo run corpus                        # Default: --scanner both
-cargo run corpus -- --scanner both     # Explicit dual-scanner mode
-cargo run corpus -- --diagnose         # Detailed analysis
+<pre><code class="language-bash"># Run corpus comparison modes (requires legacy feature)
+cargo run -p xtask --features legacy -- corpus                          # Default scanner: v3
+cargo run -p xtask --features legacy -- corpus --scanner both           # C vs v3 comparison mode
+cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose
 </code></pre>
 <h2 id="key-components"><a class="header" href="#key-components">Key Components</a></h2>
 <h3 id="moduleresolver-component-new-v088---diataxis-reference"><a class="header" href="#moduleresolver-component-new-v088---diataxis-reference">ModuleResolver Component (NEW v0.8.8) - (<em>Diataxis: Reference</em>)</a></h3>

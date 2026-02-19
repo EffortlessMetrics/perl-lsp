@@ -5,8 +5,23 @@
 
 use crate::feature_catalog::has_feature as catalog_has_feature;
 use crate::inline_values::collect_inline_values;
-use crate::protocol::{InlineValuesArguments, InlineValuesResponseBody};
+use crate::protocol::{
+    BreakpointLocation, BreakpointLocationsArguments, BreakpointLocationsResponseBody,
+    CompletionItem, CompletionsArguments, CompletionsResponseBody, ContinueArguments,
+    ContinueResponseBody, DataBreakpointInfoArguments, DataBreakpointInfoResponseBody,
+    DisconnectArguments, EvaluateArguments, EvaluateResponseBody, ExceptionDetails,
+    ExceptionInfoArguments, ExceptionInfoResponseBody, GotoArguments, GotoTarget,
+    GotoTargetsArguments, GotoTargetsResponseBody, InlineValuesArguments, InlineValuesResponseBody,
+    LoadedSourcesResponseBody, Module, ModulesArguments, ModulesResponseBody, NextArguments,
+    PauseArguments, RestartArguments, Scope, ScopesArguments, ScopesResponseBody,
+    SetDataBreakpointsArguments, SetDataBreakpointsResponseBody, SetExceptionBreakpointsArguments,
+    SetExpressionArguments, SetExpressionResponseBody, SetFunctionBreakpointsArguments,
+    SetVariableArguments, SetVariableResponseBody, SourceArguments, SourceResponseBody,
+    StackTraceArguments, StepInArguments, StepInTarget, StepInTargetsArguments,
+    StepInTargetsResponseBody, StepOutArguments, TerminateArguments, VariablesArguments,
+};
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
+use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use perl_dap_eval::SafeEvaluator;
 use perl_dap_stack::PerlStackParser;
 use perl_dap_variables::{
@@ -17,14 +32,16 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::net::TcpListener;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::breakpoints::{BreakpointHitOutcome, BreakpointStore};
+use crate::security;
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
@@ -40,6 +57,20 @@ fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<
             poisoned.into_inner()
         }
     }
+}
+
+/// Send a DAP event through the event channel with poison-safe sequence numbering.
+///
+/// Returns `true` if the event was successfully sent, `false` otherwise.
+fn emit_event_safe(
+    sender: &Sender<DapMessage>,
+    seq: &Mutex<i64>,
+    event: &str,
+    body: Option<Value>,
+) -> bool {
+    let mut seq_lock = lock_or_recover(seq, "emit_event_safe.seq");
+    *seq_lock += 1;
+    sender.send(DapMessage::Event { seq: *seq_lock, event: event.to_string(), body }).is_ok()
 }
 
 /// Compiled regex patterns for debugger output parsing
@@ -58,6 +89,8 @@ static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ANSI_ESCAPE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SET_VARIABLE_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static FUNCTION_BREAKPOINT_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static WARNING_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static INC_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 const DEBUGGER_FRAME_POLL_MS: u64 = 10;
@@ -108,6 +141,22 @@ fn exception_re() -> Option<&'static Regex> {
             //  - message text
             //  - `at /path/file.pl line N.`
             Regex::new(r"(?i)\b(?:died|uncaught exception|panic)\b|^\s*at\s+\S+?\s+line\s+\d+\.?$")
+        })
+        .as_ref()
+        .ok()
+}
+
+fn warning_re() -> Option<&'static Regex> {
+    WARNING_RE
+        .get_or_init(|| {
+            // Perl `warn`, `Carp::carp`, and `Carp::cluck` emit warning messages.
+            // Common patterns:
+            //  - "Something went wrong at script.pl line 42."
+            //  - "Use of uninitialized value..."
+            //  - Explicit warn/carp/cluck output
+            Regex::new(
+                r"(?i)\b(?:warn(?:ing)?|carp|cluck)\b.*\bat\s+\S+?\s+line\s+\d+|^.+\bat\s+\S+?\s+line\s+\d+\.?\s*$",
+            )
         })
         .as_ref()
         .ok()
@@ -297,6 +346,21 @@ fn is_valid_function_breakpoint_name(name: &str) -> bool {
     function_breakpoint_name_re().is_some_and(|re| re.is_match(name))
 }
 
+fn inc_re() -> Option<&'static Regex> {
+    INC_RE.get_or_init(|| Regex::new(r"'([^']+)'\s*=>\s*'([^']+)'")).as_ref().ok()
+}
+
+/// Stored data breakpoint record for watchpoint management
+#[derive(Debug, Clone)]
+struct DataBreakpointRecord {
+    #[allow(dead_code)]
+    data_id: String,
+    #[allow(dead_code)]
+    access_type: Option<String>,
+    #[allow(dead_code)]
+    condition: Option<String>,
+}
+
 /// Check if the match is an escape sequence (preceded by backslash)
 fn is_escape_sequence(s: &str, match_start: usize) -> bool {
     if match_start == 0 {
@@ -329,8 +393,24 @@ pub struct DebugAdapter {
     next_function_breakpoint_id: Arc<Mutex<i64>>,
     /// Exception breakpoint policy: break on `die`/uncaught exception output.
     exception_break_on_die: Arc<Mutex<bool>>,
+    /// Exception breakpoint policy: break on `warn`/carp/cluck output.
+    exception_break_on_warn: Arc<Mutex<bool>>,
     /// Unique marker IDs used to frame debugger output per command.
     debugger_output_marker: Arc<AtomicU64>,
+    /// Cancellation flag for in-progress requests.
+    cancel_requested: Arc<AtomicBool>,
+    /// Data breakpoints (watchpoints) stored with REPLACE semantics
+    data_breakpoints: Arc<Mutex<Vec<DataBreakpointRecord>>>,
+    /// Last exception message captured by the output reader (for exceptionInfo)
+    last_exception_message: Arc<Mutex<Option<String>>>,
+    /// Stored launch arguments for restart support
+    last_launch_args: Arc<Mutex<Option<Value>>>,
+    /// Goto target ID → (file_path, line) mapping for cross-file goto
+    goto_targets: Arc<Mutex<HashMap<i64, (String, i64)>>>,
+    /// Monotonic goto target ID counter
+    next_goto_target_id: Arc<Mutex<i64>>,
+    /// Workspace root for path validation (set during launch)
+    workspace_root: Arc<Mutex<Option<PathBuf>>>,
 }
 
 /// Active debug session
@@ -360,6 +440,7 @@ enum DebugState {
 #[derive(Debug, Clone, PartialEq)]
 enum ResumeMode {
     Continue,
+    Goto,
     Next,
     StepIn,
     StepOut,
@@ -472,13 +553,38 @@ impl DebugAdapter {
             function_breakpoints: Arc::new(Mutex::new(Vec::new())),
             next_function_breakpoint_id: Arc::new(Mutex::new(1)),
             exception_break_on_die: Arc::new(Mutex::new(false)),
+            exception_break_on_warn: Arc::new(Mutex::new(false)),
             debugger_output_marker: Arc::new(AtomicU64::new(1)),
+            cancel_requested: Arc::new(AtomicBool::new(false)),
+            data_breakpoints: Arc::new(Mutex::new(Vec::new())),
+            last_exception_message: Arc::new(Mutex::new(None)),
+            last_launch_args: Arc::new(Mutex::new(None)),
+            goto_targets: Arc::new(Mutex::new(HashMap::new())),
+            next_goto_target_id: Arc::new(Mutex::new(1)),
+            workspace_root: Arc::new(Mutex::new(None)),
         }
     }
 
     /// Set the event sender (primarily for testing)
     pub fn set_event_sender(&mut self, sender: Sender<DapMessage>) {
         self.event_sender = Some(sender);
+    }
+
+    /// Validate a client-provided source path against the workspace root.
+    ///
+    /// Returns the validated `PathBuf` on success, or an error message on failure.
+    /// If no workspace root is set (pre-launch), the path is allowed through with a
+    /// warning — defense-in-depth only blocks when a workspace boundary is known.
+    fn validate_source_path(&self, path: &str) -> Result<PathBuf, String> {
+        let ws = lock_or_recover(&self.workspace_root, "debug_adapter.workspace_root");
+        match ws.as_ref() {
+            Some(root) => security::validate_path(Path::new(path), root)
+                .map_err(|e| format!("Path validation failed: {e}")),
+            None => {
+                // No workspace set (pre-launch) — allow reads but accept the risk
+                Ok(PathBuf::from(path))
+            }
+        }
     }
 
     /// Run the debug adapter server
@@ -695,6 +801,22 @@ impl DebugAdapter {
             "pause" => self.handle_pause(seq, request_seq, arguments),
             "evaluate" => self.handle_evaluate(seq, request_seq, arguments),
             "inlineValues" => self.handle_inline_values(seq, request_seq, arguments),
+            "breakpointLocations" => self.handle_breakpoint_locations(seq, request_seq, arguments),
+            "source" => self.handle_source(seq, request_seq, arguments),
+            "loadedSources" => self.handle_loaded_sources(seq, request_seq, arguments),
+            "modules" => self.handle_modules(seq, request_seq, arguments),
+            "completions" => self.handle_completions(seq, request_seq, arguments),
+            "exceptionInfo" => self.handle_exception_info(seq, request_seq, arguments),
+            "restart" => self.handle_restart(seq, request_seq, arguments),
+            "setExpression" => self.handle_set_expression(seq, request_seq, arguments),
+            "dataBreakpointInfo" => self.handle_data_breakpoint_info(seq, request_seq, arguments),
+            "setDataBreakpoints" => self.handle_set_data_breakpoints(seq, request_seq, arguments),
+            "cancel" => self.handle_cancel(seq, request_seq, arguments),
+            "stepInTargets" => self.handle_step_in_targets(seq, request_seq, arguments),
+            "gotoTargets" => self.handle_goto_targets(seq, request_seq, arguments),
+            "goto" => self.handle_goto(seq, request_seq, arguments),
+            "restartFrame" => self.handle_restart_frame(seq, request_seq, arguments),
+            "terminateThreads" => self.handle_terminate_threads(seq, request_seq, arguments),
             _ => DapMessage::Response {
                 seq,
                 request_seq,
@@ -824,6 +946,12 @@ impl DebugAdapter {
             Instant::now() + Duration::from_millis(timeout_ms.max(DEBUGGER_QUERY_WAIT_MS));
 
         loop {
+            // Check for cancellation before each poll iteration
+            if self.cancel_requested.load(Ordering::Acquire) {
+                self.cancel_requested.store(false, Ordering::Release);
+                return None;
+            }
+
             let lines = self.snapshot_recent_output_lines();
             let normalized_lines: Vec<String> =
                 lines.iter().map(|line| Self::normalize_debugger_output_line(line)).collect();
@@ -1114,23 +1242,33 @@ impl DebugAdapter {
         let supports_log_points = catalog_has_feature("dap.breakpoints.logpoints");
         let supports_exceptions = catalog_has_feature("dap.exceptions.die");
         let supports_inline_values = catalog_has_feature("dap.inline_values");
+        let supports_completions = catalog_has_feature("dap.completions");
+        let supports_modules = catalog_has_feature("dap.modules");
+        let supports_watchpoints = catalog_has_feature("dap.watchpoints");
+        let supports_warn = catalog_has_feature("dap.exceptions.warn");
+        let supports_any_exception = supports_exceptions || supports_warn;
 
-        let exception_breakpoint_filters = if supports_exceptions {
-            json!([
-                {
-                    "filter": "die",
-                    "label": "Perl die() and uncaught exceptions",
-                    "default": true
-                },
-                {
-                    "filter": "all",
-                    "label": "All Perl exception events",
-                    "default": false
-                }
-            ])
-        } else {
-            json!([])
-        };
+        let mut filters = Vec::new();
+        if supports_exceptions {
+            filters.push(json!({
+                "filter": "die",
+                "label": "Perl die() and uncaught exceptions",
+                "default": true
+            }));
+            filters.push(json!({
+                "filter": "all",
+                "label": "All Perl exception events",
+                "default": false
+            }));
+        }
+        if supports_warn {
+            filters.push(json!({
+                "filter": "warn",
+                "label": "Perl warn() and Carp warnings",
+                "default": false
+            }));
+        }
+        let exception_breakpoint_filters = json!(filters);
 
         let capabilities = json!({
             "supportsConfigurationDoneRequest": supports_core,
@@ -1141,30 +1279,30 @@ impl DebugAdapter {
             "supportsStepBack": false,
             "supportsSetVariable": supports_core,
             "supportsRestartFrame": false,
-            "supportsGotoTargetsRequest": false,
+            "supportsGotoTargetsRequest": supports_core,
             "supportsStepInTargetsRequest": false,
-            "supportsCompletionsRequest": false,
-            "supportsModulesRequest": false,
-            "supportsRestartRequest": false,
-            "supportsExceptionOptions": supports_exceptions,
+            "supportsCompletionsRequest": supports_completions,
+            "supportsModulesRequest": supports_modules,
+            "supportsRestartRequest": true,
+            "supportsExceptionOptions": supports_any_exception,
             "supportsValueFormattingOptions": supports_core,
-            "supportsExceptionInfoRequest": false,
+            "supportsExceptionInfoRequest": supports_any_exception,
             "supportTerminateDebuggee": supports_core,
             "supportsDelayedStackTraceLoading": false,
-            "supportsLoadedSourcesRequest": false,
+            "supportsLoadedSourcesRequest": true,
             "supportsLogPoints": supports_log_points,
             "supportsTerminateThreadsRequest": false,
-            "supportsSetExpression": false,
+            "supportsSetExpression": supports_core,
             "supportsTerminateRequest": supports_core,
-            "supportsDataBreakpoints": false,
+            "supportsDataBreakpoints": supports_watchpoints,
             "supportsReadMemoryRequest": false,
             "supportsDisassembleRequest": false,
-            "supportsCancelRequest": false,
-            "supportsBreakpointLocationsRequest": false,
+            "supportsCancelRequest": supports_core,
+            "supportsBreakpointLocationsRequest": supports_basic_breakpoints,
             "supportsClipboardContext": false,
             "supportsSteppingGranularity": false,
             "supportsInstructionBreakpoints": false,
-            "supportsExceptionFilterOptions": supports_exceptions,
+            "supportsExceptionFilterOptions": supports_any_exception,
             "supportsInlineValues": supports_inline_values,
             "exceptionBreakpointFilters": exception_breakpoint_filters
         });
@@ -1187,7 +1325,22 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         if let Some(args) = arguments {
+            // Store launch arguments for restart support
+            *lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args") =
+                Some(args.clone());
+
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
+
+            // Set workspace root for path validation (prefer cwd, fall back to program's parent)
+            let workspace = args
+                .get("cwd")
+                .and_then(|c| c.as_str())
+                .map(PathBuf::from)
+                .or_else(|| Path::new(program).parent().map(PathBuf::from));
+            if let Some(ref root) = workspace {
+                *lock_or_recover(&self.workspace_root, "debug_adapter.workspace_root") =
+                    Some(root.clone());
+            }
 
             let perl_args = args
                 .get("args")
@@ -1281,7 +1434,6 @@ impl DebugAdapter {
         // - exists() returns true for directories
         // - exists() returns true for symlinks to non-files
         // - is_file() specifically checks for regular files
-        use std::path::Path;
         let path = Path::new(program);
         match std::fs::metadata(path) {
             Ok(metadata) => {
@@ -1359,6 +1511,8 @@ impl DebugAdapter {
         let recent_output = self.recent_output.clone();
         let breakpoints = self.breakpoints.clone();
         let exception_break_on_die = self.exception_break_on_die.clone();
+        let exception_break_on_warn = self.exception_break_on_warn.clone();
+        let last_exception_message = self.last_exception_message.clone();
 
         thread::spawn(move || {
             // Perl's debugger prompt and evaluation output are emitted on stderr.
@@ -1385,19 +1539,12 @@ impl DebugAdapter {
                 eprintln!("No debugger output stream available - output reader thread exiting");
                 // Send termination event
                 if let Some(ref sender) = sender {
-                    let mut seq_lock = match seq.lock() {
-                        Ok(lock) => lock,
-                        Err(poisoned) => {
-                            eprintln!("Sequence lock poisoned, recovering");
-                            poisoned.into_inner()
-                        }
-                    };
-                    *seq_lock += 1;
-                    let _ = sender.send(DapMessage::Event {
-                        seq: *seq_lock,
-                        event: "terminated".to_string(),
-                        body: Some(json!({"reason": "no_debugger_stream"})),
-                    });
+                    emit_event_safe(
+                        sender,
+                        &seq,
+                        "terminated",
+                        Some(json!({"reason": "no_debugger_stream"})),
+                    );
                 }
                 return;
             };
@@ -1432,43 +1579,19 @@ impl DebugAdapter {
                         }
 
                         // Send all output to client with error handling
-                        if let Some(ref sender) = sender {
-                            match seq.lock() {
-                                Ok(mut seq_lock) => {
-                                    *seq_lock += 1;
-                                    if sender
-                                        .send(DapMessage::Event {
-                                            seq: *seq_lock,
-                                            event: "output".to_string(),
-                                            body: Some(json!({
-                                                "category": "stdout",
-                                                "output": format!("{}\n", text)
-                                            })),
-                                        })
-                                        .is_err()
-                                    {
-                                        eprintln!(
-                                            "Failed to send output event - client may have disconnected"
-                                        );
-                                        break; // Exit the loop if client is gone
-                                    }
-                                }
-                                Err(poisoned) => {
-                                    eprintln!(
-                                        "Sequence lock poisoned in output reader, attempting recovery"
-                                    );
-                                    let mut seq_lock = poisoned.into_inner();
-                                    *seq_lock += 1;
-                                    let _ = sender.send(DapMessage::Event {
-                                        seq: *seq_lock,
-                                        event: "output".to_string(),
-                                        body: Some(json!({
-                                            "category": "stdout",
-                                            "output": format!("{}\n", text)
-                                        })),
-                                    });
-                                }
-                            }
+                        if let Some(ref sender) = sender
+                            && !emit_event_safe(
+                                sender,
+                                &seq,
+                                "output",
+                                Some(json!({
+                                    "category": "stdout",
+                                    "output": format!("{}\n", text)
+                                })),
+                            )
+                        {
+                            eprintln!("Failed to send output event - client may have disconnected");
+                            break; // Exit the loop if client is gone
                         }
 
                         // Enhanced context information parsing with multiple patterns
@@ -1524,26 +1647,37 @@ impl DebugAdapter {
                             context_updated = true;
 
                             // Send error event to client
-                            if let Some(ref sender) = sender
-                                && let Ok(mut seq_lock) = seq.lock()
-                            {
-                                *seq_lock += 1;
-                                let _ = sender.send(DapMessage::Event {
-                                    seq: *seq_lock,
-                                    event: "output".to_string(),
-                                    body: Some(json!({
+                            if let Some(ref sender) = sender {
+                                emit_event_safe(
+                                    sender,
+                                    &seq,
+                                    "output",
+                                    Some(json!({
                                         "category": "stderr",
                                         "output": format!("Error: {}\n", text)
                                     })),
-                                });
+                                );
                             }
                         }
 
                         if context_updated {
                             let break_on_die =
                                 exception_break_on_die.lock().map(|guard| *guard).unwrap_or(false);
-                            let exception_match =
-                                break_on_die && exception_re().is_some_and(|re| re.is_match(&text));
+                            let break_on_warn =
+                                exception_break_on_warn.lock().map(|guard| *guard).unwrap_or(false);
+                            let is_exception_line =
+                                exception_re().is_some_and(|re| re.is_match(&text));
+                            let is_warning_line = warning_re().is_some_and(|re| re.is_match(&text));
+                            let exception_match = break_on_die && is_exception_line;
+                            let warning_match =
+                                break_on_warn && is_warning_line && !is_exception_line;
+
+                            // Store exception message for exceptionInfo request
+                            if exception_match || warning_match {
+                                if let Ok(mut guard) = last_exception_message.lock() {
+                                    *guard = Some(text.clone());
+                                }
+                            }
 
                             let mut should_emit_stopped = false;
                             let mut should_auto_continue = false;
@@ -1602,7 +1736,7 @@ impl DebugAdapter {
                                                 BreakpointHitOutcome::default()
                                             };
 
-                                        if exception_match {
+                                        if exception_match || warning_match {
                                             stop_reason = "exception".to_string();
                                             s.state = DebugState::Stopped;
                                         } else if breakpoint_outcome.matched {
@@ -1636,31 +1770,15 @@ impl DebugAdapter {
 
                             if let Some(ref sender) = sender {
                                 for message in logpoint_messages {
-                                    match seq.lock() {
-                                        Ok(mut seq_lock) => {
-                                            *seq_lock += 1;
-                                            let _ = sender.send(DapMessage::Event {
-                                                seq: *seq_lock,
-                                                event: "output".to_string(),
-                                                body: Some(json!({
-                                                    "category": "console",
-                                                    "output": format!("{message}\n")
-                                                })),
-                                            });
-                                        }
-                                        Err(poisoned) => {
-                                            let mut seq_lock = poisoned.into_inner();
-                                            *seq_lock += 1;
-                                            let _ = sender.send(DapMessage::Event {
-                                                seq: *seq_lock,
-                                                event: "output".to_string(),
-                                                body: Some(json!({
-                                                    "category": "console",
-                                                    "output": format!("{message}\n")
-                                                })),
-                                            });
-                                        }
-                                    }
+                                    emit_event_safe(
+                                        sender,
+                                        &seq,
+                                        "output",
+                                        Some(json!({
+                                            "category": "console",
+                                            "output": format!("{message}\n")
+                                        })),
+                                    );
                                 }
                             }
 
@@ -1668,45 +1786,21 @@ impl DebugAdapter {
                                 continue;
                             }
 
-                            if should_emit_stopped && let Some(ref sender) = sender {
-                                match seq.lock() {
-                                    Ok(mut seq_lock) => {
-                                        *seq_lock += 1;
-                                        if sender
-                                            .send(DapMessage::Event {
-                                                seq: *seq_lock,
-                                                event: "stopped".to_string(),
-                                                body: Some(json!({
-                                                    "reason": stop_reason,
-                                                    "threadId": thread_id,
-                                                    "allThreadsStopped": true
-                                                })),
-                                            })
-                                            .is_err()
-                                        {
-                                            eprintln!(
-                                                "Failed to send stopped event - client disconnected"
-                                            );
-                                            return;
-                                        }
-                                    }
-                                    Err(poisoned) => {
-                                        eprintln!(
-                                            "Sequence lock poisoned when sending stopped event, recovering"
-                                        );
-                                        let mut seq_lock = poisoned.into_inner();
-                                        *seq_lock += 1;
-                                        let _ = sender.send(DapMessage::Event {
-                                            seq: *seq_lock,
-                                            event: "stopped".to_string(),
-                                            body: Some(json!({
-                                                "reason": stop_reason,
-                                                "threadId": thread_id,
-                                                "allThreadsStopped": true
-                                            })),
-                                        });
-                                    }
-                                }
+                            if should_emit_stopped
+                                && let Some(ref sender) = sender
+                                && !emit_event_safe(
+                                    sender,
+                                    &seq,
+                                    "stopped",
+                                    Some(json!({
+                                        "reason": stop_reason,
+                                        "threadId": thread_id,
+                                        "allThreadsStopped": true
+                                    })),
+                                )
+                            {
+                                eprintln!("Failed to send stopped event - client disconnected");
+                                return;
                             }
                             continue;
                         }
@@ -1776,45 +1870,20 @@ impl DebugAdapter {
                             };
 
                             // Send stopped event with robust error handling
-                            if let Some(ref sender) = sender {
-                                match seq.lock() {
-                                    Ok(mut seq_lock) => {
-                                        *seq_lock += 1;
-                                        if sender
-                                            .send(DapMessage::Event {
-                                                seq: *seq_lock,
-                                                event: "stopped".to_string(),
-                                                body: Some(json!({
-                                                    "reason": "step",
-                                                    "threadId": thread_id,
-                                                    "allThreadsStopped": true
-                                                })),
-                                            })
-                                            .is_err()
-                                        {
-                                            eprintln!(
-                                                "Failed to send stopped event - client disconnected"
-                                            );
-                                            return; // Exit thread
-                                        }
-                                    }
-                                    Err(poisoned) => {
-                                        eprintln!(
-                                            "Sequence lock poisoned when sending stopped event, recovering"
-                                        );
-                                        let mut seq_lock = poisoned.into_inner();
-                                        *seq_lock += 1;
-                                        let _ = sender.send(DapMessage::Event {
-                                            seq: *seq_lock,
-                                            event: "stopped".to_string(),
-                                            body: Some(json!({
-                                                "reason": "step",
-                                                "threadId": thread_id,
-                                                "allThreadsStopped": true
-                                            })),
-                                        });
-                                    }
-                                }
+                            if let Some(ref sender) = sender
+                                && !emit_event_safe(
+                                    sender,
+                                    &seq,
+                                    "stopped",
+                                    Some(json!({
+                                        "reason": "step",
+                                        "threadId": thread_id,
+                                        "allThreadsStopped": true
+                                    })),
+                                )
+                            {
+                                eprintln!("Failed to send stopped event - client disconnected");
+                                return; // Exit thread
                             }
                         }
                     }
@@ -1822,29 +1891,12 @@ impl DebugAdapter {
                         eprintln!("Error reading from debugger: {}", e);
                         // Send termination event before exiting
                         if let Some(ref sender) = sender {
-                            match seq.lock() {
-                                Ok(mut seq_lock) => {
-                                    *seq_lock += 1;
-                                    let _ = sender.send(DapMessage::Event {
-                                        seq: *seq_lock,
-                                        event: "terminated".to_string(),
-                                        body: Some(
-                                            json!({"reason": "read_error", "error": e.to_string()}),
-                                        ),
-                                    });
-                                }
-                                Err(poisoned) => {
-                                    let mut seq_lock = poisoned.into_inner();
-                                    *seq_lock += 1;
-                                    let _ = sender.send(DapMessage::Event {
-                                        seq: *seq_lock,
-                                        event: "terminated".to_string(),
-                                        body: Some(
-                                            json!({"reason": "read_error", "error": e.to_string()}),
-                                        ),
-                                    });
-                                }
-                            }
+                            emit_event_safe(
+                                sender,
+                                &seq,
+                                "terminated",
+                                Some(json!({"reason": "read_error", "error": e.to_string()})),
+                            );
                         }
                         break;
                     }
@@ -1941,7 +1993,18 @@ impl DebugAdapter {
             } else {
                 // Extract host and port for TCP attachment.
                 let host = args.get("host").and_then(|h| h.as_str()).unwrap_or("localhost");
-                let port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603) as u16;
+                let raw_port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603);
+                if raw_port > 65535 {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "attach".to_string(),
+                        body: None,
+                        message: Some(format!("Port {raw_port} out of range (must be 1-65535)")),
+                    };
+                }
+                let port = raw_port as u16;
                 let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
 
                 // Validate arguments.
@@ -2194,8 +2257,11 @@ impl DebugAdapter {
         &mut self,
         seq: i64,
         request_seq: i64,
-        _arguments: Option<Value>,
+        arguments: Option<Value>,
     ) -> DapMessage {
+        let _args: Option<DisconnectArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
         self.clear_active_session_state();
 
         // Send terminated event
@@ -2218,8 +2284,10 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
-        let restart =
-            arguments.as_ref().and_then(|args| args.get("restart")).and_then(Value::as_bool);
+        let args: Option<TerminateArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
+        let restart = args.and_then(|a| a.restart);
 
         self.clear_active_session_state();
 
@@ -2269,6 +2337,14 @@ impl DebugAdapter {
                 }
             };
 
+        // Snapshot old breakpoints for this file before replacing them,
+        // so we can clear only per-file breakpoints instead of global `B *`.
+        let old_breakpoints = if let Some(ref source_path) = args.source.path {
+            self.breakpoints.get_breakpoints(source_path)
+        } else {
+            Vec::new()
+        };
+
         // AC7: AST-based breakpoint validation via BreakpointStore
         let verified_breakpoints = self.breakpoints.set_breakpoints(&args);
 
@@ -2277,9 +2353,14 @@ impl DebugAdapter {
             && let Some(ref mut session) = *guard
         {
             if let Some(stdin) = session.process.stdin.as_mut() {
-                // Clear breakpoints in file (Perl debugger 'B' command)
-                let _ = stdin.write_all(b"B *\n");
-                let _ = stdin.flush();
+                // Clear only the old breakpoints for this specific file
+                for old_bp in &old_breakpoints {
+                    if old_bp.verified {
+                        let cmd = format!("B {}\n", old_bp.line);
+                        let _ = stdin.write_all(cmd.as_bytes());
+                        let _ = stdin.flush();
+                    }
+                }
 
                 // Set new breakpoints that were successfully verified
                 for bp in &verified_breakpoints {
@@ -2323,25 +2404,28 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
-        let Some(args) = arguments else {
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "setFunctionBreakpoints".to_string(),
-                body: None,
-                message: Some("Missing arguments".to_string()),
+        let args: SetFunctionBreakpointsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "setFunctionBreakpoints".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
             };
-        };
 
-        let requested =
-            args.get("breakpoints").and_then(Value::as_array).cloned().unwrap_or_default();
+        let requested = args.breakpoints;
 
         let mut validated_names = Vec::with_capacity(requested.len());
         let mut response_breakpoints = Vec::with_capacity(requested.len());
 
         for entry in requested {
-            let name = entry.get("name").and_then(Value::as_str).unwrap_or("").trim().to_string();
+            let name = entry.name.trim().to_string();
 
             let id = {
                 let mut next = lock_or_recover(
@@ -2410,28 +2494,40 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         let mut break_on_die = false;
+        let mut break_on_warn = false;
+        let supports_die = catalog_has_feature("dap.exceptions.die");
+        let supports_warn = catalog_has_feature("dap.exceptions.warn");
 
-        if let Some(args) = arguments {
-            if let Some(filters) = args.get("filters").and_then(Value::as_array) {
-                break_on_die = filters.iter().filter_map(Value::as_str).any(|filter| {
-                    filter.eq_ignore_ascii_case("die") || filter.eq_ignore_ascii_case("all")
-                });
+        if let Some(args) = arguments
+            .and_then(|v| serde_json::from_value::<SetExceptionBreakpointsArguments>(v).ok())
+        {
+            let matches_filter = |id: &str| -> (bool, bool) {
+                let all = id.eq_ignore_ascii_case("all");
+                let die = supports_die && (id.eq_ignore_ascii_case("die") || all);
+                let warn = supports_warn && (id.eq_ignore_ascii_case("warn") || all);
+                (die, warn)
+            };
+
+            for filter in &args.filters {
+                let (die, warn) = matches_filter(filter);
+                break_on_die |= die;
+                break_on_warn |= warn;
             }
 
-            if !break_on_die
-                && let Some(filter_options) = args.get("filterOptions").and_then(Value::as_array)
-            {
-                break_on_die = filter_options
-                    .iter()
-                    .filter_map(|entry| entry.get("filterId").and_then(Value::as_str))
-                    .any(|filter| {
-                        filter.eq_ignore_ascii_case("die") || filter.eq_ignore_ascii_case("all")
-                    });
+            if let Some(filter_options) = args.filter_options {
+                for entry in &filter_options {
+                    let (die, warn) = matches_filter(&entry.filter_id);
+                    break_on_die |= die;
+                    break_on_warn |= warn;
+                }
             }
         }
 
         if let Ok(mut guard) = self.exception_break_on_die.lock() {
             *guard = break_on_die;
+        }
+        if let Ok(mut guard) = self.exception_break_on_warn.lock() {
+            *guard = break_on_warn;
         }
 
         DapMessage::Response {
@@ -2499,6 +2595,8 @@ impl DebugAdapter {
                 "id": Self::i64_to_i32_saturating(i64::from(pid)),
                 "name": format!("Attached Process ({pid})")
             })]
+        } else if lock_or_recover(&self.tcp_session, "debug_adapter.tcp_session").is_some() {
+            vec![json!({ "id": 1, "name": "TCP Attached Thread" })]
         } else {
             vec![]
         };
@@ -2520,8 +2618,10 @@ impl DebugAdapter {
         &self,
         seq: i64,
         request_seq: i64,
-        _arguments: Option<Value>,
+        arguments: Option<Value>,
     ) -> DapMessage {
+        let _args: Option<StackTraceArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
         let mut framed_output_lines = None;
 
         // Ask the debugger for an explicit stack snapshot when a live session is present.
@@ -2627,78 +2727,81 @@ impl DebugAdapter {
 
     /// Handle scopes request
     fn handle_scopes(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
-        if let Some(args) = arguments {
-            let frame_id = args.get("frameId").and_then(|f| f.as_i64()).unwrap_or(0) as i32;
-
-            // AC8.3: Hierarchical scope inspection
-            // Use bit-shifting or offsets to distinguish between scope types for the same frame
-            let locals_ref = frame_id * 10 + 1;
-            let package_ref = frame_id * 10 + 2;
-            let globals_ref = frame_id * 10 + 3;
-
-            let scopes = vec![
-                json!({
-                    "name": "Locals",
-                    "presentationHint": "locals",
-                    "variablesReference": locals_ref,
-                    "expensive": false
-                }),
-                json!({
-                    "name": "Package",
-                    "variablesReference": package_ref,
-                    "expensive": true
-                }),
-                json!({
-                    "name": "Globals",
-                    "variablesReference": globals_ref,
-                    "expensive": true
-                }),
-            ];
-
-            DapMessage::Response {
-                seq,
-                request_seq,
-                success: true,
-                command: "scopes".to_string(),
-                body: Some(json!({
-                    "scopes": scopes
-                })),
-                message: None,
+        let args: ScopesArguments = match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "scopes".to_string(),
+                    body: None,
+                    message: Some("Missing frameId".to_string()),
+                };
             }
-        } else {
-            DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "scopes".to_string(),
-                body: None,
-                message: Some("Missing frameId".to_string()),
-            }
+        };
+
+        let frame_id = args.frame_id as i32;
+
+        // AC8.3: Hierarchical scope inspection
+        // Use bit-shifting or offsets to distinguish between scope types for the same frame
+        let locals_ref = frame_id * 10 + 1;
+        let package_ref = frame_id * 10 + 2;
+        let globals_ref = frame_id * 10 + 3;
+
+        let scopes_body = ScopesResponseBody {
+            scopes: vec![
+                Scope {
+                    name: "Locals".to_string(),
+                    presentation_hint: Some("locals".to_string()),
+                    variables_reference: i64::from(locals_ref),
+                    expensive: false,
+                },
+                Scope {
+                    name: "Package".to_string(),
+                    presentation_hint: None,
+                    variables_reference: i64::from(package_ref),
+                    expensive: true,
+                },
+                Scope {
+                    name: "Globals".to_string(),
+                    presentation_hint: None,
+                    variables_reference: i64::from(globals_ref),
+                    expensive: true,
+                },
+            ],
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "scopes".to_string(),
+            body: serde_json::to_value(&scopes_body).ok(),
+            message: None,
         }
     }
 
     /// Handle variables request
     fn handle_variables(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
-        let Some(args) = arguments else {
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "variables".to_string(),
-                body: None,
-                message: Some("Missing arguments".to_string()),
-            };
+        let args: VariablesArguments = match arguments.and_then(|v| serde_json::from_value(v).ok())
+        {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "variables".to_string(),
+                    body: None,
+                    message: Some("Missing arguments".to_string()),
+                };
+            }
         };
 
-        let variables_ref =
-            args.get("variablesReference").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-        let start = args.get("start").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-        let count = args
-            .get("count")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(256)
-            .clamp(1, 1024);
+        let variables_ref = args.variables_reference as i32;
+        let start = args.start.unwrap_or(0) as usize;
+        let count = args.count.map(|v| v as usize).unwrap_or(256).clamp(1, 1024);
 
         if variables_ref == 0 {
             return DapMessage::Response {
@@ -2854,18 +2957,22 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
-        let Some(args) = arguments else {
-            return DapMessage::Response {
-                seq,
-                request_seq,
-                success: false,
-                command: "setVariable".to_string(),
-                body: None,
-                message: Some("Missing arguments".to_string()),
+        let args: SetVariableArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "setVariable".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
             };
-        };
 
-        let variables_ref = args.get("variablesReference").and_then(Value::as_i64).unwrap_or(0);
+        let variables_ref = args.variables_reference;
         if variables_ref <= 0 {
             return DapMessage::Response {
                 seq,
@@ -2877,8 +2984,10 @@ impl DebugAdapter {
             };
         }
 
-        let name = args.get("name").and_then(Value::as_str).unwrap_or("").trim();
-        let value = args.get("value").and_then(Value::as_str).unwrap_or("").trim();
+        let name = args.name.trim().to_string();
+        let value = args.value.trim().to_string();
+        let name = name.as_str();
+        let value = value.as_str();
 
         if name.is_empty() {
             return DapMessage::Response {
@@ -3002,22 +3111,27 @@ impl DebugAdapter {
             };
         };
 
+        let set_var_body = SetVariableResponseBody {
+            value: rendered_value,
+            type_: Some(rendered_type),
+            variables_reference: 0,
+        };
+
         DapMessage::Response {
             seq,
             request_seq,
             success: true,
             command: "setVariable".to_string(),
-            body: Some(json!({
-                "value": rendered_value,
-                "type": rendered_type,
-                "variablesReference": 0
-            })),
+            body: serde_json::to_value(&set_var_body).ok(),
             message: None,
         }
     }
 
     /// Handle continue request
-    fn handle_continue(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_continue(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<ContinueArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
         let mut thread_id = 1;
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
@@ -3026,6 +3140,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Continue;
+            session.variables.clear();
             thread_id = session.thread_id;
         } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
         {
@@ -3042,20 +3157,21 @@ impl DebugAdapter {
             })),
         );
 
+        let continue_body = ContinueResponseBody { all_threads_continued: true };
+
         DapMessage::Response {
             seq,
             request_seq,
             success: true,
             command: "continue".to_string(),
-            body: Some(json!({
-                "allThreadsContinued": true
-            })),
+            body: serde_json::to_value(&continue_body).ok(),
             message: None,
         }
     }
 
     /// Handle next request
-    fn handle_next(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_next(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<NextArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
         {
@@ -3063,6 +3179,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::Next;
+            session.variables.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -3084,7 +3201,8 @@ impl DebugAdapter {
     }
 
     /// Handle stepIn request
-    fn handle_step_in(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_step_in(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<StepInArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
         {
@@ -3092,6 +3210,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepIn;
+            session.variables.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -3113,7 +3232,9 @@ impl DebugAdapter {
     }
 
     /// Handle stepOut request
-    fn handle_step_out(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_step_out(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<StepOutArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
         if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
             && let Some(stdin) = session.process.stdin.as_mut()
         {
@@ -3121,6 +3242,7 @@ impl DebugAdapter {
             let _ = stdin.flush();
             session.state = DebugState::Running;
             session.last_resume_mode = ResumeMode::StepOut;
+            session.variables.clear();
             let t_id = session.thread_id;
             self.send_event(
                 "continued",
@@ -3142,7 +3264,8 @@ impl DebugAdapter {
     }
 
     /// Handle pause request
-    fn handle_pause(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+    fn handle_pause(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let _args: Option<PauseArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
         let success = if let Some(ref session) =
             *lock_or_recover(&self.session, "debug_adapter.session")
         {
@@ -3613,8 +3736,22 @@ impl DebugAdapter {
     /// AC10.2: Safe evaluation mode (non-mutating) by default
     /// AC10.3: Timeout enforcement (5s default, 30s hard limit)
     fn handle_evaluate(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
-        if let Some(args) = arguments {
-            let expression = args.get("expression").and_then(|e| e.as_str()).unwrap_or("");
+        let args: EvaluateArguments = match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "evaluate".to_string(),
+                    body: None,
+                    message: Some("Missing arguments".to_string()),
+                };
+            }
+        };
+
+        {
+            let expression = &args.expression;
 
             if expression.is_empty() {
                 return DapMessage::Response {
@@ -3640,8 +3777,7 @@ impl DebugAdapter {
             }
 
             // AC10.2: Safe evaluation mode (non-mutating) by default
-            let allow_side_effects =
-                args.get("allowSideEffects").and_then(|v| v.as_bool()).unwrap_or(false);
+            let allow_side_effects = args.allow_side_effects.unwrap_or(false);
 
             // Validate expression safety if side effects are not allowed
             if !allow_side_effects {
@@ -3670,54 +3806,34 @@ impl DebugAdapter {
                     };
                 }
             }
+        }
 
-            // AC10.3: Get timeout configuration (5s default, 30s hard limit)
-            let timeout_ms =
-                args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32).unwrap_or(5000);
-            let timeout_ms = timeout_ms.min(30000); // Enforce 30s hard limit
-            // Send evaluation command to debugger
-            let output_frame_markers = if let Some(ref mut session) =
-                *lock_or_recover(&self.session, "debug_adapter.session")
-            {
-                if let Some(stdin) = session.process.stdin.as_mut() {
-                    // Frame debugger output so evaluate parsing only considers this request's output.
-                    let commands = vec![format!("x {expression}")];
-                    match self.send_framed_debugger_commands(stdin, &commands) {
-                        Ok(markers) => Some(markers),
-                        Err(error) => {
-                            return DapMessage::Response {
-                                seq,
-                                request_seq,
-                                success: false,
-                                command: "evaluate".to_string(),
-                                body: None,
-                                message: Some(format!("Failed to send evaluate command: {error}")),
-                            };
-                        }
+        let expression = &args.expression;
+
+        // AC10.3: Get timeout configuration (5s default, 30s hard limit)
+        let timeout_ms = 5000u32;
+        let timeout_ms = timeout_ms.min(30000); // Enforce 30s hard limit
+
+        // Send evaluation command to debugger
+        let output_frame_markers = if let Some(ref mut session) =
+            *lock_or_recover(&self.session, "debug_adapter.session")
+        {
+            if let Some(stdin) = session.process.stdin.as_mut() {
+                // Frame debugger output so evaluate parsing only considers this request's output.
+                let commands = vec![format!("x {expression}")];
+                match self.send_framed_debugger_commands(stdin, &commands) {
+                    Ok(markers) => Some(markers),
+                    Err(error) => {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "evaluate".to_string(),
+                            body: None,
+                            message: Some(format!("Failed to send evaluate command: {error}")),
+                        };
                     }
-                } else {
-                    return DapMessage::Response {
-                        seq,
-                        request_seq,
-                        success: false,
-                        command: "evaluate".to_string(),
-                        body: None,
-                        message: Some("No debugger session active".to_string()),
-                    };
                 }
-            } else if let Some(pid) =
-                *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
-            {
-                return DapMessage::Response {
-                    seq,
-                    request_seq,
-                    success: false,
-                    command: "evaluate".to_string(),
-                    body: None,
-                    message: Some(format!(
-                        "Evaluate is unavailable for processId attach (PID {pid}) without an active debugger transport"
-                    )),
-                };
             } else {
                 return DapMessage::Response {
                     seq,
@@ -3725,47 +3841,58 @@ impl DebugAdapter {
                     success: false,
                     command: "evaluate".to_string(),
                     body: None,
-                    message: Some("No debugger session".to_string()),
+                    message: Some("No debugger session active".to_string()),
                 };
-            };
-
-            let framed_lines = output_frame_markers.as_ref().and_then(|(begin, end)| {
-                self.capture_framed_debugger_output(begin, end, u64::from(timeout_ms))
-            });
-
-            let parsed = framed_lines
-                .as_ref()
-                .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
-                .or_else(|| self.parse_evaluate_result_from_output(expression));
-
-            let (result, result_type) = parsed.unwrap_or_else(|| {
-                (
-                    format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms),
-                    "string".to_string(),
-                )
-            });
-
-            DapMessage::Response {
-                seq,
-                request_seq,
-                success: true,
-                command: "evaluate".to_string(),
-                body: Some(json!({
-                    "result": result,
-                    "type": result_type,
-                    "variablesReference": 0
-                })),
-                message: None,
             }
-        } else {
-            DapMessage::Response {
+        } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        {
+            return DapMessage::Response {
                 seq,
                 request_seq,
                 success: false,
                 command: "evaluate".to_string(),
                 body: None,
-                message: Some("Missing arguments".to_string()),
-            }
+                message: Some(format!(
+                    "Evaluate is unavailable for processId attach (PID {pid}) without an active debugger transport"
+                )),
+            };
+        } else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "evaluate".to_string(),
+                body: None,
+                message: Some("No debugger session".to_string()),
+            };
+        };
+
+        let framed_lines = output_frame_markers.as_ref().and_then(|(begin, end)| {
+            self.capture_framed_debugger_output(begin, end, u64::from(timeout_ms))
+        });
+
+        let parsed = framed_lines
+            .as_ref()
+            .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
+            .or_else(|| self.parse_evaluate_result_from_output(expression));
+
+        let (result, result_type) = parsed.unwrap_or_else(|| {
+            (
+                format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms),
+                "string".to_string(),
+            )
+        });
+
+        let eval_body =
+            EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "evaluate".to_string(),
+            body: serde_json::to_value(&eval_body).ok(),
+            message: None,
         }
     }
 
@@ -3861,6 +3988,1118 @@ impl DebugAdapter {
             },
         }
     }
+
+    fn handle_breakpoint_locations(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: BreakpointLocationsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "breakpointLocations".to_string(),
+                        body: None,
+                        message: Some("Missing or invalid arguments".to_string()),
+                    };
+                }
+            };
+
+        let source_path = match args.source.path {
+            Some(ref p) => p.clone(),
+            None => {
+                let body = BreakpointLocationsResponseBody { breakpoints: Vec::new() };
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "breakpointLocations".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                };
+            }
+        };
+
+        // Validate path against workspace root to prevent path traversal
+        let validated_path = match self.validate_source_path(&source_path) {
+            Ok(p) => p,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "breakpointLocations".to_string(),
+                    body: None,
+                    message: Some(e),
+                };
+            }
+        };
+
+        let content = match std::fs::read_to_string(&validated_path) {
+            Ok(c) => c,
+            Err(_) => {
+                let body = BreakpointLocationsResponseBody { breakpoints: Vec::new() };
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "breakpointLocations".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                };
+            }
+        };
+
+        let mut breakpoints = Vec::new();
+        let end_line = args.end_line.unwrap_or(args.line);
+
+        if let Ok(validator) = AstBreakpointValidator::new(&content) {
+            for line in args.line..=end_line {
+                if self.cancel_requested.load(Ordering::Acquire) {
+                    self.cancel_requested.store(false, Ordering::Release);
+                    break;
+                }
+                if validator.is_executable_line(line) {
+                    breakpoints.push(BreakpointLocation {
+                        line,
+                        column: None,
+                        end_line: None,
+                        end_column: None,
+                    });
+                }
+            }
+        }
+
+        let body = BreakpointLocationsResponseBody { breakpoints };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "breakpointLocations".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    fn handle_source(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let args: SourceArguments = match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "source".to_string(),
+                    body: None,
+                    message: Some("Missing or invalid arguments".to_string()),
+                };
+            }
+        };
+
+        let path = match args.source.and_then(|s| s.path) {
+            Some(p) => p,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "source".to_string(),
+                    body: None,
+                    message: Some("source.path is required".to_string()),
+                };
+            }
+        };
+
+        // Validate path against workspace root to prevent path traversal
+        let validated_path = match self.validate_source_path(&path) {
+            Ok(p) => p,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "source".to_string(),
+                    body: None,
+                    message: Some(e),
+                };
+            }
+        };
+
+        match std::fs::read_to_string(&validated_path) {
+            Ok(content) => {
+                let body =
+                    SourceResponseBody { content, mime_type: Some("text/x-perl".to_string()) };
+                DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "source".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                }
+            }
+            Err(e) => DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "source".to_string(),
+                body: None,
+                message: Some(format!("Failed to read source file: {}", e)),
+            },
+        }
+    }
+
+    fn handle_goto_targets(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: GotoTargetsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "gotoTargets".to_string(),
+                        body: None,
+                        message: Some("Missing or invalid arguments".to_string()),
+                    };
+                }
+            };
+
+        let source_path = match args.source.path {
+            Some(ref p) => p.clone(),
+            None => {
+                let body = GotoTargetsResponseBody { targets: Vec::new() };
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "gotoTargets".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                };
+            }
+        };
+
+        // Validate path against workspace root to prevent path traversal
+        let validated_path = match self.validate_source_path(&source_path) {
+            Ok(p) => p,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "gotoTargets".to_string(),
+                    body: None,
+                    message: Some(e),
+                };
+            }
+        };
+
+        let content = match std::fs::read_to_string(&validated_path) {
+            Ok(c) => c,
+            Err(_) => {
+                let body = GotoTargetsResponseBody { targets: Vec::new() };
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "gotoTargets".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                };
+            }
+        };
+
+        // Clear stale goto target mappings and build fresh ones
+        let mut goto_map = lock_or_recover(&self.goto_targets, "debug_adapter.goto_targets");
+        goto_map.clear();
+        let mut id_counter =
+            lock_or_recover(&self.next_goto_target_id, "debug_adapter.next_goto_target_id");
+
+        let mut targets = Vec::new();
+        let search_start = (args.line - 5).max(1);
+        let search_end = args.line + 5;
+
+        if let Ok(validator) = AstBreakpointValidator::new(&content) {
+            for line in search_start..=search_end {
+                if self.cancel_requested.load(Ordering::Acquire) {
+                    self.cancel_requested.store(false, Ordering::Release);
+                    break;
+                }
+                if validator.is_executable_line(line) {
+                    let id = *id_counter;
+                    *id_counter += 1;
+                    goto_map.insert(id, (source_path.clone(), line));
+                    targets.push(GotoTarget {
+                        id,
+                        label: format!("Line {}", line),
+                        line,
+                        column: None,
+                        end_line: None,
+                        end_column: None,
+                    });
+                }
+            }
+        }
+        drop(goto_map);
+        drop(id_counter);
+
+        let body = GotoTargetsResponseBody { targets };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "gotoTargets".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    fn handle_goto(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let args: GotoArguments = match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+            Some(a) => a,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "goto".to_string(),
+                    body: None,
+                    message: Some("Missing or invalid arguments".to_string()),
+                };
+            }
+        };
+
+        // Look up the goto target from our stored mapping
+        let target_info = {
+            let mut goto_map = lock_or_recover(&self.goto_targets, "debug_adapter.goto_targets");
+            goto_map.remove(&args.target_id)
+        };
+        let (target_path, target_line) = match target_info {
+            Some(info) => info,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "goto".to_string(),
+                    body: None,
+                    message: Some(format!("Unknown goto target id {}", args.target_id)),
+                };
+            }
+        };
+
+        if let Some(ref mut session) = *lock_or_recover(&self.session, "debug_adapter.session")
+            && let Some(stdin) = session.process.stdin.as_mut()
+        {
+            // Set debugger file context for cross-file goto
+            let file_cmd = format!("f {}\n", target_path);
+            let _ = stdin.write_all(file_cmd.as_bytes());
+            let _ = stdin.flush();
+            let goto_cmd = format!("c {}\n", target_line);
+            let _ = stdin.write_all(goto_cmd.as_bytes());
+            let _ = stdin.flush();
+            session.state = DebugState::Running;
+            session.last_resume_mode = ResumeMode::Goto;
+            session.variables.clear();
+            let t_id = session.thread_id;
+
+            self.send_event(
+                "continued",
+                Some(json!({
+                    "threadId": t_id,
+                    "allThreadsContinued": true
+                })),
+            );
+
+            DapMessage::Response {
+                seq,
+                request_seq,
+                success: true,
+                command: "goto".to_string(),
+                body: None,
+                message: None,
+            }
+        } else {
+            DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "goto".to_string(),
+                body: None,
+                message: Some("No active debug session".to_string()),
+            }
+        }
+    }
+
+    fn handle_step_in_targets(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: StepInTargetsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "stepInTargets".to_string(),
+                        body: None,
+                        message: Some("Missing or invalid arguments".to_string()),
+                    };
+                }
+            };
+
+        let mut targets = Vec::new();
+
+        // Extract the frame source path while session lock is held, then release.
+        let frame_info = {
+            let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            if let Some(ref session) = *session_guard {
+                session
+                    .stack_frames
+                    .iter()
+                    .find(|f| i64::from(f.id) == args.frame_id)
+                    .map(|frame| (frame.source.path.clone(), frame.line))
+            } else {
+                None
+            }
+        };
+
+        if let Some((source_path, frame_line)) = frame_info {
+            // Defense-in-depth: validate even internal session paths
+            if let Ok(validated_path) = self.validate_source_path(&source_path) {
+                if let Ok(content) = std::fs::read_to_string(&validated_path) {
+                    let line_idx = frame_line as usize;
+                    if let Some(source_line) = content.lines().nth(line_idx.saturating_sub(1)) {
+                        // Find function call patterns
+                        let call_re = match Regex::new(r"(\w[\w:]*)\s*\(") {
+                            Ok(re) => re,
+                            Err(_) => {
+                                let body = StepInTargetsResponseBody { targets };
+                                return DapMessage::Response {
+                                    seq,
+                                    request_seq,
+                                    success: true,
+                                    command: "stepInTargets".to_string(),
+                                    body: serde_json::to_value(&body).ok(),
+                                    message: None,
+                                };
+                            }
+                        };
+                        for (idx, cap) in call_re.captures_iter(source_line).enumerate() {
+                            if let Some(name) = cap.get(1) {
+                                targets.push(StepInTarget {
+                                    id: idx as i64,
+                                    label: name.as_str().to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let body = StepInTargetsResponseBody { targets };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "stepInTargets".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    fn handle_cancel(&self, seq: i64, request_seq: i64, _arguments: Option<Value>) -> DapMessage {
+        // cancel_requested field will be added by the integration task
+        self.cancel_requested.store(true, Ordering::Release);
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "cancel".to_string(),
+            body: None,
+            message: None,
+        }
+    }
+
+    fn handle_restart_frame(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: false,
+            command: "restartFrame".to_string(),
+            body: None,
+            message: Some(
+                "Perl does not support restarting execution from a specific stack frame"
+                    .to_string(),
+            ),
+        }
+    }
+
+    fn handle_terminate_threads(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: false,
+            command: "terminateThreads".to_string(),
+            body: None,
+            message: Some(
+                "Perl threading model does not support targeted thread termination from the debugger"
+                    .to_string(),
+            ),
+        }
+    }
+
+    /// Handle exceptionInfo request
+    ///
+    /// Returns details about the most recent exception (die/croak) encountered
+    /// during debugging. Reads from `self.last_exception_message` which is
+    /// populated by the output reader when exception patterns are detected.
+    fn handle_exception_info(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let _args: Option<ExceptionInfoArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
+        let stored_message =
+            lock_or_recover(&self.last_exception_message, "debug_adapter.last_exception_message");
+        let exception_text = stored_message.clone();
+        drop(stored_message);
+
+        let body = match exception_text {
+            Some(ref message) => ExceptionInfoResponseBody {
+                exception_id: "perl_exception".to_string(),
+                description: Some(message.clone()),
+                break_mode: "always".to_string(),
+                details: Some(ExceptionDetails {
+                    message: Some(message.clone()),
+                    type_name: Some("die".to_string()),
+                    stack_trace: None,
+                }),
+            },
+            None => ExceptionInfoResponseBody {
+                exception_id: "perl_exception".to_string(),
+                description: Some("Unknown exception".to_string()),
+                break_mode: "always".to_string(),
+                details: None,
+            },
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "exceptionInfo".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle setExpression request
+    ///
+    /// Assigns a value to an arbitrary Perl l-value expression using the debugger.
+    /// Similar to setVariable but accepts full expressions (e.g. `$hash{key}`,
+    /// `$array[0]`, `$obj->{field}`) rather than just simple variable names.
+    fn handle_set_expression(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: SetExpressionArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "setExpression".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
+            };
+
+        let expression = args.expression.trim().to_string();
+        let value = args.value.trim().to_string();
+        let expression = expression.as_str();
+        let value = value.as_str();
+
+        if expression.is_empty() {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some("Missing expression".to_string()),
+            };
+        }
+
+        if value.is_empty() {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some("Missing value".to_string()),
+            };
+        }
+
+        if expression.contains('\n')
+            || expression.contains('\r')
+            || value.contains('\n')
+            || value.contains('\r')
+        {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some("Expression/value cannot contain newlines".to_string()),
+            };
+        }
+
+        // Validate the VALUE with SafeEvaluator (the value is what gets evaluated)
+        let evaluator = SafeEvaluator::new();
+        if let Err(error) = evaluator.validate(value) {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some(format!("Unsafe value for setExpression: {error}")),
+            };
+        }
+
+        let output_frame_markers = if let Some(ref mut session) =
+            *lock_or_recover(&self.session, "debug_adapter.session")
+        {
+            if let Some(stdin) = session.process.stdin.as_mut() {
+                let commands = vec![format!("p {expression} = {value}"), format!("p {expression}")];
+                match self.send_framed_debugger_commands(stdin, &commands) {
+                    Ok(markers) => Some(markers),
+                    Err(error) => {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "setExpression".to_string(),
+                            body: None,
+                            message: Some(format!("Failed to send setExpression command: {error}")),
+                        };
+                    }
+                }
+            } else {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "setExpression".to_string(),
+                    body: None,
+                    message: Some("No debugger session active".to_string()),
+                };
+            }
+        } else if let Some(pid) = *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some(format!(
+                    "setExpression is unavailable for processId attach (PID {pid}) without an active debugger transport"
+                )),
+            };
+        } else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some("No debugger session".to_string()),
+            };
+        };
+
+        let parsed = output_frame_markers
+            .as_ref()
+            .and_then(|(begin, end)| {
+                self.capture_framed_debugger_output(begin, end, DEBUGGER_QUERY_WAIT_MS * 8)
+            })
+            .and_then(|lines| Self::parse_evaluate_result_from_lines(&lines, "", true));
+
+        let Some((rendered_value, rendered_type)) = parsed else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some(format!(
+                    "setExpression read-back for `{expression}` produced no parseable output"
+                )),
+            };
+        };
+
+        let body = SetExpressionResponseBody {
+            value: rendered_value,
+            type_: Some(rendered_type),
+            variables_reference: 0,
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "setExpression".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle restart request
+    ///
+    /// Restarts the debug session by tearing down the current session and
+    /// re-launching with stored (or updated) launch arguments. If no previous
+    /// launch configuration is available, returns an error.
+    fn handle_restart(
+        &mut self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: Option<RestartArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
+
+        // Determine launch args: prefer restart-provided args, then stored args
+        let updated_args = args.and_then(|a| a.arguments);
+
+        let launch_args = if let Some(new_args) = updated_args {
+            new_args
+        } else {
+            let stored = lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args");
+            match stored.clone() {
+                Some(args) => args,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "restart".to_string(),
+                        body: None,
+                        message: Some(
+                            "No previous launch configuration available for restart".to_string(),
+                        ),
+                    };
+                }
+            }
+        };
+
+        self.clear_active_session_state();
+        self.handle_launch(seq, request_seq, Some(launch_args))
+    }
+
+    // ========================================================================
+    // Loaded Sources / Modules / Completions / Data Breakpoints
+    // ========================================================================
+
+    /// Query `%INC` from the debugger and return parsed (module_key, abs_path) pairs.
+    fn query_inc_entries(&self) -> Vec<(String, String)> {
+        let output_frame_markers = {
+            let mut session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            if let Some(ref mut session) = *session_guard {
+                if let Some(stdin) = session.process.stdin.as_mut() {
+                    let commands = vec!["x \\%INC".to_string()];
+                    self.send_framed_debugger_commands(stdin, &commands).ok()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        // Session guard dropped — safe to read output.
+        let lines = match output_frame_markers {
+            Some((begin, end)) => self
+                .capture_framed_debugger_output(&begin, &end, DEBUGGER_QUERY_WAIT_MS * 8)
+                .unwrap_or_default(),
+            None => return Vec::new(),
+        };
+
+        let re = match inc_re() {
+            Some(re) => re,
+            None => return Vec::new(),
+        };
+
+        let mut entries = Vec::new();
+        for line in &lines {
+            if self.cancel_requested.load(Ordering::Acquire) {
+                self.cancel_requested.store(false, Ordering::Release);
+                return Vec::new();
+            }
+            if let Some(caps) = re.captures(line) {
+                if let (Some(key), Some(val)) = (caps.get(1), caps.get(2)) {
+                    entries.push((key.as_str().to_string(), val.as_str().to_string()));
+                }
+            }
+        }
+        entries
+    }
+
+    /// Handle loadedSources request — returns all files loaded via `%INC`.
+    fn handle_loaded_sources(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
+
+        let sources = if has_session {
+            self.query_inc_entries()
+                .into_iter()
+                .map(|(key, path)| crate::protocol::Source { name: Some(key), path: Some(path) })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let body = LoadedSourcesResponseBody { sources };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "loadedSources".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle modules request — returns Perl modules from `%INC` with pagination.
+    fn handle_modules(&self, seq: i64, request_seq: i64, arguments: Option<Value>) -> DapMessage {
+        let args: Option<ModulesArguments> = arguments.and_then(|v| serde_json::from_value(v).ok());
+
+        let start_module = args.as_ref().and_then(|a| a.start_module).unwrap_or(0).max(0) as usize;
+        let module_count = args.as_ref().and_then(|a| a.module_count);
+
+        let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
+
+        let all_entries = if has_session { self.query_inc_entries() } else { Vec::new() };
+
+        let total = all_entries.len() as i64;
+
+        // Convert Foo/Bar.pm keys to Foo::Bar module names.
+        let all_modules: Vec<Module> = all_entries
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (key, path))| {
+                let name = key.replace('/', "::").trim_end_matches(".pm").to_string();
+                Module { id: idx.to_string(), name, path: Some(path) }
+            })
+            .collect();
+
+        // Apply pagination.
+        let paginated: Vec<Module> = if let Some(count) = module_count {
+            all_modules.into_iter().skip(start_module).take(count.max(0) as usize).collect()
+        } else {
+            all_modules.into_iter().skip(start_module).collect()
+        };
+
+        let body = ModulesResponseBody { modules: paginated, total_modules: Some(total) };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "modules".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle completions request — provides Perl keyword completions in the debug console.
+    fn handle_completions(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: CompletionsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "completions".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
+            };
+
+        let byte_offset = (args.column.max(0) as usize).min(args.text.len());
+        // Clamp to a valid UTF-8 char boundary to avoid panics on multi-byte input.
+        let mut column = byte_offset;
+        while column > 0 && !args.text.is_char_boundary(column) {
+            column -= 1;
+        }
+        let prefix = &args.text[..column];
+
+        // Find the last word boundary to get the completion stem.
+        // rfind returns a byte position; we advance past the matched char (which may be multi-byte).
+        let stem = prefix
+            .rmatch_indices(|c: char| !c.is_alphanumeric() && c != '_')
+            .next()
+            .map(|(pos, matched)| &prefix[pos + matched.len()..])
+            .unwrap_or(prefix);
+
+        const PERL_KEYWORDS: &[&str] = &[
+            "my", "our", "local", "sub", "use", "require", "package", "if", "elsif", "else",
+            "unless", "while", "until", "for", "foreach", "do", "eval", "return", "last", "next",
+            "redo", "die", "warn", "print", "say", "printf", "sprintf", "open", "close", "chomp",
+            "chop", "push", "pop", "shift", "unshift", "splice", "join", "split", "sort", "map",
+            "grep", "defined", "exists", "delete", "ref", "bless", "tie", "untie", "scalar",
+            "keys", "values", "each", "length", "substr", "index", "rindex", "reverse", "lc", "uc",
+            "lcfirst", "ucfirst", "hex", "oct", "int", "abs", "sqrt", "chr", "ord", "pack",
+            "unpack", "qw",
+        ];
+
+        let mut targets: Vec<CompletionItem> = PERL_KEYWORDS
+            .iter()
+            .filter(|kw| stem.is_empty() || kw.starts_with(stem))
+            .map(|kw| CompletionItem {
+                label: (*kw).to_string(),
+                type_: Some("keyword".to_string()),
+                text: None,
+                sort_text: None,
+                detail: None,
+                start: None,
+                length: None,
+            })
+            .collect();
+
+        // When a debug session is active, supplement with runtime data.
+        let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
+
+        let runtime_start = targets.len();
+        if has_session {
+            // Add variable names from cached session scope.
+            {
+                let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+                if let Some(ref session) = *session_guard {
+                    let mut seen = std::collections::HashSet::new();
+                    for vars in session.variables.values() {
+                        for var in vars {
+                            if (stem.is_empty() || var.name.starts_with(stem))
+                                && seen.insert(var.name.clone())
+                            {
+                                targets.push(CompletionItem {
+                                    label: var.name.clone(),
+                                    type_: Some("variable".to_string()),
+                                    text: None,
+                                    sort_text: None,
+                                    detail: None,
+                                    start: None,
+                                    length: None,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Add loaded module names from %INC.
+            let modules = self.query_inc_entries();
+            for (key, _path) in &modules {
+                let name = key.replace('/', "::").trim_end_matches(".pm").to_string();
+                if stem.is_empty() || name.starts_with(stem) {
+                    targets.push(CompletionItem {
+                        label: name,
+                        type_: Some("module".to_string()),
+                        text: None,
+                        sort_text: None,
+                        detail: None,
+                        start: None,
+                        length: None,
+                    });
+                }
+            }
+
+            // Sort runtime completions for deterministic output.
+            targets[runtime_start..].sort_by(|a, b| a.label.cmp(&b.label));
+        }
+
+        let body = CompletionsResponseBody { targets };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "completions".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle dataBreakpointInfo request — check if a variable can be watched.
+    fn handle_data_breakpoint_info(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: DataBreakpointInfoArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "dataBreakpointInfo".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
+            };
+
+        let body = if is_valid_set_variable_name(&args.name) {
+            DataBreakpointInfoResponseBody {
+                data_id: Some(args.name.clone()),
+                description: format!("Watch `{}` for write access", args.name),
+                access_types: Some(vec!["write".to_string()]),
+            }
+        } else {
+            DataBreakpointInfoResponseBody {
+                data_id: None,
+                description: "Cannot watch this expression".to_string(),
+                access_types: None,
+            }
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "dataBreakpointInfo".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle setDataBreakpoints request — set watchpoints via Perl debugger `w` command.
+    fn handle_set_data_breakpoints(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: SetDataBreakpointsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "setDataBreakpoints".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
+            };
+
+        // Store the data breakpoints.
+        {
+            let mut store =
+                lock_or_recover(&self.data_breakpoints, "debug_adapter.data_breakpoints");
+            *store = args
+                .breakpoints
+                .iter()
+                .map(|bp| DataBreakpointRecord {
+                    data_id: bp.data_id.clone(),
+                    access_type: bp.access_type.clone(),
+                    condition: bp.condition.clone(),
+                })
+                .collect();
+        }
+
+        // If session active, set watchpoints via the debugger.
+        {
+            let mut session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            if let Some(ref mut session) = *session_guard {
+                if let Some(stdin) = session.process.stdin.as_mut() {
+                    // Build commands: clear all watchpoints, then set each.
+                    let mut commands = vec!["W *".to_string()];
+                    for bp in &args.breakpoints {
+                        commands.push(format!("w {}", bp.data_id));
+                    }
+                    // Fire-and-forget: we don't need the output.
+                    let _ = self.send_framed_debugger_commands(stdin, &commands);
+                }
+            }
+            // Session guard dropped here.
+        }
+
+        // Build response breakpoints — one per input.
+        let response_breakpoints: Vec<crate::protocol::Breakpoint> = args
+            .breakpoints
+            .iter()
+            .enumerate()
+            .map(|(idx, _bp)| crate::protocol::Breakpoint {
+                id: (idx as i64) + 1,
+                verified: true,
+                line: 0,
+                column: None,
+                message: None,
+            })
+            .collect();
+
+        let body = SetDataBreakpointsResponseBody { breakpoints: response_breakpoints };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "setDataBreakpoints".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -3932,13 +5171,23 @@ mod tests {
             ("supportsValueFormattingOptions", crate::feature_catalog::has_feature("dap.core")),
             ("supportTerminateDebuggee", crate::feature_catalog::has_feature("dap.core")),
             ("supportsLogPoints", crate::feature_catalog::has_feature("dap.breakpoints.logpoints")),
-            ("supportsExceptionOptions", crate::feature_catalog::has_feature("dap.exceptions.die")),
+            (
+                "supportsExceptionOptions",
+                crate::feature_catalog::has_feature("dap.exceptions.die")
+                    || crate::feature_catalog::has_feature("dap.exceptions.warn"),
+            ),
             (
                 "supportsExceptionFilterOptions",
-                crate::feature_catalog::has_feature("dap.exceptions.die"),
+                crate::feature_catalog::has_feature("dap.exceptions.die")
+                    || crate::feature_catalog::has_feature("dap.exceptions.warn"),
             ),
             ("supportsInlineValues", crate::feature_catalog::has_feature("dap.inline_values")),
             ("supportsTerminateRequest", crate::feature_catalog::has_feature("dap.core")),
+            ("supportsCompletionsRequest", crate::feature_catalog::has_feature("dap.completions")),
+            ("supportsModulesRequest", crate::feature_catalog::has_feature("dap.modules")),
+            ("supportsDataBreakpoints", crate::feature_catalog::has_feature("dap.watchpoints")),
+            ("supportsTerminateThreadsRequest", false),
+            ("supportsGotoTargetsRequest", crate::feature_catalog::has_feature("dap.core")),
         ];
 
         for (capability, expected) in expectations {
@@ -3956,15 +5205,34 @@ mod tests {
             .get("exceptionBreakpointFilters")
             .and_then(Value::as_array)
             .ok_or("exceptionBreakpointFilters must be present as an array")?;
-        if crate::feature_catalog::has_feature("dap.exceptions.die") {
-            assert!(
-                !exception_filters.is_empty(),
-                "Exception filters should be advertised when dap.exceptions.die is enabled"
-            );
-        } else {
+
+        let has_filter = |id: &str| -> bool {
+            exception_filters.iter().any(|f| f.get("filter").and_then(Value::as_str) == Some(id))
+        };
+
+        let die_enabled = crate::feature_catalog::has_feature("dap.exceptions.die");
+        let warn_enabled = crate::feature_catalog::has_feature("dap.exceptions.warn");
+
+        assert_eq!(
+            has_filter("die"),
+            die_enabled,
+            "die filter presence must match dap.exceptions.die"
+        );
+        assert_eq!(
+            has_filter("all"),
+            die_enabled,
+            "all filter presence must match dap.exceptions.die"
+        );
+        assert_eq!(
+            has_filter("warn"),
+            warn_enabled,
+            "warn filter presence must match dap.exceptions.warn"
+        );
+
+        if !die_enabled && !warn_enabled {
             assert!(
                 exception_filters.is_empty(),
-                "Exception filters should be empty when dap.exceptions.die is not advertised"
+                "exceptionBreakpointFilters must be empty when no exception features are enabled"
             );
         }
 
@@ -4003,6 +5271,18 @@ mod tests {
             ("supportsInlineValues", "inlineValues"),
             ("supportsTerminateRequest", "terminate"),
             ("supportTerminateDebuggee", "terminate"),
+            ("supportsCompletionsRequest", "completions"),
+            ("supportsModulesRequest", "modules"),
+            ("supportsRestartRequest", "restart"),
+            ("supportsExceptionInfoRequest", "exceptionInfo"),
+            ("supportsBreakpointLocationsRequest", "breakpointLocations"),
+            ("supportsSetExpression", "setExpression"),
+            ("supportsDataBreakpoints", "setDataBreakpoints"),
+            ("supportsLoadedSourcesRequest", "loadedSources"),
+            ("supportsCancelRequest", "cancel"),
+            ("supportsStepInTargetsRequest", "stepInTargets"),
+            ("supportsGotoTargetsRequest", "gotoTargets"),
+            ("supportsTerminateThreadsRequest", "terminateThreads"),
         ];
 
         let mut mapped_commands = HashSet::new();
@@ -4048,6 +5328,24 @@ mod tests {
                     "endLine": 1
                 })),
                 "terminate" => Some(json!({"restart": false})),
+                "completions" => Some(json!({"text": "pr", "column": 2})),
+                "modules" => Some(json!({})),
+                "restart" => Some(json!({})),
+                "exceptionInfo" => Some(json!({"threadId": 1})),
+                "breakpointLocations" => Some(json!({
+                    "source": { "path": "/tmp/capability_honesty.pl" },
+                    "line": 1
+                })),
+                "setExpression" => Some(json!({"expression": "$x", "value": "1"})),
+                "setDataBreakpoints" => Some(json!({"breakpoints": []})),
+                "loadedSources" => Some(json!({})),
+                "cancel" => Some(json!({})),
+                "stepInTargets" => Some(json!({"frameId": 1})),
+                "gotoTargets" => Some(json!({
+                    "source": { "path": "/tmp/capability_honesty.pl" },
+                    "line": 1
+                })),
+                "terminateThreads" => Some(json!({})),
                 _ => None,
             };
 
@@ -4069,6 +5367,13 @@ mod tests {
                 _ => return Err(format!("Expected response for `{command}`").into()),
             }
         }
+
+        // supportsTerminateThreadsRequest must be false (Perl limitation)
+        assert_eq!(
+            capability_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
+            Some(false),
+            "supportsTerminateThreadsRequest must be false — Perl has no thread termination"
+        );
 
         Ok(())
     }
@@ -5039,5 +6344,372 @@ DB<1>"#;
             let err = validate_safe_expression(expr);
             assert!(err.is_some(), "expected block for {expr:?}");
         }
+    }
+
+    #[test]
+    fn test_tcp_session_threads_non_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let adapter = DebugAdapter::new();
+        // Inject a TcpAttachSession so handle_threads sees it
+        {
+            let mut guard = lock_or_recover(&adapter.tcp_session, "test.tcp_session");
+            *guard = Some(TcpAttachSession::new());
+        }
+        let response = adapter.handle_threads(1, 1);
+        match response {
+            DapMessage::Response { success, body: Some(body), .. } => {
+                assert!(success);
+                let threads = body["threads"].as_array().ok_or("threads must be array")?;
+                assert!(!threads.is_empty(), "TCP attach should return non-empty threads");
+                assert_eq!(threads[0]["id"], 1);
+                assert_eq!(threads[0]["name"], "TCP Attached Thread");
+            }
+            _ => return Err("Expected successful response with body".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_attach_port_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        // Initialize first so attach is allowed
+        let _ = adapter.handle_request(1, "initialize", None);
+
+        for port in [65536_u64, 70000, u64::MAX] {
+            let args = json!({ "port": port });
+            let response = adapter.handle_request(2, "attach", Some(args));
+            match response {
+                DapMessage::Response { success, message, .. } => {
+                    assert!(!success, "port {port} should be rejected");
+                    assert!(
+                        message.as_ref().is_some_and(|m| m.contains("out of range")),
+                        "expected 'out of range' error for port {port}, got: {message:?}"
+                    );
+                }
+                _ => return Err(format!("Expected error response for port {port}").into()),
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_attach_port_valid_boundary() {
+        let mut adapter = DebugAdapter::new();
+        let _ = adapter.handle_request(1, "initialize", None);
+
+        // Port 1 and 65535 should pass port validation (may fail later at TCP connect)
+        for port in [1_u64, 65535] {
+            let args = json!({ "port": port });
+            let response = adapter.handle_request(2, "attach", Some(args));
+            if let DapMessage::Response { message, .. } = response {
+                // Should NOT contain "out of range" — it passed validation
+                assert!(
+                    !message.as_ref().is_some_and(|m| m.contains("out of range")),
+                    "port {port} should pass range validation, got: {message:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_goto_missing_arguments() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let response = adapter.handle_request(1, "goto", None);
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "goto");
+                assert_eq!(message.as_deref(), Some("Missing or invalid arguments"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_goto_invalid_target() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let response =
+            adapter.handle_request(1, "goto", Some(json!({"threadId": 1, "targetId": -1})));
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "goto");
+                // With target mapping, unknown IDs produce "Unknown goto target id"
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Unknown goto target"),
+                    "expected unknown target message, got: {msg}"
+                );
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_goto_no_session() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        // First store a mapping so goto gets past the lookup
+        {
+            let mut goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
+            goto_map.insert(10, ("/test/file.pl".to_string(), 10));
+        }
+        let response =
+            adapter.handle_request(1, "goto", Some(json!({"threadId": 1, "targetId": 10})));
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "goto");
+                assert_eq!(message.as_deref(), Some("No active debug session"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_terminate_threads_capability_is_false() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let init = adapter.handle_request(1, "initialize", None);
+        let capabilities = match init {
+            DapMessage::Response { success: true, body: Some(body), .. } => body,
+            _ => return Err("Expected successful initialize response".into()),
+        };
+        let cap_map = capabilities.as_object().ok_or("body must be object")?;
+        assert_eq!(
+            cap_map.get("supportsTerminateThreadsRequest").and_then(|v| v.as_bool()),
+            Some(false),
+            "supportsTerminateThreadsRequest must be false"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_goto_targets_then_goto_flow() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+
+        // gotoTargets should succeed (even with no file — returns empty targets)
+        let gt_response = adapter.handle_request(
+            1,
+            "gotoTargets",
+            Some(json!({"source": {"path": "/tmp/nonexistent.pl"}, "line": 1})),
+        );
+        match gt_response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(success, "gotoTargets should succeed");
+                assert_eq!(command, "gotoTargets");
+                // Must NOT say "does not support"
+                assert!(
+                    !message.as_deref().unwrap_or("").contains("does not support"),
+                    "gotoTargets must not claim lack of support"
+                );
+            }
+            _ => return Err("Expected response".into()),
+        }
+
+        // goto should fail gracefully with unknown target (no stored mapping)
+        let goto_response =
+            adapter.handle_request(2, "goto", Some(json!({"threadId": 1, "targetId": 999})));
+        match goto_response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "goto with unknown target should fail");
+                assert_eq!(command, "goto");
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Unknown goto target"),
+                    "goto must report unknown target, got: {msg}"
+                );
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_goto_targets_stores_mapping() -> Result<(), Box<dyn std::error::Error>> {
+        use std::io::Write;
+
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        // Create a temp file with executable content
+        let dir = tempfile::tempdir()?;
+        let file_path = dir.path().join("test_goto.pl");
+        {
+            let mut f = std::fs::File::create(&file_path)?;
+            writeln!(f, "my $x = 1;")?;
+            writeln!(f, "my $y = 2;")?;
+            writeln!(f, "print $x + $y;")?;
+        }
+
+        let path_str = file_path.to_string_lossy().to_string();
+        let response = adapter.handle_request(
+            2,
+            "gotoTargets",
+            Some(json!({
+                "source": {"path": path_str},
+                "line": 2
+            })),
+        );
+
+        // Verify the response contains targets with monotonic IDs (not line numbers)
+        match response {
+            DapMessage::Response { success, body: Some(body), .. } => {
+                assert!(success, "gotoTargets should succeed");
+                let targets = body
+                    .get("targets")
+                    .and_then(|t| t.as_array())
+                    .ok_or("should have targets array")?;
+                assert!(!targets.is_empty(), "should find executable lines");
+
+                // Verify IDs are monotonic starting from 1, NOT equal to line numbers
+                let first_id = targets[0].get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                assert!(first_id >= 1, "IDs should start at 1 or higher");
+
+                // Verify the mapping was stored internally
+                let goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
+                assert!(!goto_map.is_empty(), "goto_targets map should be populated");
+                // Each stored entry should reference our temp file
+                for (_id, (stored_path, _line)) in goto_map.iter() {
+                    assert_eq!(stored_path, &path_str, "stored path should match source");
+                }
+            }
+            _ => return Err("Expected successful response".into()),
+        }
+
+        let _ = std::fs::remove_file(&file_path);
+        Ok(())
+    }
+
+    #[test]
+    fn test_goto_uses_stored_mapping() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        // Manually populate the goto_targets map to simulate handle_goto_targets
+        {
+            let mut goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
+            goto_map.insert(42, ("/some/file.pl".to_string(), 10));
+        }
+
+        // Without a debug session, goto should fail with "No active debug session"
+        // but only after successfully looking up the target
+        let response =
+            adapter.handle_request(2, "goto", Some(json!({"threadId": 1, "targetId": 42})));
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "goto without session should fail");
+                assert_eq!(command, "goto");
+                // It should NOT say "Unknown goto target" — the mapping was found
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("No active debug session"),
+                    "goto should report no session, got: {msg}"
+                );
+            }
+            _ => return Err("Expected response".into()),
+        }
+
+        // Verify the consumed entry was removed from the map
+        let goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
+        assert!(!goto_map.contains_key(&42), "consumed goto target should be removed from map");
+        Ok(())
+    }
+
+    #[test]
+    fn test_source_rejects_traversal() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        // Set workspace root to a temp directory
+        let dir = tempfile::tempdir()?;
+        *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
+            Some(dir.path().to_path_buf());
+
+        let response = adapter.handle_request(
+            2,
+            "source",
+            Some(json!({
+                "source": {"path": "../../../etc/passwd"},
+                "sourceReference": 0
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "source with traversal path should fail");
+                assert_eq!(command, "source");
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Path validation failed"),
+                    "should report path validation failure, got: {msg}"
+                );
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_breakpoint_locations_rejects_traversal() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        let dir = tempfile::tempdir()?;
+        *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
+            Some(dir.path().to_path_buf());
+
+        let response = adapter.handle_request(
+            2,
+            "breakpointLocations",
+            Some(json!({
+                "source": {"path": "../../../etc/passwd"},
+                "line": 1
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "breakpointLocations with traversal path should fail");
+                assert_eq!(command, "breakpointLocations");
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Path validation failed"),
+                    "should report path validation failure, got: {msg}"
+                );
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_goto_targets_rejects_traversal() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        adapter.handle_request(1, "initialize", None);
+
+        let dir = tempfile::tempdir()?;
+        *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
+            Some(dir.path().to_path_buf());
+
+        let response = adapter.handle_request(
+            2,
+            "gotoTargets",
+            Some(json!({
+                "source": {"path": "../../../etc/passwd"},
+                "line": 1
+            })),
+        );
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "gotoTargets with traversal path should fail");
+                assert_eq!(command, "gotoTargets");
+                let msg = message.as_deref().unwrap_or("");
+                assert!(
+                    msg.contains("Path validation failed"),
+                    "should report path validation failure, got: {msg}"
+                );
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
     }
 }

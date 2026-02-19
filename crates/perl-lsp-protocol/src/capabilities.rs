@@ -253,34 +253,34 @@ impl BuildFlags {
             completion: true,
             hover: true,
             definition: true,
-            type_definition: false, // New feature, not GA yet
-            implementation: false,  // New feature, not GA yet
+            type_definition: true, // Working - 493-line impl, integration tested
+            implementation: true,  // Working - workspace-aware, integration tested
             references: true,
             document_symbol: true,
             workspace_symbol: true, // Working via index
             inlay_hints: true,      // v0.8.4 feature - working
             pull_diagnostics: true, // v0.8.5 feature - working
             workspace_symbol_resolve: true,
-            semantic_tokens: true,          // v0.8.4 feature - working
+            semantic_tokens: true,         // v0.8.4 feature - working
             code_actions: true, // v0.8.4 feature - working (enhanced v0.8.9 with refactoring)
             execute_command: true, // v0.8.5 feature - working
             rename: true, // v0.8.4 feature - working (enhanced v0.8.9 with workspace refactoring)
             document_links: true, // v0.8.4 feature - working
             selection_ranges: true, // v0.8.4 feature - working
             on_type_formatting: true, // v0.8.4 feature - working
-            code_lens: false, // Only ~20% functional → don't advertise in GA-lock
+            code_lens: true, // Working - reference counting, well-tested
             call_hierarchy: true, // Call hierarchy support (v0.8.9)
             type_hierarchy: true, // Type hierarchy support (v0.8.9)
-            linked_editing: false, // Not GA yet
-            inline_completion: false, // New feature, not GA yet
-            inline_values: false, // New feature, not GA yet
-            notebook_document_sync: false, // Deliberately conservative in GA-lock builds
-            notebook_cell_execution: false, // Deliberately conservative in GA-lock builds
-            moniker: false, // New feature, not GA yet
-            document_color: false, // New feature, not GA yet
-            source_organize_imports: false, // Excluded from GA-lock contract
-            formatting: false,
-            range_formatting: false,
+            linked_editing: true, // Working - bracket pair editing
+            inline_completion: true, // Working - deterministic rules, well-tested
+            inline_values: false, // Needs DAP integration
+            notebook_document_sync: true, // Fully implemented in runtime/notebook.rs, tested
+            notebook_cell_execution: true, // Metadata tracking, zero risk
+            moniker: true, // Working - export/import classification
+            document_color: true, // Working - hex + ANSI detection
+            source_organize_imports: true, // Working - sort by category
+            formatting: true, // Working - perltidy integration
+            range_formatting: true, // Working - perltidy integration
             folding_range: true,
         }
     }
@@ -295,7 +295,7 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     // Use Options instead of Kind to comply with LSP 3.18 shape requirements
     caps.text_document_sync = Some(TextDocumentSyncCapability::Options(TextDocumentSyncOptions {
         open_close: Some(true),
-        change: Some(TextDocumentSyncKind::FULL),
+        change: Some(TextDocumentSyncKind::INCREMENTAL),
         will_save: None,
         will_save_wait_until: None,
         save: None,
@@ -559,6 +559,9 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.runTestSub".to_string(),
         "perl.debugTests".to_string(),
         "perl.runCritic".to_string(),
+        "perl.runTest".to_string(),
+        "perl.runTestFile".to_string(),
+        "perl.debugFile".to_string(),
     ]
 }
 

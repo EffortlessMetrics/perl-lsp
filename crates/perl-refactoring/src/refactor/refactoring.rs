@@ -2886,8 +2886,6 @@ sub complex {
             // AC2: Backup cleanup removes backup files older than a configurable retention period
             // AC6: Errors during cleanup are logged but don't prevent operation history clearing
             use std::fs;
-            use std::thread;
-            use std::time::Duration;
 
             let temp_dir = must(tempfile::tempdir());
             let backup_root = temp_dir.path().to_path_buf();
@@ -2900,6 +2898,27 @@ sub complex {
             let test_file = old_backup.join("file_0.pl");
             must(fs::write(&test_file, "sub old_backup { }"));
 
+            // Poll filesystem metadata until the backup is older than the age threshold,
+            // matching the pattern used by `test_cleanup_respects_age_limit` above.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut reached_age_limit = false;
+            while std::time::Instant::now() < deadline {
+                if let Ok(metadata) = fs::metadata(&old_backup)
+                    && let Ok(modified) = metadata.modified()
+                    && let Ok(age) = std::time::SystemTime::now().duration_since(modified)
+                    && age > std::time::Duration::from_secs(1)
+                {
+                    reached_age_limit = true;
+                    break;
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            assert!(
+                reached_age_limit,
+                "backup directory did not age past threshold within test timeout"
+            );
+
             let config = RefactoringConfig {
                 backup_max_age_seconds: 1, // 1 second age limit
                 backup_root: Some(backup_root),
@@ -2907,9 +2926,6 @@ sub complex {
             };
 
             let mut engine = RefactoringEngine::with_config(config);
-
-            // Wait to ensure backup is older than 1 second
-            thread::sleep(Duration::from_secs(2));
 
             // Run cleanup
             let result = engine.clear_history();

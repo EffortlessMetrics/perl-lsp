@@ -523,24 +523,10 @@ impl<'a> Parser<'a> {
         // Check if the second token is a colon
         if let Ok(second_token) = self.tokens.peek_second() {
             if second_token.kind == TokenKind::Colon {
-                // To avoid conflict with qualified identifiers (Package::name),
-                // we need to be more careful. A true label should be:
-                // IDENTIFIER : STATEMENT
-                // where STATEMENT doesn't start with another colon.
-                //
-                // For now, let's be conservative and disable label detection
-                // when we see patterns that could be qualified identifiers.
-                // This is a simple heuristic: if we see IDENTIFIER : and the
-                // identifier looks like it could be a package name (starts with
-                // uppercase), we'll let the expression parser handle it.
-                if let Ok(first_token) = self.tokens.peek() {
-                    let name = &first_token.text;
-                    // If identifier starts with uppercase, it might be a package name
-                    // so avoid treating it as a label
-                    if name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                        return false;
-                    }
-                }
+                // Qualified identifiers use `::` which tokenizes as
+                // DoubleColon, so `Identifier Colon` (single colon) is
+                // unambiguously a label — even for uppercase names like
+                // OUTER:, LOOP:, LINE: which are idiomatic Perl labels.
                 return true;
             }
         }

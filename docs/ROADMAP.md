@@ -376,13 +376,13 @@ The LSP compliance table is now auto-generated. Source of truth: `features.toml`
 <!-- BEGIN: COMPLIANCE_TABLE -->
 | Area | Implemented | Total | Coverage |
 |------|-------------|-------|----------|
-| debug | 6 | 6 | 100% |
+| debug | 10 | 10 | 100% |
 | notebook | 2 | 2 | 100% |
 | protocol | 9 | 9 | 100% |
 | text_document | 41 | 41 | 100% |
 | window | 9 | 9 | 100% |
 | workspace | 26 | 26 | 100% |
-| **Overall** | **93** | **93** | **100%** |
+| **Overall** | **97** | **97** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->
 
 **v0.9.0 Metrics**:

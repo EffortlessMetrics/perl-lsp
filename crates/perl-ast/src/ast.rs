@@ -1969,6 +1969,93 @@ impl NodeKind {
             NodeKind::UnknownRest => "UnknownRest",
         }
     }
+
+    /// Canonical list of **all** `kind_name()` strings, in alphabetical order.
+    ///
+    /// Every consumer that needs the full set of NodeKind names should reference
+    /// this constant instead of maintaining a hand-written copy.
+    pub const ALL_KIND_NAMES: &[&'static str] = &[
+        "ArrayLiteral",
+        "Assignment",
+        "Binary",
+        "Block",
+        "Class",
+        "DataSection",
+        "Default",
+        "Diamond",
+        "Do",
+        "Ellipsis",
+        "Error",
+        "Eval",
+        "ExpressionStatement",
+        "For",
+        "Foreach",
+        "Format",
+        "FunctionCall",
+        "Given",
+        "Glob",
+        "HashLiteral",
+        "Heredoc",
+        "Identifier",
+        "If",
+        "IndirectCall",
+        "LabeledStatement",
+        "LoopControl",
+        "MandatoryParameter",
+        "Match",
+        "Method",
+        "MethodCall",
+        "MissingBlock",
+        "MissingExpression",
+        "MissingIdentifier",
+        "MissingStatement",
+        "NamedParameter",
+        "No",
+        "Number",
+        "OptionalParameter",
+        "Package",
+        "PhaseBlock",
+        "Program",
+        "Prototype",
+        "Readline",
+        "Regex",
+        "Return",
+        "Signature",
+        "SlurpyParameter",
+        "StatementModifier",
+        "String",
+        "Subroutine",
+        "Substitution",
+        "Ternary",
+        "Tie",
+        "Transliteration",
+        "Try",
+        "Typeglob",
+        "Unary",
+        "Undef",
+        "UnknownRest",
+        "Untie",
+        "Use",
+        "Variable",
+        "VariableDeclaration",
+        "VariableListDeclaration",
+        "VariableWithAttributes",
+        "When",
+        "While",
+    ];
+
+    /// Subset of `ALL_KIND_NAMES` that represent synthetic/recovery nodes.
+    ///
+    /// These kinds are only produced by `parse_with_recovery()` on malformed
+    /// input and should not be expected in clean parses.
+    pub const RECOVERY_KIND_NAMES: &[&'static str] = &[
+        "Error",
+        "MissingBlock",
+        "MissingExpression",
+        "MissingIdentifier",
+        "MissingStatement",
+        "UnknownRest",
+    ];
 }
 
 /// Format unary operator for S-expression output
@@ -2131,3 +2218,248 @@ fn format_binary_operator(op: &str) -> String {
 
 // SourceLocation is now provided by perl-position-tracking crate
 // See the re-export at the top of this file
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+
+    /// Build a dummy instance for every `NodeKind` variant and return its
+    /// `kind_name()`.  This ensures the compiler forces us to update here
+    /// whenever a variant is added/removed.
+    fn all_kind_names_from_variants() -> BTreeSet<&'static str> {
+        let loc = SourceLocation { start: 0, end: 0 };
+        let dummy_node = || Node::new(NodeKind::Undef, loc);
+
+        let variants: Vec<NodeKind> = vec![
+            NodeKind::Program { statements: vec![] },
+            NodeKind::ExpressionStatement { expression: Box::new(dummy_node()) },
+            NodeKind::VariableDeclaration {
+                declarator: String::new(),
+                variable: Box::new(dummy_node()),
+                attributes: vec![],
+                initializer: None,
+            },
+            NodeKind::VariableListDeclaration {
+                declarator: String::new(),
+                variables: vec![],
+                attributes: vec![],
+                initializer: None,
+            },
+            NodeKind::Variable { sigil: String::new(), name: String::new() },
+            NodeKind::VariableWithAttributes {
+                variable: Box::new(dummy_node()),
+                attributes: vec![],
+            },
+            NodeKind::Assignment {
+                lhs: Box::new(dummy_node()),
+                rhs: Box::new(dummy_node()),
+                op: String::new(),
+            },
+            NodeKind::Binary {
+                op: String::new(),
+                left: Box::new(dummy_node()),
+                right: Box::new(dummy_node()),
+            },
+            NodeKind::Ternary {
+                condition: Box::new(dummy_node()),
+                then_expr: Box::new(dummy_node()),
+                else_expr: Box::new(dummy_node()),
+            },
+            NodeKind::Unary { op: String::new(), operand: Box::new(dummy_node()) },
+            NodeKind::Diamond,
+            NodeKind::Ellipsis,
+            NodeKind::Undef,
+            NodeKind::Readline { filehandle: None },
+            NodeKind::Glob { pattern: String::new() },
+            NodeKind::Typeglob { name: String::new() },
+            NodeKind::Number { value: String::new() },
+            NodeKind::String { value: String::new(), interpolated: false },
+            NodeKind::Heredoc {
+                delimiter: String::new(),
+                content: String::new(),
+                interpolated: false,
+                indented: false,
+                command: false,
+                body_span: None,
+            },
+            NodeKind::ArrayLiteral { elements: vec![] },
+            NodeKind::HashLiteral { pairs: vec![] },
+            NodeKind::Block { statements: vec![] },
+            NodeKind::Eval { block: Box::new(dummy_node()) },
+            NodeKind::Do { block: Box::new(dummy_node()) },
+            NodeKind::Try {
+                body: Box::new(dummy_node()),
+                catch_blocks: vec![],
+                finally_block: None,
+            },
+            NodeKind::If {
+                condition: Box::new(dummy_node()),
+                then_branch: Box::new(dummy_node()),
+                elsif_branches: vec![],
+                else_branch: None,
+            },
+            NodeKind::LabeledStatement { label: String::new(), statement: Box::new(dummy_node()) },
+            NodeKind::While {
+                condition: Box::new(dummy_node()),
+                body: Box::new(dummy_node()),
+                continue_block: None,
+            },
+            NodeKind::Tie {
+                variable: Box::new(dummy_node()),
+                package: Box::new(dummy_node()),
+                args: vec![],
+            },
+            NodeKind::Untie { variable: Box::new(dummy_node()) },
+            NodeKind::For {
+                init: None,
+                condition: None,
+                update: None,
+                body: Box::new(dummy_node()),
+                continue_block: None,
+            },
+            NodeKind::Foreach {
+                variable: Box::new(dummy_node()),
+                list: Box::new(dummy_node()),
+                body: Box::new(dummy_node()),
+                continue_block: None,
+            },
+            NodeKind::Given { expr: Box::new(dummy_node()), body: Box::new(dummy_node()) },
+            NodeKind::When { condition: Box::new(dummy_node()), body: Box::new(dummy_node()) },
+            NodeKind::Default { body: Box::new(dummy_node()) },
+            NodeKind::StatementModifier {
+                statement: Box::new(dummy_node()),
+                modifier: String::new(),
+                condition: Box::new(dummy_node()),
+            },
+            NodeKind::Subroutine {
+                name: None,
+                name_span: None,
+                prototype: None,
+                signature: None,
+                attributes: vec![],
+                body: Box::new(dummy_node()),
+            },
+            NodeKind::Prototype { content: String::new() },
+            NodeKind::Signature { parameters: vec![] },
+            NodeKind::MandatoryParameter { variable: Box::new(dummy_node()) },
+            NodeKind::OptionalParameter {
+                variable: Box::new(dummy_node()),
+                default_value: Box::new(dummy_node()),
+            },
+            NodeKind::SlurpyParameter { variable: Box::new(dummy_node()) },
+            NodeKind::NamedParameter { variable: Box::new(dummy_node()) },
+            NodeKind::Method {
+                name: String::new(),
+                signature: None,
+                attributes: vec![],
+                body: Box::new(dummy_node()),
+            },
+            NodeKind::Return { value: None },
+            NodeKind::LoopControl { op: String::new(), label: None },
+            NodeKind::MethodCall {
+                object: Box::new(dummy_node()),
+                method: String::new(),
+                args: vec![],
+            },
+            NodeKind::FunctionCall { name: String::new(), args: vec![] },
+            NodeKind::IndirectCall {
+                method: String::new(),
+                object: Box::new(dummy_node()),
+                args: vec![],
+            },
+            NodeKind::Regex {
+                pattern: String::new(),
+                replacement: None,
+                modifiers: String::new(),
+                has_embedded_code: false,
+            },
+            NodeKind::Match {
+                expr: Box::new(dummy_node()),
+                pattern: String::new(),
+                modifiers: String::new(),
+                has_embedded_code: false,
+            },
+            NodeKind::Substitution {
+                expr: Box::new(dummy_node()),
+                pattern: String::new(),
+                replacement: String::new(),
+                modifiers: String::new(),
+                has_embedded_code: false,
+            },
+            NodeKind::Transliteration {
+                expr: Box::new(dummy_node()),
+                search: String::new(),
+                replace: String::new(),
+                modifiers: String::new(),
+            },
+            NodeKind::Package { name: String::new(), name_span: loc, block: None },
+            NodeKind::Use { module: String::new(), args: vec![], has_filter_risk: false },
+            NodeKind::No { module: String::new(), args: vec![], has_filter_risk: false },
+            NodeKind::PhaseBlock {
+                phase: String::new(),
+                phase_span: None,
+                block: Box::new(dummy_node()),
+            },
+            NodeKind::DataSection { marker: String::new(), body: None },
+            NodeKind::Class { name: String::new(), body: Box::new(dummy_node()) },
+            NodeKind::Format { name: String::new(), body: String::new() },
+            NodeKind::Identifier { name: String::new() },
+            NodeKind::Error {
+                message: String::new(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            NodeKind::MissingExpression,
+            NodeKind::MissingStatement,
+            NodeKind::MissingIdentifier,
+            NodeKind::MissingBlock,
+            NodeKind::UnknownRest,
+        ];
+
+        variants.iter().map(|v| v.kind_name()).collect()
+    }
+
+    #[test]
+    fn all_kind_names_is_consistent_with_kind_name() {
+        let from_enum = all_kind_names_from_variants();
+        let from_const: BTreeSet<&str> = NodeKind::ALL_KIND_NAMES.iter().copied().collect();
+
+        // Check for duplicates in the const array
+        assert_eq!(
+            NodeKind::ALL_KIND_NAMES.len(),
+            from_const.len(),
+            "ALL_KIND_NAMES contains duplicates"
+        );
+
+        let only_in_enum: Vec<_> = from_enum.difference(&from_const).collect();
+        let only_in_const: Vec<_> = from_const.difference(&from_enum).collect();
+
+        assert!(
+            only_in_enum.is_empty() && only_in_const.is_empty(),
+            "ALL_KIND_NAMES is out of sync with NodeKind variants:\n  \
+             in enum but not in ALL_KIND_NAMES: {only_in_enum:?}\n  \
+             in ALL_KIND_NAMES but not in enum: {only_in_const:?}"
+        );
+    }
+
+    #[test]
+    fn recovery_kind_names_is_subset_of_all() {
+        let all: BTreeSet<&str> = NodeKind::ALL_KIND_NAMES.iter().copied().collect();
+        let recovery: BTreeSet<&str> = NodeKind::RECOVERY_KIND_NAMES.iter().copied().collect();
+
+        // No duplicates
+        assert_eq!(
+            NodeKind::RECOVERY_KIND_NAMES.len(),
+            recovery.len(),
+            "RECOVERY_KIND_NAMES contains duplicates"
+        );
+
+        let not_in_all: Vec<_> = recovery.difference(&all).collect();
+        assert!(
+            not_in_all.is_empty(),
+            "RECOVERY_KIND_NAMES contains entries not in ALL_KIND_NAMES: {not_in_all:?}"
+        );
+    }
+}
