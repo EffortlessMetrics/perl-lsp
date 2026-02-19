@@ -1,6 +1,8 @@
-# 🚀 START HERE - perl-lsp Quick Start Guide
+# Project Orientation
 
-> **⚠️ SNAPSHOT DISCLAIMER**: Orientation-only. For live status and metrics, see `docs/CURRENT_STATUS.md` and GitHub milestones/issues.
+> For the documentation hub, see [README.md](README.md). This page provides project orientation for active contributors.
+
+> **SNAPSHOT DISCLAIMER**: Orientation-only. For live status and metrics, see `docs/CURRENT_STATUS.md` and GitHub milestones/issues.
 
 Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 

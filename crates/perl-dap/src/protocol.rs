@@ -680,3 +680,464 @@ pub struct SetVariableResponseBody {
     /// Reference for child variables (0 means no children)
     pub variables_reference: i64,
 }
+
+// ============================================================================
+// Breakpoint Locations Request/Response Types
+// ============================================================================
+
+/// Arguments for `breakpointLocations` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BreakpointLocationsArguments {
+    /// The source location of the breakpoints
+    pub source: Source,
+    /// Start line of range to query (1-based)
+    pub line: i64,
+    /// Optional end line of range (1-based, defaults to line)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<i64>,
+}
+
+/// A breakpoint location
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BreakpointLocation {
+    /// Line number (1-based)
+    pub line: i64,
+    /// Optional column number (1-based)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column: Option<i64>,
+    /// Optional end line
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<i64>,
+    /// Optional end column
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_column: Option<i64>,
+}
+
+/// Response body for `breakpointLocations` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BreakpointLocationsResponseBody {
+    /// Sorted set of possible breakpoint locations
+    pub breakpoints: Vec<BreakpointLocation>,
+}
+
+// ============================================================================
+// Source Request/Response Types
+// ============================================================================
+
+/// Arguments for `source` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceArguments {
+    /// Source reference (> 0)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_reference: Option<i64>,
+    /// The source to retrieve content for
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<Source>,
+}
+
+/// Response body for `source` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceResponseBody {
+    /// Content of the source
+    pub content: String,
+    /// MIME type of the content
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+}
+
+// ============================================================================
+// Step In Targets Request/Response Types
+// ============================================================================
+
+/// Arguments for `stepInTargets` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepInTargetsArguments {
+    /// The frame for which to retrieve step-in targets
+    pub frame_id: i64,
+}
+
+/// A step-in target
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepInTarget {
+    /// Unique identifier for this target
+    pub id: i64,
+    /// The name of the target
+    pub label: String,
+}
+
+/// Response body for `stepInTargets` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepInTargetsResponseBody {
+    /// The step-in targets
+    pub targets: Vec<StepInTarget>,
+}
+
+// ============================================================================
+// Goto Targets Request/Response Types
+// ============================================================================
+
+/// Arguments for `gotoTargets` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GotoTargetsArguments {
+    /// The source for which to find targets
+    pub source: Source,
+    /// The line for which to find targets
+    pub line: i64,
+    /// Optional column for which to find targets
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column: Option<i64>,
+}
+
+/// A goto target
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GotoTarget {
+    /// Unique identifier for this target
+    pub id: i64,
+    /// The name of the target
+    pub label: String,
+    /// The line of the target
+    pub line: i64,
+    /// Optional column of the target
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub column: Option<i64>,
+    /// Optional end line of the target
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<i64>,
+    /// Optional end column of the target
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_column: Option<i64>,
+}
+
+/// Response body for `gotoTargets` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GotoTargetsResponseBody {
+    /// The goto targets
+    pub targets: Vec<GotoTarget>,
+}
+
+// ============================================================================
+// Exception Info Request/Response Types
+// ============================================================================
+
+/// Arguments for `exceptionInfo` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExceptionInfoArguments {
+    /// Thread for which to retrieve exception info
+    pub thread_id: i64,
+}
+
+/// Detailed information about an exception
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExceptionDetails {
+    /// Message contained in the exception
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    /// Short type name of the exception object
+    #[serde(rename = "typeName", skip_serializing_if = "Option::is_none")]
+    pub type_name: Option<String>,
+    /// Formatted stack trace for the exception
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stack_trace: Option<String>,
+}
+
+/// Response body for `exceptionInfo` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExceptionInfoResponseBody {
+    /// ID of the exception that was thrown
+    pub exception_id: String,
+    /// Descriptive text for the exception
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Mode that caused the exception notification (never, always, unhandled, userUnhandled)
+    pub break_mode: String,
+    /// Detailed information about the exception
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub details: Option<ExceptionDetails>,
+}
+
+// ============================================================================
+// Set Expression Request/Response Types
+// ============================================================================
+
+/// Arguments for `setExpression` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetExpressionArguments {
+    /// The l-value expression to assign to
+    pub expression: String,
+    /// The value expression to assign
+    pub value: String,
+    /// Evaluate the expressions in the scope of this stack frame (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_id: Option<i64>,
+}
+
+/// Response body for `setExpression` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetExpressionResponseBody {
+    /// The new value of the expression
+    pub value: String,
+    /// The type of the value
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub type_: Option<String>,
+    /// Reference for structured result (0 means no children)
+    pub variables_reference: i64,
+}
+
+// ============================================================================
+// Restart Request Types
+// ============================================================================
+
+/// Arguments for `restart` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartArguments {
+    /// Updated launch/attach configuration arguments (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<serde_json::Value>,
+}
+
+// ============================================================================
+// Loaded Sources Request/Response Types
+// ============================================================================
+
+/// Response body for `loadedSources` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadedSourcesResponseBody {
+    /// Set of loaded sources
+    pub sources: Vec<Source>,
+}
+
+// ============================================================================
+// Modules Request/Response Types
+// ============================================================================
+
+/// Arguments for `modules` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModulesArguments {
+    /// Index of the first module to return (0-based)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_module: Option<i64>,
+    /// Number of modules to return
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub module_count: Option<i64>,
+}
+
+/// A module in the debuggee
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Module {
+    /// Unique identifier for the module
+    pub id: String,
+    /// Module name (e.g., "Foo::Bar")
+    pub name: String,
+    /// Absolute path on disk
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+}
+
+/// Response body for `modules` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModulesResponseBody {
+    /// All modules
+    pub modules: Vec<Module>,
+    /// Total number of modules available
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_modules: Option<i64>,
+}
+
+// ============================================================================
+// Completions Request/Response Types
+// ============================================================================
+
+/// Arguments for `completions` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionsArguments {
+    /// The text to compute completions for
+    pub text: String,
+    /// The column position (0-based) within `text` for which to compute completions
+    pub column: i64,
+    /// Frame ID for context (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_id: Option<i64>,
+    /// Line number (optional, for multi-line text)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<i64>,
+}
+
+/// A single completion item
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionItem {
+    /// The label of this completion item (shown in the UI)
+    pub label: String,
+    /// Type classification of this item
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub type_: Option<String>,
+    /// Replacement text (if different from label)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// Sort text used for ordering
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_text: Option<String>,
+    /// Detailed information about this item
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    /// Start position for text replacement (0-based column)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<i64>,
+    /// Number of characters to replace
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub length: Option<i64>,
+}
+
+/// Response body for `completions` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompletionsResponseBody {
+    /// The completion items
+    pub targets: Vec<CompletionItem>,
+}
+
+// ============================================================================
+// Data Breakpoint Info Request/Response Types
+// ============================================================================
+
+/// Arguments for `dataBreakpointInfo` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataBreakpointInfoArguments {
+    /// Variable name to get data breakpoint info for
+    pub name: String,
+    /// Reference to the variable container
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub variables_reference: Option<i64>,
+    /// Frame ID for context
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_id: Option<i64>,
+}
+
+/// Response body for `dataBreakpointInfo` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataBreakpointInfoResponseBody {
+    /// Identifier for the data (null/None means not available)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_id: Option<String>,
+    /// Description of the data
+    pub description: String,
+    /// Available access types for this data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_types: Option<Vec<String>>,
+}
+
+// ============================================================================
+// Set Data Breakpoints Request/Response Types
+// ============================================================================
+
+/// A data breakpoint in the request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DataBreakpoint {
+    /// Identifier obtained from `dataBreakpointInfo`
+    pub data_id: String,
+    /// Access type (e.g., "write", "read", "readWrite")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_type: Option<String>,
+    /// Optional condition expression
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub condition: Option<String>,
+    /// Optional hit condition
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hit_condition: Option<String>,
+}
+
+/// Arguments for `setDataBreakpoints` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetDataBreakpointsArguments {
+    /// The data breakpoints to set (replaces all existing)
+    pub breakpoints: Vec<DataBreakpoint>,
+}
+
+/// Response body for `setDataBreakpoints` request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetDataBreakpointsResponseBody {
+    /// Information about the data breakpoints (same order as request)
+    pub breakpoints: Vec<Breakpoint>,
+}
+
+// ============================================================================
+// Goto Request Types
+// ============================================================================
+
+/// Arguments for goto request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GotoArguments {
+    /// Thread to perform the goto on
+    pub thread_id: i64,
+    /// Target obtained from gotoTargets
+    pub target_id: i64,
+}
+
+// ============================================================================
+// Cancel Request Types
+// ============================================================================
+
+/// Arguments for cancel request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelArguments {
+    /// ID of the request to cancel
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<i64>,
+    /// ID of the progress to cancel
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_id: Option<String>,
+}
+
+// ============================================================================
+// Restart Frame Request Types
+// ============================================================================
+
+/// Arguments for restartFrame request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartFrameArguments {
+    /// Frame to restart
+    pub frame_id: i64,
+}
+
+// ============================================================================
+// Terminate Threads Request Types
+// ============================================================================
+
+/// Arguments for terminateThreads request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminateThreadsArguments {
+    /// IDs of threads to terminate
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thread_ids: Option<Vec<i64>>,
+}

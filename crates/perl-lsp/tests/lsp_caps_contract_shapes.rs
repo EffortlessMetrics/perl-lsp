@@ -319,17 +319,25 @@ fn test_ga_lock_is_conservative() -> Result<(), Box<dyn std::error::Error>> {
     let _prod = BuildFlags::production();
 
     // GA lock should be more conservative than production
-    assert!(!ga.linked_editing, "linked editing not GA");
-    assert!(!ga.inline_completion, "inline completion not GA");
     assert!(!ga.inline_values, "inline values not GA");
-    assert!(!ga.moniker, "moniker not GA");
-    assert!(!ga.document_color, "document color not GA");
+    assert!(!ga.notebook_document_sync, "notebook sync not GA");
+    assert!(!ga.notebook_cell_execution, "notebook cell execution not GA");
 
-    // But core features should be enabled
+    // Graduated features should be enabled
     assert!(ga.completion, "completion is GA");
     assert!(ga.hover, "hover is GA");
     assert!(ga.definition, "definition is GA");
     assert!(ga.references, "references is GA");
+    assert!(ga.linked_editing, "linked editing is GA");
+    assert!(ga.inline_completion, "inline completion is GA");
+    assert!(ga.moniker, "moniker is GA");
+    assert!(ga.document_color, "document color is GA");
+    assert!(ga.code_lens, "code lens is GA");
+    assert!(ga.type_definition, "type definition is GA");
+    assert!(ga.implementation, "implementation is GA");
+    assert!(ga.source_organize_imports, "organize imports is GA");
+    assert!(ga.formatting, "formatting is GA");
+    assert!(ga.range_formatting, "range formatting is GA");
 
     Ok(())
 }

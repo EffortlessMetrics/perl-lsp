@@ -395,14 +395,23 @@ pub use breakpoints::{BreakpointRecord, BreakpointStore};
 #[allow(deprecated)]
 pub use dispatcher::{DapDispatcher, DispatchResult};
 pub use protocol::{
-    AttachRequestArguments, Breakpoint, Capabilities, ContinueArguments, ContinueResponseBody,
+    AttachRequestArguments, Breakpoint, BreakpointLocation, BreakpointLocationsArguments,
+    BreakpointLocationsResponseBody, CancelArguments, Capabilities, CompletionItem,
+    CompletionsArguments, CompletionsResponseBody, ContinueArguments, ContinueResponseBody,
+    DataBreakpoint, DataBreakpointInfoArguments, DataBreakpointInfoResponseBody,
     DisconnectArguments, EvaluateArguments, EvaluateResponseBody, Event, ExceptionBreakpointFilter,
-    ExceptionFilterOption, FunctionBreakpoint, InitializeRequestArguments, LaunchRequestArguments,
-    NextArguments, PauseArguments, ProtocolStackFrame, ProtocolVariable, Request, Response, Scope,
+    ExceptionDetails, ExceptionFilterOption, ExceptionInfoArguments, ExceptionInfoResponseBody,
+    FunctionBreakpoint, GotoArguments, GotoTarget, GotoTargetsArguments, GotoTargetsResponseBody,
+    InitializeRequestArguments, LaunchRequestArguments, LoadedSourcesResponseBody, Module,
+    ModulesArguments, ModulesResponseBody, NextArguments, PauseArguments, ProtocolStackFrame,
+    ProtocolVariable, Request, Response, RestartArguments, RestartFrameArguments, Scope,
     ScopesArguments, ScopesResponseBody, SetBreakpointsArguments, SetBreakpointsResponseBody,
-    SetExceptionBreakpointsArguments, SetFunctionBreakpointsArguments, SetVariableArguments,
-    SetVariableResponseBody, Source, SourceBreakpoint, StackTraceArguments, StackTraceResponseBody,
-    StepInArguments, StepOutArguments, TerminateArguments, Thread, ThreadsResponseBody,
+    SetDataBreakpointsArguments, SetDataBreakpointsResponseBody, SetExceptionBreakpointsArguments,
+    SetExpressionArguments, SetExpressionResponseBody, SetFunctionBreakpointsArguments,
+    SetVariableArguments, SetVariableResponseBody, Source, SourceArguments, SourceBreakpoint,
+    SourceResponseBody, StackTraceArguments, StackTraceResponseBody, StepInArguments,
+    StepInTarget, StepInTargetsArguments, StepInTargetsResponseBody, StepOutArguments,
+    TerminateArguments, TerminateThreadsArguments, Thread, ThreadsResponseBody,
     VariablesArguments, VariablesResponseBody,
 };
 

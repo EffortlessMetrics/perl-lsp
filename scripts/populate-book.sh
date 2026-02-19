@@ -40,52 +40,9 @@ copy_doc() {
 echo "Setting up Getting Started..."
 copy_doc "$DOCS_DIR/EDITOR_SETUP.md" "$BOOK_SRC/getting-started/editor-setup.md"
 copy_doc "$DOCS_DIR/CONFIG.md" "$BOOK_SRC/getting-started/configuration.md"
-copy_doc "$DOCS_DIR/START_HERE.md" "$BOOK_SRC/getting-started/first-steps.md"
+copy_doc "$DOCS_DIR/ORIENTATION.md" "$BOOK_SRC/getting-started/first-steps.md"
 
-# Create installation guide from README
-cat > "$BOOK_SRC/getting-started/installation.md" << 'EOF'
-# Installation
-
-## From crates.io
-
-The recommended way to install perl-lsp is via crates.io:
-
-```bash
-cargo install perl-lsp
-```
-
-## From Source
-
-Clone the repository and build:
-
-```bash
-git clone https://github.com/EffortlessMetrics/tree-sitter-perl.git
-cd tree-sitter-perl
-cargo build --release -p perl-lsp
-```
-
-The binary will be located at `target/release/perl-lsp`.
-
-## System Requirements
-
-- Rust toolchain 1.70 or later
-- Perl 5 installation (for testing)
-- Sufficient memory for workspace indexing (typically 512MB+)
-
-## Verifying Installation
-
-Check that perl-lsp is properly installed:
-
-```bash
-perl-lsp --version
-```
-
-## Next Steps
-
-- [Editor Setup](./editor-setup.md)
-- [Configuration](./configuration.md)
-- [First Steps](./first-steps.md)
-EOF
+copy_doc "$DOCS_DIR/GETTING_STARTED.md" "$BOOK_SRC/getting-started/installation.md"
 
 # User Guides section
 echo "Setting up User Guides..."
@@ -101,31 +58,7 @@ copy_doc "$DOCS_DIR/ARCHITECTURE_OVERVIEW.md" "$BOOK_SRC/architecture/overview.m
 copy_doc "$DOCS_DIR/CRATE_ARCHITECTURE_GUIDE.md" "$BOOK_SRC/architecture/crate-structure.md"
 copy_doc "$DOCS_DIR/MODERN_ARCHITECTURE.md" "$BOOK_SRC/architecture/modern-architecture.md"
 
-# Create parser design doc
-cat > "$BOOK_SRC/architecture/parser-design.md" << 'EOF'
-# Parser Design
-
-The perl-parser crate implements a recursive descent parser for Perl 5 syntax.
-
-## Key Features
-
-- Near-complete Perl 5 syntax coverage (~100%)
-- Tree-sitter compatible output
-- Incremental parsing support
-- Robust error recovery
-- Context-aware lexing
-
-## Architecture
-
-The parser follows a multi-stage pipeline:
-
-1. **Lexical Analysis**: Context-aware tokenization
-2. **Parsing**: Recursive descent with error recovery
-3. **AST Construction**: Build abstract syntax tree
-4. **Serialization**: Output S-expressions for Tree-sitter compatibility
-
-See the [LSP Implementation Guide](../lsp/implementation-guide.md) for integration details.
-EOF
+copy_doc "$DOCS_DIR/ARCHITECTURE_OVERVIEW.md" "$BOOK_SRC/architecture/parser-design.md"
 
 copy_doc "$DOCS_DIR/LSP_IMPLEMENTATION_GUIDE.md" "$BOOK_SRC/architecture/lsp-implementation.md"
 copy_doc "$DOCS_DIR/CRATE_ARCHITECTURE_DAP.md" "$BOOK_SRC/architecture/dap-implementation.md"
@@ -190,82 +123,9 @@ copy_doc "$DOCS_DIR/DOCUMENTATION_TRUTH_SYSTEM.md" "$BOOK_SRC/process/documentat
 copy_doc "$DOCS_DIR/QUALITY_SURFACES.md" "$BOOK_SRC/process/quality-surfaces.md"
 
 # Additional Resources section
+# Static resource files (adr.md, benchmarks.md, forensics.md, issue-tracking.md)
+# are committed in book/src/resources/ and do not need to be generated.
 echo "Setting up Additional Resources..."
-cat > "$BOOK_SRC/resources/adr.md" << 'EOF'
-# Architecture Decision Records (ADRs)
-
-Architecture Decision Records document significant architectural decisions made in the project.
-
-## Available ADRs
-
-See the [adr/ directory](https://github.com/EffortlessMetrics/tree-sitter-perl/tree/master/docs/adr) for all ADRs.
-
-Key ADRs:
-
-- ADR 002: API Documentation Infrastructure
-- Additional ADRs are available in the repository
-
-## ADR Format
-
-Each ADR follows this structure:
-
-1. Context
-2. Decision
-3. Consequences
-4. Status
-EOF
-
-cat > "$BOOK_SRC/resources/benchmarks.md" << 'EOF'
-# Benchmarks
-
-Performance benchmarks are tracked in the repository.
-
-## Benchmark Reports
-
-- [Benchmark Framework](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/docs/benchmarks/BENCHMARK_FRAMEWORK.md)
-- [Benchmark Report](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/docs/benchmarks/BENCHMARK_REPORT.md)
-
-## Running Benchmarks
-
-```bash
-cargo bench
-```
-
-See the [Performance Guide](../advanced/performance-guide.md) for details.
-EOF
-
-cat > "$BOOK_SRC/resources/forensics.md" << 'EOF'
-# Forensics
-
-PR archaeology and investigation documentation.
-
-## Forensics Schema
-
-See the [Forensics Schema](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/docs/FORENSICS_SCHEMA.md) for the investigation template.
-
-## Examples
-
-Forensics examples are available in the [docs/forensics](https://github.com/EffortlessMetrics/tree-sitter-perl/tree/master/docs/forensics) directory.
-EOF
-
-cat > "$BOOK_SRC/resources/issue-tracking.md" << 'EOF'
-# Issue Tracking
-
-Issue status and tracking documentation.
-
-## Current Issues
-
-See [GitHub Issues](https://github.com/EffortlessMetrics/tree-sitter-perl/issues) for active issues.
-
-## Milestones
-
-Active milestones:
-- v0.9.1: Close-out
-- v1.0.0: Boring Promises
-
-See [Milestones](../reference/milestones.md) for details.
-EOF
-
 copy_doc "$DOCS_DIR/GA_RUNBOOK.md" "$BOOK_SRC/resources/ga-runbook.md"
 
 echo "Documentation population complete!"

@@ -3,10 +3,15 @@
   "codeActionProvider": {
     "codeActionKinds": [
       "quickfix",
+      "source.organizeImports",
       "refactor.extract"
     ],
     "resolveProvider": true
   },
+  "codeLensProvider": {
+    "resolveProvider": true
+  },
+  "colorProvider": true,
   "completionProvider": {
     "resolveProvider": true,
     "triggerCharacters": [
@@ -22,6 +27,7 @@
     "interFileDependencies": false,
     "workspaceDiagnostics": true
   },
+  "documentFormattingProvider": true,
   "documentHighlightProvider": true,
   "documentLinkProvider": {
     "resolveProvider": true
@@ -32,6 +38,7 @@
       ";"
     ]
   },
+  "documentRangeFormattingProvider": true,
   "documentSymbolProvider": true,
   "executeCommandProvider": {
     "commands": [
@@ -42,11 +49,17 @@
       "perl.runCritic"
     ]
   },
+  "experimental": {
+    "inlineCompletionProvider": {}
+  },
   "foldingRangeProvider": true,
   "hoverProvider": true,
+  "implementationProvider": true,
   "inlayHintProvider": {
     "resolveProvider": true
   },
+  "linkedEditingRangeProvider": true,
+  "monikerProvider": true,
   "referencesProvider": true,
   "renameProvider": {
     "prepareProvider": true
@@ -102,9 +115,10 @@
     ]
   },
   "textDocumentSync": {
-    "change": 1,
+    "change": 2,
     "openClose": true
   },
+  "typeDefinitionProvider": true,
   "typeHierarchyProvider": {
     "workDoneProgressOptions": {}
   },

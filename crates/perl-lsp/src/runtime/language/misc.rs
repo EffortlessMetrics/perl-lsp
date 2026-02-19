@@ -688,8 +688,14 @@ impl LspServer {
 
     /// Check if a symbol name appears in @EXPORT or @EXPORT_OK
     fn is_symbol_exported(&self, text: &str, symbol_name: &str) -> bool {
-        let export_re =
-            regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*qw[(\[{/<|!]([^)\]}/|!>]+)[)\]}/|!>]").ok();
+        use std::sync::OnceLock;
+
+        static EXPORT_QW_RE: OnceLock<Option<regex::Regex>> = OnceLock::new();
+        static EXPORT_ARRAY_RE: OnceLock<Option<regex::Regex>> = OnceLock::new();
+
+        let export_re = EXPORT_QW_RE.get_or_init(|| {
+            regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*qw[(\[{/<|!]([^)\]}/|!>]+)[)\]}/|!>]").ok()
+        });
 
         if let Some(re) = export_re {
             for cap in re.captures_iter(text) {
@@ -701,7 +707,9 @@ impl LspServer {
             }
         }
 
-        let array_re = regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*\(([^)]+)\)").ok();
+        let array_re = EXPORT_ARRAY_RE.get_or_init(|| {
+            regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*\(([^)]+)\)").ok()
+        });
         if let Some(re) = array_re {
             for cap in re.captures_iter(text) {
                 if let Some(content) = cap.get(1) {
@@ -1199,8 +1207,25 @@ impl LspServer {
 
     /// Get workspace roots from initialization
     pub(crate) fn workspace_roots(&self) -> Vec<url::Url> {
-        // In a real implementation, store these from initialize params
-        // For now, return empty vec
-        vec![]
+        let mut results = Vec::new();
+
+        if let Some(ref path) = *self.root_path.lock() {
+            if let Ok(url) = url::Url::from_file_path(path) {
+                results.push(url);
+            }
+        }
+
+        {
+            let folders = self.workspace_folders.lock();
+            for uri in folders.iter() {
+                if let Ok(parsed) = url::Url::parse(uri) {
+                    if !results.contains(&parsed) {
+                        results.push(parsed);
+                    }
+                }
+            }
+        }
+
+        results
     }
 }

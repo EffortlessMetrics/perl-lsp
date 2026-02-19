@@ -1,39 +1,9 @@
 # Installation Guide
 
-Perl Language Server (perl-lsp) v1.0.0 provides a high-performance Language Server Protocol implementation for Perl with ~100% syntax coverage.
+Perl Language Server (perl-lsp) v0.9.0 provides a high-performance Language Server Protocol implementation for Perl with ~100% syntax coverage.
 
-## Quick Installation
+## Install from crates.io
 
-### One-Liner Installers
-
-#### Linux / macOS
-```bash
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/tree-sitter-perl-rs/main/install.sh | bash
-```
-
-#### Windows (PowerShell)
-```powershell
-irm https://raw.githubusercontent.com/EffortlessMetrics/tree-sitter-perl-rs/main/install.ps1 | iex
-```
-
-## Package Managers
-
-### Homebrew (macOS/Linux)
-```bash
-brew install perl-lsp
-```
-
-### Chocolatey (Windows)
-```powershell
-choco install perl-lsp
-```
-
-### Scoop (Windows)
-```powershell
-scoop install perl-lsp
-```
-
-### Cargo (Rust)
 ```bash
 cargo install perl-lsp
 ```
@@ -48,41 +18,41 @@ cargo install perl-lsp
 
 #### Linux x86_64
 ```bash
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v1.0.0/perl-lsp-1.0.0-x86_64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-1.0.0-x86_64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-1.0.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
+tar xzf perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
+sudo cp perl-lsp-0.9.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
 ```
 
 #### Linux aarch64
 ```bash
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v1.0.0/perl-lsp-1.0.0-aarch64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-1.0.0-aarch64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-1.0.0-aarch64-unknown-linux-gnu/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-aarch64-unknown-linux-gnu.tar.gz
+tar xzf perl-lsp-0.9.0-aarch64-unknown-linux-gnu.tar.gz
+sudo cp perl-lsp-0.9.0-aarch64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
 ```
 
 #### macOS x86_64
 ```bash
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v1.0.0/perl-lsp-1.0.0-x86_64-apple-darwin.tar.gz
-tar xzf perl-lsp-1.0.0-x86_64-apple-darwin.tar.gz
-sudo cp perl-lsp-1.0.0-x86_64-apple-darwin/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-apple-darwin.tar.gz
+tar xzf perl-lsp-0.9.0-x86_64-apple-darwin.tar.gz
+sudo cp perl-lsp-0.9.0-x86_64-apple-darwin/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
 ```
 
 #### macOS aarch64 (Apple Silicon)
 ```bash
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v1.0.0/perl-lsp-1.0.0-aarch64-apple-darwin.tar.gz
-tar xzf perl-lsp-1.0.0-aarch64-apple-darwin.tar.gz
-sudo cp perl-lsp-1.0.0-aarch64-apple-darwin/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-aarch64-apple-darwin.tar.gz
+tar xzf perl-lsp-0.9.0-aarch64-apple-darwin.tar.gz
+sudo cp perl-lsp-0.9.0-aarch64-apple-darwin/perl-lsp /usr/local/bin/
 chmod +x /usr/local/bin/perl-lsp
 ```
 
 #### Windows x86_64
 ```powershell
-wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v1.0.0/perl-lsp-1.0.0-x86_64-pc-windows-msvc.zip
-Expand-Archive perl-lsp-1.0.0-x86_64-pc-windows-msvc.zip
-Copy-Item perl-lsp-1.0.0-x86_64-pc-windows-msvc\perl-lsp.exe C:\Program Files\perl-lsp\
+wget https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-pc-windows-msvc.zip
+Expand-Archive perl-lsp-0.9.0-x86_64-pc-windows-msvc.zip
+Copy-Item perl-lsp-0.9.0-x86_64-pc-windows-msvc\perl-lsp.exe C:\Program Files\perl-lsp\
 ```
 
 ### Build from Source
@@ -108,7 +78,7 @@ perl-lsp --version
 
 Expected output:
 ```
-perl-lsp 1.0.0
+perl-lsp 0.9.0
 ```
 
 ## Editor Configuration
@@ -207,7 +177,7 @@ export PATH="$PATH:$HOME/.local/bin"
 3. Look for error messages in your editor's LSP logs
 
 #### Slow performance
-1. Ensure you're using the latest version (v1.0.0)
+1. Ensure you're using the latest version (v0.9.0)
 2. Check if your workspace has very large Perl files (>100KB)
 3. Consider using `.perl-lspignore` to exclude unnecessary files
 
@@ -227,11 +197,11 @@ export PATH="$PATH:$HOME/.local/bin"
 
 | Platform | Architecture | Status |
 |----------|-------------|--------|
-| Linux | x86_64 | ✅ Tested |
-| Linux | aarch64 | ✅ Tested |
-| macOS | x86_64 | ✅ Tested |
-| macOS | aarch64 | ✅ Tested |
-| Windows | x86_64 | ✅ Tested |
+| Linux | x86_64 | Tested |
+| Linux | aarch64 | Tested |
+| macOS | x86_64 | Tested |
+| macOS | aarch64 | Tested |
+| Windows | x86_64 | Tested |
 
 ## Minimum Requirements
 

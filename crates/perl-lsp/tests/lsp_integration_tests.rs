@@ -54,7 +54,7 @@ fn test_lsp_initialization() -> TestResult {
     // TextDocumentSync can be either a number or an object
     assert!(
         capabilities["capabilities"]["textDocumentSync"].is_object()
-            || capabilities["capabilities"]["textDocumentSync"] == 1
+            || capabilities["capabilities"]["textDocumentSync"] == 2
     );
     assert_eq!(
         capabilities["capabilities"]["completionProvider"]["triggerCharacters"],

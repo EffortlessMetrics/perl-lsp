@@ -494,7 +494,7 @@ pub fn load_mock_infrastructure_responses() -> HashMap<String, Value> {
         "id": 1,
         "result": {
             "capabilities": {
-                "textDocumentSync": 1,
+                "textDocumentSync": 2,
                 "hoverProvider": true,
                 "completionProvider": {
                     "triggerCharacters": ["$", "@", "%", ":", ">"]

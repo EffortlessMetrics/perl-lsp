@@ -6,13 +6,23 @@
 use crate::feature_catalog::has_feature as catalog_has_feature;
 use crate::inline_values::collect_inline_values;
 use crate::protocol::{
+    BreakpointLocation, BreakpointLocationsArguments, BreakpointLocationsResponseBody,
     ContinueArguments, ContinueResponseBody, DisconnectArguments, EvaluateArguments,
-    EvaluateResponseBody, InlineValuesArguments, InlineValuesResponseBody, NextArguments,
-    PauseArguments, Scope, ScopesArguments, ScopesResponseBody, SetExceptionBreakpointsArguments,
-    SetFunctionBreakpointsArguments, SetVariableArguments, SetVariableResponseBody,
-    StackTraceArguments, StepInArguments, StepOutArguments, TerminateArguments, VariablesArguments,
+    EvaluateResponseBody, ExceptionDetails, ExceptionInfoArguments, ExceptionInfoResponseBody,
+    GotoTarget, GotoTargetsArguments, GotoTargetsResponseBody, InlineValuesArguments,
+    InlineValuesResponseBody, NextArguments, PauseArguments, RestartArguments, Scope,
+    ScopesArguments, ScopesResponseBody, SetExceptionBreakpointsArguments,
+    SetExpressionArguments, SetExpressionResponseBody, SetFunctionBreakpointsArguments,
+    SetVariableArguments, SetVariableResponseBody, SourceArguments, SourceResponseBody,
+    StackTraceArguments, StepInArguments, StepInTarget, StepInTargetsArguments,
+    StepInTargetsResponseBody, StepOutArguments, TerminateArguments, VariablesArguments,
+    CompletionItem, CompletionsArguments, CompletionsResponseBody,
+    DataBreakpointInfoArguments, DataBreakpointInfoResponseBody,
+    LoadedSourcesResponseBody, Module, ModulesArguments, ModulesResponseBody,
+    SetDataBreakpointsArguments, SetDataBreakpointsResponseBody,
 };
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
+use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use perl_dap_eval::SafeEvaluator;
 use perl_dap_stack::PerlStackParser;
 use perl_dap_variables::{
@@ -78,6 +88,7 @@ static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ANSI_ESCAPE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static SET_VARIABLE_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static FUNCTION_BREAKPOINT_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+static INC_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 const DEBUGGER_FRAME_POLL_MS: u64 = 10;
@@ -317,6 +328,24 @@ fn is_valid_function_breakpoint_name(name: &str) -> bool {
     function_breakpoint_name_re().is_some_and(|re| re.is_match(name))
 }
 
+fn inc_re() -> Option<&'static Regex> {
+    INC_RE
+        .get_or_init(|| Regex::new(r"'([^']+)'\s*=>\s*'([^']+)'"))
+        .as_ref()
+        .ok()
+}
+
+/// Stored data breakpoint record for watchpoint management
+#[derive(Debug, Clone)]
+struct DataBreakpointRecord {
+    #[allow(dead_code)]
+    data_id: String,
+    #[allow(dead_code)]
+    access_type: Option<String>,
+    #[allow(dead_code)]
+    condition: Option<String>,
+}
+
 /// Check if the match is an escape sequence (preceded by backslash)
 fn is_escape_sequence(s: &str, match_start: usize) -> bool {
     if match_start == 0 {
@@ -351,6 +380,14 @@ pub struct DebugAdapter {
     exception_break_on_die: Arc<Mutex<bool>>,
     /// Unique marker IDs used to frame debugger output per command.
     debugger_output_marker: Arc<AtomicU64>,
+    /// Cancellation flag for in-progress requests.
+    cancel_requested: Arc<std::sync::atomic::AtomicBool>,
+    /// Data breakpoints (watchpoints) stored with REPLACE semantics
+    data_breakpoints: Arc<Mutex<Vec<DataBreakpointRecord>>>,
+    /// Last exception message captured by the output reader (for exceptionInfo)
+    last_exception_message: Arc<Mutex<Option<String>>>,
+    /// Stored launch arguments for restart support
+    last_launch_args: Arc<Mutex<Option<Value>>>,
 }
 
 /// Active debug session
@@ -493,6 +530,10 @@ impl DebugAdapter {
             next_function_breakpoint_id: Arc::new(Mutex::new(1)),
             exception_break_on_die: Arc::new(Mutex::new(false)),
             debugger_output_marker: Arc::new(AtomicU64::new(1)),
+            cancel_requested: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            data_breakpoints: Arc::new(Mutex::new(Vec::new())),
+            last_exception_message: Arc::new(Mutex::new(None)),
+            last_launch_args: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -715,6 +756,30 @@ impl DebugAdapter {
             "pause" => self.handle_pause(seq, request_seq, arguments),
             "evaluate" => self.handle_evaluate(seq, request_seq, arguments),
             "inlineValues" => self.handle_inline_values(seq, request_seq, arguments),
+            "breakpointLocations" => {
+                self.handle_breakpoint_locations(seq, request_seq, arguments)
+            }
+            "source" => self.handle_source(seq, request_seq, arguments),
+            "loadedSources" => self.handle_loaded_sources(seq, request_seq, arguments),
+            "modules" => self.handle_modules(seq, request_seq, arguments),
+            "completions" => self.handle_completions(seq, request_seq, arguments),
+            "exceptionInfo" => self.handle_exception_info(seq, request_seq, arguments),
+            "restart" => self.handle_restart(seq, request_seq, arguments),
+            "setExpression" => self.handle_set_expression(seq, request_seq, arguments),
+            "dataBreakpointInfo" => {
+                self.handle_data_breakpoint_info(seq, request_seq, arguments)
+            }
+            "setDataBreakpoints" => {
+                self.handle_set_data_breakpoints(seq, request_seq, arguments)
+            }
+            "cancel" => self.handle_cancel(seq, request_seq, arguments),
+            "stepInTargets" => self.handle_step_in_targets(seq, request_seq, arguments),
+            "gotoTargets" => self.handle_goto_targets(seq, request_seq, arguments),
+            "goto" => self.handle_goto(seq, request_seq, arguments),
+            "restartFrame" => self.handle_restart_frame(seq, request_seq, arguments),
+            "terminateThreads" => {
+                self.handle_terminate_threads(seq, request_seq, arguments)
+            }
             _ => DapMessage::Response {
                 seq,
                 request_seq,
@@ -1161,26 +1226,26 @@ impl DebugAdapter {
             "supportsStepBack": false,
             "supportsSetVariable": supports_core,
             "supportsRestartFrame": false,
-            "supportsGotoTargetsRequest": false,
-            "supportsStepInTargetsRequest": false,
-            "supportsCompletionsRequest": false,
-            "supportsModulesRequest": false,
-            "supportsRestartRequest": false,
+            "supportsGotoTargetsRequest": supports_core,
+            "supportsStepInTargetsRequest": supports_core,
+            "supportsCompletionsRequest": true,
+            "supportsModulesRequest": true,
+            "supportsRestartRequest": true,
             "supportsExceptionOptions": supports_exceptions,
             "supportsValueFormattingOptions": supports_core,
-            "supportsExceptionInfoRequest": false,
+            "supportsExceptionInfoRequest": supports_exceptions,
             "supportTerminateDebuggee": supports_core,
             "supportsDelayedStackTraceLoading": false,
-            "supportsLoadedSourcesRequest": false,
+            "supportsLoadedSourcesRequest": true,
             "supportsLogPoints": supports_log_points,
-            "supportsTerminateThreadsRequest": false,
-            "supportsSetExpression": false,
+            "supportsTerminateThreadsRequest": supports_core,
+            "supportsSetExpression": supports_core,
             "supportsTerminateRequest": supports_core,
-            "supportsDataBreakpoints": false,
+            "supportsDataBreakpoints": true,
             "supportsReadMemoryRequest": false,
             "supportsDisassembleRequest": false,
-            "supportsCancelRequest": false,
-            "supportsBreakpointLocationsRequest": false,
+            "supportsCancelRequest": supports_core,
+            "supportsBreakpointLocationsRequest": supports_basic_breakpoints,
             "supportsClipboardContext": false,
             "supportsSteppingGranularity": false,
             "supportsInstructionBreakpoints": false,
@@ -1207,6 +1272,10 @@ impl DebugAdapter {
         arguments: Option<Value>,
     ) -> DapMessage {
         if let Some(args) = arguments {
+            // Store launch arguments for restart support
+            *lock_or_recover(&self.last_launch_args, "debug_adapter.last_launch_args") =
+                Some(args.clone());
+
             let program = args.get("program").and_then(|p| p.as_str()).unwrap_or("");
 
             let perl_args = args
@@ -1379,6 +1448,7 @@ impl DebugAdapter {
         let recent_output = self.recent_output.clone();
         let breakpoints = self.breakpoints.clone();
         let exception_break_on_die = self.exception_break_on_die.clone();
+        let last_exception_message = self.last_exception_message.clone();
 
         thread::spawn(move || {
             // Perl's debugger prompt and evaluation output are emitted on stderr.
@@ -1531,6 +1601,13 @@ impl DebugAdapter {
                                 exception_break_on_die.lock().map(|guard| *guard).unwrap_or(false);
                             let exception_match =
                                 break_on_die && exception_re().is_some_and(|re| re.is_match(&text));
+
+                            // Store exception message for exceptionInfo request
+                            if exception_match {
+                                if let Ok(mut guard) = last_exception_message.lock() {
+                                    *guard = Some(text.clone());
+                                }
+                            }
 
                             let mut should_emit_stopped = false;
                             let mut should_auto_continue = false;
@@ -3825,6 +3902,993 @@ impl DebugAdapter {
                 body: None,
                 message: Some(format!("Failed to serialize inlineValues response: {}", e)),
             },
+        }
+    }
+
+    fn handle_breakpoint_locations(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: BreakpointLocationsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "breakpointLocations".to_string(),
+                        body: None,
+                        message: Some("Missing or invalid arguments".to_string()),
+                    };
+                }
+            };
+
+        let source_path = match args.source.path {
+            Some(ref p) => p.clone(),
+            None => {
+                let body = BreakpointLocationsResponseBody {
+                    breakpoints: Vec::new(),
+                };
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "breakpointLocations".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                };
+            }
+        };
+
+        let content = match std::fs::read_to_string(&source_path) {
+            Ok(c) => c,
+            Err(_) => {
+                let body = BreakpointLocationsResponseBody {
+                    breakpoints: Vec::new(),
+                };
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "breakpointLocations".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                };
+            }
+        };
+
+        let mut breakpoints = Vec::new();
+        let end_line = args.end_line.unwrap_or(args.line);
+
+        if let Ok(validator) = AstBreakpointValidator::new(&content) {
+            for line in args.line..=end_line {
+                if validator.is_executable_line(line) {
+                    breakpoints.push(BreakpointLocation {
+                        line,
+                        column: None,
+                        end_line: None,
+                        end_column: None,
+                    });
+                }
+            }
+        }
+
+        let body = BreakpointLocationsResponseBody { breakpoints };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "breakpointLocations".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    fn handle_source(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: SourceArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "source".to_string(),
+                        body: None,
+                        message: Some("Missing or invalid arguments".to_string()),
+                    };
+                }
+            };
+
+        let path = match args.source.and_then(|s| s.path) {
+            Some(p) => p,
+            None => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "source".to_string(),
+                    body: None,
+                    message: Some("source.path is required".to_string()),
+                };
+            }
+        };
+
+        match std::fs::read_to_string(&path) {
+            Ok(content) => {
+                let body = SourceResponseBody {
+                    content,
+                    mime_type: Some("text/x-perl".to_string()),
+                };
+                DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "source".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                }
+            }
+            Err(e) => DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "source".to_string(),
+                body: None,
+                message: Some(format!("Failed to read source file: {}", e)),
+            },
+        }
+    }
+
+    fn handle_goto_targets(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: GotoTargetsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "gotoTargets".to_string(),
+                        body: None,
+                        message: Some("Missing or invalid arguments".to_string()),
+                    };
+                }
+            };
+
+        let source_path = match args.source.path {
+            Some(ref p) => p.clone(),
+            None => {
+                let body = GotoTargetsResponseBody {
+                    targets: Vec::new(),
+                };
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "gotoTargets".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                };
+            }
+        };
+
+        let content = match std::fs::read_to_string(&source_path) {
+            Ok(c) => c,
+            Err(_) => {
+                let body = GotoTargetsResponseBody {
+                    targets: Vec::new(),
+                };
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: true,
+                    command: "gotoTargets".to_string(),
+                    body: serde_json::to_value(&body).ok(),
+                    message: None,
+                };
+            }
+        };
+
+        let mut targets = Vec::new();
+        let search_start = (args.line - 5).max(1);
+        let search_end = args.line + 5;
+
+        if let Ok(validator) = AstBreakpointValidator::new(&content) {
+            for line in search_start..=search_end {
+                if validator.is_executable_line(line) {
+                    targets.push(GotoTarget {
+                        id: line,
+                        label: format!("Line {}", line),
+                        line,
+                        column: None,
+                        end_line: None,
+                        end_column: None,
+                    });
+                }
+            }
+        }
+
+        let body = GotoTargetsResponseBody { targets };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "gotoTargets".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    fn handle_goto(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: false,
+            command: "goto".to_string(),
+            body: None,
+            message: Some(
+                "Perl debugger does not support arbitrary goto".to_string(),
+            ),
+        }
+    }
+
+    fn handle_step_in_targets(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: StepInTargetsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "stepInTargets".to_string(),
+                        body: None,
+                        message: Some("Missing or invalid arguments".to_string()),
+                    };
+                }
+            };
+
+        let mut targets = Vec::new();
+
+        let session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+        if let Some(ref session) = *session_guard {
+            // Find the frame matching the requested frame_id
+            if let Some(frame) = session
+                .stack_frames
+                .iter()
+                .find(|f| i64::from(f.id) == args.frame_id)
+            {
+                // Read the source line from the file
+                if let Ok(content) = std::fs::read_to_string(&frame.source.path) {
+                    let line_idx = frame.line as usize;
+                    if let Some(source_line) = content.lines().nth(line_idx.saturating_sub(1)) {
+                        // Find function call patterns
+                        let call_re = match Regex::new(r"(\w[\w:]*)\s*\(") {
+                            Ok(re) => re,
+                            Err(_) => {
+                                let body = StepInTargetsResponseBody { targets };
+                                return DapMessage::Response {
+                                    seq,
+                                    request_seq,
+                                    success: true,
+                                    command: "stepInTargets".to_string(),
+                                    body: serde_json::to_value(&body).ok(),
+                                    message: None,
+                                };
+                            }
+                        };
+                        for (idx, cap) in call_re.captures_iter(source_line).enumerate() {
+                            if let Some(name) = cap.get(1) {
+                                targets.push(StepInTarget {
+                                    id: idx as i64,
+                                    label: name.as_str().to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let body = StepInTargetsResponseBody { targets };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "stepInTargets".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    fn handle_cancel(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        // cancel_requested field will be added by the integration task
+        self.cancel_requested.store(true, Ordering::Release);
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "cancel".to_string(),
+            body: None,
+            message: None,
+        }
+    }
+
+    fn handle_restart_frame(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: false,
+            command: "restartFrame".to_string(),
+            body: None,
+            message: Some(
+                "Perl does not support restarting execution from a specific stack frame"
+                    .to_string(),
+            ),
+        }
+    }
+
+    fn handle_terminate_threads(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: false,
+            command: "terminateThreads".to_string(),
+            body: None,
+            message: Some(
+                "Perl threading model does not support targeted thread termination from the debugger"
+                    .to_string(),
+            ),
+        }
+    }
+
+    /// Handle exceptionInfo request
+    ///
+    /// Returns details about the most recent exception (die/croak) encountered
+    /// during debugging. Reads from `self.last_exception_message` which is
+    /// populated by the output reader when exception patterns are detected.
+    fn handle_exception_info(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let _args: Option<ExceptionInfoArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
+        let stored_message = lock_or_recover(
+            &self.last_exception_message,
+            "debug_adapter.last_exception_message",
+        );
+        let exception_text = stored_message.clone();
+        drop(stored_message);
+
+        let body = match exception_text {
+            Some(ref message) => ExceptionInfoResponseBody {
+                exception_id: "perl_exception".to_string(),
+                description: Some(message.clone()),
+                break_mode: "always".to_string(),
+                details: Some(ExceptionDetails {
+                    message: Some(message.clone()),
+                    type_name: Some("die".to_string()),
+                    stack_trace: None,
+                }),
+            },
+            None => ExceptionInfoResponseBody {
+                exception_id: "perl_exception".to_string(),
+                description: Some("Unknown exception".to_string()),
+                break_mode: "always".to_string(),
+                details: None,
+            },
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "exceptionInfo".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle setExpression request
+    ///
+    /// Assigns a value to an arbitrary Perl l-value expression using the debugger.
+    /// Similar to setVariable but accepts full expressions (e.g. `$hash{key}`,
+    /// `$array[0]`, `$obj->{field}`) rather than just simple variable names.
+    fn handle_set_expression(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: SetExpressionArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "setExpression".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
+            };
+
+        let expression = args.expression.trim().to_string();
+        let value = args.value.trim().to_string();
+        let expression = expression.as_str();
+        let value = value.as_str();
+
+        if expression.is_empty() {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some("Missing expression".to_string()),
+            };
+        }
+
+        if value.is_empty() {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some("Missing value".to_string()),
+            };
+        }
+
+        if expression.contains('\n')
+            || expression.contains('\r')
+            || value.contains('\n')
+            || value.contains('\r')
+        {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some("Expression/value cannot contain newlines".to_string()),
+            };
+        }
+
+        // Validate the VALUE with SafeEvaluator (the value is what gets evaluated)
+        let evaluator = SafeEvaluator::new();
+        if let Err(error) = evaluator.validate(value) {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some(format!("Unsafe value for setExpression: {error}")),
+            };
+        }
+
+        let output_frame_markers = if let Some(ref mut session) =
+            *lock_or_recover(&self.session, "debug_adapter.session")
+        {
+            if let Some(stdin) = session.process.stdin.as_mut() {
+                let commands =
+                    vec![format!("p {expression} = {value}"), format!("p {expression}")];
+                match self.send_framed_debugger_commands(stdin, &commands) {
+                    Ok(markers) => Some(markers),
+                    Err(error) => {
+                        return DapMessage::Response {
+                            seq,
+                            request_seq,
+                            success: false,
+                            command: "setExpression".to_string(),
+                            body: None,
+                            message: Some(format!(
+                                "Failed to send setExpression command: {error}"
+                            )),
+                        };
+                    }
+                }
+            } else {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "setExpression".to_string(),
+                    body: None,
+                    message: Some("No debugger session active".to_string()),
+                };
+            }
+        } else if let Some(pid) =
+            *lock_or_recover(&self.attached_pid, "debug_adapter.attached_pid")
+        {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some(format!(
+                    "setExpression is unavailable for processId attach (PID {pid}) without an active debugger transport"
+                )),
+            };
+        } else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some("No debugger session".to_string()),
+            };
+        };
+
+        let parsed = output_frame_markers
+            .as_ref()
+            .and_then(|(begin, end)| {
+                self.capture_framed_debugger_output(begin, end, DEBUGGER_QUERY_WAIT_MS * 8)
+            })
+            .and_then(|lines| Self::parse_evaluate_result_from_lines(&lines, "", true));
+
+        let Some((rendered_value, rendered_type)) = parsed else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "setExpression".to_string(),
+                body: None,
+                message: Some(format!(
+                    "setExpression read-back for `{expression}` produced no parseable output"
+                )),
+            };
+        };
+
+        let body = SetExpressionResponseBody {
+            value: rendered_value,
+            type_: Some(rendered_type),
+            variables_reference: 0,
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "setExpression".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle restart request
+    ///
+    /// Restarts the debug session by tearing down the current session and
+    /// re-launching with stored (or updated) launch arguments. If no previous
+    /// launch configuration is available, returns an error.
+    fn handle_restart(
+        &mut self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: Option<RestartArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
+        // Determine launch args: prefer restart-provided args, then stored args
+        let updated_args = args.and_then(|a| a.arguments);
+
+        let launch_args = if let Some(new_args) = updated_args {
+            new_args
+        } else {
+            let stored = lock_or_recover(
+                &self.last_launch_args,
+                "debug_adapter.last_launch_args",
+            );
+            match stored.clone() {
+                Some(args) => args,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "restart".to_string(),
+                        body: None,
+                        message: Some(
+                            "No previous launch configuration available for restart".to_string(),
+                        ),
+                    };
+                }
+            }
+        };
+
+        self.clear_active_session_state();
+        self.handle_launch(seq, request_seq, Some(launch_args))
+    }
+
+    // ========================================================================
+    // Loaded Sources / Modules / Completions / Data Breakpoints
+    // ========================================================================
+
+    /// Query `%INC` from the debugger and return parsed (module_key, abs_path) pairs.
+    fn query_inc_entries(&self) -> Vec<(String, String)> {
+        let output_frame_markers = {
+            let mut session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            if let Some(ref mut session) = *session_guard {
+                if let Some(stdin) = session.process.stdin.as_mut() {
+                    let commands = vec!["x \\%INC".to_string()];
+                    self.send_framed_debugger_commands(stdin, &commands).ok()
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        // Session guard dropped — safe to read output.
+        let lines = match output_frame_markers {
+            Some((begin, end)) => {
+                self.capture_framed_debugger_output(&begin, &end, DEBUGGER_QUERY_WAIT_MS * 8)
+                    .unwrap_or_default()
+            }
+            None => return Vec::new(),
+        };
+
+        let re = match inc_re() {
+            Some(re) => re,
+            None => return Vec::new(),
+        };
+
+        let mut entries = Vec::new();
+        for line in &lines {
+            if let Some(caps) = re.captures(line) {
+                if let (Some(key), Some(val)) = (caps.get(1), caps.get(2)) {
+                    entries.push((key.as_str().to_string(), val.as_str().to_string()));
+                }
+            }
+        }
+        entries
+    }
+
+    /// Handle loadedSources request — returns all files loaded via `%INC`.
+    fn handle_loaded_sources(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        _arguments: Option<Value>,
+    ) -> DapMessage {
+        let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
+
+        let sources = if has_session {
+            self.query_inc_entries()
+                .into_iter()
+                .map(|(key, path)| crate::protocol::Source {
+                    name: Some(key),
+                    path: Some(path),
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+
+        let body = LoadedSourcesResponseBody { sources };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "loadedSources".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle modules request — returns Perl modules from `%INC` with pagination.
+    fn handle_modules(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: Option<ModulesArguments> =
+            arguments.and_then(|v| serde_json::from_value(v).ok());
+
+        let start_module = args
+            .as_ref()
+            .and_then(|a| a.start_module)
+            .unwrap_or(0)
+            .max(0) as usize;
+        let module_count = args.as_ref().and_then(|a| a.module_count);
+
+        let has_session = lock_or_recover(&self.session, "debug_adapter.session").is_some();
+
+        let all_entries = if has_session {
+            self.query_inc_entries()
+        } else {
+            Vec::new()
+        };
+
+        let total = all_entries.len() as i64;
+
+        // Convert Foo/Bar.pm keys to Foo::Bar module names.
+        let all_modules: Vec<Module> = all_entries
+            .into_iter()
+            .enumerate()
+            .map(|(idx, (key, path))| {
+                let name = key.replace('/', "::").trim_end_matches(".pm").to_string();
+                Module {
+                    id: idx.to_string(),
+                    name,
+                    path: Some(path),
+                }
+            })
+            .collect();
+
+        // Apply pagination.
+        let paginated: Vec<Module> = if let Some(count) = module_count {
+            all_modules
+                .into_iter()
+                .skip(start_module)
+                .take(count.max(0) as usize)
+                .collect()
+        } else {
+            all_modules.into_iter().skip(start_module).collect()
+        };
+
+        let body = ModulesResponseBody {
+            modules: paginated,
+            total_modules: Some(total),
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "modules".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle completions request — provides Perl keyword completions in the debug console.
+    fn handle_completions(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: CompletionsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "completions".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
+            };
+
+        let column = (args.column.max(0) as usize).min(args.text.len());
+        let prefix = &args.text[..column];
+
+        // Find the last word boundary to get the completion stem.
+        let stem = prefix
+            .rfind(|c: char| !c.is_alphanumeric() && c != '_')
+            .map(|pos| &prefix[pos + 1..])
+            .unwrap_or(prefix);
+
+        const PERL_KEYWORDS: &[&str] = &[
+            "my", "our", "local", "sub", "use", "require", "package",
+            "if", "elsif", "else", "unless",
+            "while", "until", "for", "foreach", "do", "eval",
+            "return", "last", "next", "redo",
+            "die", "warn", "print", "say", "printf", "sprintf",
+            "open", "close", "chomp", "chop",
+            "push", "pop", "shift", "unshift", "splice", "join", "split",
+            "sort", "map", "grep",
+            "defined", "exists", "delete", "ref", "bless", "tie", "untie",
+            "scalar", "keys", "values", "each",
+            "length", "substr", "index", "rindex", "reverse",
+            "lc", "uc", "lcfirst", "ucfirst",
+            "hex", "oct", "int", "abs", "sqrt",
+            "chr", "ord", "pack", "unpack", "qw",
+        ];
+
+        let targets: Vec<CompletionItem> = PERL_KEYWORDS
+            .iter()
+            .filter(|kw| stem.is_empty() || kw.starts_with(stem))
+            .map(|kw| CompletionItem {
+                label: (*kw).to_string(),
+                type_: Some("keyword".to_string()),
+                text: None,
+                sort_text: None,
+                detail: None,
+                start: None,
+                length: None,
+            })
+            .collect();
+
+        let body = CompletionsResponseBody { targets };
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "completions".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle dataBreakpointInfo request — check if a variable can be watched.
+    fn handle_data_breakpoint_info(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: DataBreakpointInfoArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "dataBreakpointInfo".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
+            };
+
+        let body = if is_valid_set_variable_name(&args.name) {
+            DataBreakpointInfoResponseBody {
+                data_id: Some(args.name.clone()),
+                description: format!("Watch `{}` for write access", args.name),
+                access_types: Some(vec!["write".to_string()]),
+            }
+        } else {
+            DataBreakpointInfoResponseBody {
+                data_id: None,
+                description: "Cannot watch this expression".to_string(),
+                access_types: None,
+            }
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "dataBreakpointInfo".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
+        }
+    }
+
+    /// Handle setDataBreakpoints request — set watchpoints via Perl debugger `w` command.
+    fn handle_set_data_breakpoints(
+        &self,
+        seq: i64,
+        request_seq: i64,
+        arguments: Option<Value>,
+    ) -> DapMessage {
+        let args: SetDataBreakpointsArguments =
+            match arguments.and_then(|v| serde_json::from_value(v).ok()) {
+                Some(a) => a,
+                None => {
+                    return DapMessage::Response {
+                        seq,
+                        request_seq,
+                        success: false,
+                        command: "setDataBreakpoints".to_string(),
+                        body: None,
+                        message: Some("Missing arguments".to_string()),
+                    };
+                }
+            };
+
+        // Store the data breakpoints.
+        {
+            let mut store =
+                lock_or_recover(&self.data_breakpoints, "debug_adapter.data_breakpoints");
+            *store = args
+                .breakpoints
+                .iter()
+                .map(|bp| DataBreakpointRecord {
+                    data_id: bp.data_id.clone(),
+                    access_type: bp.access_type.clone(),
+                    condition: bp.condition.clone(),
+                })
+                .collect();
+        }
+
+        // If session active, set watchpoints via the debugger.
+        {
+            let mut session_guard = lock_or_recover(&self.session, "debug_adapter.session");
+            if let Some(ref mut session) = *session_guard {
+                if let Some(stdin) = session.process.stdin.as_mut() {
+                    // Build commands: clear all watchpoints, then set each.
+                    let mut commands = vec!["W *".to_string()];
+                    for bp in &args.breakpoints {
+                        commands.push(format!("w {}", bp.data_id));
+                    }
+                    // Fire-and-forget: we don't need the output.
+                    let _ = self.send_framed_debugger_commands(stdin, &commands);
+                }
+            }
+            // Session guard dropped here.
+        }
+
+        // Build response breakpoints — one per input.
+        let response_breakpoints: Vec<crate::protocol::Breakpoint> = args
+            .breakpoints
+            .iter()
+            .enumerate()
+            .map(|(idx, _bp)| crate::protocol::Breakpoint {
+                id: (idx as i64) + 1,
+                verified: true,
+                line: 0,
+                column: None,
+                message: None,
+            })
+            .collect();
+
+        let body = SetDataBreakpointsResponseBody {
+            breakpoints: response_breakpoints,
+        };
+
+        DapMessage::Response {
+            seq,
+            request_seq,
+            success: true,
+            command: "setDataBreakpoints".to_string(),
+            body: serde_json::to_value(&body).ok(),
+            message: None,
         }
     }
 }

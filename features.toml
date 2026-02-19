@@ -425,11 +425,11 @@ description = "Logpoint breakpoints (`logMessage`) emit output events and contin
 id = "dap.exceptions.die"
 spec = "DAP 1.0"
 area = "debug"
-maturity = "preview"
-advertised = false
+maturity = "ga"
+advertised = true
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
-description = "Exception breakpoint handling for `die`/uncaught exception categories"
+description = "Exception breakpoint handling for `die`/uncaught exception categories with exceptionInfo support"
 
 [[feature]]
 id = "dap.inline_values"
@@ -440,6 +440,36 @@ advertised = true
 counts_in_coverage = false
 tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs"]
 description = "Inline variable values while debugging (native adapter)"
+
+[[feature]]
+id = "dap.completions"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "preview"
+advertised = false
+counts_in_coverage = false
+tests = []
+description = "Debug console autocomplete with Perl keywords"
+
+[[feature]]
+id = "dap.modules"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "preview"
+advertised = false
+counts_in_coverage = false
+tests = []
+description = "Loaded modules view via %INC inspection"
+
+[[feature]]
+id = "dap.watchpoints"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "preview"
+advertised = false
+counts_in_coverage = false
+tests = []
+description = "Data breakpoints (watchpoints) via Perl debugger w/W commands"
 
 # Protocol / Lifecycle Features
 
