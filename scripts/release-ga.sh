@@ -19,16 +19,16 @@ set -euo pipefail
 # Usage (dry-run first):
 #   scripts/release-ga.sh \
 #     --version v0.8.3 \
-#     --owner EffortlessSteven \
-#     --repo tree-sitter-perl \
+#     --owner EffortlessMetrics \
+#     --repo perl-lsp \
 #     --brew-tap effortlesssteven/tools \
 #     --dry-run
 #
 # Real run:
 #   scripts/release-ga.sh \
 #     --version v0.8.3 \
-#     --owner EffortlessSteven \
-#     --repo tree-sitter-perl \
+#     --owner EffortlessMetrics \
+#     --repo perl-lsp \
 #     --brew-tap effortlesssteven/tools
 #
 # Notes:

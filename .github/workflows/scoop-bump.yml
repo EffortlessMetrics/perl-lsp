@@ -90,7 +90,7 @@ jobs:
 
           # Update version and hash
           sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" distribution/scoop/perl-lsp.json
-          sed -i "s/\"url\": \"[^\"]*x86_64-pc-windows-msvc.zip\"/\"url\": \"https:\/\/github.com\/EffortlessMetrics\/tree-sitter-perl-rs\/releases\/download\/v${VERSION}\/perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip\"/" distribution/scoop/perl-lsp.json
+          sed -i "s/\"url\": \"[^\"]*x86_64-pc-windows-msvc.zip\"/\"url\": \"https:\/\/github.com\/EffortlessMetrics\/perl-lsp\/releases\/download\/v${VERSION}\/perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip\"/" distribution/scoop/perl-lsp.json
           sed -i "s/\"hash\": \"[^\"]*\"/\"hash\": \"${SHA}\"/" distribution/scoop/perl-lsp.json
 
           # Show updated manifest

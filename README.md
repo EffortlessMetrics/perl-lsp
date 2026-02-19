@@ -27,7 +27,7 @@ cargo install perl-lsp
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
-cd tree-sitter-perl-rs
+cd perl-lsp
 cargo install --path crates/perl-lsp
 ```
 
