@@ -1,6 +1,6 @@
 # API Stability & Version Policy - v1.0 GA-Lock
 
-**MSRV:** 1.89 • **Edition:** 2024 • **Status:** General Availability (GA)
+**MSRV:** 1.92 • **Edition:** 2024 • **Status:** General Availability (GA)
 
 ## Executive Summary
 
@@ -668,7 +668,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_performance_tests
 
 **From v0.9.x to v1.0.0:**
 - See [`docs/MIGRATION.md`](MIGRATION.md) for detailed migration guide
-- **Breaking changes:** MSRV bumped to 1.89 (Rust 2024 edition)
+- **Breaking changes:** MSRV bumped to 1.92 (Rust 2024 edition)
 - **API changes:** None - v1.0.0 is a stability release
 - **Configuration:** `perl-lsp` config schema unchanged
 
@@ -687,8 +687,8 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_performance_tests
 
 | perl-parser | perl-lexer | perl-corpus | perl-lsp | MSRV | Notes |
 |-------------|------------|-------------|----------|------|-------|
-| 1.0.x | 1.0.x | 1.0.x | 1.0.x | 1.89 | Current GA (2024 edition) |
-| 0.9.x | 0.9.x | 0.9.x | 0.9.x | 1.89 | Previous stable (semantic analyzer) |
+| 1.0.x | 1.0.x | 1.0.x | 1.0.x | 1.92 | Current GA (2024 edition) |
+| 0.9.x | 0.9.x | 0.9.x | 0.9.x | 1.92 | Previous stable (semantic analyzer) |
 | 0.8.x | 0.8.x | 0.8.x | 0.8.x | 1.85 | Previous stable (workspace config) |
 | 0.7.x | 0.7.x | 0.7.x | - | 1.80 | Security fixes only until 2026-04-01 |
 
@@ -897,7 +897,7 @@ cargo test -p perl-lsp --test lsp_comprehensive_3_17_test
 ✅ **Performance:** O(n) parsing, <50ms LSP responses, no exponential blowups
 ✅ **Security:** 24-hour critical patches, coordinated disclosure, memory safety
 ✅ **Error Handling:** No panics on invalid input, structured errors with source locations
-✅ **MSRV Policy:** Rust 1.89+ (2024 edition), increases only in minor releases with 6-month notice
+✅ **MSRV Policy:** Rust 1.92+ (2024 edition), increases only in minor releases with 6-month notice
 ✅ **Documentation:** Comprehensive migration guides and API documentation
 ✅ **Testing:** 535+ tests, 100% LSP coverage, integration tests for all capabilities
 

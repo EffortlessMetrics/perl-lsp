@@ -17,7 +17,7 @@ The tree-sitter-perl project provides comprehensive workspace refactoring capabi
 
 ### Prerequisites
 
-- Rust 1.89+ (MSRV)
+- Rust 1.92+ (MSRV)
 - tree-sitter-perl v0.8.8 or later
 - Workspace with indexed Perl files
 

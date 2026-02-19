@@ -34,7 +34,7 @@ This document communicates the commitments the Perl LSP project makes to users f
 
 | Version | MSRV | Rust Edition |
 |---------|------|--------------|
-| v1.0.x | 1.89 | 2024 |
+| v1.0.x | 1.92 | 2024 |
 
 **MSRV Policy**:
 - The MSRV will only increase in **minor** releases (e.g., v1.1.0), never in patch releases
@@ -326,7 +326,7 @@ The following may change in any release without notice:
 
 | Area | Change | Migration |
 |------|--------|-----------|
-| MSRV | 1.89 (unchanged from 0.9.x) | No action needed |
+| MSRV | 1.92 (unchanged from 0.9.x) | No action needed |
 | API | No breaking changes | No action needed |
 | Configuration | No breaking changes | No action needed |
 | Wire protocol | No breaking changes | No action needed |

@@ -4,7 +4,7 @@ This guide gets you from zero to a working Perl language server in your editor.
 
 ## Prerequisites
 
-- **Rust 1.89+** (for building from source)
+- **Rust 1.92+** (for building from source)
 - **A supported editor**: VS Code, Neovim, Emacs, Helix, or Sublime Text
 
 ## Installation

@@ -48,10 +48,10 @@ cargo install perl-lsp --force
 | Version | MSRV | Edition |
 |---------|------|---------|
 | v0.8.x | 1.85 | 2021 |
-| v0.9.x | 1.89 | 2024 |
-| v1.0.0 | 1.89 | 2024 |
+| v0.9.x | 1.92 | 2024 |
+| v1.0.0 | 1.92 | 2024 |
 
-**Impact**: If building from source, ensure Rust 1.89 or later is installed.
+**Impact**: If building from source, ensure Rust 1.92 or later is installed.
 
 ```bash
 # Check your Rust version
@@ -341,7 +341,7 @@ perl-lsp = "1.0"  # If using as library
 
 ### Step 4: Address Breaking Changes
 
-1. **MSRV**: Ensure Rust 1.89+ if building from source
+1. **MSRV**: Ensure Rust 1.92+ if building from source
 2. **DeclarationProvider**: Add version parameter if using library API
 3. **Error handling**: Update `Option` to `Result` handling
 4. **NodeKind matches**: Add wildcard arms
@@ -585,7 +585,7 @@ Do NOT file public issues for security vulnerabilities.
 | perl-corpus | 0.8.x | 0.9.x | 1.0.x |
 | perl-lsp | 0.8.x | 0.9.x | 1.0.x |
 | perl-dap | 0.1.x | 0.1.x | 0.2.x |
-| MSRV | 1.85 | 1.89 | 1.89 |
+| MSRV | 1.85 | 1.92 | 1.92 |
 | Rust Edition | 2021 | 2024 | 2024 |
 
 **Note**: `perl-dap` remains at 0.2.x in v1.0.0 as it is still in preview.

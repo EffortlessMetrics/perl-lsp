@@ -6,7 +6,7 @@ Common questions about perl-lsp, organized by topic.
 
 ### What are the system requirements?
 
-- **Rust 1.89+** for building from source
+- **Rust 1.92+** for building from source
 - No runtime dependencies (perl-lsp is a standalone Rust binary)
 - Any operating system: Linux, macOS, Windows
 

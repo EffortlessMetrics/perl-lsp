@@ -23,10 +23,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}
 
 **Solutions**:
 
-1. Ensure you have Rust 1.89+ (MSRV):
+1. Ensure you have Rust 1.92+ (MSRV):
    ```bash
    rustup update stable
-   rustc --version  # Should be >= 1.89
+   rustc --version  # Should be >= 1.92
    ```
 
 2. Clean and rebuild:

@@ -442,8 +442,8 @@ error: unsupported rustdoc format v57
 cargo install cargo-semver-checks --locked --force
 
 # Or use older Rust toolchain for check
-rustup install 1.89.0
-rustup run 1.89.0 cargo semver-checks
+rustup install 1.92.0
+rustup run 1.92.0 cargo semver-checks
 ```
 
 ---

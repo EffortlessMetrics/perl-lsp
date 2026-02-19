@@ -16,9 +16,9 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
 
-        # MSRV: Rust 1.89.0 - pinned for OpenAI Codex compatibility
+        # MSRV: Rust 1.92.0 - pinned for OpenAI Codex compatibility
         # This matches rust-toolchain.toml and CI workflows
-        rustVersion = "1.89.0";
+        rustVersion = "1.92.0";
         rustToolchain = pkgs.rust-bin.stable.${rustVersion}.default.override {
           extensions = [ "rust-src" "clippy" "rustfmt" ];
           targets = [ "wasm32-unknown-unknown" ];  # For WASM determinism checks

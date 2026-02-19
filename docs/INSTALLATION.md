@@ -57,7 +57,7 @@ Copy-Item perl-lsp-0.9.0-x86_64-pc-windows-msvc\perl-lsp.exe C:\Program Files\pe
 
 ### Build from Source
 
-1. Install Rust (minimum version 1.89)
+1. Install Rust (minimum version 1.92)
 2. Clone the repository
 3. Build the release binary
 
@@ -205,7 +205,7 @@ export PATH="$PATH:$HOME/.local/bin"
 
 ## Minimum Requirements
 
-- **Rust**: 1.89+ (for building from source)
+- **Rust**: 1.92+ (for building from source)
 - **Perl**: 5.10+ (for parsing)
 - **Memory**: 50MB base usage
 - **Disk**: 10MB for installation

@@ -175,7 +175,7 @@ just nightly
 ### CI Passes Locally but Fails on CI
 
 - Check for platform differences (Linux vs macOS/Windows)
-- Verify Rust toolchain version (1.89.0)
+- Verify Rust toolchain version (1.92.0)
 - Check for environment-specific dependencies
 
 ---

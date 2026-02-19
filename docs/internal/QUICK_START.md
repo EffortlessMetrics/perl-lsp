@@ -14,7 +14,7 @@ Get up and running with perl-lsp in under 5 minutes.
 
 ## Prerequisites
 
-- **Rust** 1.89+ (for building from source)
+- **Rust** 1.92+ (for building from source)
 - **A supported editor**: VS Code, Neovim, Emacs, Helix, or Sublime Text
 
 ---

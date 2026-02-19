@@ -528,7 +528,7 @@ cargo test --workspace --lib
 ### 5.2 External Dependencies
 
 - GitHub Actions (platform)
-- Rust toolchain 1.89.0
+- Rust toolchain 1.92.0
 - just command runner
 - nix (for local development)
 

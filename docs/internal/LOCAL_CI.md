@@ -29,7 +29,7 @@ curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix 
 # Enter the development shell
 nix develop
 
-# You now have: Rust 1.89.0, just, cargo-nextest, cargo-audit, gh, jq, python3
+# You now have: Rust 1.92.0, just, cargo-nextest, cargo-audit, gh, jq, python3
 ```
 
 ### Option 2: Manual Installation
@@ -44,8 +44,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo install just
 
 # Pin to MSRV
-rustup install 1.89.0
-rustup override set 1.89.0
+rustup install 1.92.0
+rustup override set 1.92.0
 
 # Optional but recommended
 cargo install cargo-nextest cargo-audit
@@ -69,7 +69,7 @@ sudo pacman -S openssl pkg-config
 
 ### Editor Setup (Optional)
 
-For the best experience, configure your editor to use rust-analyzer with the workspace's rust-toolchain.toml. The project MSRV is Rust 1.89.0.
+For the best experience, configure your editor to use rust-analyzer with the workspace's rust-toolchain.toml. The project MSRV is Rust 1.92.0.
 
 ---
 
@@ -212,7 +212,7 @@ This uses `CARGO_BUILD_JOBS=1`, `RUST_TEST_THREADS=1`, and unsets `RUSTC_WRAPPER
 
 ### "I want to validate MSRV compliance"
 
-Ensure your code works on the Minimum Supported Rust Version (1.89.0):
+Ensure your code works on the Minimum Supported Rust Version (1.92.0):
 
 ```bash
 just ci-gate-msrv      # Fast gate on MSRV
@@ -336,8 +336,8 @@ Receipt JSON structure:
   "schema": 1,
   "generated_at": "2025-01-24T10:00:00Z",
   "commit": "abc123...",
-  "rustc": "rustc 1.89.0",
-  "cargo": "cargo 1.89.0",
+  "rustc": "rustc 1.92.0",
+  "cargo": "cargo 1.92.0",
   "gates": [
     {
       "name": "ci-gate",

@@ -881,7 +881,7 @@ nix develop -c just ci-gate
 # Full CI (for large changes)
 just ci-full
 
-# MSRV validation (proves 1.89 compatibility)
+# MSRV validation (proves 1.92 compatibility)
 just ci-gate-msrv
 ```
 
