@@ -1023,7 +1023,7 @@ EOF
     }
 
     #[test]
-    fn test_breakpoint_hit_count_isolated_by_directory() {
+    fn test_breakpoint_hit_count_isolated_by_directory() -> Result<(), Box<dyn std::error::Error>> {
         // Integration: two temp files with same basename in different dirs
         let dir_a = must(tempfile::tempdir());
         let dir_b = must(tempfile::tempdir());
@@ -1074,12 +1074,21 @@ EOF
 
         // file_a's breakpoint should have hit_count=1
         let bps_a = store.get_breakpoints(&path_a);
-        let bp_a = bps_a.iter().find(|bp| bp.line == 5).expect("breakpoint in file_a");
+        let bp_a = bps_a
+            .iter()
+            .find(|bp| bp.line == 5)
+            .ok_or("breakpoint in file_a not found")
+            .map_err(std::io::Error::other)?;
         assert_eq!(bp_a.hit_count, 1);
 
         // file_b's breakpoint should still have hit_count=0
         let bps_b = store.get_breakpoints(&path_b);
-        let bp_b = bps_b.iter().find(|bp| bp.line == 5).expect("breakpoint in file_b");
+        let bp_b = bps_b
+            .iter()
+            .find(|bp| bp.line == 5)
+            .ok_or("breakpoint in file_b not found")
+            .map_err(std::io::Error::other)?;
         assert_eq!(bp_b.hit_count, 0);
+        Ok(())
     }
 }

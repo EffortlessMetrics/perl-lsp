@@ -6347,7 +6347,7 @@ DB<1>"#;
     }
 
     #[test]
-    fn test_tcp_session_threads_non_empty() {
+    fn test_tcp_session_threads_non_empty() -> Result<(), Box<dyn std::error::Error>> {
         let adapter = DebugAdapter::new();
         // Inject a TcpAttachSession so handle_threads sees it
         {
@@ -6358,17 +6358,18 @@ DB<1>"#;
         match response {
             DapMessage::Response { success, body: Some(body), .. } => {
                 assert!(success);
-                let threads = body["threads"].as_array().expect("threads must be array");
+                let threads = body["threads"].as_array().ok_or("threads must be array")?;
                 assert!(!threads.is_empty(), "TCP attach should return non-empty threads");
                 assert_eq!(threads[0]["id"], 1);
                 assert_eq!(threads[0]["name"], "TCP Attached Thread");
             }
-            _ => panic!("Expected successful response with body"),
+            _ => return Err("Expected successful response with body".into()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_attach_port_out_of_range() {
+    fn test_attach_port_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         // Initialize first so attach is allowed
         let _ = adapter.handle_request(1, "initialize", None);
@@ -6384,9 +6385,10 @@ DB<1>"#;
                         "expected 'out of range' error for port {port}, got: {message:?}"
                     );
                 }
-                _ => panic!("Expected error response for port {port}"),
+                _ => return Err(format!("Expected error response for port {port}").into()),
             }
         }
+        Ok(())
     }
 
     #[test]
@@ -6398,21 +6400,18 @@ DB<1>"#;
         for port in [1_u64, 65535] {
             let args = json!({ "port": port });
             let response = adapter.handle_request(2, "attach", Some(args));
-            match response {
-                DapMessage::Response { message, .. } => {
-                    // Should NOT contain "out of range" — it passed validation
-                    assert!(
-                        !message.as_ref().is_some_and(|m| m.contains("out of range")),
-                        "port {port} should pass range validation, got: {message:?}"
-                    );
-                }
-                _ => {}
+            if let DapMessage::Response { message, .. } = response {
+                // Should NOT contain "out of range" — it passed validation
+                assert!(
+                    !message.as_ref().is_some_and(|m| m.contains("out of range")),
+                    "port {port} should pass range validation, got: {message:?}"
+                );
             }
         }
     }
 
     #[test]
-    fn test_goto_missing_arguments() {
+    fn test_goto_missing_arguments() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let response = adapter.handle_request(1, "goto", None);
         match response {
@@ -6421,12 +6420,13 @@ DB<1>"#;
                 assert_eq!(command, "goto");
                 assert_eq!(message.as_deref(), Some("Missing or invalid arguments"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_goto_invalid_target() {
+    fn test_goto_invalid_target() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         let response =
             adapter.handle_request(1, "goto", Some(json!({"threadId": 1, "targetId": -1})));
@@ -6441,12 +6441,13 @@ DB<1>"#;
                     "expected unknown target message, got: {msg}"
                 );
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_goto_no_session() {
+    fn test_goto_no_session() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         // First store a mapping so goto gets past the lookup
         {
@@ -6461,8 +6462,9 @@ DB<1>"#;
                 assert_eq!(command, "goto");
                 assert_eq!(message.as_deref(), Some("No active debug session"));
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
+        Ok(())
     }
 
     #[test]
@@ -6483,7 +6485,7 @@ DB<1>"#;
     }
 
     #[test]
-    fn test_goto_targets_then_goto_flow() {
+    fn test_goto_targets_then_goto_flow() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
 
         // gotoTargets should succeed (even with no file — returns empty targets)
@@ -6502,7 +6504,7 @@ DB<1>"#;
                     "gotoTargets must not claim lack of support"
                 );
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
 
         // goto should fail gracefully with unknown target (no stored mapping)
@@ -6518,26 +6520,26 @@ DB<1>"#;
                     "goto must report unknown target, got: {msg}"
                 );
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_goto_targets_stores_mapping() {
+    fn test_goto_targets_stores_mapping() -> Result<(), Box<dyn std::error::Error>> {
         use std::io::Write;
 
         let mut adapter = DebugAdapter::new();
         adapter.handle_request(1, "initialize", None);
 
         // Create a temp file with executable content
-        let dir = tempfile::tempdir().ok();
-        let dir = dir.as_ref().map(|d| d.path()).unwrap_or(Path::new("/tmp"));
-        let file_path = dir.join("test_goto.pl");
+        let dir = tempfile::tempdir()?;
+        let file_path = dir.path().join("test_goto.pl");
         {
-            let mut f = std::fs::File::create(&file_path).expect("create temp file");
-            writeln!(f, "my $x = 1;").expect("write");
-            writeln!(f, "my $y = 2;").expect("write");
-            writeln!(f, "print $x + $y;").expect("write");
+            let mut f = std::fs::File::create(&file_path)?;
+            writeln!(f, "my $x = 1;")?;
+            writeln!(f, "my $y = 2;")?;
+            writeln!(f, "print $x + $y;")?;
         }
 
         let path_str = file_path.to_string_lossy().to_string();
@@ -6554,9 +6556,10 @@ DB<1>"#;
         match response {
             DapMessage::Response { success, body: Some(body), .. } => {
                 assert!(success, "gotoTargets should succeed");
-                let targets = body.get("targets").and_then(|t| t.as_array());
-                assert!(targets.is_some(), "should have targets array");
-                let targets = targets.expect("targets");
+                let targets = body
+                    .get("targets")
+                    .and_then(|t| t.as_array())
+                    .ok_or("should have targets array")?;
                 assert!(!targets.is_empty(), "should find executable lines");
 
                 // Verify IDs are monotonic starting from 1, NOT equal to line numbers
@@ -6571,14 +6574,15 @@ DB<1>"#;
                     assert_eq!(stored_path, &path_str, "stored path should match source");
                 }
             }
-            _ => panic!("Expected successful response"),
+            _ => return Err("Expected successful response".into()),
         }
 
         let _ = std::fs::remove_file(&file_path);
+        Ok(())
     }
 
     #[test]
-    fn test_goto_uses_stored_mapping() {
+    fn test_goto_uses_stored_mapping() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         adapter.handle_request(1, "initialize", None);
 
@@ -6603,21 +6607,22 @@ DB<1>"#;
                     "goto should report no session, got: {msg}"
                 );
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
 
         // Verify the consumed entry was removed from the map
         let goto_map = lock_or_recover(&adapter.goto_targets, "test.goto_targets");
         assert!(!goto_map.contains_key(&42), "consumed goto target should be removed from map");
+        Ok(())
     }
 
     #[test]
-    fn test_source_rejects_traversal() {
+    fn test_source_rejects_traversal() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         adapter.handle_request(1, "initialize", None);
 
         // Set workspace root to a temp directory
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = tempfile::tempdir()?;
         *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
             Some(dir.path().to_path_buf());
 
@@ -6639,16 +6644,17 @@ DB<1>"#;
                     "should report path validation failure, got: {msg}"
                 );
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_breakpoint_locations_rejects_traversal() {
+    fn test_breakpoint_locations_rejects_traversal() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         adapter.handle_request(1, "initialize", None);
 
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = tempfile::tempdir()?;
         *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
             Some(dir.path().to_path_buf());
 
@@ -6670,16 +6676,17 @@ DB<1>"#;
                     "should report path validation failure, got: {msg}"
                 );
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_goto_targets_rejects_traversal() {
+    fn test_goto_targets_rejects_traversal() -> Result<(), Box<dyn std::error::Error>> {
         let mut adapter = DebugAdapter::new();
         adapter.handle_request(1, "initialize", None);
 
-        let dir = tempfile::tempdir().expect("create tempdir");
+        let dir = tempfile::tempdir()?;
         *lock_or_recover(&adapter.workspace_root, "test.workspace_root") =
             Some(dir.path().to_path_buf());
 
@@ -6701,7 +6708,8 @@ DB<1>"#;
                     "should report path validation failure, got: {msg}"
                 );
             }
-            _ => panic!("Expected response"),
+            _ => return Err("Expected response".into()),
         }
+        Ok(())
     }
 }
