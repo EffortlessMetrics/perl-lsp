@@ -12,7 +12,6 @@ build-dir = "book"
 [output.html]
 git-repository-url = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 git-repository-icon = "fa-github"
-edit-url-template = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs/edit/master/book/src/{path}"
 site-url = "/tree-sitter-perl-rs/"
 default-theme = "light"
 preferred-dark-theme = "navy"

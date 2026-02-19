@@ -144,11 +144,8 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
-                        </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/src/developer/contributing.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
-                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -457,7 +454,29 @@ ln -sf ../../.ci/hooks/pre-commit .git/hooks/pre-commit
 <p>Run the policy check locally anytime:</p>
 <pre><code class="language-bash">./.ci/scripts/check-from-raw.sh
 </code></pre>
-<h2 id="project-structure"><a class="header" href="#project-structure">Project Structure</a></h2>
+<h2 id="workspace-architecture"><a class="header" href="#workspace-architecture">Workspace Architecture</a></h2>
+<p>We use a unified Rust workspace for all core and auxiliary crates.</p>
+<h3 id="core-crates-build-everywhere"><a class="header" href="#core-crates-build-everywhere">Core Crates (Build Everywhere)</a></h3>
+<p>These crates have zero system dependencies and work on all platforms:</p>
+<ul>
+<li><strong>perl-parser</strong>: Main parser library</li>
+<li><strong>perl-lsp</strong>: LSP server binary</li>
+<li><strong>perl-lexer</strong>: Tokenizer</li>
+<li><strong>tree-sitter-perl</strong>: Pure-Rust tree-sitter bindings (default)</li>
+</ul>
+<h3 id="advanced-components-opt-in"><a class="header" href="#advanced-components-opt-in">Advanced Components (Opt-in)</a></h3>
+<p>Some functionality requires system dependencies (like <code>libclang-dev</code>) and is gated behind Cargo features:</p>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>Crate</th><th>Dependency</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>bindings</code></td><td>tree-sitter-perl</td><td><code>libclang-dev</code></td><td>Generates C bindings via bindgen</td></tr>
+<tr><td><code>c-parser</code></td><td>tree-sitter-perl</td><td>C compiler</td><td>Builds the native C parser/scanner</td></tr>
+</tbody></table>
+</div>
+<h4 id="building-with-advanced-features"><a class="header" href="#building-with-advanced-features">Building with Advanced Features</a></h4>
+<pre><code class="language-bash"># Ubuntu/Debian
+sudo apt-get install libclang-dev
+cargo build -p tree-sitter-perl --features bindings,c-parser
+</code></pre>
+<h3 id="testing"><a class="header" href="#testing">Testing</a></h3>
 <ul>
 <li><strong><code>crates/perl-parser/</code></strong> - Core parser implementation and LSP providers</li>
 <li><strong><code>crates/perl-lsp/</code></strong> - LSP server binary and CLI</li>
@@ -467,6 +486,12 @@ ln -sf ../../.ci/hooks/pre-commit .git/hooks/pre-commit
 <li><strong><code>xtask/</code></strong> - Advanced testing and development tools</li>
 <li><strong><code>docs/</code></strong> - Comprehensive project documentation</li>
 </ul>
+<h3 id="semver-compliance"><a class="header" href="#semver-compliance">SemVer Compliance</a></h3>
+<p>All API changes are checked for Semantic Versioning (SemVer) compatibility using <code>cargo-semver-checks</code>.</p>
+<h4 id="check-for-breaking-changes-locally"><a class="header" href="#check-for-breaking-changes-locally">Check for breaking changes locally</a></h4>
+<pre><code class="language-bash">just semver-check
+</code></pre>
+<p>Breaking changes are allowed in minor version bumps (pre-1.0) but require a migration guide in <code>CHANGELOG.md</code>. See <a href="docs/SEMVER_POLICY.html">SEMVER_POLICY.md</a> for full details.</p>
 <h2 id="testing-guidelines"><a class="header" href="#testing-guidelines">Testing Guidelines</a></h2>
 <h3 id="writing-tests"><a class="header" href="#writing-tests">Writing Tests</a></h3>
 <ul>
@@ -544,8 +569,223 @@ gh pr list --author "app/dependabot" --search "status:success" --json number --j
 <p>We follow the Rust Code of Conduct. Please be respectful and constructive in all interactions.</p>
 <h2 id="license"><a class="header" href="#license">License</a></h2>
 <p>By contributing, you agree that your contributions will be licensed under the same license as the project (typically MIT or Apache-2.0).</p>
+<h2 id="release-process"><a class="header" href="#release-process">Release Process</a></h2>
+<p>This section describes the release process for Perl LSP, now that we’ve reached v1.0 GA.</p>
+<h3 id="version-policy"><a class="header" href="#version-policy">Version Policy</a></h3>
+<p>We follow <a href="https://semver.org/">Semantic Versioning 2.0.0</a>:</p>
+<ul>
+<li><strong>Major (X.0.0)</strong>: Breaking changes, requires migration guide</li>
+<li><strong>Minor (X.Y.0)</strong>: New features, backward compatible</li>
+<li><strong>Patch (X.Y.Z)</strong>: Bug fixes, security updates, documentation</li>
+</ul>
+<h3 id="release-types"><a class="header" href="#release-types">Release Types</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Release Type</th><th>Frequency</th><th>Examples</th><th>Requirements</th></tr></thead><tbody>
+<tr><td><strong>Major</strong></td><td>Annually (as needed)</td><td>1.0.0 → 2.0.0</td><td>Breaking changes, migration guide, extensive testing</td></tr>
+<tr><td><strong>Minor</strong></td><td>Quarterly</td><td>1.0.0 → 1.1.0</td><td>New features, API additions, performance improvements</td></tr>
+<tr><td><strong>Patch</strong></td><td>Monthly (as needed)</td><td>1.0.0 → 1.0.1</td><td>Bug fixes, security updates, documentation updates</td></tr>
+</tbody></table>
+</div>
+<h3 id="release-process-workflow"><a class="header" href="#release-process-workflow">Release Process Workflow</a></h3>
+<h4 id="1-pre-release-preparation"><a class="header" href="#1-pre-release-preparation">1. Pre-Release Preparation</a></h4>
+<pre><code class="language-bash"># Update version numbers
+cargo update -p perl-parser --precise 1.0.0
+cargo update -p perl-lsp --precise 1.0.0
+# ... for all published crates
+
+# Run comprehensive validation
+just ci-full
+just security-scan
+just semver-check
+
+# Update documentation
+# - UPDATE_CHANGELOG.md
+# - Update version references in README.md
+# - Update feature matrix in docs/FEATURES.md
+</code></pre>
+<h4 id="2-release-checklist"><a class="header" href="#2-release-checklist">2. Release Checklist</a></h4>
+<p>Before any release, ensure:</p>
+<ul>
+<li><input disabled="" type="checkbox"/>
+All tests pass: <code>just ci-full</code></li>
+<li><input disabled="" type="checkbox"/>
+Security scan passes: <code>just security-scan</code></li>
+<li><input disabled="" type="checkbox"/>
+No breaking changes (for minor/patch): <code>just semver-check</code></li>
+<li><input disabled="" type="checkbox"/>
+Documentation updated: <code>CHANGELOG.md</code>, version references</li>
+<li><input disabled="" type="checkbox"/>
+Performance benchmarks run: <code>cargo bench</code></li>
+<li><input disabled="" type="checkbox"/>
+Release notes drafted: <code>RELEASE_NOTES.md</code></li>
+<li><input disabled="" type="checkbox"/>
+Version numbers updated in all crates</li>
+<li><input disabled="" type="checkbox"/>
+Git tag prepared: <code>git tag -a v1.0.0 -m "Release v1.0.0"</code></li>
+</ul>
+<h4 id="3-release-execution"><a class="header" href="#3-release-execution">3. Release Execution</a></h4>
+<pre><code class="language-bash"># Create release branch
+git checkout -b release/v1.0.0
+
+# Final validation
+just ci-full
+
+# Merge to main
+git checkout main
+git merge release/v1.0.0
+
+# Tag and push
+git tag v1.0.0
+git push origin main --tags
+
+# Publish to crates.io
+cargo publish -p perl-parser
+cargo publish -p perl-lexer
+cargo publish -p perl-lsp
+# ... other crates in dependency order
+
+# Create GitHub Release
+gh release create v1.0.0 --title "v1.0.0 - Production Ready" --notes-file RELEASE_NOTES.md
+</code></pre>
+<h4 id="4-post-release-tasks"><a class="header" href="#4-post-release-tasks">4. Post-Release Tasks</a></h4>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Update website/documentation</li>
+<li><input disabled="" type="checkbox"/>
+Announce on community channels</li>
+<li><input disabled="" type="checkbox"/>
+Monitor for issues</li>
+<li><input disabled="" type="checkbox"/>
+Begin next development cycle</li>
+</ul>
+<h3 id="code-review-process-for-releases"><a class="header" href="#code-review-process-for-releases">Code Review Process for Releases</a></h3>
+<h4 id="release-reviewers"><a class="header" href="#release-reviewers">Release Reviewers</a></h4>
+<p>All releases require review from:</p>
+<ul>
+<li><strong>Core Maintainer</strong>: Technical approval</li>
+<li><strong>Release Manager</strong>: Process validation</li>
+<li><strong>Security Lead</strong>: Security assessment (for major/minor releases)</li>
+</ul>
+<h4 id="review-criteria"><a class="header" href="#review-criteria">Review Criteria</a></h4>
+<p><strong>Technical Review:</strong></p>
+<ul>
+<li>Code quality and performance</li>
+<li>Test coverage and quality</li>
+<li>Documentation completeness</li>
+<li>Breaking change justification</li>
+</ul>
+<p><strong>Process Review:</strong></p>
+<ul>
+<li>Version compliance with SemVer</li>
+<li>Release checklist completion</li>
+<li>Changelog accuracy</li>
+<li>Migration guide quality (for breaking changes)</li>
+</ul>
+<p><strong>Security Review:</strong></p>
+<ul>
+<li>Dependency vulnerability scan</li>
+<li>Security best practices</li>
+<li>Attack surface analysis</li>
+<li>Enterprise security requirements</li>
+</ul>
+<h3 id="testing-requirements-for-releases"><a class="header" href="#testing-requirements-for-releases">Testing Requirements for Releases</a></h3>
+<h4 id="release-testing-matrix"><a class="header" href="#release-testing-matrix">Release Testing Matrix</a></h4>
+<div class="table-wrapper"><table><thead><tr><th>Release Type</th><th>Required Tests</th><th>Performance Tests</th><th>Security Tests</th></tr></thead><tbody>
+<tr><td><strong>Major</strong></td><td>Full test suite</td><td>Comprehensive benchmarks</td><td>Full security scan</td></tr>
+<tr><td><strong>Minor</strong></td><td>Full test suite</td><td>Regression benchmarks</td><td>Security scan</td></tr>
+<tr><td><strong>Patch</strong></td><td>Core tests</td><td>N/A</td><td>Security scan (if security patch)</td></tr>
+</tbody></table>
+</div>
+<h4 id="test-execution"><a class="header" href="#test-execution">Test Execution</a></h4>
+<pre><code class="language-bash"># Full test suite (required for all releases)
+cargo test --workspace
+
+# Performance benchmarks (required for major/minor)
+cargo bench
+
+# Security scan (required for all releases)
+just security-scan
+
+# Mutation testing (required for major releases)
+just mutation-test
+
+# Integration tests (required for major/minor)
+just integration-test
+</code></pre>
+<h3 id="version-policy-details"><a class="header" href="#version-policy-details">Version Policy Details</a></h3>
+<h4 id="breaking-changes-definition"><a class="header" href="#breaking-changes-definition">Breaking Changes Definition</a></h4>
+<p>Breaking changes include:</p>
+<ul>
+<li>API signature changes</li>
+<li>Removal of public functions/types</li>
+<li>Changes in behavior that affect existing code</li>
+<li>Configuration format changes</li>
+<li>Dependency requirement changes</li>
+</ul>
+<h4 id="compatibility-guarantees"><a class="header" href="#compatibility-guarantees">Compatibility Guarantees</a></h4>
+<p><strong>For v1.x series:</strong></p>
+<ul>
+<li>API stability within major version</li>
+<li>Configuration format stability</li>
+<li>LSP protocol compatibility</li>
+<li>File format compatibility</li>
+</ul>
+<p><strong>Migration Support:</strong></p>
+<ul>
+<li>Automated migration tools when possible</li>
+<li>Comprehensive migration guides</li>
+<li>Deprecation warnings before removal</li>
+<li>Backward compatibility periods</li>
+</ul>
+<h3 id="emergency-releases"><a class="header" href="#emergency-releases">Emergency Releases</a></h3>
+<p>For critical security issues:</p>
+<ol>
+<li><strong>Immediate Assessment</strong>: Triage within 24 hours</li>
+<li><strong>Rapid Fix</strong>: Develop and test fix in 48-72 hours</li>
+<li><strong>Expedited Release</strong>: Bypass normal process if needed</li>
+<li><strong>Security Advisory</strong>: Coordinate disclosure</li>
+<li><strong>Post-Mortem</strong>: Document and improve process</li>
+</ol>
+<h3 id="release-communication"><a class="header" href="#release-communication">Release Communication</a></h3>
+<h4 id="release-channels"><a class="header" href="#release-channels">Release Channels</a></h4>
+<ul>
+<li><strong>GitHub Releases</strong>: Primary announcement channel</li>
+<li><strong>CHANGELOG.md</strong>: Detailed change log</li>
+<li><strong>Security Advisories</strong>: For security-related releases</li>
+<li><strong>Community Forums</strong>: Discussion and support</li>
+<li><strong>Email Lists</strong>: For enterprise notifications</li>
+</ul>
+<h4 id="release-notes-template"><a class="header" href="#release-notes-template">Release Notes Template</a></h4>
+<pre><code class="language-markdown"># Release v1.0.0
+
+## Highlights
+- Key features and improvements
+- Performance metrics
+- Security enhancements
+
+## Breaking Changes
+- Detailed list with migration guidance
+
+## New Features
+- Comprehensive feature list with examples
+
+## Bug Fixes
+- Bug fixes with issue references
+
+## Security Updates
+- Security fixes and CVE references
+
+## Performance Improvements
+- Benchmarks and performance metrics
+
+## Upgrade Instructions
+- Step-by-step upgrade guide
+- Migration considerations
+
+## Known Issues
+- Any known limitations or issues
+</code></pre>
 <hr />
-<p>Thank you for contributing to Perl LSP! =�</p>
+<p>Thank you for contributing to Perl LSP! 🚀</p>
 
                     </main>
 

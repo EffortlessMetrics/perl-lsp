@@ -145,7 +145,7 @@
                         <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
 
@@ -267,7 +267,7 @@
 <p>Get perl-lsp up and running in 5 minutes!</p>
 <h2 id="prerequisites"><a class="header" href="#prerequisites">Prerequisites</a></h2>
 <ul>
-<li>Rust toolchain (1.70+)</li>
+<li>Rust toolchain (1.89+)</li>
 <li>Perl 5 installation (for testing)</li>
 <li>Your favorite code editor with LSP support</li>
 </ul>
@@ -376,33 +376,189 @@ cargo test -p perl-lsp
 <li><a href="https://github.com/EffortlessMetrics/tree-sitter-perl">Project README</a></li>
 </ul>
 <p>Happy coding with perl-lsp!</p>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="installation-1"><a class="header" href="#installation-1">Installation</a></h1>
-<h2 id="from-cratesio"><a class="header" href="#from-cratesio">From crates.io</a></h2>
-<p>The recommended way to install perl-lsp is via crates.io:</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="getting-started-with-perl-lsp"><a class="header" href="#getting-started-with-perl-lsp">Getting Started with perl-lsp</a></h1>
+<p>This guide gets you from zero to a working Perl language server in your editor.</p>
+<h2 id="prerequisites-1"><a class="header" href="#prerequisites-1">Prerequisites</a></h2>
+<ul>
+<li><strong>Rust 1.89+</strong> (for building from source)</li>
+<li><strong>A supported editor</strong>: VS Code, Neovim, Emacs, Helix, or Sublime Text</li>
+</ul>
+<h2 id="installation-1"><a class="header" href="#installation-1">Installation</a></h2>
+<p>Choose one method:</p>
+<h3 id="option-1-install-from-cratesio-recommended"><a class="header" href="#option-1-install-from-cratesio-recommended">Option 1: Install from crates.io (Recommended)</a></h3>
 <pre><code class="language-bash">cargo install perl-lsp
 </code></pre>
-<h2 id="from-source-1"><a class="header" href="#from-source-1">From Source</a></h2>
-<p>Clone the repository and build:</p>
-<pre><code class="language-bash">git clone https://github.com/EffortlessMetrics/tree-sitter-perl.git
-cd tree-sitter-perl
-cargo build --release -p perl-lsp
+<h3 id="option-2-download-pre-built-binary"><a class="header" href="#option-2-download-pre-built-binary">Option 2: Download Pre-built Binary</a></h3>
+<p>Download from <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases">GitHub Releases</a>:</p>
+<pre><code class="language-bash"># Linux (x86_64)
+curl -LO https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
+tar xzf perl-lsp-linux-x86_64.tar.gz
+sudo mv perl-lsp /usr/local/bin/
+
+# macOS (Apple Silicon)
+curl -LO https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
+tar xzf perl-lsp-darwin-aarch64.tar.gz
+sudo mv perl-lsp /usr/local/bin/
 </code></pre>
-<p>The binary will be located at <code>target/release/perl-lsp</code>.</p>
-<h2 id="system-requirements"><a class="header" href="#system-requirements">System Requirements</a></h2>
+<h3 id="option-3-build-from-source"><a class="header" href="#option-3-build-from-source">Option 3: Build from Source</a></h3>
+<pre><code class="language-bash">git clone https://github.com/EffortlessMetrics/tree-sitter-perl-rs.git
+cd tree-sitter-perl-rs
+cargo install --path crates/perl-lsp
+</code></pre>
+<h2 id="verify-installation-1"><a class="header" href="#verify-installation-1">Verify Installation</a></h2>
+<pre><code class="language-bash"># Check binary is available
+perl-lsp --version
+
+# Quick health check
+perl-lsp --health
+# Should output: ok 0.9.0
+</code></pre>
+<h2 id="quick-editor-setup"><a class="header" href="#quick-editor-setup">Quick Editor Setup</a></h2>
+<h3 id="vs-code"><a class="header" href="#vs-code">VS Code</a></h3>
+<ol>
+<li>
+<p>Install the extension:</p>
+<pre><code class="language-bash">code --install-extension effortlesssteven.perl-lsp
+</code></pre>
+</li>
+<li>
+<p>Open a <code>.pl</code> or <code>.pm</code> file - the server starts automatically.</p>
+</li>
+</ol>
+<h3 id="neovim"><a class="header" href="#neovim">Neovim</a></h3>
+<p>Add to your <code>init.lua</code>:</p>
+<pre><code class="language-lua">local lspconfig = require('lspconfig')
+local configs = require('lspconfig.configs')
+
+if not configs.perl_lsp then
+  configs.perl_lsp = {
+    default_config = {
+      cmd = { 'perl-lsp', '--stdio' },
+      filetypes = { 'perl' },
+      root_dir = lspconfig.util.root_pattern('.git'),
+      single_file_support = true,
+    },
+  }
+end
+
+lspconfig.perl_lsp.setup({})
+</code></pre>
+<h3 id="emacs-with-eglot-emacs-29"><a class="header" href="#emacs-with-eglot-emacs-29">Emacs (with eglot, Emacs 29+)</a></h3>
+<pre><code class="language-elisp">(add-to-list 'eglot-server-programs
+             '((cperl-mode perl-mode) . ("perl-lsp" "--stdio")))
+</code></pre>
+<p>Then run <code>M-x eglot</code> in a Perl buffer.</p>
+<h3 id="helix"><a class="header" href="#helix">Helix</a></h3>
+<p>Add to <code>~/.config/helix/languages.toml</code>:</p>
+<pre><code class="language-toml">[[language]]
+name = "perl"
+language-servers = ["perl-lsp"]
+
+[language-server.perl-lsp]
+command = "perl-lsp"
+args = ["--stdio"]
+</code></pre>
+<h2 id="your-first-5-minutes"><a class="header" href="#your-first-5-minutes">Your First 5 Minutes</a></h2>
+<p>Once installed, open any Perl file and try these features:</p>
+<h3 id="1-hover-for-documentation"><a class="header" href="#1-hover-for-documentation">1. Hover for Documentation</a></h3>
+<p>Move your cursor over a function like <code>print</code> or <code>substr</code> and see documentation appear.</p>
+<h3 id="2-go-to-definition"><a class="header" href="#2-go-to-definition">2. Go to Definition</a></h3>
+<p>Click on a variable or function call and use your editor’s “Go to Definition” command:</p>
 <ul>
-<li>Rust toolchain 1.70 or later</li>
-<li>Perl 5 installation (for testing)</li>
-<li>Sufficient memory for workspace indexing (typically 512MB+)</li>
+<li>VS Code: <code>F12</code> or <code>Ctrl+Click</code></li>
+<li>Neovim: <code>gd</code></li>
+<li>Emacs: <code>M-.</code></li>
 </ul>
-<h2 id="verifying-installation"><a class="header" href="#verifying-installation">Verifying Installation</a></h2>
-<p>Check that perl-lsp is properly installed:</p>
-<pre><code class="language-bash">perl-lsp --version
+<h3 id="3-find-all-references"><a class="header" href="#3-find-all-references">3. Find All References</a></h3>
+<p>Find everywhere a symbol is used:</p>
+<ul>
+<li>VS Code: <code>Shift+F12</code></li>
+<li>Neovim: <code>gr</code></li>
+<li>Emacs: <code>M-?</code></li>
+</ul>
+<h3 id="4-code-completion"><a class="header" href="#4-code-completion">4. Code Completion</a></h3>
+<p>Type <code>$</code> to see variable completions, or start typing a function name:</p>
+<pre><code class="language-perl">my $name = "Alice";
+print $na  # Completes to $name
+prin       # Completes to print
 </code></pre>
+<h3 id="5-quick-fixes"><a class="header" href="#5-quick-fixes">5. Quick Fixes</a></h3>
+<p>The LSP suggests fixes for common issues. Look for the lightbulb icon (VS Code) or use:</p>
+<ul>
+<li>VS Code: <code>Ctrl+.</code></li>
+<li>Neovim: <code>&lt;leader&gt;ca</code></li>
+<li>Emacs: <code>C-c l a</code></li>
+</ul>
+<h2 id="what-you-get"><a class="header" href="#what-you-get">What You Get</a></h2>
+<p>perl-lsp provides:</p>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>What It Does</th></tr></thead><tbody>
+<tr><td><strong>Diagnostics</strong></td><td>Real-time syntax error detection</td></tr>
+<tr><td><strong>Completion</strong></td><td>Variables, functions, keywords, file paths</td></tr>
+<tr><td><strong>Hover</strong></td><td>Documentation for 150+ Perl built-ins</td></tr>
+<tr><td><strong>Definition</strong></td><td>Jump to where symbols are defined</td></tr>
+<tr><td><strong>References</strong></td><td>Find all uses of a symbol</td></tr>
+<tr><td><strong>Rename</strong></td><td>Safely rename variables across files</td></tr>
+<tr><td><strong>Formatting</strong></td><td>Format code with Perl::Tidy</td></tr>
+<tr><td><strong>Folding</strong></td><td>Collapse functions, blocks, POD</td></tr>
+<tr><td><strong>Symbols</strong></td><td>Document outline and workspace search</td></tr>
+</tbody></table>
+</div>
+<h2 id="project-configuration"><a class="header" href="#project-configuration">Project Configuration</a></h2>
+<p>For project-specific settings, the server reads configuration from your editor’s LSP settings.</p>
+<h3 id="example-configure-module-search-paths"><a class="header" href="#example-configure-module-search-paths">Example: Configure Module Search Paths</a></h3>
+<pre><code class="language-json">{
+  "perl": {
+    "workspace": {
+      "includePaths": ["lib", ".", "local/lib/perl5"]
+    }
+  }
+}
+</code></pre>
+<h3 id="example-tune-for-large-projects"><a class="header" href="#example-tune-for-large-projects">Example: Tune for Large Projects</a></h3>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "maxIndexedFiles": 50000,
+      "referencesCap": 1000
+    }
+  }
+}
+</code></pre>
+<p>See <a href="getting-started/CONFIG.html">CONFIG.md</a> for all configuration options.</p>
+<h2 id="troubleshooting-1"><a class="header" href="#troubleshooting-1">Troubleshooting</a></h2>
+<h3 id="server-not-starting-1"><a class="header" href="#server-not-starting-1">Server Not Starting</a></h3>
+<pre><code class="language-bash"># Test if the binary works
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}' | perl-lsp --stdio
+</code></pre>
+<h3 id="no-diagnostics-appearing"><a class="header" href="#no-diagnostics-appearing">No Diagnostics Appearing</a></h3>
+<ol>
+<li>Ensure your file has a Perl extension (<code>.pl</code>, <code>.pm</code>, <code>.t</code>)</li>
+<li>Check your editor’s language mode is set to Perl</li>
+<li>Look at the LSP output log in your editor</li>
+</ol>
+<h3 id="slow-performance"><a class="header" href="#slow-performance">Slow Performance</a></h3>
+<p>Reduce indexed files and result caps in your settings:</p>
+<pre><code class="language-json">{
+  "perl": {
+    "limits": {
+      "maxIndexedFiles": 5000,
+      "workspaceSymbolCap": 100
+    }
+  }
+}
+</code></pre>
+<p>See <a href="getting-started/TROUBLESHOOTING.html">TROUBLESHOOTING.md</a> for more solutions.</p>
 <h2 id="next-steps-1"><a class="header" href="#next-steps-1">Next Steps</a></h2>
 <ul>
-<li><a href="getting-started/./editor-setup.html">Editor Setup</a></li>
-<li><a href="getting-started/./configuration.html">Configuration</a></li>
-<li><a href="getting-started/./first-steps.html">First Steps</a></li>
+<li><strong><a href="getting-started/EDITOR_SETUP.html">EDITOR_SETUP.md</a></strong> - Detailed editor configurations</li>
+<li><strong><a href="getting-started/CONFIG.html">CONFIG.md</a></strong> - All configuration options</li>
+<li><strong><a href="getting-started/LSP_FEATURES.html">LSP_FEATURES.md</a></strong> - Complete feature documentation</li>
+<li><strong><a href="getting-started/FAQ.html">FAQ.md</a></strong> - Frequently asked questions</li>
+</ul>
+<h2 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h2>
+<ul>
+<li><strong>Issues</strong>: <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues">GitHub Issues</a></li>
+<li><strong>Documentation</strong>: <a href="getting-started/INDEX.html">docs/INDEX.md</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="editor-setup-guide"><a class="header" href="#editor-setup-guide">Editor Setup Guide</a></h1>
 <p>This guide provides copy/paste ready configurations for setting up the Perl LSP server with popular editors.</p>
@@ -417,7 +573,7 @@ cargo build --release -p perl-lsp
 <li><a href="getting-started/editor-setup.html#troubleshooting">Troubleshooting</a></li>
 </ul>
 <hr />
-<h2 id="prerequisites-1"><a class="header" href="#prerequisites-1">Prerequisites</a></h2>
+<h2 id="prerequisites-2"><a class="header" href="#prerequisites-2">Prerequisites</a></h2>
 <h3 id="install-the-server"><a class="header" href="#install-the-server">Install the Server</a></h3>
 <pre><code class="language-bash"># Option 1: Install from crates.io (recommended)
 cargo install perl-lsp
@@ -430,7 +586,7 @@ cargo install --path crates/perl-lsp
 # Option 3: Download pre-built binary
 # See https://github.com/EffortlessMetrics/tree-sitter-perl-rs/releases
 </code></pre>
-<h3 id="verify-installation-1"><a class="header" href="#verify-installation-1">Verify Installation</a></h3>
+<h3 id="verify-installation-2"><a class="header" href="#verify-installation-2">Verify Installation</a></h3>
 <pre><code class="language-bash"># Check binary is in PATH
 which perl-lsp
 
@@ -441,7 +597,7 @@ perl-lsp --version
 perl-lsp --health
 </code></pre>
 <hr />
-<h2 id="vs-code"><a class="header" href="#vs-code">VS Code</a></h2>
+<h2 id="vs-code-1"><a class="header" href="#vs-code-1">VS Code</a></h2>
 <h3 id="option-1-using-generic-lsp-extension"><a class="header" href="#option-1-using-generic-lsp-extension">Option 1: Using Generic LSP Extension</a></h3>
 <p>Install a generic LSP client extension (e.g., “Generic LSP Client” or “vscode-lsp-wl”).</p>
 <p>Create or edit <code>.vscode/settings.json</code> in your workspace:</p>
@@ -484,7 +640,7 @@ perl-lsp --health
 }
 </code></pre>
 <hr />
-<h2 id="neovim"><a class="header" href="#neovim">Neovim</a></h2>
+<h2 id="neovim-1"><a class="header" href="#neovim-1">Neovim</a></h2>
 <h3 id="using-nvim-lspconfig"><a class="header" href="#using-nvim-lspconfig">Using nvim-lspconfig</a></h3>
 <p>Add to your <code>init.lua</code>:</p>
 <pre><code class="language-lua">-- Define perl-lsp in lspconfig
@@ -651,7 +807,7 @@ lspconfig.perl_lsp.setup({})
   (define-key perl-mode-map (kbd "C-c a") 'lsp-execute-code-action))
 </code></pre>
 <hr />
-<h2 id="helix"><a class="header" href="#helix">Helix</a></h2>
+<h2 id="helix-1"><a class="header" href="#helix-1">Helix</a></h2>
 <p>Add to <code>~/.config/helix/languages.toml</code>:</p>
 <pre><code class="language-toml">[[language]]
 name = "perl"
@@ -716,8 +872,8 @@ limits.referencesCap = 500
 }
 </code></pre>
 <hr />
-<h2 id="troubleshooting-1"><a class="header" href="#troubleshooting-1">Troubleshooting</a></h2>
-<h3 id="server-not-starting-1"><a class="header" href="#server-not-starting-1">Server Not Starting</a></h3>
+<h2 id="troubleshooting-2"><a class="header" href="#troubleshooting-2">Troubleshooting</a></h2>
+<h3 id="server-not-starting-2"><a class="header" href="#server-not-starting-2">Server Not Starting</a></h3>
 <ol>
 <li>
 <p><strong>Verify binary location</strong>:</p>
@@ -756,7 +912,7 @@ perl-lsp --health
 </code></pre>
 </li>
 </ol>
-<h3 id="slow-performance"><a class="header" href="#slow-performance">Slow Performance</a></h3>
+<h3 id="slow-performance-1"><a class="header" href="#slow-performance-1">Slow Performance</a></h3>
 <ol>
 <li>
 <p><strong>Reduce result caps</strong>:</p>
@@ -862,13 +1018,16 @@ Examples:
 <li><a href="getting-started/LSP_FEATURES.html">LSP_FEATURES.md</a> - Supported LSP features</li>
 <li><a href="getting-started/DAP_USER_GUIDE.html">DAP_USER_GUIDE.md</a> - Debugging setup with perl-dap</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="-start-here---perl-lsp-quick-start-guide"><a class="header" href="#-start-here---perl-lsp-quick-start-guide">🚀 START HERE - perl-lsp Quick Start Guide</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="project-orientation"><a class="header" href="#project-orientation">Project Orientation</a></h1>
 <blockquote>
-<p><strong>⚠️ SNAPSHOT DISCLAIMER</strong>: Orientation-only. For live status and metrics, see <code>docs/CURRENT_STATUS.md</code> and GitHub milestones/issues.</p>
+<p>For the documentation hub, see <a href="getting-started/README.html">README.md</a>. This page provides project orientation for active contributors.</p>
+</blockquote>
+<blockquote>
+<p><strong>SNAPSHOT DISCLAIMER</strong>: Orientation-only. For live status and metrics, see <code>docs/CURRENT_STATUS.md</code> and GitHub milestones/issues.</p>
 </blockquote>
 <p>Welcome to the perl-lsp project! This guide will get you up to speed quickly.</p>
 <h2 id="-you-are-here"><a class="header" href="#-you-are-here">📍 You Are Here</a></h2>
-<p><strong>Project Status</strong>: v0.9.0 released; v0.9.1 close-out in progress; v1.0 planning underway
+<p><strong>Project Status</strong>: v0.9.1 close-out receipts captured; v1.0.x hardening underway
 <strong>Open Issues</strong>: See GitHub milestones/issues for live counts</p>
 <h2 id="-5-minute-orientation"><a class="header" href="#-5-minute-orientation">🎯 5-Minute Orientation</a></h2>
 <h3 id="what-is-this-project"><a class="header" href="#what-is-this-project">What Is This Project?</a></h3>
@@ -876,14 +1035,14 @@ Examples:
 <ul>
 <li>Fast native Rust parser with near-complete Perl 5 coverage</li>
 <li>Production-grade LSP server with broad feature support (tracked in <code>features.toml</code>)</li>
-<li>DAP support with native CLI + BridgeAdapter (Phase 1)</li>
+<li>DAP support with native preview adapter + BridgeAdapter compatibility path</li>
 <li>Quality gates: tests, fuzzing/mutation hardening, missing_docs enforcement (see <code>CURRENT_STATUS.md</code>)</li>
 </ul>
 <h3 id="current-focus"><a class="header" href="#current-focus">Current Focus</a></h3>
-<p><strong>Now (v0.9.1 close-out)</strong></p>
+<p><strong>Now (post v0.9.1 close-out)</strong></p>
 <ul>
-<li>Workspace index state machine verification + receipts (phase transitions, early-exit caps)</li>
-<li>Documentation cleanup (<code>missing_docs</code>)</li>
+<li>Keep close-out receipts green (<code>just ci-gate</code>, targeted state-machine tests, benchmark checks)</li>
+<li>Publish benchmark outputs under <code>benchmarks/results/</code></li>
 </ul>
 <p><strong>Next (v1.0.0)</strong></p>
 <ul>
@@ -893,7 +1052,7 @@ Examples:
 </ul>
 <p><strong>Later (post v1.0)</strong></p>
 <ul>
-<li>Native DAP completeness (attach, variables/evaluate, safe eval)</li>
+<li>DAP preview -&gt; GA hardening (runtime variable/evaluate depth + packaging)</li>
 <li>Full LSP 3.18 compliance</li>
 <li>Package manager distribution</li>
 </ul>
@@ -915,11 +1074,11 @@ Examples:
 <li><strong><a href="getting-started/COMMANDS_REFERENCE.html">COMMANDS_REFERENCE.md</a></strong> - Build/test commands</li>
 </ol>
 <h2 id="-what-needs-attention-right-now"><a class="header" href="#-what-needs-attention-right-now">🚨 What Needs Attention RIGHT NOW</a></h2>
-<h3 id="now-as-of-2026-01-27"><a class="header" href="#now-as-of-2026-01-27">Now (as of 2026-01-27)</a></h3>
+<h3 id="now-as-of-2026-02-16"><a class="header" href="#now-as-of-2026-02-16">Now (as of 2026-02-16)</a></h3>
 <ol>
-<li>🔴 <strong>Index state machine verification</strong> - confirm transitions, early-exit caps, and receipts</li>
-<li>🔴 <strong>Documentation cleanup</strong> - reduce <code>missing_docs</code> violations + module-level docs</li>
-<li>🟡 <strong>v0.9.1 release notes + doc alignment</strong> - CHANGELOG/ROADMAP/CURRENT_STATUS in sync</li>
+<li>🟡 <strong>Benchmark publication</strong> - commit canonical benchmark outputs under <code>benchmarks/results/</code></li>
+<li>🟡 <strong>v1.0.x packaging stance</strong> - finalize supported platforms and shipping model</li>
+<li>🟡 <strong>Upgrade notes polish</strong> - ensure v0.8.x → v1.0 path is explicit</li>
 <li>📌 <strong>Expanded backlog</strong> - see <code>docs/TODO.md</code> + <code>docs/LSP_MISSING_FEATURES_REPORT.md</code></li>
 </ol>
 <h3 id="next"><a class="header" href="#next">Next</a></h3>
@@ -936,7 +1095,7 @@ Examples:
 ├── crates/
 │   ├── perl-parser/      ⭐ Main crate - Parser
 │   ├── perl-lsp/          LSP server binary + LSP logic
-│   ├── perl-dap/          Debug Adapter Protocol (Phase 1 complete)
+│   ├── perl-dap/          Debug Adapter Protocol (native preview + bridge fallback)
 │   ├── perl-lexer/        Context-aware tokenizer
 │   ├── perl-corpus/       Test corpus (see CURRENT_STATUS for counts)
 │   └── perl-parser-pest/  Legacy Pest parser
@@ -973,8 +1132,8 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp  # With adaptive threading
 </code></pre>
 <h2 id="-where-to-start-contributing"><a class="header" href="#-where-to-start-contributing">💡 Where to Start Contributing</a></h2>
 <ul>
-<li>Check the active milestone (v0.9.1) and the <code>good first issue</code> / <code>help wanted</code> labels</li>
-<li>Near-term work: index state machine + documentation cleanup (see ROADMAP)</li>
+<li>Check the active milestone and the <code>good first issue</code> / <code>help wanted</code> labels</li>
+<li>Near-term work: benchmark publication + v1.0.x packaging/readiness (see ROADMAP)</li>
 <li>Larger efforts: v1.0 milestone and <code>phase:*</code> labels</li>
 <li>See <a href="getting-started/../CONTRIBUTING.html">CONTRIBUTING.md</a> for workflow details</li>
 </ul>
@@ -1046,7 +1205,7 @@ Run <code>just status-check</code> for live numbers.</p>
 <p>The perl-lsp project has clear paths to both MVP and Production v1.0. Your contributions will help make Perl development smoother across editors.</p>
 <p><strong>Pick an issue, dive in, and let’s ship this! 🎉</strong></p>
 <hr />
-<p><em>This guide is kept up-to-date as the project evolves. Last updated: 2026-01-27</em></p>
+<p><em>This guide is kept up-to-date as the project evolves. Last updated: 2026-02-17</em></p>
 <p><em>For detailed status, see: <a href="getting-started/CURRENT_STATUS.html">CURRENT_STATUS.md</a></em></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="configuration-reference"><a class="header" href="#configuration-reference">Configuration Reference</a></h1>
 <p>This document is the authoritative list of all configuration keys for the Perl LSP server.</p>
@@ -2060,7 +2219,7 @@ use utf8;  # If non-ASCII content detected
   }
 }
 </code></pre>
-<h3 id="neovim-1"><a class="header" href="#neovim-1">Neovim</a></h3>
+<h3 id="neovim-2"><a class="header" href="#neovim-2">Neovim</a></h3>
 <p>Using nvim-lspconfig:</p>
 <pre><code class="language-lua">require('lspconfig').perl_lsp.setup{
   cmd = {'perl-lsp', '--stdio'},
@@ -2127,7 +2286,7 @@ use utf8;  # If non-ASCII content detected
 <li><strong>Configure Cache</strong>: Adjust cache duration based on project size</li>
 <li><strong>Limit File Size</strong>: Set reasonable limits for very large generated files</li>
 </ol>
-<h2 id="troubleshooting-2"><a class="header" href="#troubleshooting-2">Troubleshooting</a></h2>
+<h2 id="troubleshooting-3"><a class="header" href="#troubleshooting-3">Troubleshooting</a></h2>
 <h3 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h3>
 <p><strong>LSP not starting:</strong></p>
 <pre><code class="language-bash"># Check if perl-lsp is in PATH
@@ -2576,7 +2735,7 @@ cargo install --path crates/perl-dap
 <blockquote>
 <p>Note: The native adapter supports <code>launch</code> only; <code>attach</code> is not implemented yet.</p>
 </blockquote>
-<h2 id="troubleshooting-3"><a class="header" href="#troubleshooting-3">Troubleshooting</a></h2>
+<h2 id="troubleshooting-4"><a class="header" href="#troubleshooting-4">Troubleshooting</a></h2>
 <h3 id="workspace-build-issues-v088"><a class="header" href="#workspace-build-issues-v088">Workspace Build Issues (v0.8.8+)</a></h3>
 <h4 id="cannot-find-parserc-or-libclang-not-found"><a class="header" href="#cannot-find-parserc-or-libclang-not-found">“Cannot find parser.c” or “libclang not found”</a></h4>
 <p>The workspace uses an exclusion strategy to avoid these system dependency issues:</p>
@@ -2769,7 +2928,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 </code></pre>
 </li>
 </ol>
-<h3 id="slow-performance-1"><a class="header" href="#slow-performance-1">Slow Performance</a></h3>
+<h3 id="slow-performance-2"><a class="header" href="#slow-performance-2">Slow Performance</a></h3>
 <p><strong>Problem</strong>: LSP responses are slow.</p>
 <p><strong>Solutions</strong>:</p>
 <ol>
@@ -2787,7 +2946,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 <p>Reduce workspace scope - see <a href="user-guides/EDITOR_SETUP.html#slow-performance">EDITOR_SETUP.md</a></p>
 </li>
 </ol>
-<h3 id="no-diagnostics-appearing"><a class="header" href="#no-diagnostics-appearing">No Diagnostics Appearing</a></h3>
+<h3 id="no-diagnostics-appearing-1"><a class="header" href="#no-diagnostics-appearing-1">No Diagnostics Appearing</a></h3>
 <p><strong>Problem</strong>: Syntax errors are not highlighted.</p>
 <p><strong>Solutions</strong>:</p>
 <ol>
@@ -3058,7 +3217,7 @@ END
 <p>Check <code>*lsp-log*</code> buffer for detailed errors</p>
 </li>
 </ol>
-<h2 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h2>
+<h2 id="getting-help-1"><a class="header" href="#getting-help-1">Getting Help</a></h2>
 <ol>
 <li>
 <p>Check existing issues: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues</p>
@@ -4116,13 +4275,10 @@ struct CorpusTestResults {
 <li><strong>Diagnostic Analysis</strong>: Detailed structural breakdown for debugging parser differences</li>
 </ul>
 <h4 id="usage-pattern-diataxis-how-to-guide---implementation-approach"><a class="header" href="#usage-pattern-diataxis-how-to-guide---implementation-approach"><strong>Usage Pattern</strong> (<em>Diataxis: How-to Guide</em> - Implementation approach)</a></h4>
-<pre><code class="language-bash"># From project root, navigate to xtask directory
-cd xtask
-
-# Run dual-scanner comparison (requires libclang-dev)
-cargo run corpus                        # Default: --scanner both
-cargo run corpus -- --scanner both     # Explicit dual-scanner mode
-cargo run corpus -- --diagnose         # Detailed analysis
+<pre><code class="language-bash"># Run corpus comparison modes (requires legacy feature)
+cargo run -p xtask --features legacy -- corpus                          # Default scanner: v3
+cargo run -p xtask --features legacy -- corpus --scanner both           # C vs v3 comparison mode
+cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose
 </code></pre>
 <h2 id="key-components-1"><a class="header" href="#key-components-1">Key Components</a></h2>
 <h3 id="moduleresolver-component-new-v088---diataxis-reference"><a class="header" href="#moduleresolver-component-new-v088---diataxis-reference">ModuleResolver Component (NEW v0.8.8) - (<em>Diataxis: Reference</em>)</a></h3>
@@ -4750,25 +4906,521 @@ while self.current_char() == Some(':') &amp;&amp; self.peek_char(1) == Some(':')
 <li><strong>Minimal Performance Impact</strong>: Smart indexing with deduplication</li>
 <li><strong>Improved Developer Experience</strong>: More accurate LSP features across the board</li>
 </ol>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="parser-design"><a class="header" href="#parser-design">Parser Design</a></h1>
-<p>The perl-parser crate implements a recursive descent parser for Perl 5 syntax.</p>
-<h2 id="key-features-1"><a class="header" href="#key-features-1">Key Features</a></h2>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="architecture-overview-2"><a class="header" href="#architecture-overview-2">Architecture Overview</a></h1>
+<h2 id="crate-structure-1"><a class="header" href="#crate-structure-1">Crate Structure</a></h2>
+<h3 id="production-crates-1"><a class="header" href="#production-crates-1">Production Crates</a></h3>
 <ul>
-<li>Near-complete Perl 5 syntax coverage (~100%)</li>
-<li>Tree-sitter compatible output</li>
-<li>Incremental parsing support</li>
-<li>Robust error recovery</li>
-<li>Context-aware lexing</li>
+<li>
+<p><strong><code>/crates/perl-lsp/</code></strong>: Standalone LSP server binary. This is what users install for IDE integration.</p>
+</li>
+<li>
+<p><strong><code>/crates/perl-parser/</code></strong>: The core parsing library. It contains the parser itself, the AST definitions, and all the LSP feature implementations. Published as <code>perl-parser</code> on crates.io.</p>
+</li>
+<li>
+<p><strong><code>/crates/perl-lexer/</code></strong>: Context-aware tokenizer</p>
+<ul>
+<li><code>src/lib.rs</code>: Lexer API with Unicode support</li>
+<li><code>src/token.rs</code>: Token definitions</li>
+<li><code>src/mode.rs</code>: Lexer modes (ExpectTerm, ExpectOperator)</li>
+<li><code>src/unicode.rs</code>: Unicode identifier support</li>
+<li><strong>Unicode Handling</strong>: Robust support for Unicode characters in all contexts</li>
+<li><strong>Heredoc Safety</strong>: Proper bounds checking for Unicode + heredoc syntax</li>
+<li>Published as <code>perl-lexer</code> on crates.io</li>
 </ul>
-<h2 id="architecture-2"><a class="header" href="#architecture-2">Architecture</a></h2>
-<p>The parser follows a multi-stage pipeline:</p>
+</li>
+<li>
+<p><strong><code>/crates/perl-corpus/</code></strong>: Test corpus</p>
+<ul>
+<li><code>src/lib.rs</code>: Corpus API</li>
+<li><code>tests/</code>: Perl test files</li>
+<li>Published as <code>perl-corpus</code> on crates.io</li>
+</ul>
+</li>
+<li>
+<p><strong><code>/crates/perl-parser-pest/</code></strong>: Legacy Pest parser</p>
+<ul>
+<li><code>src/grammar.pest</code>: PEG grammar</li>
+<li><code>src/lib.rs</code>: Parser implementation</li>
+<li>Published as <code>perl-parser-pest</code> on crates.io (marked legacy)</li>
+</ul>
+</li>
+</ul>
+<h3 id="internalunpublished-1"><a class="header" href="#internalunpublished-1">Internal/Unpublished</a></h3>
+<ul>
+<li><strong><code>/tree-sitter-perl/</code></strong>: Original C implementation (benchmarking only)</li>
+<li><strong><code>/crates/tree-sitter-perl-rs/</code></strong>: Tree-sitter integration with unified scanner architecture
+<ul>
+<li>Delegation pattern: C scanner wrapper delegates to Rust implementation</li>
+<li>Single source of truth for all scanner functionality</li>
+<li>Maintains backward compatibility while providing modern Rust performance</li>
+</ul>
+</li>
+<li><strong><code>/xtask/</code></strong>: Development automation</li>
+<li><strong><code>/docs/</code></strong>: Architecture documentation</li>
+</ul>
+<h2 id="workspace-configuration-strategy-v088-1"><a class="header" href="#workspace-configuration-strategy-v088-1">Workspace Configuration Strategy (v0.8.8+)</a></h2>
+<h3 id="exclusion-architecture-diataxis-explanation---design-decisions-1"><a class="header" href="#exclusion-architecture-diataxis-explanation---design-decisions-1">Exclusion Architecture (<strong>Diataxis: Explanation</strong> - Design decisions)</a></h3>
+<p>The workspace uses a <strong>production-focused exclusion strategy</strong> to ensure reliable builds:</p>
+<h4 id="excluded-crates-1"><a class="header" href="#excluded-crates-1">Excluded Crates</a></h4>
+<ul>
+<li><strong><code>tree-sitter-perl-c</code></strong>: Requires libclang and system dependencies</li>
+<li><strong>Example crates with feature conflicts</strong>: Avoid cross-crate feature dependency issues</li>
+<li><strong>Legacy tooling</strong>: Internal development tools not part of published API</li>
+</ul>
+<h4 id="architectural-benefits-1"><a class="header" href="#architectural-benefits-1">Architectural Benefits</a></h4>
 <ol>
-<li><strong>Lexical Analysis</strong>: Context-aware tokenization</li>
-<li><strong>Parsing</strong>: Recursive descent with error recovery</li>
-<li><strong>AST Construction</strong>: Build abstract syntax tree</li>
-<li><strong>Serialization</strong>: Output S-expressions for Tree-sitter compatibility</li>
+<li><strong>Platform Independence</strong>: No C toolchain requirements</li>
+<li><strong>CI Stability</strong>: Consistent build behavior across platforms</li>
+<li><strong>Production Focus</strong>: Testing only published crate surface area</li>
+<li><strong>Dependency Safety</strong>: Avoid system-specific build failures</li>
 </ol>
-<p>See the <a href="architecture/../lsp/implementation-guide.html">LSP Implementation Guide</a> for integration details.</p>
+<p>This approach prioritizes <strong>published crate reliability</strong> over comprehensive internal tooling, ensuring users can depend on stable builds regardless of their platform or system configuration.</p>
+<p>See <a href="architecture/../WORKSPACE_TEST_REPORT.html">WORKSPACE_TEST_REPORT.md</a> for current workspace status.</p>
+<h2 id="key-components-2"><a class="header" href="#key-components-2">Key Components</a></h2>
+<h3 id="1-pest-parser-architecture-1"><a class="header" href="#1-pest-parser-architecture-1">1. Pest Parser Architecture</a></h3>
+<ul>
+<li>PEG grammar in <code>grammar.pest</code> defines all Perl syntax</li>
+<li>Recursive descent parsing with packrat optimization</li>
+<li>Zero-copy parsing with <code>&amp;str</code> slices</li>
+<li>Feature flag: <code>pure-rust</code> enables the Pest parser</li>
+</ul>
+<h3 id="2-ast-generation-1"><a class="header" href="#2-ast-generation-1">2. AST Generation</a></h3>
+<ul>
+<li>Strongly typed AST nodes in <code>pure_rust_parser.rs</code></li>
+<li>Arc<str> for efficient string storage</li>
+<li>Tree-sitter compatible node types</li>
+<li>Position tracking for all nodes</li>
+</ul>
+<h3 id="3-production-ready-incremental-parsing-diataxis-explanation-1"><a class="header" href="#3-production-ready-incremental-parsing-diataxis-explanation-1">3. Production-Ready Incremental Parsing (<strong>Diataxis: Explanation</strong>)</a></h3>
+<ul>
+<li><strong>IncrementalParserV2</strong>: Advanced incremental parser with intelligent node reuse</li>
+<li><strong>Statistical Validation</strong>: Comprehensive performance analysis framework
+<ul>
+<li>Performance metrics: 65µs average (Excellent), 205µs moderate (Very Good), 538µs large (Good)</li>
+<li>Node reuse efficiency: 99.7% peak, 96.8% average (target: ≥70%)</li>
+<li>Statistical consistency: &lt;0.6 coefficient of variation (target: &lt;1.0)</li>
+<li>Success rate: 100% with comprehensive fallback mechanisms</li>
+</ul>
+</li>
+<li><strong>Unicode-Safe Operations</strong>: Proper multibyte character handling with UTF-8 boundary validation</li>
+<li><strong>Memory Efficiency</strong>: Arc<Node> sharing, intelligent symbol-priority cache eviction, Rope-based document management</li>
+<li><strong>Test Infrastructure</strong>: 40+ comprehensive test cases with production-grade validation</li>
+<li><strong>LSP Integration</strong>: Real-time document updates with Rope-based position tracking</li>
+</ul>
+<h3 id="4-s-expression-output-1"><a class="header" href="#4-s-expression-output-1">4. S-Expression Output</a></h3>
+<ul>
+<li><code>to_sexp()</code> method produces tree-sitter format</li>
+<li>Compatible with existing tree-sitter tools</li>
+<li>Preserves all position information</li>
+<li>Error nodes for unparseable constructs</li>
+</ul>
+<h3 id="5-edge-case-handling-1"><a class="header" href="#5-edge-case-handling-1">5. Edge Case Handling</a></h3>
+<ul>
+<li>Comprehensive heredoc support (93% edge case test coverage)</li>
+<li>Phase-aware parsing for BEGIN/END blocks</li>
+<li>Dynamic delimiter detection and recovery</li>
+<li>Clear diagnostics for unparseable constructs</li>
+</ul>
+<h3 id="6-revolutionary-testing-strategy-pr-140-enhanced-1"><a class="header" href="#6-revolutionary-testing-strategy-pr-140-enhanced-1">6. Revolutionary Testing Strategy (PR #140 Enhanced)</a></h3>
+<ul>
+<li><strong>Revolutionary LSP Performance</strong>: 5000x faster behavioral tests, 4700x faster user stories</li>
+<li><strong>Adaptive Timeout Architecture</strong>: Multi-tier timeout scaling with thread awareness</li>
+<li><strong>Enhanced Test Harness</strong>: Real JSON-RPC protocol with mock responses and graceful degradation</li>
+<li><strong>Optimized Idle Detection</strong>: 1000ms → 200ms cycles (5x improvement)</li>
+<li><strong>Grammar tests for each Perl construct</strong>: Traditional comprehensive coverage maintained</li>
+<li><strong>Edge case tests with property testing</strong>: Extensive edge case validation</li>
+<li><strong>Incremental Parsing Tests</strong>: 40+ comprehensive test cases with statistical validation</li>
+<li><strong>Performance Benchmarks</strong>: Sub-millisecond performance validation with revolutionary improvements</li>
+<li>Integration tests for S-expression output</li>
+<li>Position tracking validation tests</li>
+<li>Encoding-aware lexing for mid-file encoding changes</li>
+<li>Tree-sitter compatible error nodes and diagnostics</li>
+<li>Performance optimized (&lt;5% overhead for normal code, 65µs incremental updates)</li>
+</ul>
+<h2 id="development-guidelines-2"><a class="header" href="#development-guidelines-2">Development Guidelines</a></h2>
+<h3 id="choosing-a-crate-2"><a class="header" href="#choosing-a-crate-2">Choosing a Crate</a></h3>
+<ol>
+<li><strong>For Any Perl Parsing</strong>: Use <code>perl-parser</code> - fastest, most complete, production-ready with Rope support</li>
+<li><strong>For IDE Integration</strong>: Install <code>perl-lsp</code> from <code>perl-parser</code> crate - includes full Rope-based document management</li>
+<li><strong>For Testing Parsers</strong>: Use <code>perl-corpus</code> for comprehensive test suite</li>
+<li><strong>For Legacy Migration</strong>: Migrate from <code>perl-parser-pest</code> to <code>perl-parser</code></li>
+</ol>
+<h3 id="development-locations-2"><a class="header" href="#development-locations-2">Development Locations</a></h3>
+<ul>
+<li><strong>LSP Binary &amp; CLI</strong>: <code>/crates/perl-lsp/</code> - for changes to the command-line interface or server startup.</li>
+<li><strong>LSP Feature Logic</strong>: <code>/crates/perl-parser/</code> - for all core LSP features (diagnostics, completion, etc.). This is where most LSP development happens.</li>
+<li><strong>Parser Core</strong>: <code>/crates/perl-parser/</code> - for changes to the parsing engine itself.</li>
+<li><strong>Lexer</strong>: <code>/crates/perl-lexer/</code> - for tokenization improvements.</li>
+<li><strong>Test Corpus</strong>: <code>/crates/perl-corpus/</code> - for adding new test cases.</li>
+<li><strong>Legacy</strong>: <code>/crates/perl-parser-pest/</code> - maintenance only.</li>
+</ul>
+<h3 id="rope-development-guidelines-2"><a class="header" href="#rope-development-guidelines-2">Rope Development Guidelines</a></h3>
+<p><strong>IMPORTANT</strong>: All Rope improvements should target the <strong>production perl-parser crate</strong>, not internal test harnesses.</p>
+<p><strong>Production Rope Modules</strong> (Target for improvements):</p>
+<ul>
+<li><strong><code>/crates/perl-parser/src/textdoc.rs</code></strong>: Core document management with <code>ropey::Rope</code>.</li>
+<li><strong><code>/crates/perl-parser/src/position_mapper.rs</code></strong>: UTF-16/UTF-8 position conversion.</li>
+<li><strong><code>/crates/perl-parser/src/incremental_integration.rs</code></strong>: LSP integration bridge.</li>
+<li><strong><code>/crates/perl-parser/src/incremental_handler_v2.rs</code></strong>: Document change processing.</li>
+</ul>
+<p><strong>Recent Incremental Parsing Improvements</strong>:</p>
+<ul>
+<li><strong>Enhanced Module Organization</strong>: Fixed import issues in incremental parsing comprehensive tests</li>
+<li><strong>Improved Code Consistency</strong>: Enhanced formatting and readability across incremental parsing modules</li>
+<li><strong>Stabilized Integration</strong>: Resolved module import dependencies for better build reliability</li>
+</ul>
+<p><strong>Do NOT modify these Rope usages</strong> (internal test code):</p>
+<ul>
+<li><strong><code>/crates/tree-sitter-perl-rs/</code></strong>: Legacy test harnesses with outdated Rope usage</li>
+<li><strong>Internal test infrastructure</strong>: Focus on production code, not test utilities</li>
+</ul>
+<h2 id="performance-characteristics-3"><a class="header" href="#performance-characteristics-3">Performance Characteristics</a></h2>
+<ul>
+<li>Pure Rust parser: ~200-450 µs for typical files (2.5KB)</li>
+<li>Memory usage: Arc<str> for zero-copy string storage</li>
+<li>Production ready: Handles real-world Perl code</li>
+<li>Predictable: ~180 µs/KB parsing speed</li>
+<li>Legacy C parser: ~12-68 µs (kept for benchmark reference only)</li>
+</ul>
+<h2 id="documentation-infrastructure-layer-spec-149--implemented-1"><a class="header" href="#documentation-infrastructure-layer-spec-149--implemented-1">Documentation Infrastructure Layer (SPEC-149) ✅ <strong>IMPLEMENTED</strong></a></h2>
+<h3 id="missing-documentation-warnings-infrastructure-1"><a class="header" href="#missing-documentation-warnings-infrastructure-1">Missing Documentation Warnings Infrastructure</a></h3>
+<p>As of <strong>Draft PR 159 (SPEC-149)</strong>, the perl-parser crate includes comprehensive documentation quality enforcement infrastructure:</p>
+<h4 id="core-infrastructure-components-1"><a class="header" href="#core-infrastructure-components-1">Core Infrastructure Components</a></h4>
+<ol>
+<li>
+<p><strong>Documentation Enforcement</strong>:</p>
+<ul>
+<li><code>#![warn(missing_docs)]</code> enabled in <code>/crates/perl-parser/src/lib.rs</code> at line 38</li>
+<li>Comprehensive coverage of 605+ undocumented APIs across all modules</li>
+<li>Zero performance impact (&lt;1% overhead) on revolutionary parsing performance</li>
+</ul>
+</li>
+<li>
+<p><strong>Validation Framework</strong>:</p>
+<ul>
+<li><strong>25 Acceptance Criteria Tests</strong> in <code>/crates/perl-parser/tests/missing_docs_ac_tests.rs</code></li>
+<li><strong>17/25 Infrastructure Tests Passing</strong>: Documentation enforcement operational</li>
+<li><strong>8/25 Content Tests Failing</strong>: Systematic implementation targets for 4-phase resolution</li>
+<li><strong>Property-Based Testing</strong>: Advanced validation with arbitrary input fuzzing</li>
+</ul>
+</li>
+<li>
+<p><strong>Quality Assurance</strong>:</p>
+<ul>
+<li><strong>CI Integration</strong>: Automated documentation quality gates preventing regression</li>
+<li><strong>Real-Time Monitoring</strong>: Violation count tracking and progress assessment</li>
+<li><strong>Edge Case Detection</strong>: Validates malformed doctests, empty docs, invalid cross-references</li>
+</ul>
+</li>
+</ol>
+<h4 id="systematic-resolution-strategy-1"><a class="header" href="#systematic-resolution-strategy-1">Systematic Resolution Strategy</a></h4>
+<p><strong>4-Phase Implementation Approach</strong>:</p>
+<p><strong>Phase 1: Critical Parser Infrastructure (Weeks 1-2)</strong></p>
+<ul>
+<li>Target modules: <code>parser.rs</code>, <code>ast.rs</code>, <code>error.rs</code>, <code>token_stream.rs</code>, <code>semantic.rs</code></li>
+<li>Focus: LSP workflow integration and performance characteristics</li>
+<li>~150 violations from core parsing functionality</li>
+</ul>
+<p><strong>Phase 2: LSP Provider Interfaces (Weeks 3-4)</strong></p>
+<ul>
+<li>Target modules: <code>completion.rs</code>, <code>workspace_index.rs</code>, <code>diagnostics.rs</code>, <code>semantic_tokens.rs</code></li>
+<li>Focus: Protocol compliance and editor integration patterns</li>
+<li>~200 violations from LSP functionality</li>
+</ul>
+<p><strong>Phase 3: Advanced Features (Weeks 5-6)</strong></p>
+<ul>
+<li>Target modules: <code>import_optimizer.rs</code>, <code>test_generator.rs</code>, <code>scope_analyzer.rs</code>, <code>type_inference.rs</code></li>
+<li>Focus: TDD workflow and advanced code analysis features</li>
+<li>~150 violations from specialized functionality</li>
+</ul>
+<p><strong>Phase 4: Supporting Infrastructure (Weeks 7-8)</strong></p>
+<ul>
+<li>Target modules: Utilities, supporting modules, generated code</li>
+<li>Focus: Final consistency and infrastructure cleanup</li>
+<li>~105 violations from supporting infrastructure</li>
+</ul>
+<h4 id="documentation-quality-standards-1"><a class="header" href="#documentation-quality-standards-1">Documentation Quality Standards</a></h4>
+<p><strong>Enterprise-Grade Requirements</strong>:</p>
+<ul>
+<li><strong>Brief Summary</strong>: One-sentence functionality description</li>
+<li><strong>Detailed Description</strong>: 2-3 sentences with LSP workflow context</li>
+<li><strong>Complete Parameters</strong>: All arguments with types, purposes, and constraints</li>
+<li><strong>Return Documentation</strong>: Values including error conditions and recovery strategies</li>
+<li><strong>Working Examples</strong>: Realistic usage scenarios with assertions and error handling</li>
+<li><strong>Performance Notes</strong>: Time/space complexity for critical APIs</li>
+<li><strong>Cross-References</strong>: Proper Rust documentation linking</li>
+</ul>
+<h4 id="integration-with-development-workflow-1"><a class="header" href="#integration-with-development-workflow-1">Integration with Development Workflow</a></h4>
+<p><strong>Validation Commands</strong>:</p>
+<pre><code class="language-bash"># Run all 25 acceptance criteria tests
+cargo test -p perl-parser --test missing_docs_ac_tests
+
+# Track violation count (baseline: 605+)
+cargo build -p perl-parser 2&gt;&amp;1 | grep "warning: missing documentation" | wc -l
+
+# Generate documentation without warnings
+cargo doc --no-deps --package perl-parser
+</code></pre>
+<p><strong>Related Documentation</strong>:</p>
+<ul>
+<li><strong><a href="architecture/MISSING_DOCUMENTATION_GUIDE.html">Missing Documentation Guide</a></strong> - Systematic resolution strategy</li>
+<li><strong><a href="architecture/API_DOCUMENTATION_STANDARDS.html">API Documentation Standards</a></strong> - Enterprise quality requirements</li>
+<li><strong><a href="architecture/adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.html">ADR-002: API Documentation Infrastructure</a></strong> - Implementation architecture</li>
+<li><strong><a href="architecture/adr/ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.html">ADR-003: Missing Documentation Infrastructure</a></strong> - Implementation details</li>
+</ul>
+<h2 id="context-sensitive-features-1"><a class="header" href="#context-sensitive-features-1">Context-Sensitive Features</a></h2>
+<p>The parser includes sophisticated solutions for Perl’s context-sensitive features:</p>
+<h3 id="slash-disambiguation-1"><a class="header" href="#slash-disambiguation-1">Slash Disambiguation</a></h3>
+<ol>
+<li><strong>Mode-aware lexer</strong> (<code>perl_lexer.rs</code>) - Tracks parser state to disambiguate / as division vs regex</li>
+<li><strong>Preprocessing adapter</strong> (<code>lexer_adapter.rs</code>) - Transforms ambiguous tokens for PEG parsing</li>
+<li><strong>Disambiguated parser</strong> (<code>disambiguated_parser.rs</code>) - High-level API with automatic handling</li>
+</ol>
+<p>See <code>SLASH_DISAMBIGUATION.md</code> for full details.</p>
+<h3 id="heredoc-support-1"><a class="header" href="#heredoc-support-1">Heredoc Support</a></h3>
+<ol>
+<li><strong>Multi-phase parser</strong> (<code>heredoc_parser.rs</code>) - Three-phase approach to handle stateful heredocs</li>
+<li><strong>Full parser</strong> (<code>full_parser.rs</code>) - Combines heredoc and slash handling</li>
+<li><strong>Complete coverage</strong> - Supports all heredoc variants including indented heredocs</li>
+</ol>
+<p>See <code>HEREDOC_IMPLEMENTATION.md</code> for full details.</p>
+<h3 id="edge-case-handling-2"><a class="header" href="#edge-case-handling-2">Edge Case Handling</a></h3>
+<ol>
+<li><strong>Edge case handler</strong> (<code>edge_case_handler.rs</code>) - Unified detection and recovery system</li>
+<li><strong>Phase-aware parsing</strong> (<code>phase_aware_parser.rs</code>) - Handles BEGIN/CHECK/INIT/END blocks</li>
+<li><strong>Dynamic recovery</strong> (<code>dynamic_delimiter_recovery.rs</code>) - Multiple strategies for runtime delimiters</li>
+<li><strong>Tree-sitter adapter</strong> (<code>tree_sitter_adapter.rs</code>) - Ensures 100% AST compatibility</li>
+</ol>
+<p>See <code>docs/EDGE_CASES.md</code> for comprehensive documentation.</p>
+<h2 id="thread-safety-architecture-diataxis-explanation-1"><a class="header" href="#thread-safety-architecture-diataxis-explanation-1">Thread-Safety Architecture (<strong>Diataxis: Explanation</strong>)</a></h2>
+<h3 id="thread-safety-design-principles-1"><a class="header" href="#thread-safety-design-principles-1">Thread-Safety Design Principles</a></h3>
+<p>The tree-sitter-perl architecture implements comprehensive thread-safety through immutable data structures and local state management patterns. This design enables high-performance concurrent operations while eliminating race conditions.</p>
+<h4 id="core-thread-safety-patterns-1"><a class="header" href="#core-thread-safety-patterns-1">Core Thread-Safety Patterns</a></h4>
+<ol>
+<li>
+<p><strong>Immutable Provider Pattern</strong> (<strong>Diataxis: Reference</strong>)</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Thread-safe provider with immutable data
+pub struct SemanticTokensProvider {
+    source: String,  // Immutable after construction
+    // No mutable shared state
+}
+
+impl SemanticTokensProvider {
+    // Safe for concurrent access (&amp;self, not &amp;mut self)
+    pub fn extract(&amp;self, ast: &amp;Node) -&gt; Vec&lt;SemanticToken&gt; {
+        let mut collector = TokenCollector::new(&amp;self.source);
+        collector.collect(ast)  // Local state only
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+</li>
+<li>
+<p><strong>Local State Collector Pattern</strong> (<strong>Diataxis: Reference</strong>)</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// Each operation creates fresh local state
+struct TokenCollector&lt;'a&gt; {
+    source: &amp;'a str,                               // Immutable reference
+    declared_vars: HashMap&lt;String, Vec&lt;(u32, u32)&gt;&gt;, // Local state per call
+}
+
+impl&lt;'a&gt; TokenCollector&lt;'a&gt; {
+    fn new(source: &amp;'a str) -&gt; Self {
+        Self { 
+            source, 
+            declared_vars: HashMap::new() // Fresh state each time
+        }
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+</li>
+<li>
+<p><strong>Arc-Based Node Sharing</strong> (<strong>Diataxis: Reference</strong>)</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// AST nodes use Arc for safe concurrent access
+pub struct Node {
+    pub kind: Arc&lt;NodeKind&gt;,     // Immutable shared content
+    pub span: Span,              // Value type - no sharing issues
+    pub children: Vec&lt;Arc&lt;Node&gt;&gt;, // Safe to share between threads
+}
+<span class="boring">}</span></code></pre></pre>
+</li>
+</ol>
+<h4 id="performance-impact-of-thread-safety-1"><a class="header" href="#performance-impact-of-thread-safety-1">Performance Impact of Thread-Safety</a></h4>
+<p><strong>Semantic Tokens Performance</strong> (v0.8.8):</p>
+<ul>
+<li><strong>Average execution time</strong>: 2.826µs</li>
+<li><strong>Performance improvement</strong>: 35x better than 100µs target</li>
+<li><strong>Memory efficiency</strong>: Zero persistent state between calls</li>
+<li><strong>Concurrency</strong>: Unlimited concurrent calls with consistent results</li>
+</ul>
+<p><strong>Memory Architecture</strong>:</p>
+<ul>
+<li><strong>Zero-copy source references</strong>: <code>&amp;str</code> slices avoid string duplication</li>
+<li><strong>Local state isolation</strong>: Each operation creates independent working state</li>
+<li><strong>Efficient cleanup</strong>: Local state automatically dropped after operation</li>
+<li><strong>No locks required</strong>: Immutable data eliminates need for synchronization</li>
+</ul>
+<h4 id="thread-safety-validation-diataxis-how-to-1"><a class="header" href="#thread-safety-validation-diataxis-how-to-1">Thread-Safety Validation (<strong>Diataxis: How-to</strong>)</a></h4>
+<p>The architecture includes comprehensive thread-safety testing:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[test]
+fn test_concurrent_semantic_token_access() {
+    let provider = SemanticTokensProvider::new(source.to_string());
+    let ast = parse_code(source);
+    
+    // Test concurrent calls produce identical results
+    let (tokens1, tokens2, tokens3) = rayon::join(
+        || provider.extract(&amp;ast),
+        || provider.extract(&amp;ast), 
+        || provider.extract(&amp;ast)
+    );
+    
+    // Verify consistency across all concurrent calls
+    assert_eq!(tokens1, tokens2);
+    assert_eq!(tokens2, tokens3);
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="integration-with-lsp-server-diataxis-how-to-1"><a class="header" href="#integration-with-lsp-server-diataxis-how-to-1">Integration with LSP Server (<strong>Diataxis: How-to</strong>)</a></h4>
+<p>The thread-safe design enables high-performance LSP operations:</p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>// LSP server can safely handle concurrent requests
+fn handle_semantic_tokens_full(&amp;self, params: SemanticTokensParams) -&gt; Result&lt;Response&gt; {
+    let doc = self.get_document(&amp;params.uri)?;
+    
+    // Thread-safe provider creation - no shared mutable state
+    let provider = SemanticTokensProvider::new(doc.content.clone());
+    
+    // Safe concurrent access to AST and provider
+    let tokens = provider.extract(&amp;doc.ast);
+    
+    Ok(encode_semantic_tokens(&amp;tokens))
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="benefits-of-thread-safe-architecture-diataxis-explanation-1"><a class="header" href="#benefits-of-thread-safe-architecture-diataxis-explanation-1">Benefits of Thread-Safe Architecture (<strong>Diataxis: Explanation</strong>)</a></h4>
+<ol>
+<li><strong>Eliminated Race Conditions</strong>: No shared mutable state prevents data races</li>
+<li><strong>Exceptional Performance</strong>: Local state management avoids synchronization overhead</li>
+<li><strong>Memory Safety</strong>: Immutable references prevent use-after-free scenarios</li>
+<li><strong>Scalability</strong>: Unlimited concurrent operations without contention</li>
+<li><strong>Consistency</strong>: Identical results guaranteed for same inputs across threads</li>
+<li><strong>Maintainability</strong>: Clear ownership and lifetime semantics reduce complexity</li>
+</ol>
+<h4 id="future-thread-safety-extensions-diataxis-reference-1"><a class="header" href="#future-thread-safety-extensions-diataxis-reference-1">Future Thread-Safety Extensions (<strong>Diataxis: Reference</strong>)</a></h4>
+<p>The thread-safe patterns established for semantic tokens provide a template for future LSP features:</p>
+<ul>
+<li><strong>Completion Provider</strong>: Apply immutable provider + local collector pattern</li>
+<li><strong>Hover Provider</strong>: Use same thread-safe AST traversal approach</li>
+<li><strong>Definition Provider</strong>: Implement concurrent symbol resolution with local state</li>
+<li><strong>Reference Provider</strong>: Scale to workspace-wide concurrent symbol searches</li>
+</ul>
+<p>This architecture ensures all LSP features can achieve similar performance and safety characteristics as the semantic token provider.</p>
+<h3 id="revolutionary-adaptive-timeout-system-design-pr-140-diataxis-explanation---game-changing-testing-architecture-1"><a class="header" href="#revolutionary-adaptive-timeout-system-design-pr-140-diataxis-explanation---game-changing-testing-architecture-1">Revolutionary Adaptive Timeout System Design (PR #140) (<strong>Diataxis: Explanation</strong> - Game-changing testing architecture)</a></h3>
+<p>PR #140 introduces a sophisticated adaptive timeout system that delivers transformative performance improvements:</p>
+<h4 id="performance-achievements-1"><a class="header" href="#performance-achievements-1">Performance Achievements</a></h4>
+<ul>
+<li><strong>LSP behavioral tests</strong>: 1560s+ → 0.31s (<strong>5000x faster</strong>)</li>
+<li><strong>User story tests</strong>: 1500s+ → 0.32s (<strong>4700x faster</strong>)</li>
+<li><strong>Individual workspace tests</strong>: 60s+ → 0.26s (<strong>230x faster</strong>)</li>
+<li><strong>Overall test suite</strong>: 60s+ → &lt;10s (<strong>6x faster</strong>)</li>
+<li><strong>CI reliability</strong>: 100% pass rate (was ~55% due to timeouts)</li>
+</ul>
+<h4 id="multi-tier-adaptive-timeout-architecture-1"><a class="header" href="#multi-tier-adaptive-timeout-architecture-1">Multi-Tier Adaptive Timeout Architecture</a></h4>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// LSP Harness Fine-Grained Timeout Control
+fn get_adaptive_timeout() -&gt; Duration {
+    let thread_count = std::env::var("RUST_TEST_THREADS")
+        .ok()
+        .and_then(|s| s.parse::&lt;usize&gt;().ok())
+        .unwrap_or(4);
+
+    match thread_count {
+        0..=2 =&gt; Duration::from_millis(500), // High contention: longer timeout
+        3..=4 =&gt; Duration::from_millis(300), // Medium contention
+        _ =&gt; Duration::from_millis(200),     // Low contention: shorter timeout
+    }
+}
+
+/// Comprehensive Test Suite Timeout Scaling
+fn adaptive_timeout() -&gt; Duration {
+    let base_timeout = default_timeout();
+    let thread_count = max_concurrent_threads();
+
+    // Logarithmic backoff with protection against extreme scenarios
+    match thread_count {
+        0..=2 =&gt; base_timeout * 3,   // Heavily constrained: 3x base timeout
+        3..=4 =&gt; base_timeout * 2,   // Moderately constrained: 2x base timeout
+        5..=8 =&gt; base_timeout * 1_5, // Lightly constrained: 1.5x base timeout
+        _ =&gt; base_timeout,           // Unconstrained: standard timeout
+    }
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="key-optimization-components-1"><a class="header" href="#key-optimization-components-1">Key Optimization Components</a></h4>
+<p><strong>1. Intelligent Symbol Waiting with Exponential Backoff</strong></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// Enhanced idle detection with optimized cycles
+fn wait_for_idle_optimized(&amp;mut self, timeout: Duration) -&gt; Result&lt;(), String&gt; {
+    let start = Instant::now();
+    let adaptive_timeout = self.get_adaptive_timeout();
+    
+    while start.elapsed() &lt; adaptive_timeout.min(timeout) {
+        // Exponential backoff with more nuanced timing
+        let wait_duration = match start.elapsed().as_millis() {
+            0..=50 =&gt; Duration::from_millis(10),   // Initial rapid polling
+            51..=200 =&gt; Duration::from_millis(50), // Medium polling
+            _ =&gt; Duration::from_millis(200),       // Stable polling (was 1000ms)
+        };
+        
+        thread::sleep(wait_duration);
+        if self.check_idle_state() { return Ok(()); }
+    }
+    Err("Timeout waiting for idle state".to_string())
+}
+<span class="boring">}</span></code></pre></pre>
+<p><strong>2. Enhanced Test Harness with Mock Responses</strong></p>
+<ul>
+<li><strong>Mock responses</strong>: Fast fallback for expected non-responses</li>
+<li><strong>Graceful degradation</strong>: CI environment adaptation</li>
+<li><strong>Real JSON-RPC protocol</strong>: Maintains protocol compliance while achieving 5000x improvements</li>
+</ul>
+<p><strong>3. Thread-Aware Sleep Scaling</strong></p>
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>/// More sophisticated sleep scaling with exponential strategy
+pub fn adaptive_sleep_ms(base_ms: u64) -&gt; Duration {
+    let thread_count = max_concurrent_threads();
+    let multiplier = match thread_count {
+        0..=2 =&gt; 3,   // High contention: 3x sleep duration
+        3..=4 =&gt; 2,   // Medium contention: 2x sleep duration  
+        5..=8 =&gt; 1_5, // Light contention: 1.5x sleep duration
+        _ =&gt; 1,       // No contention: base sleep duration
+    };
+    Duration::from_millis(base_ms * multiplier)
+}
+<span class="boring">}</span></code></pre></pre>
+<h4 id="strategic-value-analysis-1"><a class="header" href="#strategic-value-analysis-1">Strategic Value Analysis</a></h4>
+<p><strong>Transformational Impact</strong>:</p>
+<ul>
+<li><strong>5000x improvement</strong> in behavioral tests = <strong>Transformational</strong></li>
+<li><strong>4700x improvement</strong> in user story tests = <strong>Revolutionary</strong></li>
+<li><strong>230x improvement</strong> in workspace tests = <strong>Game-changing</strong></li>
+<li><strong>100% CI reliability</strong> = <strong>Production-ready</strong></li>
+</ul>
+<p><strong>Architectural Benefits</strong>:</p>
+<ol>
+<li><strong>Multi-tier scaling</strong>: Different timeout strategies for different test types</li>
+<li><strong>Environment awareness</strong>: Adapts to CI vs development environments</li>
+<li><strong>Performance optimization</strong>: 200ms idle detection vs previous 1000ms</li>
+<li><strong>Reliability enhancement</strong>: Exponential backoff prevents timeout failures</li>
+<li><strong>Strategic value</strong>: Enables rapid development iteration and CI reliability</li>
+</ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="lsp-implementation-technical-guide-diataxis-explanation---understanding-lsp-architecture-and-design-decisions"><a class="header" href="#lsp-implementation-technical-guide-diataxis-explanation---understanding-lsp-architecture-and-design-decisions">LSP Implementation Technical Guide (<em>Diataxis: Explanation</em> - Understanding LSP architecture and design decisions)</a></h1>
 <blockquote>
 <p>This guide follows the <strong><a href="https://diataxis.fr/">Diataxis framework</a></strong> for comprehensive technical documentation:</p>
@@ -5279,7 +5931,7 @@ my @vals = @mixed{
     qw(word_list)          # ✅ Word list - correctly identified
 };
 </code></pre>
-<h3 id="performance-characteristics-3"><a class="header" href="#performance-characteristics-3">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-4"><a class="header" href="#performance-characteristics-4">Performance Characteristics</a></h3>
 <ul>
 <li><strong>Complexity</strong>: O(depth) where depth is AST nesting level</li>
 <li><strong>Typical Case</strong>: 1-3 parent traversals for most hash contexts</li>
@@ -5993,7 +6645,7 @@ fn handle_code_action(&amp;self, params: Option&lt;Value&gt;) -&gt; Result&lt;Op
     Ok(Some(json!(actions)))
 }
 <span class="boring">}</span></code></pre></pre>
-<h3 id="performance-characteristics-4"><a class="header" href="#performance-characteristics-4">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-5"><a class="header" href="#performance-characteristics-5">Performance Characteristics</a></h3>
 <p><strong>Import Analysis Performance</strong>:</p>
 <ul>
 <li><strong>Regex-based parsing</strong>: Fast identification of use statements</li>
@@ -7324,7 +7976,7 @@ let provider = CompletionProvider::new_with_index_and_source(
 <li><code>Module</code>: Perl modules and packages</li>
 <li><code>File</code>: File paths (when URI context provided)</li>
 </ul>
-<h4 id="performance-characteristics-5"><a class="header" href="#performance-characteristics-5">Performance Characteristics</a></h4>
+<h4 id="performance-characteristics-6"><a class="header" href="#performance-characteristics-6">Performance Characteristics</a></h4>
 <p><strong>Constructor Performance:</strong></p>
 <ul>
 <li><code>new()</code>: O(n) where n = AST nodes (symbol extraction only)</li>
@@ -8759,7 +9411,7 @@ fn test_nested_calls() {
 <li><strong>Nested Call Support</strong>: Accurate parameter tracking in complex nested function calls</li>
 <li><strong>Performance Optimized</strong>: Efficient parsing with minimal overhead for LSP responsiveness</li>
 </ol>
-<h3 id="performance-characteristics-6"><a class="header" href="#performance-characteristics-6">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-7"><a class="header" href="#performance-characteristics-7">Performance Characteristics</a></h3>
 <ul>
 <li><strong>Call Context Detection</strong>: O(n) where n is characters from cursor to function start</li>
 <li><strong>Parameter Parsing</strong>: O(k) where k is number of parameters in signature</li>
@@ -11336,7 +11988,7 @@ cpan-upload Devel-TSPerlDAP-0.1.0.tar.gz
 <h2 id="crate-1-perl-lexer---the-foundation"><a class="header" href="#crate-1-perl-lexer---the-foundation">Crate 1: <code>perl-lexer</code> - The Foundation</a></h2>
 <h3 id="purpose"><a class="header" href="#purpose">Purpose</a></h3>
 <p>Convert raw Perl source code into a stream of well-defined tokens.</p>
-<h3 id="key-features-2"><a class="header" href="#key-features-2">Key Features</a></h3>
+<h3 id="key-features-1"><a class="header" href="#key-features-1">Key Features</a></h3>
 <ul>
 <li><strong>99.995% Perl 5 coverage</strong> with sophisticated heredoc recovery</li>
 <li><strong>Enhanced delimiter recognition</strong> with comprehensive pattern matching ✨</li>
@@ -11401,7 +12053,7 @@ pub struct Token {
 <h2 id="crate-2-perl-parser---the-structure"><a class="header" href="#crate-2-perl-parser---the-structure">Crate 2: <code>perl-parser</code> - The Structure</a></h2>
 <h3 id="purpose-1"><a class="header" href="#purpose-1">Purpose</a></h3>
 <p>Transform the token stream from <code>perl-lexer</code> into a structured Abstract Syntax Tree (AST).</p>
-<h3 id="key-features-3"><a class="header" href="#key-features-3">Key Features</a></h3>
+<h3 id="key-features-2"><a class="header" href="#key-features-2">Key Features</a></h3>
 <ul>
 <li><strong>Clean token consumption</strong> via adapter layer</li>
 <li><strong>Recursive descent</strong> with operator precedence</li>
@@ -11567,7 +12219,7 @@ while let Some(token) = lexer.next_token() {
 </ul>
 <h2 id="document-management-layer-rope-integration-v087"><a class="header" href="#document-management-layer-rope-integration-v087">Document Management Layer: Rope Integration (v0.8.7)</a></h2>
 <p>The perl-parser crate includes a comprehensive <strong>Rope-based document management layer</strong> for efficient text operations and LSP integration:</p>
-<h3 id="architecture-3"><a class="header" href="#architecture-3">Architecture</a></h3>
+<h3 id="architecture-2"><a class="header" href="#architecture-2">Architecture</a></h3>
 <pre><code>┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
 │   LSP Client    │  ──&gt;    │   Rope-based    │  ──&gt;    │  perl-parser    │
 │   (UTF-16)      │         │ Position Mapper │         │ (UTF-8 bytes)   │
@@ -11888,7 +12540,29 @@ ln -sf ../../.ci/hooks/pre-commit .git/hooks/pre-commit
 <p>Run the policy check locally anytime:</p>
 <pre><code class="language-bash">./.ci/scripts/check-from-raw.sh
 </code></pre>
-<h2 id="project-structure"><a class="header" href="#project-structure">Project Structure</a></h2>
+<h2 id="workspace-architecture"><a class="header" href="#workspace-architecture">Workspace Architecture</a></h2>
+<p>We use a unified Rust workspace for all core and auxiliary crates.</p>
+<h3 id="core-crates-build-everywhere"><a class="header" href="#core-crates-build-everywhere">Core Crates (Build Everywhere)</a></h3>
+<p>These crates have zero system dependencies and work on all platforms:</p>
+<ul>
+<li><strong>perl-parser</strong>: Main parser library</li>
+<li><strong>perl-lsp</strong>: LSP server binary</li>
+<li><strong>perl-lexer</strong>: Tokenizer</li>
+<li><strong>tree-sitter-perl</strong>: Pure-Rust tree-sitter bindings (default)</li>
+</ul>
+<h3 id="advanced-components-opt-in"><a class="header" href="#advanced-components-opt-in">Advanced Components (Opt-in)</a></h3>
+<p>Some functionality requires system dependencies (like <code>libclang-dev</code>) and is gated behind Cargo features:</p>
+<div class="table-wrapper"><table><thead><tr><th>Feature</th><th>Crate</th><th>Dependency</th><th>Description</th></tr></thead><tbody>
+<tr><td><code>bindings</code></td><td>tree-sitter-perl</td><td><code>libclang-dev</code></td><td>Generates C bindings via bindgen</td></tr>
+<tr><td><code>c-parser</code></td><td>tree-sitter-perl</td><td>C compiler</td><td>Builds the native C parser/scanner</td></tr>
+</tbody></table>
+</div>
+<h4 id="building-with-advanced-features"><a class="header" href="#building-with-advanced-features">Building with Advanced Features</a></h4>
+<pre><code class="language-bash"># Ubuntu/Debian
+sudo apt-get install libclang-dev
+cargo build -p tree-sitter-perl --features bindings,c-parser
+</code></pre>
+<h3 id="testing"><a class="header" href="#testing">Testing</a></h3>
 <ul>
 <li><strong><code>crates/perl-parser/</code></strong> - Core parser implementation and LSP providers</li>
 <li><strong><code>crates/perl-lsp/</code></strong> - LSP server binary and CLI</li>
@@ -11898,6 +12572,12 @@ ln -sf ../../.ci/hooks/pre-commit .git/hooks/pre-commit
 <li><strong><code>xtask/</code></strong> - Advanced testing and development tools</li>
 <li><strong><code>docs/</code></strong> - Comprehensive project documentation</li>
 </ul>
+<h3 id="semver-compliance"><a class="header" href="#semver-compliance">SemVer Compliance</a></h3>
+<p>All API changes are checked for Semantic Versioning (SemVer) compatibility using <code>cargo-semver-checks</code>.</p>
+<h4 id="check-for-breaking-changes-locally"><a class="header" href="#check-for-breaking-changes-locally">Check for breaking changes locally</a></h4>
+<pre><code class="language-bash">just semver-check
+</code></pre>
+<p>Breaking changes are allowed in minor version bumps (pre-1.0) but require a migration guide in <code>CHANGELOG.md</code>. See <a href="developer/docs/SEMVER_POLICY.html">SEMVER_POLICY.md</a> for full details.</p>
 <h2 id="testing-guidelines"><a class="header" href="#testing-guidelines">Testing Guidelines</a></h2>
 <h3 id="writing-tests"><a class="header" href="#writing-tests">Writing Tests</a></h3>
 <ul>
@@ -11964,7 +12644,7 @@ gh pr list --author "app/dependabot" --search "status:success" --json number --j
 <li>Troubleshooting common issues</li>
 </ul>
 <p>For quick reference, see <strong><a href="developer/./docs/DEPENDENCY_QUICK_REFERENCE.html">Dependency Quick Reference</a></strong>.</p>
-<h2 id="getting-help-1"><a class="header" href="#getting-help-1">Getting Help</a></h2>
+<h2 id="getting-help-2"><a class="header" href="#getting-help-2">Getting Help</a></h2>
 <ul>
 <li><strong>Issues:</strong> Browse existing issues or create a new one</li>
 <li><strong>Discussions:</strong> Use GitHub Discussions for questions and ideas</li>
@@ -11975,8 +12655,223 @@ gh pr list --author "app/dependabot" --search "status:success" --json number --j
 <p>We follow the Rust Code of Conduct. Please be respectful and constructive in all interactions.</p>
 <h2 id="license-2"><a class="header" href="#license-2">License</a></h2>
 <p>By contributing, you agree that your contributions will be licensed under the same license as the project (typically MIT or Apache-2.0).</p>
+<h2 id="release-process"><a class="header" href="#release-process">Release Process</a></h2>
+<p>This section describes the release process for Perl LSP, now that we’ve reached v1.0 GA.</p>
+<h3 id="version-policy"><a class="header" href="#version-policy">Version Policy</a></h3>
+<p>We follow <a href="https://semver.org/">Semantic Versioning 2.0.0</a>:</p>
+<ul>
+<li><strong>Major (X.0.0)</strong>: Breaking changes, requires migration guide</li>
+<li><strong>Minor (X.Y.0)</strong>: New features, backward compatible</li>
+<li><strong>Patch (X.Y.Z)</strong>: Bug fixes, security updates, documentation</li>
+</ul>
+<h3 id="release-types"><a class="header" href="#release-types">Release Types</a></h3>
+<div class="table-wrapper"><table><thead><tr><th>Release Type</th><th>Frequency</th><th>Examples</th><th>Requirements</th></tr></thead><tbody>
+<tr><td><strong>Major</strong></td><td>Annually (as needed)</td><td>1.0.0 → 2.0.0</td><td>Breaking changes, migration guide, extensive testing</td></tr>
+<tr><td><strong>Minor</strong></td><td>Quarterly</td><td>1.0.0 → 1.1.0</td><td>New features, API additions, performance improvements</td></tr>
+<tr><td><strong>Patch</strong></td><td>Monthly (as needed)</td><td>1.0.0 → 1.0.1</td><td>Bug fixes, security updates, documentation updates</td></tr>
+</tbody></table>
+</div>
+<h3 id="release-process-workflow"><a class="header" href="#release-process-workflow">Release Process Workflow</a></h3>
+<h4 id="1-pre-release-preparation"><a class="header" href="#1-pre-release-preparation">1. Pre-Release Preparation</a></h4>
+<pre><code class="language-bash"># Update version numbers
+cargo update -p perl-parser --precise 1.0.0
+cargo update -p perl-lsp --precise 1.0.0
+# ... for all published crates
+
+# Run comprehensive validation
+just ci-full
+just security-scan
+just semver-check
+
+# Update documentation
+# - UPDATE_CHANGELOG.md
+# - Update version references in README.md
+# - Update feature matrix in docs/FEATURES.md
+</code></pre>
+<h4 id="2-release-checklist"><a class="header" href="#2-release-checklist">2. Release Checklist</a></h4>
+<p>Before any release, ensure:</p>
+<ul>
+<li><input disabled="" type="checkbox"/>
+All tests pass: <code>just ci-full</code></li>
+<li><input disabled="" type="checkbox"/>
+Security scan passes: <code>just security-scan</code></li>
+<li><input disabled="" type="checkbox"/>
+No breaking changes (for minor/patch): <code>just semver-check</code></li>
+<li><input disabled="" type="checkbox"/>
+Documentation updated: <code>CHANGELOG.md</code>, version references</li>
+<li><input disabled="" type="checkbox"/>
+Performance benchmarks run: <code>cargo bench</code></li>
+<li><input disabled="" type="checkbox"/>
+Release notes drafted: <code>RELEASE_NOTES.md</code></li>
+<li><input disabled="" type="checkbox"/>
+Version numbers updated in all crates</li>
+<li><input disabled="" type="checkbox"/>
+Git tag prepared: <code>git tag -a v1.0.0 -m "Release v1.0.0"</code></li>
+</ul>
+<h4 id="3-release-execution"><a class="header" href="#3-release-execution">3. Release Execution</a></h4>
+<pre><code class="language-bash"># Create release branch
+git checkout -b release/v1.0.0
+
+# Final validation
+just ci-full
+
+# Merge to main
+git checkout main
+git merge release/v1.0.0
+
+# Tag and push
+git tag v1.0.0
+git push origin main --tags
+
+# Publish to crates.io
+cargo publish -p perl-parser
+cargo publish -p perl-lexer
+cargo publish -p perl-lsp
+# ... other crates in dependency order
+
+# Create GitHub Release
+gh release create v1.0.0 --title "v1.0.0 - Production Ready" --notes-file RELEASE_NOTES.md
+</code></pre>
+<h4 id="4-post-release-tasks"><a class="header" href="#4-post-release-tasks">4. Post-Release Tasks</a></h4>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Update website/documentation</li>
+<li><input disabled="" type="checkbox"/>
+Announce on community channels</li>
+<li><input disabled="" type="checkbox"/>
+Monitor for issues</li>
+<li><input disabled="" type="checkbox"/>
+Begin next development cycle</li>
+</ul>
+<h3 id="code-review-process-for-releases"><a class="header" href="#code-review-process-for-releases">Code Review Process for Releases</a></h3>
+<h4 id="release-reviewers"><a class="header" href="#release-reviewers">Release Reviewers</a></h4>
+<p>All releases require review from:</p>
+<ul>
+<li><strong>Core Maintainer</strong>: Technical approval</li>
+<li><strong>Release Manager</strong>: Process validation</li>
+<li><strong>Security Lead</strong>: Security assessment (for major/minor releases)</li>
+</ul>
+<h4 id="review-criteria"><a class="header" href="#review-criteria">Review Criteria</a></h4>
+<p><strong>Technical Review:</strong></p>
+<ul>
+<li>Code quality and performance</li>
+<li>Test coverage and quality</li>
+<li>Documentation completeness</li>
+<li>Breaking change justification</li>
+</ul>
+<p><strong>Process Review:</strong></p>
+<ul>
+<li>Version compliance with SemVer</li>
+<li>Release checklist completion</li>
+<li>Changelog accuracy</li>
+<li>Migration guide quality (for breaking changes)</li>
+</ul>
+<p><strong>Security Review:</strong></p>
+<ul>
+<li>Dependency vulnerability scan</li>
+<li>Security best practices</li>
+<li>Attack surface analysis</li>
+<li>Enterprise security requirements</li>
+</ul>
+<h3 id="testing-requirements-for-releases"><a class="header" href="#testing-requirements-for-releases">Testing Requirements for Releases</a></h3>
+<h4 id="release-testing-matrix"><a class="header" href="#release-testing-matrix">Release Testing Matrix</a></h4>
+<div class="table-wrapper"><table><thead><tr><th>Release Type</th><th>Required Tests</th><th>Performance Tests</th><th>Security Tests</th></tr></thead><tbody>
+<tr><td><strong>Major</strong></td><td>Full test suite</td><td>Comprehensive benchmarks</td><td>Full security scan</td></tr>
+<tr><td><strong>Minor</strong></td><td>Full test suite</td><td>Regression benchmarks</td><td>Security scan</td></tr>
+<tr><td><strong>Patch</strong></td><td>Core tests</td><td>N/A</td><td>Security scan (if security patch)</td></tr>
+</tbody></table>
+</div>
+<h4 id="test-execution"><a class="header" href="#test-execution">Test Execution</a></h4>
+<pre><code class="language-bash"># Full test suite (required for all releases)
+cargo test --workspace
+
+# Performance benchmarks (required for major/minor)
+cargo bench
+
+# Security scan (required for all releases)
+just security-scan
+
+# Mutation testing (required for major releases)
+just mutation-test
+
+# Integration tests (required for major/minor)
+just integration-test
+</code></pre>
+<h3 id="version-policy-details"><a class="header" href="#version-policy-details">Version Policy Details</a></h3>
+<h4 id="breaking-changes-definition"><a class="header" href="#breaking-changes-definition">Breaking Changes Definition</a></h4>
+<p>Breaking changes include:</p>
+<ul>
+<li>API signature changes</li>
+<li>Removal of public functions/types</li>
+<li>Changes in behavior that affect existing code</li>
+<li>Configuration format changes</li>
+<li>Dependency requirement changes</li>
+</ul>
+<h4 id="compatibility-guarantees"><a class="header" href="#compatibility-guarantees">Compatibility Guarantees</a></h4>
+<p><strong>For v1.x series:</strong></p>
+<ul>
+<li>API stability within major version</li>
+<li>Configuration format stability</li>
+<li>LSP protocol compatibility</li>
+<li>File format compatibility</li>
+</ul>
+<p><strong>Migration Support:</strong></p>
+<ul>
+<li>Automated migration tools when possible</li>
+<li>Comprehensive migration guides</li>
+<li>Deprecation warnings before removal</li>
+<li>Backward compatibility periods</li>
+</ul>
+<h3 id="emergency-releases"><a class="header" href="#emergency-releases">Emergency Releases</a></h3>
+<p>For critical security issues:</p>
+<ol>
+<li><strong>Immediate Assessment</strong>: Triage within 24 hours</li>
+<li><strong>Rapid Fix</strong>: Develop and test fix in 48-72 hours</li>
+<li><strong>Expedited Release</strong>: Bypass normal process if needed</li>
+<li><strong>Security Advisory</strong>: Coordinate disclosure</li>
+<li><strong>Post-Mortem</strong>: Document and improve process</li>
+</ol>
+<h3 id="release-communication"><a class="header" href="#release-communication">Release Communication</a></h3>
+<h4 id="release-channels"><a class="header" href="#release-channels">Release Channels</a></h4>
+<ul>
+<li><strong>GitHub Releases</strong>: Primary announcement channel</li>
+<li><strong>CHANGELOG.md</strong>: Detailed change log</li>
+<li><strong>Security Advisories</strong>: For security-related releases</li>
+<li><strong>Community Forums</strong>: Discussion and support</li>
+<li><strong>Email Lists</strong>: For enterprise notifications</li>
+</ul>
+<h4 id="release-notes-template"><a class="header" href="#release-notes-template">Release Notes Template</a></h4>
+<pre><code class="language-markdown"># Release v1.0.0
+
+## Highlights
+- Key features and improvements
+- Performance metrics
+- Security enhancements
+
+## Breaking Changes
+- Detailed list with migration guidance
+
+## New Features
+- Comprehensive feature list with examples
+
+## Bug Fixes
+- Bug fixes with issue references
+
+## Security Updates
+- Security fixes and CVE references
+
+## Performance Improvements
+- Benchmarks and performance metrics
+
+## Upgrade Instructions
+- Step-by-step upgrade guide
+- Migration considerations
+
+## Known Issues
+- Any known limitations or issues
+</code></pre>
 <hr />
-<p>Thank you for contributing to Perl LSP! =�</p>
+<p>Thank you for contributing to Perl LSP! 🚀</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="commands-reference-diataxis-reference---complete-command-specifications"><a class="header" href="#commands-reference-diataxis-reference---complete-command-specifications">Commands Reference (<em>Diataxis: Reference</em> - Complete command specifications)</a></h1>
 <p><em>This reference provides all available commands for building, testing, and using the tree-sitter-perl ecosystem.</em></p>
 <h2 id="installation-commands-diataxis-how-to-guide---step-by-step-installation"><a class="header" href="#installation-commands-diataxis-how-to-guide---step-by-step-installation">Installation Commands (<em>Diataxis: How-to Guide</em> - Step-by-step installation)</a></h2>
@@ -12622,22 +13517,24 @@ cargo test --doc                      # Documentation tests
 sudo apt-get install libclang-dev  # Ubuntu/Debian
 brew install llvm                  # macOS
 
-# Run dual-scanner corpus comparison (requires xtask excluded from workspace)
-cd xtask &amp;&amp; cargo run corpus                              # Default: compare both scanners
-cd xtask &amp;&amp; cargo run corpus -- --scanner both           # Explicit dual-scanner mode
-cd xtask &amp;&amp; cargo run corpus -- --scanner both --diagnose # With detailed analysis
+# Run corpus comparison modes (requires legacy feature)
+cargo run -p xtask --features legacy -- corpus                          # Corpus vs selected parser (default scanner: v3)
+cargo run -p xtask --features legacy -- corpus --scanner both           # C vs v3 comparison mode
+cargo run -p xtask --features legacy -- corpus --scanner both --diagnose
 
 # Individual scanner testing
-cd xtask &amp;&amp; cargo run corpus -- --scanner c              # C scanner (delegates to Rust)
-cd xtask &amp;&amp; cargo run corpus -- --scanner rust           # Rust scanner implementation  
-cd xtask &amp;&amp; cargo run corpus -- --scanner v3             # V3 parser only
+cargo run -p xtask --features legacy -- corpus --scanner c                    # C scanner
+cargo run -p xtask --features legacy -- corpus --scanner rust                 # In-crate v2 pest parser
+cargo run -p xtask --features legacy -- corpus --scanner v2-pest-microcrate   # Extracted perl-parser-pest v2
+cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose # v2&lt;-&gt;v2 drift detector
+cargo run -p xtask --features legacy -- corpus --scanner v3                   # V3 parser only
 
 # Diagnostic analysis (*Diataxis: Reference* - detailed comparison)
-cd xtask &amp;&amp; cargo run corpus -- --diagnose               # Analyze first failing test
-cd xtask &amp;&amp; cargo run corpus -- --test                   # Test current parser behavior
+cargo run -p xtask --features legacy -- corpus --diagnose  # Analyze first failing test
+cargo run -p xtask --features legacy -- corpus --test      # Test current parser behavior
 
 # Custom corpus path
-cd xtask &amp;&amp; cargo run corpus -- --path ../test/corpus    # Custom corpus directory
+cargo run -p xtask --features legacy -- corpus --path tree-sitter-perl/test/corpus
 </code></pre>
 <h3 id="dual-scanner-output-analysis-diataxis-explanation---understanding-results"><a class="header" href="#dual-scanner-output-analysis-diataxis-explanation---understanding-results">Dual-Scanner Output Analysis (<em>Diataxis: Explanation</em> - Understanding results)</a></h3>
 <pre><code class="language-bash"># Scanner mismatch tracking
@@ -12676,19 +13573,21 @@ cd xtask &amp;&amp; cargo run corpus -- --path ../test/corpus    # Custom corpus
 </code></pre>
 <h3 id="xtask-corpus-command-reference-diataxis-reference---complete-command-specification"><a class="header" href="#xtask-corpus-command-reference-diataxis-reference---complete-command-specification">xtask corpus Command Reference (<em>Diataxis: Reference</em> - Complete command specification)</a></h3>
 <pre><code class="language-bash"># Basic corpus command structure
-cd xtask &amp;&amp; cargo run corpus [OPTIONS]
+cargo run -p xtask --features legacy -- corpus [OPTIONS]
 
 # Command line options:
---path &lt;PATH&gt;              # Corpus directory path (default: ../c/test/corpus)
---scanner &lt;SCANNER&gt;        # Scanner type: c, rust, v3, both (default: both)
+--path &lt;PATH&gt;              # Corpus directory path (default: tree-sitter-perl/test/corpus)
+--scanner &lt;SCANNER&gt;        # Scanner type: c, rust, v2-pest-microcrate, v2-parity, v3, both
 --diagnose                 # Run diagnostic analysis on first failing test
 --test                     # Test current parser behavior with simple expressions
 
 # Scanner type options:
 c       # Use C tree-sitter scanner only (baseline for comparison)
-rust    # Use Rust tree-sitter scanner only (PureRustPerlParser)
+rust    # Use in-crate v2 pest parser (tree_sitter_perl::PureRustPerlParser)
+v2-pest-microcrate  # Use extracted perl-parser-pest v2 parser
+v2-parity  # Compare in-crate v2 vs extracted v2 output only (ignores corpus expected)
 v3      # Use V3 native parser only (perl_parser::Parser)
-both    # Compare C scanner vs Rust scanner (legacy testing - C now delegates to Rust)
+both    # Compare C scanner vs V3 parser output before corpus expectation check
 
 # Prerequisites for dual-scanner mode:
 # Ubuntu/Debian: sudo apt-get install libclang-dev
@@ -13089,7 +13988,7 @@ target=25  # Issue #144 target: ≤25 ignored tests
 // All stages benefit from reduced ignored test technical debt
 <span class="boring">}</span></code></pre></pre>
 <h3 id="1-documentation-quality-testing--implemented"><a class="header" href="#1-documentation-quality-testing--implemented">1. Documentation Quality Testing ✅ <strong>IMPLEMENTED</strong></a></h3>
-<h4 id="missing-documentation-warnings-infrastructure-1"><a class="header" href="#missing-documentation-warnings-infrastructure-1">Missing Documentation Warnings Infrastructure</a></h4>
+<h4 id="missing-documentation-warnings-infrastructure-2"><a class="header" href="#missing-documentation-warnings-infrastructure-2">Missing Documentation Warnings Infrastructure</a></h4>
 <pre><code class="language-bash"># Core documentation validation (25 acceptance criteria tests)
 cargo test -p perl-parser --test missing_docs_ac_tests
 
@@ -13365,7 +14264,7 @@ cargo test -p perl-parser --test mutation_hardening_tests -- --nocapture
 <li><strong>Crash Detection</strong>: Zero tolerance policy with automated panic identification</li>
 <li><strong>Performance Preservation</strong>: Revolutionary LSP performance maintained (5000x improvements)</li>
 </ul>
-<h2 id="integration-with-development-workflow-1"><a class="header" href="#integration-with-development-workflow-1">Integration with Development Workflow</a></h2>
+<h2 id="integration-with-development-workflow-2"><a class="header" href="#integration-with-development-workflow-2">Integration with Development Workflow</a></h2>
 <h3 id="for-new-feature-development"><a class="header" href="#for-new-feature-development">For New Feature Development</a></h3>
 <ol>
 <li><strong>Write Code</strong>: Implement functionality with comprehensive documentation</li>
@@ -14416,7 +15315,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 <h2 id="overview-6"><a class="header" href="#overview-6">Overview</a></h2>
 <p>As of <strong>Draft PR 159 (SPEC-149)</strong>, the perl-parser crate <strong>successfully implements</strong> comprehensive API documentation infrastructure through <code>#![warn(missing_docs)]</code> enforcement to maintain enterprise-grade code quality. This guide provides detailed requirements and best practices for writing effective API documentation.</p>
 <h2 id="implementation-status--successfully-deployed"><a class="header" href="#implementation-status--successfully-deployed">Implementation Status ✅ <strong>SUCCESSFULLY DEPLOYED</strong></a></h2>
-<h3 id="missing-documentation-warnings-infrastructure-2"><a class="header" href="#missing-documentation-warnings-infrastructure-2">Missing Documentation Warnings Infrastructure</a></h3>
+<h3 id="missing-documentation-warnings-infrastructure-3"><a class="header" href="#missing-documentation-warnings-infrastructure-3">Missing Documentation Warnings Infrastructure</a></h3>
 <p>The perl-parser crate has <strong><code>#![warn(missing_docs)]</code> successfully enabled</strong> in <code>/crates/perl-parser/src/lib.rs</code> at line 38, providing:</p>
 <ul>
 <li><strong>605+ Warning Baseline</strong>: Systematic tracking of documentation violations across all modules</li>
@@ -14721,7 +15620,7 @@ pub enum ParseError {
 <li><strong>Check Style</strong>: Automated validation through CI pipeline</li>
 <li><strong>Review</strong>: Ensure documentation meets all acceptance criteria</li>
 </ol>
-<h2 id="troubleshooting-4"><a class="header" href="#troubleshooting-4">Troubleshooting</a></h2>
+<h2 id="troubleshooting-5"><a class="header" href="#troubleshooting-5">Troubleshooting</a></h2>
 <h3 id="common-issues-1"><a class="header" href="#common-issues-1">Common Issues</a></h3>
 <ol>
 <li><strong>Missing Documentation Warning</strong>: Add comprehensive documentation following the examples above</li>
@@ -14729,7 +15628,7 @@ pub enum ParseError {
 <li><strong>Invalid Cross-References</strong>: Use correct <code>[</code>function_name<code>]</code> syntax</li>
 <li><strong>Style Violations</strong>: Follow Rust documentation conventions with proper section headers</li>
 </ol>
-<h3 id="getting-help-2"><a class="header" href="#getting-help-2">Getting Help</a></h3>
+<h3 id="getting-help-3"><a class="header" href="#getting-help-3">Getting Help</a></h3>
 <ul>
 <li>Review existing well-documented modules for examples</li>
 <li>Run the test suite to identify specific documentation gaps</li>
@@ -14790,9 +15689,9 @@ cargo build -p perl-parser 2&gt;&amp;1 | grep "warning: missing documentation" |
 <p>This document provides guidelines and instructions for contributors working on the Pure Rust Perl Parser built with Pest.</p>
 <hr />
 <h2 id="-quick-start"><a class="header" href="#-quick-start">🚀 Quick Start</a></h2>
-<h3 id="prerequisites-2"><a class="header" href="#prerequisites-2">Prerequisites</a></h3>
+<h3 id="prerequisites-3"><a class="header" href="#prerequisites-3">Prerequisites</a></h3>
 <ul>
-<li><strong>Rust</strong>: 1.70+ (stable)</li>
+<li><strong>Rust</strong>: 1.89+ (stable)</li>
 <li><strong>Cargo</strong>: Latest stable</li>
 </ul>
 <h3 id="development-setup"><a class="header" href="#development-setup">Development Setup</a></h3>
@@ -14834,7 +15733,7 @@ cargo run --features pure-rust --bin parse-rust -- script.pl
 # Parse from stdin
 echo 'print "Hello"' | cargo run --features pure-rust --bin parse-rust -- -
 </code></pre>
-<h3 id="testing"><a class="header" href="#testing">Testing</a></h3>
+<h3 id="testing-1"><a class="header" href="#testing-1">Testing</a></h3>
 <pre><code class="language-bash"># Run all tests
 cargo xtask test
 
@@ -14972,7 +15871,7 @@ cargo run --features pure-rust --bin parse-rust -- --ast script.pl
 <li><a href="https://perldoc.perl.org/perlsyn">Perl Language Reference</a></li>
 <li><a href="https://tree-sitter.github.io/">Tree-sitter Docs</a></li>
 </ul>
-<h3 id="architecture-4"><a class="header" href="#architecture-4">Architecture</a></h3>
+<h3 id="architecture-3"><a class="header" href="#architecture-3">Architecture</a></h3>
 <ul>
 <li><code>ARCHITECTURE.md</code>: System design</li>
 <li><code>docs/EDGE_CASES.md</code>: Edge case handling</li>
@@ -15530,7 +16429,7 @@ my @vals = @mixed{
     qw(word_list)          # ✅ Word list - correctly identified
 };
 </code></pre>
-<h3 id="performance-characteristics-7"><a class="header" href="#performance-characteristics-7">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-8"><a class="header" href="#performance-characteristics-8">Performance Characteristics</a></h3>
 <ul>
 <li><strong>Complexity</strong>: O(depth) where depth is AST nesting level</li>
 <li><strong>Typical Case</strong>: 1-3 parent traversals for most hash contexts</li>
@@ -16244,7 +17143,7 @@ fn handle_code_action(&amp;self, params: Option&lt;Value&gt;) -&gt; Result&lt;Op
     Ok(Some(json!(actions)))
 }
 <span class="boring">}</span></code></pre></pre>
-<h3 id="performance-characteristics-8"><a class="header" href="#performance-characteristics-8">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-9"><a class="header" href="#performance-characteristics-9">Performance Characteristics</a></h3>
 <p><strong>Import Analysis Performance</strong>:</p>
 <ul>
 <li><strong>Regex-based parsing</strong>: Fast identification of use statements</li>
@@ -17575,7 +18474,7 @@ let provider = CompletionProvider::new_with_index_and_source(
 <li><code>Module</code>: Perl modules and packages</li>
 <li><code>File</code>: File paths (when URI context provided)</li>
 </ul>
-<h4 id="performance-characteristics-9"><a class="header" href="#performance-characteristics-9">Performance Characteristics</a></h4>
+<h4 id="performance-characteristics-10"><a class="header" href="#performance-characteristics-10">Performance Characteristics</a></h4>
 <p><strong>Constructor Performance:</strong></p>
 <ul>
 <li><code>new()</code>: O(n) where n = AST nodes (symbol extraction only)</li>
@@ -19010,7 +19909,7 @@ fn test_nested_calls() {
 <li><strong>Nested Call Support</strong>: Accurate parameter tracking in complex nested function calls</li>
 <li><strong>Performance Optimized</strong>: Efficient parsing with minimal overhead for LSP responsiveness</li>
 </ol>
-<h3 id="performance-characteristics-10"><a class="header" href="#performance-characteristics-10">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-11"><a class="header" href="#performance-characteristics-11">Performance Characteristics</a></h3>
 <ul>
 <li><strong>Call Context Detection</strong>: O(n) where n is characters from cursor to function start</li>
 <li><strong>Parameter Parsing</strong>: O(k) where k is number of parameters in signature</li>
@@ -19983,7 +20882,7 @@ let links = compute_links(uri, source, &amp;roots);
 //   "tooltip": "Open Data::Dumper"
 // }
 <span class="boring">}</span></code></pre></pre>
-<h3 id="performance-characteristics-11"><a class="header" href="#performance-characteristics-11">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-12"><a class="header" href="#performance-characteristics-12">Performance Characteristics</a></h3>
 <ul>
 <li><strong>Parsing Speed</strong>: Line-based scanning, &lt;100μs for typical files</li>
 <li><strong>Memory Footprint</strong>: Minimal - no AST required, operates on text</li>
@@ -20133,7 +21032,7 @@ for lens in &amp;mut lenses {
 // - "3 references" for helper
 // - "3 references" for MyApp package
 <span class="boring">}</span></code></pre></pre>
-<h3 id="performance-characteristics-12"><a class="header" href="#performance-characteristics-12">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-13"><a class="header" href="#performance-characteristics-13">Performance Characteristics</a></h3>
 <ul>
 <li><strong>AST Traversal</strong>: Single-pass recursive descent, &lt;1ms for typical files</li>
 <li><strong>Position Calculation</strong>: UTF-8 byte offset to line/column conversion, ~1μs per position</li>
@@ -20315,7 +21214,7 @@ for hint in hints {
     println!("{}", json);
 }
 <span class="boring">}</span></code></pre></pre>
-<h3 id="performance-characteristics-13"><a class="header" href="#performance-characteristics-13">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-14"><a class="header" href="#performance-characteristics-14">Performance Characteristics</a></h3>
 <ul>
 <li><strong>AST Traversal</strong>: Single-pass recursive descent</li>
 <li><strong>Hint Generation</strong>: &lt;100μs per function call/variable declaration</li>
@@ -20493,7 +21392,7 @@ let highlights = provider.find_highlights(&amp;ast, source, 4);
 //   DocumentHighlight { location: 59..63 ($foo * 2), kind: Read },
 // ]
 <span class="boring">}</span></code></pre></pre>
-<h3 id="performance-characteristics-14"><a class="header" href="#performance-characteristics-14">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-15"><a class="header" href="#performance-characteristics-15">Performance Characteristics</a></h3>
 <ul>
 <li><strong>Node Finding</strong>: Single AST traversal, &lt;50μs for typical files</li>
 <li><strong>Symbol Matching</strong>: O(n) where n = AST node count</li>
@@ -20725,7 +21624,7 @@ ranges.extend(heredoc_ranges);
 // - If block inside calculate (Region)
 // - Array literal @data (Region)
 <span class="boring">}</span></code></pre></pre>
-<h3 id="performance-characteristics-15"><a class="header" href="#performance-characteristics-15">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-16"><a class="header" href="#performance-characteristics-16">Performance Characteristics</a></h3>
 <ul>
 <li><strong>Memory Footprint</strong>: 24 bytes per range (optimized for large files)</li>
 <li><strong>Range Calculation</strong>: &lt;1μs per fold region</li>
@@ -20873,7 +21772,7 @@ assert!(result.is_some());
 let locations = result.unwrap();
 assert_eq!(locations.len(), 1);
 <span class="boring">}</span></code></pre></pre>
-<h3 id="performance-characteristics-16"><a class="header" href="#performance-characteristics-16">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-17"><a class="header" href="#performance-characteristics-17">Performance Characteristics</a></h3>
 <ul>
 <li><strong>Type Extraction</strong>: Pattern matching on AST nodes, &lt;10μs</li>
 <li><strong>Package Search</strong>: Linear AST traversal, &lt;100ms for typical files</li>
@@ -21074,7 +21973,7 @@ let implementations = provider.find_implementations(&amp;ast, 1, 8, uri, &amp;do
 // Results contain LocationLink to Dog and Cat package declarations
 assert_eq!(implementations.len(), 2);
 <span class="boring">}</span></code></pre></pre>
-<h3 id="performance-characteristics-17"><a class="header" href="#performance-characteristics-17">Performance Characteristics</a></h3>
+<h3 id="performance-characteristics-18"><a class="header" href="#performance-characteristics-18">Performance Characteristics</a></h3>
 <ul>
 <li><strong>Implementation Finding</strong>: &lt;100ms for typical inheritance hierarchies</li>
 <li><strong>Memory Usage</strong>: &lt;5MB for implementation metadata</li>
@@ -21264,7 +22163,7 @@ let hints = provider.extract_range(ast, range);  // ~50% reduction
 <div style="break-before: page; page-break-before: always;"></div><h1 id="lsp-feature-implementation-best-practices"><a class="header" href="#lsp-feature-implementation-best-practices">LSP Feature Implementation Best Practices</a></h1>
 <h2 id="the-right-way-to-add-lsp-features"><a class="header" href="#the-right-way-to-add-lsp-features">The Right Way to Add LSP Features</a></h2>
 <p>This guide explains the proper approach for adding new LSP features to perl-lsp.</p>
-<h2 id="architecture-overview-2"><a class="header" href="#architecture-overview-2">Architecture Overview</a></h2>
+<h2 id="architecture-overview-3"><a class="header" href="#architecture-overview-3">Architecture Overview</a></h2>
 <pre><code>┌──────────────────┐
 │   VSCode/IDE     │
 └────────┬─────────┘
@@ -23179,7 +24078,7 @@ Large Perl files (10-100KB): ~150µs parsing ✅ **MAINTAINED**
 <div style="break-before: page; page-break-before: always;"></div><h1 id="incremental-parsing-guide"><a class="header" href="#incremental-parsing-guide">Incremental Parsing Guide</a></h1>
 <h2 id="overview-11"><a class="header" href="#overview-11">Overview</a></h2>
 <p>The native parser includes <strong>production-ready incremental parsing</strong> with <strong>statistical validation framework</strong> achieving 99.7% node reuse efficiency and 65µs average update times for efficient real-time LSP editing.</p>
-<h2 id="architecture-5"><a class="header" href="#architecture-5">Architecture</a></h2>
+<h2 id="architecture-4"><a class="header" href="#architecture-4">Architecture</a></h2>
 <ul>
 <li><strong>IncrementalDocument</strong>: High-performance document state with intelligent subtree caching and Rope integration</li>
 <li><strong>Rope-based Text Management</strong>: Efficient UTF-16/UTF-8 position conversion using <code>ropey</code> crate</li>
@@ -23327,7 +24226,7 @@ cargo test -p perl-parser incremental_edge_cases_test --features incremental
 <li><strong>Fallback Mechanisms</strong>: Graceful degradation to full parsing when incremental parsing fails</li>
 <li><strong>Testing</strong>: Comprehensive integration tests with async LSP harness and Rope-based position validation</li>
 </ul>
-<h2 id="development-guidelines-2"><a class="header" href="#development-guidelines-2">Development Guidelines</a></h2>
+<h2 id="development-guidelines-3"><a class="header" href="#development-guidelines-3">Development Guidelines</a></h2>
 <p><strong>Where to Make Rope Improvements</strong>:</p>
 <ul>
 <li><strong>Production Code</strong>: <code>/crates/perl-parser/src/</code> - All Rope enhancements should target this crate</li>
@@ -23746,7 +24645,7 @@ lsp_golden_tests.rs           | 45s       | 2.1s      | 21x
 lsp_caps_contract_shapes.rs   | 30s       | 1.8s      | 17x
 Workspace integration tests   | 60s+      | 0.26s     | 230x
 </code></pre>
-<h4 id="key-optimization-components-1"><a class="header" href="#key-optimization-components-1">Key Optimization Components</a></h4>
+<h4 id="key-optimization-components-2"><a class="header" href="#key-optimization-components-2">Key Optimization Components</a></h4>
 <ul>
 <li><strong>Adaptive Timeout Configuration</strong>: Thread-aware timeout scaling</li>
 <li><strong>Intelligent Symbol Waiting</strong>: Exponential backoff with fast fallback</li>
@@ -24416,14 +25315,14 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <hr />
 <h2 id="at-a-glance"><a class="header" href="#at-a-glance">At a Glance</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Metric</th><th>Value</th><th>Target</th><th>Status</th></tr></thead><tbody>
-<tr><td><strong>Tier A Tests</strong></td><td>1002 lib tests (discovered), 163 ignores (tracked)</td><td>100% pass</td><td>PASS</td></tr>
-<tr><td><strong>Tracked Test Debt</strong></td><td>2 (1 bug, 1 manual)</td><td>0</td><td>Near-zero</td></tr>
+<tr><td><strong>Tier A Tests</strong></td><td>1218 lib tests (discovered), 0 ignores (tracked)</td><td>100% pass</td><td>PASS</td></tr>
+<tr><td><strong>Tracked Test Debt</strong></td><td>0 (0 bug, 0 manual)</td><td>0</td><td>Near-zero</td></tr>
 </tbody></table>
 </div><!-- BEGIN: STATUS_METRICS_TABLE -->
 <p>| <strong>LSP Coverage</strong> | 100% (53/53 advertised features, <code>features.toml</code>) | 93%+ | In progress |</p>
 <!-- END: STATUS_METRICS_TABLE -->
 <p>| <strong>Parser Coverage</strong> | ~100% | 100% | Complete |
-| <strong>Semantic Analyzer</strong> | Phase 2-6 Complete | Phase 3 | All NodeKind handlers |
+| <strong>Semantic Analyzer</strong> | Phase 1, 2, 3 Complete (100%) | Complete | All NodeKind handlers |
 | <strong>Mutation Score</strong> | 87% | 87%+ | Target met |
 | <strong>Documentation</strong> | perl-parser missing_docs = 0 (baseline 0) | 0 | Ratchet |</p>
 <hr />
@@ -24431,20 +25330,22 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <ul>
 <li><strong>Parser</strong>: Production-ready Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates</li>
 <li><strong>LSP Server</strong>: Capability catalog is <code>features.toml</code>; Tier A gate is <code>just ci-gate</code>; TCP socket mode available</li>
-<li><strong>Semantic Analyzer</strong>: Phase 2-6 complete with all NodeKind handlers, <code>textDocument/definition</code> integrated, uninitialized variable detection</li>
+<li><strong>Semantic Analyzer</strong>: Phase 1, 2, 3 complete with all NodeKind handlers (100% AST node coverage), <code>textDocument/definition</code> integrated, uninitialized variable detection</li>
 <li><strong>Refactoring Engine</strong>: <code>perform_inline</code> and <code>perform_move_code</code> implemented</li>
 <li><strong>Test Infrastructure</strong>: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)</li>
 <li><strong>Quality</strong>: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups</li>
+<li><strong>Safety Ratchets</strong>: production baseline currently at <code>unwrap/expect=0</code>, panic-family macros (<code>panic!/todo!/unimplemented!/unreachable!</code>) = <code>0</code>, explicit <code>unsafe</code> syntax = <code>0</code></li>
 <li><strong>Security</strong>: Comprehensive hardening complete (path traversal, command injection, DAP evaluate, perldoc/perlcritic argument injection)</li>
-<li><strong>DAP Server</strong>: Native adapter CLI (launch/step/breakpoints), async BridgeAdapter with graceful shutdown; attach/variables/evaluate pending</li>
+<li><strong>DAP Server</strong>: Native adapter preview is implemented (breakpoints with AST validation via <code>perl-dap-breakpoint</code>, step/pause/continue handlers, safe-eval guards, stdio+socket transport, PID/TCP attach modes); BridgeAdapter remains available for Perl::LanguageServer interoperability</li>
+<li><strong>Index State Machine Receipts (2026-02-16)</strong>: <code>just ci-gate</code> + targeted state-machine tests and workspace benchmarks validated transitions, instrumentation, and caps (<code>~368.7us</code> initial small index, <code>~721.1us</code> initial medium index, <code>~212.6us</code> incremental update)</li>
 </ul>
 <h3 id="computed-metrics-auto-updated-by-just-status-update"><a class="header" href="#computed-metrics-auto-updated-by-just-status-update">Computed Metrics (auto-updated by <code>just status-update</code>)</a></h3>
 <!-- BEGIN: STATUS_METRICS_BULLETS -->
 <ul>
 <li><strong>LSP Coverage</strong>: 100% user-visible feature coverage (53/53 advertised features from <code>features.toml</code>)</li>
-<li><strong>Protocol Compliance</strong>: 100% overall LSP protocol support (89/89 including plumbing)</li>
-<li><strong>Parser Coverage</strong>: ~100% Perl 5 syntax via <code>tree-sitter-perl/test/corpus</code> (~611 sections) + <code>test_corpus/</code> (21 <code>.pl</code> files)</li>
-<li><strong>Test Status</strong>: 1002 lib tests (Tier A), 163 ignores tracked (2 total tracked debt: 1 bug, 1 manual)</li>
+<li><strong>Protocol Compliance</strong>: 100% overall LSP protocol support (93/93 including plumbing)</li>
+<li><strong>Parser Coverage</strong>: ~100% Perl 5 syntax via <code>tree-sitter-perl/test/corpus</code> (~611 sections) + <code>test_corpus/</code> (78 <code>.pl</code> files)</li>
+<li><strong>Test Status</strong>: 1218 lib tests (Tier A), 0 ignores tracked (0 total tracked debt: 0 bug, 0 manual)</li>
 <li><strong>Docs (perl-parser)</strong>: missing_docs warnings = 0 (baseline 0)</li>
 <li><strong>Quality Metrics</strong>: 87% mutation score, &lt;50ms LSP response times, 931ns incremental parsing</li>
 <li><strong>Production Status</strong>: LSP server production-ready (<code>just ci-gate</code> passing)</li>
@@ -24453,10 +25354,10 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <!-- END: STATUS_METRICS_BULLETS -->
 <hr />
 <h2 id="whats-next"><a class="header" href="#whats-next">What’s Next</a></h2>
-<p><strong>Now (v0.9.1 close-out)</strong></p>
+<p><strong>Now (post v0.9.1 close-out)</strong></p>
 <ul>
-<li>Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)</li>
-<li>Documentation cleanup: reduce <code>missing_docs</code> violations and complete module-level docs</li>
+<li>Keep verification receipts green (<code>just ci-gate</code>, targeted state-machine tests, benchmark checks)</li>
+<li>Publish benchmark outputs under <code>benchmarks/results/</code> for v1.0.x evidence trail</li>
 </ul>
 <p><strong>Next (v1.0.0 readiness)</strong></p>
 <ul>
@@ -24468,7 +25369,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 </ul>
 <p><strong>Later (post v1.0)</strong></p>
 <ul>
-<li>Native DAP completeness (attach, variables/evaluate, safe eval)</li>
+<li>DAP preview -&gt; GA hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)</li>
 <li>Full LSP 3.18 compliance</li>
 <li>Package manager distribution (Homebrew/apt/etc.)</li>
 </ul>
@@ -24479,14 +25380,14 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <li><strong>Tracked test debt</strong>: see <code>scripts/ignored-test-count.sh</code>; feature-gated ignores are by design</li>
 <li><strong>CI Pipeline (#211)</strong>: Blocks merge-blocking gates (#210)</li>
 <li><strong>Docs scope</strong>: perl-parser missing_docs is ratcheted (see <code>ci/check_missing_docs.sh</code>); workspace-wide enforcement is a separate decision</li>
-<li><strong>Index State Machine</strong>: Verification pending (run <code>just ci-gate</code> + targeted tests/benchmarks)</li>
+<li><strong>Index State Machine</strong>: Verification complete (2026-02-16 receipts captured with <code>just ci-gate</code> + targeted tests/benchmarks)</li>
 </ul>
 <hr />
 <h2 id="component-summary"><a class="header" href="#component-summary">Component Summary</a></h2>
 <div class="table-wrapper"><table><thead><tr><th>Component</th><th>Status</th><th>Notes</th></tr></thead><tbody>
 <tr><td>perl-parser</td><td>Production</td><td>~100% Perl 5, 87% mutation score</td></tr>
 <tr><td>perl-lsp</td><td>Production</td><td>Coverage tracked via <code>features.toml</code></td></tr>
-<tr><td>perl-dap</td><td>Phase 1</td><td>Native adapter CLI; BridgeAdapter library available</td></tr>
+<tr><td>perl-dap</td><td>Preview (Native + Bridge)</td><td>Native adapter implemented/tested (phase2+phase3 suites); BridgeAdapter retained for compatibility</td></tr>
 <tr><td>perl-lexer</td><td>Production</td><td>Context-aware, sub-microsecond</td></tr>
 <tr><td>perl-corpus</td><td>Production</td><td>Corpus counts tracked in computed metrics</td></tr>
 </tbody></table>
@@ -24500,7 +25401,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 </ol>
 <p><strong>Historical archives</strong>: See <code>docs/archive/status_snapshots/</code> for sprint logs and completion history.</p>
 <hr />
-<p><em>Last Updated: 2026-01-28 (narrative sections only; run <code>just status-update</code> to refresh metrics)</em>
+<p><em>Last Updated: 2026-02-17 (narrative sections only; run <code>just status-update</code> to refresh metrics)</em>
 <em>Canonical docs: <a href="reference/ROADMAP.html">ROADMAP.md</a>, <a href="reference/../features.toml">features.toml</a></em></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="perl-parser-project---roadmap"><a class="header" href="#perl-parser-project---roadmap">Perl Parser Project - Roadmap</a></h1>
 <blockquote>
@@ -24508,7 +25409,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <strong>Stale roadmaps</strong>: Archived at <code>docs/archive/roadmaps/</code>; retrieve from git history if needed.</p>
 </blockquote>
 <blockquote>
-<p><strong>Status (2026-01-28)</strong>: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.</p>
+<p><strong>Status (2026-02-17)</strong>: v0.9.1 close-out verification completed with receipts; v1.0.x hardening underway with native DAP preview validated.</p>
 <p><strong>Canonical receipt</strong>: <code>nix develop -c just ci-gate</code> must be green before merging.
 <strong>CI</strong> is intentionally optional/opt-in; the repo is local-first by design.</p>
 </blockquote>
@@ -24535,7 +25436,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <tr><td><strong>perl-lexer</strong></td><td>Production</td><td><code>just ci-gate</code></td><td>Tokenization stable</td></tr>
 <tr><td><strong>perl-corpus</strong></td><td>Production</td><td><code>just ci-gate</code></td><td>Regression corpus + mutation hardening inputs</td></tr>
 <tr><td><strong>perl-lsp</strong></td><td>Production (advertised subset)</td><td>capability snapshots + targeted tests</td><td>Advertise only what’s tested; keep GA-lock stable</td></tr>
-<tr><td><strong>perl-dap</strong></td><td>Experimental (native adapter)</td><td>manual smoke</td><td>CLI uses native adapter; BridgeAdapter library available (Perl::LanguageServer)</td></tr>
+<tr><td><strong>perl-dap</strong></td><td>Preview (Native + Bridge)</td><td><code>cargo test -p perl-dap --features dap-phase2,dap-phase3</code></td><td>Native adapter implemented (breakpoints/control-flow/attach paths) with BridgeAdapter interoperability fallback</td></tr>
 <tr><td><strong>perl-parser-pest</strong> (v2)</td><td>Legacy</td><td>N/A</td><td>Optional crate; keep out of default gate</td></tr>
 <tr><td><strong>Semantic Analyzer</strong></td><td>Phase 2-6 Complete</td><td><code>just ci-gate</code></td><td>All NodeKind handlers; full semantic analysis pipeline</td></tr>
 </tbody></table>
@@ -24543,21 +25444,21 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <p><em>Only features that pass <code>ci-gate</code> or have targeted integration tests count as “Production”.</em></p>
 <hr />
 <h2 id="now--next--later-summary"><a class="header" href="#now--next--later-summary">Now / Next / Later (Summary)</a></h2>
-<p><strong>Now (v0.9.1 close-out)</strong></p>
+<p><strong>Now (post v0.9.1 close-out)</strong></p>
 <ul>
-<li>Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)</li>
-<li>Documentation cleanup: reduce <code>missing_docs</code> violations and complete module-level docs</li>
+<li>Keep close-out receipts green (<code>just ci-gate</code>, targeted state-machine tests, benchmark checks)</li>
+<li>Publish benchmark outputs under <code>benchmarks/results/</code> for durable v1.0.x evidence</li>
 </ul>
 <p><strong>Next (v1.0.0)</strong></p>
 <ul>
 <li>Stability statement (GA-lock + versioning rules)</li>
 <li>Packaging stance (what ships; supported platforms)</li>
-<li>Benchmark publication with receipts under <code>benchmarks/results/</code></li>
+<li>Benchmark publication with receipts under <code>benchmarks/results/</code> (in progress)</li>
 <li>Upgrade notes from v0.8.x → v1.0</li>
 </ul>
 <p><strong>Later (post v1.0)</strong></p>
 <ul>
-<li>Native DAP completeness (attach, variables/evaluate, safe eval)</li>
+<li>DAP preview -&gt; GA hardening (deeper variables/evaluate fidelity, shim distribution strategy, cross-editor receipts)</li>
 <li>Full LSP 3.18 compliance</li>
 <li>Package manager distribution (Homebrew/apt/etc.)</li>
 </ul>
@@ -24569,7 +25470,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <tr><td><strong>perl-lsp</strong></td><td>v0.8.8</td><td>Production</td><td>LSP server (see <code>features.toml</code> for GA coverage)</td></tr>
 <tr><td><strong>perl-lexer</strong></td><td>v0.8.8</td><td>Production</td><td>Context-aware tokenizer</td></tr>
 <tr><td><strong>perl-corpus</strong></td><td>v0.8.8</td><td>Production</td><td>Test corpus (see <code>just status-check</code> for counts)</td></tr>
-<tr><td><strong>perl-dap</strong></td><td>v0.1.0</td><td>Phase 1</td><td>Debug Adapter Protocol (native adapter CLI; BridgeAdapter library)</td></tr>
+<tr><td><strong>perl-dap</strong></td><td>v0.1.0</td><td>Preview (Native + Bridge)</td><td>Debug Adapter Protocol (native preview adapter + BridgeAdapter compatibility path)</td></tr>
 <tr><td><strong>perl-parser-pest</strong></td><td>v0.8.8</td><td>Legacy</td><td>Pest-based parser (maintained)</td></tr>
 </tbody></table>
 </div>
@@ -24637,7 +25538,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <li><strong>Semantic Analyzer</strong>: Phase 2-6 complete (all NodeKind handlers)</li>
 </ul>
 <h3 id="v091-post-release-optimization-january-2026"><a class="header" href="#v091-post-release-optimization-january-2026">v0.9.1: Post-Release Optimization (January 2026)</a></h3>
-<p><strong>Status</strong>: In Progress</p>
+<p><strong>Status</strong>: Close-Out Complete (receipts captured on 2026-02-16)</p>
 <p><strong>Goal</strong>: Performance optimization, semantic analyzer completion, and refactoring infrastructure.</p>
 <p><strong>Completed Deliverables</strong>:</p>
 <ol>
@@ -24725,29 +25626,29 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 </ul>
 </li>
 </ol>
-<p><strong>Remaining Deliverables</strong>:</p>
+<p><strong>Close-Out Receipts</strong>:</p>
 <ol>
 <li>
-<p><strong>Index State Machine Verification</strong> (deferred from v0.9.0)</p>
+<p><strong>Index State Machine Verification</strong> ✓</p>
 <ul>
-<li>Validate transitions and early-exit caps with receipts</li>
-<li>Confirm instrumentation output for state/phase durations</li>
-<li>Verify performance caps: &lt;100ms initial index, &lt;10ms incremental</li>
+<li>Transition and instrumentation tests passed in <code>perl-workspace-index</code></li>
+<li>Early-exit and transition receipts validated via targeted tests</li>
+<li>Benchmarks confirm caps with large margin (<code>~368.7us</code> initial small, <code>~721.1us</code> initial medium, <code>~212.6us</code> incremental)</li>
 </ul>
 </li>
 <li>
-<p><strong>Documentation Cleanup</strong></p>
+<p><strong>Documentation Cleanup</strong> ✓</p>
 <ul>
-<li>Address remaining violations flagged by <code>missing_docs</code></li>
-<li>Public API documentation coverage to 95%+</li>
-<li>Module-level documentation for all crates</li>
+<li><code>cargo test -p perl-parser --features doc-coverage --test missing_docs_ac_tests</code> passed (25/25)</li>
+<li><code>cargo doc --no-deps -p perl-parser</code> clean (no rustdoc warnings)</li>
+<li>LSP compatibility module docs and cross-links aligned to current module layout</li>
 </ul>
 </li>
 </ol>
 <p><strong>Exit criteria</strong>:</p>
 <ul>
-<li>Index state machine implemented with performance benchmarks</li>
-<li>Documentation violations &lt; 200</li>
+<li>Index state machine verified with receipts and benchmark caps</li>
+<li><code>missing_docs</code> ratchet clean for perl-parser (baseline 0)</li>
 <li>LSP coverage maintained at 100% ✓</li>
 <li>Tracked test debt ≤ 2 ✓</li>
 <li>Security hardening complete ✓</li>
@@ -24757,13 +25658,12 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <p>These items are explicitly deferred:</p>
 <ul>
 <li>Full LSP 3.18 compliance (see CURRENT_STATUS.md for current coverage)</li>
-<li>Native DAP completeness (attach, variables/evaluate, safe eval; bridge wiring decision)</li>
 <li>Benchmark result publication (framework exists, results not committed)</li>
 <li>Package manager distribution (Homebrew, apt, etc.)</li>
 </ul>
 <hr />
 <h3 id="v100-boring-promises-sequence-after-v091"><a class="header" href="#v100-boring-promises-sequence-after-v091">v1.0.0: “Boring Promises” (sequence after v0.9.1)</a></h3>
-<p><strong>Goal</strong>: Freeze the surfaces you’re willing to support.</p>
+<p><strong>Goal</strong>: Freeze the surfaces you’re willing to support. Close known gaps honestly.</p>
 <p><strong>Deliverables</strong>:</p>
 <ol>
 <li>
@@ -24787,30 +25687,107 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <li>Remove “UNVERIFIED” tags where you now have receipts</li>
 </ul>
 </li>
+<li>
+<p><strong>Gap closing (honest assessment items)</strong></p>
+<ul>
+<li><del>Fix execute_command test failures (7 tests)</del> ✓ Fixed: workspace root security boundary was not set in integration tests</li>
+<li><del>Correct <code>features.toml</code> DAP maturity levels</del> ✓ Fixed: DAP features are tracked as <code>maturity = "preview"</code> with implemented native paths</li>
+<li><del>Fix <code>CURRENT_STATUS.md</code> DAP narrative</del> ✓ Fixed: now describes native preview + bridge interoperability reality</li>
+<li>Add E2E LSP smoke test (send initialize→didOpen→completion→shutdown, verify responses)</li>
+<li>Document Moo/Moose limitations honestly in user-facing docs</li>
+</ul>
+</li>
 </ol>
 <p><strong>Exit criteria</strong>:</p>
 <ul>
 <li>Capability snapshot + docs aligned</li>
 <li>Benchmarks published</li>
 <li>Upgrade notes exist from v0.8.x → v1.0</li>
+<li>Honest assessment document (<code>docs/HONEST_ASSESSMENT.md</code>) exists and is current</li>
+<li>No DAP features marked as GA in <code>features.toml</code></li>
 </ul>
 <hr />
-<h2 id="known-gaps-v091-hardening"><a class="header" href="#known-gaps-v091-hardening">Known Gaps (v0.9.1 Hardening)</a></h2>
-<p>These gaps are tracked in <a href="reference/issues/"><code>docs/issues/</code></a> and need closure before v0.9.1 close-out:</p>
-<h3 id="corpus-coverage-gaps"><a class="header" href="#corpus-coverage-gaps">Corpus Coverage Gaps</a></h3>
+<h3 id="v11-semantic-depth"><a class="header" href="#v11-semantic-depth">v1.1: Semantic Depth</a></h3>
+<p><strong>Goal</strong>: Close the Moo/Moose gap — the #1 real-world limitation.</p>
+<p><strong>Deliverables</strong>:</p>
+<ol>
+<li>
+<p><strong>Moo/Moose <code>has</code> attribute recognition</strong></p>
 <ul>
-<li>See <code>docs/issues/corpus/</code> for NodeKind reachability and GA feature alignment</li>
+<li>Semantic analyzer recognizes <code>has</code> as a field declaration</li>
+<li>Hover on Moo attributes shows field type, default, documentation</li>
+<li>Completion inside <code>has</code> blocks suggests type constraints, <code>is</code>, <code>isa</code>, <code>default</code>, etc.</li>
 </ul>
-<h3 id="hangbounds-risks-p0"><a class="header" href="#hangbounds-risks-p0">Hang/Bounds Risks (P0)</a></h3>
+</li>
+<li>
+<p><strong>Class::Accessor support</strong></p>
 <ul>
-<li>Deep nesting boundedness</li>
-<li>Slash ambiguity (division vs regex)</li>
-<li>Regex literal handling</li>
+<li>Auto-generated accessor methods visible in completion and go-to-definition</li>
+</ul>
+</li>
+<li>
+<p><strong>Role composition tracking</strong></p>
+<ul>
+<li><code>with 'Role'</code> connects role methods to consuming class</li>
+<li>Go-to-definition resolves role methods</li>
+</ul>
+</li>
+</ol>
+<p><strong>Exit criteria</strong>:</p>
+<ul>
+<li>Hover on <code>has 'name'</code> in a Moo class returns field information</li>
+<li>Completion inside <code>has</code> blocks works</li>
+<li><code>features.toml</code> updated with Moo/Moose semantic coverage</li>
+</ul>
+<hr />
+<h3 id="v12-dap-preview---ga"><a class="header" href="#v12-dap-preview---ga">v1.2: DAP Preview -&gt; GA</a></h3>
+<p><strong>Goal</strong>: Harden native debugging from preview to GA without requiring Perl::LanguageServer.</p>
+<p><strong>Deliverables</strong>:</p>
+<ol>
+<li><strong>Promote preview breakpoints/inline values</strong> to GA-quality behavior and receipts</li>
+<li><strong>Deep variable inspection + evaluate context</strong> in active debugger sessions</li>
+<li><strong>Attach stability</strong> across PID and TCP modes with consistent stack/thread semantics</li>
+<li><strong>Finalize shim/package strategy</strong> (<code>Devel::TSPerlDAP</code> or bundled equivalent) and editor defaults</li>
+</ol>
+<p><strong>Exit criteria</strong>:</p>
+<ul>
+<li>Set breakpoint, step, inspect variables, evaluate expressions — works natively with reliable receipts</li>
+<li>DAP features promoted from <code>maturity = "preview"</code> to <code>maturity = "ga"</code> where warranted</li>
+<li>VSCode extension debug configuration works out of the box</li>
+</ul>
+<hr />
+<h3 id="v20-dap-phase-3--polish"><a class="header" href="#v20-dap-phase-3--polish">v2.0: DAP Phase 3 + Polish</a></h3>
+<p><strong>Goal</strong>: Full debugging experience and ecosystem polish.</p>
+<p><strong>Deliverables</strong>:</p>
+<ol>
+<li>Multi-process attach and child-process tracking</li>
+<li>Watch expressions and richer evaluation UX</li>
+<li>Full debug console parity + transcript conformance coverage</li>
+<li>Pest parser decision: archive to <code>archive/</code> or maintain for benchmark comparison</li>
+<li>Package manager distribution (Homebrew, apt, etc.)</li>
+</ol>
+<hr />
+<h2 id="known-gaps"><a class="header" href="#known-gaps">Known Gaps</a></h2>
+<blockquote>
+<p>For the full honest assessment, see <a href="reference/HONEST_ASSESSMENT.html"><code>docs/HONEST_ASSESSMENT.md</code></a>.</p>
+</blockquote>
+<h3 id="resolved-v091"><a class="header" href="#resolved-v091">Resolved (v0.9.1)</a></h3>
+<ul>
+<li><del>Corpus coverage gaps</del> ✓ Comprehensive corpus (732KB, 78 files, 611+ sections)</li>
+<li><del>Hang/bounds risks</del> ✓ Budget-protected lexer, recursion limits, fuzz testing</li>
+<li><del>Execute command test failures</del> ✓ Fixed workspace root security boundary</li>
+</ul>
+<h3 id="open-gaps"><a class="header" href="#open-gaps">Open Gaps</a></h3>
+<ul>
+<li><strong>DAP is preview, not GA</strong>: Native adapter now covers breakpoint/control-flow/attach foundations, but deep runtime variable/evaluate fidelity and packaging strategy still need hardening. <code>features.toml</code> keeps DAP at <code>maturity = "preview"</code>.</li>
+<li><strong>Moo/Moose semantic blindness</strong>: Parser tokenizes correctly but semantic analyzer doesn’t understand <code>has</code> as field declaration. #1 real-world gap.</li>
+<li><strong>No E2E LSP smoke test</strong>: All testing is unit/integration; no automated test that starts the server and sends real LSP messages end-to-end.</li>
+<li><strong>Pest parser orphaned</strong>: Compiles and works but excluded from CI, not used in production, 10-100x slower than v3. Maintained for reference only.</li>
 </ul>
 <h3 id="known-constraints-1"><a class="header" href="#known-constraints-1">Known Constraints</a></h3>
 <ul>
 <li><strong>CI Pipeline</strong>: Issue #211 blocks merge-blocking gates (#210)</li>
-<li><strong>Native DAP completeness</strong>: Attach/variables/evaluate deferred (see “Not Before v1.0”)</li>
+<li><strong>DAP GA promotion</strong>: Depends on shim distribution decision and cross-editor native debugging receipts</li>
 </ul>
 <hr />
 <h2 id="v090-blockers-historical-resolved"><a class="header" href="#v090-blockers-historical-resolved">v0.9.0 Blockers (Historical; resolved)</a></h2>
@@ -24851,13 +25828,13 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <p>The LSP compliance table is now auto-generated. Source of truth: <code>features.toml</code></p>
 <!-- BEGIN: COMPLIANCE_TABLE -->
 <div class="table-wrapper"><table><thead><tr><th>Area</th><th>Implemented</th><th>Total</th><th>Coverage</th></tr></thead><tbody>
-<tr><td>debug</td><td>2</td><td>2</td><td>100%</td></tr>
+<tr><td>debug</td><td>6</td><td>6</td><td>100%</td></tr>
 <tr><td>notebook</td><td>2</td><td>2</td><td>100%</td></tr>
 <tr><td>protocol</td><td>9</td><td>9</td><td>100%</td></tr>
 <tr><td>text_document</td><td>41</td><td>41</td><td>100%</td></tr>
 <tr><td>window</td><td>9</td><td>9</td><td>100%</td></tr>
 <tr><td>workspace</td><td>26</td><td>26</td><td>100%</td></tr>
-<tr><td><strong>Overall</strong></td><td><strong>89</strong></td><td><strong>89</strong></td><td><strong>100%</strong></td></tr>
+<tr><td><strong>Overall</strong></td><td><strong>93</strong></td><td><strong>93</strong></td><td><strong>100%</strong></td></tr>
 </tbody></table>
 </div><!-- END: COMPLIANCE_TABLE -->
 <p><strong>v0.9.0 Metrics</strong>:</p>
@@ -24890,7 +25867,7 @@ Manual editor smoke test: diagnostics, completion, hover, go-to-definition, rena
 <li><strong><a href="reference/../features.toml">features.toml</a></strong> - Canonical capability definitions</li>
 <li><strong><a href="reference/LESSONS.html">LESSONS.md</a></strong> - What went wrong and what changed</li>
 </ul>
-<!-- Last Updated: 2026-01-28 -->
+<!-- Last Updated: 2026-02-17 -->
 <div style="break-before: page; page-break-before: always;"></div><h1 id="milestones"><a class="header" href="#milestones">Milestones</a></h1>
 <blockquote>
 <p><strong>Source of Truth</strong>: GitHub Milestones at https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestones</p>
@@ -26587,7 +27564,7 @@ just ci-lsp-def
 nix develop -c just ci-gate
 </code></pre>
 <hr />
-<h2 id="troubleshooting-5"><a class="header" href="#troubleshooting-5">Troubleshooting</a></h2>
+<h2 id="troubleshooting-6"><a class="header" href="#troubleshooting-6">Troubleshooting</a></h2>
 <h3 id="issue-edition-2024-is-unstable-error"><a class="header" href="#issue-edition-2024-is-unstable-error">Issue: “edition ‘2024’ is unstable” Error</a></h3>
 <p><strong>Problem:</strong></p>
 <pre><code>error: edition '2024' is unstable and only available with -Z unstable-options
@@ -26710,7 +27687,7 @@ LSP operations slower than v0.8.x</p>
 # - LSP server logs
 </code></pre>
 <hr />
-<h2 id="getting-help-3"><a class="header" href="#getting-help-3">Getting Help</a></h2>
+<h2 id="getting-help-4"><a class="header" href="#getting-help-4">Getting Help</a></h2>
 <h3 id="documentation-4"><a class="header" href="#documentation-4">Documentation</a></h3>
 <ul>
 <li><strong>Upgrade Guide</strong>: This document</li>
@@ -27736,7 +28713,7 @@ pub enum ParseError {
 <p><strong>End of Error Handling API Contracts Specification</strong></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="lsp-missing-features--test-coverage-report"><a class="header" href="#lsp-missing-features--test-coverage-report">LSP Missing Features &amp; Test Coverage Report</a></h1>
 <blockquote>
-<p><strong>Last Updated</strong>: 2026-01-27
+<p><strong>Last Updated</strong>: 2026-02-17
 <strong>Source of truth</strong>: <code>features.toml</code> (capabilities) + <code>docs/CURRENT_STATUS.md</code> (metrics)</p>
 <p>This report lists <strong>non-advertised</strong> or <strong>planned/preview</strong> features only.
 If this file conflicts with <code>features.toml</code>, update this file.</p>
@@ -27773,8 +28750,15 @@ If this file conflicts with <code>features.toml</code>, update this file.</p>
 <h2 id="related-dap-gaps-tracked-in-featurestoml"><a class="header" href="#related-dap-gaps-tracked-in-featurestoml">Related DAP Gaps (Tracked in <code>features.toml</code>)</a></h2>
 <p>These are DAP items but often requested alongside LSP functionality.</p>
 <ul>
-<li><strong><code>dap.breakpoints</code></strong> - preview, not advertised (implemented + tests)</li>
-<li><strong><code>dap.inline_values</code></strong> - preview, not advertised (custom inlineValues request, implemented + tests)</li>
+<li><strong><code>dap.breakpoints.hit_condition</code></strong> - preview, not advertised</li>
+<li><strong><code>dap.breakpoints.logpoints</code></strong> - preview, not advertised</li>
+<li><strong><code>dap.exceptions.die</code></strong> - preview, not advertised</li>
+</ul>
+<p>GA DAP features currently advertised:</p>
+<ul>
+<li><strong><code>dap.core</code></strong> - core launch/break/step/inspect/evaluate/setVariable loop</li>
+<li><strong><code>dap.breakpoints.basic</code></strong> - verified/unverified breakpoint lifecycle</li>
+<li><strong><code>dap.inline_values</code></strong> - custom inlineValues request support</li>
 </ul>
 <p>For DAP roadmap items (attach, variables/evaluate, safe eval), see <code>docs/ROADMAP.md</code>.</p>
 <hr />
@@ -27801,10 +28785,10 @@ If this file conflicts with <code>features.toml</code>, update this file.</p>
 <li><strong>Explanation sections</strong>: Understanding DAP architecture and design</li>
 </ul>
 </blockquote>
-<p><strong>Status</strong>: Native adapter CLI (launch-only) + BridgeAdapter guide (Perl::LanguageServer)
+<p><strong>Status</strong>: Native adapter CLI (launch + attach + stepping + evaluate) + BridgeAdapter guide (Perl::LanguageServer)
 <strong>Version</strong>: 1.0.0
 <strong>Date</strong>: 2025-10-04</p>
-<p><strong>Note</strong>: The <code>perl-dap</code> CLI runs the native adapter (launch-only) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.</p>
+<p><strong>Note</strong>: The <code>perl-dap</code> CLI runs the native adapter (launch + attach) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.</p>
 <hr />
 <h2 id="table-of-contents-7"><a class="header" href="#table-of-contents-7">Table of Contents</a></h2>
 <ul>
@@ -27842,7 +28826,7 @@ If this file conflicts with <code>features.toml</code>, update this file.</p>
 </ul>
 <hr />
 <h2 id="tutorial-getting-started-with-perl-debugging"><a class="header" href="#tutorial-getting-started-with-perl-debugging">Tutorial: Getting Started with Perl Debugging</a></h2>
-<h3 id="prerequisites-3"><a class="header" href="#prerequisites-3">Prerequisites</a></h3>
+<h3 id="prerequisites-4"><a class="header" href="#prerequisites-4">Prerequisites</a></h3>
 <p>Before you begin debugging Perl code with VS Code, ensure you have:</p>
 <ol>
 <li>
@@ -27906,7 +28890,7 @@ If this file conflicts with <code>features.toml</code>, update this file.</p>
 <p><strong>Configuration Explained</strong>:</p>
 <ul>
 <li><code>type</code>: Must be <code>"perl"</code> for Perl debugging</li>
-<li><code>request</code>: <code>"launch"</code> to start a new process, <code>"attach"</code> to connect to running process (bridge only; native adapter does not support attach yet)</li>
+<li><code>request</code>: <code>"launch"</code> to start a new process, <code>"attach"</code> to connect to a running process/debugger</li>
 <li><code>name</code>: Display name in VS Code’s debug dropdown</li>
 <li><code>program</code>: Path to the Perl script to debug (supports VS Code variables like <code>${file}</code>)</li>
 <li><code>args</code>: Command-line arguments to pass to your script</li>
@@ -27946,7 +28930,7 @@ print "Done!\n";
 <p><strong>Observe the debugger</strong>:</p>
 <ul>
 <li>Execution pauses at line 8</li>
-<li>Variables panel shows <code>$name</code> and <code>$greeting</code> values in BridgeAdapter mode (native adapter shows placeholders)</li>
+<li>Variables panel shows best-effort parsed values from debugger output</li>
 <li>Call stack shows your script in the execution context</li>
 </ul>
 </li>
@@ -27962,9 +28946,9 @@ print "Done!\n";
 <li>
 <p><strong>Inspect variables</strong>:</p>
 <ul>
-<li>Hover over variables to see values (placeholder output in native adapter)</li>
-<li>Use the Variables panel to explore data structures (placeholder output in native adapter)</li>
-<li>Use the Debug Console to evaluate Perl expressions (placeholder output in native adapter)</li>
+<li>Hover over variables to inspect parsed values</li>
+<li>Use the Variables panel to explore data structures with lazy expansion</li>
+<li>Use the Debug Console to evaluate Perl expressions (safe mode by default)</li>
 </ul>
 </li>
 <li>
@@ -27992,19 +28976,28 @@ print "Done!\n";
 <li>Add <code>"args": ["--verbose", "--input=data.txt"]</code> for command-line arguments</li>
 </ul>
 <h3 id="attach-to-a-running-process"><a class="header" href="#attach-to-a-running-process">Attach to a Running Process</a></h3>
-<p><strong>Note</strong>: The <code>perl-dap</code> native adapter does not support attach yet. This section applies to the BridgeAdapter/Perl::LanguageServer path.</p>
-<p><strong>Use Case</strong>: Connect to an already-running Perl script that was started with DAP support.</p>
-<p><strong>Start your Perl script with DAP</strong>:</p>
-<pre><code class="language-bash">perl -d:LanguageServer::DAP script.pl
-</code></pre>
+<p><strong>Use Case</strong>: Connect to an already-running debug target.</p>
+<p>The native adapter supports two attach modes:</p>
+<ul>
+<li><code>processId</code>: local PID signal-control mode</li>
+<li><code>host</code>/<code>port</code>: TCP debugger endpoint (for shim/bridge workflows)</li>
+</ul>
 <p><strong>Attach Configuration</strong>:</p>
 <pre><code class="language-json">{
   "type": "perl",
   "request": "attach",
-  "name": "Attach to Perl::LanguageServer",
+  "name": "Attach by TCP",
   "host": "localhost",
   "port": 13603,
   "timeout": 5000
+}
+</code></pre>
+<p><strong>Attach by PID</strong>:</p>
+<pre><code class="language-json">{
+  "type": "perl",
+  "request": "attach",
+  "name": "Attach by PID",
+  "processId": 12345
 }
 </code></pre>
 <p><strong>When to Use</strong>:</p>
@@ -28116,13 +29109,14 @@ print "Done!\n";
 }
 </code></pre>
 <h3 id="attach-configuration"><a class="header" href="#attach-configuration">Attach Configuration</a></h3>
-<p>Complete schema for <code>"request": "attach"</code> configurations (BridgeAdapter only; native adapter does not support attach yet).</p>
+<p>Complete schema for <code>"request": "attach"</code> configurations.</p>
 <div class="table-wrapper"><table><thead><tr><th>Property</th><th>Type</th><th>Required</th><th>Default</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>type</code></td><td><code>string</code></td><td>✅ Yes</td><td>N/A</td><td>Must be <code>"perl"</code></td></tr>
 <tr><td><code>request</code></td><td><code>string</code></td><td>✅ Yes</td><td>N/A</td><td>Must be <code>"attach"</code> for connecting to running process</td></tr>
 <tr><td><code>name</code></td><td><code>string</code></td><td>✅ Yes</td><td>N/A</td><td>Display name in debug dropdown</td></tr>
-<tr><td><code>host</code></td><td><code>string</code></td><td>✅ Yes</td><td><code>"localhost"</code></td><td>Hostname or IP address of DAP server</td></tr>
-<tr><td><code>port</code></td><td><code>number</code></td><td>✅ Yes</td><td><code>13603</code></td><td>Port number of DAP server</td></tr>
+<tr><td><code>processId</code></td><td><code>number</code></td><td>❌ No</td><td>N/A</td><td>Local process ID for signal-control attach mode</td></tr>
+<tr><td><code>host</code></td><td><code>string</code></td><td>❌ No</td><td><code>"localhost"</code></td><td>Hostname or IP address of DAP server</td></tr>
+<tr><td><code>port</code></td><td><code>number</code></td><td>❌ No</td><td><code>13603</code></td><td>Port number of DAP server</td></tr>
 <tr><td><code>timeout</code></td><td><code>number</code></td><td>❌ No</td><td><code>5000</code></td><td>Connection timeout in milliseconds</td></tr>
 </tbody></table>
 </div>
@@ -28198,12 +29192,11 @@ PERL5LIB=C:\workspace\lib;C:\custom\lib perl script.pl
 │                      Perl Runtime                           │
 └─────────────────────────────────────────────────────────────┘
 </code></pre>
-<p><strong>BridgeAdapter Design Decisions</strong>:</p>
+<p><strong>BridgeAdapter Compatibility Role</strong>:</p>
 <ol>
-<li><strong>Immediate User Value</strong>: Bridge to existing, mature Perl::LanguageServer DAP implementation</li>
-<li><strong>Minimal Dependencies</strong>: No complex Perl debugger protocol parsing in Rust</li>
-<li><strong>Cross-Platform Foundation</strong>: Platform abstraction layer ready for Phase 2 native implementation</li>
-<li><strong>Clean Separation</strong>: Bridge adapter isolated in <code>perl-dap</code> crate for future replacement</li>
+<li><strong>Interoperability</strong>: Supports environments already standardized on Perl::LanguageServer DAP</li>
+<li><strong>Migration Path</strong>: Lets teams move incrementally from bridge-based workflows to native <code>perl-dap</code></li>
+<li><strong>Isolation</strong>: Bridge code remains separate from native adapter runtime paths</li>
 </ol>
 <p><strong>BridgeAdapter Trade-offs</strong>:</p>
 <ul>
@@ -28211,11 +29204,10 @@ PERL5LIB=C:\workspace\lib;C:\custom\lib perl script.pl
 <li>⚠️ <strong>Cons</strong>: External dependency on Perl::LanguageServer CPAN module, additional process overhead</li>
 </ul>
 <h3 id="future-roadmap"><a class="header" href="#future-roadmap">Future Roadmap</a></h3>
-<p><strong>Phase 2: Native Adapter Completion (Planned)</strong></p>
-<p>The CLI already uses the native adapter; Phase 2 focuses on attach support, parsed variables/evaluate output, and hardened evaluation.</p>
+<p><strong>Native Adapter Roadmap</strong></p>
+<p>The CLI already uses the native adapter with launch + attach + evaluation support. Remaining roadmap items focus on deeper protocol parity and hardening.</p>
 <p><strong>Planned Features</strong>:</p>
 <ul>
-<li>Direct DAP protocol implementation in Rust</li>
 <li>AST-based breakpoint validation (leveraging <code>perl-parser</code>)</li>
 <li>Incremental parsing integration (&lt;1ms breakpoint updates)</li>
 <li>Workspace navigation for cross-file debugging</li>
@@ -28230,7 +29222,7 @@ PERL5LIB=C:\workspace\lib;C:\custom\lib perl script.pl
 </ul>
 <p><strong>Migration Path</strong>: BridgeAdapter users can keep their configuration if/when CLI wiring is added.</p>
 <hr />
-<h2 id="troubleshooting-6"><a class="header" href="#troubleshooting-6">Troubleshooting</a></h2>
+<h2 id="troubleshooting-7"><a class="header" href="#troubleshooting-7">Troubleshooting</a></h2>
 <h3 id="perllanguageserver-not-found-bridgeadapter-only"><a class="header" href="#perllanguageserver-not-found-bridgeadapter-only">Perl::LanguageServer Not Found (BridgeAdapter only)</a></h3>
 <p><strong>Symptom</strong>: Error message “Failed to spawn Perl::LanguageServer DAP process” when starting debugger.</p>
 <p><strong>Solution</strong>:</p>
@@ -28374,7 +29366,7 @@ $ENV{DEBUG}
 </li>
 </ol>
 <hr />
-<h2 id="getting-help-4"><a class="header" href="#getting-help-4">Getting Help</a></h2>
+<h2 id="getting-help-5"><a class="header" href="#getting-help-5">Getting Help</a></h2>
 <ul>
 <li><strong>Documentation</strong>: See <a href="dap/DAP_IMPLEMENTATION_SPECIFICATION.html">DAP Implementation Specification</a> for technical details</li>
 <li><strong>Security</strong>: See <a href="dap/DAP_SECURITY_SPECIFICATION.html">DAP Security Specification</a> for security considerations</li>
@@ -30909,7 +31901,7 @@ cargo audit -p perl-dap
 <p><strong>End of DAP Security Specification</strong></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="dap-bridge-setup-guide"><a class="header" href="#dap-bridge-setup-guide">DAP Bridge Setup Guide</a></h1>
 <p>This guide describes how to set up the Debug Adapter Protocol (DAP) bridge for the Perl Language Server. This feature allows you to debug Perl scripts directly in VS Code using the <code>Perl::LanguageServer</code> backend.</p>
-<h2 id="prerequisites-4"><a class="header" href="#prerequisites-4">Prerequisites</a></h2>
+<h2 id="prerequisites-5"><a class="header" href="#prerequisites-5">Prerequisites</a></h2>
 <ol>
 <li><strong>Perl Installation</strong>: Perl 5.10 or later must be installed.</li>
 <li><strong>Perl::LanguageServer Module</strong>: The bridge requires the Perl module to communicate with the debug backend.</li>
@@ -30945,7 +31937,7 @@ cpanm Perl::LanguageServer
     "host": "localhost"
 }
 </code></pre>
-<h2 id="troubleshooting-7"><a class="header" href="#troubleshooting-7">Troubleshooting</a></h2>
+<h2 id="troubleshooting-8"><a class="header" href="#troubleshooting-8">Troubleshooting</a></h2>
 <h3 id="debugger-fails-to-start"><a class="header" href="#debugger-fails-to-start">Debugger Fails to Start</a></h3>
 <ul>
 <li><strong>Error</strong>: “Perl::LanguageServer not found”
@@ -31944,7 +32936,7 @@ fn slow_integration_test() {
     // This test runs locally but is skipped in CI
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="troubleshooting-8"><a class="header" href="#troubleshooting-8">Troubleshooting</a></h2>
+<h2 id="troubleshooting-9"><a class="header" href="#troubleshooting-9">Troubleshooting</a></h2>
 <h3 id="exit-code-143-sigterm"><a class="header" href="#exit-code-143-sigterm">Exit code 143 (SIGTERM)</a></h3>
 <p><strong>Cause:</strong> The GitHub runner was terminated, often due to:</p>
 <ul>
@@ -32069,7 +33061,7 @@ fn get_memory_usage() -&gt; Result&lt;f64&gt; { Ok(0.0) }  // Fallback
 </ul>
 <hr />
 <h2 id="quick-start-3"><a class="header" href="#quick-start-3">Quick Start</a></h2>
-<h3 id="prerequisites-5"><a class="header" href="#prerequisites-5">Prerequisites</a></h3>
+<h3 id="prerequisites-6"><a class="header" href="#prerequisites-6">Prerequisites</a></h3>
 <p><strong>Option 1: Nix (Recommended - Deterministic, Reproducible)</strong></p>
 <pre><code class="language-bash"># Install Nix (if not already installed)
 curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
@@ -32378,7 +33370,7 @@ SKIP_PREPUSH=1 git push
 </code></pre>
 <p><strong>Warning:</strong> Only bypass if you understand the risks. Broken commits on main/master affect everyone.</p>
 <hr />
-<h2 id="troubleshooting-9"><a class="header" href="#troubleshooting-9">Troubleshooting</a></h2>
+<h2 id="troubleshooting-10"><a class="header" href="#troubleshooting-10">Troubleshooting</a></h2>
 <h3 id="common-issues-3"><a class="header" href="#common-issues-3">Common Issues</a></h3>
 <h4 id="issue-just-command-not-found"><a class="header" href="#issue-just-command-not-found">Issue: <code>just: command not found</code></a></h4>
 <p><strong>Problem:</strong> The <code>just</code> command runner is not installed.</p>
@@ -32989,7 +33981,7 @@ fn test_stress_scenario() {
     // Only runs with ci:stress label
 }
 <span class="boring">}</span></code></pre></pre>
-<h2 id="troubleshooting-10"><a class="header" href="#troubleshooting-10">Troubleshooting</a></h2>
+<h2 id="troubleshooting-11"><a class="header" href="#troubleshooting-11">Troubleshooting</a></h2>
 <h3 id="ci-hangs"><a class="header" href="#ci-hangs">CI Hangs</a></h3>
 <ol>
 <li>Check if test is in security/protocol lane</li>
@@ -33815,7 +34807,7 @@ technical_debt:
 <li><strong>Celebrate resolution</strong> - Acknowledge when debt is paid down</li>
 <li><strong>Don’t abuse quarantine</strong> - It’s not a way to hide broken tests</li>
 </ol>
-<h2 id="troubleshooting-11"><a class="header" href="#troubleshooting-11">Troubleshooting</a></h2>
+<h2 id="troubleshooting-12"><a class="header" href="#troubleshooting-12">Troubleshooting</a></h2>
 <h3 id="pyyaml-not-installed"><a class="header" href="#pyyaml-not-installed">“PyYAML not installed”</a></h3>
 <p>Install PyYAML for full functionality:</p>
 <pre><code class="language-bash">pip install pyyaml
@@ -34436,7 +35428,7 @@ Each entry follows the format: <strong>wrong → evidence → fix → prevention
 <p><strong>Root cause</strong>: Hardcoded numbers = fragile truth that drifts by design.</p>
 <h2 id="solution-self-healing-documentation"><a class="header" href="#solution-self-healing-documentation">Solution: Self-Healing Documentation</a></h2>
 <p>Generate canonical receipts → Render docs from receipts → Guard with CI.</p>
-<h3 id="architecture-6"><a class="header" href="#architecture-6">Architecture</a></h3>
+<h3 id="architecture-5"><a class="header" href="#architecture-5">Architecture</a></h3>
 <pre><code>┌─────────────────────────────────────────────────────────────┐
 │                    Source of Truth                           │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
@@ -34629,7 +35621,7 @@ Each entry follows the format: <strong>wrong → evidence → fix → prevention
 <li><strong>Snapshot updates</strong> - Require explicit label to change baselines</li>
 <li><strong>Template validation</strong> - Catch unused tokens or missing receipts</li>
 </ol>
-<h2 id="troubleshooting-12"><a class="header" href="#troubleshooting-12">Troubleshooting</a></h2>
+<h2 id="troubleshooting-13"><a class="header" href="#troubleshooting-13">Troubleshooting</a></h2>
 <h3 id="receipts-not-generated"><a class="header" href="#receipts-not-generated">Receipts not generated</a></h3>
 <pre><code class="language-bash"># Check if xtask compilation is interfering
 cargo test --workspace --exclude xtask --no-fail-fast
@@ -34818,7 +35810,7 @@ Efficiency tells you how much it cost to achieve that quality.
 <div style="break-before: page; page-break-before: always;"></div><h1 id="architecture-decision-records-adrs"><a class="header" href="#architecture-decision-records-adrs">Architecture Decision Records (ADRs)</a></h1>
 <p>Architecture Decision Records document significant architectural decisions made in the project.</p>
 <h2 id="available-adrs"><a class="header" href="#available-adrs">Available ADRs</a></h2>
-<p>See the <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/tree/master/docs/adr">adr/ directory</a> for all ADRs.</p>
+<p>See the <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/tree/master/docs/adr">adr/ directory</a> for all ADRs.</p>
 <p>Key ADRs:</p>
 <ul>
 <li>ADR 002: API Documentation Infrastructure</li>
@@ -34836,8 +35828,8 @@ Efficiency tells you how much it cost to achieve that quality.
 <p>Performance benchmarks are tracked in the repository.</p>
 <h2 id="benchmark-reports"><a class="header" href="#benchmark-reports">Benchmark Reports</a></h2>
 <ul>
-<li><a href="https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/docs/benchmarks/BENCHMARK_FRAMEWORK.md">Benchmark Framework</a></li>
-<li><a href="https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/docs/benchmarks/BENCHMARK_REPORT.md">Benchmark Report</a></li>
+<li><a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/master/docs/benchmarks/BENCHMARK_FRAMEWORK.md">Benchmark Framework</a></li>
+<li><a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/master/docs/benchmarks/BENCHMARK_REPORT.md">Benchmark Report</a></li>
 </ul>
 <h2 id="running-benchmarks"><a class="header" href="#running-benchmarks">Running Benchmarks</a></h2>
 <pre><code class="language-bash">cargo bench
@@ -34846,13 +35838,13 @@ Efficiency tells you how much it cost to achieve that quality.
 <div style="break-before: page; page-break-before: always;"></div><h1 id="forensics"><a class="header" href="#forensics">Forensics</a></h1>
 <p>PR archaeology and investigation documentation.</p>
 <h2 id="forensics-schema"><a class="header" href="#forensics-schema">Forensics Schema</a></h2>
-<p>See the <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/docs/FORENSICS_SCHEMA.md">Forensics Schema</a> for the investigation template.</p>
+<p>See the <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/blob/master/docs/FORENSICS_SCHEMA.md">Forensics Schema</a> for the investigation template.</p>
 <h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
-<p>Forensics examples are available in the <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/tree/master/docs/forensics">docs/forensics</a> directory.</p>
+<p>Forensics examples are available in the <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/tree/master/docs/forensics">docs/forensics</a> directory.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="issue-tracking"><a class="header" href="#issue-tracking">Issue Tracking</a></h1>
 <p>Issue status and tracking documentation.</p>
 <h2 id="current-issues"><a class="header" href="#current-issues">Current Issues</a></h2>
-<p>See <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/issues">GitHub Issues</a> for active issues.</p>
+<p>See <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues">GitHub Issues</a> for active issues.</p>
 <h2 id="milestones-1"><a class="header" href="#milestones-1">Milestones</a></h2>
 <p>Active milestones:</p>
 <ul>

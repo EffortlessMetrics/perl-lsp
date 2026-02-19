@@ -144,11 +144,8 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
-                        </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/src/reference/lsp-missing-features.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
-                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -183,7 +180,7 @@
                     <main>
                         <h1 id="lsp-missing-features--test-coverage-report"><a class="header" href="#lsp-missing-features--test-coverage-report">LSP Missing Features &amp; Test Coverage Report</a></h1>
 <blockquote>
-<p><strong>Last Updated</strong>: 2026-01-27
+<p><strong>Last Updated</strong>: 2026-02-17
 <strong>Source of truth</strong>: <code>features.toml</code> (capabilities) + <code>docs/CURRENT_STATUS.md</code> (metrics)</p>
 <p>This report lists <strong>non-advertised</strong> or <strong>planned/preview</strong> features only.
 If this file conflicts with <code>features.toml</code>, update this file.</p>
@@ -220,8 +217,15 @@ If this file conflicts with <code>features.toml</code>, update this file.</p>
 <h2 id="related-dap-gaps-tracked-in-featurestoml"><a class="header" href="#related-dap-gaps-tracked-in-featurestoml">Related DAP Gaps (Tracked in <code>features.toml</code>)</a></h2>
 <p>These are DAP items but often requested alongside LSP functionality.</p>
 <ul>
-<li><strong><code>dap.breakpoints</code></strong> - preview, not advertised (implemented + tests)</li>
-<li><strong><code>dap.inline_values</code></strong> - preview, not advertised (custom inlineValues request, implemented + tests)</li>
+<li><strong><code>dap.breakpoints.hit_condition</code></strong> - preview, not advertised</li>
+<li><strong><code>dap.breakpoints.logpoints</code></strong> - preview, not advertised</li>
+<li><strong><code>dap.exceptions.die</code></strong> - preview, not advertised</li>
+</ul>
+<p>GA DAP features currently advertised:</p>
+<ul>
+<li><strong><code>dap.core</code></strong> - core launch/break/step/inspect/evaluate/setVariable loop</li>
+<li><strong><code>dap.breakpoints.basic</code></strong> - verified/unverified breakpoint lifecycle</li>
+<li><strong><code>dap.inline_values</code></strong> - custom inlineValues request support</li>
 </ul>
 <p>For DAP roadmap items (attach, variables/evaluate, safe eval), see <code>docs/ROADMAP.md</code>.</p>
 <hr />

@@ -41,7 +41,7 @@ Documentation for Perl LSP v0.9.0 — a Language Server Protocol implementation 
 
 ```bash
 nix develop -c just ci-gate   # Canonical local gate
-just status-check              # Verify metrics haven't drifted
+nix develop -c just status-check  # Verify metrics haven't drifted
 ```
 
 ## Further reading

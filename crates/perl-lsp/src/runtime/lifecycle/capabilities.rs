@@ -190,13 +190,8 @@ impl LspServer {
 
         eprintln!("Tool availability: perltidy={}, perlcritic={}", has_perltidy, has_perlcritic);
 
-        // Check if incremental parsing is enabled
-        let sync_kind =
-            if cfg!(feature = "incremental") && std::env::var("PERL_LSP_INCREMENTAL").is_ok() {
-                2 // Incremental sync
-            } else {
-                1 // Full document sync
-            };
+        // Incremental text sync: ropey handles range-based edits correctly
+        let sync_kind = 2;
 
         // Build capabilities using catalog-driven approach
         let mut build_flags = if cfg!(feature = "lsp-ga-lock") {
@@ -227,12 +222,8 @@ impl LspServer {
         // Add fields not yet in lsp-types 0.97
         capabilities["positionEncoding"] = json!("utf-16");
         capabilities["declarationProvider"] = json!(true);
-        capabilities["documentHighlightProvider"] = json!(true);
         if features.type_hierarchy {
             capabilities["typeHierarchyProvider"] = json!(true);
-        }
-        if features.call_hierarchy {
-            capabilities["callHierarchyProvider"] = json!(true);
         }
 
         // Override text document sync with more detailed options
@@ -240,33 +231,28 @@ impl LspServer {
             "openClose": true,
             "change": sync_kind,
             "willSave": true,
-            "willSaveWaitUntil": false,
+            "willSaveWaitUntil": true,
             "save": { "includeText": true }
         });
 
-        // Add workspace capabilities for LSP 3.18 features
+        // Workspace capabilities: folders, file operations, and content schemes
         capabilities["workspace"] = json!({
+            "workspaceFolders": {
+                "supported": true,
+                "changeNotifications": true
+            },
+            "fileOperations": {
+                "willCreate": { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
+                "didCreate":  { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
+                "willRename": { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
+                "didRename":  { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
+                "willDelete": { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] },
+                "didDelete":  { "filters": [{ "pattern": { "glob": "**/*.{pl,pm,t,psgi}" } }] }
+            },
             "textDocumentContent": {
                 "schemes": ["perldoc"]
             }
         });
-
-        // Add notebook document sync capability (LSP 3.17) when enabled
-        if features.notebook_document_sync {
-            capabilities["notebookDocumentSync"] = json!({
-                "notebookSelector": [
-                    {
-                        "notebook": "jupyter-notebook",
-                        "cells": [
-                            {
-                                "language": "perl"
-                            }
-                        ]
-                    }
-                ],
-                "save": true
-            });
-        }
 
         Ok(Some(json!({
             "capabilities": capabilities,

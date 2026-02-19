@@ -144,11 +144,8 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
-                        </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/src/dap/user-guide.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
-                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -192,10 +189,10 @@
 <li><strong>Explanation sections</strong>: Understanding DAP architecture and design</li>
 </ul>
 </blockquote>
-<p><strong>Status</strong>: Native adapter CLI (launch-only) + BridgeAdapter guide (Perl::LanguageServer)
+<p><strong>Status</strong>: Native adapter CLI (launch + attach + stepping + evaluate) + BridgeAdapter guide (Perl::LanguageServer)
 <strong>Version</strong>: 1.0.0
 <strong>Date</strong>: 2025-10-04</p>
-<p><strong>Note</strong>: The <code>perl-dap</code> CLI runs the native adapter (launch-only) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.</p>
+<p><strong>Note</strong>: The <code>perl-dap</code> CLI runs the native adapter (launch + attach) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.</p>
 <hr />
 <h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of Contents</a></h2>
 <ul>
@@ -297,7 +294,7 @@
 <p><strong>Configuration Explained</strong>:</p>
 <ul>
 <li><code>type</code>: Must be <code>"perl"</code> for Perl debugging</li>
-<li><code>request</code>: <code>"launch"</code> to start a new process, <code>"attach"</code> to connect to running process (bridge only; native adapter does not support attach yet)</li>
+<li><code>request</code>: <code>"launch"</code> to start a new process, <code>"attach"</code> to connect to a running process/debugger</li>
 <li><code>name</code>: Display name in VS Code’s debug dropdown</li>
 <li><code>program</code>: Path to the Perl script to debug (supports VS Code variables like <code>${file}</code>)</li>
 <li><code>args</code>: Command-line arguments to pass to your script</li>
@@ -337,7 +334,7 @@ print "Done!\n";
 <p><strong>Observe the debugger</strong>:</p>
 <ul>
 <li>Execution pauses at line 8</li>
-<li>Variables panel shows <code>$name</code> and <code>$greeting</code> values in BridgeAdapter mode (native adapter shows placeholders)</li>
+<li>Variables panel shows best-effort parsed values from debugger output</li>
 <li>Call stack shows your script in the execution context</li>
 </ul>
 </li>
@@ -353,9 +350,9 @@ print "Done!\n";
 <li>
 <p><strong>Inspect variables</strong>:</p>
 <ul>
-<li>Hover over variables to see values (placeholder output in native adapter)</li>
-<li>Use the Variables panel to explore data structures (placeholder output in native adapter)</li>
-<li>Use the Debug Console to evaluate Perl expressions (placeholder output in native adapter)</li>
+<li>Hover over variables to inspect parsed values</li>
+<li>Use the Variables panel to explore data structures with lazy expansion</li>
+<li>Use the Debug Console to evaluate Perl expressions (safe mode by default)</li>
 </ul>
 </li>
 <li>
@@ -383,19 +380,28 @@ print "Done!\n";
 <li>Add <code>"args": ["--verbose", "--input=data.txt"]</code> for command-line arguments</li>
 </ul>
 <h3 id="attach-to-a-running-process"><a class="header" href="#attach-to-a-running-process">Attach to a Running Process</a></h3>
-<p><strong>Note</strong>: The <code>perl-dap</code> native adapter does not support attach yet. This section applies to the BridgeAdapter/Perl::LanguageServer path.</p>
-<p><strong>Use Case</strong>: Connect to an already-running Perl script that was started with DAP support.</p>
-<p><strong>Start your Perl script with DAP</strong>:</p>
-<pre><code class="language-bash">perl -d:LanguageServer::DAP script.pl
-</code></pre>
+<p><strong>Use Case</strong>: Connect to an already-running debug target.</p>
+<p>The native adapter supports two attach modes:</p>
+<ul>
+<li><code>processId</code>: local PID signal-control mode</li>
+<li><code>host</code>/<code>port</code>: TCP debugger endpoint (for shim/bridge workflows)</li>
+</ul>
 <p><strong>Attach Configuration</strong>:</p>
 <pre><code class="language-json">{
   "type": "perl",
   "request": "attach",
-  "name": "Attach to Perl::LanguageServer",
+  "name": "Attach by TCP",
   "host": "localhost",
   "port": 13603,
   "timeout": 5000
+}
+</code></pre>
+<p><strong>Attach by PID</strong>:</p>
+<pre><code class="language-json">{
+  "type": "perl",
+  "request": "attach",
+  "name": "Attach by PID",
+  "processId": 12345
 }
 </code></pre>
 <p><strong>When to Use</strong>:</p>
@@ -507,13 +513,14 @@ print "Done!\n";
 }
 </code></pre>
 <h3 id="attach-configuration"><a class="header" href="#attach-configuration">Attach Configuration</a></h3>
-<p>Complete schema for <code>"request": "attach"</code> configurations (BridgeAdapter only; native adapter does not support attach yet).</p>
+<p>Complete schema for <code>"request": "attach"</code> configurations.</p>
 <div class="table-wrapper"><table><thead><tr><th>Property</th><th>Type</th><th>Required</th><th>Default</th><th>Description</th></tr></thead><tbody>
 <tr><td><code>type</code></td><td><code>string</code></td><td>✅ Yes</td><td>N/A</td><td>Must be <code>"perl"</code></td></tr>
 <tr><td><code>request</code></td><td><code>string</code></td><td>✅ Yes</td><td>N/A</td><td>Must be <code>"attach"</code> for connecting to running process</td></tr>
 <tr><td><code>name</code></td><td><code>string</code></td><td>✅ Yes</td><td>N/A</td><td>Display name in debug dropdown</td></tr>
-<tr><td><code>host</code></td><td><code>string</code></td><td>✅ Yes</td><td><code>"localhost"</code></td><td>Hostname or IP address of DAP server</td></tr>
-<tr><td><code>port</code></td><td><code>number</code></td><td>✅ Yes</td><td><code>13603</code></td><td>Port number of DAP server</td></tr>
+<tr><td><code>processId</code></td><td><code>number</code></td><td>❌ No</td><td>N/A</td><td>Local process ID for signal-control attach mode</td></tr>
+<tr><td><code>host</code></td><td><code>string</code></td><td>❌ No</td><td><code>"localhost"</code></td><td>Hostname or IP address of DAP server</td></tr>
+<tr><td><code>port</code></td><td><code>number</code></td><td>❌ No</td><td><code>13603</code></td><td>Port number of DAP server</td></tr>
 <tr><td><code>timeout</code></td><td><code>number</code></td><td>❌ No</td><td><code>5000</code></td><td>Connection timeout in milliseconds</td></tr>
 </tbody></table>
 </div>
@@ -589,12 +596,11 @@ PERL5LIB=C:\workspace\lib;C:\custom\lib perl script.pl
 │                      Perl Runtime                           │
 └─────────────────────────────────────────────────────────────┘
 </code></pre>
-<p><strong>BridgeAdapter Design Decisions</strong>:</p>
+<p><strong>BridgeAdapter Compatibility Role</strong>:</p>
 <ol>
-<li><strong>Immediate User Value</strong>: Bridge to existing, mature Perl::LanguageServer DAP implementation</li>
-<li><strong>Minimal Dependencies</strong>: No complex Perl debugger protocol parsing in Rust</li>
-<li><strong>Cross-Platform Foundation</strong>: Platform abstraction layer ready for Phase 2 native implementation</li>
-<li><strong>Clean Separation</strong>: Bridge adapter isolated in <code>perl-dap</code> crate for future replacement</li>
+<li><strong>Interoperability</strong>: Supports environments already standardized on Perl::LanguageServer DAP</li>
+<li><strong>Migration Path</strong>: Lets teams move incrementally from bridge-based workflows to native <code>perl-dap</code></li>
+<li><strong>Isolation</strong>: Bridge code remains separate from native adapter runtime paths</li>
 </ol>
 <p><strong>BridgeAdapter Trade-offs</strong>:</p>
 <ul>
@@ -602,11 +608,10 @@ PERL5LIB=C:\workspace\lib;C:\custom\lib perl script.pl
 <li>⚠️ <strong>Cons</strong>: External dependency on Perl::LanguageServer CPAN module, additional process overhead</li>
 </ul>
 <h3 id="future-roadmap"><a class="header" href="#future-roadmap">Future Roadmap</a></h3>
-<p><strong>Phase 2: Native Adapter Completion (Planned)</strong></p>
-<p>The CLI already uses the native adapter; Phase 2 focuses on attach support, parsed variables/evaluate output, and hardened evaluation.</p>
+<p><strong>Native Adapter Roadmap</strong></p>
+<p>The CLI already uses the native adapter with launch + attach + evaluation support. Remaining roadmap items focus on deeper protocol parity and hardening.</p>
 <p><strong>Planned Features</strong>:</p>
 <ul>
-<li>Direct DAP protocol implementation in Rust</li>
 <li>AST-based breakpoint validation (leveraging <code>perl-parser</code>)</li>
 <li>Incremental parsing integration (&lt;1ms breakpoint updates)</li>
 <li>Workspace navigation for cross-file debugging</li>

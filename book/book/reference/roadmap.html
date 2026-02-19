@@ -144,11 +144,8 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
-                        </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/src/reference/roadmap.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
-                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -187,7 +184,7 @@
 <strong>Stale roadmaps</strong>: Archived at <code>docs/archive/roadmaps/</code>; retrieve from git history if needed.</p>
 </blockquote>
 <blockquote>
-<p><strong>Status (2026-01-28)</strong>: v0.9.1 verification and doc alignment in progress; v1.0 preparation underway.</p>
+<p><strong>Status (2026-02-17)</strong>: v0.9.1 close-out verification completed with receipts; v1.0.x hardening underway with native DAP preview validated.</p>
 <p><strong>Canonical receipt</strong>: <code>nix develop -c just ci-gate</code> must be green before merging.
 <strong>CI</strong> is intentionally optional/opt-in; the repo is local-first by design.</p>
 </blockquote>
@@ -214,7 +211,7 @@
 <tr><td><strong>perl-lexer</strong></td><td>Production</td><td><code>just ci-gate</code></td><td>Tokenization stable</td></tr>
 <tr><td><strong>perl-corpus</strong></td><td>Production</td><td><code>just ci-gate</code></td><td>Regression corpus + mutation hardening inputs</td></tr>
 <tr><td><strong>perl-lsp</strong></td><td>Production (advertised subset)</td><td>capability snapshots + targeted tests</td><td>Advertise only what’s tested; keep GA-lock stable</td></tr>
-<tr><td><strong>perl-dap</strong></td><td>Experimental (native adapter)</td><td>manual smoke</td><td>CLI uses native adapter; BridgeAdapter library available (Perl::LanguageServer)</td></tr>
+<tr><td><strong>perl-dap</strong></td><td>Preview (Native + Bridge)</td><td><code>cargo test -p perl-dap --features dap-phase2,dap-phase3</code></td><td>Native adapter implemented (breakpoints/control-flow/attach paths) with BridgeAdapter interoperability fallback</td></tr>
 <tr><td><strong>perl-parser-pest</strong> (v2)</td><td>Legacy</td><td>N/A</td><td>Optional crate; keep out of default gate</td></tr>
 <tr><td><strong>Semantic Analyzer</strong></td><td>Phase 2-6 Complete</td><td><code>just ci-gate</code></td><td>All NodeKind handlers; full semantic analysis pipeline</td></tr>
 </tbody></table>
@@ -222,21 +219,21 @@
 <p><em>Only features that pass <code>ci-gate</code> or have targeted integration tests count as “Production”.</em></p>
 <hr />
 <h2 id="now--next--later-summary"><a class="header" href="#now--next--later-summary">Now / Next / Later (Summary)</a></h2>
-<p><strong>Now (v0.9.1 close-out)</strong></p>
+<p><strong>Now (post v0.9.1 close-out)</strong></p>
 <ul>
-<li>Verify workspace index state machine (transitions, early-exit caps, instrumentation receipts)</li>
-<li>Documentation cleanup: reduce <code>missing_docs</code> violations and complete module-level docs</li>
+<li>Keep close-out receipts green (<code>just ci-gate</code>, targeted state-machine tests, benchmark checks)</li>
+<li>Publish benchmark outputs under <code>benchmarks/results/</code> for durable v1.0.x evidence</li>
 </ul>
 <p><strong>Next (v1.0.0)</strong></p>
 <ul>
 <li>Stability statement (GA-lock + versioning rules)</li>
 <li>Packaging stance (what ships; supported platforms)</li>
-<li>Benchmark publication with receipts under <code>benchmarks/results/</code></li>
+<li>Benchmark publication with receipts under <code>benchmarks/results/</code> (in progress)</li>
 <li>Upgrade notes from v0.8.x → v1.0</li>
 </ul>
 <p><strong>Later (post v1.0)</strong></p>
 <ul>
-<li>Native DAP completeness (attach, variables/evaluate, safe eval)</li>
+<li>DAP preview -&gt; GA hardening (deeper variables/evaluate fidelity, shim distribution strategy, cross-editor receipts)</li>
 <li>Full LSP 3.18 compliance</li>
 <li>Package manager distribution (Homebrew/apt/etc.)</li>
 </ul>
@@ -248,7 +245,7 @@
 <tr><td><strong>perl-lsp</strong></td><td>v0.8.8</td><td>Production</td><td>LSP server (see <code>features.toml</code> for GA coverage)</td></tr>
 <tr><td><strong>perl-lexer</strong></td><td>v0.8.8</td><td>Production</td><td>Context-aware tokenizer</td></tr>
 <tr><td><strong>perl-corpus</strong></td><td>v0.8.8</td><td>Production</td><td>Test corpus (see <code>just status-check</code> for counts)</td></tr>
-<tr><td><strong>perl-dap</strong></td><td>v0.1.0</td><td>Phase 1</td><td>Debug Adapter Protocol (native adapter CLI; BridgeAdapter library)</td></tr>
+<tr><td><strong>perl-dap</strong></td><td>v0.1.0</td><td>Preview (Native + Bridge)</td><td>Debug Adapter Protocol (native preview adapter + BridgeAdapter compatibility path)</td></tr>
 <tr><td><strong>perl-parser-pest</strong></td><td>v0.8.8</td><td>Legacy</td><td>Pest-based parser (maintained)</td></tr>
 </tbody></table>
 </div>
@@ -316,7 +313,7 @@
 <li><strong>Semantic Analyzer</strong>: Phase 2-6 complete (all NodeKind handlers)</li>
 </ul>
 <h3 id="v091-post-release-optimization-january-2026"><a class="header" href="#v091-post-release-optimization-january-2026">v0.9.1: Post-Release Optimization (January 2026)</a></h3>
-<p><strong>Status</strong>: In Progress</p>
+<p><strong>Status</strong>: Close-Out Complete (receipts captured on 2026-02-16)</p>
 <p><strong>Goal</strong>: Performance optimization, semantic analyzer completion, and refactoring infrastructure.</p>
 <p><strong>Completed Deliverables</strong>:</p>
 <ol>
@@ -404,29 +401,29 @@
 </ul>
 </li>
 </ol>
-<p><strong>Remaining Deliverables</strong>:</p>
+<p><strong>Close-Out Receipts</strong>:</p>
 <ol>
 <li>
-<p><strong>Index State Machine Verification</strong> (deferred from v0.9.0)</p>
+<p><strong>Index State Machine Verification</strong> ✓</p>
 <ul>
-<li>Validate transitions and early-exit caps with receipts</li>
-<li>Confirm instrumentation output for state/phase durations</li>
-<li>Verify performance caps: &lt;100ms initial index, &lt;10ms incremental</li>
+<li>Transition and instrumentation tests passed in <code>perl-workspace-index</code></li>
+<li>Early-exit and transition receipts validated via targeted tests</li>
+<li>Benchmarks confirm caps with large margin (<code>~368.7us</code> initial small, <code>~721.1us</code> initial medium, <code>~212.6us</code> incremental)</li>
 </ul>
 </li>
 <li>
-<p><strong>Documentation Cleanup</strong></p>
+<p><strong>Documentation Cleanup</strong> ✓</p>
 <ul>
-<li>Address remaining violations flagged by <code>missing_docs</code></li>
-<li>Public API documentation coverage to 95%+</li>
-<li>Module-level documentation for all crates</li>
+<li><code>cargo test -p perl-parser --features doc-coverage --test missing_docs_ac_tests</code> passed (25/25)</li>
+<li><code>cargo doc --no-deps -p perl-parser</code> clean (no rustdoc warnings)</li>
+<li>LSP compatibility module docs and cross-links aligned to current module layout</li>
 </ul>
 </li>
 </ol>
 <p><strong>Exit criteria</strong>:</p>
 <ul>
-<li>Index state machine implemented with performance benchmarks</li>
-<li>Documentation violations &lt; 200</li>
+<li>Index state machine verified with receipts and benchmark caps</li>
+<li><code>missing_docs</code> ratchet clean for perl-parser (baseline 0)</li>
 <li>LSP coverage maintained at 100% ✓</li>
 <li>Tracked test debt ≤ 2 ✓</li>
 <li>Security hardening complete ✓</li>
@@ -436,13 +433,12 @@
 <p>These items are explicitly deferred:</p>
 <ul>
 <li>Full LSP 3.18 compliance (see CURRENT_STATUS.md for current coverage)</li>
-<li>Native DAP completeness (attach, variables/evaluate, safe eval; bridge wiring decision)</li>
 <li>Benchmark result publication (framework exists, results not committed)</li>
 <li>Package manager distribution (Homebrew, apt, etc.)</li>
 </ul>
 <hr />
 <h3 id="v100-boring-promises-sequence-after-v091"><a class="header" href="#v100-boring-promises-sequence-after-v091">v1.0.0: “Boring Promises” (sequence after v0.9.1)</a></h3>
-<p><strong>Goal</strong>: Freeze the surfaces you’re willing to support.</p>
+<p><strong>Goal</strong>: Freeze the surfaces you’re willing to support. Close known gaps honestly.</p>
 <p><strong>Deliverables</strong>:</p>
 <ol>
 <li>
@@ -466,30 +462,107 @@
 <li>Remove “UNVERIFIED” tags where you now have receipts</li>
 </ul>
 </li>
+<li>
+<p><strong>Gap closing (honest assessment items)</strong></p>
+<ul>
+<li><del>Fix execute_command test failures (7 tests)</del> ✓ Fixed: workspace root security boundary was not set in integration tests</li>
+<li><del>Correct <code>features.toml</code> DAP maturity levels</del> ✓ Fixed: DAP features are tracked as <code>maturity = "preview"</code> with implemented native paths</li>
+<li><del>Fix <code>CURRENT_STATUS.md</code> DAP narrative</del> ✓ Fixed: now describes native preview + bridge interoperability reality</li>
+<li>Add E2E LSP smoke test (send initialize→didOpen→completion→shutdown, verify responses)</li>
+<li>Document Moo/Moose limitations honestly in user-facing docs</li>
+</ul>
+</li>
 </ol>
 <p><strong>Exit criteria</strong>:</p>
 <ul>
 <li>Capability snapshot + docs aligned</li>
 <li>Benchmarks published</li>
 <li>Upgrade notes exist from v0.8.x → v1.0</li>
+<li>Honest assessment document (<code>docs/HONEST_ASSESSMENT.md</code>) exists and is current</li>
+<li>No DAP features marked as GA in <code>features.toml</code></li>
 </ul>
 <hr />
-<h2 id="known-gaps-v091-hardening"><a class="header" href="#known-gaps-v091-hardening">Known Gaps (v0.9.1 Hardening)</a></h2>
-<p>These gaps are tracked in <a href="issues/"><code>docs/issues/</code></a> and need closure before v0.9.1 close-out:</p>
-<h3 id="corpus-coverage-gaps"><a class="header" href="#corpus-coverage-gaps">Corpus Coverage Gaps</a></h3>
+<h3 id="v11-semantic-depth"><a class="header" href="#v11-semantic-depth">v1.1: Semantic Depth</a></h3>
+<p><strong>Goal</strong>: Close the Moo/Moose gap — the #1 real-world limitation.</p>
+<p><strong>Deliverables</strong>:</p>
+<ol>
+<li>
+<p><strong>Moo/Moose <code>has</code> attribute recognition</strong></p>
 <ul>
-<li>See <code>docs/issues/corpus/</code> for NodeKind reachability and GA feature alignment</li>
+<li>Semantic analyzer recognizes <code>has</code> as a field declaration</li>
+<li>Hover on Moo attributes shows field type, default, documentation</li>
+<li>Completion inside <code>has</code> blocks suggests type constraints, <code>is</code>, <code>isa</code>, <code>default</code>, etc.</li>
 </ul>
-<h3 id="hangbounds-risks-p0"><a class="header" href="#hangbounds-risks-p0">Hang/Bounds Risks (P0)</a></h3>
+</li>
+<li>
+<p><strong>Class::Accessor support</strong></p>
 <ul>
-<li>Deep nesting boundedness</li>
-<li>Slash ambiguity (division vs regex)</li>
-<li>Regex literal handling</li>
+<li>Auto-generated accessor methods visible in completion and go-to-definition</li>
+</ul>
+</li>
+<li>
+<p><strong>Role composition tracking</strong></p>
+<ul>
+<li><code>with 'Role'</code> connects role methods to consuming class</li>
+<li>Go-to-definition resolves role methods</li>
+</ul>
+</li>
+</ol>
+<p><strong>Exit criteria</strong>:</p>
+<ul>
+<li>Hover on <code>has 'name'</code> in a Moo class returns field information</li>
+<li>Completion inside <code>has</code> blocks works</li>
+<li><code>features.toml</code> updated with Moo/Moose semantic coverage</li>
+</ul>
+<hr />
+<h3 id="v12-dap-preview---ga"><a class="header" href="#v12-dap-preview---ga">v1.2: DAP Preview -&gt; GA</a></h3>
+<p><strong>Goal</strong>: Harden native debugging from preview to GA without requiring Perl::LanguageServer.</p>
+<p><strong>Deliverables</strong>:</p>
+<ol>
+<li><strong>Promote preview breakpoints/inline values</strong> to GA-quality behavior and receipts</li>
+<li><strong>Deep variable inspection + evaluate context</strong> in active debugger sessions</li>
+<li><strong>Attach stability</strong> across PID and TCP modes with consistent stack/thread semantics</li>
+<li><strong>Finalize shim/package strategy</strong> (<code>Devel::TSPerlDAP</code> or bundled equivalent) and editor defaults</li>
+</ol>
+<p><strong>Exit criteria</strong>:</p>
+<ul>
+<li>Set breakpoint, step, inspect variables, evaluate expressions — works natively with reliable receipts</li>
+<li>DAP features promoted from <code>maturity = "preview"</code> to <code>maturity = "ga"</code> where warranted</li>
+<li>VSCode extension debug configuration works out of the box</li>
+</ul>
+<hr />
+<h3 id="v20-dap-phase-3--polish"><a class="header" href="#v20-dap-phase-3--polish">v2.0: DAP Phase 3 + Polish</a></h3>
+<p><strong>Goal</strong>: Full debugging experience and ecosystem polish.</p>
+<p><strong>Deliverables</strong>:</p>
+<ol>
+<li>Multi-process attach and child-process tracking</li>
+<li>Watch expressions and richer evaluation UX</li>
+<li>Full debug console parity + transcript conformance coverage</li>
+<li>Pest parser decision: archive to <code>archive/</code> or maintain for benchmark comparison</li>
+<li>Package manager distribution (Homebrew, apt, etc.)</li>
+</ol>
+<hr />
+<h2 id="known-gaps"><a class="header" href="#known-gaps">Known Gaps</a></h2>
+<blockquote>
+<p>For the full honest assessment, see <a href="HONEST_ASSESSMENT.html"><code>docs/HONEST_ASSESSMENT.md</code></a>.</p>
+</blockquote>
+<h3 id="resolved-v091"><a class="header" href="#resolved-v091">Resolved (v0.9.1)</a></h3>
+<ul>
+<li><del>Corpus coverage gaps</del> ✓ Comprehensive corpus (732KB, 78 files, 611+ sections)</li>
+<li><del>Hang/bounds risks</del> ✓ Budget-protected lexer, recursion limits, fuzz testing</li>
+<li><del>Execute command test failures</del> ✓ Fixed workspace root security boundary</li>
+</ul>
+<h3 id="open-gaps"><a class="header" href="#open-gaps">Open Gaps</a></h3>
+<ul>
+<li><strong>DAP is preview, not GA</strong>: Native adapter now covers breakpoint/control-flow/attach foundations, but deep runtime variable/evaluate fidelity and packaging strategy still need hardening. <code>features.toml</code> keeps DAP at <code>maturity = "preview"</code>.</li>
+<li><strong>Moo/Moose semantic blindness</strong>: Parser tokenizes correctly but semantic analyzer doesn’t understand <code>has</code> as field declaration. #1 real-world gap.</li>
+<li><strong>No E2E LSP smoke test</strong>: All testing is unit/integration; no automated test that starts the server and sends real LSP messages end-to-end.</li>
+<li><strong>Pest parser orphaned</strong>: Compiles and works but excluded from CI, not used in production, 10-100x slower than v3. Maintained for reference only.</li>
 </ul>
 <h3 id="known-constraints"><a class="header" href="#known-constraints">Known Constraints</a></h3>
 <ul>
 <li><strong>CI Pipeline</strong>: Issue #211 blocks merge-blocking gates (#210)</li>
-<li><strong>Native DAP completeness</strong>: Attach/variables/evaluate deferred (see “Not Before v1.0”)</li>
+<li><strong>DAP GA promotion</strong>: Depends on shim distribution decision and cross-editor native debugging receipts</li>
 </ul>
 <hr />
 <h2 id="v090-blockers-historical-resolved"><a class="header" href="#v090-blockers-historical-resolved">v0.9.0 Blockers (Historical; resolved)</a></h2>
@@ -530,13 +603,13 @@
 <p>The LSP compliance table is now auto-generated. Source of truth: <code>features.toml</code></p>
 <!-- BEGIN: COMPLIANCE_TABLE -->
 <div class="table-wrapper"><table><thead><tr><th>Area</th><th>Implemented</th><th>Total</th><th>Coverage</th></tr></thead><tbody>
-<tr><td>debug</td><td>2</td><td>2</td><td>100%</td></tr>
+<tr><td>debug</td><td>6</td><td>6</td><td>100%</td></tr>
 <tr><td>notebook</td><td>2</td><td>2</td><td>100%</td></tr>
 <tr><td>protocol</td><td>9</td><td>9</td><td>100%</td></tr>
 <tr><td>text_document</td><td>41</td><td>41</td><td>100%</td></tr>
 <tr><td>window</td><td>9</td><td>9</td><td>100%</td></tr>
 <tr><td>workspace</td><td>26</td><td>26</td><td>100%</td></tr>
-<tr><td><strong>Overall</strong></td><td><strong>89</strong></td><td><strong>89</strong></td><td><strong>100%</strong></td></tr>
+<tr><td><strong>Overall</strong></td><td><strong>93</strong></td><td><strong>93</strong></td><td><strong>100%</strong></td></tr>
 </tbody></table>
 </div><!-- END: COMPLIANCE_TABLE -->
 <p><strong>v0.9.0 Metrics</strong>:</p>
@@ -569,7 +642,7 @@
 <li><strong><a href="../features.toml">features.toml</a></strong> - Canonical capability definitions</li>
 <li><strong><a href="LESSONS.html">LESSONS.md</a></strong> - What went wrong and what changed</li>
 </ul>
-<!-- Last Updated: 2026-01-28 -->
+<!-- Last Updated: 2026-02-17 -->
 
                     </main>
 

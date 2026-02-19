@@ -46,7 +46,10 @@
       "perl.runFile",
       "perl.runTestSub",
       "perl.debugTests",
-      "perl.runCritic"
+      "perl.runCritic",
+      "perl.runTest",
+      "perl.runTestFile",
+      "perl.debugFile"
     ]
   },
   "experimental": {
@@ -60,6 +63,19 @@
   },
   "linkedEditingRangeProvider": true,
   "monikerProvider": true,
+  "notebookDocumentSync": {
+    "notebookSelector": [
+      {
+        "cells": [
+          {
+            "language": "perl"
+          }
+        ],
+        "notebook": "jupyter-notebook"
+      }
+    ],
+    "save": true
+  },
   "referencesProvider": true,
   "renameProvider": {
     "prepareProvider": true

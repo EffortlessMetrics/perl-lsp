@@ -707,9 +707,8 @@ impl LspServer {
             }
         }
 
-        let array_re = EXPORT_ARRAY_RE.get_or_init(|| {
-            regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*\(([^)]+)\)").ok()
-        });
+        let array_re = EXPORT_ARRAY_RE
+            .get_or_init(|| regex::Regex::new(r"@EXPORT(?:_OK)?\s*=\s*\(([^)]+)\)").ok());
         if let Some(re) = array_re {
             for cap in re.captures_iter(text) {
                 if let Some(content) = cap.get(1) {

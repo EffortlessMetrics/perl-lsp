@@ -261,7 +261,7 @@ impl BuildFlags {
             inlay_hints: true,      // v0.8.4 feature - working
             pull_diagnostics: true, // v0.8.5 feature - working
             workspace_symbol_resolve: true,
-            semantic_tokens: true,          // v0.8.4 feature - working
+            semantic_tokens: true,         // v0.8.4 feature - working
             code_actions: true, // v0.8.4 feature - working (enhanced v0.8.9 with refactoring)
             execute_command: true, // v0.8.5 feature - working
             rename: true, // v0.8.4 feature - working (enhanced v0.8.9 with workspace refactoring)
@@ -274,8 +274,8 @@ impl BuildFlags {
             linked_editing: true, // Working - bracket pair editing
             inline_completion: true, // Working - deterministic rules, well-tested
             inline_values: false, // Needs DAP integration
-            notebook_document_sync: false, // Deliberately conservative in GA-lock builds
-            notebook_cell_execution: false, // Deliberately conservative in GA-lock builds
+            notebook_document_sync: true, // Fully implemented in runtime/notebook.rs, tested
+            notebook_cell_execution: true, // Metadata tracking, zero risk
             moniker: true, // Working - export/import classification
             document_color: true, // Working - hex + ANSI detection
             source_organize_imports: true, // Working - sort by category
@@ -559,6 +559,9 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.runTestSub".to_string(),
         "perl.debugTests".to_string(),
         "perl.runCritic".to_string(),
+        "perl.runTest".to_string(),
+        "perl.runTestFile".to_string(),
+        "perl.debugFile".to_string(),
     ]
 }
 

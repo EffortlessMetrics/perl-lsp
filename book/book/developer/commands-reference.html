@@ -144,11 +144,8 @@
                         <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl-rs" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
-                        </a>
-                        <a href="https://github.com/EffortlessMetrics/tree-sitter-perl/edit/master/docs/src/developer/commands-reference.md" title="Suggest an edit" aria-label="Suggest an edit" rel="edit">
-                            <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
 
                     </div>
@@ -826,22 +823,24 @@ cargo test --doc                      # Documentation tests
 sudo apt-get install libclang-dev  # Ubuntu/Debian
 brew install llvm                  # macOS
 
-# Run dual-scanner corpus comparison (requires xtask excluded from workspace)
-cd xtask &amp;&amp; cargo run corpus                              # Default: compare both scanners
-cd xtask &amp;&amp; cargo run corpus -- --scanner both           # Explicit dual-scanner mode
-cd xtask &amp;&amp; cargo run corpus -- --scanner both --diagnose # With detailed analysis
+# Run corpus comparison modes (requires legacy feature)
+cargo run -p xtask --features legacy -- corpus                          # Corpus vs selected parser (default scanner: v3)
+cargo run -p xtask --features legacy -- corpus --scanner both           # C vs v3 comparison mode
+cargo run -p xtask --features legacy -- corpus --scanner both --diagnose
 
 # Individual scanner testing
-cd xtask &amp;&amp; cargo run corpus -- --scanner c              # C scanner (delegates to Rust)
-cd xtask &amp;&amp; cargo run corpus -- --scanner rust           # Rust scanner implementation  
-cd xtask &amp;&amp; cargo run corpus -- --scanner v3             # V3 parser only
+cargo run -p xtask --features legacy -- corpus --scanner c                    # C scanner
+cargo run -p xtask --features legacy -- corpus --scanner rust                 # In-crate v2 pest parser
+cargo run -p xtask --features legacy -- corpus --scanner v2-pest-microcrate   # Extracted perl-parser-pest v2
+cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose # v2&lt;-&gt;v2 drift detector
+cargo run -p xtask --features legacy -- corpus --scanner v3                   # V3 parser only
 
 # Diagnostic analysis (*Diataxis: Reference* - detailed comparison)
-cd xtask &amp;&amp; cargo run corpus -- --diagnose               # Analyze first failing test
-cd xtask &amp;&amp; cargo run corpus -- --test                   # Test current parser behavior
+cargo run -p xtask --features legacy -- corpus --diagnose  # Analyze first failing test
+cargo run -p xtask --features legacy -- corpus --test      # Test current parser behavior
 
 # Custom corpus path
-cd xtask &amp;&amp; cargo run corpus -- --path ../test/corpus    # Custom corpus directory
+cargo run -p xtask --features legacy -- corpus --path tree-sitter-perl/test/corpus
 </code></pre>
 <h3 id="dual-scanner-output-analysis-diataxis-explanation---understanding-results"><a class="header" href="#dual-scanner-output-analysis-diataxis-explanation---understanding-results">Dual-Scanner Output Analysis (<em>Diataxis: Explanation</em> - Understanding results)</a></h3>
 <pre><code class="language-bash"># Scanner mismatch tracking
@@ -880,19 +879,21 @@ cd xtask &amp;&amp; cargo run corpus -- --path ../test/corpus    # Custom corpus
 </code></pre>
 <h3 id="xtask-corpus-command-reference-diataxis-reference---complete-command-specification"><a class="header" href="#xtask-corpus-command-reference-diataxis-reference---complete-command-specification">xtask corpus Command Reference (<em>Diataxis: Reference</em> - Complete command specification)</a></h3>
 <pre><code class="language-bash"># Basic corpus command structure
-cd xtask &amp;&amp; cargo run corpus [OPTIONS]
+cargo run -p xtask --features legacy -- corpus [OPTIONS]
 
 # Command line options:
---path &lt;PATH&gt;              # Corpus directory path (default: ../c/test/corpus)
---scanner &lt;SCANNER&gt;        # Scanner type: c, rust, v3, both (default: both)
+--path &lt;PATH&gt;              # Corpus directory path (default: tree-sitter-perl/test/corpus)
+--scanner &lt;SCANNER&gt;        # Scanner type: c, rust, v2-pest-microcrate, v2-parity, v3, both
 --diagnose                 # Run diagnostic analysis on first failing test
 --test                     # Test current parser behavior with simple expressions
 
 # Scanner type options:
 c       # Use C tree-sitter scanner only (baseline for comparison)
-rust    # Use Rust tree-sitter scanner only (PureRustPerlParser)
+rust    # Use in-crate v2 pest parser (tree_sitter_perl::PureRustPerlParser)
+v2-pest-microcrate  # Use extracted perl-parser-pest v2 parser
+v2-parity  # Compare in-crate v2 vs extracted v2 output only (ignores corpus expected)
 v3      # Use V3 native parser only (perl_parser::Parser)
-both    # Compare C scanner vs Rust scanner (legacy testing - C now delegates to Rust)
+both    # Compare C scanner vs V3 parser output before corpus expectation check
 
 # Prerequisites for dual-scanner mode:
 # Ubuntu/Debian: sudo apt-get install libclang-dev
