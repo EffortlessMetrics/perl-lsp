@@ -4,7 +4,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Testing qq and q Operators ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         ("Simple q string", r#"my $str = q(Hello World);"#),
         ("Simple qq string", r#"my $str = qq(Hello World);"#),
         ("q with brackets", r#"my $str = q[Hello World];"#),

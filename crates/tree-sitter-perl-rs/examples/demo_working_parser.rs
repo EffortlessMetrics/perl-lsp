@@ -10,7 +10,7 @@ fn main() {
     println!("=== Working Perl Parser Demo ===\n");
 
     // Test cases
-    let test_cases = vec![
+    let test_cases = [
         // Basic variable declaration
         "my $x = 42;",
         // String assignment

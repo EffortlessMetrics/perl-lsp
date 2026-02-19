@@ -7,7 +7,7 @@ fn main() {
     println!("=== Tree-sitter Perl Comprehensive Demo ===\n");
 
     // Test various Perl constructs
-    let test_cases = vec![
+    let test_cases = [
         (
             "Simple subroutine",
             r#"

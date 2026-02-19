@@ -7,7 +7,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Tree-sitter Perl Edge Case Tests ===\n");
 
-    let edge_cases = vec![
+    let edge_cases = [
         // Heredoc edge cases
         (
             "Simple heredoc",

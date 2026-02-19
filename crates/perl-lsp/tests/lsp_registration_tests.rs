@@ -217,7 +217,7 @@ fn test_file_watcher_glob_pattern_variants() -> TestResult {
         assert!(watcher["globPattern"].is_string(), "each watcher must specify a globPattern");
         let kind = watcher["kind"].as_u64().ok_or("kind must be present")?;
         // kind must be a valid WatchKind bitmask (1=Create, 2=Change, 4=Delete)
-        assert!(kind >= 1 && kind <= 7, "kind {kind} is not a valid WatchKind bitmask");
+        assert!((1..=7).contains(&kind), "kind {kind} is not a valid WatchKind bitmask");
     }
 
     // Verify specific pattern semantics

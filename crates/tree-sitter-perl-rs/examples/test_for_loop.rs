@@ -5,7 +5,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Testing For Loops ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         (
             "Simple for with range",
             r#"
@@ -70,17 +70,17 @@ for (1..10) {
                 println!("✗ Parse error: {}", e);
                 // Extract positives from error
                 let error_str = format!("{:?}", e);
-                if let Some(start) = error_str.find("positives: [") {
-                    if let Some(end) = error_str.find("], negatives") {
-                        let expected = &error_str[start + 12..end];
-                        println!("Expected tokens: {}", expected);
-                    }
+                if let Some(start) = error_str.find("positives: [")
+                    && let Some(end) = error_str.find("], negatives")
+                {
+                    let expected = &error_str[start + 12..end];
+                    println!("Expected tokens: {}", expected);
                 }
-                if let Some(loc) = error_str.find("line_col: Pos(") {
-                    if let Some(end) = error_str[loc..].find(")") {
-                        let pos = &error_str[loc + 14..loc + end];
-                        println!("Error position: {}", pos);
-                    }
+                if let Some(loc) = error_str.find("line_col: Pos(")
+                    && let Some(end) = error_str[loc..].find(")")
+                {
+                    let pos = &error_str[loc + 14..loc + end];
+                    println!("Error position: {}", pos);
                 }
             }
         }

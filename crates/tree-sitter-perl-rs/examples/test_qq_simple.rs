@@ -2,7 +2,7 @@
 use tree_sitter_perl::EnhancedFullParser;
 
 fn main() {
-    let test_cases = vec![
+    let test_cases = [
         ("Simple pipe delimiter", r#"my $str = qq|Hello|;"#),
         ("Pipe with text", r#"my $str = qq|Hello World|;"#),
         ("Pipe with simple var", r#"my $str = qq|Hello $name|;"#),
