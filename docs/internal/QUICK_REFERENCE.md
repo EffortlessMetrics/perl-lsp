@@ -20,7 +20,7 @@ tree-sitter-perl/
 │   ├── tree-sitter-perl-rs/  # v2 parser (Pest)
 │   └── tree-sitter-perl-c/   # v1 parser (C bindings)
 ├── docs/                  # Documentation
-├── benches/              # Performance benchmarks
+├── benchmarks/            # Performance benchmarks
 └── xtask/                # Build automation
 ```
 

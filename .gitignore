@@ -38,7 +38,8 @@ scripts/__pycache__/
 *.pyc
 releases/
 
-# Claude
+# Claude — agents/ is gitignored to allow swapping the active symlink;
+# agents2/, agents3/, agents4/ etc. are version-tracked.
 /.claude/agents/
 
 # Mutation testing artifacts
@@ -136,6 +137,9 @@ benchmarks/results/
 
 # Archive directories (keep organized)
 archive/
+
+# Old root benchmark directory (superseded by benchmarks/ and crates/*/benches/)
+benches/
 
 # Large binary executables (should be built, not committed)
 test_perf
