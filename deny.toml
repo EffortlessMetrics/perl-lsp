@@ -72,6 +72,7 @@ feature-depth = 1
 ignore = [
     # difference crate is unmaintained but only used in xtask (dev tooling)
     { id = "RUSTSEC-2020-0095", reason = "only used in xtask dev tooling, not shipped" },
+    { id = "RUSTSEC-2023-0089", reason = "atomic-polyfill unmaintained (transitive via heapless/postcard in legacy pest/tree-sitter crates). No upgrade path available. Tracking migration to portable-atomic." },
 ]
 # If this is true, then cargo deny will use the git executable to fetch advisory database.
 # If this is false, then it uses a built-in git library.

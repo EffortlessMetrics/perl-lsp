@@ -435,7 +435,12 @@
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
     "adm-zip": "^0.5.10",
-    "tar": "^7.5.7"
+    "tar": "^7.5.8"
+  },
+  "pnpm": {
+    "overrides": {
+      "minimatch": ">=10.2.1"
+    }
   },
   "devDependencies": {
     "@types/node": "^25.1.0",

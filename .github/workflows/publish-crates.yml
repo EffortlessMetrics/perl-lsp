@@ -131,7 +131,8 @@ jobs:
           TOTAL=$(echo "$CRATES_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
           echo "Publishing $TOTAL crates..."
 
-          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' | \
+          CRATES_LIST="$(mktemp)"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
             echo ""
             echo "===> $CRATE@$VERSION"
@@ -179,7 +180,7 @@ jobs:
               fi
               sleep 10
             done
-          done
+          done < "$CRATES_LIST"
 
           echo ""
           echo "All crates processed."
@@ -204,7 +205,8 @@ jobs:
           TOTAL=0
           OK=0
 
-          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' | \
+          CRATES_LIST="$(mktemp)"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
             TOTAL=$((TOTAL + 1))
 
@@ -216,7 +218,7 @@ jobs:
               echo "FAIL $CRATE@$VERSION"
               FAILED="${FAILED} ${CRATE}"
             fi
-          done
+          done < "$CRATES_LIST"
 
           echo ""
           echo "Published: ${OK}/${TOTAL}"
