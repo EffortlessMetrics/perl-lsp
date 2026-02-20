@@ -7,6 +7,7 @@
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
+use perl_parser_core::builtin_signatures_phf;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -666,8 +667,17 @@ impl SemanticAnalyzer {
                         }
                     };
 
+                    // Try to find exact location of the function name
+                    // Optimization: if the node location is already the same length as the name, use it directly
+                    let location = if node.location.end - node.location.start == name.len() {
+                        node.location
+                    } else {
+                        let name_offset = self.find_substring_in_source(node, name).unwrap_or(node.location.start);
+                        SourceLocation { start: name_offset, end: name_offset + name.len() }
+                    };
+
                     self.semantic_tokens.push(SemanticToken {
-                        location: node.location,
+                        location,
                         token_type,
                         modifiers: if is_builtin_function(name) && !is_control_keyword(name) {
                             vec![SemanticTokenModifier::DefaultLibrary]
@@ -1203,9 +1213,18 @@ impl SemanticAnalyzer {
                 });
             }
 
-            NodeKind::Identifier { .. } => {
+            NodeKind::Identifier { name } => {
                 // Bareword identifiers, usually left to lexical highlighting
                 // but we handle them to avoid the default case.
+
+                // Check if it's a builtin used as a bareword (e.g. mkdir "foo")
+                if is_builtin_function(name) && !is_control_keyword(name) {
+                    self.semantic_tokens.push(SemanticToken {
+                        location: node.location,
+                        token_type: SemanticTokenType::Function,
+                        modifiers: vec![SemanticTokenModifier::DefaultLibrary],
+                    });
+                }
             }
 
             NodeKind::Heredoc { .. } => {
@@ -1518,51 +1537,9 @@ fn is_control_keyword(name: &str) -> bool {
 }
 
 fn is_builtin_function(name: &str) -> bool {
-    matches!(
-        name,
-        "print"
-            | "say"
-            | "printf"
-            | "sprintf"
-            | "open"
-            | "close"
-            | "read"
-            | "write"
-            | "chomp"
-            | "chop"
-            | "split"
-            | "join"
-            | "push"
-            | "pop"
-            | "shift"
-            | "unshift"
-            | "sort"
-            | "reverse"
-            | "map"
-            | "grep"
-            | "length"
-            | "substr"
-            | "index"
-            | "rindex"
-            | "lc"
-            | "uc"
-            | "lcfirst"
-            | "ucfirst"
-            | "defined"
-            | "undef"
-            | "ref"
-            | "blessed"
-            | "die"
-            | "warn"
-            | "eval"
-            | "require"
-            | "use"
-            | "return"
-            | "next"
-            | "last"
-            | "redo"
-            | "goto" // ... many more
-    )
+    // Use the comprehensive PHF map from perl-builtins (via perl-parser-core)
+    // Also include 'blessed' which is often used as a builtin-like function
+    builtin_signatures_phf::is_builtin(name) || name == "blessed"
 }
 
 /// Get documentation for a Perl built-in function.
