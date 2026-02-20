@@ -239,6 +239,7 @@
         "perl-lsp.perltidyConfig": {
           "type": "string",
           "default": "",
+          "scope": "machine",
           "markdownDescription": "Path to your `.perltidyrc` configuration file. If omitted, searches workspace and home directory."
         },
         "perl-lsp.includePaths": {
