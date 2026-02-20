@@ -29,7 +29,7 @@ permissions:
 jobs:
   build:
     name: Build ${{ matrix.platform }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -83,7 +83,7 @@ jobs:
 
   publish-dockerhub:
     name: Publish to Docker Hub
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     if: github.event.inputs.push != 'false'
 
@@ -132,7 +132,7 @@ jobs:
   summary:
     name: Summary
     needs: [build, publish-dockerhub]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: always()
 
     steps:

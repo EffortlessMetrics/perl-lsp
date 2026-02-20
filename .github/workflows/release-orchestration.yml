@@ -43,7 +43,7 @@ env:
 jobs:
   validate:
     name: Validate Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -80,7 +80,7 @@ jobs:
           echo "Checking CI status for main branch..."
 
           # Get the latest commit SHA on main
-          SHA=$(git rev-parse origin/main)
+          SHA=$(git rev-parse origin/master)
           echo "Latest commit: $SHA"
 
           # Verify the commit has passed CI
@@ -111,7 +111,7 @@ jobs:
   create-tag:
     name: Create Release Tag
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
@@ -150,7 +150,7 @@ jobs:
   trigger-release:
     name: Trigger Release Workflows
     needs: create-tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     if: always()
 

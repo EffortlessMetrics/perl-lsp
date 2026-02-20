@@ -25,7 +25,7 @@ env:
 jobs:
   ci-gate:
     name: CI Gate (Merge-Blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -102,7 +102,7 @@ jobs:
 
       - name: Set PR status (check)
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');

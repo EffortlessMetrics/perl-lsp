@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   bump:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
@@ -105,7 +105,7 @@ jobs:
           cat distribution/chocolatey/tools/chocolateyinstall.ps1
 
       - name: Create PR to Chocolatey
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           path: distribution/chocolatey

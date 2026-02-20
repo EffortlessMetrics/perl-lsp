@@ -60,7 +60,7 @@ jobs:
       (github.event_name == 'pull_request' &&
        contains(github.event.pull_request.labels.*.name, 'ci:mutation')) ||
       (github.event_name == 'schedule' && github.event.inputs.run_mutation != 'false')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
@@ -80,7 +80,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
       contains(github.event.pull_request.labels.*.name, 'ci:bench')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout repository
@@ -144,7 +144,7 @@ jobs:
 
     - name: Comment on PR (performance alerts)
       if: github.event_name == 'pull_request' && (steps.compare.outputs.REGRESSION == '1' || steps.alert.outputs.CRITICAL != '')
-      uses: actions/github-script@v7
+      uses: actions/github-script@v8
       with:
         script: |
           const fs = require('fs');
@@ -181,7 +181,7 @@ jobs:
 
   test-coverage:
     name: Test Coverage
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -228,7 +228,7 @@ jobs:
 
   tautology-check:
     name: Tautology Detection
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -260,7 +260,7 @@ jobs:
 
   semver-check:
     name: API Compatibility
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     if: |
       github.event_name == 'workflow_dispatch' ||
@@ -332,7 +332,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
        contains(github.event.pull_request.labels.*.name, 'ci:strict'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
 
@@ -355,7 +355,7 @@ jobs:
 
   fuzz:
     name: Fuzz Target (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     if: |
       github.event_name == 'workflow_dispatch' ||
