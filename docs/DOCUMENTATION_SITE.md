@@ -324,7 +324,7 @@ Potential improvements:
 - [ ] Interactive code examples (playground)
 - [ ] Mermaid diagram support
 - [ ] PDF export
-- [ ] Multi-version support (v0.9, v0.9.x (Production-Ready), etc.)
+- [ ] Multi-version support (v0.9, v0.9.x, etc.)
 - [ ] Localization (i18n)
 
 See [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues) for tracking.

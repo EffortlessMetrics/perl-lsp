@@ -945,7 +945,7 @@ fn calculate_batch_size(&self, files: &[FileEdit]) -> usize {
 
 ### Open Questions
 1. **Q**: Should rename support regex patterns for bulk renaming?
-   **A**: Defer to post-v0.9.x (Production-Ready); current spec focuses on single symbol rename
+   **A**: Defer to post-v0.9.x; current spec focuses on single symbol rename
 
 2. **Q**: How to handle symbols in POD documentation?
    **A**: Treat as text references; no semantic validation needed

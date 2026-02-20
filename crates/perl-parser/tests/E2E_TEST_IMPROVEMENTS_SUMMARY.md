@@ -169,4 +169,4 @@ The Perl LSP server now has **industry-leading test coverage** with:
 ✅ **Reusable test infrastructure**
 ✅ **Clear documentation and organization**
 
-The test suite is now **production-ready** and provides confidence for enterprise deployment.
+The test suite is now **comprehensive** and provides confidence for deployment.

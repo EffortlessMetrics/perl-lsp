@@ -1,4 +1,4 @@
-//! Production-ready workspace index coordinator with cache and SLO integration.
+//! Workspace index coordinator with cache and SLO integration.
 //!
 //! This module provides an enhanced index coordinator that integrates:
 //! - Enhanced index lifecycle state machine
@@ -158,10 +158,10 @@ pub struct ProductionCoordinatorConfig {
     pub resource_limits: IndexResourceLimits,
 }
 
-/// Production-ready workspace index coordinator.
+/// Workspace index coordinator.
 ///
-/// Integrates state machine, caching, and SLO monitoring for production
-/// deployments with comprehensive performance optimization.
+/// Integrates state machine, caching, and SLO monitoring with
+/// comprehensive performance optimization.
 pub struct ProductionIndexCoordinator {
     /// Enhanced state machine for index lifecycle
     state_machine: IndexStateMachine,

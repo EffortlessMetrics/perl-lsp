@@ -1,6 +1,6 @@
 # Workspace Refactoring Tutorial (**Diataxis: Tutorial**)
 
-This tutorial provides step-by-step guidance on using the comprehensive workspace refactoring capabilities introduced in v0.8.8. These features enable safe, enterprise-grade cross-file refactoring operations for Perl codebases.
+This tutorial provides step-by-step guidance on using the comprehensive workspace refactoring capabilities introduced in v0.8.8. These features enable safe cross-file refactoring operations for Perl codebases.
 
 ## Prerequisites
 
@@ -686,4 +686,4 @@ You've learned how to use the comprehensive workspace refactoring capabilities i
 
 ---
 
-**Note**: This tutorial provides comprehensive guidance for the workspace refactoring system. All examples are production-ready and include proper error handling. The 19 comprehensive test cases ensure reliability across all supported operations.
+**Note**: This tutorial provides comprehensive guidance for the workspace refactoring system. All examples include proper error handling. The 19 test cases ensure reliability across all supported operations.

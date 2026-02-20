@@ -198,7 +198,7 @@ All agents are configured with deep knowledge of:
 
 ### Development Standards
 - **Rust 2024** edition with MSRV 1.92+ compatibility
-- **Performance targets**: 1-150 µs parsing speeds, 4-19x improvement over legacy
+- **Performance targets**: 1-150 µs parsing speeds
 - **Test coverage**: ~100% Perl 5 syntax coverage including ALL edge cases
 - **LSP compliance**: LSP 3.18+ protocol, ~75% feature coverage
 - **Quality tools**: cargo-nextest, xtask automation, comprehensive corpus validation

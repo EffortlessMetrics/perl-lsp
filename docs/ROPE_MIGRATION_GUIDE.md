@@ -8,7 +8,7 @@ PR #100 introduces significant performance improvements to the perl-parser crate
 
 ### Performance Improvements
 
-- **4-19x faster** large file handling through Rope data structure optimization
+- **Faster** large file handling through Rope data structure optimization
 - **35.7% memory efficiency** improvement for documents >100KB
 - **Sub-millisecond position tracking** for real-time editing responsiveness
 - **O(log n) position conversion** vs O(n) string-based approaches
@@ -132,7 +132,7 @@ impl Document {
             let start_byte = lsp_pos_to_byte(&self.rope, change.range.start, PosEnc::Utf16)?;
             let end_byte = lsp_pos_to_byte(&self.rope, change.range.end, PosEnc::Utf16)?;
             
-            // O(log n) Rope operations - 4-19x faster for large files
+            // O(log n) Rope operations - faster for large files
             self.rope.remove(start_byte..end_byte);
             self.rope.insert(start_byte, &change.text);
         }
@@ -190,7 +190,7 @@ cargo bench -p perl-parser -- rope_large_file_handling
 
 ### Expected Performance Improvements
 - **Position Conversion**: <10µs per operation (vs ~50µs string-based)
-- **Large File Handling**: 4-19x faster for files >100KB
+- **Large File Handling**: Significantly faster for files >100KB
 - **Memory Usage**: 35.7% reduction in peak memory usage
 - **Incremental Updates**: <1ms for typical document changes
 
@@ -278,7 +278,7 @@ let byte_offset = lsp_pos_to_byte(&doc.rope, pos)?; // This won't compile
 ```
 
 #### Issue: Performance not improving as expected
-**Symptom**: Not seeing 4-19x performance improvements
+**Symptom**: Not seeing expected performance improvements
 **Cause**: Still using string-based operations instead of Rope
 **Solution**: Migrate to Rope-based document management:
 ```rust

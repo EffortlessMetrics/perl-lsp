@@ -69,7 +69,7 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 - Tree-sitter compatible node types
 - Position tracking for all nodes
 
-### 3. Production-Ready Incremental Parsing (**Diataxis: Explanation**)
+### 3. Validated Incremental Parsing (**Diataxis: Explanation**)
 - **IncrementalParserV2**: Advanced incremental parser with intelligent node reuse
 - **Statistical Validation**: Comprehensive performance analysis framework
   - Performance metrics: 65µs average (Excellent), 205µs moderate (Very Good), 538µs large (Good)
@@ -78,7 +78,7 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
   - Success rate: 100% with comprehensive fallback mechanisms
 - **Unicode-Safe Operations**: Proper multibyte character handling with UTF-8 boundary validation
 - **Memory Efficiency**: Arc<Node> sharing, intelligent symbol-priority cache eviction, Rope-based document management
-- **Test Infrastructure**: 40+ comprehensive test cases with production-grade validation
+- **Test Infrastructure**: 40+ comprehensive test cases with robust validation
 - **LSP Integration**: Real-time document updates with Rope-based position tracking
 
 ### 4. S-Expression Output
@@ -93,15 +93,15 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 - Dynamic delimiter detection and recovery
 - Clear diagnostics for unparseable constructs
 
-### 6. Revolutionary Testing Strategy (PR #140 Enhanced)
-- **Revolutionary LSP Performance**: 5000x faster behavioral tests, 4700x faster user stories
+### 6. Testing Strategy (PR #140 Enhanced)
+- **Fast LSP Tests**: 0.31s behavioral tests, 0.32s user stories
 - **Adaptive Timeout Architecture**: Multi-tier timeout scaling with thread awareness
 - **Enhanced Test Harness**: Real JSON-RPC protocol with mock responses and graceful degradation
 - **Optimized Idle Detection**: 1000ms → 200ms cycles (5x improvement)
 - **Grammar tests for each Perl construct**: Traditional comprehensive coverage maintained
 - **Edge case tests with property testing**: Extensive edge case validation
 - **Incremental Parsing Tests**: 40+ comprehensive test cases with statistical validation
-- **Performance Benchmarks**: Sub-millisecond performance validation with revolutionary improvements
+- **Performance Benchmarks**: Sub-millisecond performance validation
 - Integration tests for S-expression output
 - Position tracking validation tests
 - Encoding-aware lexing for mid-file encoding changes
@@ -111,7 +111,7 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 ## Development Guidelines
 
 ### Choosing a Crate
-1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, production-ready with Rope support
+1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, well-tested with Rope support
 2. **For IDE Integration**: Install `perl-lsp` from `perl-parser` crate - includes full Rope-based document management  
 3. **For Testing Parsers**: Use `perl-corpus` for comprehensive test suite
 4. **For Legacy Migration**: Migrate from `perl-parser-pest` to `perl-parser`
@@ -161,7 +161,7 @@ As of **Draft PR 159 (SPEC-149)**, the perl-parser crate includes comprehensive 
 1. **Documentation Enforcement**:
    - `#![warn(missing_docs)]` enabled in `/crates/perl-parser/src/lib.rs` at line 38
    - Comprehensive coverage of 605+ undocumented APIs across all modules
-   - Zero performance impact (<1% overhead) on revolutionary parsing performance
+   - Zero performance impact (<1% overhead) on parsing performance
 
 2. **Validation Framework**:
    - **25 Acceptance Criteria Tests** in `/crates/perl-parser/tests/missing_docs_ac_tests.rs`
@@ -384,14 +384,14 @@ The thread-safe patterns established for semantic tokens provide a template for 
 
 This architecture ensures all LSP features can achieve similar performance and safety characteristics as the semantic token provider.
 
-### Revolutionary Adaptive Timeout System Design (PR #140) (**Diataxis: Explanation** - Game-changing testing architecture)
+### Adaptive Timeout System Design (PR #140) (**Diataxis: Explanation** - Testing architecture)
 
 PR #140 introduces a sophisticated adaptive timeout system that delivers transformative performance improvements:
 
 #### Performance Achievements
-- **LSP behavioral tests**: 1560s+ → 0.31s (**5000x faster**)
-- **User story tests**: 1500s+ → 0.32s (**4700x faster**) 
-- **Individual workspace tests**: 60s+ → 0.26s (**230x faster**)
+- **LSP behavioral tests**: 1560s+ → 0.31s (0.31s)
+- **User story tests**: 1500s+ → 0.32s (0.32s) 
+- **Individual workspace tests**: 60s+ → 0.26s (0.26s)
 - **Overall test suite**: 60s+ → <10s (**6x faster**)
 - **CI reliability**: 100% pass rate (was ~55% due to timeouts)
 
@@ -454,7 +454,7 @@ fn wait_for_idle_optimized(&mut self, timeout: Duration) -> Result<(), String> {
 **2. Enhanced Test Harness with Mock Responses**
 - **Mock responses**: Fast fallback for expected non-responses
 - **Graceful degradation**: CI environment adaptation
-- **Real JSON-RPC protocol**: Maintains protocol compliance while achieving 5000x improvements
+- **Real JSON-RPC protocol**: Maintains protocol compliance with fast execution
 
 **3. Thread-Aware Sleep Scaling**
 ```rust
@@ -473,10 +473,10 @@ pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
 
 #### Strategic Value Analysis
 
-**Transformational Impact**:
-- **5000x improvement** in behavioral tests = **Transformational**
-- **4700x improvement** in user story tests = **Revolutionary** 
-- **230x improvement** in workspace tests = **Game-changing**
+**Performance Results**:
+- Behavioral tests: 0.31s
+- User story tests: 0.32s
+- Workspace tests: 0.26s
 - **100% CI reliability** = **Production-ready**
 
 **Architectural Benefits**:

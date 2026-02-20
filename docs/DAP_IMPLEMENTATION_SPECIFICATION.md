@@ -3,7 +3,7 @@
 
 **Issue**: #207 - Debug Adapter Protocol Support
 **Status**: Specification Complete
-**Version**: 0.9.x (Production-Ready)
+**Version**: 0.9.x
 **Date**: 2025-10-04
 
 ---
@@ -1246,7 +1246,7 @@ sub render_value {
 
 **Test Validation**: `cargo test --test dap_binary_packaging`
 
-**Success Criteria**: All Phase 3 ACs passing, production-ready DAP adapter
+**Success Criteria**: All Phase 3 ACs passing, functional DAP adapter
 
 ---
 

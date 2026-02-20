@@ -7,7 +7,7 @@
 
 ## Context
 
-The perl-parser crate had grown to include 603 public API items without comprehensive documentation, creating barriers to adoption and maintenance. As an enterprise-grade parsing library with complex LSP integration, clear API documentation is critical for:
+The perl-parser crate had grown to include 603 public API items without comprehensive documentation, creating barriers to adoption and maintenance. As an comprehensive parsing library with complex LSP integration, clear API documentation is critical for:
 
 - **Developer Onboarding**: New contributors need comprehensive examples and context
 - **LSP Integration**: Complex Parse → Index → Navigate → Complete → Analyze workflow requires clear documentation
@@ -96,7 +96,7 @@ Implement comprehensive API documentation infrastructure with enforced `#![warn(
 ### 3. Documentation Generation from Code
 **Pros**: Automatically stays current with implementation
 **Cons**: Lacks context, examples, and usage guidance critical for complex APIs
-**Decision**: Rejected - insufficient for enterprise-grade documentation needs
+**Decision**: Rejected - insufficient for comprehensive documentation needs
 
 ### 4. Immediate Full Documentation Requirement
 **Pros**: Complete coverage from day one

@@ -112,7 +112,7 @@ npm run publish
 
 # Or with version bump
 vsce publish minor  # 0.5.0 -> 0.6.0
-vsce publish major  # 0.5.0 -> 0.9.x (Production-Ready)
+vsce publish major  # 0.5.0 -> 0.9.x
 vsce publish 0.5.1  # Specific version
 ```
 

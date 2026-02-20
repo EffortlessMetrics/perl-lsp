@@ -1,16 +1,16 @@
 # DAP Security Specification
-<!-- Labels: security:enterprise, validation:comprehensive, compliance:maintained -->
+<!-- Labels: security:comprehensive, validation:comprehensive, compliance:maintained -->
 
 **Issue**: #207 - Debug Adapter Protocol Support
 **Status**: Security Requirements Complete
-**Version**: 0.9.x (Production-Ready)
+**Version**: 0.9.x
 **Date**: 2025-10-04
 
 ---
 
 ## Executive Summary
 
-This specification defines comprehensive security requirements for the DAP implementation, aligned with existing enterprise security framework (`docs/SECURITY_DEVELOPMENT_GUIDE.md`). All security measures are testable via AC16 validation suite.
+This specification defines comprehensive security requirements for the DAP implementation, aligned with existing comprehensive security framework (`docs/SECURITY_DEVELOPMENT_GUIDE.md`). All security measures are testable via AC16 validation suite.
 
 **Key Security Domains**:
 1. **Path Traversal Prevention**: Canonical path validation within workspace boundaries

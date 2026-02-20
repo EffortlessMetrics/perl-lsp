@@ -3,14 +3,14 @@
 ## Published Crates (Workspace Members)
 
 ### `/crates/perl-parser/` - Main Parser Library ⭐ **MAIN CRATE**
-- **Purpose**: Core recursive descent parser with production-grade features
+- **Purpose**: Core recursive descent parser with robust features
 - **Key Features**:
   - Native recursive descent parser with ~100% Perl 5 syntax coverage (including comprehensive substitution operator parsing)
-  - 4-19x faster than legacy implementations (1-150 µs parsing)
+  - Sub-millisecond parsing (1-150 us)
   - True incremental parsing with <1ms LSP updates
   - Production-ready Rope integration for UTF-16/UTF-8 position conversion
   - Enhanced workspace navigation with dual indexing strategy for 98% reference coverage
-  - **Revolutionary Dual Indexing**: Functions indexed under both qualified (`Package::function`) and bare (`function`) names
+  - **Enhanced Dual Indexing**: Functions indexed under both qualified (`Package::function`) and bare (`function`) names
   - **Thread-safe semantic tokens** - 2.826µs average performance (35x better than 100µs target)
   - **Zero-race-condition LSP features** - immutable provider pattern with local state management
   - **Cross-file workspace refactoring utilities** - comprehensive WorkspaceRefactor provider for symbol renaming, module extraction, workspace-wide changes
@@ -37,7 +37,7 @@
 ### `/crates/perl-lsp/` - Standalone LSP Server ⭐ **LSP BINARY** (v0.8.8)
 - **Purpose**: Clean LSP server implementation separated from parser logic
 - **Key Features**:
-  - Standalone Language Server binary with production-grade CLI
+  - Standalone Language Server binary with robust CLI
   - Clean separation from parser logic for improved maintainability
   - Works with VSCode, Neovim, Emacs, and all LSP-compatible editors
 - **Key Files**:
@@ -427,7 +427,7 @@ cargo test -p tree-sitter-perl-rs rust_scanner_smoke
 - **LSP-Compliant UTF-16 Support**: Accurate character counting for multi-byte Unicode characters and emoji
 - **Multi-line Token Support**: Proper position tracking for tokens spanning multiple lines (strings, comments, heredocs)
 - **Line Ending Agnostic**: Handles CRLF, LF, and CR line endings consistently across platforms
-- **Production-Ready Integration**: Seamless integration with parser context and LSP server for real-time editing
+- **Integration**: Seamless integration with parser context and LSP server for real-time editing
 - **Comprehensive Testing**: 8 specialized test cases covering Unicode, CRLF, multiline strings, and edge cases
 
 ## Enhanced Dual Indexing Strategy (v0.8.8) ⭐ **ENHANCED**
@@ -574,7 +574,7 @@ pub fn get_code_actions(&self, ast: &Node, range: (usize, usize), diagnostics: &
 
 ### 94 Specialized Agents Architecture
 
-**Revolutionary Workflow Enhancement**: PR #153 introduces a comprehensive agent ecosystem with 94 specialized agents designed specifically for the tree-sitter-perl parsing ecosystem. This represents a paradigm shift from generic automation to domain-specific intelligent workflow coordination.
+**Enhanced Workflow Enhancement**: PR #153 introduces a comprehensive agent ecosystem with 94 specialized agents designed specifically for the tree-sitter-perl parsing ecosystem. This represents a paradigm shift from generic automation to domain-specific intelligent workflow coordination.
 
 #### Agent Directory Structure (*Diataxis: Reference* - Agent organization)
 
@@ -583,12 +583,12 @@ pub fn get_code_actions(&self, ast: &Node, range: (usize, usize), diagnostics: &
 ├── review/                               # 26 agents - PR review workflow
 │   ├── review-security-scanner.md       # UTF-16 security validation
 │   ├── review-mutation-tester.md        # 87% quality score validation
-│   ├── review-performance-validator.md  # Revolutionary performance preservation
+│   ├── review-performance-validator.md  # Enhanced performance preservation
 │   └── review-governance-gate.md        # Final quality assurance
 ├── integration/                          # 21 agents - CI/CD coordination
 │   ├── integration-test-coordinator.md  # Adaptive threading orchestration
 │   ├── integration-workspace-validator.md # Multi-crate validation
-│   └── integration-performance-monitor.md # 5000x LSP improvements tracking
+│   └── integration-performance-monitor.md # fast LSP improvements tracking
 ├── generative/                           # 24 agents - Content creation
 │   ├── generative-doc-writer.md         # Parser ecosystem documentation
 │   ├── generative-test-creator.md       # Mutation hardening test generation
@@ -606,8 +606,8 @@ pub fn get_code_actions(&self, ast: &Node, range: (usize, usize), diagnostics: &
 
 **Parser Ecosystem Context Integration:**
 - **Multi-crate Architecture**: Understanding of 5 published crates and their interdependencies
-- **Performance Standards**: Built-in knowledge of revolutionary performance requirements (5000x LSP improvements)
-- **Security Requirements**: UTF-16 position conversion security, enterprise-grade Unicode safety
+- **Performance Standards**: Built-in knowledge of strong performance requirements (fast LSP improvements)
+- **Security Requirements**: UTF-16 position conversion security, comprehensive Unicode safety
 - **Quality Metrics**: Mutation testing (87% score), zero clippy warnings, comprehensive test coverage
 
 **Intelligent Workflow Coordination:**
@@ -625,7 +625,7 @@ CodeEnhancer → TestCreator → DocGenerator → ReviewPrep
 ```markdown
 # Agent customizes itself based on project context
 - Multi-crate workspace patterns (perl-parser ⭐, perl-lsp ⭐, perl-lexer, perl-corpus)
-- Revolutionary performance requirements (sub-microsecond parsing, <1ms LSP updates)
+- Enhanced performance requirements (sub-microsecond parsing, <1ms LSP updates)
 - Enterprise security standards (UTF-16 safety, path traversal prevention)
 - Comprehensive quality validation (87% mutation score, zero clippy warnings)
 ```
@@ -633,7 +633,7 @@ CodeEnhancer → TestCreator → DocGenerator → ReviewPrep
 **Self-Documenting Configuration:**
 - **Inline Expertise**: Each agent includes parser ecosystem domain knowledge
 - **Quality Integration**: Built-in understanding of mutation testing and performance benchmarks
-- **Security Awareness**: UTF-16 position conversion security and enterprise patterns
+- **Security Awareness**: UTF-16 position conversion security and comprehensive patterns
 - **Workflow Intelligence**: Context-aware routing between specialized agents
 
 #### Quality and Security Integration (*Diataxis: Explanation* - Enterprise-grade validation)
@@ -644,7 +644,7 @@ CodeEnhancer → TestCreator → DocGenerator → ReviewPrep
 - **Security Validation**: UTF-16 boundary violation detection and remediation
 
 **Performance Preservation:**
-- **Revolutionary Standards**: Agents ensure 5000x LSP performance improvements are maintained
+- **Enhanced Standards**: Agents ensure fast LSP performance improvements are maintained
 - **Security-Performance Balance**: Enhanced security without performance regression
 - **Adaptive Threading**: CI environment optimization through intelligent agent coordination
 
@@ -670,7 +670,7 @@ review-security-scanner     # UTF-16 security validation
   ↓
 review-mutation-tester      # 87% quality score verification
   ↓
-review-performance-validator # Revolutionary performance preservation
+review-performance-validator # Enhanced performance preservation
   ↓
 review-governance-gate      # Final quality assurance and routing decision
 ```
@@ -690,7 +690,7 @@ generative-doc-writer       # Documentation synchronization
 ## Development Guidelines
 
 ### Choosing a Crate
-1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, production-ready with Rope support
+1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, well-tested with Rope support
 2. **For IDE Integration**: Install `perl-lsp` from `perl-parser` crate - includes full Rope-based document management  
 3. **For Testing Parsers**: Use `perl-corpus` for comprehensive test suite
 4. **For Legacy Migration**: Migrate from `perl-parser-pest` to `perl-parser`
@@ -716,7 +716,7 @@ generative-doc-writer       # Documentation synchronization
 - **`/crates/tree-sitter-perl-rs/`**: Legacy test harnesses with outdated Rope usage
 - **Internal test infrastructure**: Focus on production code, not test utilities
 
-## Dual Indexing Architecture (v0.8.8+) (*Diataxis: Explanation* - Revolutionary workspace navigation design)
+## Dual Indexing Architecture (v0.8.8+) (*Diataxis: Explanation* - Enhanced workspace navigation design)
 
 ### Problem Statement (*Diataxis: Explanation* - Why dual indexing is needed)
 

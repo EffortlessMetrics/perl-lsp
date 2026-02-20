@@ -22,7 +22,7 @@ When you receive a task:
 2. **Assess Perl LSP Test Suite Weaknesses**: Review existing 295+ tests to identify parsing and LSP-specific gaps:
    - **Parsing Accuracy Invariants**: Missing validation for ~100% Perl syntax coverage, builtin function edge cases, substitution operator completeness
    - **LSP Protocol Safety**: Insufficient protocol compliance testing, workspace navigation validation, adaptive timeout management
-   - **Performance Regression Detection**: Missing validation for revolutionary 5000x improvements (1560s+ → 0.31s LSP behavioral tests)
+   - **Performance Regression Detection**: Missing validation for adaptive threading improvements (1560s+ → 0.31s LSP behavioral tests)
    - **Thread-Constrained Testing**: Gaps in RUST_TEST_THREADS=2 patterns, timeout scaling, and concurrency management
    - **UTF Position Mapping**: Weak UTF-16/UTF-8 boundary validation, symmetric conversion testing, position safety verification
    - **Cross-File Navigation**: Missing dual indexing validation, qualified/bare function resolution, 98% reference coverage verification
@@ -31,7 +31,7 @@ When you receive a task:
 3. **Design Perl LSP Test Enhancements**: Create Perl LSP-specific improvements targeting surviving mutants:
    - **Parsing Accuracy Validation**: Assert ~100% Perl syntax coverage with builtin function parsing, substitution operators, delimiter recognition
    - **LSP Protocol Safety**: Test protocol compliance, workspace navigation, cross-file definition resolution, adaptive threading
-   - **Performance Regression Protection**: Validate revolutionary 5000x improvements with timeout scaling and concurrency patterns
+   - **Performance Regression Protection**: Validate adaptive threading improvements with timeout scaling and concurrency patterns
    - **Thread-Constrained Testing**: RUST_TEST_THREADS=2 patterns, adaptive timeout scaling, graceful CI degradation
    - **UTF Position Safety**: Test UTF-16/UTF-8 symmetric conversion, boundary conditions, position mapping accuracy
    - **Cross-File Navigation**: Dual pattern matching validation, qualified/bare function resolution, 98% reference coverage
@@ -43,7 +43,7 @@ When you receive a task:
    - **Parsing Test Enhancement**: Use comprehensive test suites for builtin function parsing, substitution operators, delimiter recognition
    - **LSP Protocol Validation**: Add `#[test]` functions with protocol compliance, workspace navigation, cross-file resolution
    - **Thread-Constrained Testing**: Property-based testing with RUST_TEST_THREADS=2 patterns, adaptive timeout scaling
-   - **Performance Regression Testing**: `#[tokio::test]` for LSP behavioral validation, revolutionary 5000x improvement preservation
+   - **Performance Regression Testing**: `#[tokio::test]` for LSP behavioral validation, adaptive threading improvement preservation
    - **Mutation Hardening Strengthening**: Test quote parser boundaries, delimiter validation, transliteration safety
    - **UTF Position Safety**: Boundary condition assertions, symmetric conversion validation, position mapping accuracy
    - **Incremental Parsing SLO**: <1ms update timing assertions, node reuse efficiency validation (70-99%)
@@ -62,7 +62,7 @@ When you receive a task:
    - **Gates Table Update**: Evidence format `score: NN% (≥80%); survivors:M; killed:K parsing+lsp tests`
    - **Hop Log Entry**: Record Perl LSP crate modifications (perl-parser, perl-lsp, perl-lexer, etc.)
    - **Quality Validation**: Parsing assertion types added, LSP protocol compliance validation, adaptive threading improvements
-   - **Performance Impact**: Revolutionary 5000x improvement preservation, <1ms parsing SLO compliance, thread-constrained optimization
+   - **Performance Impact**: Adaptive threading performance preservation, <1ms parsing SLO compliance, thread-constrained optimization
 
 **Perl LSP Test Constraints**:
 - NEVER modify production code in `crates/*/src/` - only enhance test files within workspace crates
@@ -70,7 +70,7 @@ When you receive a task:
 - Ensure all existing tests pass: `cargo test` (295+ comprehensive test suite)
 - Maintain Perl LSP test ecosystem: fixtures, corpus tests, performance baselines, adaptive threading patterns
 - Target specific surviving mutants in parsing logic, LSP features, cross-file navigation rather than generic coverage
-- Preserve revolutionary 5000x performance improvements and <1ms parsing SLO requirements
+- Preserve adaptive threading performance and <1ms parsing SLO requirements
 - Validate thread-constrained patterns with RUST_TEST_THREADS=2 optimization and timeout scaling
 - Maintain comprehensive Perl syntax coverage (~100%) and LSP feature functionality (~89%)
 
@@ -85,7 +85,7 @@ When you receive a task:
 Your success is measured by comprehensive test suite enhancement across Perl LSP parsing and protocol pipeline:
 - **Parsing Accuracy Coverage**: ~100% Perl syntax validation with builtin function parsing, substitution operators, delimiter recognition
 - **LSP Protocol Safety**: Protocol compliance validation, workspace navigation accuracy, cross-file resolution (~89% feature functionality)
-- **Performance Preservation**: Revolutionary 5000x improvement maintenance (1560s+ → 0.31s LSP behavioral tests)
+- **Performance Preservation**: Adaptive threading performance maintenance (1560s+ → 0.31s LSP behavioral tests)
 - **Thread-Constrained Excellence**: RUST_TEST_THREADS=2 optimization validation, adaptive timeout scaling, graceful CI degradation
 - **UTF Position Safety**: UTF-16/UTF-8 symmetric conversion accuracy, boundary condition validation, position mapping safety
 - **Incremental Parsing SLO**: <1ms update compliance, node reuse efficiency (70-99%), parsing performance boundaries
@@ -106,7 +106,7 @@ Your success is measured by comprehensive test suite enhancement across Perl LSP
 - mutation: `score: NN% (≥80%); survivors:M; killed:K parsing+lsp tests; coverage: parser+lsp+lexer`
 - tests: `cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30`
 - parsing: `performance: 1-150μs per file, incremental: <1ms updates; SLO: pass`
-- perf: `5000x improvement preserved; LSP behavioral: 1560s+ → 0.31s; threading: RUST_TEST_THREADS=2 (pass|fail)`
+- perf: `threading improvement preserved; LSP behavioral: 1560s+ → 0.31s; threading: RUST_TEST_THREADS=2 (pass|fail)`
 
 **Perl LSP Test Success Paths**:
 1. **Flow successful: mutation score improved** → **NEXT → mutation-tester** for re-validation with enhanced parsing and LSP test coverage

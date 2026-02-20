@@ -48,7 +48,7 @@ for pr_info in "${DUPLICATE_PRS[@]}"; do
 **Evidence**: 
 - See PR_EVALUATION_SUMMARY.md for detailed analysis
 - Verified against current codebase (v0.8.7+ with comprehensive testing)
-- All advertised LSP features are production-ready with 100% E2E test coverage
+- All advertised LSP features have 100% E2E test coverage
 
 This closure is part of repository cleanup to focus on actionable PRs. Thank you for the contribution!"
 

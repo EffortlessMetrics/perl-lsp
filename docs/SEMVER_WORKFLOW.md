@@ -46,7 +46,7 @@ cat target/semver-reports/breaking-changes.json
 # Verify version bump is appropriate
 # - Breaking changes → major version (0.9 → 1.0)
 # - Additive changes → minor version (0.9 → 0.10)
-# - Bug fixes → patch version (0.9.x (Production-Ready) → 0.9.2)
+# - Bug fixes → patch version (0.9.x → 0.9.2)
 ```
 
 ---
@@ -377,15 +377,15 @@ match kind {
 
 | Change Type | Example | Version Bump |
 |-------------|---------|--------------|
-| **Breaking** | Remove pub fn | 0.9.x (Production-Ready) → 2.0.0 |
-| **Breaking** | Change signature | 0.9.x (Production-Ready) → 2.0.0 |
-| **Breaking** | Remove enum variant | 0.9.x (Production-Ready) → 2.0.0 |
-| **Additive** | Add pub fn | 0.9.x (Production-Ready) → 0.10.0 |
-| **Additive** | Add enum variant (`#[non_exhaustive]`) | 0.9.x (Production-Ready) → 0.10.0 |
-| **Additive** | Deprecate item | 0.9.x (Production-Ready) → 0.10.0 |
-| **Patch** | Fix bug (same behavior) | 0.9.x (Production-Ready) → 0.9.2 |
-| **Patch** | Documentation only | 0.9.x (Production-Ready) → 0.9.2 |
-| **Patch** | Internal refactoring | 0.9.x (Production-Ready) → 0.9.2 |
+| **Breaking** | Remove pub fn | 0.9.x → 2.0.0 |
+| **Breaking** | Change signature | 0.9.x → 2.0.0 |
+| **Breaking** | Remove enum variant | 0.9.x → 2.0.0 |
+| **Additive** | Add pub fn | 0.9.x → 0.10.0 |
+| **Additive** | Add enum variant (`#[non_exhaustive]`) | 0.9.x → 0.10.0 |
+| **Additive** | Deprecate item | 0.9.x → 0.10.0 |
+| **Patch** | Fix bug (same behavior) | 0.9.x → 0.9.2 |
+| **Patch** | Documentation only | 0.9.x → 0.9.2 |
+| **Patch** | Internal refactoring | 0.9.x → 0.9.2 |
 
 ### Deprecation Timeline
 

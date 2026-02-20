@@ -90,9 +90,8 @@ just ci-gate
 # Comprehensive validation (~10-20 min, for large changes)
 just ci-full
 ```
-✅ `just ci-gate` passed
+
 See: [Local CI Protocol](docs/ci/LOCAL_CI_PROTOCOL.md)
-```
 
 **Semantic & LSP Changes**:
 
@@ -185,8 +184,8 @@ Add the `ci:semver` label to your PR to run automated breaking change detection:
 | **Breaking** | Change function signature | Major (0.9 → 1.0) | Major releases only |
 | **Additive** | Add new public function | Minor (0.9 → 0.10) | Minor releases |
 | **Additive** | Add new enum variant | Minor (0.9 → 0.10) | Minor releases (with `#[non_exhaustive]`) |
-| **Patch** | Fix bug, same behavior | Patch (0.9.x (Production-Ready) → 0.9.2) | Patch releases |
-| **Patch** | Documentation update | Patch (0.9.x (Production-Ready) → 0.9.2) | Patch releases |
+| **Patch** | Fix bug, same behavior | Patch (0.9.x → 0.9.2) | Patch releases |
+| **Patch** | Documentation update | Patch (0.9.x → 0.9.2) | Patch releases |
 
 ### Breaking Change Workflow
 
@@ -232,8 +231,8 @@ SemVer checking is configured in `.cargo-semver-checks.toml`:
 
 - **SemVer spec:** https://semver.org/
 - **cargo-semver-checks:** https://github.com/obi1kenobi/cargo-semver-checks
-- **Project stability policy:** `docs/STABILITY.md`
-- **API stability guarantees:** `docs/STABILITY.md#api-surface-stability`
+- **Project stability policy:** [`docs/STABILITY.md`](docs/STABILITY.md)
+- **API stability guarantees:** [`docs/STABILITY.md`](docs/STABILITY.md)
 
 ## Coding Standards
 
@@ -436,7 +435,7 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ## Release Process
 
-This section describes the release process for Perl LSP, now that we've reached v0.9.x (Production-Ready) GA.
+This section describes the release process for Perl LSP.
 
 ### Version Policy
 
@@ -450,19 +449,17 @@ We follow [Semantic Versioning 2.0.0](https://semver.org/):
 
 | Release Type | Frequency | Examples | Requirements |
 |--------------|-----------|----------|--------------|
-| **Major** | Annually (as needed) | 0.9.x (Production-Ready) → 2.0.0 | Breaking changes, migration guide, extensive testing |
-| **Minor** | Quarterly | 0.9.x (Production-Ready) → 0.10.0 | New features, API additions, performance improvements |
-| **Patch** | Monthly (as needed) | 0.9.x (Production-Ready) → 0.9.2 | Bug fixes, security updates, documentation updates |
+| **Major** | As needed | 0.x → 1.0.0 | Breaking changes, migration guide, extensive testing |
+| **Minor** | Quarterly | 0.9.x → 0.10.0 | New features, API additions, performance improvements |
+| **Patch** | As needed | 0.9.1 → 0.9.2 | Bug fixes, security updates, documentation updates |
 
 ### Release Process Workflow
 
 #### 1. Pre-Release Preparation
 
 ```bash
-# Update version numbers
-cargo update -p perl-parser --precise 0.9.x (Production-Ready)
-cargo update -p perl-lsp --precise 0.9.x (Production-Ready)
-# ... for all published crates
+# Update version numbers in Cargo.toml files
+# Then run cargo check to verify
 
 # Run comprehensive validation
 just ci-full
@@ -512,7 +509,7 @@ cargo publish -p perl-lsp
 # ... other crates in dependency order
 
 # Create GitHub Release
-gh release create v0.9.1 --title "v0.9.1 - Production Ready" --notes-file RELEASE_NOTES.md
+gh release create v0.9.1 --title "v0.9.1 - Initial Public Alpha" --notes-file RELEASE_NOTES.md
 ```
 
 #### 4. Post-Release Tasks
@@ -550,7 +547,7 @@ All releases require review from:
 - Dependency vulnerability scan
 - Security best practices
 - Attack surface analysis
-- Enterprise security requirements
+- Security best practices
 
 ### Testing Requirements for Releases
 

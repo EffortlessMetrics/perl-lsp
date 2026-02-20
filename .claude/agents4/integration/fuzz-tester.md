@@ -74,7 +74,7 @@ Execute Perl LSP fuzz testing with these steps:
 **Critical Parsing Infrastructure:**
 - **UTF-16/UTF-8 Position Safety**: Position conversion symmetry, boundary arithmetic validation, character encoding edge cases, vulnerability fixes from PR #153
 - **Workspace Indexing**: Cross-file reference accuracy, dual pattern matching consistency, index corruption detection, Package::function resolution
-- **Memory Safety**: Parser state management, recursive parsing limits, stack overflow prevention, enterprise-grade security practices
+- **Memory Safety**: Parser state management, recursive parsing limits, stack overflow prevention, security best practices
 - **Perl Syntax Coverage**: ~100% Perl syntax validation, edge case construct handling, error recovery robustness, comprehensive substitution operator parsing
 - **LSP Feature Validation**: ~89% feature completeness under adversarial inputs, protocol compliance maintenance, thread-safe semantic tokens
 - **Performance SLO**: Incremental parsing ≤1ms updates, workspace operations within performance bounds, <1ms updates with 70-99% node reuse efficiency

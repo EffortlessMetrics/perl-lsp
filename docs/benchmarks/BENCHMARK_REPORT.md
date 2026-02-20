@@ -97,7 +97,7 @@ Based on 31 representative test files:
 
 ### ✅ Ready for Production
 
-The pure Rust parser is production-ready and can be made the default with confidence:
+The pure Rust parser is robust and can be made the default with confidence:
 
 1. **Feature Complete** - All Perl constructs are supported
 2. **Reliable** - 100% success rate on extensive test suite

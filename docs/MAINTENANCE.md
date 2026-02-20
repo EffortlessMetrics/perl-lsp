@@ -1,9 +1,8 @@
-# Perl LSP v0.9.x (Production-Ready) Maintenance Plan
+# Perl LSP v0.9.x Maintenance Plan
 
 > **Status**: Active
 > **Last Updated**: 2026-02-14
 > **Applies To**: perl-parser 0.9.x, perl-lsp 0.9.x, perl-lexer 0.9.x, perl-dap 0.9.x
-> **Support Period**: 5 years from v0.9.1 release (2026-02-14 to 2031-02-14)
 
 ---
 
@@ -100,7 +99,7 @@ cargo machete
 
 **Frequency**: As needed (typically 1-2 per month)
 
-**Patch Release Criteria** (v0.9.x (Production-Ready).Z):
+**Patch Release Criteria** (v0.9.x.Z):
 
 | Category | Criteria | Example |
 |----------|----------|---------|
@@ -163,13 +162,11 @@ cargo machete
 
 | Version | Release Date | End of Life | Status |
 |---------|--------------|-------------|--------|
-| 0.9.x | 2026-02-14 | 2031-02-14 | Active (LTS) |
-| 0.9.x | 2026-01-18 | 2026-08-18 | Maintenance |
+| 0.9.x | 2026-02-14 | TBD | Active |
 | 0.8.x | 2025-10-01 | 2026-02-14 | Deprecated |
 
 **Version Support Rules**:
-- **LTS (0.9.x)**: Full support for 5 years, security patches only after 2 years
-- **Maintenance (0.9.x)**: Security patches only, 6 months after v0.9.x (Production-Ready) release
+- **Active (0.9.x)**: Bug fixes and security patches
 - **Deprecated (0.8.x)**: No updates, users must upgrade
 
 ### Service Level Agreement (SLA)
@@ -921,7 +918,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 
 ### Related Documentation
 
-- [STABILITY_STATEMENT_v0.9.x (Production-Ready).md](STABILITY_STATEMENT_v0.9.x (Production-Ready).md) - API stability guarantees
+- [STABILITY.md](STABILITY.md) - API stability guarantees
 - [SEMVER_POLICY.md](SEMVER_POLICY.md) - Semantic versioning policy
 - [RELEASE_PROCESS.md](RELEASE_PROCESS.md) - Release process documentation
 - [PERFORMANCE_SLO.md](PERFORMANCE_SLO.md) - Performance service level objectives
@@ -970,7 +967,7 @@ cargo doc --open                # Open documentation in browser
 
 | Date | Version | Changes |
 |------|---------|---------|
-| 2026-02-14 | 1.0 | Initial maintenance plan for v0.9.x (Production-Ready) release |
+| 2026-02-14 | 1.0 | Initial maintenance plan for v0.9.x release |
 
 ---
 

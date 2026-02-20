@@ -1,5 +1,5 @@
 repository:
-  description: "Production-ready Perl parser, LSP, and DAP ecosystem in Rust."
+  description: "Perl parser, LSP, and DAP ecosystem in Rust."
   homepage: "https://github.com/EffortlessMetrics/perl-lsp"
   default_branch: "master"
   has_issues: true

@@ -1,9 +1,9 @@
-# Upgrading to perl-lsp v0.9.x (Production-Ready)
+# Upgrading to perl-lsp v0.9.x
 
-This guide provides comprehensive upgrade instructions from v0.8.x to v0.9.x (Production-Ready).
+This guide provides upgrade instructions from v0.8.x to v0.9.x.
 
 **Quick Summary:**
-- **MSRV bumped**: Rust 1.89+ required (was 1.89+ in v0.8.x, unchanged)
+- **MSRV bumped**: Rust 1.92+ required
 - **Rust Edition**: Rust 2024 Edition (was 2021 in v0.8.x)
 - **Breaking Changes**: Minimal - primarily internal API refinements
 - **New Features**: Semantic analyzer, refactoring engine, performance optimizations
@@ -57,7 +57,7 @@ rust-version = "1.89"
 let ast = parser.parse_unchecked(source);
 ```
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 ```rust
 // Returns Result for safe error handling
 let ast = parser.parse(source)?;
@@ -84,7 +84,7 @@ let ast = parser.parse(source)?;
 }
 ```
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 ```json
 // Setting removed - use standard installation methods
 // Install via: cargo install perl-lsp
@@ -105,7 +105,7 @@ let ast = parser.parse(source)?;
 let position = Position { line: 0, character: offset };
 ```
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 ```rust
 // Strict UTF-16 code unit offsets
 let position = offset_to_utf16_position(source, offset)?;
@@ -274,11 +274,9 @@ perl-dap --stdio
 - Linear scan: O(n) for symbol resolution
 - 10,000 symbols: ~10ms lookup time
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 - Hash-based lookup: O(1) for symbol resolution
-- 10,000 symbols: ~50μs lookup time
-
-**Impact:** 200x faster symbol resolution
+- 10,000 symbols: ~50us lookup time
 
 ### 2. Zero-Allocation Variable Lookup (PR #473)
 
@@ -289,7 +287,7 @@ let var_name = format!("${}", name);
 scope.find_variable(&var_name)
 ```
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 ```rust
 // Zero allocations with Cow<str>
 scope.find_variable_borrowed(name)
@@ -303,7 +301,7 @@ scope.find_variable_borrowed(name)
 - Recursive parent map traversal
 - Multiple HashMap lookups per scope resolution
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 - Stack-based ancestor tracking
 - Single traversal for scope chain
 
@@ -317,7 +315,7 @@ scope.find_variable_borrowed(name)
 Node::new(token.text().to_string())
 ```
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 ```rust
 // Arc<str> for shared string references
 Node::new(Arc::clone(&token.text))
@@ -331,21 +329,21 @@ Node::new(Arc::clone(&token.text))
 - Rebuilt signature objects for every completion request
 - 150+ function signatures reconstructed each time
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 - Lazy static signature cache
 - One-time initialization per function
 
 **Impact:** 10x faster completion for built-in functions
 
-### Summary: Overall Performance
+### Summary: v0.9.x Performance
 
-| Metric | v0.8.x | v0.9.x (Production-Ready) | Improvement |
-|--------|--------|------|-------------|
-| Symbol lookup (10K symbols) | ~10ms | ~50μs | 200x |
-| Scope resolution (deep nesting) | 300μs | 100μs | 3x |
-| Parser (large files) | 250μs | 150μs | 1.7x |
-| Built-in completion | 5ms | 500μs | 10x |
-| LSP test suite | 60s+ | <10s | 6x |
+| Metric | v0.9.x |
+|--------|--------|
+| Symbol lookup (10K symbols) | ~50us |
+| Scope resolution (deep nesting) | ~100us |
+| Parser (large files) | ~150us |
+| Built-in completion | ~500us |
+| LSP test suite | <10s |
 
 ---
 
@@ -359,7 +357,7 @@ Node::new(Arc::clone(&token.text))
 executeCommand("perl", "../../../etc/passwd")
 ```
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 ```rust
 // Validates all paths before execution
 let safe_path = validate_path(input)?;
@@ -384,7 +382,7 @@ Command::new("sh")
     .arg(format!("perl {}", user_input))
 ```
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 ```rust
 // Direct command invocation without shell
 Command::new("perl")
@@ -413,7 +411,7 @@ Command::new("perl")
 Command::new("perlcritic").args(user_args.split_whitespace())
 ```
 
-**After (v0.9.x (Production-Ready)):**
+**After (v0.9.x):**
 ```rust
 // Safe: explicit argument validation
 let validated = validate_critic_args(user_args)?;
@@ -442,18 +440,18 @@ Command::new("perlcritic")
 [dependencies]
 perl-parser-pest = "0.8"
 
-# After (v0.9.x (Production-Ready)) - Native parser (recommended)
+# After (v0.9.x) - Native parser (recommended)
 [dependencies]
 perl-parser = "1.0"
 ```
 
 **Rationale:**
-- Native parser (v3) is production-ready with ~100% syntax coverage
-- 4-19x faster than Pest-based implementation
+- Native parser (v3) covers ~100% of Perl 5 syntax
+- Significantly faster than Pest-based implementation
 - Better error recovery and incremental parsing
 
 **Timeline:**
-- v0.9.x (Production-Ready): Legacy parser remains available but not recommended
+- v0.9.x: Legacy parser remains available but not recommended
 - v2.0: Legacy parser may be archived or removed
 
 ### 2. Internal APIs
@@ -536,7 +534,7 @@ cargo clippy --workspace
 code --uninstall-extension perl-language-server
 
 # Install new extension
-code --install-extension perl-language-server@0.9.x (Production-Ready)
+code --install-extension perl-language-server@0.9.x
 
 # Remove deprecated settings from settings.json
 # Delete: "perl-lsp.downloadBaseUrl"
@@ -558,7 +556,7 @@ cargo doc --open
 
 ### Updated Capabilities
 
-**v0.9.x (Production-Ready) Capability Negotiation:**
+**v0.9.x Capability Negotiation:**
 
 ```json
 {
@@ -597,7 +595,7 @@ cargo doc --open
 
 ### Protocol Compliance
 
-**v0.9.x (Production-Ready) Compliance:**
+**v0.9.x Compliance:**
 - **LSP Coverage**: 100% (53/53 advertised features)
 - **Protocol Compliance**: 100% (88/88 including plumbing)
 - **LSP Version**: 3.18
@@ -661,7 +659,7 @@ for token in lexer {
 // Before (v0.8.x) - could panic
 let ast = parser.parse_unchecked(source);
 
-// After (v0.9.x (Production-Ready)) - returns Result
+// After (v0.9.x) - returns Result
 let ast = parser.parse(source)
     .map_err(|e| format!("Parse error at {}: {}", e.location, e.message))?;
 ```
@@ -680,7 +678,7 @@ let ast = parser.parse(source)
 
 **Removed Settings:**
 ```json
-// REMOVED in v0.9.x (Production-Ready)
+// REMOVED in v0.9.x
 {
   "perl-lsp.downloadBaseUrl": "..."  // No longer supported
 }
@@ -811,12 +809,12 @@ just ci-lsp-def
 
 ### Test Performance
 
-| Test Suite | v0.8.x | v0.9.x (Production-Ready) | Improvement |
-|------------|--------|------|-------------|
-| LSP Behavioral Tests | 1560s+ | 0.31s | 5000x |
-| User Story Tests | 1500s+ | 0.32s | 4700x |
-| Workspace Tests | 60s+ | 0.26s | 230x |
-| Overall Suite | 60s+ | <10s | 6x |
+| Test Suite | v0.9.x |
+|------------|--------|
+| LSP Behavioral Tests | 0.31s |
+| User Story Tests | 0.32s |
+| Workspace Tests | 0.26s |
+| Overall Suite | <10s |
 
 ### Running Tests
 
@@ -1010,7 +1008,7 @@ LSP operations slower than v0.8.x
 ### Support Channels
 
 - **GitHub Issues**: [tree-sitter-perl-rs/issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
-  - Tag with `upgrade`, `v0.9.x (Production-Ready)`, or `migration`
+  - Tag with `upgrade`, `v0.9.x`, or `migration`
   - Include version numbers and error messages
   - Provide minimal reproduction if possible
 
@@ -1020,7 +1018,7 @@ LSP operations slower than v0.8.x
 
 When reporting upgrade issues:
 
-1. **Version info**: Include v0.8.x version and v0.9.x (Production-Ready) version
+1. **Version info**: Include v0.8.x version and v0.9.x version
 2. **Error messages**: Full error output with stack traces
 3. **Minimal reproduction**: Smallest code that shows the issue
 4. **Platform**: OS, Rust version, LSP client (if applicable)
@@ -1029,15 +1027,15 @@ When reporting upgrade issues:
 ### Example Issue Report
 
 ```markdown
-**Title:** Parser API change breaks my code after v0.9.x (Production-Ready) upgrade
+**Title:** Parser API change breaks my code after v0.9.x upgrade
 
 **Environment:**
-- perl-parser: 0.8.9 → 0.9.x (Production-Ready)
+- perl-parser: 0.8.9 → 0.9.x
 - Rust: 1.91.0
 - OS: Ubuntu 22.04
 
 **Problem:**
-After upgrading to v0.9.x (Production-Ready), parser.parse() now returns Result but my code expects direct AST.
+After upgrading to v0.9.x, parser.parse() now returns Result but my code expects direct AST.
 
 **Error:**
 ```
@@ -1065,15 +1063,15 @@ Compilation error
 
 ## Summary
 
-**v0.9.x (Production-Ready) brings significant improvements:**
+**v0.9.x brings significant improvements:**
 
-✅ **Semantic Analyzer**: Precise symbol resolution and type inference
-✅ **Refactoring Engine**: Extract method, inline variable, move code
-✅ **Performance**: 3-200x faster symbol lookups and parsing
-✅ **Security**: Path traversal and command injection protection
-✅ **LSP 3.18**: 100% protocol compliance, inlay hints, call hierarchy
-✅ **DAP Phase 1**: Native debugger with launch/breakpoints/step
-✅ **Test Infrastructure**: 5000x faster test suite, adaptive threading
+- **Semantic Analyzer**: Precise symbol resolution and type inference
+- **Refactoring Engine**: Extract method, inline variable, move code
+- **Performance**: Faster symbol lookups and parsing (0.31s test suite)
+- **Security**: Path traversal and command injection protection
+- **LSP 3.18**: Broad protocol coverage, inlay hints, call hierarchy
+- **DAP Phase 1**: Native debugger with launch/breakpoints/step
+- **Test Infrastructure**: Fast test suite (<10s), adaptive threading
 
 **Breaking changes are minimal:**
 - Rust 2024 Edition (standard upgrade path)

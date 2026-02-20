@@ -66,12 +66,12 @@ Key terms:
 
 ## What's True Right Now
 
-- **Parser**: Production-ready Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
+- **Parser**: Perl 5 syntax coverage, 1-150us parsing, 931ns incremental updates
 - **LSP Server**: Capability catalog is `features.toml`; Tier A gate is `just ci-gate`; TCP socket mode available
 - **Semantic Analyzer**: Phase 1, 2, 3 complete with all NodeKind handlers (100% AST node coverage), `textDocument/definition` integrated, uninitialized variable detection
 - **Refactoring Engine**: `perform_inline` and `perform_move_code` implemented
 - **Test Infrastructure**: Tier A suite is the only merge-blocking truth (see At a Glance + computed metrics)
-- **Quality**: 87% mutation score, enterprise-grade UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups
+- **Quality**: 87% mutation score, comprehensive UTF-16 handling, path validation, O(1) symbol lookups, zero-allocation variable lookups
 - **Safety Ratchets**: production baseline currently at `unwrap/expect=0`, panic-family macros (`panic!/todo!/unimplemented!/unreachable!`) = `0`, explicit `unsafe` syntax = `0`
 - **Security**: Comprehensive hardening complete (path traversal, command injection, DAP evaluate, perldoc/perlcritic argument injection)
 - **DAP Server**: Native adapter preview is implemented (breakpoints with AST validation via `perl-dap-breakpoint`, step/pause/continue handlers, safe-eval guards, stdio+socket transport, PID/TCP attach modes); BridgeAdapter remains available for Perl::LanguageServer interoperability
@@ -86,7 +86,7 @@ Key terms:
 - **Test Status**: 1249 lib tests (Tier A), 0 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
 - **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
-- **Production Status**: LSP server production-ready (`just ci-gate` passing)
+- **Production Status**: LSP server public alpha (`just ci-gate` passing)
 
 **Target**: 93%+ LSP coverage (from current 100%)
 <!-- END: STATUS_METRICS_BULLETS -->
@@ -100,14 +100,14 @@ Key terms:
 - Publish benchmark outputs under `benchmarks/results/` for v0.9.x evidence trail
 
 **Next (v0.9.1 readiness)**
-- Stability statement (GA-lock + versioning rules)
+- Stability statement (versioning rules)
 - Packaging stance (what ships; supported platforms)
 - Benchmark publication with receipts under `benchmarks/results/`
-- Upgrade notes from v0.8.x → v0.9.x (Production-Ready)
+- Upgrade notes from v0.8.x → v0.9.x
 - Merge gates (#210) after CI pipeline cleanup (#211)
 
-**Later (post v0.9.x (Production-Ready))**
-- DAP preview -> GA hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)
+**Later (post v0.9.x)**
+- DAP preview hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)
 - Full LSP 3.18 compliance
 - Package manager distribution (Homebrew/apt/etc.)
 
@@ -128,11 +128,11 @@ See [ROADMAP.md](ROADMAP.md) for milestone details.
 
 | Component | Status | Notes |
 | --- | --- | --- |
-| perl-parser | Production | ~100% Perl 5, 87% mutation score |
-| perl-lsp | Production | Coverage tracked via `features.toml` |
+| perl-parser | Public Alpha | ~100% Perl 5, 87% mutation score |
+| perl-lsp | Public Alpha | Coverage tracked via `features.toml` |
 | perl-dap | Preview (Native + Bridge) | Native adapter implemented/tested (phase2+phase3 suites); BridgeAdapter retained for compatibility |
-| perl-lexer | Production | Context-aware, sub-microsecond |
-| perl-corpus | Production | Corpus counts tracked in computed metrics |
+| perl-lexer | Public Alpha | Context-aware, sub-microsecond |
+| perl-corpus | Public Alpha | Corpus counts tracked in computed metrics |
 
 ---
 

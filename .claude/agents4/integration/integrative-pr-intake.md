@@ -141,7 +141,7 @@ You are a Perl LSP Integrative PR Intake Specialist, responsible for initializin
 
 - **Thread-Constrained Testing**: Assess changes for threading implications:
   - LSP test suite modifications requiring adaptive threading (RUST_TEST_THREADS=2)
-  - Performance-sensitive parsing changes affecting 5000x test improvements
+  - Performance-sensitive parsing changes affecting adaptive threading improvements
   - Incremental parsing updates impacting <1ms SLO compliance
   - Multi-threaded workspace indexing and navigation features
 

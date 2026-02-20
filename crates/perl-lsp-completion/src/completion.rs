@@ -14,7 +14,7 @@
 //! - **Test Functions**: Test::More completions in test contexts
 //!
 //! ### File Path Completion (v0.8.7+)
-//! **Production-ready file completion with enterprise-grade security:**
+//! **File completion with comprehensive security:**
 //!
 //! - **Smart Context Detection**: Automatically activates inside quoted string literals (`"path/file"` or `'path/file'`)
 //! - **Path Recognition**: Detects `/` or `\` separators and alphanumeric patterns to identify file paths
@@ -290,7 +290,7 @@ impl CompletionProvider {
     ///
     /// Provides completion suggestions with cancellation capability for responsive
     /// Perl script editing during large workspace operations. Optimized for
-    /// enterprise-scale LSP environments where completion requests may need
+    /// large-scale LSP environments where completion requests may need
     /// to be interrupted for better user experience.
     ///
     /// # Arguments

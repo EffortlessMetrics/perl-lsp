@@ -30,10 +30,10 @@
 - v0.9.1 released and stable
 - Capability snapshot + docs aligned
 - Benchmarks published under benchmarks/results/
-- Upgrade notes exist from v0.8.x → v0.9.x (Production-Ready)
+- Upgrade notes exist from v0.8.x → v0.9.x
 
 **Deliverables**:
-1. Stability statement (what "GA-lock" means)
+1. Stability statement (versioning rules)
 2. Packaging stance (binaries, crates, platforms)
 3. Benchmark publication
 
@@ -55,7 +55,7 @@
 - `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1
 - README / CURRENT_STATUS / ROADMAP agree (no unbacked claims)
 - `cargo install --path crates/perl-lsp` works cleanly
-- GA-lock capability snapshot remains stable
+- Capability snapshot remains stable
 - Release notes match advertised capabilities
 
 **Historical blockers**:

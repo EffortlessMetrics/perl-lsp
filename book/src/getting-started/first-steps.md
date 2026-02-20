@@ -17,7 +17,7 @@ Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 
 perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 - Fast native Rust parser with near-complete Perl 5 coverage
-- Production-grade LSP server with broad feature support (tracked in `features.toml`)
+- LSP server with broad feature support (tracked in `features.toml`)
 - DAP support with native preview adapter + BridgeAdapter compatibility path
 - Quality gates: tests, fuzzing/mutation hardening, missing_docs enforcement (see `CURRENT_STATUS.md`)
 
@@ -27,13 +27,13 @@ perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 - Keep close-out receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
 - Publish benchmark outputs under `benchmarks/results/`
 
-**Next (v0.9.x (Production-Ready))**
-- Stability statement + packaging stance
-- Benchmark publication with receipts
-- Upgrade notes from v0.8.x → v0.9.x (Production-Ready)
+**Next (v0.10.0)**
+- Moo/Moose semantic depth improvements
+- Native DAP enhancements (variables/evaluate)
+- Stability goal refinement for v0.15.0 contract
 
-**Later (post v0.9.x (Production-Ready))**
-- DAP preview -> GA hardening (runtime variable/evaluate depth + packaging)
+**Later (targeting v0.15.0 for Stability Contract)**
+- Formal API stability and locked wire protocol
 - Full LSP 3.18 compliance
 - Package manager distribution
 
@@ -59,11 +59,11 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 ### Now (as of 2026-02-16)
 1. 🟡 **Benchmark publication** - commit canonical benchmark outputs under `benchmarks/results/`
 2. 🟡 **v0.9.x packaging stance** - finalize supported platforms and shipping model
-3. 🟡 **Upgrade notes polish** - ensure v0.8.x → v0.9.x (Production-Ready) path is explicit
+3. 🟡 **Upgrade notes polish** - ensure v0.8.x → v0.9.x path is explicit
 4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/LSP_MISSING_FEATURES_REPORT.md`
 
 ### Next
-1. **v0.9.x (Production-Ready) readiness** - stability statement, packaging stance, benchmark receipts, upgrade notes
+1. **v0.15.0 readiness** - stability contract, packaging stance, benchmark receipts
 2. **Merge gates** - #210 after CI pipeline cleanup (#211)
 
 ### Critical Blockers / Constraints
@@ -119,7 +119,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp  # With adaptive threading
 
 - Check the active milestone and the `good first issue` / `help wanted` labels
 - Near-term work: benchmark publication + v0.9.x packaging/readiness (see ROADMAP)
-- Larger efforts: v0.9.x (Production-Ready) milestone and `phase:*` labels
+- Larger efforts: see ROADMAP.md and `phase:*` labels
 - See [CONTRIBUTING.md](../CONTRIBUTING.md) for workflow details
 
 ## 📊 Quality Metrics
@@ -189,7 +189,7 @@ See [CURRENT_STATUS.md](CURRENT_STATUS.md) for computed health signals and recei
 
 ## 🚀 Let's Build Together!
 
-The perl-lsp project has clear paths to both MVP and Production v0.9.x (Production-Ready). Your contributions will help make Perl development smoother across editors.
+The perl-lsp project is in active development with a clear path toward a stable v0.15.0 release. Your contributions will help make Perl development smoother across editors.
 
 **Pick an issue, dive in, and let's ship this! 🎉**
 
