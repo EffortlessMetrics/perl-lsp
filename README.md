@@ -114,7 +114,7 @@ cargo clippy --workspace --lib && cargo fmt --all
 nix develop -c just ci-gate
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [CLAUDE.md](CLAUDE.md) for the full command reference.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for our community standards, [SUPPORT.md](SUPPORT.md) for how to get help, and [CLAUDE.md](CLAUDE.md) for the full command reference.
 
 ## Documentation
 

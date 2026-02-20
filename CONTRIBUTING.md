@@ -79,25 +79,17 @@ See **[CI & Automation](./docs/CI.md)** for comprehensive details about our GitH
 - Add `ci:mac` label if your changes affect macOS
 - Add `ci:semver` label to check for breaking API changes
 
-### Local CI Validation (While GitHub Actions Is Unavailable)
+### Local CI Validation
 
-**⚠️ IMPORTANT**: GitHub Actions is currently unavailable due to billing issues. During this period:
-
-- **REQUIRED**: Run `just ci-gate` before every merge
-- **RECOMMENDED**: Run `just ci-full` for large/structural changes
-- See **[Local CI Protocol](./docs/ci/LOCAL_CI_PROTOCOL.md)** for complete details
+It is recommended to run `just ci-gate` before pushing your changes to ensure they pass the core checks.
 
 ```bash
-# Fast merge gate (~2-5 min, required for all merges)
+# Fast merge gate (~2-5 min)
 just ci-gate
 
 # Comprehensive validation (~10-20 min, for large changes)
 just ci-full
 ```
-
-**Note in PR descriptions**:
-```markdown
-## Local CI Validation
 ✅ `just ci-gate` passed
 See: [Local CI Protocol](docs/ci/LOCAL_CI_PROTOCOL.md)
 ```
@@ -436,7 +428,7 @@ For quick reference, see **[Dependency Quick Reference](./docs/DEPENDENCY_QUICK_
 
 ## Code of Conduct
 
-We follow the Rust Code of Conduct. Please be respectful and constructive in all interactions.
+We follow the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). Please be respectful and constructive in all interactions.
 
 ## License
 
