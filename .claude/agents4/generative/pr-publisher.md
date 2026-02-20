@@ -78,7 +78,8 @@ publication: PR created; URL: <github-url>; labels applied: flow:generative,stat
 tests: cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30
 parsing: ~100% Perl syntax coverage; incremental: <1ms updates with 70-99% node reuse
 lsp: ~89% features functional; workspace navigation: 98% reference coverage
-benchmarks: parsing: 1-150μs per filemigration: Issue→PR Ledger; gates table migrated; receipts verified
+benchmarks: parsing: 1-150μs per file
+migration: Issue→PR Ledger; gates table migrated; receipts verified
 ```
 
 **Final Output Format:**

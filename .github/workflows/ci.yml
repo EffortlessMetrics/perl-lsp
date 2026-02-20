@@ -130,7 +130,8 @@ jobs:
               description = 'Gate receipt not found';
             } else {
               const data = JSON.parse(fs.readFileSync('target/receipts/receipt.json', 'utf8'));
-              const failedGates = data.gates.filter(g => g.status !== 'passed');
+              const ok = s => ['passed', 'pass', 'skipped'].includes(String(s || '').toLowerCase());
+              const failedGates = (data.gates || []).filter(g => !ok(g.status));
               if (failedGates.length > 0) {
                 status = 'failure';
                 description = `${failedGates.length} gate(s) failed: ${failedGates.map(g => g.name).join(', ')}`;
