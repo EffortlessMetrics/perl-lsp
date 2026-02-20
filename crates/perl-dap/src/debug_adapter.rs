@@ -3374,93 +3374,84 @@ fn is_in_single_quotes(s: &str, idx: usize) -> bool {
     in_sq
 }
 
-/// Check if the match is CORE:: or CORE::GLOBAL:: qualified (must block these)
-fn is_core_qualified(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-
-    // Must have :: immediately before op
-    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
-        return false;
-    }
-
-    // Extract the identifier right before that ::
-    let end = op_start - 2;
-    let mut start = end;
-    while start > 0 {
-        let b = bytes[start - 1];
-        if b.is_ascii_alphanumeric() || b == b'_' {
-            start -= 1;
-        } else {
-            break;
-        }
-    }
-    let seg = &s[start..end];
-    if seg == "CORE" {
-        return true;
-    }
-    if seg != "GLOBAL" {
-        return false;
-    }
-
-    // If GLOBAL, require CORE::GLOBAL::op
-    if start < 2 || bytes[start - 1] != b':' || bytes[start - 2] != b':' {
-        return false;
-    }
-    let end2 = start - 2;
-    let mut start2 = end2;
-    while start2 > 0 {
-        let b = bytes[start2 - 1];
-        if b.is_ascii_alphanumeric() || b == b'_' {
-            start2 -= 1;
-        } else {
-            break;
-        }
-    }
-    &s[start2..end2] == "CORE"
-}
-
 /// Check if the match is a sigil-prefixed identifier ($print, @say, %exit, *dump)
 /// BUT NOT if it's a dereference call (&$print) or method call (->$print)
+/// Handles package qualification: $Foo::Bar::print is allowed, Foo::Bar::print is NOT.
 fn is_sigil_prefixed_identifier(s: &str, op_start: usize) -> bool {
     let bytes = s.as_bytes();
     if op_start == 0 {
         return false;
     }
 
+    let mut i = op_start;
+
+    // Scan backwards over package parts (::Name)*
+    // e.g. for $Foo::Bar::print, op_start points to 'p'
+    // check for preceding ::
+    while i >= 2 && bytes[i - 1] == b':' && bytes[i - 2] == b':' {
+        i -= 2; // skip ::
+        // skip identifier part
+        if i == 0 {
+            return false;
+        }
+
+        // Scan backwards over identifier chars
+        let end_ident = i;
+        while i > 0 && (bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_') {
+            i -= 1;
+        }
+        if i == end_ident {
+            // :: without identifier before it? e.g. $::print (main package) or $Foo::::bar
+            // Just treat as valid package separator traversal
+        }
+    }
+
+    // Now we expect a sigil, possibly with whitespace
+    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+
+    if i == 0 {
+        return false;
+    }
+
     // Must be preceded by a sigil
-    if !matches!(bytes[op_start - 1], b'$' | b'@' | b'%' | b'*') {
+    if !matches!(bytes[i - 1], b'$' | b'@' | b'%' | b'*') {
         return false;
     }
 
     // Security: If it's a sigil, we must ensure it's not being used in a way
     // that triggers execution (like &$sub or ->$method).
     // We scan backwards from the sigil (op_start - 1) skipping whitespace.
-    let mut i = op_start - 1;
-    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
-        i -= 1;
-    }
-
+    // i currently points to the sigil char.
     if i > 0 {
-        let prev = bytes[i - 1];
-
-        // Block dereference execution (&$sub)
-        if prev == b'&' {
-            return false;
+        let mut j = i - 1; // Index of char before sigil
+        while j > 0 && bytes[j - 1].is_ascii_whitespace() {
+            j -= 1;
         }
 
-        // Block method call (->$method)
-        if prev == b'>' && i > 1 && bytes[i - 2] == b'-' {
-            return false;
-        }
+        if j > 0 {
+            let prev = bytes[j - 1];
 
-        // Handle braced dereference &{ $sub }
-        if prev == b'{' {
-            i -= 1;
-            while i > 0 && bytes[i - 1].is_ascii_whitespace() {
-                i -= 1;
-            }
-            if i > 0 && bytes[i - 1] == b'&' {
+            // Block dereference execution (&$sub)
+            if prev == b'&' {
                 return false;
+            }
+
+            // Block method call (->$method)
+            if prev == b'>' && j > 1 && bytes[j - 2] == b'-' {
+                return false;
+            }
+
+            // Handle braced dereference &{ $sub }
+            if prev == b'{' {
+                j -= 1;
+                while j > 0 && bytes[j - 1].is_ascii_whitespace() {
+                    j -= 1;
+                }
+                if j > 0 && bytes[j - 1] == b'&' {
+                    return false;
+                }
             }
         }
     }
@@ -3495,16 +3486,6 @@ fn is_simple_braced_scalar_var(s: &str, op_start: usize, op_end: usize) -> bool 
         j += 1;
     }
     j < bytes.len() && bytes[j] == b'}'
-}
-
-/// Check if the match is package-qualified (Foo::print) but not CORE::
-fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
-        return false;
-    }
-    // It's qualified, but we need to check it's not CORE::
-    !is_core_qualified(s, op_start)
 }
 
 /// Validate that an expression is safe for evaluation (non-mutating)
@@ -3591,12 +3572,9 @@ fn validate_safe_expression(expression: &str) -> Option<String> {
                 continue;
             }
 
-            // Allow package-qualified names unless it's CORE::
-            if is_package_qualified_not_core(expression, start) {
-                continue;
-            }
-
-            // Block: either bare op or CORE:: qualified
+            // Block: either bare op or package-qualified op (e.g. POSIX::system)
+            // Note: is_sigil_prefixed_identifier handles $Foo::system (allowed)
+            // vs Foo::system (blocked)
             return Some(format!(
                 "Safe evaluation mode: potentially mutating operation '{}' not allowed (use allowSideEffects: true)",
                 op
@@ -5777,8 +5755,8 @@ mod tests {
             "${print}",         // braced scalar variable
             "${ print }",       // braced with spaces
             "'print'",          // single-quoted string
-            "Foo::print",       // package-qualified
-            "My::Module::exit", // deeply qualified
+            "$Foo::print",      // package-qualified variable (safe)
+            "$My::Module::exit", // deeply qualified variable (safe)
         ];
 
         for expr in allowed {
@@ -5804,6 +5782,8 @@ mod tests {
             "kill 9, $$",
             "CORE::print $x",
             "CORE::GLOBAL::exit",
+            "Foo::print",       // package-qualified dangerous op (UNSAFE)
+            "My::Module::exit", // deeply qualified dangerous op (UNSAFE)
             "$obj->print",
             "$obj->system('ls')",
         ];
