@@ -1,0 +1,78 @@
+name: Parser Bug
+description: Report a Perl parsing issue (incorrect AST, missing syntax support, parse failure)
+labels: ["bug", "parser", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for Perl code that is parsed incorrectly or not supported yet.
+
+  - type: textarea
+    id: perl-code
+    attributes:
+      label: Perl Code
+      description: The Perl code that triggers the parsing issue. Keep it as minimal as possible.
+      render: perl
+    validations:
+      required: true
+
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      options:
+        - Parse error on valid Perl
+        - Incorrect AST / wrong parse tree
+        - Missing syntax support
+        - Incorrect token spans / positions
+        - Crash or panic during parsing
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Parse Result
+      description: What the parser should produce (describe the expected AST structure, or just say "should parse without errors").
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Parse Result
+      description: What the parser actually produces (error message, incorrect AST, etc.).
+    validations:
+      required: true
+
+  - type: dropdown
+    id: perl-version
+    attributes:
+      label: Perl Version Compatibility
+      description: Which Perl version uses this syntax?
+      options:
+        - Perl 5 (standard)
+        - Perl 5.38+ (builtin functions, class syntax)
+        - Perl 5.40+
+        - Multiple versions
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: If you found a workaround (e.g., rewriting the code differently), describe it here.
+
+  - type: input
+    id: version
+    attributes:
+      label: perl-lsp Version
+      placeholder: "0.9.1"
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Links to Perl docs, perlop references, or any other context.

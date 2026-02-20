@@ -1,0 +1,72 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a feature! Please describe what you'd like and why it would be useful.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Feature Area
+      options:
+        - LSP feature (completion, hover, diagnostics, etc.)
+        - Parser (new Perl syntax support)
+        - Editor integration (VSCode, Neovim, etc.)
+        - DAP / debugging
+        - Performance
+        - Developer experience / tooling
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem does this feature solve? What frustration does it address?
+      placeholder: "When working with large Perl codebases, I can't ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe what you'd like to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: perl-example
+    attributes:
+      label: Example Perl Code
+      description: If applicable, provide example Perl code that would benefit from this feature.
+      render: perl
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative solutions or workarounds you've considered.
+
+  - type: dropdown
+    id: willing
+    attributes:
+      label: Willing to Contribute?
+      description: Would you be willing to submit a PR for this feature?
+      options:
+        - "Yes, I'd like to implement this"
+        - "I could help with testing"
+        - "No, just suggesting"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, mockups, or references.
