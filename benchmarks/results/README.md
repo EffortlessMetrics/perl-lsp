@@ -25,7 +25,7 @@ Examples:
 
 **Results:**
 - **Parser Benchmarks**: `/benchmarks/results/2026-01-22-ryzen9-9950x3d-parser.json`
-  - `parse_simple_script`: 21.26μs mean  - Performance: ~15-20x faster than legacy implementations
+  - `parse_simple_script`: 21.26μs mean
 
 **Status:**
 - Parser performance baseline established
@@ -36,7 +36,8 @@ Examples:
 ## Performance Targets
 
 ### Parser Performance
-- **Target**: 1-150μs parsing time- **v0.9.1 Baseline**: 21.26μs mean (ACHIEVED)
+- **Target**: 1-150μs parsing time
+- **v0.9.1 Baseline**: 21.26μs mean (ACHIEVED)
 
 ### Incremental Parsing
 - **Target**: <1ms updates with 70-99% node reuse
