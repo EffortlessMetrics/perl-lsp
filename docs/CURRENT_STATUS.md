@@ -52,7 +52,7 @@ Key terms:
 
 | Metric | Value | Target | Status |
 | --- | --- | --- | --- |
-| **Tier A Tests** | 1249 lib tests (discovered), 0 ignores (tracked) | 100% pass | PASS |
+| **Tier A Tests** | 1250 lib tests (discovered), 2 ignores (tracked) | 100% pass | PASS |
 | **Tracked Test Debt** | 0 (0 bug, 0 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
 | **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 93%+ | In progress |
@@ -83,7 +83,7 @@ Key terms:
 - **LSP Coverage**: 100% user-visible feature coverage (53/53 advertised features from `features.toml`)
 - **Protocol Compliance**: 100% overall LSP protocol support (97/97 including plumbing)
 - **Parser Coverage**: ~100% Perl 5 syntax via `tree-sitter-perl/test/corpus` (~611 sections) + `test_corpus/` (73 `.pl` files)
-- **Test Status**: 1249 lib tests (Tier A), 0 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
+- **Test Status**: 1250 lib tests (Tier A), 2 ignores tracked (0 total tracked debt: 0 bug, 0 manual)
 - **Docs (perl-parser)**: missing_docs warnings = 0 (baseline 0)
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server public alpha (`just ci-gate` passing)

@@ -183,12 +183,12 @@ Update README.md installation section:
 
 #### Unix (Linux/macOS)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 #### Windows PowerShell
 ```powershell
-irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 ```
 
 #### Homebrew
@@ -227,10 +227,10 @@ This release marks perl-lsp with comprehensive edge case coverage and broad feat
 
 ```bash
 # Unix
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 # Windows
-irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 
 # Homebrew
 brew tap effortlesssteven/tap
@@ -273,7 +273,7 @@ Twitter/X:
 🛠️ 35+ IDE features
 🧪 Property-based testing
 
-Install: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+Install: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 #Perl #LSP #RustLang
 ```
@@ -291,7 +291,7 @@ Features:
 - Zero C dependencies
 
 Installation is now one line:
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 GitHub: https://github.com/EffortlessMetrics/perl-lsp
 ```

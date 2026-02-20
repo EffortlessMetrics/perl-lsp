@@ -76,6 +76,26 @@ When the project reaches **v0.15.0**, we will establish a formal **Stability Con
 
 ---
 
+## LSP Feature Implementation
+
+The LSP compliance table is auto-generated from `features.toml`.
+
+<!-- BEGIN: COMPLIANCE_TABLE -->
+| Area | Implemented | Total | Coverage |
+|------|-------------|-------|----------|
+| debug | 10 | 10 | 100% |
+| notebook | 2 | 2 | 100% |
+| protocol | 9 | 9 | 100% |
+| text_document | 41 | 41 | 100% |
+| window | 9 | 9 | 100% |
+| workspace | 26 | 26 | 100% |
+| **Overall** | **97** | **97** | **100%** |
+<!-- END: COMPLIANCE_TABLE -->
+
+For live metrics, run `just status-check` or see [CURRENT_STATUS.md](CURRENT_STATUS.md).
+
+---
+
 ## Completed Work
 
 See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.

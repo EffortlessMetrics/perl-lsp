@@ -55,6 +55,7 @@ members = [
 
 exclude = [
     "tree-sitter-perl",           # Legacy C parser
+    "crates/tree-sitter-perl-c",  # Requires libclang-dev (bindgen)
     "fuzz",                       # cargo-fuzz specialized requirements
     "archive",                    # Archived legacy components
 ]

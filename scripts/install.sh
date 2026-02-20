@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Perl LSP installer script
-# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 REPO="${REPO:-EffortlessMetrics/perl-lsp}"
 NAME="perl-lsp"

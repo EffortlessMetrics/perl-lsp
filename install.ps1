@@ -1,5 +1,5 @@
 # Perl LSP installer for Windows
-# Usage: irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 
 param(
     [string]$Version = "latest",

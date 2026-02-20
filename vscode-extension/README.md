@@ -57,7 +57,7 @@ brew tap tree-sitter-perl/tap
 brew install perl-lsp
 
 # One-liner (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 # From source
 cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp

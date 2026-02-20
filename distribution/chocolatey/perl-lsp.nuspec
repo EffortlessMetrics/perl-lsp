@@ -8,7 +8,7 @@
     <owners>EffortlessMetrics</owners>
     <licenseUrl>https://github.com/EffortlessMetrics/perl-lsp/blob/main/LICENSE-APACHE</licenseUrl>
     <projectUrl>https://github.com/EffortlessMetrics/perl-lsp</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/vscode-extension/images/icon.png</iconUrl>
+    <iconUrl>https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/vscode-extension/images/icon.png</iconUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>
 perl-lsp is a high-performance Language Server Protocol implementation for Perl,

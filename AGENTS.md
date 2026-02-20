@@ -58,7 +58,7 @@ This repository contains **six published crates** forming a complete Perl develo
 cargo install perl-lsp
 
 # Or quick install (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 ### Usage

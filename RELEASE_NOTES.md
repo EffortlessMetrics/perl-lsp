@@ -63,7 +63,7 @@ cargo install perl-lsp
 cargo install perl-dap
 
 # Or quick install (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 ## 📊 Platform Support
