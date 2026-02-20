@@ -1,0 +1,45 @@
+name: Documentation Issue
+description: Report a problem or suggest an improvement to documentation
+labels: ["documentation", "needs-triage"]
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Issue Type
+      options:
+        - Incorrect or outdated information
+        - Missing documentation
+        - Confusing or unclear
+        - Code example doesn't work
+        - Typo or grammar
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: location
+    attributes:
+      label: Documentation Location
+      description: Link to the page or file path (e.g., `docs/LSP_IMPLEMENTATION_GUIDE.md`, README section).
+      placeholder: "docs/ROADMAP.md or https://github.com/..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the documentation issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested Fix
+      description: If you have a suggestion for the correct content, describe it here.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context

@@ -1,6 +1,10 @@
-# GA Release Runbook for perl-lsp v0.8.3
+# GA Release Runbook (Forward-Looking)
 
-This document provides the exact steps to release perl-lsp v0.8.3 to general availability.
+> **Note**: This is a forward-looking planning document for a future GA release (v0.15.0+).
+> The project is currently at v0.9.x (Initial Public Alpha). The GA milestone has not been reached.
+> Content below is retained as planning documentation and will be updated when GA readiness is assessed.
+
+This document provides a template for a future general availability release.
 
 ## Pre-flight Checklist
 
@@ -179,12 +183,12 @@ Update README.md installation section:
 
 #### Unix (Linux/macOS)
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 #### Windows PowerShell
 ```powershell
-irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 ```
 
 #### Homebrew
@@ -207,9 +211,9 @@ Update the auto-generated release notes with:
 ```markdown
 # perl-lsp v0.8.3
 
-## 🎉 Major Release: Production-Ready LSP
+## 🎉 Major Release
 
-This release marks perl-lsp as production-ready with 100% edge case coverage and enterprise-grade features.
+This release marks perl-lsp with comprehensive edge case coverage and broad feature support.
 
 ### ✨ Highlights
 
@@ -223,10 +227,10 @@ This release marks perl-lsp as production-ready with 100% edge case coverage and
 
 ```bash
 # Unix
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 # Windows
-irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 
 # Homebrew
 brew tap effortlesssteven/tap
@@ -235,7 +239,7 @@ brew install perl-lsp
 
 ### 📊 Performance
 
-- Parser: 4-19x faster than C implementation
+- Parser: Fast native Rust implementation (1-150us parsing)
 - LSP: <50ms response time for all operations
 - Memory: Efficient caching with LRU eviction
 
@@ -265,29 +269,29 @@ Twitter/X:
 🚀 perl-lsp v0.8.3 is here!
 
 ✅ 100% Perl edge case coverage
-⚡ 4-19x faster than C parser
+⚡ Fast native Rust parser
 🛠️ 35+ IDE features
 🧪 Property-based testing
 
-Install: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+Install: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 #Perl #LSP #RustLang
 ```
 
 Reddit (r/perl):
 ```
-Title: perl-lsp v0.8.3 Released - Production-Ready Perl Language Server
+Title: perl-lsp v0.8.3 Released - Perl Language Server
 
-We're excited to announce perl-lsp v0.8.3, a production-ready Perl language server with 100% edge case coverage!
+We're excited to announce perl-lsp v0.8.3, a Perl language server with comprehensive edge case coverage!
 
 Features:
 - 35+ IDE features (completion, hover, refactoring, etc.)
-- 4-19x faster than the C implementation
+- Fast native Rust parser (1-150us parsing)
 - Works with VSCode, Neovim, Emacs, and any LSP editor
 - Zero C dependencies
 
 Installation is now one line:
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 GitHub: https://github.com/EffortlessMetrics/perl-lsp
 ```

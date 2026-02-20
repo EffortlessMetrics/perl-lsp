@@ -4,13 +4,13 @@ Welcome to the **perl-lsp** documentation! This project provides a comprehensive
 
 ## What is perl-lsp?
 
-perl-lsp is a production-ready Language Server Protocol (LSP) implementation for Perl 5, offering:
+perl-lsp is a Language Server Protocol (LSP) implementation for Perl 5, offering:
 
 - **Fast Native Parser**: Built with Rust for near-complete Perl 5 syntax coverage (~100%)
 - **LSP Server**: Full-featured language server with autocompletion, go-to-definition, refactoring, and more
 - **Debug Adapter**: DAP support for debugging Perl applications
 - **Multiple Crates**: Modular architecture with specialized components for parsing, lexing, and IDE integration
-- **Enterprise Quality**: Comprehensive testing, mutation hardening, and API documentation enforcement
+- **Quality Focus**: Comprehensive testing, mutation hardening, and API documentation enforcement
 
 ## Key Features
 
@@ -34,15 +34,15 @@ perl-lsp is a production-ready Language Server Protocol (LSP) implementation for
 - BridgeAdapter for IDE integration
 - Breakpoint management and validation
 - Stack trace inspection
-- Enterprise security features
+- Security features
 
 ## Project Status
 
 **Latest Release**: v0.9.1
 **API Stability**: See [Stability Statement](./reference/stability.md)
-**Current Milestone**: v1.0.0 - Boring Promises
+**Current Milestone**: v0.9.1 (Initial Public Alpha)
 
-The project is actively developed with a focus on production readiness, comprehensive testing, and enterprise-grade quality assurance.
+The project is actively developed with a focus on correctness, comprehensive testing, and thorough quality assurance. A formal Stability Contract is targeted for v0.15.0.
 
 ## Architecture
 

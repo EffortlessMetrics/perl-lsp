@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { BinaryDownloader } from './downloader';
 
 export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {
+    constructor(private readonly context: vscode.ExtensionContext) {}
+
     createDebugAdapterDescriptor(
         session: vscode.DebugSession,
         executable: vscode.DebugAdapterExecutable | undefined
@@ -11,7 +14,7 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
         
         if (!dapPath) {
             vscode.window.showErrorMessage(
-                'Perl Debug Adapter not found. Please install it with: cargo install --path crates/perl-dap --bin perl-dap'
+                'Perl Debug Adapter (perl-dap) not found. It ships with perl-lsp — re-download from the release page or install via: cargo install perl-dap'
             );
             return undefined;
         }
@@ -22,7 +25,13 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
     }
 
     private findDebugAdapter(): string | undefined {
-        // First, try to find perl-dap in PATH
+        // First, check the auto-download directory (ships with perl-lsp)
+        const downloadedDap = BinaryDownloader.getLocalDapPath(this.context);
+        if (this.isExecutable(downloadedDap)) {
+            return downloadedDap;
+        }
+
+        // Next, try to find perl-dap in PATH
         const pathDap = this.findExecutable('perl-dap');
         if (pathDap) {
             return pathDap;
@@ -183,7 +192,7 @@ export function activateDebugger(context: vscode.ExtensionContext) {
         vscode.debug.registerDebugConfigurationProvider('perl', provider)
     );
 
-    const factory = new PerlDebugAdapterDescriptorFactory();
+    const factory = new PerlDebugAdapterDescriptorFactory(context);
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory('perl', factory)
     );

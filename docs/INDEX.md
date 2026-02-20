@@ -78,15 +78,15 @@ bash scripts/ignored-test-count.sh
 
 ## Document Categories
 
-### v1.0 Core Documentation
+### v0.9.x Core Documentation
 
-- **[docs/README.md](README.md)** - **v1.0 Documentation Index** - Complete documentation hub
+- **[docs/README.md](README.md)** - **v0.9.x Documentation Index** - Complete documentation hub
 - `GETTING_STARTED.md` - **New users start here** - Installation and first steps
 - `FAQ.md` - Frequently asked questions
-- `CURRENT_STATUS.md` - Computed project metrics for v1.0
+- `CURRENT_STATUS.md` - Computed project metrics for v0.9.x
 - `ROADMAP.md` - Release plans and exit criteria
-- `RELEASE_NOTES.md` - v1.0 release details and changelog
-- `../SECURITY.md` - v1.0 security policy and procedures
+- `RELEASE_NOTES.md` - v0.9.x release details and changelog
+- `../SECURITY.md` - v0.9.x security policy and procedures
 
 ### Operator Docs (start here)
 
@@ -115,7 +115,7 @@ bash scripts/ignored-test-count.sh
 - `DAP_USER_GUIDE.md` - Debug adapter usage
 - `WORKSPACE_NAVIGATION_GUIDE.md` - Cross-file features
 
-### Process Docs (v1.0)
+### Process Docs (v0.9.x)
 
 - `AGENTIC_DEV.md` - Development model and budget definitions
 - `LESSONS.md` - What went wrong and what changed
@@ -123,7 +123,7 @@ bash scripts/ignored-test-count.sh
 - `forensics/INDEX.md` - PR archaeology inventory
 - `FORENSICS_SCHEMA.md` - PR archaeology dossier template
 - `STABILITY.md` - API stability policy
-- `STABILITY_STATEMENT_v1.0.md` - v1.0 stability guarantees
+- `STABILITY_STATEMENT_v0.9.x.md` - v0.9.x stability guarantees
 - `CONTRIBUTING_LSP.md` - LSP contribution guidelines
 - `../CONTRIBUTING.md` - Development workflow and release process
 
@@ -132,16 +132,16 @@ bash scripts/ignored-test-count.sh
 - `archive/` - Old roadmaps, superseded docs
 - `reports/` - Point-in-time analysis reports
 
-## Truth Contract (v1.0)
+## Truth Contract (v0.9.x)
 
 1. Metrics come from computation, not hand-editing
 2. `just status-check` fails if docs drift from computed values
 3. Claims require receipts (test output, gate output, or targeted tests)
 4. No adjectives without evidence (no "revolutionary", "enterprise-grade" without proof)
-5. **v1.0 Production Claims**: All performance and security claims are validated with comprehensive testing
+5. **v0.9.x Claims**: All performance and security claims are validated with comprehensive testing
 
 See [`LESSONS.md`](LESSONS.md) for what happens when we violate these rules.
 
 ---
 
-**Note**: This is the legacy documentation index. For the most current v1.0 documentation, please see **[docs/README.md](README.md)**.
+**Note**: This is the legacy documentation index. For the most current v0.9.x documentation, please see **[docs/README.md](README.md)**.

@@ -128,7 +128,7 @@ The 1.5% performance overhead is negligible compared to the benefits:
 - Cross-platform support increases adoption
 - Modern tooling improves developer productivity
 
-**The Pure Rust implementation is production-ready and recommended for use.**
+**The Pure Rust implementation is recommended for use.**
 
 ## Future Optimization Opportunities
 

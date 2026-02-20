@@ -47,7 +47,7 @@ docs/                    # Documentation following Diátaxis framework
     └── (other benchmark docs)
 
 crates/              # Workspace structure
-├── perl-parser/      # Main parser library (production-ready recursive descent)
+├── perl-parser/      # Main parser library (recursive descent)
 ├── perl-lsp/         # LSP server binary with CLI interface
 ├── perl-lexer/       # Context-aware tokenizer with Unicode support
 ├── perl-corpus/      # Comprehensive test corpus with property-based testing
@@ -287,7 +287,7 @@ Ensure every customized agent includes:
 - [ ] LSP protocol compliance validation (~89% features functional)
 - [ ] Incremental parsing efficiency testing and workspace navigation
 - [ ] Adaptive threading configuration (RUST_TEST_THREADS=2 for LSP tests)
-- [ ] Parsing performance validation (1-150μs per file, 4-19x faster)
+- [ ] Parsing performance validation (1-150μs per file)
 - [ ] Cross-file reference resolution testing (98% coverage)
 
 ## Your Adaptation Workflow

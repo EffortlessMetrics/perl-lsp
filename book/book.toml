@@ -4,7 +4,7 @@ authors = ["perl-lsp contributors"]
 language = "en"
 multilingual = false
 src = "src"
-description = "Comprehensive documentation for the perl-lsp project - a production-ready Perl Language Server Protocol implementation"
+description = "Comprehensive documentation for the perl-lsp project - a Perl Language Server Protocol implementation in Rust"
 
 [build]
 build-dir = "book"

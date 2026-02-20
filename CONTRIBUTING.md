@@ -79,28 +79,19 @@ See **[CI & Automation](./docs/CI.md)** for comprehensive details about our GitH
 - Add `ci:mac` label if your changes affect macOS
 - Add `ci:semver` label to check for breaking API changes
 
-### Local CI Validation (While GitHub Actions Is Unavailable)
+### Local CI Validation
 
-**⚠️ IMPORTANT**: GitHub Actions is currently unavailable due to billing issues. During this period:
-
-- **REQUIRED**: Run `just ci-gate` before every merge
-- **RECOMMENDED**: Run `just ci-full` for large/structural changes
-- See **[Local CI Protocol](./docs/ci/LOCAL_CI_PROTOCOL.md)** for complete details
+It is recommended to run `just ci-gate` before pushing your changes to ensure they pass the core checks.
 
 ```bash
-# Fast merge gate (~2-5 min, required for all merges)
+# Fast merge gate (~2-5 min)
 just ci-gate
 
 # Comprehensive validation (~10-20 min, for large changes)
 just ci-full
 ```
 
-**Note in PR descriptions**:
-```markdown
-## Local CI Validation
-✅ `just ci-gate` passed
 See: [Local CI Protocol](docs/ci/LOCAL_CI_PROTOCOL.md)
-```
 
 **Semantic & LSP Changes**:
 
@@ -189,12 +180,12 @@ Add the `ci:semver` label to your PR to run automated breaking change detection:
 
 | Change Type | Example | Version Bump | Allowed In |
 |-------------|---------|--------------|------------|
-| **Breaking** | Remove public function | Major (1.0 → 2.0) | Major releases only |
-| **Breaking** | Change function signature | Major (1.0 → 2.0) | Major releases only |
-| **Additive** | Add new public function | Minor (1.0 → 1.1) | Minor releases |
-| **Additive** | Add new enum variant | Minor (1.0 → 1.1) | Minor releases (with `#[non_exhaustive]`) |
-| **Patch** | Fix bug, same behavior | Patch (1.0.0 → 1.0.1) | Patch releases |
-| **Patch** | Documentation update | Patch (1.0.0 → 1.0.1) | Patch releases |
+| **Breaking** | Remove public function | Major (0.9 → 1.0) | Major releases only |
+| **Breaking** | Change function signature | Major (0.9 → 1.0) | Major releases only |
+| **Additive** | Add new public function | Minor (0.9 → 0.10) | Minor releases |
+| **Additive** | Add new enum variant | Minor (0.9 → 0.10) | Minor releases (with `#[non_exhaustive]`) |
+| **Patch** | Fix bug, same behavior | Patch (0.9.x → 0.9.2) | Patch releases |
+| **Patch** | Documentation update | Patch (0.9.x → 0.9.2) | Patch releases |
 
 ### Breaking Change Workflow
 
@@ -240,8 +231,8 @@ SemVer checking is configured in `.cargo-semver-checks.toml`:
 
 - **SemVer spec:** https://semver.org/
 - **cargo-semver-checks:** https://github.com/obi1kenobi/cargo-semver-checks
-- **Project stability policy:** `docs/STABILITY.md`
-- **API stability guarantees:** `docs/STABILITY.md#api-surface-stability`
+- **Project stability policy:** [`docs/STABILITY.md`](docs/STABILITY.md)
+- **API stability guarantees:** [`docs/STABILITY.md`](docs/STABILITY.md)
 
 ## Coding Standards
 
@@ -343,7 +334,7 @@ All API changes are checked for Semantic Versioning (SemVer) compatibility using
 just semver-check
 ```
 
-Breaking changes are allowed in minor version bumps (pre-1.0) but require a migration guide in `CHANGELOG.md`. See [SEMVER_POLICY.md](docs/SEMVER_POLICY.md) for full details.
+Breaking changes are allowed in minor version bumps (pre-0.10) but require a migration guide in `CHANGELOG.md`. See [SEMVER_POLICY.md](docs/SEMVER_POLICY.md) for full details.
 
 ## Testing Guidelines
 
@@ -436,7 +427,7 @@ For quick reference, see **[Dependency Quick Reference](./docs/DEPENDENCY_QUICK_
 
 ## Code of Conduct
 
-We follow the Rust Code of Conduct. Please be respectful and constructive in all interactions.
+We follow the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). Please be respectful and constructive in all interactions.
 
 ## License
 
@@ -444,7 +435,7 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ## Release Process
 
-This section describes the release process for Perl LSP, now that we've reached v1.0 GA.
+This section describes the release process for Perl LSP.
 
 ### Version Policy
 
@@ -458,19 +449,17 @@ We follow [Semantic Versioning 2.0.0](https://semver.org/):
 
 | Release Type | Frequency | Examples | Requirements |
 |--------------|-----------|----------|--------------|
-| **Major** | Annually (as needed) | 1.0.0 → 2.0.0 | Breaking changes, migration guide, extensive testing |
-| **Minor** | Quarterly | 1.0.0 → 1.1.0 | New features, API additions, performance improvements |
-| **Patch** | Monthly (as needed) | 1.0.0 → 1.0.1 | Bug fixes, security updates, documentation updates |
+| **Major** | As needed | 0.x → 1.0.0 | Breaking changes, migration guide, extensive testing |
+| **Minor** | Quarterly | 0.9.x → 0.10.0 | New features, API additions, performance improvements |
+| **Patch** | As needed | 0.9.1 → 0.9.2 | Bug fixes, security updates, documentation updates |
 
 ### Release Process Workflow
 
 #### 1. Pre-Release Preparation
 
 ```bash
-# Update version numbers
-cargo update -p perl-parser --precise 1.0.0
-cargo update -p perl-lsp --precise 1.0.0
-# ... for all published crates
+# Update version numbers in Cargo.toml files
+# Then run cargo check to verify
 
 # Run comprehensive validation
 just ci-full
@@ -494,23 +483,23 @@ Before any release, ensure:
 - [ ] Performance benchmarks run: `cargo bench`
 - [ ] Release notes drafted: `RELEASE_NOTES.md`
 - [ ] Version numbers updated in all crates
-- [ ] Git tag prepared: `git tag -a v1.0.0 -m "Release v1.0.0"`
+- [ ] Git tag prepared: `git tag -a v0.9.1 -m "Release v0.9.1"`
 
 #### 3. Release Execution
 
 ```bash
 # Create release branch
-git checkout -b release/v1.0.0
+git checkout -b release/v0.9.1
 
 # Final validation
 just ci-full
 
 # Merge to main
 git checkout main
-git merge release/v1.0.0
+git merge release/v0.9.1
 
 # Tag and push
-git tag v1.0.0
+git tag v0.9.1
 git push origin main --tags
 
 # Publish to crates.io
@@ -520,7 +509,7 @@ cargo publish -p perl-lsp
 # ... other crates in dependency order
 
 # Create GitHub Release
-gh release create v1.0.0 --title "v1.0.0 - Production Ready" --notes-file RELEASE_NOTES.md
+gh release create v0.9.1 --title "v0.9.1 - Initial Public Alpha" --notes-file RELEASE_NOTES.md
 ```
 
 #### 4. Post-Release Tasks
@@ -558,7 +547,7 @@ All releases require review from:
 - Dependency vulnerability scan
 - Security best practices
 - Attack surface analysis
-- Enterprise security requirements
+- Security best practices
 
 ### Testing Requirements for Releases
 
@@ -637,7 +626,7 @@ For critical security issues:
 #### Release Notes Template
 
 ```markdown
-# Release v1.0.0
+# Release v0.9.1
 
 ## Highlights
 - Key features and improvements

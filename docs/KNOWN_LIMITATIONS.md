@@ -114,7 +114,7 @@ This document provides a comprehensive list of parsing limitations across all th
 
 ### ✅ ~91% LSP Protocol Coverage (v0.9+)
 
-The perl-lsp server has achieved **~91% functional LSP protocol coverage** with comprehensive workspace support and enterprise-grade features. See [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) for the complete feature matrix.
+The perl-lsp server has achieved **~91% functional LSP protocol coverage** with comprehensive workspace support. See [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) for the complete feature matrix.
 
 ### ✅ Fully Implemented Core Features
 
@@ -179,7 +179,7 @@ These features are planned for future semantic analyzer phases:
 ### ✅ Test Coverage
 
 - **530+ tests** with comprehensive E2E validation
-- **Revolutionary performance**: 5000x test speed improvements (PR #140)
+- **Significant performance improvements**: Test speed improvements via adaptive threading (PR #140)
 - **100% CI reliability** with adaptive threading
 - All tests validate actual functionality, not just response shapes
 

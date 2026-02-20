@@ -25,7 +25,7 @@ env:
 jobs:
   ci-gate:
     name: CI Gate (Merge-Blocking)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -63,6 +63,22 @@ jobs:
             target/receipts/artifacts/*
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Dump gate failures on error
+        if: failure()
+        run: |
+          echo "=== receipt.json (tail) ==="
+          test -f target/receipts/receipt.json && tail -200 target/receipts/receipt.json || true
+          echo "=== failed gates ==="
+          python3 - <<'PY' || true
+          import json, pathlib
+          p = pathlib.Path("target/receipts/receipt.json")
+          if not p.exists(): raise SystemExit(0)
+          data = json.loads(p.read_text())
+          for g in data.get("gates", []):
+              if str(g.get("status", "")).lower() not in ("passed", "pass", "skipped"):
+                  print(f"- {g.get('name', '<unnamed>')}: {g.get('status', '')} (exit {g.get('exit_code', '?')})")
+          PY
 
       - name: Gate summary
         if: always()
@@ -102,7 +118,7 @@ jobs:
 
       - name: Set PR status (check)
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const fs = require('fs');

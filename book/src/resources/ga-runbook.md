@@ -1,6 +1,8 @@
-# GA Release Runbook for perl-lsp v0.8.3
+# Release Runbook for perl-lsp v0.8.3 (Historical)
 
-This document provides the exact steps to release perl-lsp v0.8.3 to general availability.
+> **Note**: This is a historical document from the v0.8.3 release cycle. The project is currently at v0.9.1 (Initial Public Alpha). A formal Stability Contract and release process will be established for v0.15.0.
+
+This document provided the exact steps used to release perl-lsp v0.8.3.
 
 ## Pre-flight Checklist
 
@@ -207,15 +209,15 @@ Update the auto-generated release notes with:
 ```markdown
 # perl-lsp v0.8.3
 
-## 🎉 Major Release: Production-Ready LSP
+## perl-lsp v0.8.3
 
-This release marks perl-lsp as production-ready with 100% edge case coverage and enterprise-grade features.
+This release included comprehensive edge case coverage and broad feature support.
 
 ### ✨ Highlights
 
 - **100% Edge Case Coverage**: All 141 edge cases passing
 - **35+ IDE Features**: Complete LSP implementation
-- **World-Class Performance**: 1-150µs parsing times
+- **Performance**: 1-150us parsing times
 - **Property-Based Testing**: Comprehensive test infrastructure
 - **Multi-Platform**: Linux, macOS, Windows (x86_64 & ARM64)
 
@@ -235,7 +237,7 @@ brew install perl-lsp
 
 ### 📊 Performance
 
-- Parser: 4-19x faster than C implementation
+- Parser: Sub-millisecond parse times
 - LSP: <50ms response time for all operations
 - Memory: Efficient caching with LRU eviction
 
@@ -265,7 +267,7 @@ Twitter/X:
 🚀 perl-lsp v0.8.3 is here!
 
 ✅ 100% Perl edge case coverage
-⚡ 4-19x faster than C parser
+Sub-millisecond parse times
 🛠️ 35+ IDE features
 🧪 Property-based testing
 
@@ -276,13 +278,13 @@ Install: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp
 
 Reddit (r/perl):
 ```
-Title: perl-lsp v0.8.3 Released - Production-Ready Perl Language Server
+Title: perl-lsp v0.8.3 Released - Perl Language Server
 
-We're excited to announce perl-lsp v0.8.3, a production-ready Perl language server with 100% edge case coverage!
+perl-lsp v0.8.3 is a Perl language server with comprehensive edge case coverage.
 
 Features:
 - 35+ IDE features (completion, hover, refactoring, etc.)
-- 4-19x faster than the C implementation
+- Sub-millisecond parse times
 - Works with VSCode, Neovim, Emacs, and any LSP editor
 - Zero C dependencies
 

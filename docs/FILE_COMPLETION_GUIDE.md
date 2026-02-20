@@ -2,7 +2,7 @@
 
 ## Overview
 
-The LSP server includes comprehensive file path completion with enterprise-grade security and performance features.
+The LSP server includes comprehensive file path completion with security and performance features.
 
 ## Core Architecture
 

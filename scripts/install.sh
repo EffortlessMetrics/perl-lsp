@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Perl LSP installer script
-# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 REPO="${REPO:-EffortlessMetrics/perl-lsp}"
 NAME="perl-lsp"
@@ -179,6 +179,16 @@ chmod +x "$INSTALL_DIR/$NAME"
 
 success "Installed $NAME to $INSTALL_DIR/$NAME"
 
+# Install perl-dap if present in the archive (ships since v0.9.1)
+if [ -f "perl-dap" ]; then
+    if [ -f "$INSTALL_DIR/perl-dap" ]; then
+        rm "$INSTALL_DIR/perl-dap"
+    fi
+    cp "perl-dap" "$INSTALL_DIR/perl-dap"
+    chmod +x "$INSTALL_DIR/perl-dap"
+    success "Installed perl-dap to $INSTALL_DIR/perl-dap"
+fi
+
 # Verify installation
 if "$INSTALL_DIR/$NAME" --version >/dev/null 2>&1; then
     VERSION_OUTPUT=$("$INSTALL_DIR/$NAME" --version 2>&1 || true)
@@ -220,5 +230,8 @@ echo "To get started with Perl LSP:"
 echo "  • VS Code: Install the Perl LSP extension from the marketplace"
 echo "  • Neovim: Add perl-lsp to your LSP config"
 echo "  • Other editors: Configure to use '$INSTALL_DIR/$NAME --stdio'"
+if [ -f "$INSTALL_DIR/perl-dap" ]; then
+    echo "  • Debug adapter: perl-dap is available at '$INSTALL_DIR/perl-dap'"
+fi
 echo ""
 echo "For more information: https://github.com/$REPO"

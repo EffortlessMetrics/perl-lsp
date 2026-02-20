@@ -80,7 +80,7 @@ Routing
    - Check incremental parsing efficiency maintains <1ms update requirements
    - Ensure LSP protocol compliance and workspace navigation accuracy (98% reference coverage)
    - Validate dual indexing strategy for both qualified (`Package::function`) and bare (`function`) patterns
-   - Check parser performance standards (4-19x faster than legacy, 1-150μs per file)
+   - Check parser performance standards (fast, 1-150μs per file)
    - Verify Tree-sitter integration and highlight validation when applicable
    - Validate enterprise security measures for LSP protocol handling and file completion
 
@@ -91,7 +91,7 @@ Routing
    tests: cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30
    parsing: ~100% Perl syntax coverage; incremental: <1ms updates with 70-99% node reuse
    lsp: ~89% features functional; workspace navigation: 98% reference coverage
-   benchmarks: parsing: 1-150μs per file; 4-19x faster than legacy parsers
+   benchmarks: parsing: 1-150μs per file; fast parsers
    ```
 
 8. **Gate Enforcement**: Ensure `generative:gate:format = pass` and `generative:gate:clippy = pass` before proceeding. If any quality checks fail:
@@ -127,7 +127,7 @@ Escalate to code-refiner for:
 - Complex parser algorithm changes affecting incremental parsing efficiency
 - LSP protocol architecture modifications requiring structural changes
 - Cross-file workspace navigation discrepancies requiring dual indexing updates
-- Performance regression issues affecting parser benchmarks (4-19x standards)
+- Performance regression issues affecting parser benchmarks (performance standards)
 - Major API design decisions impacting Perl LSP workspace architecture
 - Tree-sitter integration compatibility issues requiring structural changes
 - Complex parser correctness issues affecting ~100% Perl syntax coverage
@@ -189,6 +189,6 @@ Receipts
 - `generative:gate:format = pass` and `generative:gate:clippy = pass` for all workspace crates
 - No debug artifacts remain in parser or LSP protocol code
 - Commits follow Perl LSP semantic conventions with clear parser/LSP context
-- Parser performance standards maintained (4-19x faster, <1ms incremental updates)
+- Parser performance standards maintained (fast, <1ms incremental updates)
 - Code ready for PR preparation with dual indexing and workspace navigation preserved
 - All diff changes validated against Perl LSP Language Server Protocol development standards

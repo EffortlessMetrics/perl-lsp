@@ -78,28 +78,31 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
 
-      - name: Build binary
+      - name: Build binaries
         shell: bash
         run: |
+          BUILD_CMD="cargo"
           if [[ "${{ matrix.use_cross }}" == "true" ]]; then
-            cross build --locked --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
-          else
-            cargo build --locked --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
+            BUILD_CMD="cross"
           fi
+          $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perl-lsp --bin perl-lsp
+          $BUILD_CMD build --locked --release --target ${{ matrix.target }} -p perl-dap --bin perl-dap
 
-      - name: Package binary
+      - name: Package binaries
         shell: bash
         run: |
           NAME="perl-lsp"
           TARGET="${{ matrix.target }}"
           VERSION="${{ github.event.inputs.tag || github.ref_name }}"
 
-          # Binary name with .exe for Windows
+          # Binary names with .exe for Windows
           if [[ "$TARGET" == *"windows"* ]]; then
             BIN="${NAME}.exe"
+            DAP_BIN="perl-dap.exe"
             EXT=".zip"
           else
             BIN="${NAME}"
+            DAP_BIN="perl-dap"
             EXT=".tar.gz"
           fi
 
@@ -107,12 +110,14 @@ jobs:
           PKG_NAME="${NAME}-${VERSION}-${TARGET}"
           mkdir -p "${PKG_NAME}"
 
-          # Copy binary
+          # Copy binaries
           cp "target/${TARGET}/release/${BIN}" "${PKG_NAME}/"
+          cp "target/${TARGET}/release/${DAP_BIN}" "${PKG_NAME}/"
 
-          # Strip binary on Unix
+          # Strip binaries on Unix
           if [[ "$TARGET" != *"windows"* ]] && [[ "${{ matrix.use_cross }}" != "true" ]]; then
             strip "${PKG_NAME}/${BIN}" 2>/dev/null || true
+            strip "${PKG_NAME}/${DAP_BIN}" 2>/dev/null || true
           fi
 
           # Copy additional files
@@ -121,9 +126,9 @@ jobs:
           # Generate checksums
           cd "${PKG_NAME}"
           if command -v sha256sum >/dev/null; then
-            sha256sum "${BIN}" > SHA256SUMS.txt
+            sha256sum "${BIN}" "${DAP_BIN}" > SHA256SUMS.txt
           else
-            shasum -a 256 "${BIN}" > SHA256SUMS.txt
+            shasum -a 256 "${BIN}" "${DAP_BIN}" > SHA256SUMS.txt
           fi
           cd ..
 
@@ -147,7 +152,7 @@ jobs:
   release:
     name: Create Release
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
@@ -165,12 +170,20 @@ jobs:
         run: cargo install cargo-release --locked
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
 
       - name: Display structure of downloaded files
         run: ls -R artifacts
+
+      - name: Generate consolidated SHA256SUMS
+        run: |
+          cd artifacts
+          find . -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec sha256sum {} \; | \
+            sed 's|  \./[^/]*/|  |' > ../SHA256SUMS
+          cd ..
+          cat SHA256SUMS
 
       - name: Generate release notes
         id: release_notes
@@ -195,14 +208,16 @@ jobs:
 
           ### Checksums
 
-          All binaries include SHA256 checksums in their packages.
+          Verify downloads with the consolidated \`SHA256SUMS\` file attached to this release.
           EOF
           cat release_notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*/*
+          files: |
+            artifacts/*/*
+            SHA256SUMS
           body_path: release_notes.md
           draft: false
           prerelease: false

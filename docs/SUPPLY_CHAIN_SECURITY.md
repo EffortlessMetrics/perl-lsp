@@ -4,7 +4,7 @@ This document describes the supply chain security measures implemented for perl-
 
 ## Overview
 
-Perl-lsp implements enterprise-grade supply chain security practices to ensure transparency, integrity, and verifiability of all released artifacts. This includes:
+Perl-lsp implements comprehensive supply chain security practices to ensure transparency, integrity, and verifiability of all released artifacts. This includes:
 
 - **SBOM (Software Bill of Materials)**: Complete dependency inventory in industry-standard formats
 - **SLSA Provenance**: Cryptographic attestation of build provenance (SLSA Level 2)

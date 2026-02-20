@@ -37,8 +37,8 @@ cargo clippy --workspace -- -D warnings               # Linting with zero warnin
 cargo build -p perl-lsp --release                      # LSP server binary
 cargo build -p perl-parser --release                   # Parser library
 
-# Adaptive threading for LSP tests (PR #140 Revolutionary Performance)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp            # Adaptive threading (5000x faster)
+# Adaptive threading for LSP tests (PR #140)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp            # Adaptive threading
 
 # Advanced validation
 cd xtask && cargo run highlight                        # Tree-sitter highlight integration

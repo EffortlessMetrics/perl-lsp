@@ -4,9 +4,11 @@
 [![codecov](https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/perl-lsp)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
-A fast, native Perl language server and parser toolkit written in Rust.
+A fast, native Perl language server and parser toolkit written in Rust. Currently in **initial public alpha**.
 
-Provides LSP support for editors (VS Code, Neovim, Emacs, etc.), a Debug Adapter Protocol server, and a standalone Perl parser library.
+## Origins
+
+This project started in Q2 2025. It was initially forked on July 15th, 2025 from [tree-sitter-perl-better](https://github.com/tree-sitter-perl/tree-sitter-perl) (the current official tree-sitter repository). Since then, it has evolved into a native Rust implementation focused on LSP and DAP performance.
 
 ## Features
 
@@ -114,7 +116,7 @@ cargo clippy --workspace --lib && cargo fmt --all
 nix develop -c just ci-gate
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [CLAUDE.md](CLAUDE.md) for the full command reference.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for our community standards, [SUPPORT.md](SUPPORT.md) for how to get help, and [CLAUDE.md](CLAUDE.md) for the full command reference.
 
 ## Documentation
 

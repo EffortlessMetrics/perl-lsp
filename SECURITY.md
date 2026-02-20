@@ -6,12 +6,12 @@ We actively support security updates for the following versions:
 
 | Version | Supported          | Status |
 | ------- | ------------------ | -------- |
-| 1.0.x   | :white_check_mark: | **Current Production** |
-| 0.9.x   | :white_check_mark: | Legacy Support |
+| 0.9.x   | :white_check_mark: | **Current Release** |
+| 0.8.x   | :white_check_mark: | Legacy Support |
 | 0.8.x   | :white_check_mark: | Legacy Support |
 | < 0.8   | :x:                | End of Life |
 
-**v1.0 Security Guarantee**: As a production-ready release, v1.0.x receives priority security support with rapid response times and comprehensive security validation.
+**v0.9.x Security Guarantee**: v0.9.x receives priority security support with rapid response times and comprehensive security validation.
 
 ## Reporting a Vulnerability
 
@@ -69,9 +69,9 @@ This project uses comprehensive automated security scanning:
 - **Mutation Testing**: Security-focused mutation hardening with 87% quality score
 - **Fuzz Testing**: Property-based testing with crash detection and AST invariant validation
 
-### v1.0 Security Features
+### v0.9.x Security Features
 
-- **Enterprise-Grade Security**: Path traversal prevention, input validation, secure defaults
+- **Comprehensive Security**: Path traversal prevention, input validation, secure defaults
 - **UTF-16 Boundary Protection**: Fixes for symmetric position conversion vulnerabilities
 - **Process Isolation**: Safe execution environment for untrusted Perl code
 - **Memory Safety**: Full Rust memory safety guarantees with minimal unsafe code
@@ -104,7 +104,7 @@ When using perl-lsp:
 
 ## Known Security Considerations
 
-### v1.0 Production Security
+### v0.9.x Security
 
 **Parser Security**:
 - **Input validation**: The parser handles arbitrary Perl code with bounded recursion to prevent stack overflow
@@ -114,14 +114,14 @@ When using perl-lsp:
 
 **LSP Server Security**:
 - **IPC security**: LSP communication over stdio/pipes only (no network exposure by default)
-- **File system access**: Limited to workspace roots configured by client with enterprise-grade validation
+- **File system access**: Limited to workspace roots configured by client with comprehensive validation
 - **Path traversal prevention**: All file paths validated and canonicalized with UTF-16 boundary protection
 - **Resource limits**: Memory and CPU usage bounded with <1MB overhead and adaptive timeout scaling
 
 **DAP Debugging Security**:
 - **Process isolation**: Debug adapter runs in isolated environment with controlled process spawning
 - **Cross-platform security**: Windows, macOS, Linux, WSL with automatic path normalization
-- **Secure defaults**: Safe configuration with enterprise security defaults
+- **Secure defaults**: Safe configuration with security-focused defaults
 - **Performance security**: <50ms operations with resource monitoring
 
 **Dependency Security**:
@@ -132,14 +132,13 @@ When using perl-lsp:
 
 ## Security Updates
 
-### v1.0 Security Update Process
+### v0.9.x Security Update Process
 
 **Notification Channels**:
 1. **GitHub Security Advisories**: https://github.com/EffortlessMetrics/perl-lsp/security/advisories
 2. **GitHub Releases**: Tagged with `[SECURITY]` prefix
 3. **CHANGELOG.md**: With `[SECURITY]` section and CVE references
 4. **RustSec Database**: Critical vulnerabilities reported to RustSec
-5. **Enterprise Notifications**: Direct notifications for enterprise customers
 
 **Update Procedure**:
 
@@ -155,16 +154,14 @@ cargo build --release
 
 # Verify version and security status
 perl-lsp --version
-perl-lsp --security-status  # New v1.0 feature
+perl-lsp --security-status
 ```
 
 **Emergency Security Updates**:
 
 For critical vulnerabilities (CVSS 9.0+):
 - **Hotfix Release**: Within 48 hours of disclosure
-- **Automated Updates**: Recommended for production systems
 - **Security Advisory**: Detailed impact analysis and mitigation
-- **Enterprise Support**: Priority patches for enterprise customers
 
 ## Security Tooling
 
@@ -204,7 +201,7 @@ We track vulnerabilities in:
 
 We currently **do not** have a formal bug bounty program. However:
 
-- **v1.0 Security Focus**: Increased attention to security vulnerabilities in production release
+- **v0.9.x Security Focus**: Increased attention to security vulnerabilities
 - **Responsible Disclosure**: We appreciate and reward responsible disclosure
 - **Security Credits**: We provide credit in security advisories and annual security report
 - **Contributor Recognition**: Security researchers recognized in our contributors page and release notes
@@ -220,26 +217,20 @@ We currently **do not** have a formal bug bounty program. However:
 
 - **Security email**: See maintainers in `Cargo.toml`
 - **General inquiries**: Open a non-security issue on GitHub
-- **Commercial support**: Contact maintainers for enterprise support options
 - **Security Discord**: Private channel for security researchers (request access via security email)
 
-## v1.0 Security Commitments
+## v0.9.x Security Commitments
 
-### Production Security Guarantees
-
-As a v1.0 production release, we commit to:
+We target the following for v0.9.x:
 
 - **48-hour response** for critical security vulnerabilities
 - **Comprehensive security testing** for all releases
-- **Regular security audits** with third-party validation
 - **Transparent disclosure** with coordinated vulnerability disclosure
-- **Enterprise-grade support** for security issues
 
 ### Security Roadmap
 
-- **Q1 2026**: Formal security audit by third-party firm
 - **Q2 2026**: Enhanced fuzz testing infrastructure
-- **Q3 2026**: Security hardening for enterprise deployments
+- **Q3 2026**: Security hardening
 - **Q4 2026**: Formal bug bounty program establishment
 
 ## Acknowledgments
@@ -254,6 +245,5 @@ We thank the following security researchers and contributors:
 
 ---
 
-**Last Updated**: 2026-02-13 (v1.0 Release)
-**Next Review**: 2026-05-13 (quarterly review)
-**Security Status**: Production Ready ✅
+**Last Updated**: 2026-02-20 (v0.9.1 Release)
+**Next Review**: 2026-05-20 (quarterly review)

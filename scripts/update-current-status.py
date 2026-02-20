@@ -315,7 +315,7 @@ def _update_current_status() -> str:
         "931ns incremental parsing"
     )
     production_status = (
-        "- **Production Status**: LSP server production-ready (`just ci-gate` passing)"
+        "- **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     )
     lsp_target = f"**Target**: 93%+ LSP coverage (from current {ux_percent}%)"
 

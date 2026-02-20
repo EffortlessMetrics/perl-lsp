@@ -1,7 +1,7 @@
 name: Publish to crates.io
 
 # Automated publishing of all crates to crates.io
-# Uses sequential tier-based publishing to respect dependency ordering
+# Uses cargo metadata for correct dependency-order publishing
 
 on:
   release:
@@ -26,30 +26,89 @@ env:
   CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
 jobs:
-  # Tier 1: Leaf crates (no internal dependencies)
-  tier1:
-    name: "Tier 1: ${{ matrix.crate }}"
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        crate:
-          - perl-token
-          - perl-quote
-          - perl-edit
-          - perl-builtins
-          - perl-regex
-          - perl-pragma
-          - perl-heredoc
-          - perl-error
-          - perl-position-tracking
-          - perl-symbol-types
-          - perl-diagnostics-codes
-          - perl-uri
-          - perl-dap-eval
-          - perl-dap-stack
-          - perl-dap-variables
+  # Step 1: Compute topological publish order from cargo metadata
+  compute-order:
+    name: Compute publish order
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      crates: ${{ steps.topo.outputs.crates }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compute topological order
+        id: topo
+        run: |
+          cargo metadata --format-version=1 --no-deps | python3 -c '
+          import json, sys
+
+          meta = json.load(sys.stdin)
+          workspace_members = set(meta["workspace_members"])
+
+          # Build name -> package info map (only workspace members)
+          packages = {}
+          for pkg in meta["packages"]:
+              if pkg["id"] in workspace_members:
+                  packages[pkg["name"]] = pkg
+
+          # Build dependency graph (only internal deps)
+          deps = {}
+          for name, pkg in packages.items():
+              deps[name] = set()
+              for dep in pkg["dependencies"]:
+                  if dep["name"] in packages and dep.get("kind") != "dev":
+                      deps[name].add(dep["name"])
+
+          # Topological sort (Kahn algorithm)
+          in_degree = {name: len(d) for name, d in deps.items()}
+          queue = sorted([n for n, d in in_degree.items() if d == 0])
+          order = []
+
+          while queue:
+              node = queue.pop(0)
+              order.append(node)
+              for name, d in deps.items():
+                  if node in d:
+                      in_degree[name] -= 1
+                      if in_degree[name] == 0:
+                          queue.append(name)
+                          queue.sort()
+
+          if len(order) != len(packages):
+              print("ERROR: cycle detected in dependency graph", file=sys.stderr)
+              sys.exit(1)
+
+          # Filter to only crates that should be published (have publish != [])
+          result = []
+          for name in order:
+              pkg = packages[name]
+              publish = pkg.get("publish")
+              if publish is not None and len(publish) == 0:
+                  continue
+              result.append({"name": name, "version": pkg["version"]})
+
+          print(json.dumps(result))
+          ' > /tmp/crates.json
+
+          echo "crates=$(cat /tmp/crates.json)" >> $GITHUB_OUTPUT
+          echo "Publish order ($(cat /tmp/crates.json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))') crates):"
+          cat /tmp/crates.json | python3 -c '
+          import json, sys
+          for i, c in enumerate(json.load(sys.stdin), 1):
+              print(f"  {i}. {c[\"name\"]}@{c[\"version\"]}")
+          '
+
+  # Step 2: Publish crates sequentially in dependency order
+  publish:
+    name: Publish crates
+    needs: compute-order
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
 
     steps:
       - name: Checkout
@@ -64,549 +123,102 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
 
-      - name: Get crate version
-        id: verify
+      - name: Publish all crates
+        env:
+          CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
-          CRATE_VERSION=$(grep '^version' crates/${{ matrix.crate }}/Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "crate_version=${CRATE_VERSION}" >> $GITHUB_OUTPUT
-          echo "Crate: ${{ matrix.crate }}@${CRATE_VERSION}"
+          TOTAL=$(echo "$CRATES_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
+          echo "Publishing $TOTAL crates..."
 
-      - name: Check if already published
-        id: check_published
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "already_published=true" >> $GITHUB_OUTPUT
-            echo "::warning::Version $VERSION of ${{ matrix.crate }} is already published"
-          else
-            echo "already_published=false" >> $GITHUB_OUTPUT
-          fi
+          CRATES_LIST="$(mktemp)"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
+          while read -r CRATE VERSION; do
+            echo ""
+            echo "===> $CRATE@$VERSION"
 
-      - name: Publish crate
-        if: steps.check_published.outputs.already_published != 'true'
-        run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "Dry run: would publish ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish --dry-run -p ${{ matrix.crate }}
-          else
-            echo "Publishing ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish -p ${{ matrix.crate }}
-          fi
-
-      - name: Wait for index
-        if: steps.check_published.outputs.already_published != 'true' && github.event.inputs.dry_run != 'true'
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "Version indexed successfully"
-              break
+            # Check if already published
+            SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
+            if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
+              echo "::warning::$CRATE@$VERSION already published, skipping"
+              continue
             fi
-            echo "Waiting for index... ($i/30)"
-            sleep 10
-          done
 
-  # Tier 2: Single-level internal dependencies
-  tier2:
-    name: "Tier 2: ${{ matrix.crate }}"
-    needs: tier1
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        crate:
-          - perl-ast
-          - perl-lexer
-          - perl-symbol-table
-          - perl-lsp-protocol
-          - perl-tokenizer
-          - perl-dap-breakpoint
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-
-      - name: Get crate version
-        id: verify
-        run: |
-          CRATE_VERSION=$(grep '^version' crates/${{ matrix.crate }}/Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "crate_version=${CRATE_VERSION}" >> $GITHUB_OUTPUT
-          echo "Crate: ${{ matrix.crate }}@${CRATE_VERSION}"
-
-      - name: Check if already published
-        id: check_published
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "already_published=true" >> $GITHUB_OUTPUT
-            echo "::warning::Version $VERSION of ${{ matrix.crate }} is already published"
-          else
-            echo "already_published=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Publish crate
-        if: steps.check_published.outputs.already_published != 'true'
-        run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "Dry run: would publish ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish --dry-run -p ${{ matrix.crate }}
-          else
-            echo "Publishing ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish -p ${{ matrix.crate }}
-          fi
-
-      - name: Wait for index
-        if: steps.check_published.outputs.already_published != 'true' && github.event.inputs.dry_run != 'true'
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "Version indexed successfully"
-              break
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "Dry run: cargo package -p $CRATE"
+              cargo package -p "$CRATE"
+              continue
             fi
-            echo "Waiting for index... ($i/30)"
-            sleep 10
-          done
 
-  # Tier 3: Two-level internal dependencies
-  tier3:
-    name: "Tier 3: ${{ matrix.crate }}"
-    needs: tier2
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        crate:
-          - perl-parser-core
-          - perl-lsp-transport
-          - perl-lsp-tooling
-          - perl-tdd-support
+            # Publish with retries
+            PUBLISHED=false
+            for attempt in 1 2 3; do
+              echo "Attempt $attempt/3: cargo publish -p $CRATE"
+              if cargo publish -p "$CRATE" 2>&1; then
+                PUBLISHED=true
+                break
+              fi
+              echo "Attempt $attempt failed, waiting 30s..."
+              sleep 30
+            done
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-
-      - name: Get crate version
-        id: verify
-        run: |
-          CRATE_VERSION=$(grep '^version' crates/${{ matrix.crate }}/Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "crate_version=${CRATE_VERSION}" >> $GITHUB_OUTPUT
-          echo "Crate: ${{ matrix.crate }}@${CRATE_VERSION}"
-
-      - name: Check if already published
-        id: check_published
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "already_published=true" >> $GITHUB_OUTPUT
-            echo "::warning::Version $VERSION of ${{ matrix.crate }} is already published"
-          else
-            echo "already_published=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Publish crate
-        if: steps.check_published.outputs.already_published != 'true'
-        run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "Dry run: would publish ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish --dry-run -p ${{ matrix.crate }}
-          else
-            echo "Publishing ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish -p ${{ matrix.crate }}
-          fi
-
-      - name: Wait for index
-        if: steps.check_published.outputs.already_published != 'true' && github.event.inputs.dry_run != 'true'
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "Version indexed successfully"
-              break
+            if [ "$PUBLISHED" != "true" ]; then
+              echo "::error::Failed to publish $CRATE after 3 attempts"
+              exit 1
             fi
-            echo "Waiting for index... ($i/30)"
-            sleep 10
-          done
 
-  # Tier 4: Provider and analysis crates
-  tier4:
-    name: "Tier 4: ${{ matrix.crate }}"
-    needs: tier3
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        crate:
-          - perl-parser-pest
-          - perl-lsp-formatting
-          - perl-lsp-diagnostics
-          - perl-lsp-semantic-tokens
-          - perl-lsp-inlay-hints
-          - perl-lsp-navigation
-          - perl-lsp-completion
-          - perl-lsp-code-actions
-          - perl-lsp-rename
-          - perl-semantic-analyzer
-          - perl-workspace-index
-          - perl-incremental-parsing
+            # Wait for crates.io sparse index to pick up the new version
+            echo "Waiting for $CRATE@$VERSION to appear in index..."
+            for i in $(seq 1 30); do
+              SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
+              if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
+                echo "$CRATE@$VERSION indexed successfully"
+                break
+              fi
+              if [ "$i" = "30" ]; then
+                echo "::warning::$CRATE@$VERSION not yet indexed after 5 min, proceeding anyway"
+              fi
+              sleep 10
+            done
+          done < "$CRATES_LIST"
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+          echo ""
+          echo "All crates processed."
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-
-      - name: Get crate version
-        id: verify
-        run: |
-          CRATE_VERSION=$(grep '^version' crates/${{ matrix.crate }}/Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "crate_version=${CRATE_VERSION}" >> $GITHUB_OUTPUT
-          echo "Crate: ${{ matrix.crate }}@${CRATE_VERSION}"
-
-      - name: Check if already published
-        id: check_published
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "already_published=true" >> $GITHUB_OUTPUT
-            echo "::warning::Version $VERSION of ${{ matrix.crate }} is already published"
-          else
-            echo "already_published=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Publish crate
-        if: steps.check_published.outputs.already_published != 'true'
-        run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "Dry run: would publish ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish --dry-run -p ${{ matrix.crate }}
-          else
-            echo "Publishing ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish -p ${{ matrix.crate }}
-          fi
-
-      - name: Wait for index
-        if: steps.check_published.outputs.already_published != 'true' && github.event.inputs.dry_run != 'true'
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "Version indexed successfully"
-              break
-            fi
-            echo "Waiting for index... ($i/30)"
-            sleep 10
-          done
-
-  # Tier 5: Refactoring and providers
-  tier5:
-    name: "Tier 5: ${{ matrix.crate }}"
-    needs: tier4
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        crate:
-          - perl-refactoring
-          - perl-lsp-providers
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-
-      - name: Get crate version
-        id: verify
-        run: |
-          CRATE_VERSION=$(grep '^version' crates/${{ matrix.crate }}/Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "crate_version=${CRATE_VERSION}" >> $GITHUB_OUTPUT
-          echo "Crate: ${{ matrix.crate }}@${CRATE_VERSION}"
-
-      - name: Check if already published
-        id: check_published
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "already_published=true" >> $GITHUB_OUTPUT
-            echo "::warning::Version $VERSION of ${{ matrix.crate }} is already published"
-          else
-            echo "already_published=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Publish crate
-        if: steps.check_published.outputs.already_published != 'true'
-        run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "Dry run: would publish ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish --dry-run -p ${{ matrix.crate }}
-          else
-            echo "Publishing ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish -p ${{ matrix.crate }}
-          fi
-
-      - name: Wait for index
-        if: steps.check_published.outputs.already_published != 'true' && github.event.inputs.dry_run != 'true'
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "Version indexed successfully"
-              break
-            fi
-            echo "Waiting for index... ($i/30)"
-            sleep 10
-          done
-
-  # Tier 6: Top-level parser and corpus
-  tier6:
-    name: "Tier 6: ${{ matrix.crate }}"
-    needs: tier5
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        crate:
-          - perl-parser
-          - perl-corpus
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-
-      - name: Get crate version
-        id: verify
-        run: |
-          CRATE_VERSION=$(grep '^version' crates/${{ matrix.crate }}/Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "crate_version=${CRATE_VERSION}" >> $GITHUB_OUTPUT
-          echo "Crate: ${{ matrix.crate }}@${CRATE_VERSION}"
-
-      - name: Check if already published
-        id: check_published
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "already_published=true" >> $GITHUB_OUTPUT
-            echo "::warning::Version $VERSION of ${{ matrix.crate }} is already published"
-          else
-            echo "already_published=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Publish crate
-        if: steps.check_published.outputs.already_published != 'true'
-        run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "Dry run: would publish ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish --dry-run -p ${{ matrix.crate }}
-          else
-            echo "Publishing ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish -p ${{ matrix.crate }}
-          fi
-
-      - name: Wait for index
-        if: steps.check_published.outputs.already_published != 'true' && github.event.inputs.dry_run != 'true'
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "Version indexed successfully"
-              break
-            fi
-            echo "Waiting for index... ($i/30)"
-            sleep 10
-          done
-
-  # Tier 7: Application binaries (depend on everything above)
-  tier7:
-    name: "Tier 7: ${{ matrix.crate }}"
-    needs: tier6
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        crate:
-          - perl-lsp
-          - perl-dap
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          cache-all-crates: true
-
-      - name: Get crate version
-        id: verify
-        run: |
-          CRATE_VERSION=$(grep '^version' crates/${{ matrix.crate }}/Cargo.toml | head -1 | cut -d'"' -f2)
-          echo "crate_version=${CRATE_VERSION}" >> $GITHUB_OUTPUT
-          echo "Crate: ${{ matrix.crate }}@${CRATE_VERSION}"
-
-      - name: Check if already published
-        id: check_published
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "already_published=true" >> $GITHUB_OUTPUT
-            echo "::warning::Version $VERSION of ${{ matrix.crate }} is already published"
-          else
-            echo "already_published=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Publish crate
-        if: steps.check_published.outputs.already_published != 'true'
-        run: |
-          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            echo "Dry run: would publish ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish --dry-run -p ${{ matrix.crate }}
-          else
-            echo "Publishing ${{ matrix.crate }}@${{ steps.verify.outputs.crate_version }}"
-            cargo publish -p ${{ matrix.crate }}
-          fi
-
-      - name: Wait for index
-        if: steps.check_published.outputs.already_published != 'true' && github.event.inputs.dry_run != 'true'
-        run: |
-          VERSION="${{ steps.verify.outputs.crate_version }}"
-          for i in {1..30}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://crates.io/api/v1/crates/${{ matrix.crate }}/${VERSION}")
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "Version indexed successfully"
-              break
-            fi
-            echo "Waiting for index... ($i/30)"
-            sleep 10
-          done
-
-  # Final verification that all crates are published
-  verify-all:
-    name: Verify All Crates Published
-    needs: tier7
-    runs-on: ubuntu-latest
+  # Step 3: Verify all crates are published
+  verify:
+    name: Verify all crates published
+    needs: [compute-order, publish]
+    if: github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Verify all crates
+        env:
+          CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
         run: |
           FAILED=""
           TOTAL=0
           OK=0
 
-          for crate in \
-            perl-token perl-quote perl-edit perl-builtins perl-regex perl-pragma \
-            perl-heredoc perl-error perl-position-tracking perl-symbol-types \
-            perl-diagnostics-codes perl-uri perl-dap-eval perl-dap-stack \
-            perl-dap-variables \
-            perl-ast perl-lexer perl-symbol-table perl-lsp-protocol perl-tokenizer \
-            perl-dap-breakpoint \
-            perl-parser-core perl-lsp-transport perl-lsp-tooling perl-tdd-support \
-            perl-parser-pest perl-lsp-formatting perl-lsp-diagnostics \
-            perl-lsp-semantic-tokens perl-lsp-inlay-hints perl-lsp-navigation \
-            perl-lsp-completion perl-lsp-code-actions perl-lsp-rename \
-            perl-semantic-analyzer perl-workspace-index perl-incremental-parsing \
-            perl-refactoring perl-lsp-providers \
-            perl-parser perl-corpus \
-            perl-lsp perl-dap; do
-
+          CRATES_LIST="$(mktemp)"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
+          while read -r CRATE VERSION; do
             TOTAL=$((TOTAL + 1))
 
-            # Read each crate's actual version from its Cargo.toml
-            CRATE_VERSION=$(grep '^version' crates/${crate}/Cargo.toml | head -1 | cut -d'"' -f2)
-
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "https://crates.io/api/v1/crates/${crate}/${CRATE_VERSION}")
-
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "✅ ${crate}@${CRATE_VERSION}"
+            SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
+            if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
+              echo "OK $CRATE@$VERSION"
               OK=$((OK + 1))
             else
-              echo "❌ ${crate}@${CRATE_VERSION} (HTTP ${HTTP_CODE})"
-              FAILED="${FAILED} ${crate}"
+              echo "FAIL $CRATE@$VERSION"
+              FAILED="${FAILED} ${CRATE}"
             fi
-          done
+          done < "$CRATES_LIST"
 
           echo ""
           echo "Published: ${OK}/${TOTAL}"
@@ -617,8 +229,11 @@ jobs:
           fi
 
       - name: Summary
+        env:
+          CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
         run: |
+          COUNT=$(echo "$CRATES_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
           echo "## All Crates Published Successfully :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Crates**: 43 published across 7 tiers" >> $GITHUB_STEP_SUMMARY
+          echo "- **Crates**: ${COUNT} published in topological order" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: All crates verified on crates.io" >> $GITHUB_STEP_SUMMARY

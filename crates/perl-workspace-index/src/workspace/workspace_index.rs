@@ -1864,13 +1864,24 @@ impl WorkspaceIndex {
     /// ```
     pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
         let mut locations = Vec::new();
+        let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
         let files = self.files.read();
 
         for (_uri_key, file_index) in files.iter() {
             // Search for exact match first
             if let Some(refs) = file_index.references.get(symbol_name) {
                 for reference in refs {
-                    locations.push(Location { uri: reference.uri.clone(), range: reference.range });
+                    let key = (
+                        reference.uri.clone(),
+                        reference.range.start.line,
+                        reference.range.start.column,
+                        reference.range.end.line,
+                        reference.range.end.column,
+                    );
+                    if seen.insert(key) {
+                        locations
+                            .push(Location { uri: reference.uri.clone(), range: reference.range });
+                    }
                 }
             }
 
@@ -1879,8 +1890,19 @@ impl WorkspaceIndex {
                 let bare_name = &symbol_name[idx + 2..];
                 if let Some(refs) = file_index.references.get(bare_name) {
                     for reference in refs {
-                        locations
-                            .push(Location { uri: reference.uri.clone(), range: reference.range });
+                        let key = (
+                            reference.uri.clone(),
+                            reference.range.start.line,
+                            reference.range.start.column,
+                            reference.range.end.line,
+                            reference.range.end.column,
+                        );
+                        if seen.insert(key) {
+                            locations.push(Location {
+                                uri: reference.uri.clone(),
+                                range: reference.range,
+                            });
+                        }
                     }
                 }
             }
@@ -1896,22 +1918,38 @@ impl WorkspaceIndex {
     /// "N references" where N means call sites, not the definition itself.
     pub fn count_usages(&self, symbol_name: &str) -> usize {
         let files = self.files.read();
-        let mut count = 0;
+        let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
 
         for (_uri_key, file_index) in files.iter() {
             if let Some(refs) = file_index.references.get(symbol_name) {
-                count += refs.iter().filter(|r| r.kind != ReferenceKind::Definition).count();
+                for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
+                    seen.insert((
+                        r.uri.clone(),
+                        r.range.start.line,
+                        r.range.start.column,
+                        r.range.end.line,
+                        r.range.end.column,
+                    ));
+                }
             }
 
             if let Some(idx) = symbol_name.rfind("::") {
                 let bare_name = &symbol_name[idx + 2..];
                 if let Some(refs) = file_index.references.get(bare_name) {
-                    count += refs.iter().filter(|r| r.kind != ReferenceKind::Definition).count();
+                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
+                        seen.insert((
+                            r.uri.clone(),
+                            r.range.start.line,
+                            r.range.start.column,
+                            r.range.end.line,
+                            r.range.end.column,
+                        ));
+                    }
                 }
             }
         }
 
-        count
+        seen.len()
     }
 
     /// Find the definition of a symbol
@@ -3764,5 +3802,54 @@ sub hello {
         let symbols2 = index.file_symbols(uri.as_str());
         // Symbols should still be found, but content hash differs so it re-indexed
         assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+    }
+
+    #[test]
+    fn test_count_usages_no_double_counting_for_qualified_calls() {
+        let index = WorkspaceIndex::new();
+
+        // File 1: defines Utils::process_data
+        let uri1 = "file:///lib/Utils.pm";
+        let code1 = r#"
+package Utils;
+
+sub process_data {
+    return 1;
+}
+"#;
+        must(index.index_file(must(url::Url::parse(uri1)), code1.to_string()));
+
+        // File 2: calls Utils::process_data (qualified call)
+        let uri2 = "file:///app.pl";
+        let code2 = r#"
+use Utils;
+Utils::process_data();
+Utils::process_data();
+"#;
+        must(index.index_file(must(url::Url::parse(uri2)), code2.to_string()));
+
+        // Each qualified call is stored under both "process_data" and "Utils::process_data"
+        // by the dual indexing strategy. count_usages should deduplicate so we get the
+        // actual number of call sites, not double.
+        let count = index.count_usages("Utils::process_data");
+
+        // We expect exactly 2 usage sites (the two calls in app.pl),
+        // not 4 (which would be the double-counted result).
+        assert_eq!(
+            count, 2,
+            "count_usages should not double-count qualified calls, got {} (expected 2)",
+            count
+        );
+
+        // find_references should also deduplicate
+        let refs = index.find_references("Utils::process_data");
+        let non_def_refs: Vec<_> =
+            refs.iter().filter(|loc| loc.uri != "file:///lib/Utils.pm").collect();
+        assert_eq!(
+            non_def_refs.len(),
+            2,
+            "find_references should not return duplicates for qualified calls, got {} non-def refs",
+            non_def_refs.len()
+        );
     }
 }

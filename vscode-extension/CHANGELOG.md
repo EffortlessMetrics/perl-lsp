@@ -29,7 +29,7 @@ All notable changes to the Perl Language Server extension will be documented in 
 ### Parser Features
 - Uses tree-sitter-perl v3 parser
 - 100% Perl 5 syntax coverage
-- 4-19x performance improvement over v1
+- 1-150μs typical parse times
 - Handles all edge cases including:
   - Arbitrary regex delimiters (m!pattern!)
   - Indirect object syntax

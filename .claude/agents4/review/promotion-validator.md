@@ -61,7 +61,7 @@ cargo test -p perl-parser    # Parser library tests
 cargo test -p perl-lsp       # LSP server integration tests
 cargo test -p perl-lexer     # Lexer tests
 
-# Thread-optimized LSP testing (Revolutionary performance improvements)
+# Thread-optimized LSP testing (adaptive threading)
 RUST_TEST_THREADS=2 cargo test -p perl-lsp
 
 # Quarantine check

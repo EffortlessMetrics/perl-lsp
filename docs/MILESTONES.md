@@ -21,7 +21,7 @@
 
 ---
 
-### v1.0.0: Boring Promises
+### v0.9.1: Boring Promises
 
 **Status**: Queued (after v0.9.1)
 **Goal**: Freeze the surfaces you're willing to support.
@@ -30,16 +30,16 @@
 - v0.9.1 released and stable
 - Capability snapshot + docs aligned
 - Benchmarks published under benchmarks/results/
-- Upgrade notes exist from v0.8.x → v1.0
+- Upgrade notes exist from v0.8.x → v0.9.x
 
 **Deliverables**:
-1. Stability statement (what "GA-lock" means)
+1. Stability statement (versioning rules)
 2. Packaging stance (binaries, crates, platforms)
 3. Benchmark publication
 
 **Effort Estimate**: ~40-80 hours after v0.9.1
 
-[View all v1.0.0 issues](https://github.com/EffortlessMetrics/perl-lsp/milestone/2)
+[View all v0.9.1 issues](https://github.com/EffortlessMetrics/perl-lsp/milestone/2)
 
 ---
 
@@ -55,7 +55,7 @@
 - `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1
 - README / CURRENT_STATUS / ROADMAP agree (no unbacked claims)
 - `cargo install --path crates/perl-lsp` works cleanly
-- GA-lock capability snapshot remains stable
+- Capability snapshot remains stable
 - Release notes match advertised capabilities
 
 **Historical blockers**:
@@ -91,8 +91,8 @@ gh issue list --label "phase:stability"
 # All v0.9.0 issues
 gh issue list --milestone "v0.9.0: Semantic-Ready"
 
-# All v1.0.0 issues
-gh issue list --milestone "v1.0.0: Boring Promises"
+# All v0.9.1 issues
+gh issue list --milestone "v0.9.1: Boring Promises"
 ```
 
 ---

@@ -55,7 +55,7 @@ members = [
 
 exclude = [
     "tree-sitter-perl",           # Legacy C parser
-    "tree-sitter-perl-c",         # Requires libclang-dev (bindgen)
+    "crates/tree-sitter-perl-c",  # Requires libclang-dev (bindgen)
     "fuzz",                       # cargo-fuzz specialized requirements
     "archive",                    # Archived legacy components
 ]
@@ -66,7 +66,7 @@ version = "0.9.1"
 edition = "2024"
 rust-version = "1.92"
 authors = ["Steven Zimmerman, CPA <git@effortlesssteven.com>"]
-description = "Production-ready Perl parser, LSP, and DAP ecosystem in Rust"
+description = "Perl parser, LSP, and DAP ecosystem in Rust"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/EffortlessMetrics/perl-lsp"
 homepage = "https://github.com/EffortlessMetrics/perl-lsp"

@@ -53,7 +53,7 @@ docs/                    # Documentation following Diátaxis framework
     └── (other benchmark docs)
 
 crates/              # Workspace structure
-├── perl-parser/      # Main parser library (production-ready recursive descent)
+├── perl-parser/      # Main parser library (recursive descent)
 ├── perl-lsp/         # LSP server binary with CLI interface
 ├── perl-lexer/       # Context-aware tokenizer with Unicode support
 ├── perl-corpus/      # Comprehensive test corpus with property-based testing

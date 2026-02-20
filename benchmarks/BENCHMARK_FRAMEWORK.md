@@ -6,9 +6,9 @@ This document describes the benchmark framework for the Perl LSP project, includ
 
 The Perl LSP benchmark suite measures parsing and LSP server performance to:
 - Establish performance baselines for regression detection
-- Validate 4-19x speed improvements over legacy implementations
+- Validate speed improvements over legacy implementations
 - Track incremental parsing efficiency and node reuse rates
-- Measure LSP server revolutionary performance targets
+- Measure LSP server performance targets
 
 ## Machine Configuration
 
@@ -42,12 +42,12 @@ cargo bench -p perl-parser --bench parser_benchmark
 
 **Save baseline:**
 ```bash
-cargo bench -p perl-parser --bench parser_benchmark -- --save-baseline v1.0-baseline
+cargo bench -p perl-parser --bench parser_benchmark -- --save-baseline v0.9.x-baseline
 ```
 
 **Compare against baseline:**
 ```bash
-cargo bench -p perl-parser --bench parser_benchmark -- --baseline v1.0-baseline
+cargo bench -p perl-parser --bench parser_benchmark -- --baseline v0.9.x-baseline
 ```
 
 ### 2. Incremental Parsing Benchmarks (`perl-parser`)
@@ -74,13 +74,13 @@ cargo bench -p perl-parser --bench incremental_benchmark --features incremental
 
 **Test-based benchmarks:**
 ```bash
-# LSP behavioral tests (revolutionary 0.31s target)
+# LSP behavioral tests (0.31s target)
 RUST_TEST_THREADS=2 cargo test --release -p perl-lsp --test behavioral
 
-# LSP user story tests (revolutionary 0.32s target)
+# LSP user story tests (0.32s target)
 RUST_TEST_THREADS=2 cargo test --release -p perl-lsp --test user_stories
 
-# Workspace navigation tests (230x improvement, 0.26s target)
+# Workspace navigation tests (0.26s target)
 RUST_TEST_THREADS=2 cargo test --release -p perl-lsp --test workspace_navigation
 ```
 
@@ -114,13 +114,13 @@ cargo bench -p perl-lsp --bench rope_performance_benchmark
 ## Performance Baseline Targets
 
 ### Parser Performance
-- **Target**: 1-150μs parsing time (4-19x faster than legacy)
+- **Target**: 1-150μs parsing time
 - **Baseline**: Established in `/benchmarks/results/`
 
 ### LSP Server Performance
-- **Behavioral Tests**: <1s execution (revolutionary 0.31s target, 5000x improvement)
-- **User Story Tests**: <1s execution (revolutionary 0.32s target, 4700x improvement)
-- **Workspace Navigation**: <1s individual tests (230x improvement, 0.26s target)
+- **Behavioral Tests**: <1s execution (0.31s target)
+- **User Story Tests**: <1s execution (0.32s target)
+- **Workspace Navigation**: <1s individual tests (0.26s target)
 
 ### Incremental Parsing
 - **Updates**: <1ms with 70-99% node reuse efficiency
@@ -268,12 +268,12 @@ cargo bench -p perl-parser -- --save-baseline current
 - [Criterion.rs User Guide](https://bheisler.github.io/criterion.rs/book/)
 - [Perl LSP Performance Requirements](../docs/ROADMAP.md)
 - [Parser Performance Targets](../crates/perl-parser/README.md)
-- [LSP Revolutionary Performance](../docs/LSP_IMPLEMENTATION_GUIDE.md)
+- [LSP Performance](../docs/LSP_IMPLEMENTATION_GUIDE.md)
 
 ## History
 
 - **2026-01-22**: Initial benchmark framework documentation
-- **v1.0 baseline**: Established on AMD Ryzen 9 9950X3D system
+- **v0.9.x baseline**: Established on AMD Ryzen 9 9950X3D system
 
 ---
 

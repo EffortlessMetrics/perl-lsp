@@ -397,7 +397,7 @@ You've successfully learned how to:
 ✅ Validate performance and reliability characteristics
 ✅ Combine with code actions for complete development support
 
-The executeCommand functionality elevates Perl LSP server capabilities from ~89% to ~91% functional coverage, providing enterprise-grade development tools while maintaining the revolutionary performance improvements of the Perl LSP ecosystem.
+The executeCommand functionality elevates Perl LSP server capabilities from ~89% to ~91% functional coverage, providing development tools while maintaining the performance improvements of the Perl LSP ecosystem.
 
 **Total Tutorial Time**: ~30-45 minutes for complete walkthrough
 **Key Achievement**: Comprehensive understanding of executeCommand integration and practical usage patterns

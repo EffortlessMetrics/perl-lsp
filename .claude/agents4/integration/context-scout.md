@@ -117,8 +117,8 @@ Route analysis to appropriate specialist agents based on context findings:
 - **Thread Safety & Concurrency**: Adaptive threading configuration analysis, thread-aware timeout scaling (200-500ms LSP harness), concurrency management patterns, and CI environment optimization
 - **Parser Robustness Context**: Comprehensive fuzz testing results, mutation hardening implementation (60%+ score improvement), quote parser safety validation, and AST invariant compliance
 - **Integration Point Mapping**: Component interaction analysis across Parser → LSP → Lexer → Corpus → Tree-sitter → xtask
-- **Documentation & Testing**: API documentation compliance assessment, comprehensive test coverage validation, and enterprise-grade quality assurance patterns
-- **Performance Optimization**: Adaptive threading benefits, timeout scaling effectiveness, and thread-constrained environment performance improvements (5000x+ gains)
+- **Documentation & Testing**: API documentation compliance assessment, comprehensive test coverage validation, and quality assurance patterns
+- **Performance Optimization**: Adaptive threading benefits, timeout scaling effectiveness, and thread-constrained environment performance improvements (significant gains)
 
 **Perl LSP Context Exploration Commands:**
 - **Workspace Indexing Analysis**: `cargo test -p perl-parser test_cross_file_definition` and `cargo test -p perl-parser test_cross_file_references` for dual indexing pattern validation

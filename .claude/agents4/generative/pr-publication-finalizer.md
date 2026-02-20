@@ -79,7 +79,7 @@ Routing
    - Check for proper GitHub-native labels (`flow:generative`, `state:ready`, optional `topic:<short>`, `needs:<short>`)
    - Validate Issue Ledger → PR Ledger migration is complete with single authoritative comment
    - Ensure feature implementation includes proper parser accuracy validation (~100% Perl syntax coverage) and LSP protocol compliance
-   - Verify Perl parsing performance requirements (4-19x faster parsing, <1ms incremental updates) and TDD compliance are documented
+   - Verify Perl parsing performance requirements (fast parsing, <1ms incremental updates) and TDD compliance are documented
    - Check Tree-sitter integration compatibility and highlight validation
    - Confirm workspace navigation and cross-file reference resolution integration
    - Validate API documentation standards compliance with comprehensive quality gates
@@ -111,7 +111,7 @@ When ALL verification checks pass:
    - Verification results summary for Perl LSP workspace
    - PR details (number, branch, commit hash, parser/LSP feature context)
    - Perl parsing spec and LSP protocol contract validation confirmation
-   - Parser accuracy (~100% Perl syntax coverage) and performance (4-19x faster parsing) verification
+   - Parser accuracy (~100% Perl syntax coverage) and performance (fast parsing) verification
    - Tree-sitter highlight integration and workspace navigation validation results
    - Cargo toolchain integration with package-specific testing (`-p perl-parser`, `-p perl-lsp`)
    - API documentation standards compliance and comprehensive quality gates validation
@@ -163,7 +163,7 @@ If ANY verification check fails:
 - Ensure routing messages are precise and actionable with Perl LSP-specific context
 - Confirm all verification steps completed before declaring ready state
 - Validate Perl parsing accuracy (~100% syntax coverage) and TDD compliance are met
-- Verify parser performance (4-19x faster parsing, <1ms incremental updates) and LSP protocol compliance testing is complete
+- Verify parser performance (fast parsing, <1ms incremental updates) and LSP protocol compliance testing is complete
 - Check Tree-sitter integration compatibility and highlight validation
 - Confirm cargo workspace automation and proper package-specific testing
 - Validate workspace navigation and cross-file reference resolution integration
@@ -180,7 +180,7 @@ If ANY verification check fails:
 **Perl LSP-Specific Final Validations:**
 
 - Confirm feature branch implements Perl parsing and LSP protocol requirements with proper TDD compliance
-- Verify parser accuracy (~100% Perl syntax coverage) and performance targets (4-19x faster parsing, <1ms incremental updates)
+- Verify parser accuracy (~100% Perl syntax coverage) and performance targets (fast parsing, <1ms incremental updates)
 - Validate cargo toolchain integration with package-specific testing (`-p perl-parser`, `-p perl-lsp`, `-p perl-lexer`)
 - Ensure feature implementation covers realistic Perl parsing scenarios with comprehensive test corpus validation
 - Check that documentation reflects Perl LSP architecture and Rust workspace patterns in `docs/` following Diátaxis framework
@@ -193,7 +193,7 @@ If ANY verification check fails:
 - Validate comprehensive substitution operator parsing with all delimiter styles and balanced delimiters
 - Check enhanced builtin function parsing with deterministic map/grep/sort function handling
 - Verify API documentation standards compliance with comprehensive quality gates and missing documentation warnings tracking
-- Validate workspace refactoring capabilities with enterprise-grade symbol renaming and import optimization
+- Validate workspace refactoring capabilities with comprehensive symbol renaming and import optimization
 - Confirm proper error handling and graceful degradation patterns throughout the parser and LSP stack
 
 **Check Run Integration:**

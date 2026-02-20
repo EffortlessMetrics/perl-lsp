@@ -69,17 +69,17 @@
 
 ---
 
-## Next (v1.0.0 Readiness) - TODOs
+## Next (v0.9.1 Readiness) - TODOs
 
-- [ ] Stability statement (GA-lock + versioning rules)
+- [ ] Stability statement (versioning rules)
 - [ ] Packaging stance (what ships; supported platforms)
 - [ ] Benchmark receipts committed under `benchmarks/results/`
-- [ ] Upgrade notes from v0.8.x -> v1.0
+- [ ] Upgrade notes from v0.8.x -> v0.9.x
 - [ ] Merge-gate work unblocked by CI pipeline cleanup (#211 -> #210)
 
 ---
 
-## Later (Post v1.0)
+## Later (Post v0.9.x)
 
 - [ ] Native DAP completeness: attach, variables/evaluate, safe eval
 - [ ] Full LSP 3.18 compliance audit vs spec (add missing catalog items to `features.toml`)

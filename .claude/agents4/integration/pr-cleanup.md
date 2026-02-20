@@ -103,7 +103,7 @@ After completing fixes, route according to the Perl LSP Integrative flow using N
 
 **Perl LSP-Specific Cleanup Patterns:**
 - **Import cleanup**: Systematically remove `#[allow(unused_imports)]` annotations when imports become used
-- **Dead code cleanup**: Remove `#[allow(dead_code)]` annotations when code becomes production-ready
+- **Dead code cleanup**: Remove `#[allow(dead_code)]` annotations when code becomes stable
 - **Error handling migration**: Convert panic-prone `expect()` calls to proper Result<T, anyhow::Error> patterns when safe
 - **Performance optimization**: Apply efficient patterns for Perl parsing (avoid excessive cloning, use rope operations, optimize incremental parsing)
 - **Package-specific testing**: Fix test isolation for perl-parser, perl-lsp, perl-lexer crates

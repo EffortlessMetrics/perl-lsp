@@ -90,7 +90,7 @@ The parser should:
 **Pros**:
 - Comprehensive solution covering all cases
 - Clear error messages for invalid branch reset groups
-- Production-ready approach
+- Recommended approach
 
 **Cons**:
 - More complex implementation

@@ -8,7 +8,7 @@
 > - **Explanation sections**: Understanding DAP architecture and design
 
 **Status**: Native adapter CLI (launch + attach + stepping + evaluate) + BridgeAdapter guide (Perl::LanguageServer)
-**Version**: 1.0.0
+**Version**: 0.9.x
 **Date**: 2025-10-04
 
 **Note**: The `perl-dap` CLI runs the native adapter (launch + attach) and does not require Perl::LanguageServer. The bridge adapter steps below apply only if you are running the BridgeAdapter library or Perl::LanguageServer DAP directly.
@@ -630,4 +630,4 @@ The CLI already uses the native adapter with launch + attach + evaluation suppor
 ---
 
 **Version History**:
-- **1.0.0** (2025-10-04): Phase 1 bridge implementation with Perl::LanguageServer DAP support
+- **0.9.x** (2025-10-04): Phase 1 bridge implementation with Perl::LanguageServer DAP support

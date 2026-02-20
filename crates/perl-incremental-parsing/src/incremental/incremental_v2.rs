@@ -1,4 +1,4 @@
-//! Production-ready incremental parsing implementation with comprehensive tree reuse
+//! Incremental parsing implementation with comprehensive tree reuse
 //!
 //! This module provides a high-performance incremental parser that achieves significant
 //! performance improvements over full parsing through intelligent AST node reuse.

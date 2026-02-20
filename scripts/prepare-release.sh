@@ -76,7 +76,7 @@ else
 - 100% edge case coverage
 
 ### 🚀 Performance
-- Parser: 4-19x faster than v1
+- Parser: 1-150us parsing (native Rust)
 - Incremental updates: 0.005ms average
 - LSP response: <50ms for all operations
 

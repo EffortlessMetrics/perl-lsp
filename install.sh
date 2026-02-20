@@ -1,6 +1,6 @@
 #!/bin/bash
 # Perl LSP installer for Linux and macOS
-# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 set -e
 

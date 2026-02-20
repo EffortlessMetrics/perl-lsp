@@ -99,7 +99,7 @@ The parser should:
 **Pros**:
 - Handles multiple heredocs correctly
 - Clear error messages for unmatched terminators
-- Production-ready approach
+- Recommended approach
 
 **Cons**:
 - More complex implementation
@@ -163,7 +163,7 @@ fn parse_heredocs() -> Node {
 **Rationale**:
 - Handles multiple heredocs correctly
 - Provides clear error messages
-- Production-ready approach
+- Recommended approach
 - Aligns with Perl's heredoc behavior
 
 **Implementation Steps**:

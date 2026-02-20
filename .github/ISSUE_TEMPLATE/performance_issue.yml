@@ -1,0 +1,99 @@
+name: Performance Issue
+description: Report a performance problem or regression
+labels: ["performance", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Help us track down performance issues. The more data you can provide, the faster we can fix it.
+
+  - type: dropdown
+    id: type
+    attributes:
+      label: Performance Issue Type
+      options:
+        - Slow response time (completion, hover, etc.)
+        - High CPU usage
+        - High memory usage
+        - Startup time regression
+        - Large file handling
+        - Workspace indexing slowness
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the performance problem.
+    validations:
+      required: true
+
+  - type: input
+    id: baseline
+    attributes:
+      label: Expected Performance
+      description: What response time or resource usage do you expect?
+      placeholder: "Completion in <100ms, <200MB RAM"
+
+  - type: input
+    id: actual
+    attributes:
+      label: Actual Performance
+      description: What are you actually seeing?
+      placeholder: "Completion takes 2-3s, 1.5GB RAM after 30 min"
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce the issue?
+      value: |
+        1. Open a workspace with ...
+        2. Open a file with approximately ... lines
+        3. Trigger ... (completion, hover, etc.)
+        4. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: file-info
+    attributes:
+      label: File / Workspace Details
+      description: Approximate size of files and workspace involved.
+      placeholder: |
+        - File size: ~5,000 lines
+        - Workspace: ~200 .pm files
+        - Uses Moose/Moo: yes
+
+  - type: textarea
+    id: profiling
+    attributes:
+      label: Profiling Data
+      description: If you have profiling data, flame graphs, or `time` output, attach them here.
+
+  - type: input
+    id: version
+    attributes:
+      label: perl-lsp Version
+      placeholder: "0.9.1"
+    validations:
+      required: true
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      placeholder: "8-core CPU, 16GB RAM, SSD"
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "Ubuntu 24.04, macOS 15, etc."
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context

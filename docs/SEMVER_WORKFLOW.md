@@ -44,9 +44,9 @@ just semver-report
 cat target/semver-reports/breaking-changes.json
 
 # Verify version bump is appropriate
-# - Breaking changes → major version (1.0 → 2.0)
-# - Additive changes → minor version (1.0 → 1.1)
-# - Bug fixes → patch version (1.0.0 → 1.0.1)
+# - Breaking changes → major version (0.9 → 1.0)
+# - Additive changes → minor version (0.9 → 0.10)
+# - Bug fixes → patch version (0.9.x → 0.9.2)
 ```
 
 ---
@@ -279,7 +279,7 @@ pub fn parse_with_config(source: &str, config: &Config) -> Result<Node>
 ```
 
 **SemVer check:** ✅ Passes (additive change)
-**Version bump:** Minor (1.0 → 1.1)
+**Version bump:** Minor (0.9 → 0.10)
 **Action:** None required
 
 ---
@@ -296,7 +296,7 @@ pub fn parse(source: &str, config: &Config) -> Result<Node>
 ```
 
 **SemVer check:** ❌ Fails (breaking change)
-**Version bump:** Major (1.0 → 2.0)
+**Version bump:** Major (0.9 → 1.0)
 **Action:**
 1. Document breaking change in PR
 2. Add to CHANGELOG under "Breaking Changes"
@@ -325,7 +325,7 @@ pub fn parse_with_config(source: &str, config: &Config) -> Result<Node>
 ```
 
 **SemVer check:** ❌ Fails (breaking change)
-**Version bump:** Major (1.0 → 2.0)
+**Version bump:** Major (0.9 → 1.0)
 **Action:**
 1. Ensure deprecation was present for ≥6 months
 2. Document removal in CHANGELOG
@@ -347,7 +347,7 @@ pub enum NodeKind {
 ```
 
 **SemVer check:** ✅ Passes (if `#[non_exhaustive]`)
-**Version bump:** Minor (1.0 → 1.1)
+**Version bump:** Minor (0.9 → 0.10)
 **Action:** Ensure enum has `#[non_exhaustive]` attribute
 
 **Without `#[non_exhaustive]`:**
@@ -377,15 +377,15 @@ match kind {
 
 | Change Type | Example | Version Bump |
 |-------------|---------|--------------|
-| **Breaking** | Remove pub fn | 1.0.0 → 2.0.0 |
-| **Breaking** | Change signature | 1.0.0 → 2.0.0 |
-| **Breaking** | Remove enum variant | 1.0.0 → 2.0.0 |
-| **Additive** | Add pub fn | 1.0.0 → 1.1.0 |
-| **Additive** | Add enum variant (`#[non_exhaustive]`) | 1.0.0 → 1.1.0 |
-| **Additive** | Deprecate item | 1.0.0 → 1.1.0 |
-| **Patch** | Fix bug (same behavior) | 1.0.0 → 1.0.1 |
-| **Patch** | Documentation only | 1.0.0 → 1.0.1 |
-| **Patch** | Internal refactoring | 1.0.0 → 1.0.1 |
+| **Breaking** | Remove pub fn | 0.9.x → 2.0.0 |
+| **Breaking** | Change signature | 0.9.x → 2.0.0 |
+| **Breaking** | Remove enum variant | 0.9.x → 2.0.0 |
+| **Additive** | Add pub fn | 0.9.x → 0.10.0 |
+| **Additive** | Add enum variant (`#[non_exhaustive]`) | 0.9.x → 0.10.0 |
+| **Additive** | Deprecate item | 0.9.x → 0.10.0 |
+| **Patch** | Fix bug (same behavior) | 0.9.x → 0.9.2 |
+| **Patch** | Documentation only | 0.9.x → 0.9.2 |
+| **Patch** | Internal refactoring | 0.9.x → 0.9.2 |
 
 ### Deprecation Timeline
 
@@ -496,8 +496,8 @@ Before cutting a release:
 After release:
 ```bash
 # Tag release
-git tag -a v1.1.0 -m "Release v1.1.0"
-git push origin v1.1.0
+git tag -a v0.10.0 -m "Release v0.10.0"
+git push origin v0.10.0
 
 # This tag becomes the baseline for next semver check
 ```

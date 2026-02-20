@@ -2,7 +2,7 @@
 
 ## Overview
 
-The tree-sitter-perl project provides comprehensive workspace refactoring capabilities through the `WorkspaceRefactor` system introduced in v0.8.8. This guide covers all aspects of using and extending these enterprise-grade cross-file refactoring operations.
+The tree-sitter-perl project provides comprehensive workspace refactoring capabilities through the `WorkspaceRefactor` system introduced in v0.8.8. This guide covers all aspects of using and extending these cross-file refactoring operations.
 
 ## Table of Contents
 

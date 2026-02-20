@@ -1,9 +1,9 @@
 # AGENTS.md
-<!-- Labels: governance:validated, parser:comprehensive-improvements, performance:preserved, security:maintained, docs:enterprise-grade -->
+<!-- Labels: governance:validated, parser:comprehensive-improvements, performance:preserved, security:maintained -->
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.9.1 - Semantic Ready (Issue #188 Phase 1, 2, 3 Complete) + Production Hardening
+**Latest Release**: v0.9.1 - Initial Public Alpha
 
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
@@ -15,18 +15,18 @@ This repository contains **six published crates** forming a complete Perl develo
 
 1. **perl-parser** (`/crates/perl-parser/`) ⭐ **MAIN CRATE**
    - Native recursive descent parser with ~100% Perl 5 syntax coverage
-   - 4-19x faster than legacy implementations (1-150 µs parsing)
-   - Production-ready incremental parsing with <1ms LSP updates
-   - Enterprise-grade workspace refactoring and cross-file analysis
+   - Fast native parsing (1-150 µs typical)
+   - Incremental parsing with <1ms LSP updates
+   - Workspace refactoring and cross-file analysis
    - **Enhanced Dual Indexing Strategy**: Functions indexed under both qualified (`Package::function`) and bare (`function`) names for 98% reference coverage
    - **Enhanced Builtin Function Parsing**: Deterministic parsing of map/grep/sort functions with {} blocks
    - **Test-Driven Development Support**: Auto-detecting TestGenerator with AST-based expectation inference
-   - **Comprehensive API Documentation**: Enterprise-grade documentation infrastructure with `#![warn(missing_docs)]` enforcement (PR #160/SPEC-149)
+   - **Comprehensive API Documentation**: Documentation infrastructure with `#![warn(missing_docs)]` enforcement (PR #160/SPEC-149)
    - **Advanced Parser Robustness**: Comprehensive fuzz testing and mutation hardening with 12 test suites (60%+ mutation score improvement)
    - **Documentation Quality Enforcement**: 12 acceptance criteria validation with automated quality gates and progress tracking
 
 2. **perl-lsp** (`/crates/perl-lsp/`) ⭐ **LSP BINARY**
-   - Standalone Language Server binary with production-grade CLI
+   - Standalone Language Server binary with full-featured CLI
    - Enhanced cross-file navigation with dual pattern matching
    - Works with VSCode, Neovim, Emacs, and all LSP-compatible editors
 
@@ -34,7 +34,7 @@ This repository contains **six published crates** forming a complete Perl develo
    - Debug Adapter Protocol implementation for Perl debugging
    - **Phase 1 Bridge**: Proxies to Perl::LanguageServer for immediate debugging capability
    - Cross-platform support (Windows, macOS, Linux, WSL) with automatic path normalization
-   - Enterprise security with path validation, process isolation, and safe defaults
+   - Security with path validation, process isolation, and safe defaults
    - Performance optimized (<50ms breakpoint operations, <100ms step/continue)
    - Comprehensive testing (71/71 tests passing with mutation hardening)
 
@@ -58,7 +58,7 @@ This repository contains **six published crates** forming a complete Perl develo
 cargo install perl-lsp
 
 # Or quick install (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 ### Usage
@@ -97,8 +97,8 @@ cargo test                               # All tests (robust across environments
 cargo test -p perl-parser               # Parser library tests
 cargo test -p perl-lsp                  # LSP server integration tests
 
-# Revolutionary LSP testing with controlled threading (PR #140 Enhanced)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2  # Achieves 5000x performance improvements
+# LSP testing with controlled threading (PR #140 Enhanced)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 
 cargo test -p perl-parser --test lsp_comprehensive_e2e_test -- --nocapture # Full E2E test
 cargo test -p perl-parser --test builtin_empty_blocks_test   # Builtin function parsing tests
@@ -122,14 +122,14 @@ cargo test -p perl-parser test_cross_file_references      # Enhanced dual-patter
 
 # Mutation testing and test quality validation (PR #153)
 cargo test -p perl-parser --test mutation_hardening_tests # Comprehensive mutation survivor elimination (147 tests)
-# Note: Enterprise-grade mutation testing with 87% quality score, UTF-16 security bug discovery
+# Note: Mutation testing with 87% quality score, UTF-16 security bug discovery
 # Real vulnerability detection: symmetric position conversion issues, boundary arithmetic problems
 # Improved mutation score from ~70% to 87% with comprehensive edge case coverage and security hardening
 
-# Revolutionary thread-constrained environment testing (PR #140 optimizations)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp              # Adaptive timeout with 5000x improvements
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.31s (was 1560s+)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
+# Thread-constrained environment testing (PR #140 optimizations)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp              # Adaptive timeout
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.31s
+RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 0.32s
 RUST_TEST_THREADS=1 cargo test --test lsp_comprehensive_e2e_test # Maximum reliability mode
 
 # API Documentation Quality Testing ⭐ **NEW: PR #160 (SPEC-149)**
@@ -222,7 +222,7 @@ cargo run highlight -- --path ../crates/tree-sitter-perl/test/highlight  # Custo
 - **xtask**: `/xtask/` - advanced testing tools (excluded from workspace to maintain clean builds)
 
 ### Parser Versions
-- **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, 4-19x faster, production incremental parsing, enhanced builtin function support
+- **v3 (Native)** ⭐ **RECOMMENDED**: ~100% coverage, fast native parsing, incremental parsing, enhanced builtin function support
 - **v2 (Pest)**: ~99.996% coverage, legacy but stable
 - **v1 (C-based)**: ~95% coverage, benchmarking only (now uses unified Rust scanner via delegation)
 
@@ -240,14 +240,14 @@ The scanner implementation uses a unified Rust-based architecture with C compati
 
 - **~100% Perl Syntax Coverage**: Handles all modern Perl constructs including edge cases, enhanced builtin function parsing, **comprehensive substitution operator parsing** (`s///` with complete pattern/replacement/modifier support, all delimiter styles including balanced delimiters `s{}{}, s[][], s<>`, and alternative delimiters `s///, s###, s|||`), and full delimiter support (including single-quote substitution delimiters: `s'pattern'replacement'`)
 - **Enhanced Cross-File Navigation**: Dual indexing strategy with 98% reference coverage for both qualified (`Package::function`) and bare (`function`) function calls
-- **Advanced Workspace Indexing**: Revolutionary dual pattern matching for comprehensive LSP navigation across package boundaries
-- **Production-Ready LSP Server**: ~91% of LSP features functional with comprehensive workspace support, enhanced reference resolution, and integrated executeCommand capabilities
+- **Advanced Workspace Indexing**: Dual pattern matching for comprehensive LSP navigation across package boundaries
+- **LSP Server**: ~91% of LSP features functional with comprehensive workspace support, enhanced reference resolution, and integrated executeCommand capabilities
 - **Debug Adapter Protocol (DAP) Support** ⭐ **NEW**: Full debugging support in VS Code and DAP-compatible editors with Phase 1 bridge to Perl::LanguageServer
 - **Adaptive Threading Configuration**: Thread-aware timeout scaling and concurrency management for CI environments
 - **Enhanced Incremental Parsing**: <1ms updates with 70-99% node reuse efficiency
 - **Unicode-Safe**: Full Unicode identifier and emoji support with proper UTF-8/UTF-16 handling, **symmetric position conversion** (PR #153)
-- **Enterprise Security**: Path traversal prevention, file completion safeguards, **UTF-16 boundary vulnerability fixes** (PR #153)
-- **Cross-file Workspace Refactoring**: Enterprise-grade symbol renaming, module extraction, comprehensive import optimization
+- **Security**: Path traversal prevention, file completion safeguards, **UTF-16 boundary vulnerability fixes** (PR #153)
+- **Cross-file Workspace Refactoring**: Symbol renaming, module extraction, comprehensive import optimization
 - **Import Optimization**: Remove unused imports, add missing imports, remove duplicates, sort alphabetically
 
 ## Documentation
@@ -259,7 +259,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[LSP Development Guide](docs/LSP_DEVELOPMENT_GUIDE.md)** - Source threading and comment extraction
 - **[Crate Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md)** - System design and components
 - **[Incremental Parsing Guide](docs/INCREMENTAL_PARSING_GUIDE.md)** - Performance and implementation
-- **[Security Development Guide](docs/SECURITY_DEVELOPMENT_GUIDE.md)** - Enterprise security practices
+- **[Security Development Guide](docs/SECURITY_DEVELOPMENT_GUIDE.md)** - Security practices
 - **[Benchmark Framework](docs/benchmarks/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
 
 ### Specialized Guides
@@ -270,7 +270,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 - **[Source Threading](docs/SOURCE_THREADING_GUIDE.md)** - Comment documentation extraction
 - **[Position Tracking](docs/POSITION_TRACKING_GUIDE.md)** - UTF-16/UTF-8 position mapping, **symmetric conversion fixes** (PR #153)
 - **[Variable Resolution](docs/VARIABLE_RESOLUTION_GUIDE.md)** - Scope analysis system
-- **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Enterprise-secure path completion
+- **[File Completion Guide](docs/FILE_COMPLETION_GUIDE.md)** - Secure path completion
 - **[Import Optimizer Guide](docs/IMPORT_OPTIMIZER_GUIDE.md)** - Comprehensive import analysis and optimization
 - **[Threading Configuration Guide](docs/THREADING_CONFIGURATION_GUIDE.md)** - Adaptive threading and concurrency management
 - **[Error Handling Strategy Guide](docs/ERROR_HANDLING_STRATEGY.md)** - Defensive programming principles and guard condition patterns (Issue #178)
@@ -285,7 +285,7 @@ See the [docs/](docs/) directory for comprehensive documentation:
 ## Development Guidelines
 
 ### Choosing a Crate
-1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, production-ready
+1. **For Any Perl Parsing**: Use `perl-parser` - fast, comprehensive Perl 5 coverage
 2. **For IDE Integration**: Install `perl-lsp` - includes full LSP feature support
 3. **For Debugging**: Use `perl-dap` - Debug Adapter Protocol support for VS Code and DAP-compatible editors
 4. **For Testing Parsers**: Use `perl-corpus` for comprehensive test suite
@@ -321,7 +321,7 @@ cargo test -p perl-parser --test missing_docs_ac_tests -- test_missing_docs_warn
 
 ### Enhanced LSP Cancellation System ⭐ **NEW: PR #165**
 
-**Comprehensive enhanced LSP cancellation infrastructure is now implemented** addressing Issue #48 with production-ready capabilities:
+**Comprehensive enhanced LSP cancellation infrastructure is now implemented** addressing Issue #48:
 
 ```bash
 # Validate Enhanced LSP Cancellation System
@@ -457,26 +457,26 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 4. **Performance Awareness**: Maintain search performance despite dual lookups through efficient indexing
 5. **Backward Compatibility**: Ensure existing code continues to work with enhanced indexing
 
-## Current Status (0.8.8 + PR #140 Revolutionary Performance + PR #160 API Documentation & Parser Robustness [SPEC-149] + Issue #207 DAP Support + Issue #188 Semantic Phase 1, 2, 3 Complete)
+## Current Status (v0.9.1 - Initial Public Alpha)
 
-✅ **Revolutionary Production Ready** (~85-90% "fully working" for core goal):
+✅ **Alpha Release** (~85-90% "fully working" for core goal):
 - High test pass rate across all components (run `just health` or `cargo test --workspace --lib` for current metrics)
 - **Parser & Heredocs/Statement Tracker**: ~95-100% complete - functionally done for v1
 - **Semantic Analyzer Phase 1, 2, 3**: ✅ Complete (100% AST node coverage with all handlers implemented)
 - **LSP textDocument/definition**: ~90-95% done (implementation + tests complete)
-- **Revolutionary Performance Achievements (PR #140)**:
-  - **LSP behavioral tests**: 1560s+ → 0.31s (**5000x faster**, Transformational)
-  - **User story tests**: 1500s+ → 0.32s (**4700x faster**, Revolutionary)
-  - **Individual workspace tests**: 60s+ → 0.26s (**230x faster**, Game-changing)
-  - **Overall test suite**: 60s+ → <10s (**6x faster**, Production-ready)
-  - **CI reliability**: 100% pass rate (was ~55% due to timeouts)
+- **Performance Achievements (PR #140)**:
+  - **LSP behavioral tests**: 0.31s
+  - **User story tests**: 0.32s
+  - **Individual workspace tests**: 0.26s
+  - **Overall test suite**: <10s
+  - **CI reliability**: 100% pass rate
 - Zero clippy warnings, consistent formatting
-- Enterprise-grade LSP server with comprehensive features
-- Production-stable incremental parsing with statistical validation
+- Comprehensive LSP server with broad feature coverage
+- Incremental parsing with statistical validation
 - **API Documentation Infrastructure (PR #160/SPEC-149)**:
   - **Successfully Implemented**: `#![warn(missing_docs)]` enforcement with 12 acceptance criteria validation framework
   - **Current Baseline**: Documentation violations tracked for systematic resolution across 4 phases
-  - **Enterprise-Grade Quality Assurance**: Property-based testing, edge case detection, and CI integration
+  - **Quality Assurance**: Property-based testing, edge case detection, and CI integration
   - **Implementation Strategy**: Phased approach targeting critical parser infrastructure first (Phase 1)
   - **Quality Standards**: Comprehensive API Documentation Standards with LSP workflow integration requirements
 - **Advanced Parser Robustness (PR #160/SPEC-149)**:
@@ -502,13 +502,13 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
   - **Dual Analyzer Strategy**: External perlcritic with built-in analyzer fallback for 100% availability
   - **Diagnostic Integration**: Seamless workflow with LSP diagnostic publication pipeline
   - **Performance Optimized**: <50ms code action responses, <2s executeCommand execution
-  - **Enterprise Quality**: Structured error handling with actionable user feedback
+  - **Quality**: Structured error handling with actionable user feedback
 - ✅ Import optimization: unused/duplicate removal, missing import detection, alphabetical sorting
 - ✅ Thread-safe semantic tokens (2.826µs average, zero race conditions)
-- ✅ **Revolutionary Adaptive Threading Configuration (PR #140)**: Multi-tier timeout scaling system
+- ✅ **Adaptive Threading Configuration (PR #140)**: Multi-tier timeout scaling system
   - **LSP Harness Timeouts**: 200-500ms based on thread count (High/Medium/Low contention)
   - **Comprehensive Test Timeouts**: 15s for ≤2 threads, 10s for ≤4 threads, 7.5s for 5-8 threads
-  - **Optimized Idle Detection**: 1000ms → 200ms cycles (**5x improvement**)
+  - **Optimized Idle Detection**: 200ms cycles
   - **Intelligent Symbol Waiting**: Exponential backoff with mock responses
   - **Enhanced Test Harness**: Real JSON-RPC protocol with graceful CI degradation
 - ✅ **Enhanced cross-file navigation**: Package::subroutine patterns, multi-tier fallback system
@@ -516,7 +516,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 - ✅ **Dual-pattern reference search**: Enhanced find references with qualified/unqualified matching
 - ✅ Enhanced call hierarchy, go-to-definition, find references
 - ✅ Code Lens with reference counts and resolve support
-- ✅ File path completion with enterprise security
+- ✅ File path completion with security validation
 - ✅ Enhanced formatting: always-available capabilities with graceful perltidy fallback
 - ✅ **Advanced Code Action Refactorings**: AST-aware refactoring with cross-file impact analysis
   - **Extract Operations**: Variable and subroutine extraction with intelligent parameter detection
@@ -528,7 +528,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
   - **Cross-Platform**: Windows, macOS, Linux, WSL with automatic path normalization
   - **Configuration Management**: Launch (start new process) and attach (connect to running process) modes
   - **Performance**: <50ms breakpoint operations, <100ms step/continue, <200ms variable expansion
-  - **Enterprise Security**: Path validation, process isolation, safe defaults
+  - **Security**: Path validation, process isolation, safe defaults
   - **Quality Assurance**: 71/71 tests passing with comprehensive mutation hardening
 
 ## GitHub Issues & Project Status
@@ -536,7 +536,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 **🎯 Quick Status** (as of 2026-02-19):
 - **Core Goal** ("Perl parser + LSP that actually works"): ~85-95% complete
 - **MVP**: 85-90% complete (parser done, semantics Phase 1, 2, 3 done, LSP def implementation complete)
-- **Production v1.0**: 90-95% ready (validation/de-risking phase)
+- **v0.9.x**: 90-95% ready (validation/de-risking phase)
 - **Open Issues**: 30 total (4 ready to close, 2 P0-CRITICAL)
 - **Sprint A**: Parser foundation + heredocs/statement tracker ✅ **100% COMPLETE**
 - **Sprint B**: LSP polish + semantic analyzer ✅ **100% COMPLETE** (Phase 1, 2, 3 all done)
@@ -569,7 +569,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 3. **CLI enhancements** → `/crates/perl-lsp/src/` (binary interface)
 4. **DAP features** → `/crates/perl-dap/src/` (Debug Adapter Protocol implementation)
 5. **Testing** → Use existing comprehensive test infrastructure with adaptive threading support
-6. **Security features** → Follow enterprise security practices
+6. **Security features** → Follow security practices
 7. **xtask improvements** → `/xtask/src/` (Rust 2024 compatible advanced testing tools)
 8. **Agent customization** → `.claude/agents2/` (97 specialized agents for Perl parser ecosystem workflow, PR #153 architecture)
 9. **Issue tracking** → See [Issue Status Report](docs/ISSUE_STATUS_2025-11-12.md) for priorities and assignments

@@ -38,10 +38,10 @@ Lightning-fast Perl language support with 26+ IDE features powered by tree-sitte
 
 ## 🚀 Performance
 
-- **4-19x faster** than traditional parsers
+- **1-150μs** typical parse times
 - **<50ms response time** for all operations
 - **100% Perl 5 coverage** including edge cases
-- **40-100x faster** position conversions (v0.8.0)
+- **Sub-millisecond** position conversions (v0.8.0)
 
 ## 📦 Installation
 
@@ -57,7 +57,7 @@ brew tap tree-sitter-perl/tap
 brew install perl-lsp
 
 # One-liner (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 # From source
 cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp

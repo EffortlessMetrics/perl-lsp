@@ -475,7 +475,7 @@ If critical issues are discovered post-release:
 
 | Date | Version | Author | Changes |
 |------|---------|--------|---------|
-| 2025-11-05 | 1.0.0 | spec-creator | Initial ADR draft with decision rationale |
+| 2025-11-05 | 0.9.x | spec-creator | Initial ADR draft with decision rationale |
 
 ---
 

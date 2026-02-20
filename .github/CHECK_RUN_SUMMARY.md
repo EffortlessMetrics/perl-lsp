@@ -77,7 +77,7 @@
 - **Low Risk**: Performance optimization (AC10) - target <5µs overhead achievable
 
 #### Performance Impact
-- **Baseline**: 1-150µs for heredoc parsing (4-19x faster than legacy)
+- **Baseline**: 1-150µs for heredoc parsing
 - **Target**: <155µs with backreference workaround (<5µs overhead)
 - **Mitigation**: Manual state machine is O(n) complexity, minimal overhead expected
 

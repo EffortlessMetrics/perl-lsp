@@ -109,12 +109,12 @@ The recommended way to install is to use the pre-built binaries or a package man
 ### Quick Install (Linux/macOS)
 ```bash
 # One-liner installer
-curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 ### Quick Install (Windows PowerShell)
 ```powershell
-irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 ```
 
 ### Homebrew (macOS/Linux)
