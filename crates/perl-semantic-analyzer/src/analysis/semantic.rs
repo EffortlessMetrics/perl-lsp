@@ -7,9 +7,7 @@
 use crate::SourceLocation;
 use crate::ast::{Node, NodeKind};
 use crate::symbol::{ScopeId, ScopeKind, Symbol, SymbolExtractor, SymbolKind, SymbolTable};
-use regex::Regex;
 use std::collections::HashMap;
-use std::sync::OnceLock;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Semantic token types for syntax highlighting in the Parse/Complete workflow.
@@ -1312,43 +1310,142 @@ impl SemanticAnalyzer {
 
     /// Extract documentation (POD or comments) preceding a position
     fn extract_documentation(&self, start: usize) -> Option<String> {
-        static POD_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-        static COMMENT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-
         if self.source.is_empty() {
             return None;
         }
-        let before = &self.source[..start];
 
-        // Check for POD blocks ending with =cut
-        let pod_re = POD_RE
-            .get_or_init(|| Regex::new(r"(?ms)(=[a-zA-Z0-9].*?\n=cut\n?)\s*$"))
-            .as_ref()
-            .ok()?;
-        if let Some(caps) = pod_re.captures(before) {
-            if let Some(pod_text) = caps.get(1) {
-                return Some(pod_text.as_str().trim().to_string());
-            }
+        if let Some(pod) = self.scan_backward_for_pod(start) {
+            return Some(pod);
         }
 
-        // Check for consecutive comment lines
-        let comment_re =
-            COMMENT_RE.get_or_init(|| Regex::new(r"(?m)(#.*\n)+\s*$")).as_ref().ok()?;
-        if let Some(caps) = comment_re.captures(before) {
-            if let Some(comment_match) = caps.get(0) {
-                // Strip the # prefix from each comment line
-                let doc = comment_match
-                    .as_str()
-                    .lines()
-                    .map(|line| line.trim_start_matches('#').trim())
-                    .filter(|line| !line.is_empty())
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                return Some(doc);
-            }
+        if let Some(comment) = self.scan_backward_for_comments(start) {
+            return Some(comment);
         }
 
         None
+    }
+
+    fn scan_backward_for_pod(&self, start: usize) -> Option<String> {
+        if start > self.source.len() {
+            return None;
+        }
+        let before = &self.source[..start];
+        let mut lines = before.lines().rev();
+
+        let mut pod_lines = Vec::new();
+        let mut found_cut = false;
+        let mut lines_scanned = 0;
+
+        // 1. Find =cut
+        // The regex `\s*$` implies we match even if there are blank lines between =cut and start.
+        for line in lines.by_ref() {
+            lines_scanned += 1;
+            if lines_scanned > 500 {
+                return None;
+            } // Limit scan
+
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+
+            if trimmed == "=cut" {
+                found_cut = true;
+                pod_lines.push(line); // Keep original formatting
+                break;
+            } else {
+                // If we see code before =cut, then no POD immediately preceding?
+                return None;
+            }
+        }
+
+        if !found_cut {
+            return None;
+        }
+
+        // 2. Collect POD content
+        for line in lines {
+            lines_scanned += 1;
+            if lines_scanned > 500 {
+                break;
+            }
+
+            let trimmed = line.trim();
+            if trimmed == "=cut" {
+                // End of previous block. Stop.
+                break;
+            }
+
+            pod_lines.push(line);
+        }
+
+        // 3. Process collected lines (which are in reverse order)
+        pod_lines.reverse();
+
+        // 4. Find the first command line (=...)
+        // Everything before it is considered "garbage" (code/comments between blocks?) and ignored
+        if let Some(start_idx) = pod_lines.iter().position(|line| line.starts_with('=')) {
+            let doc = pod_lines[start_idx..].join("\n");
+            return Some(doc);
+        }
+
+        None
+    }
+
+    fn scan_backward_for_comments(&self, start: usize) -> Option<String> {
+        if start > self.source.len() {
+            return None;
+        }
+        let before = &self.source[..start];
+        let mut lines = before.lines().rev();
+
+        let mut comment_lines = Vec::new();
+        let mut lines_scanned = 0;
+
+        // 1. Skip current line prefix if we are not at the start of a line
+        // If 'before' does not end with a newline, the first item from lines() is the
+        // partial content of the current line (e.g. indentation). We skip it.
+        // We use is_whitespace check on the last char to be safe about \n or \r.
+        // Actually simplest is: does lines() return a "line" that corresponds to current line?
+        // Yes, always, unless string ends with \n.
+        let ends_with_newline = before.ends_with('\n') || before.ends_with('\r');
+
+        if !ends_with_newline {
+            if lines.next().is_some() {
+                lines_scanned += 1;
+            }
+        }
+
+        // 2. Collect contiguous comments
+        for line in lines {
+            lines_scanned += 1;
+            if lines_scanned > 100 {
+                break;
+            }
+
+            let trimmed = line.trim_start();
+            if trimmed.is_empty() {
+                // Blank line breaks the comment block
+                break;
+            }
+
+            if trimmed.starts_with('#') {
+                // Extract comment content
+                let content = trimmed.trim_start_matches('#').trim();
+                comment_lines.push(content);
+            } else {
+                // Non-comment code line. Stop.
+                break;
+            }
+        }
+
+        if comment_lines.is_empty() {
+            return None;
+        }
+
+        // Reverse to get original order
+        comment_lines.reverse();
+        Some(comment_lines.join(" "))
     }
 
     /// Get scope id for a node by consulting the symbol table
