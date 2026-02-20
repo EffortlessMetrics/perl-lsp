@@ -1,10 +1,10 @@
-# API Stability & Version Policy - v1.0 GA-Lock
+# API Stability & Version Policy - v0.9.1 GA-Lock
 
 **MSRV:** 1.92 • **Edition:** 2024 • **Status:** General Availability (GA)
 
 ## Executive Summary
 
-This document defines the **GA-lock** stability guarantees for Perl LSP v1.0 and beyond. GA-lock establishes formal contracts for API stability, wire protocol invariants, versioning policy, and platform support that users can depend on for production deployments.
+This document defines the **GA-lock** stability guarantees for Perl LSP v0.9.x (Production-Ready) and beyond. GA-lock establishes formal contracts for API stability, wire protocol invariants, versioning policy, and platform support that users can depend on for production deployments.
 
 **What "GA-lock" means:**
 - Published crate APIs are stable under semantic versioning
@@ -34,7 +34,7 @@ This document defines the **GA-lock** stability guarantees for Perl LSP v1.0 and
 
 ## Published Artifacts
 
-### What We Ship (v1.0+)
+### What We Ship (v0.9.x (Production-Ready)+)
 
 | Distribution | Format | Support Level | Update Cadence |
 |--------------|--------|---------------|----------------|
@@ -44,18 +44,18 @@ This document defines the **GA-lock** stability guarantees for Perl LSP v1.0 and
 | **Homebrew** | Formula (macOS/Linux) | Production | Automated on release |
 | **Source** | GitHub releases + tags | Production | Every release |
 
-### Published Crates (v1.0.0 GA)
+### Published Crates (v0.9.1 GA)
 
 | Crate | Version | Purpose | Stability | SemVer Commitment |
 |-------|---------|---------|-----------|-------------------|
-| [perl-parser](https://crates.io/crates/perl-parser) | 1.0.0 | Parser & AST | **GA-locked** | Yes - strict SemVer |
-| [perl-lexer](https://crates.io/crates/perl-lexer) | 1.0.0 | Tokenizer | **GA-locked** | Yes - strict SemVer |
-| [perl-lsp](https://crates.io/crates/perl-lsp) | 1.0.0 | LSP Server Binary | **GA-locked** | Yes - strict SemVer |
-| [perl-corpus](https://crates.io/crates/perl-corpus) | 1.0.0 | Test corpus | **GA-locked** | Yes - best-effort API |
-| [perl-dap](https://crates.io/crates/perl-dap) | 0.2.0 | Debug Adapter | **Preview** | No - pre-1.0 |
-| [perl-parser-pest](https://crates.io/crates/perl-parser-pest) | 1.0.0 | Legacy parser | **Deprecated** | Maintenance only |
+| [perl-parser](https://crates.io/crates/perl-parser) | 0.9.x (Production-Ready) | Parser & AST | **GA-locked** | Yes - strict SemVer |
+| [perl-lexer](https://crates.io/crates/perl-lexer) | 0.9.x (Production-Ready) | Tokenizer | **GA-locked** | Yes - strict SemVer |
+| [perl-lsp](https://crates.io/crates/perl-lsp) | 0.9.x (Production-Ready) | LSP Server Binary | **GA-locked** | Yes - strict SemVer |
+| [perl-corpus](https://crates.io/crates/perl-corpus) | 0.9.x (Production-Ready) | Test corpus | **GA-locked** | Yes - best-effort API |
+| [perl-dap](https://crates.io/crates/perl-dap) | 0.2.0 | Debug Adapter | **Preview** | No - pre-0.10 |
+| [perl-parser-pest](https://crates.io/crates/perl-parser-pest) | 0.9.x (Production-Ready) | Legacy parser | **Deprecated** | Maintenance only |
 
-**Note:** Only crates at 1.0+ provide GA-lock guarantees. `perl-dap` remains in preview with no stability guarantees until 1.0.
+**Note:** Only crates at 0.9.x+ provide GA-lock guarantees. `perl-dap` remains in preview with no stability guarantees until 0.10.
 
 ---
 
@@ -66,7 +66,7 @@ This document defines the **GA-lock** stability guarantees for Perl LSP v1.0 and
 **GA-lock** is a formal stability contract that guarantees:
 
 1. **API Stability**: Public APIs in GA-locked crates will not break without major version bump
-2. **Wire Protocol Stability**: LSP capabilities advertised in v1.0 will remain compatible through all v1.x releases
+2. **Wire Protocol Stability**: LSP capabilities advertised in v0.9.x (Production-Ready) will remain compatible through all v1.x releases
 3. **Behavioral Compatibility**: Bug-fix releases will not change semantics of correct programs
 4. **MSRV Stability**: Minimum Supported Rust Version only increases in minor releases with 6-month notice
 5. **Data Format Stability**: Serialization formats (S-expressions, JSON-RPC) remain parseable by older clients
@@ -125,17 +125,17 @@ pub fn parse(source: &str, config: &ParseConfig) -> Result<Ast, Error>
 
 **Example additive changes:**
 ```rust
-// v1.0.0
+// v0.9.1
 pub enum NodeKind {
     Sub,
     Package,
 }
 
-// v1.1.0 - new variant (ALLOWED in minor)
+// v0.10.0 - new variant (ALLOWED in minor)
 pub enum NodeKind {
     Sub,
     Package,
-    Async,  // New in 1.1.0
+    Async,  // New in 0.10.0
 }
 ```
 
@@ -167,15 +167,15 @@ pub enum NodeKind {
 
 The LSP server advertises capabilities via the `initialize` handshake. **GA-lock guarantees:**
 
-1. **Capability Stability**: Once advertised in v1.0, capabilities remain available through all v1.x releases
+1. **Capability Stability**: Once advertised in v0.9.x (Production-Ready), capabilities remain available through all v1.x releases
 2. **Request/Response Compatibility**: Message formats remain backward compatible
 3. **Method Names**: LSP method names (e.g., `textDocument/completion`) never change in v1.x
 4. **Capability Negotiation**: Servers honor client capabilities for conditional feature support
 5. **Error Codes**: LSP error codes remain stable (may add new codes, never remove)
 
-### Capability Snapshot (v1.0.0)
+### Capability Snapshot (v0.9.1)
 
-The canonical capability set is defined in [`features.toml`](../features.toml). As of v1.0.0:
+The canonical capability set is defined in [`features.toml`](../features.toml). As of v0.9.1:
 
 | Area | Capabilities | GA Status |
 |------|-------------|-----------|
@@ -293,7 +293,7 @@ Platforms without Rust compiler support are not supported:
 
 ### perl-parser Stable APIs
 
-**Core parsing API (GA-locked since v1.0.0):**
+**Core parsing API (GA-locked since v0.9.1):**
 
 ```rust
 // Parser construction and execution
@@ -363,7 +363,7 @@ pub struct Node {
 
 ### perl-lexer Stable APIs
 
-**Tokenization API (GA-locked since v1.0.0):**
+**Tokenization API (GA-locked since v0.9.1):**
 
 ```rust
 pub struct PerlLexer<'a> { /* ... */ }
@@ -395,13 +395,13 @@ pub enum TokenType {
 
 ### perl-lsp Binary Interface
 
-**Command-line interface (GA-locked since v1.0.0):**
+**Command-line interface (GA-locked since v0.9.1):**
 
 ```bash
 # Stdio mode (stable)
 perl-lsp --stdio
 
-# TCP socket mode (added in v0.9.1, stable in v1.0)
+# TCP socket mode (added in v0.9.1, stable in v0.9.x (Production-Ready))
 perl-lsp --tcp 127.0.0.1:9257
 
 # Version/help (stable)
@@ -434,9 +434,9 @@ perl-lsp --capabilities  # JSON output of advertised capabilities
 
 ## Breaking Changes Policy
 
-### Pre-1.0 Policy (Historical)
+### Pre-0.9 Policy (Historical)
 
-**v0.x releases (before v1.0):**
+**v0.x releases (before v0.9.x (Production-Ready)):**
 - Breaking changes allowed in minor releases (0.Y.0)
 - Deprecation warnings provided for at least one minor release
 - CHANGELOG documents all breaking changes
@@ -449,7 +449,7 @@ perl-lsp --capabilities  # JSON output of advertised capabilities
 - Migration: Replace `.unwrap()` with `.expect("parse error")` or proper error handling
 ```
 
-### Post-1.0 Policy (Current)
+### Post-0.9 Policy (Current)
 
 **v1.x releases:**
 - Breaking changes ONLY allowed in major releases (v2.0.0, v3.0.0, etc.)
@@ -530,7 +530,7 @@ server_capabilities.deprecated_capabilities = Some(vec![
 
 ## Feature Flags
 
-### Stable Feature Flags (v1.0+)
+### Stable Feature Flags (v0.9.x (Production-Ready)+)
 
 | Flag | Purpose | Stability | Default |
 |------|---------|-----------|---------|
@@ -555,12 +555,12 @@ server_capabilities.deprecated_capabilities = Some(vec![
 ```toml
 # Cargo.toml
 [dependencies]
-perl-parser = { version = "1.0", features = ["ts-compat"] }
+perl-parser = { version = "0.9.1", features = ["ts-compat"] }
 ```
 
 **Deprecation path:**
 ```rust
-// v1.0 - stable feature
+// v0.9.x (Production-Ready) - stable feature
 #[cfg(feature = "ts-compat")]
 pub fn tree_sitter_mode() -> bool { true }
 
@@ -579,18 +579,18 @@ pub fn tree_sitter_mode() -> bool { true }
 
 ### Complexity Guarantees (GA-locked)
 
-**Parser performance (v1.0+):**
+**Parser performance (v0.9.x (Production-Ready)+):**
 - **Time complexity:** O(n) in input size for valid Perl code
 - **Space complexity:** O(n) for AST construction (no exponential blowups)
 - **Streaming:** Parser does not require entire file in memory (incremental parsing)
 
-**LSP response times (v1.0+):**
+**LSP response times (v0.9.x (Production-Ready)+):**
 - **Single-file operations:** <50ms for files <10K lines (p95)
 - **Workspace indexing:** <100ms initial index, <10ms incremental (p95)
 - **Completion:** <20ms typical, <50ms worst-case (p95)
 - **Go-to-definition:** <10ms single-file, <30ms cross-file (p95)
 
-**Measured performance (v1.0.0 baseline):**
+**Measured performance (v0.9.1 baseline):**
 
 | File Size | Parse Time (p50) | Parse Time (p95) |
 |-----------|------------------|------------------|
@@ -623,7 +623,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_performance_tests
 
 ## Security Support
 
-### Security Policy (v1.0+)
+### Security Policy (v0.9.x (Production-Ready)+)
 
 **Supported versions:**
 | Version | Security Fixes | Support Duration |
@@ -650,7 +650,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_performance_tests
 4. Coordinated disclosure 7-14 days after patch release
 5. CVE assignment and public advisory
 
-### Security Hardening (v1.0+)
+### Security Hardening (v0.9.x (Production-Ready)+)
 
 **Production hardening commitments:**
 - **No panics on invalid input:** Parser returns `Result` for all malformed input
@@ -666,13 +666,13 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_performance_tests
 
 ### Upgrade Paths
 
-**From v0.9.x to v1.0.0:**
+**From v0.9.x to v0.9.1:**
 - See [`docs/MIGRATION.md`](MIGRATION.md) for detailed migration guide
 - **Breaking changes:** MSRV bumped to 1.92 (Rust 2024 edition)
-- **API changes:** None - v1.0.0 is a stability release
+- **API changes:** None - v0.9.1 is a stability release
 - **Configuration:** `perl-lsp` config schema unchanged
 
-**From v0.8.x to v1.0.0:**
+**From v0.8.x to v0.9.1:**
 - **Position helpers:** `offset_to_position()` signature changed (v0.8.0)
 - **Error types:** `ParseError` structure changed (v0.8.5)
 - **LSP capabilities:** 8 capabilities promoted to GA (v0.9.0)
@@ -687,13 +687,13 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_performance_tests
 
 | perl-parser | perl-lexer | perl-corpus | perl-lsp | MSRV | Notes |
 |-------------|------------|-------------|----------|------|-------|
-| 1.0.x | 1.0.x | 1.0.x | 1.0.x | 1.92 | Current GA (2024 edition) |
+| 0.9.x | 0.9.x | 0.9.x | 0.9.x | 1.92 | Current GA (2024 edition) |
 | 0.9.x | 0.9.x | 0.9.x | 0.9.x | 1.92 | Previous stable (semantic analyzer) |
 | 0.8.x | 0.8.x | 0.8.x | 0.8.x | 1.85 | Previous stable (workspace config) |
 | 0.7.x | 0.7.x | 0.7.x | - | 1.80 | Security fixes only until 2026-04-01 |
 
 **Cross-version compatibility:**
-- Patch versions (`1.0.Z`) are fully compatible
+- Patch versions (`0.9.Z`) are fully compatible
 - Minor versions (`1.Y.0`) are backward compatible (additive changes only)
 - Major versions (`X.0.0`) may break compatibility
 
@@ -745,7 +745,7 @@ const INTERNAL_ERROR: i32 = -32603;
 
 ### Position Encoding (GA-locked)
 
-**Guarantees (v1.0+):**
+**Guarantees (v0.9.x (Production-Ready)+):**
 - **Parser positions:** UTF-8 byte offsets (0-based)
 - **LSP positions:** UTF-16 code unit offsets with 0-based lines/columns
 - **Converters stable:** `offset_to_position()`, `position_to_offset()`
@@ -753,7 +753,7 @@ const INTERNAL_ERROR: i32 = -32603;
 
 **Position conversion accuracy:**
 ```rust
-// Stable API (v1.0+)
+// Stable API (v0.9.x (Production-Ready)+)
 pub fn offset_to_position(source: &str, offset: usize) -> Position;
 pub fn position_to_offset(source: &str, position: Position) -> Option<usize>;
 
@@ -768,10 +768,10 @@ pub fn position_to_offset(source: &str, position: Position) -> Option<usize>;
 
 ## Support Lifecycle
 
-### Version Support Timeline (v1.0+)
+### Version Support Timeline (v0.9.x (Production-Ready)+)
 
 **Long-Term Support (LTS):**
-- **v1.0.x LTS:** First LTS release, supported until 2028-01-01
+- **v0.9.x LTS:** First LTS release, supported until 2028-01-01
 - **LTS policy:** 24-month support window from release date
 - **LTS updates:** Security fixes + critical bugs only
 
@@ -782,8 +782,8 @@ pub fn position_to_offset(source: &str, position: Position) -> Option<usize>;
 
 **Timeline visualization:**
 ```
-2026-01 |---- v1.0.0 LTS ------------------------------------> 2028-01
-2026-07 |---- v1.1.0 -----> 2027-01
+2026-01 |---- v0.9.1 LTS ------------------------------------> 2028-01
+2026-07 |---- v0.10.0 -----> 2027-01
 2027-01 |---- v1.2.0 -----> 2027-07
 2027-07 |---- v1.3.0 -----> 2028-01
 2028-01 |---- v2.0.0 LTS ------------------------------------> 2030-01
@@ -826,15 +826,15 @@ Legend:
 ```markdown
 Title: [Stability] Parser::parse() signature changed in patch release
 
-Version: v1.0.3 (previous: v1.0.2)
+Version: v0.9.x (Production-Ready).3 (previous: v0.9.x (Production-Ready).2)
 Component: perl-parser
 
 Description:
 The signature of `Parser::parse()` changed from:
-  v1.0.2: `pub fn parse(&mut self, source: &str) -> Result<Node, ParseError>`
-  v1.0.3: `pub fn parse(&mut self, source: &str, config: &Config) -> Result<Node, ParseError>`
+  v0.9.x (Production-Ready).2: `pub fn parse(&mut self, source: &str) -> Result<Node, ParseError>`
+  v0.9.x (Production-Ready).3: `pub fn parse(&mut self, source: &str, config: &Config) -> Result<Node, ParseError>`
 
-This breaks compilation of code using v1.0.2 API.
+This breaks compilation of code using v0.9.x (Production-Ready).2 API.
 
 Violates: Section "Semantic Versioning Policy" - signature changes require major version.
 
@@ -847,7 +847,7 @@ Reproduction: [link to minimal code sample]
 
 ### Automated Stability Checks
 
-**CI enforcement (v1.0+):**
+**CI enforcement (v0.9.x (Production-Ready)+):**
 ```bash
 # Semantic versioning compliance
 cargo semver-checks check-release
@@ -877,10 +877,10 @@ cargo test -p perl-lsp --test lsp_comprehensive_3_17_test
 
 **This document is authoritative for API stability questions.**
 
-**Last updated:** 2026-01-22 (v1.0.0 GA-Lock Release)
+**Last updated:** 2026-01-22 (v0.9.1 GA-Lock Release)
 
 **Document history:**
-- 2026-01-22: v1.0 GA-Lock comprehensive stability documentation
+- 2026-01-22: v0.9.1 GA-Lock comprehensive stability documentation
 - 2025-09-05: v0.8.8 GA production workspace configuration
 - 2025-06-01: v0.8.0 initial stability statement
 
@@ -888,7 +888,7 @@ cargo test -p perl-lsp --test lsp_comprehensive_3_17_test
 
 ---
 
-## Summary Checklist: What v1.0 GA-Lock Guarantees
+## Summary Checklist: What v0.9.1 GA-Lock Guarantees
 
 ✅ **API Stability:** Public APIs stable under SemVer (breaking changes only in major releases)
 ✅ **Wire Protocol:** LSP capabilities locked, backward compatible through v1.x

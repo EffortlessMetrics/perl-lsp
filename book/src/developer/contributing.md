@@ -193,8 +193,8 @@ Add the `ci:semver` label to your PR to run automated breaking change detection:
 | **Breaking** | Change function signature | Major (1.0 → 2.0) | Major releases only |
 | **Additive** | Add new public function | Minor (1.0 → 1.1) | Minor releases |
 | **Additive** | Add new enum variant | Minor (1.0 → 1.1) | Minor releases (with `#[non_exhaustive]`) |
-| **Patch** | Fix bug, same behavior | Patch (1.0.0 → 1.0.1) | Patch releases |
-| **Patch** | Documentation update | Patch (1.0.0 → 1.0.1) | Patch releases |
+| **Patch** | Fix bug, same behavior | Patch (0.9.x (Production-Ready) → 1.0.1) | Patch releases |
+| **Patch** | Documentation update | Patch (0.9.x (Production-Ready) → 1.0.1) | Patch releases |
 
 ### Breaking Change Workflow
 
@@ -444,7 +444,7 @@ By contributing, you agree that your contributions will be licensed under the sa
 
 ## Release Process
 
-This section describes the release process for Perl LSP, now that we've reached v1.0 GA.
+This section describes the release process for Perl LSP, now that we've reached v0.9.x (Production-Ready) GA.
 
 ### Version Policy
 
@@ -458,9 +458,9 @@ We follow [Semantic Versioning 2.0.0](https://semver.org/):
 
 | Release Type | Frequency | Examples | Requirements |
 |--------------|-----------|----------|--------------|
-| **Major** | Annually (as needed) | 1.0.0 → 2.0.0 | Breaking changes, migration guide, extensive testing |
-| **Minor** | Quarterly | 1.0.0 → 1.1.0 | New features, API additions, performance improvements |
-| **Patch** | Monthly (as needed) | 1.0.0 → 1.0.1 | Bug fixes, security updates, documentation updates |
+| **Major** | Annually (as needed) | 0.9.x (Production-Ready) → 2.0.0 | Breaking changes, migration guide, extensive testing |
+| **Minor** | Quarterly | 0.9.x (Production-Ready) → 1.1.0 | New features, API additions, performance improvements |
+| **Patch** | Monthly (as needed) | 0.9.x (Production-Ready) → 1.0.1 | Bug fixes, security updates, documentation updates |
 
 ### Release Process Workflow
 
@@ -468,8 +468,8 @@ We follow [Semantic Versioning 2.0.0](https://semver.org/):
 
 ```bash
 # Update version numbers
-cargo update -p perl-parser --precise 1.0.0
-cargo update -p perl-lsp --precise 1.0.0
+cargo update -p perl-parser --precise 0.9.x (Production-Ready)
+cargo update -p perl-lsp --precise 0.9.x (Production-Ready)
 # ... for all published crates
 
 # Run comprehensive validation
@@ -494,23 +494,23 @@ Before any release, ensure:
 - [ ] Performance benchmarks run: `cargo bench`
 - [ ] Release notes drafted: `RELEASE_NOTES.md`
 - [ ] Version numbers updated in all crates
-- [ ] Git tag prepared: `git tag -a v1.0.0 -m "Release v1.0.0"`
+- [ ] Git tag prepared: `git tag -a v0.9.x (Production-Ready) -m "Release v0.9.x (Production-Ready)"`
 
 #### 3. Release Execution
 
 ```bash
 # Create release branch
-git checkout -b release/v1.0.0
+git checkout -b release/v0.9.x (Production-Ready)
 
 # Final validation
 just ci-full
 
 # Merge to main
 git checkout main
-git merge release/v1.0.0
+git merge release/v0.9.x (Production-Ready)
 
 # Tag and push
-git tag v1.0.0
+git tag v0.9.x (Production-Ready)
 git push origin main --tags
 
 # Publish to crates.io
@@ -520,7 +520,7 @@ cargo publish -p perl-lsp
 # ... other crates in dependency order
 
 # Create GitHub Release
-gh release create v1.0.0 --title "v1.0.0 - Production Ready" --notes-file RELEASE_NOTES.md
+gh release create v0.9.x (Production-Ready) --title "v0.9.x (Production-Ready) - Production Ready" --notes-file RELEASE_NOTES.md
 ```
 
 #### 4. Post-Release Tasks
@@ -637,7 +637,7 @@ For critical security issues:
 #### Release Notes Template
 
 ```markdown
-# Release v1.0.0
+# Release v0.9.x (Production-Ready)
 
 ## Highlights
 - Key features and improvements

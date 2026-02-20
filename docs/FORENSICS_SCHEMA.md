@@ -520,7 +520,7 @@ Severity levels:
 | Change Type | Before | After | Risk Level |
 | ----------- | ------ | ----- | ---------- |
 | Added crate | - | `cargo-mutants v24.11.0` | Low (dev-dep) |
-| Added crate | - | `quickcheck v1.0` | Low (test-dep) |
+| Added crate | - | `quickcheck v0.9.x (Production-Ready)` | Low (test-dep) |
 
 ### Public API Delta
 | Change | Item | Crate | Breaking? |

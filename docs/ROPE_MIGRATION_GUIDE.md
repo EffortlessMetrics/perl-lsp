@@ -337,7 +337,7 @@ If you encounter issues during migration:
 ### Deprecation Timeline
 - **Current**: All existing APIs fully supported
 - **v0.9.0**: Legacy string-based approaches still supported but marked as deprecated
-- **v1.0.0**: Potential removal of inefficient legacy approaches (with 6+ month notice)
+- **v0.9.1**: Potential removal of inefficient legacy approaches (with 6+ month notice)
 
 ### Support Channels
 - **GitHub Issues**: Technical problems and bug reports

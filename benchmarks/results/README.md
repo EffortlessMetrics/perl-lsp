@@ -15,7 +15,7 @@ Examples:
 
 ## Published Results
 
-### 2026-01-22: v1.0 Baseline (AMD Ryzen 9 9950X3D)
+### 2026-01-22: v0.9.x (Production-Ready) Baseline (AMD Ryzen 9 9950X3D)
 
 **Machine Configuration:**
 - CPU: AMD Ryzen 9 9950X3D 16-Core Processor (32 threads)
@@ -38,17 +38,17 @@ Examples:
 
 ### Parser Performance
 - **Target**: 1-150μs parsing time (4-19x faster than legacy)
-- **v1.0 Baseline**: 21.26μs mean (ACHIEVED)
+- **v0.9.x (Production-Ready) Baseline**: 21.26μs mean (ACHIEVED)
 
 ### Incremental Parsing
 - **Target**: <1ms updates with 70-99% node reuse
-- **v1.0 Baseline**: Pending
+- **v0.9.x (Production-Ready) Baseline**: Pending
 
 ### LSP Server Performance
 - **Behavioral Tests**: <1s execution (0.31s revolutionary target)
 - **User Story Tests**: <1s execution (0.32s revolutionary target)
 - **Workspace Navigation**: <1s individual tests (0.26s revolutionary target)
-- **v1.0 Baseline**: Pending
+- **v0.9.x (Production-Ready) Baseline**: Pending
 
 ## Running Benchmarks
 
@@ -90,8 +90,8 @@ Future benchmark runs will be added to this directory for regression tracking.
 
 **Regression detection:**
 ```bash
-# Compare against v1.0 baseline
-cargo bench -p perl-parser --bench parser_benchmark -- --baseline v1.0-baseline
+# Compare against v0.9.x (Production-Ready) baseline
+cargo bench -p perl-parser --bench parser_benchmark -- --baseline v0.9.x (Production-Ready)-baseline
 ```
 
 ---

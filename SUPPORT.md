@@ -29,7 +29,7 @@ If you've found a bug or have a feature request, please search the [existing iss
 
 ## Service Level Agreement (SLA)
 
-As a v1.0 production release, we commit to the following response times for issues:
+As a v0.9.x (Production-Ready) production release, we commit to the following response times for issues:
 
 | Priority | Response Time | Fix Time (Target) |
 |----------|---------------|-------------------|
@@ -46,7 +46,7 @@ We only provide active support for the current major version and the immediate p
 
 | Version | Status | Support Level |
 |---------|--------|---------------|
-| **1.0.x** | **Current** | Full Support (Bug fixes + Security) |
+| **0.9.x** | **Current** | Full Support (Bug fixes + Security) |
 | **0.9.x** | Maintenance | Security Patches Only |
 | **< 0.9** | End of Life | No Support |
 

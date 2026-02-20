@@ -1596,6 +1596,6 @@ Several providers acknowledge ongoing AST migration:
 
 ---
 
-**Document Version**: 1.0.0
+**Document Version**: 0.9.x (Production-Ready)
 **Last Updated**: 2025-01-31
 **Maintainer**: Perl LSP Documentation Team

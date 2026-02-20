@@ -40,7 +40,7 @@ perl-lsp is a production-ready Language Server Protocol (LSP) implementation for
 
 **Latest Release**: v0.9.1
 **API Stability**: See [Stability Statement](./reference/stability.md)
-**Current Milestone**: v1.0.0 - Boring Promises
+**Current Milestone**: v0.9.x (Production-Ready) - Boring Promises
 
 The project is actively developed with a focus on production readiness, comprehensive testing, and enterprise-grade quality assurance.
 

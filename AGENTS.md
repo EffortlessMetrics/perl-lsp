@@ -536,7 +536,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 **🎯 Quick Status** (as of 2026-02-19):
 - **Core Goal** ("Perl parser + LSP that actually works"): ~85-95% complete
 - **MVP**: 85-90% complete (parser done, semantics Phase 1, 2, 3 done, LSP def implementation complete)
-- **Production v1.0**: 90-95% ready (validation/de-risking phase)
+- **Production v0.9.x (Production-Ready)**: 90-95% ready (validation/de-risking phase)
 - **Open Issues**: 30 total (4 ready to close, 2 P0-CRITICAL)
 - **Sprint A**: Parser foundation + heredocs/statement tracker ✅ **100% COMPLETE**
 - **Sprint B**: LSP polish + semantic analyzer ✅ **100% COMPLETE** (Phase 1, 2, 3 all done)

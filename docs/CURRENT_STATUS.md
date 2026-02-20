@@ -97,16 +97,16 @@ Key terms:
 
 **Now (post v0.9.1 close-out)**
 - Keep verification receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
-- Publish benchmark outputs under `benchmarks/results/` for v1.0.x evidence trail
+- Publish benchmark outputs under `benchmarks/results/` for v0.9.x evidence trail
 
-**Next (v1.0.0 readiness)**
+**Next (v0.9.1 readiness)**
 - Stability statement (GA-lock + versioning rules)
 - Packaging stance (what ships; supported platforms)
 - Benchmark publication with receipts under `benchmarks/results/`
-- Upgrade notes from v0.8.x → v1.0
+- Upgrade notes from v0.8.x → v0.9.x (Production-Ready)
 - Merge gates (#210) after CI pipeline cleanup (#211)
 
-**Later (post v1.0)**
+**Later (post v0.9.x (Production-Ready))**
 - DAP preview -> GA hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)
 - Full LSP 3.18 compliance
 - Package manager distribution (Homebrew/apt/etc.)

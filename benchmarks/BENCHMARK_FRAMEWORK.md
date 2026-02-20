@@ -42,12 +42,12 @@ cargo bench -p perl-parser --bench parser_benchmark
 
 **Save baseline:**
 ```bash
-cargo bench -p perl-parser --bench parser_benchmark -- --save-baseline v1.0-baseline
+cargo bench -p perl-parser --bench parser_benchmark -- --save-baseline v0.9.x (Production-Ready)-baseline
 ```
 
 **Compare against baseline:**
 ```bash
-cargo bench -p perl-parser --bench parser_benchmark -- --baseline v1.0-baseline
+cargo bench -p perl-parser --bench parser_benchmark -- --baseline v0.9.x (Production-Ready)-baseline
 ```
 
 ### 2. Incremental Parsing Benchmarks (`perl-parser`)
@@ -273,7 +273,7 @@ cargo bench -p perl-parser -- --save-baseline current
 ## History
 
 - **2026-01-22**: Initial benchmark framework documentation
-- **v1.0 baseline**: Established on AMD Ryzen 9 9950X3D system
+- **v0.9.x (Production-Ready) baseline**: Established on AMD Ryzen 9 9950X3D system
 
 ---
 

@@ -10,6 +10,6 @@ See [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues) for ac
 
 Active milestones:
 - v0.9.1: Close-out
-- v1.0.0: Boring Promises
+- v0.9.x (Production-Ready): Boring Promises
 
 See [Milestones](../reference/milestones.md) for details.

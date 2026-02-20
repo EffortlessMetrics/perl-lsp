@@ -3,7 +3,7 @@
 
 **Issue**: #207 - Debug Adapter Protocol Support
 **Status**: Schema Definitions Complete
-**Version**: 1.0.0
+**Version**: 0.9.x (Production-Ready)
 **Date**: 2025-10-04
 
 ---

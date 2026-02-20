@@ -1,11 +1,11 @@
-# Perl LSP v1.0.0 - Production-Ready GA Release
+# Perl LSP v0.9.1 - Production-Ready GA Release
 
 ## Release Date
 February 13, 2026
 
 ## Overview
 
-We're excited to announce the first General Availability (GA) release of Perl LSP v1.0.0! This milestone represents years of development and brings production-ready Perl language support to all major editors and IDEs. With GA-lock stability guarantees, enterprise-grade security, and revolutionary performance improvements, this is the most comprehensive Perl development tooling available today.
+We're excited to announce the first General Availability (GA) release of Perl LSP v0.9.1! This milestone represents years of development and brings production-ready Perl language support to all major editors and IDEs. With GA-lock stability guarantees, enterprise-grade security, and revolutionary performance improvements, this is the most comprehensive Perl development tooling available today.
 
 ## 🚀 Key Highlights
 
@@ -33,7 +33,7 @@ We're excited to announce the first General Availability (GA) release of Perl LS
 - **Process Isolation**: Sandboxed execution for external tool integration
 - **24-Hour Security Patches**: Critical vulnerability response
 
-## 🎯 What's New in v1.0.0
+## 🎯 What's New in v0.9.1
 
 ### Complete Semantic Analyzer
 The semantic analyzer now provides comprehensive understanding of Perl code:
@@ -202,8 +202,8 @@ nix develop -c just health
 2. Update dependencies in `Cargo.toml`:
    ```toml
    [dependencies]
-   perl-parser = "1.0"
-   perl-lsp = "1.0"
+   perl-parser = "0.9.1"
+   perl-lsp = "0.9.1"
    ```
 3. Replace deprecated APIs (compiler will guide you)
 
@@ -228,7 +228,7 @@ nix develop -c just health
 
 ## 📈 Performance Comparison
 
-| Operation | v0.8.x | v1.0.0 | Improvement |
+| Operation | v0.8.x | v0.9.1 | Improvement |
 |-----------|--------|--------|-------------|
 | Parse 1K lines | 800μs | 45μs | **17.8x faster** |
 | Parse 10K lines | 8ms | 200μs | **40x faster** |
@@ -363,7 +363,7 @@ nix develop -c just ci-gate
 
 ## 📋 Roadmap
 
-### v1.1.0 (Planned: April 2026)
+### v0.10.0 (Planned: April 2026)
 - Enhanced DAP native implementation (Phase 2)
 - Additional semantic analysis features
 - Performance optimizations
@@ -421,6 +421,6 @@ Special thanks to the Perl community for decades of inspiration and to the Rust 
 
 ---
 
-**Download Perl LSP v1.0.0 today and experience the future of Perl development!**
+**Download Perl LSP v0.9.1 today and experience the future of Perl development!**
 
 🚀 [Get Started Now](docs/GETTING_STARTED.md) | 📖 [Documentation](docs/INDEX.md) | 💬 [Community](https://github.com/EffortlessMetrics/perl-lsp/discussions)

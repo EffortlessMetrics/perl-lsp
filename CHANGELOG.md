@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/0.9.x (Production-Ready)/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Phase 2/3 DAP suites implemented**: feature-gated adapter/golden/performance/dependency/packaging tests now run real assertions instead of placeholder stubs
 - **Capability metadata updated**: DAP features remain non-GA but are now tracked as `maturity = "preview"` in `features.toml`
 
-## [1.0.0] - 2026-02-13
+## [0.9.x (Production-Ready)] - 2026-02-13
 
 ### Added
 - **Production-Ready GA Release**: First General Availability release with GA-lock stability guarantees
@@ -142,7 +142,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Migration Guide
 
-### From v0.9.x to v1.0.0
+### From v0.9.x to v0.9.1
 
 **Breaking Changes:**
 - MSRV bumped to Rust 1.92 (2024 edition)
@@ -153,13 +153,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 2. Update dependencies in `Cargo.toml`:
    ```toml
    [dependencies]
-   perl-parser = "1.0"
-   perl-lsp = "1.0"
+   perl-parser = "0.9.1"
+   perl-lsp = "0.9.1"
    ```
 3. Replace deprecated APIs (see compiler warnings)
 4. Run `cargo check` to verify compatibility
 
-### From v0.8.x to v1.0.0
+### From v0.8.x to v0.9.1
 
 **Major Changes:**
 - Position helper API changes
@@ -209,7 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## GA-Lock Stability Guarantees (v1.0+)
+## GA-Lock Stability Guarantees (v0.9.x (Production-Ready)+)
 
 ✅ **API Stability**: Public APIs stable under SemVer (breaking changes only in major releases)
 ✅ **Wire Protocol**: LSP capabilities locked, backward compatible through v1.x

@@ -6,12 +6,12 @@ We actively support security updates for the following versions:
 
 | Version | Supported          | Status |
 | ------- | ------------------ | -------- |
-| 1.0.x   | :white_check_mark: | **Current Production** |
+| 0.9.x   | :white_check_mark: | **Current Production** |
 | 0.9.x   | :white_check_mark: | Legacy Support |
 | 0.8.x   | :white_check_mark: | Legacy Support |
 | < 0.8   | :x:                | End of Life |
 
-**v1.0 Security Guarantee**: As a production-ready release, v1.0.x receives priority security support with rapid response times and comprehensive security validation.
+**v0.9.x (Production-Ready) Security Guarantee**: As a production-ready release, v0.9.x receives priority security support with rapid response times and comprehensive security validation.
 
 ## Reporting a Vulnerability
 
@@ -69,7 +69,7 @@ This project uses comprehensive automated security scanning:
 - **Mutation Testing**: Security-focused mutation hardening with 87% quality score
 - **Fuzz Testing**: Property-based testing with crash detection and AST invariant validation
 
-### v1.0 Security Features
+### v0.9.x (Production-Ready) Security Features
 
 - **Enterprise-Grade Security**: Path traversal prevention, input validation, secure defaults
 - **UTF-16 Boundary Protection**: Fixes for symmetric position conversion vulnerabilities
@@ -104,7 +104,7 @@ When using perl-lsp:
 
 ## Known Security Considerations
 
-### v1.0 Production Security
+### v0.9.x (Production-Ready) Production Security
 
 **Parser Security**:
 - **Input validation**: The parser handles arbitrary Perl code with bounded recursion to prevent stack overflow
@@ -132,7 +132,7 @@ When using perl-lsp:
 
 ## Security Updates
 
-### v1.0 Security Update Process
+### v0.9.x (Production-Ready) Security Update Process
 
 **Notification Channels**:
 1. **GitHub Security Advisories**: https://github.com/EffortlessMetrics/perl-lsp/security/advisories
@@ -155,7 +155,7 @@ cargo build --release
 
 # Verify version and security status
 perl-lsp --version
-perl-lsp --security-status  # New v1.0 feature
+perl-lsp --security-status  # New v0.9.x (Production-Ready) feature
 ```
 
 **Emergency Security Updates**:
@@ -204,7 +204,7 @@ We track vulnerabilities in:
 
 We currently **do not** have a formal bug bounty program. However:
 
-- **v1.0 Security Focus**: Increased attention to security vulnerabilities in production release
+- **v0.9.x (Production-Ready) Security Focus**: Increased attention to security vulnerabilities in production release
 - **Responsible Disclosure**: We appreciate and reward responsible disclosure
 - **Security Credits**: We provide credit in security advisories and annual security report
 - **Contributor Recognition**: Security researchers recognized in our contributors page and release notes
@@ -223,11 +223,11 @@ We currently **do not** have a formal bug bounty program. However:
 - **Commercial support**: Contact maintainers for enterprise support options
 - **Security Discord**: Private channel for security researchers (request access via security email)
 
-## v1.0 Security Commitments
+## v0.9.x (Production-Ready) Security Commitments
 
 ### Production Security Guarantees
 
-As a v1.0 production release, we commit to:
+As a v0.9.x (Production-Ready) production release, we commit to:
 
 - **48-hour response** for critical security vulnerabilities
 - **Comprehensive security testing** for all releases
@@ -254,6 +254,6 @@ We thank the following security researchers and contributors:
 
 ---
 
-**Last Updated**: 2026-02-13 (v1.0 Release)
+**Last Updated**: 2026-02-13 (v0.9.x (Production-Ready) Release)
 **Next Review**: 2026-05-13 (quarterly review)
 **Security Status**: Production Ready ✅

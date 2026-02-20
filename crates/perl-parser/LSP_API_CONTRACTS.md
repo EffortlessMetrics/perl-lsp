@@ -276,9 +276,9 @@ Any changes to these contracts constitute a breaking change and require:
 3. Deprecation period for removed features
 4. Update to this specification document
 
-## Future Contracts (v1.0)
+## Future Contracts (v0.9.x (Production-Ready))
 
-Planned additions for stable v1.0 release:
+Planned additions for stable v0.9.x (Production-Ready) release:
 - [ ] Incremental document sync support
 - [ ] Partial result streaming
 - [ ] Progress reporting contracts

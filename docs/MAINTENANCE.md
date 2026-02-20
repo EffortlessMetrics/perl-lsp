@@ -1,9 +1,9 @@
-# Perl LSP v1.0 Maintenance Plan
+# Perl LSP v0.9.x (Production-Ready) Maintenance Plan
 
 > **Status**: Active
 > **Last Updated**: 2026-02-14
-> **Applies To**: perl-parser 1.0.x, perl-lsp 1.0.x, perl-lexer 1.0.x, perl-dap 1.0.x
-> **Support Period**: 5 years from v1.0.0 release (2026-02-14 to 2031-02-14)
+> **Applies To**: perl-parser 0.9.x, perl-lsp 0.9.x, perl-lexer 0.9.x, perl-dap 0.9.x
+> **Support Period**: 5 years from v0.9.1 release (2026-02-14 to 2031-02-14)
 
 ---
 
@@ -100,7 +100,7 @@ cargo machete
 
 **Frequency**: As needed (typically 1-2 per month)
 
-**Patch Release Criteria** (v1.0.Z):
+**Patch Release Criteria** (v0.9.x (Production-Ready).Z):
 
 | Category | Criteria | Example |
 |----------|----------|---------|
@@ -112,8 +112,8 @@ cargo machete
 **Patch Release Process**:
 1. Verify fix passes `just ci-gate`
 2. Update CHANGELOG.md with patch notes
-3. Bump version: `1.0.Z` → `1.0.Z+1`
-4. Create release branch: `release/1.0.Z+1`
+3. Bump version: `0.9.Z` → `0.9.Z+1`
+4. Create release branch: `release/0.9.Z+1`
 5. Run full test suite: `just ci-full`
 6. Merge to main, tag release
 7. Trigger release orchestration workflow
@@ -163,13 +163,13 @@ cargo machete
 
 | Version | Release Date | End of Life | Status |
 |---------|--------------|-------------|--------|
-| 1.0.x | 2026-02-14 | 2031-02-14 | Active (LTS) |
+| 0.9.x | 2026-02-14 | 2031-02-14 | Active (LTS) |
 | 0.9.x | 2026-01-18 | 2026-08-18 | Maintenance |
 | 0.8.x | 2025-10-01 | 2026-02-14 | Deprecated |
 
 **Version Support Rules**:
-- **LTS (1.0.x)**: Full support for 5 years, security patches only after 2 years
-- **Maintenance (0.9.x)**: Security patches only, 6 months after v1.0 release
+- **LTS (0.9.x)**: Full support for 5 years, security patches only after 2 years
+- **Maintenance (0.9.x)**: Security patches only, 6 months after v0.9.x (Production-Ready) release
 - **Deprecated (0.8.x)**: No updates, users must upgrade
 
 ### Service Level Agreement (SLA)
@@ -204,7 +204,7 @@ cargo machete
 
 #### Compatibility Guarantees
 
-**API Stability** (v1.0.x):
+**API Stability** (v0.9.x):
 - Public APIs remain stable within major version
 - Breaking changes only in major releases (2.0.0)
 - Deprecated APIs supported for at least 2 minor versions
@@ -575,7 +575,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 
 ### Version Planning
 
-#### v1.1.0 (Q2 2026)
+#### v0.10.0 (Q2 2026)
 
 **Focus**: Enhancements and refinements
 
@@ -661,7 +661,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 - Support previous MSRV for 1 year
 
 **Planned Upgrades**:
-- **v1.1.0**: Evaluate Rust 1.90+ MSRV
+- **v0.10.0**: Evaluate Rust 1.90+ MSRV
 - **v1.2.0**: Evaluate Rust 1.92+ MSRV
 - **v2.0.0**: Target latest stable Rust
 
@@ -686,7 +686,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 - 100 AST cache entries
 
 **Planned Improvements**:
-- **v1.1.0**: Evaluate incremental indexing improvements
+- **v0.10.0**: Evaluate incremental indexing improvements
 - **v1.2.0**: Implement lazy loading for large workspaces
 - **v2.0.0**: Consider distributed indexing for very large workspaces
 
@@ -775,7 +775,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 1. Assess severity and impact
 2. Determine if rollback is necessary
 3. Create rollback branch from previous release
-4. Tag new release (e.g., 1.0.1-rollback)
+4. Tag new release (e.g., 0.9.2-rollback)
 5. Publish rollback release
 6. Communicate with users
 7. Fix underlying issue
@@ -921,7 +921,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 
 ### Related Documentation
 
-- [STABILITY_STATEMENT_v1.0.md](STABILITY_STATEMENT_v1.0.md) - API stability guarantees
+- [STABILITY_STATEMENT_v0.9.x (Production-Ready).md](STABILITY_STATEMENT_v0.9.x (Production-Ready).md) - API stability guarantees
 - [SEMVER_POLICY.md](SEMVER_POLICY.md) - Semantic versioning policy
 - [RELEASE_PROCESS.md](RELEASE_PROCESS.md) - Release process documentation
 - [PERFORMANCE_SLO.md](PERFORMANCE_SLO.md) - Performance service level objectives
@@ -970,7 +970,7 @@ cargo doc --open                # Open documentation in browser
 
 | Date | Version | Changes |
 |------|---------|---------|
-| 2026-02-14 | 1.0 | Initial maintenance plan for v1.0 release |
+| 2026-02-14 | 1.0 | Initial maintenance plan for v0.9.x (Production-Ready) release |
 
 ---
 

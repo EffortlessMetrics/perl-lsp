@@ -62,7 +62,7 @@ known_issues:
     added: "2026-01-20"
     issue: "#205"
     status: "accepted"
-    notes: "Complex but correct, refactor post-v1.0"
+    notes: "Complex but correct, refactor post-v0.9.x (Production-Ready)"
 
 # Cleanup work
 technical_debt:

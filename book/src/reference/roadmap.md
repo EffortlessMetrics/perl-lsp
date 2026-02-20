@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-02-17)**: v0.9.1 close-out verification completed with receipts; v1.0.x hardening underway with native DAP preview validated.
+> **Status (2026-02-17)**: v0.9.1 close-out verification completed with receipts; v0.9.x hardening underway with native DAP preview validated.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -48,15 +48,15 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 
 **Now (post v0.9.1 close-out)**
 - Keep close-out receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
-- Publish benchmark outputs under `benchmarks/results/` for durable v1.0.x evidence
+- Publish benchmark outputs under `benchmarks/results/` for durable v0.9.x evidence
 
-**Next (v1.0.0)**
+**Next (v0.9.x (Production-Ready))**
 - Stability statement (GA-lock + versioning rules)
 - Packaging stance (what ships; supported platforms)
 - Benchmark publication with receipts under `benchmarks/results/` (in progress)
-- Upgrade notes from v0.8.x → v1.0
+- Upgrade notes from v0.8.x → v0.9.x (Production-Ready)
 
-**Later (post v1.0)**
+**Later (post v0.9.x (Production-Ready))**
 - DAP preview -> GA hardening (deeper variables/evaluate fidelity, shim distribution strategy, cross-editor receipts)
 - Full LSP 3.18 compliance
 - Package manager distribution (Homebrew/apt/etc.)
@@ -168,7 +168,7 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
    - Workspace indexing synchronization (PR #394)
    - Syntax highlighting validation (PR #397)
 
-8. **v1.0 Preparation** ✓ (PR #483)
+8. **v0.9.x (Production-Ready) Preparation** ✓ (PR #483)
    - Benchmark framework and documentation
    - Code quality improvements
    - Zero-allocation variable lookup (PR #473)
@@ -208,7 +208,7 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 ---
 
-### Not Before v1.0
+### Not Before v0.9.x (Production-Ready)
 
 These items are explicitly deferred:
 - Full LSP 3.18 compliance (see CURRENT_STATUS.md for current coverage)
@@ -217,7 +217,7 @@ These items are explicitly deferred:
 
 ---
 
-### v1.0.0: "Boring Promises" (sequence after v0.9.1)
+### v0.9.x (Production-Ready): "Boring Promises" (sequence after v0.9.1)
 
 **Goal**: Freeze the surfaces you're willing to support. Close known gaps honestly.
 
@@ -245,7 +245,7 @@ These items are explicitly deferred:
 **Exit criteria**:
 - Capability snapshot + docs aligned
 - Benchmarks published
-- Upgrade notes exist from v0.8.x → v1.0
+- Upgrade notes exist from v0.8.x → v0.9.x (Production-Ready)
 - Honest assessment document (`docs/HONEST_ASSESSMENT.md`) exists and is current
 - No DAP features marked as GA in `features.toml`
 
@@ -359,7 +359,7 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - O(1) Symbol Lookups Optimization (2026-01-21)
 - TCP Socket Mode for LSP Server (2026-01-21)
 - Security Hardening: path traversal + command injection (2026-01-21)
-- v1.0 Preparation: benchmarks + documentation (2026-01-23)
+- v0.9.x (Production-Ready) Preparation: benchmarks + documentation (2026-01-23)
 - Performance: zero-allocation lookups + Arc<str> tokens (2026-01-23)
 - Security: DAP/perldoc/perlcritic injection hardening (2026-01-23)
 - VSCode: improved UX + command filtering (2026-01-23)
@@ -413,7 +413,7 @@ To publish:
 
 See `docs/archive/roadmaps/` for historical roadmap versions.
 
-Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.9/v1.0 milestones above.
+Older targets (Q1-Q4 2025, 2026 vision) have been archived. Current focus is v0.9/v0.9.x (Production-Ready) milestones above.
 
 ---
 
