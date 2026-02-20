@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Subprocess abstraction for perltidy/perlcritic, AST caching, incremental parsing, symbol indexing, and parallel file processing.
 
-**Version**: 0.9.0 (synced with workspace)
+**Version**: 0.9.1 (synced with workspace)
 
 ## Commands
 

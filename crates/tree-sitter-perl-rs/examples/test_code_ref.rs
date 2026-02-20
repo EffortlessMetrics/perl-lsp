@@ -5,7 +5,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Testing Code References ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         ("Simple function reference", r#"my $ref = \&function;"#),
         ("Qualified function reference", r#"my $ref = \&Module::function;"#),
         ("Reference without &", r#"my $ref = \function;"#),

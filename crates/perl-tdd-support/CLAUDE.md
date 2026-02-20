@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Safe unwrap replacements (`must`/`must_some`/`must_err`), Perl test code generation from ASTs, test discovery/execution with TAP parsing, TDD workflow state management, refactoring analysis, and ignored test governance.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

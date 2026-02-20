@@ -6,7 +6,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 - **Tier**: 1 (leaf crate, no internal workspace dependencies)
 - **Purpose**: UTF-8/UTF-16 position tracking, byte-span types, and line-index caching for the Perl LSP ecosystem. Bridges the gap between Rust byte offsets and LSP UTF-16 code-unit positions.
-- **Version**: 0.9.0
+- **Version**: 0.9.1
 
 ## Commands
 

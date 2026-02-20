@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 **Purpose**: Generate LSP code actions from diagnostics and AST analysis -- quick fixes for common Perl mistakes, and refactoring operations for code improvement.
 
-**Version**: 0.9.0 (workspace-inherited)
+**Version**: 0.9.1 (workspace-inherited)
 
 ## Commands
 

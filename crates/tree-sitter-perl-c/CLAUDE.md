@@ -11,7 +11,7 @@ C-based tree-sitter Perl grammar via FFI.
 from `../../tree-sitter-perl/src/`, generate Rust bindings with `bindgen`, and
 expose a tree-sitter `Language` for benchmarking against the native Rust parser.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 This crate is **excluded** from the default workspace build because it requires
 `libclang-dev` for `bindgen`.

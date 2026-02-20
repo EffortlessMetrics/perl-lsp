@@ -20,7 +20,7 @@ The perl-lsp release process is fully automated and supports:
 - **Package managers**: Homebrew, Scoop, Chocolatey
 - **Docker images**: Multi-arch (linux/amd64, linux/arm64)
 - **VSCode extension**: VSCode Marketplace and Open VSX
-- **crates.io**: All 28 workspace crates
+- **crates.io**: All 43 workspace crates
 
 ### Release Architecture
 
@@ -128,7 +128,7 @@ This will:
 Monitor the following workflows:
 
 1. **Release** - Builds binaries and creates GitHub release
-2. **Publish to crates.io** - Publishes all 28 crates
+2. **Publish to crates.io** - Publishes all 43 crates
 3. **Publish VSCode Extension** - Publishes to VSCode Marketplace and Open VSX
 4. **Publish Docker Images** - Builds and pushes multi-arch images
 5. **Homebrew Auto-Bump** - Creates PR to Homebrew
@@ -168,7 +168,7 @@ After all workflows complete, verify:
 
 ### crates.io
 
-All 28 workspace crates are published to crates.io in dependency order:
+All 43 workspace crates are published to crates.io in dependency order:
 
 ```
 perl-lexer → perl-parser-core → perl-position-tracking →

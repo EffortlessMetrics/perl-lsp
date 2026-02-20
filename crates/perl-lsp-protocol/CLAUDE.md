@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 **Purpose**: Isolates protocol types from the LSP runtime so they can be shared across binaries and provider layers.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

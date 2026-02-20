@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-02-19
+
 ### Changed
 - **v0.9.1 close-out receipts captured**: workspace index state-machine transitions, instrumentation, and early-exit behavior verified with targeted tests in `perl-workspace-index`
 - **Performance caps validated**: workspace index benchmarks confirm wide margin to targets (`~368.7us` initial small, `~721.1us` initial medium, `~212.6us` incremental)

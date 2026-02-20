@@ -212,7 +212,7 @@ EOF
 "#;
 
     // Test different recovery modes
-    let modes = vec![
+    let modes = [
         ("Conservative", RecoveryMode::Conservative),
         ("BestGuess", RecoveryMode::BestGuess),
         ("Interactive", RecoveryMode::Interactive),

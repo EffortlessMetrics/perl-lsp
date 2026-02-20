@@ -5,7 +5,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Crate Overview
 
 - **Crate**: `perl-tokenizer`
-- **Version**: 0.9.0
+- **Version**: 0.9.1
 - **Tier**: 2 (single-level internal dependencies)
 - **Purpose**: Bridge between raw `perl-lexer` output and the recursive descent parser. Provides buffered token stream with lookahead, trivia preservation (comments, whitespace, POD), position tracking, and `__DATA__`/`__END__` marker utilities.
 

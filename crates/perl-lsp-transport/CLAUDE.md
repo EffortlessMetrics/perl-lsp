@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 **Purpose**: Synchronous Content-Length based message framing for reading JSON-RPC requests and writing responses/notifications, used by the `perl-lsp` server binary.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

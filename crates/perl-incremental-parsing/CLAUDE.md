@@ -8,7 +8,7 @@ This file provides guidance to Claude Code when working with code in this crate.
 
 **Purpose**: Minimize re-parsing overhead when Perl documents change by reusing unaffected AST subtrees, lexer checkpoints, and cached token streams.
 
-**Version**: 0.9.0
+**Version**: 0.9.1
 
 ## Commands
 

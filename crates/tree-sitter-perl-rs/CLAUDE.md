@@ -6,7 +6,7 @@ Guidance for Claude Code when working in `crates/tree-sitter-perl-rs/`.
 
 - **Package name**: `tree-sitter-perl` (lib: `tree_sitter_perl`)
 - **Tier**: 7 (legacy/testing)
-- **Version**: 0.9.0 (workspace)
+- **Version**: 0.9.1 (workspace)
 - **Publish**: false (internal only)
 - **Purpose**: Pure-Rust Pest-based Perl 5 parser that emits tree-sitter-compatible S-expressions. Also serves as a comparison/benchmark harness against the native v3 parser and the legacy C tree-sitter parser.
 

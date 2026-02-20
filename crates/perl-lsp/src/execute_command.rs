@@ -75,8 +75,8 @@
 //! use serde_json::Value;
 //!
 //! // Create provider with workspace security
-//! let provider = ExecuteCommandProvider::with_workspace_root(
-//!     Some("/home/user/project".into())
+//! let provider = ExecuteCommandProvider::with_workspace_roots(
+//!     vec!["/home/user/project".into()]
 //! );
 //!
 //! // Execute command with secure path resolution
@@ -925,6 +925,9 @@ pub fn command_exists(command: &str) -> bool {
 /// - `perl.runTestSub`: Execute a specific test subroutine
 /// - `perl.debugTests`: Debug test files (future DAP integration)
 /// - `perl.runCritic`: Perform code quality analysis
+/// - `perl.runTest`: Run a single test
+/// - `perl.runTestFile`: Run a test file
+/// - `perl.debugFile`: Debug a Perl file
 ///
 /// # Examples
 ///
@@ -933,7 +936,7 @@ pub fn command_exists(command: &str) -> bool {
 ///
 /// let commands = get_supported_commands();
 /// assert!(commands.contains(&"perl.runCritic".to_string()));
-/// assert_eq!(commands.len(), 5);
+/// assert_eq!(commands.len(), 8);
 /// ```
 ///
 /// # Performance

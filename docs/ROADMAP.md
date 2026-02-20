@@ -28,7 +28,7 @@ If a number is not backed by a receipt, it must be labeled **UNVERIFIED** or rem
 
 ---
 
-## Current State (v0.9.0 → v0.9.1)
+## Current State (v0.9.1 → v0.10.0)
 
 | Component | Release Stance | Evidence | Notes |
 |-----------|----------------|----------|-------|

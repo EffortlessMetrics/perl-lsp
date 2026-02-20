@@ -14,6 +14,8 @@ keywords = ["perl", "lsp", "language-server", "ide", "tree-sitter"]
 categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
+  "build.rs",
+  "features_sot.toml",
   "Cargo.toml",
   "README.md",
   "LICENSE*"

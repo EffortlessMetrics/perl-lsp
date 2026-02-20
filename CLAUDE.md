@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code when working with code in this repository.
 
-**Latest Release**: 0.9.0
+**Latest Release**: 0.9.1
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 **Metrics**: See [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for computed status
 

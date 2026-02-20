@@ -3,7 +3,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.9.0 - Semantic Ready (Issue #188 Phase 1, 2, 3 Complete) + Production Hardening
+**Latest Release**: v0.9.1 - Semantic Ready (Issue #188 Phase 1, 2, 3 Complete) + Production Hardening
 
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 

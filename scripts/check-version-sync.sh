@@ -13,8 +13,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 # 1. features.toml: version = "X.Y.Z" under [meta]
 V_FEATURES=$(grep -m1 '^version\s*=' "$REPO_ROOT/features.toml" | sed 's/.*"\(.*\)".*/\1/')
 
-# 2. crates/perl-lsp/Cargo.toml: version = "X.Y.Z"
-V_CARGO=$(grep -m1 '^version\s*=' "$REPO_ROOT/crates/perl-lsp/Cargo.toml" | sed 's/.*"\(.*\)".*/\1/')
+# 2. Root Cargo.toml workspace version (used by crates via version.workspace = true)
+V_CARGO=$(grep -A1 '^\[workspace\.package\]' "$REPO_ROOT/Cargo.toml" | grep -m1 '^version\s*=' | sed 's/.*"\(.*\)".*/\1/')
 
 # 3. vscode-extension/package.json: "version": "X.Y.Z"
 V_VSCODE=$(grep -m1 '"version"' "$REPO_ROOT/vscode-extension/package.json" | sed 's/.*"\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)".*/\1/')
@@ -38,14 +38,14 @@ done
 if [ "$ALL_MATCH" = true ]; then
     echo "Version sync check: all sources agree on $REFERENCE"
     echo "  features.toml:           $V_FEATURES"
-    echo "  perl-lsp/Cargo.toml:     $V_CARGO"
+    echo "  Cargo.toml [workspace]:  $V_CARGO"
     echo "  vscode-extension:        $V_VSCODE"
     echo "  build.rs fallback:       $V_BUILDRS"
     exit 0
 else
     echo "ERROR: Version mismatch detected!"
     echo "  features.toml:           $V_FEATURES"
-    echo "  perl-lsp/Cargo.toml:     $V_CARGO"
+    echo "  Cargo.toml [workspace]:  $V_CARGO"
     echo "  vscode-extension:        $V_VSCODE"
     echo "  build.rs fallback:       $V_BUILDRS"
     exit 1

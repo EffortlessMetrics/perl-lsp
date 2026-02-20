@@ -1889,6 +1889,31 @@ impl WorkspaceIndex {
         locations
     }
 
+    /// Count non-definition references (usages) of a symbol.
+    ///
+    /// Like `find_references` but excludes `ReferenceKind::Definition` entries,
+    /// returning only actual usage sites. This is used by code lens to show
+    /// "N references" where N means call sites, not the definition itself.
+    pub fn count_usages(&self, symbol_name: &str) -> usize {
+        let files = self.files.read();
+        let mut count = 0;
+
+        for (_uri_key, file_index) in files.iter() {
+            if let Some(refs) = file_index.references.get(symbol_name) {
+                count += refs.iter().filter(|r| r.kind != ReferenceKind::Definition).count();
+            }
+
+            if let Some(idx) = symbol_name.rfind("::") {
+                let bare_name = &symbol_name[idx + 2..];
+                if let Some(refs) = file_index.references.get(bare_name) {
+                    count += refs.iter().filter(|r| r.kind != ReferenceKind::Definition).count();
+                }
+            }
+        }
+
+        count
+    }
+
     /// Find the definition of a symbol
     ///
     /// # Arguments
