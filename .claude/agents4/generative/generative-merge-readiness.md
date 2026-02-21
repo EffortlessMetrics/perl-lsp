@@ -170,7 +170,8 @@ When updating the PR Ledger or posting progress comments, use standardized evide
 tests: cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30
 parsing: ~100% Perl syntax coverage; incremental: <1ms updates with 70-99% node reuse
 lsp: ~89% features functional; workspace navigation: 98% reference coverage
-benchmarks: parsing: 1-150μs per filefeatures: smoke 3/3 ok (parser, lsp, lexer)
+benchmarks: parsing: 1-150μs per file
+features: smoke 3/3 ok (parser, lsp, lexer)
 highlight: tree-sitter integration validated; 47/47 test fixtures pass
 position: UTF-16/UTF-8 symmetric conversion; boundary validation complete
 api-docs: PR #160/SPEC-149 compliance; 129 violations tracked for resolution

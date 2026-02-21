@@ -76,8 +76,8 @@ jobs:
           if not p.exists(): raise SystemExit(0)
           data = json.loads(p.read_text())
           for g in data.get("gates", []):
-              if str(g.get("status", "")).lower() not in ("passed", "pass", "skipped"):
-                  print(f"- {g.get('name', '<unnamed>')}: {g.get('status', '')} (exit {g.get('exit_code', '?')})")
+              if str(g.get("status", "")).lower() not in ("passed", "pass", "skipped", "skip"):
+                  print(f"- {g.get('gate_name', g.get('name', '<unnamed>'))}: {g.get('status', '')} (exit {g.get('exit_code', '?')})")
           PY
 
       - name: Gate summary
@@ -102,15 +102,19 @@ jobs:
               raise SystemExit(0)
 
           data = json.loads(receipt_path.read_text(encoding="utf-8"))
-          lines.append(f"Generated: {data.get('generated_at', '')}")
-          lines.append(f"Commit: {data.get('commit', '')}")
+          md = data.get("metadata", {})
+          lines.append(f"Generated: {md.get('timestamp', data.get('generated_at', ''))}")
+          lines.append(f"Commit: {md.get('git_sha_short', data.get('commit', ''))}")
           lines.append("")
           lines.append("| Gate | Status | Exit | Duration (s) |")
           lines.append("| --- | --- | --- | --- |")
           for gate in data.get("gates", []):
+              gate_label = gate.get('gate_name', gate.get('name', ''))
+              dur_ms = gate.get('duration_ms')
+              dur_s = f"{dur_ms / 1000:.1f}" if dur_ms is not None else str(gate.get('duration_seconds', ''))
               lines.append(
-                  f"| {gate.get('name', '')} | {gate.get('status', '')} | "
-                  f"{gate.get('exit_code', '')} | {gate.get('duration_seconds', '')} |"
+                  f"| {gate_label} | {gate.get('status', '')} | "
+                  f"{gate.get('exit_code', '')} | {dur_s} |"
               )
 
           Path(summary_path).write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -130,10 +134,11 @@ jobs:
               description = 'Gate receipt not found';
             } else {
               const data = JSON.parse(fs.readFileSync('target/receipts/receipt.json', 'utf8'));
-              const failedGates = data.gates.filter(g => g.status !== 'passed');
+              const ok = s => ['passed', 'pass', 'skipped', 'skip'].includes(String(s || '').toLowerCase());
+              const failedGates = (data.gates || []).filter(g => !ok(g.status));
               if (failedGates.length > 0) {
                 status = 'failure';
-                description = `${failedGates.length} gate(s) failed: ${failedGates.map(g => g.name).join(', ')}`;
+                description = `${failedGates.length} gate(s) failed: ${failedGates.map(g => g.gate_name || g.name || '<unnamed>').join(', ')}`;
               }
             }
 

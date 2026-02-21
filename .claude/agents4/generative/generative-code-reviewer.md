@@ -83,7 +83,8 @@ Routing
    format: cargo fmt --workspace: clean
    docs: API documentation compliance verified; missing_docs warnings: 129 tracked
    security: UTF-16 boundary handling validated; path traversal prevention verified
-   benchmarks: parsing: 1-150μs per file   ```
+   benchmarks: parsing: 1-150μs per file
+   ```
 
 5. **Gate Enforcement**: Ensure `generative:gate:clippy = pass` before proceeding. If any quality checks fail:
    - Provide specific remediation steps aligned with Perl LSP standards
