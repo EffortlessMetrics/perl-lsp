@@ -5,8 +5,8 @@
 
 mod support;
 
-use serial_test::serial;
 use serde_json::{Value, json};
+use serial_test::serial;
 use std::collections::BTreeSet;
 use std::time::Duration;
 use support::lsp_harness::{LspHarness, TempWorkspace};
