@@ -5,6 +5,7 @@
 
 mod support;
 
+use serial_test::serial;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::time::Duration;
@@ -192,6 +193,7 @@ fn setup_workspace(files: &[(&str, &str)]) -> Result<(LspHarness, TempWorkspace)
 }
 
 #[test]
+#[serial]
 fn bdd_definition_and_references_across_files() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Cross-file definition and references");
 
@@ -264,6 +266,7 @@ my $also = process_data();
 }
 
 #[test]
+#[serial]
 fn bdd_rename_updates_workspace_edits() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Rename propagates across workspace");
 
@@ -318,6 +321,7 @@ my $also = process_data();
 }
 
 #[test]
+#[serial]
 fn bdd_workspace_symbols_expose_module_api() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Workspace symbol search surfaces module APIs");
 
@@ -367,6 +371,7 @@ sub transform {
 }
 
 #[test]
+#[serial]
 fn bdd_editor_intelligence_for_test_workflow() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Editor intelligence for test workflow");
 
@@ -444,6 +449,7 @@ is(calculate_total(1, 2), 3, 'adds values');
 }
 
 #[test]
+#[serial]
 fn bdd_pull_diagnostics_recovers_after_syntax_fix() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Pull diagnostics recover after syntax fix");
 
@@ -512,6 +518,7 @@ sub compute_value {
 }
 
 #[test]
+#[serial]
 fn bdd_refactoring_workflow_surfaces_symbols_and_actions() -> Result<(), Box<dyn std::error::Error>>
 {
     let scenario = BddScenario::new("Refactoring workflow surfaces symbols and actions");
@@ -580,6 +587,7 @@ my $answer = legacy_process([1, 2, 3]);
 }
 
 #[test]
+#[serial]
 fn bdd_incremental_changes_refresh_cross_file_navigation() -> Result<(), Box<dyn std::error::Error>>
 {
     let scenario = BddScenario::new("Incremental changes refresh cross-file navigation");
@@ -671,6 +679,7 @@ my $result = Foo::process_records();
 }
 
 #[test]
+#[serial]
 fn bdd_prepare_rename_then_rename_from_call_site() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Prepare rename then rename from call site");
 
@@ -736,6 +745,7 @@ my $result = Foo::process_data();
 }
 
 #[test]
+#[serial]
 fn bdd_pull_diagnostics_supports_unchanged_report_cycle() -> Result<(), Box<dyn std::error::Error>>
 {
     let scenario = BddScenario::new("Pull diagnostics supports unchanged report cycle");
@@ -790,6 +800,7 @@ sub healthy_sub {
 }
 
 #[test]
+#[serial]
 fn bdd_formatting_workflow_returns_structured_edits() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Formatting workflow returns structured edits");
 

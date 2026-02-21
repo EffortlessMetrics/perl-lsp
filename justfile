@@ -404,6 +404,7 @@ ci-full:
     @just ci-clippy
     @just ci-test-core
     @just ci-test-lsp
+    @just ci-lsp-bdd
     @just ci-docs
     @echo "✅ Full CI passed!"
 
@@ -517,6 +518,13 @@ ci-lsp-smoke-e2e:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp --test lsp_smoke_e2e -- --test-threads=1
     @echo "✅ LSP smoke E2E passed"
+
+# LSP BDD workflow tests (serialized to prevent WSL resource exhaustion)
+ci-lsp-bdd:
+    @echo "🎭 Running LSP BDD workflow tests..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --test lsp_bdd_workflows -- --test-threads=1
+    @echo "✅ LSP BDD workflow tests passed"
 
 # Framework semantic depth receipts (Moo/Moose/Class::Accessor)
 ci-semantic-frameworks:
