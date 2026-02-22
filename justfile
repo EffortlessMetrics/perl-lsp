@@ -63,6 +63,7 @@ merge-gate: _check-tools-basic pr-fast
     just _timed "clippy-full" "just clippy-full" && \
     just _timed "test-full" "just test-full" && \
     just _timed "lsp-smoke" "just lsp-smoke" && \
+    just _timed "lsp-bdd" "just ci-lsp-bdd" && \
     just _timed "security-audit" "just security-audit" && \
     just _timed "ci-policy" "just ci-policy" && \
     just _timed "ci-v2-bundle-sync" "just ci-v2-bundle-sync" && \
@@ -371,6 +372,7 @@ ci-gate:
     just ci-v2-parity && \
     just ci-lsp-def && \
     just ci-lsp-smoke-e2e && \
+    just ci-lsp-bdd && \
     just ci-semantic-frameworks && \
     just ci-dap-smoke-e2e && \
     just ci-parser-features-check && \
@@ -523,7 +525,7 @@ ci-lsp-smoke-e2e:
 ci-lsp-bdd:
     @echo "🎭 Running LSP BDD workflow tests..."
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
-        cargo test -p perl-lsp --test lsp_bdd_workflows -- --test-threads=1
+        cargo test -p perl-lsp --locked --test lsp_bdd_workflows -- --test-threads=1
     @echo "✅ LSP BDD workflow tests passed"
 
 # Framework semantic depth receipts (Moo/Moose/Class::Accessor)
