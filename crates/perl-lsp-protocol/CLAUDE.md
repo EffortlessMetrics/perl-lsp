@@ -36,7 +36,7 @@ cargo doc -p perl-lsp-protocol --open    # View documentation
 
 | Module | Visibility | Purpose |
 |--------|-----------|---------|
-| `capabilities` | `pub` | `BuildFlags`, `AdvertisedFeatures`, `capabilities_for()`, `default_capabilities()`, `capabilities_json()`, `get_supported_commands()` |
+| `capabilities` | `pub` | `BuildFlags`, `AdvertisedFeatures` (re-exported), `capabilities_for()`, `default_capabilities()`, `capabilities_json()`, `get_supported_commands()` |
 | `methods` | `pub` | `&str` constants for all LSP 3.17 method names (lifecycle, text document sync, language features, workspace, window, special) |
 | `jsonrpc` | re-exported | `JsonRpcRequest` (Deserialize), `JsonRpcResponse` (Serialize), `JsonRpcError` (Serialize + Error) |
 | `errors` | re-exported | Error code constants (`PARSE_ERROR`, `METHOD_NOT_FOUND`, `REQUEST_CANCELLED`, `SERVER_CANCELLED`, etc.), builder functions (`cancelled_response`, `method_not_found`, `internal_error`, `invalid_params`, `server_not_initialized`, `connection_closed_error`, `transport_error`), param extractors (`req_uri`, `req_position`, `req_range`) |

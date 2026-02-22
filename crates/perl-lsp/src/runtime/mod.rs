@@ -37,6 +37,7 @@ use perl_parser::{
 
 use crate::call_hierarchy_provider::CallHierarchyProvider;
 use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
+use perl_lsp_feature_governance::FeatureProfile;
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)
 use crate::features::{
@@ -178,6 +179,8 @@ pub struct LspServer {
     pub(crate) notebook_store: notebook::NotebookStore,
     /// Trace level set by client via $/setTrace (off, messages, verbose)
     trace_level: Arc<Mutex<String>>,
+    /// Runtime feature profile selected by launch arguments or compiled default.
+    feature_profile: FeatureProfile,
 }
 
 // Note: DocumentState, ServerConfig, and normalize_package_separator are
@@ -187,18 +190,16 @@ pub struct LspServer {
 impl LspServer {
     /// Create a new LSP server
     pub fn new() -> Self {
+        Self::new_with_feature_profile(FeatureProfile::current())
+    }
+
+    /// Create a new LSP server using an explicit feature profile.
+    pub fn new_with_feature_profile(feature_profile: FeatureProfile) -> Self {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
-        let default_features = {
-            let flags = if cfg!(feature = "lsp-ga-lock") {
-                crate::protocol::capabilities::BuildFlags::ga_lock()
-            } else {
-                crate::protocol::capabilities::BuildFlags::production()
-            };
-            flags.to_advertised_features()
-        };
+        let default_features = feature_profile.advertised_features();
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -225,6 +226,7 @@ impl LspServer {
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
             trace_level: Arc::new(Mutex::new("off".to_string())),
+            feature_profile,
         }
     }
 
@@ -264,18 +266,24 @@ impl LspServer {
         R: Read + Send + 'static,
         W: Write + Send + 'static,
     {
+        Self::with_io_and_feature_profile(reader, writer, FeatureProfile::current())
+    }
+
+    /// Create a new LSP server with custom I/O and explicit feature profile.
+    pub fn with_io_and_feature_profile<R, W>(
+        reader: Box<R>,
+        writer: Box<W>,
+        feature_profile: FeatureProfile,
+    ) -> Self
+    where
+        R: Read + Send + 'static,
+        W: Write + Send + 'static,
+    {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
-        let default_features = {
-            let flags = if cfg!(feature = "lsp-ga-lock") {
-                crate::protocol::capabilities::BuildFlags::ga_lock()
-            } else {
-                crate::protocol::capabilities::BuildFlags::production()
-            };
-            flags.to_advertised_features()
-        };
+        let default_features = feature_profile.advertised_features();
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -301,6 +309,7 @@ impl LspServer {
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
             trace_level: Arc::new(Mutex::new("off".to_string())),
+            feature_profile,
         }
     }
 
@@ -309,18 +318,19 @@ impl LspServer {
     /// **Deprecated**: Use `with_io()` instead for full control over I/O.
     /// This method is maintained for backward compatibility.
     pub fn with_output(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
+        Self::with_output_and_feature_profile(output, FeatureProfile::current())
+    }
+
+    /// Create a new LSP server with custom output and explicit feature profile.
+    pub fn with_output_and_feature_profile(
+        output: Arc<Mutex<Box<dyn Write + Send>>>,
+        feature_profile: FeatureProfile,
+    ) -> Self {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
-        let default_features = {
-            let flags = if cfg!(feature = "lsp-ga-lock") {
-                crate::protocol::capabilities::BuildFlags::ga_lock()
-            } else {
-                crate::protocol::capabilities::BuildFlags::production()
-            };
-            flags.to_advertised_features()
-        };
+        let default_features = feature_profile.advertised_features();
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -346,7 +356,13 @@ impl LspServer {
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
             trace_level: Arc::new(Mutex::new("off".to_string())),
+            feature_profile,
         }
+    }
+
+    /// Active feature profile for this server instance.
+    pub(crate) const fn feature_profile(&self) -> FeatureProfile {
+        self.feature_profile
     }
 
     /// Get the subprocess runtime for external tool execution (perltidy, perlcritic).

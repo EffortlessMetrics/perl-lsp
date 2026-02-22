@@ -29,9 +29,17 @@ members = [
     "crates/perl-lsp-diagnostics",
     "crates/perl-lsp-semantic-tokens",
     "crates/perl-lsp-inlay-hints",
+    "crates/perl-lsp-feature-contracts",
+    "crates/perl-lsp-feature-flags",
+    "crates/perl-lsp-feature-grid",
+    "crates/perl-lsp-feature-ids",
+    "crates/perl-lsp-feature-profile",
+    "crates/perl-lsp-feature-governance",
+    "crates/perl-lsp-launcher",
     "crates/perl-lsp-navigation",
     "crates/perl-lsp-completion",
     "crates/perl-lsp-code-actions",
+    "crates/perl-lsp-feature-policy",
     "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
@@ -44,6 +52,7 @@ members = [
     "crates/perl-dap-eval",
     "crates/perl-dap-stack",
     "crates/perl-dap-variables",
+    "crates/perl-feature-catalog",
     "crates/tree-sitter-perl-rs",
     "crates/perl-ts-heredoc-analysis",
     "crates/perl-ts-logos-lexer",
@@ -95,6 +104,9 @@ perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.9.1" }
 perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.9.1" }
 perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.9.1" }
 perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.9.1" }
+perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.9.1" }
+perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.9.1" }
+perl-lsp-feature-ids = { path = "crates/perl-lsp-feature-ids", version = "0.9.1" }
 
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.9.1" }
@@ -105,6 +117,12 @@ perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.9.1" }
 perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.9.1" }
 perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.9.1" }
 perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.9.1" }
+perl-lsp-feature-contracts = { path = "crates/perl-lsp-feature-contracts", version = "0.9.1" }
+perl-lsp-feature-grid = { path = "crates/perl-lsp-feature-grid", version = "0.9.1" }
+perl-lsp-feature-profile = { path = "crates/perl-lsp-feature-profile", version = "0.9.1" }
+perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "0.9.1" }
+perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.9.1" }
+perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.9.1" }
 perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.9.1" }
 perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.9.1" }
 perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.9.1" }
@@ -131,6 +149,8 @@ tree-sitter-perl = { path = "crates/tree-sitter-perl-rs", features = ["pure-rust
 tree-sitter-perl-c = { path = "crates/tree-sitter-perl-c" }
 tree-sitter = "0.26.3"
 ropey = "1.6.1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
 
 # Profile for development - slightly optimized for better performance
 [profile.dev]

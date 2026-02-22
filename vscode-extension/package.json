@@ -253,6 +253,20 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Enable `Test::More` and `Test2` integration"
+        },
+        "perl-lsp.featureProfile": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ga-lock",
+            "ga",
+            "ga_lock",
+            "prod",
+            "production",
+            "all"
+          ],
+          "default": "auto",
+          "markdownDescription": "Select runtime LSP feature profile (`auto` follows binary build mode)."
         }
       }
     },

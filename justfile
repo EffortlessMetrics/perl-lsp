@@ -63,6 +63,7 @@ merge-gate: _check-tools-basic pr-fast
     just _timed "clippy-full" "just clippy-full" && \
     just _timed "test-full" "just test-full" && \
     just _timed "lsp-smoke" "just lsp-smoke" && \
+    just _timed "lsp-microcrates" "just ci-lsp-microcrates" && \
     just _timed "lsp-bdd" "just ci-lsp-bdd" && \
     just _timed "security-audit" "just security-audit" && \
     just _timed "ci-policy" "just ci-policy" && \
@@ -372,6 +373,7 @@ ci-gate:
     just ci-v2-parity && \
     just ci-lsp-def && \
     just ci-lsp-smoke-e2e && \
+    just ci-lsp-microcrates && \
     just ci-lsp-bdd && \
     just ci-semantic-frameworks && \
     just ci-dap-smoke-e2e && \
@@ -406,6 +408,7 @@ ci-full:
     @just ci-clippy
     @just ci-test-core
     @just ci-test-lsp
+    @just ci-lsp-microcrates
     @just ci-lsp-bdd
     @just ci-docs
     @echo "✅ Full CI passed!"
@@ -527,6 +530,23 @@ ci-lsp-bdd:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp --locked --test lsp_bdd_workflows -- --test-threads=1
     @echo "✅ LSP BDD workflow tests passed"
+
+# LSP microcrate compatibility coverage (feature microcrates + provider re-export contract)
+ci-lsp-microcrates:
+    @echo "🧩 Running LSP microcrate compatibility tests..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-providers --locked --test microcrate_reexports_compatibility -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test --locked -p perl-feature-catalog \
+                   -p perl-lsp-feature-ids \
+                   -p perl-lsp-feature-profile \
+                   -p perl-lsp-feature-policy \
+                   -p perl-lsp-feature-flags \
+                   -p perl-lsp-feature-contracts \
+                   -p perl-lsp-feature-grid \
+                   -p perl-lsp-feature-governance \
+                   -p perl-lsp-launcher
+    @echo "✅ LSP microcrate compatibility tests passed"
 
 # Framework semantic depth receipts (Moo/Moose/Class::Accessor)
 ci-semantic-frameworks:

@@ -35,12 +35,11 @@ impl BddScenario {
 }
 
 fn find_position(text: &str, needle: &str) -> (u32, u32) {
-    for (line_idx, line) in text.split('\n').enumerate() {
-        if let Some(col) = line.find(needle) {
-            return (line_idx as u32, col as u32);
-        }
-    }
-    panic!("needle '{}' not found in text", needle);
+    perl_tdd_support::must_some(
+        text.split('\n').enumerate().find_map(|(line_idx, line)| {
+            line.find(needle).map(|col| (line_idx as u32, col as u32))
+        }),
+    )
 }
 
 fn ref_uris(response: &Value) -> BTreeSet<String> {

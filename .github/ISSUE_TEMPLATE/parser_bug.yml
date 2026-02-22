@@ -1,5 +1,6 @@
 name: Parser Bug
 description: Report a Perl parsing issue (incorrect AST, missing syntax support, parse failure)
+title: "[Parser] "
 labels: ["bug", "parser", "needs-triage"]
 body:
   - type: markdown

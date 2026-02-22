@@ -26,6 +26,7 @@ perl-dap = { workspace = true, optional = true }
 perl-parser = { workspace = true, features = ["test-performance"] }
 perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-formatting = { workspace = true }
+perl-lsp-feature-governance = { workspace = true }
 perl-lsp-tooling = { workspace = true }
 perl-lsp-protocol = { workspace = true }
 perl-lsp-transport = { workspace = true }
@@ -36,6 +37,7 @@ perl-lsp-inlay-hints = { workspace = true }
 perl-lsp-navigation = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-rename = { workspace = true }
 perl-lsp-semantic-tokens = { workspace = true }
+perl-lsp-launcher = { workspace = true }
 perl-lexer = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 lsp-types = "0.97.0"
@@ -66,7 +68,11 @@ workspace = []  # Workspace-wide indexing for cross-file features
 incremental = ["perl-parser/incremental"]  # Incremental parsing support
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
-lsp-ga-lock = ["perl-lsp-protocol/lsp-ga-lock"]
+lsp-ga-lock = [
+  "perl-lsp-protocol/lsp-ga-lock",
+  "perl-lsp-feature-governance/lsp-ga-lock",
+  "perl-lsp-launcher/lsp-ga-lock",
+]
 experimental-features = []  # Experimental LSP features for testing
 stress-tests = []  # Enable stress tests that are too slow for CI
 

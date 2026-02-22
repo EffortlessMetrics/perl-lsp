@@ -1,5 +1,6 @@
 name: Bug Report
 description: Report a bug in the LSP server or parser
+title: "[Bug] "
 labels: ["bug", "needs-triage"]
 body:
   - type: markdown
