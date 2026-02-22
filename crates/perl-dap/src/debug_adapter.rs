@@ -3876,12 +3876,16 @@ impl DebugAdapter {
             .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
             .or_else(|| self.parse_evaluate_result_from_output(expression));
 
-        let (result, result_type) = parsed.unwrap_or_else(|| {
-            (
-                format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms),
-                "string".to_string(),
-            )
-        });
+        let Some((result, result_type)) = parsed else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "evaluate".to_string(),
+                body: None,
+                message: Some(format!("evaluate timed out after {timeout_ms}ms")),
+            };
+        };
 
         let eval_body =
             EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };

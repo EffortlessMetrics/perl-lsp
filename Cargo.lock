@@ -1880,6 +1880,7 @@ name = "perl-lsp-protocol"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-lsp-feature-contracts",
  "perl-lsp-feature-flags",
  "serde",
  "serde_json",
