@@ -1541,6 +1541,7 @@ dependencies = [
  "perl-dap-eval",
  "perl-dap-stack",
  "perl-dap-variables",
+ "perl-feature-catalog",
  "perl-parser",
  "perl-tdd-support",
  "proptest",
@@ -1551,7 +1552,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
- "toml",
  "tracing",
  "tracing-subscriber",
  "winapi",
@@ -1629,6 +1629,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-feature-catalog"
+version = "0.9.1"
+dependencies = [
+ "serde",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "perl-heredoc"
 version = "0.9.1"
 dependencies = [
@@ -1680,8 +1689,10 @@ dependencies = [
  "perl-lsp-code-actions",
  "perl-lsp-completion",
  "perl-lsp-diagnostics",
+ "perl-lsp-feature-governance",
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
+ "perl-lsp-launcher",
  "perl-lsp-navigation",
  "perl-lsp-protocol",
  "perl-lsp-providers",
@@ -1757,6 +1768,65 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-feature-contracts"
+version = "0.9.1"
+dependencies = [
+ "lsp-types",
+ "perl-feature-catalog",
+ "perl-lsp-feature-ids",
+ "serde",
+]
+
+[[package]]
+name = "perl-lsp-feature-flags"
+version = "0.9.1"
+dependencies = [
+ "perl-lsp-feature-contracts",
+ "perl-lsp-feature-ids",
+]
+
+[[package]]
+name = "perl-lsp-feature-governance"
+version = "0.9.1"
+dependencies = [
+ "perl-lsp-feature-contracts",
+ "perl-lsp-feature-grid",
+ "perl-lsp-feature-policy",
+ "perl-lsp-feature-profile",
+ "perl-tdd-support",
+]
+
+[[package]]
+name = "perl-lsp-feature-grid"
+version = "0.9.1"
+dependencies = [
+ "perl-lsp-feature-contracts",
+ "perl-lsp-feature-policy",
+ "perl-tdd-support",
+ "serde_json",
+]
+
+[[package]]
+name = "perl-lsp-feature-ids"
+version = "0.9.1"
+
+[[package]]
+name = "perl-lsp-feature-policy"
+version = "0.9.1"
+dependencies = [
+ "perl-lsp-feature-contracts",
+ "perl-lsp-feature-flags",
+ "perl-lsp-feature-profile",
+]
+
+[[package]]
+name = "perl-lsp-feature-profile"
+version = "0.9.1"
+dependencies = [
+ "perl-lsp-feature-contracts",
+]
+
+[[package]]
 name = "perl-lsp-formatting"
 version = "0.9.1"
 dependencies = [
@@ -1782,6 +1852,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-launcher"
+version = "0.9.1"
+dependencies = [
+ "perl-lsp-feature-governance",
+ "perl-tdd-support",
+]
+
+[[package]]
 name = "perl-lsp-navigation"
 version = "0.9.1"
 dependencies = [
@@ -1802,6 +1880,7 @@ name = "perl-lsp-protocol"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-lsp-feature-flags",
  "serde",
  "serde_json",
 ]
@@ -3955,6 +4034,7 @@ dependencies = [
  "indicatif",
  "notify",
  "peak_alloc",
+ "perl-feature-catalog",
  "perl-parser",
  "perl-parser-pest",
  "perl-tdd-support",
@@ -3965,7 +4045,6 @@ dependencies = [
  "serde_yaml_ng",
  "similar",
  "tempfile",
- "toml",
  "tree-sitter",
  "tree-sitter-perl",
  "walkdir",

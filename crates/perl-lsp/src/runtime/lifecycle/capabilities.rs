@@ -194,17 +194,8 @@ impl LspServer {
         let sync_kind = 2;
 
         // Build capabilities using catalog-driven approach
-        let mut build_flags = if cfg!(feature = "lsp-ga-lock") {
-            crate::protocol::capabilities::BuildFlags::ga_lock()
-        } else {
-            crate::protocol::capabilities::BuildFlags::production()
-        };
-
-        // Set formatting flags based on perltidy availability
-        if has_perltidy {
-            build_flags.formatting = true;
-            build_flags.range_formatting = true;
-        }
+        let profile = self.feature_profile();
+        let build_flags = profile.runtime_flags(has_perltidy);
 
         // Persist advertised features for gating
         let features = build_flags.to_advertised_features();

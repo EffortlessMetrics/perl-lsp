@@ -1,5 +1,6 @@
 name: Documentation Issue
 description: Report a problem or suggest an improvement to documentation
+title: "[Docs] "
 labels: ["documentation", "needs-triage"]
 body:
   - type: dropdown

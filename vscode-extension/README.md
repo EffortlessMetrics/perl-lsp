@@ -115,7 +115,7 @@ Works with any LSP-compatible editor:
 ## 📚 Resources
 
 - [Documentation](https://github.com/EffortlessMetrics/perl-lsp#readme)
-- [Issue Tracker](https://github.com/EffortlessMetrics/perl-lsp/issues)
+- [Issue Tracker](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose)
 - [Changelog](https://github.com/EffortlessMetrics/perl-lsp/blob/master/CHANGELOG.md)
 - [Migration Guide](https://github.com/EffortlessMetrics/perl-lsp/blob/master/MIGRATION.md)
 

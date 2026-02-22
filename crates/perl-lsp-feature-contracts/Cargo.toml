@@ -1,0 +1,30 @@
+[package]
+name = "perl-lsp-feature-contracts"
+version = "0.9.1"
+edition = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+license = "MIT OR Apache-2.0"
+repository = { workspace = true }
+homepage = { workspace = true }
+description = "Shared LSP feature contract model with SRP-friendly capability mapping helpers."
+documentation = "https://docs.rs/perl-lsp-feature-contracts"
+readme = "README.md"
+keywords = ["perl", "lsp", "features", "contracts", "capabilities"]
+categories = ["development-tools", "development-tools::testing"]
+include = ["src/**", "build.rs", "Cargo.toml", "README.md"]
+
+[dependencies]
+serde = { workspace = true }
+lsp-types = "0.97.0"
+perl-feature-catalog = { workspace = true }
+perl-lsp-feature-ids = { workspace = true }
+
+[build-dependencies]
+perl-feature-catalog = { workspace = true }
+
+[features]
+lsp-ga-lock = []
+
+[lints]
+workspace = true

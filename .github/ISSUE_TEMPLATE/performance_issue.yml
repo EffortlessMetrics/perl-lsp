@@ -1,5 +1,6 @@
 name: Performance Issue
 description: Report a performance problem or regression
+title: "[Performance] "
 labels: ["performance", "needs-triage"]
 body:
   - type: markdown

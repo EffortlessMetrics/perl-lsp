@@ -139,28 +139,28 @@ measure_time() {
 
 # Run clean build measurement
 if [[ "$RUN_CLEAN" == true ]]; then
-  measure_time "clean_build_workspace" "cargo build --workspace" "cargo clean"
+  measure_time "clean_build_workspace" "cargo build --workspace --locked" "cargo clean"
 fi
 
 # Run incremental build measurement
 if [[ "$RUN_INCREMENTAL" == true ]]; then
   # First ensure we have a clean build to measure from
-  cargo build --workspace > /dev/null 2>&1 || true
+  cargo build --workspace --locked > /dev/null 2>&1 || true
 
   # Touch a file in perl-lsp-providers to trigger incremental rebuild
   if [[ -d "${PROJECT_ROOT}/crates/perl-lsp-providers" ]]; then
     touch "${PROJECT_ROOT}/crates/perl-lsp-providers/src/lib.rs" 2>/dev/null || true
-    measure_time "incremental_build_providers" "cargo build -p perl-lsp-providers"
+    measure_time "incremental_build_providers" "cargo build -p perl-lsp-providers --locked"
   else
     # If perl-lsp-providers doesn't exist yet, measure incremental on perl-parser
     touch "${PROJECT_ROOT}/crates/perl-parser/src/lib.rs" 2>/dev/null || true
-    measure_time "incremental_build_parser" "cargo build -p perl-parser"
+    measure_time "incremental_build_parser" "cargo build -p perl-parser --locked"
   fi
 fi
 
 # Run test build measurement
 if [[ "$RUN_TESTS" == true ]]; then
-  measure_time "test_build_workspace" "cargo test --workspace --lib"
+  measure_time "test_build_workspace" "cargo test --workspace --lib --locked"
 fi
 
 # Read measurements from temp file and build final JSON
