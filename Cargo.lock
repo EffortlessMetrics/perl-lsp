@@ -1716,6 +1716,7 @@ dependencies = [
  "perl-lsp-tooling",
  "perl-lsp-transport",
  "perl-module-path",
+ "perl-module-reference",
  "perl-module-rename",
  "perl-module-resolution",
  "perl-parser",
@@ -2007,6 +2008,16 @@ name = "perl-module-path"
 version = "0.9.1"
 dependencies = [
  "perl-module-name",
+]
+
+[[package]]
+name = "perl-module-reference"
+version = "0.9.1"
+dependencies = [
+ "perl-module-import",
+ "perl-module-name",
+ "perl-module-path",
+ "proptest",
 ]
 
 [[package]]
