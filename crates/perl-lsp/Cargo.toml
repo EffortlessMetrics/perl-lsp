@@ -41,8 +41,8 @@ perl-lsp-launcher = { workspace = true }
 perl-lexer = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-module-path = { workspace = true }
+perl-module-resolution = { workspace = true }
 perl-source-file = { workspace = true }
-perl-path-security = { workspace = true }
 perl-content-length-framing = { workspace = true }
 perl-keywords = { workspace = true }
 lsp-types = "0.97.0"

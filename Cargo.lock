@@ -1716,8 +1716,8 @@ dependencies = [
  "perl-lsp-tooling",
  "perl-lsp-transport",
  "perl-module-path",
+ "perl-module-resolution",
  "perl-parser",
- "perl-path-security",
  "perl-position-tracking",
  "perl-source-file",
  "perl-tdd-support",
@@ -1986,6 +1986,18 @@ dependencies = [
 [[package]]
 name = "perl-module-path"
 version = "0.9.1"
+
+[[package]]
+name = "perl-module-resolution"
+version = "0.9.1"
+dependencies = [
+ "perl-module-path",
+ "perl-path-security",
+ "perl-uri",
+ "proptest",
+ "tempfile",
+ "url",
+]
 
 [[package]]
 name = "perl-parser"
