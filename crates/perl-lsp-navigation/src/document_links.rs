@@ -3,6 +3,7 @@
 //! This module provides document link detection for Perl source files,
 //! identifying `use`, `require` module statements, and file includes.
 
+use perl_module_path::module_name_to_path;
 use serde_json::{Value, json};
 use url::Url;
 
@@ -158,7 +159,7 @@ fn is_pragma(pkg: &str) -> bool {
 
 #[allow(dead_code)] // Reserved for future document link resolution
 fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
-    let rel = pkg.replace("::", "/") + ".pm";
+    let rel = module_name_to_path(pkg);
     // Try each workspace root
     if let Some(base) = roots.first() {
         let mut u = base.clone();

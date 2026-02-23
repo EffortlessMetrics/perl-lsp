@@ -1,0 +1,20 @@
+[package]
+name = "perl-module-path"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Perl module name/path conversion utilities"
+readme = "README.md"
+documentation = "https://docs.rs/perl-module-path"
+keywords = ["perl", "module", "path", "conversion"]
+categories = ["development-tools", "text-editors"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+
+[lints]
+workspace = true

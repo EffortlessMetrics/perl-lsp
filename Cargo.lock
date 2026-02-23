@@ -1542,6 +1542,7 @@ dependencies = [
  "perl-dap-stack",
  "perl-dap-variables",
  "perl-feature-catalog",
+ "perl-module-path",
  "perl-parser",
  "perl-path-security",
  "perl-tdd-support",
@@ -1701,6 +1702,7 @@ dependencies = [
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
+ "perl-module-path",
  "perl-parser",
  "perl-path-security",
  "perl-position-tracking",
@@ -1866,6 +1868,7 @@ name = "perl-lsp-navigation"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-module-path",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-semantic-analyzer",
@@ -1962,6 +1965,10 @@ dependencies = [
  "perl-lsp-protocol",
  "serde_json",
 ]
+
+[[package]]
+name = "perl-module-path"
+version = "0.9.1"
 
 [[package]]
 name = "perl-parser"

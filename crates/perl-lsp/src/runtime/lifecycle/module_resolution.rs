@@ -3,6 +3,7 @@
 //! Handles resolution of Perl module names to file paths.
 
 use super::super::*;
+use perl_module_path::module_name_to_path;
 use perl_path_security::validate_workspace_path;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -14,7 +15,7 @@ impl LspServer {
     /// hardcoded directories. Returns absolute filesystem path for a module.
     pub(crate) fn resolve_module_path(&self, module: &str) -> Option<PathBuf> {
         let root = self.root_path.lock().clone()?;
-        let rel = module.replace("::", "/") + ".pm";
+        let rel = module_name_to_path(module);
 
         // Use configured include paths
         let include_paths = {
@@ -66,7 +67,7 @@ impl LspServer {
     /// - Returns None on timeout, allowing graceful degradation
     pub(crate) fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
         let start_time = Instant::now();
-        let relative_path = format!("{}.pm", module_name.replace("::", "/"));
+        let relative_path = module_name_to_path(module_name);
 
         // Get configuration upfront to minimize lock contention
         let (include_paths, timeout_ms, use_system_inc) = {

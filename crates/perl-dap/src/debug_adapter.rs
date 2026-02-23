@@ -27,6 +27,7 @@ use perl_dap_stack::PerlStackParser;
 use perl_dap_variables::{
     PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer,
 };
+use perl_module_path::module_path_to_name;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -4830,7 +4831,7 @@ impl DebugAdapter {
             .into_iter()
             .enumerate()
             .map(|(idx, (key, path))| {
-                let name = key.replace('/', "::").trim_end_matches(".pm").to_string();
+                let name = module_path_to_name(&key);
                 Module { id: idx.to_string(), name, path: Some(path) }
             })
             .collect();
@@ -4950,7 +4951,7 @@ impl DebugAdapter {
             // Add loaded module names from %INC.
             let modules = self.query_inc_entries();
             for (key, _path) in &modules {
-                let name = key.replace('/', "::").trim_end_matches(".pm").to_string();
+                let name = module_path_to_name(key);
                 if stem.is_empty() || name.starts_with(stem) {
                     targets.push(CompletionItem {
                         label: name,

@@ -44,6 +44,7 @@ members = [
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
     "crates/perl-symbol-table",
+    "crates/perl-module-path",
     "crates/perl-uri",
     "crates/perl-path-security",
     "crates/perl-corpus",
@@ -97,6 +98,7 @@ perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.9.1" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.9.1" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.9.1" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.9.1" }
+perl-module-path = { path = "crates/perl-module-path", version = "0.9.1" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.9.1" }
 perl-uri = { path = "crates/perl-uri", version = "0.9.1" }
 perl-path-security = { path = "crates/perl-path-security", version = "0.9.1" }
