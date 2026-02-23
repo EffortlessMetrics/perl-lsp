@@ -18,6 +18,8 @@ use perl_module_path::file_path_to_module_name;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
 #[cfg(feature = "workspace")]
+use perl_source_file::{is_perl_source_path, is_perl_source_uri};
+#[cfg(feature = "workspace")]
 use std::io::Write;
 #[cfg(feature = "workspace")]
 use std::path::Path;
@@ -33,10 +35,7 @@ use url::Url;
 #[cfg(feature = "workspace")]
 #[allow(dead_code)]
 fn is_perl_source_file(path: &Path) -> bool {
-    let Some(ext) = path.extension().and_then(|s| s.to_str()) else {
-        return false;
-    };
-    matches!(ext.to_ascii_lowercase().as_str(), "pl" | "pm" | "t" | "psgi")
+    is_perl_source_path(path)
 }
 
 #[cfg(feature = "workspace")]
@@ -493,7 +492,7 @@ impl LspServer {
                     #[cfg(feature = "workspace")]
                     if let Some(coordinator) = self.coordinator() {
                         let workspace_index = coordinator.index();
-                        if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
+                        if is_perl_source_uri(&uri) {
                             if let Some(path) = uri_to_fs_path(&uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if let Ok(url) = url::Url::parse(&uri) {
@@ -793,7 +792,7 @@ impl LspServer {
                     // Note: Mutation operation - use coordinator with lifecycle tracking
                     #[cfg(feature = "workspace")]
                     if let Some(coordinator) = self.coordinator() {
-                        if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
+                        if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     coordinator.notify_change(uri);
@@ -845,10 +844,7 @@ impl LspServer {
                         coordinator.index().remove_file(old_uri);
 
                         // Index new file if it's a Perl file
-                        if new_uri.ends_with(".pl")
-                            || new_uri.ends_with(".pm")
-                            || new_uri.ends_with(".t")
-                        {
+                        if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if let Ok(url) = url::Url::parse(new_uri) {

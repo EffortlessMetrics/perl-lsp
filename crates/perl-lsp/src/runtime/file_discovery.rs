@@ -3,6 +3,7 @@
 //! Provides a two-strategy approach: try `git ls-files` first for speed
 //! and .gitignore awareness, then fall back to `WalkDir` enumeration.
 
+use perl_source_file::is_perl_source_path;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::WalkDir;
@@ -46,16 +47,6 @@ pub fn discover_perl_files(root: &Path) -> DiscoveryResult {
     }
 }
 
-/// Check if a path has a Perl source file extension.
-///
-/// Recognized extensions: `.pl`, `.pm`, `.t`, `.psgi` (case-insensitive).
-fn is_perl_source_file(path: &Path) -> bool {
-    let Some(ext) = path.extension().and_then(|s| s.to_str()) else {
-        return false;
-    };
-    matches!(ext.to_ascii_lowercase().as_str(), "pl" | "pm" | "t" | "psgi")
-}
-
 /// Check if a directory entry should be skipped during filesystem walk.
 ///
 /// Skips: `.git`, `.hg`, `.svn`, `target`, `node_modules`, `.cache`.
@@ -94,7 +85,7 @@ fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std
             continue;
         }
         let path = root.join(entry);
-        if is_perl_source_file(&path) {
+        if is_perl_source_path(&path) {
             files.push(path);
         } else {
             excluded_count += 1;
@@ -133,7 +124,7 @@ fn walk_discovery(root: &Path, start: Instant) -> DiscoveryResult {
         };
 
         if entry.file_type().is_file() {
-            if is_perl_source_file(entry.path()) {
+            if is_perl_source_path(entry.path()) {
                 files.push(entry.path().to_path_buf());
             } else {
                 excluded_count += 1;

@@ -1712,6 +1712,7 @@ dependencies = [
  "perl-parser",
  "perl-path-security",
  "perl-position-tracking",
+ "perl-source-file",
  "perl-tdd-support",
  "predicates",
  "pretty_assertions",
@@ -2121,6 +2122,10 @@ dependencies = [
  "rustc-hash",
  "serde",
 ]
+
+[[package]]
+name = "perl-source-file"
+version = "0.9.1"
 
 [[package]]
 name = "perl-symbol-table"
