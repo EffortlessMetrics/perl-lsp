@@ -34,7 +34,7 @@ url = "2.5.8"
 lsp-types = { version = "0.97.0", optional = true }
 
 [dev-dependencies]
-anyhow = "1.0.100"
+anyhow = "1.0.102"
 criterion = "0.8.1"
 tempfile = "3.24.0"
 perl-tdd-support = { workspace = true }
