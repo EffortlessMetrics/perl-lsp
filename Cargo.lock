@@ -1996,8 +1996,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-module-name"
+version = "0.9.1"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "perl-module-path"
 version = "0.9.1"
+dependencies = [
+ "perl-module-name",
+]
 
 [[package]]
 name = "perl-module-rename"
@@ -2025,6 +2035,7 @@ dependencies = [
 name = "perl-module-token"
 version = "0.9.1"
 dependencies = [
+ "perl-module-name",
  "perl-module-path",
  "proptest",
 ]

@@ -28,16 +28,7 @@
 ///     ]
 /// );
 /// ```
-#[must_use]
-pub fn module_variant_pairs(old_module: &str, new_module: &str) -> Vec<(String, String)> {
-    let canonical_old = canonicalize_module_name(old_module);
-    let canonical_new = canonicalize_module_name(new_module);
-
-    let canonical = (canonical_old.clone(), canonical_new.clone());
-    let legacy = (canonical_old.replace("::", "'"), canonical_new.replace("::", "'"));
-
-    if legacy == canonical { vec![canonical] } else { vec![canonical, legacy] }
-}
+pub use perl_module_name::module_variant_pairs;
 
 /// Returns `true` when `line` contains `module_name` as a standalone module
 /// token, respecting module boundaries.
@@ -80,10 +71,6 @@ pub fn replace_module_token(line: &str, from: &str, to: &str) -> (String, bool) 
     } else {
         (line.to_string(), false)
     }
-}
-
-fn canonicalize_module_name(module_name: &str) -> String {
-    module_name.replace('\'', "::")
 }
 
 fn has_module_boundaries(line: &str, start: usize, end: usize) -> bool {

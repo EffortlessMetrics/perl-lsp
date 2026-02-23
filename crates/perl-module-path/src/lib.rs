@@ -18,11 +18,7 @@ use std::borrow::Cow;
 /// ```
 #[must_use]
 pub fn normalize_package_separator(module_name: &str) -> Cow<'_, str> {
-    if module_name.contains('\'') {
-        Cow::Owned(module_name.replace('\'', "::"))
-    } else {
-        Cow::Borrowed(module_name)
-    }
+    perl_module_name::normalize_package_separator(module_name)
 }
 
 /// Convert a module name into a relative Perl module path.
