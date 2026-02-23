@@ -1722,6 +1722,7 @@ dependencies = [
  "perl-position-tracking",
  "perl-source-file",
  "perl-tdd-support",
+ "perl-workspace-discovery",
  "predicates",
  "pretty_assertions",
  "proptest",
@@ -2268,6 +2269,16 @@ dependencies = [
  "perl-tdd-support",
  "tempfile",
  "url",
+]
+
+[[package]]
+name = "perl-workspace-discovery"
+version = "0.9.1"
+dependencies = [
+ "perl-source-file",
+ "proptest",
+ "tempfile",
+ "walkdir",
 ]
 
 [[package]]
