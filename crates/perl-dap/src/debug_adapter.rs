@@ -21,6 +21,7 @@ use crate::protocol::{
     StepInTargetsResponseBody, StepOutArguments, TerminateArguments, VariablesArguments,
 };
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
+use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use perl_dap_eval::SafeEvaluator;
 use perl_dap_stack::PerlStackParser;
@@ -625,10 +626,8 @@ impl DebugAdapter {
 
         thread::spawn(move || {
             while let Ok(msg) = rx.recv() {
-                let frame = match serde_json::to_string(&msg) {
-                    Ok(payload) => {
-                        format!("Content-Length: {}\r\n\r\n{}", payload.len(), payload)
-                    }
+                let framed = match serde_json::to_vec(&msg) {
+                    Ok(payload) => frame(&payload),
                     Err(e) => {
                         eprintln!("Failed to serialize DAP message: {} - {:#?}", e, msg);
                         continue;
@@ -636,7 +635,7 @@ impl DebugAdapter {
                 };
 
                 let mut writer = lock_or_recover(&event_writer, "event_writer");
-                if let Err(e) = writer.write_all(frame.as_bytes()) {
+                if let Err(e) = writer.write_all(&framed) {
                     eprintln!("Failed to write DAP frame in event handler: {}", e);
                     continue;
                 }
@@ -648,73 +647,62 @@ impl DebugAdapter {
         });
 
         let mut reader = BufReader::new(input);
-        let mut line = String::new();
+        let mut framer = ContentLengthFramer::new();
+        let mut read_buf = [0u8; 8 * 1024];
 
         loop {
-            // Read headers.
-            let mut headers = HashMap::new();
-            loop {
-                line.clear();
-                match reader.read_line(&mut line) {
-                    Ok(0) => return Ok(()), // EOF
-                    Ok(_) => {
-                        let trimmed = line.trim_end();
-                        if trimmed.is_empty() {
-                            break;
-                        }
-                        if let Some(colon_pos) = trimmed.find(':') {
-                            let key = trimmed[..colon_pos].trim();
-                            let value = trimmed[colon_pos + 1..].trim();
-                            headers.insert(key.to_string(), value.to_string());
-                        }
-                    }
-                    Err(e) => return Err(e),
-                }
+            let bytes_read = reader.read(&mut read_buf)?;
+            if bytes_read == 0 {
+                return Ok(());
             }
 
-            // Read content body based on Content-Length.
-            let Some(content_length) = headers.get("Content-Length") else {
-                continue;
-            };
-            let Ok(length) = content_length.parse::<usize>() else {
-                eprintln!("Invalid Content-Length header: {content_length}");
-                continue;
-            };
+            framer.push(&read_buf[..bytes_read]);
 
-            let mut buffer = vec![0u8; length];
-            reader.read_exact(&mut buffer)?;
+            loop {
+                let body = match framer.try_next() {
+                    Ok(Some(body)) => body,
+                    Ok(None) => break,
+                    Err(error) => {
+                        eprintln!("Failed to parse DAP transport frame: {error}");
+                        continue;
+                    }
+                };
 
-            let msg = match serde_json::from_slice::<DapMessage>(&buffer) {
-                Ok(msg) => msg,
-                Err(_) => {
-                    eprintln!("Failed to parse DAP message: {}", String::from_utf8_lossy(&buffer));
+                let msg = match serde_json::from_slice::<DapMessage>(&body) {
+                    Ok(msg) => msg,
+                    Err(_) => {
+                        eprintln!(
+                            "Failed to parse DAP message: {}",
+                            String::from_utf8_lossy(&body)
+                        );
+                        continue;
+                    }
+                };
+
+                let DapMessage::Request { seq, command, arguments } = msg else {
                     continue;
+                };
+
+                let response = self.dispatch_request(seq, &command, arguments);
+                let payload = match serde_json::to_vec(&response) {
+                    Ok(payload) => payload,
+                    Err(e) => {
+                        eprintln!("Failed to serialize DAP response: {}", e);
+                        continue;
+                    }
+                };
+
+                let framed = frame(&payload);
+                let mut writer = lock_or_recover(&shared_writer, "response_writer");
+                writer.write_all(&framed)?;
+                writer.flush()?;
+
+                // DAP requires this event only after initialize response is sent.
+                if command == "initialize"
+                    && Self::response_succeeded_for_command(&response, "initialize")
+                {
+                    self.send_event("initialized", None);
                 }
-            };
-
-            let DapMessage::Request { seq, command, arguments } = msg else {
-                continue;
-            };
-
-            let response = self.dispatch_request(seq, &command, arguments);
-            let payload = match serde_json::to_string(&response) {
-                Ok(payload) => payload,
-                Err(e) => {
-                    eprintln!("Failed to serialize DAP response: {}", e);
-                    continue;
-                }
-            };
-
-            let frame = format!("Content-Length: {}\r\n\r\n{}", payload.len(), payload);
-            let mut writer = lock_or_recover(&shared_writer, "response_writer");
-            writer.write_all(frame.as_bytes())?;
-            writer.flush()?;
-
-            // DAP requires this event only after initialize response is sent.
-            if command == "initialize"
-                && Self::response_succeeded_for_command(&response, "initialize")
-            {
-                self.send_event("initialized", None);
             }
         }
     }

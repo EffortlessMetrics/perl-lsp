@@ -42,6 +42,7 @@ perl-lexer = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-module-path = { workspace = true }
 perl-path-security = { workspace = true }
+perl-content-length-framing = { workspace = true }
 lsp-types = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

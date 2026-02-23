@@ -57,11 +57,10 @@ fn send_index_ready_notification(output: &Arc<Mutex<Box<dyn Write + Send>>>, rea
         "params": { "ready": ready }
     });
 
-    if let Ok(notification_str) = serde_json::to_string(&notification) {
+    if let Ok(payload) = serde_json::to_vec(&notification) {
         let mut out = output.lock();
-        if write!(out, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)
-            .is_ok()
-        {
+        let framed = frame(&payload);
+        if out.write_all(&framed).is_ok() {
             let _ = out.flush();
         }
     }

@@ -1,95 +1,81 @@
-//! Message framing for LSP Base Protocol
-//!
-//! Implements Content-Length based message framing as specified in
-//! the LSP Base Protocol.
+//! Message framing for the LSP base protocol.
 
+use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_lsp_protocol::{JsonRpcRequest, JsonRpcResponse};
-use std::collections::HashMap;
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Write};
 
-/// Read an LSP message from a buffered reader
+/// Stateful reader for `Content-Length` framed JSON-RPC requests.
 ///
-/// Returns `Ok(None)` on EOF or parse error (recoverable).
-/// Returns `Err` only on I/O errors (non-recoverable).
+/// This reader keeps partial frame state across reads, which allows it to
+/// handle split headers, split bodies, and multiple messages arriving in a
+/// single transport read.
+#[derive(Default)]
+pub struct ContentLengthMessageReader {
+    framer: ContentLengthFramer,
+}
+
+impl ContentLengthMessageReader {
+    /// Create a new reader with empty frame state.
+    #[must_use]
+    pub fn new() -> Self {
+        Self { framer: ContentLengthFramer::new() }
+    }
+
+    /// Read and parse the next JSON-RPC request from the underlying byte stream.
+    ///
+    /// Returns:
+    /// - `Ok(Some(request))` when a complete request is decoded
+    /// - `Ok(None)` on EOF
+    /// - `Err(io::Error)` on non-recoverable I/O failure
+    ///
+    /// Malformed frames are logged and skipped so the caller can continue
+    /// processing subsequent requests.
+    pub fn read_next(&mut self, reader: &mut dyn Read) -> io::Result<Option<JsonRpcRequest>> {
+        let mut chunk = [0u8; 8 * 1024];
+
+        loop {
+            match self.framer.try_next() {
+                Ok(Some(body)) => match serde_json::from_slice::<JsonRpcRequest>(&body) {
+                    Ok(request) => return Ok(Some(request)),
+                    Err(error) => {
+                        eprintln!("LSP server: JSON parse error - {error}");
+                        continue;
+                    }
+                },
+                Ok(None) => {}
+                Err(error) => {
+                    eprintln!("LSP server: frame parse error - {error}");
+                    continue;
+                }
+            }
+
+            let bytes_read = reader.read(&mut chunk)?;
+            if bytes_read == 0 {
+                return Ok(None);
+            }
+            self.framer.push(&chunk[..bytes_read]);
+        }
+    }
+}
+
+/// Read an LSP message from a buffered reader.
+///
+/// This is a compatibility helper for one-shot reads. For long-running loops,
+/// prefer [`ContentLengthMessageReader`] to preserve parser state across calls.
 pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcRequest>> {
-    let mut headers = HashMap::new();
-
-    // Read headers
-    loop {
-        let mut line = String::new();
-        if reader.read_line(&mut line)? == 0 {
-            return Ok(None); // EOF
-        }
-
-        let line = line.trim_end();
-        if line.is_empty() {
-            break; // End of headers
-        }
-
-        if let Some((key, value)) = line.split_once(": ") {
-            headers.insert(key.to_string(), value.to_string());
-        }
-    }
-
-    // Read content
-    if let Some(content_length) = headers.get("Content-Length") {
-        if let Ok(length) = content_length.parse::<usize>() {
-            let mut content = vec![0u8; length];
-            let mut bytes_read = 0;
-
-            // Read content in chunks to handle partial reads
-            while bytes_read < length {
-                let bytes_to_read = length - bytes_read;
-                let mut chunk = vec![0u8; bytes_to_read];
-                match reader.read(&mut chunk)? {
-                    0 => return Ok(None), // Unexpected EOF
-                    n => {
-                        content[bytes_read..bytes_read + n].copy_from_slice(&chunk[..n]);
-                        bytes_read += n;
-                    }
-                }
-            }
-
-            // Parse JSON-RPC request with enhanced error handling
-            match serde_json::from_slice(&content) {
-                Ok(request) => return Ok(Some(request)),
-                Err(e) => {
-                    // Enhanced malformed frame recovery
-                    eprintln!("LSP server: JSON parse error - {}", e);
-
-                    // Attempt to extract malformed content safely (no sensitive data logging)
-                    let content_str = String::from_utf8_lossy(&content);
-                    if content_str.len() > 100 {
-                        eprintln!(
-                            "LSP server: Malformed frame (truncated): {}...",
-                            &content_str[..100]
-                        );
-                    } else {
-                        eprintln!("LSP server: Malformed frame: {}", content_str);
-                    }
-
-                    // Continue processing - don't crash the server on malformed input
-                    return Ok(None);
-                }
-            }
-        }
-    }
-
-    Ok(None)
+    let mut message_reader = ContentLengthMessageReader::new();
+    message_reader.read_next(reader)
 }
 
-/// Write an LSP message to a writer with proper framing
+/// Write an LSP response with `Content-Length` framing.
 pub fn write_message<W: Write>(writer: &mut W, response: &JsonRpcResponse) -> io::Result<()> {
-    let content = serde_json::to_string(response)?;
-    let content_length = content.len();
-
-    write!(writer, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
-    writer.flush()?;
-
-    Ok(())
+    let content = serde_json::to_vec(response)?;
+    let framed = frame(&content);
+    writer.write_all(&framed)?;
+    writer.flush()
 }
 
-/// Write an LSP notification to a writer
+/// Write an LSP notification with `Content-Length` framing.
 pub fn write_notification<W: Write>(
     writer: &mut W,
     method: &str,
@@ -101,12 +87,13 @@ pub fn write_notification<W: Write>(
         "params": params
     });
 
-    let notification_str = serde_json::to_string(&notification)?;
-    write!(writer, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
+    let payload = serde_json::to_vec(&notification)?;
+    let framed = frame(&payload);
+    writer.write_all(&framed)?;
     writer.flush()
 }
 
-/// Log outgoing response for debugging
+/// Log outgoing response metadata for transport debugging.
 pub fn log_response(response: &JsonRpcResponse) {
     if let Ok(content) = serde_json::to_string(response) {
         eprintln!(

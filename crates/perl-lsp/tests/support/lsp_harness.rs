@@ -7,6 +7,7 @@
 #![allow(clippy::collapsible_if)]
 
 use parking_lot::{Condvar, Mutex};
+use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_lsp::LspServer;
 use perl_tdd_support::must;
 use serde_json::{Value, json};
@@ -59,6 +60,7 @@ impl TempWorkspace {
 pub struct LspHarness {
     sender: mpsc::Sender<Vec<u8>>,
     output_buffer: Arc<Mutex<Vec<u8>>>,
+    output_framer: ContentLengthFramer,
     output_signal: Arc<Condvar>,
     notification_buffer: Arc<Mutex<VecDeque<Value>>>,
     server_requests: Arc<Mutex<VecDeque<Value>>>,
@@ -102,6 +104,7 @@ impl LspHarness {
         Self {
             sender: tx,
             output_buffer,
+            output_framer: ContentLengthFramer::new(),
             output_signal,
             notification_buffer,
             server_requests,
@@ -519,10 +522,8 @@ impl LspHarness {
             "params": params
         });
 
-        let request_str = format!("{}\r\n", notification);
-        let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
-
-        let _ = self.sender.send(content.into_bytes());
+        let request_str = notification.to_string();
+        let _ = self.sender.send(frame(request_str.as_bytes()));
     }
 
     /// Drain notifications from the buffer
@@ -592,6 +593,18 @@ impl LspHarness {
         // (they belong to canceled or timed-out requests)
     }
 
+    fn try_take_one_framed_message(&mut self) -> Option<Vec<u8>> {
+        loop {
+            match self.output_framer.try_next() {
+                Ok(Some(body)) => return Some(body),
+                Ok(None) => return None,
+                Err(error) => {
+                    eprintln!("LSP harness framing error: {error}");
+                }
+            }
+        }
+    }
+
     // Private helper to send request and get response with adaptive timeout
     fn send_request(&mut self, request: Value) -> Result<Value, String> {
         let timeout = self.get_adaptive_timeout();
@@ -612,12 +625,12 @@ impl LspHarness {
     ) -> Result<Value, String> {
         let expect_id = request.get("id").and_then(|v| v.as_i64());
 
-        // Format request with Content-Length header
+        // Format request with Content-Length framing
         let request_str = request.to_string();
-        let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
+        let content = frame(request_str.as_bytes());
 
         // Send to server thread
-        if let Err(e) = self.sender.send(content.into_bytes()) {
+        if let Err(e) = self.sender.send(content) {
             return Err(format!("Server send error: {}", e));
         }
 
@@ -630,10 +643,14 @@ impl LspHarness {
                 return Err(format!("Request timed out after {:?}", timeout));
             }
 
-            // Drain complete messages from the buffer
-            while let Some(msg_bytes) = try_take_one_lsp_message(&mut guard) {
-                // Drop lock before parsing JSON
-                drop(guard);
+            if !guard.is_empty() {
+                let chunk = std::mem::take(&mut *guard);
+                self.output_framer.push(&chunk);
+            }
+
+            drop(guard);
+
+            while let Some(msg_bytes) = self.try_take_one_framed_message() {
                 if let Ok(msg) = serde_json::from_slice::<Value>(&msg_bytes) {
                     if msg.get("id").and_then(|v| v.as_i64()) == expect_id {
                         if let Some(error) = msg.get("error") {
@@ -647,9 +664,9 @@ impl LspHarness {
                         self.stash_non_matching_message(msg);
                     }
                 }
-                // Re-acquire lock for next iteration
-                guard = self.output_buffer.lock();
             }
+
+            guard = self.output_buffer.lock();
 
             // Wait for signal from TestWriter with bounded timeout
             let remaining = timeout.saturating_sub(start.elapsed());
@@ -670,12 +687,12 @@ impl LspHarness {
     ) -> Result<Value, String> {
         let expect_id = request.get("id").and_then(|v| v.as_i64());
 
-        // Format request with Content-Length header
+        // Format request with Content-Length framing
         let request_str = request.to_string();
-        let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
+        let content = frame(request_str.as_bytes());
 
         // Send to server thread
-        if let Err(e) = self.sender.send(content.into_bytes()) {
+        if let Err(e) = self.sender.send(content) {
             return Err(format!("Server send error: {}", e));
         }
 
@@ -688,10 +705,14 @@ impl LspHarness {
                 return Err(format!("Request timed out after {:?}", timeout));
             }
 
-            // Drain complete messages from the buffer
-            while let Some(msg_bytes) = try_take_one_lsp_message(&mut guard) {
-                // Drop lock before parsing JSON
-                drop(guard);
+            if !guard.is_empty() {
+                let chunk = std::mem::take(&mut *guard);
+                self.output_framer.push(&chunk);
+            }
+
+            drop(guard);
+
+            while let Some(msg_bytes) = self.try_take_one_framed_message() {
                 if let Ok(msg) = serde_json::from_slice::<Value>(&msg_bytes) {
                     if msg.get("id").and_then(|v| v.as_i64()) == expect_id {
                         // Return the full message for schema validation tests
@@ -701,9 +722,9 @@ impl LspHarness {
                         self.stash_non_matching_message(msg);
                     }
                 }
-                // Re-acquire lock for next iteration
-                guard = self.output_buffer.lock();
             }
+
+            guard = self.output_buffer.lock();
 
             // Wait for signal from TestWriter with bounded timeout
             let remaining = timeout.saturating_sub(start.elapsed());
@@ -1001,37 +1022,6 @@ impl LspHarness {
         // If it responds (even with error), server is alive
         ping_result.is_ok() || ping_result.err().is_some_and(|e| !e.contains("timed out"))
     }
-}
-
-/// Find position of `needle` within `hay`.
-fn find_subslice(hay: &[u8], needle: &[u8]) -> Option<usize> {
-    hay.windows(needle.len()).position(|w| w == needle)
-}
-
-/// Try to extract one complete LSP message from `buf`, draining consumed bytes.
-/// Returns the JSON body bytes if a complete message is available.
-fn try_take_one_lsp_message(buf: &mut Vec<u8>) -> Option<Vec<u8>> {
-    let start = find_subslice(buf, b"Content-Length:")?;
-    if start > 0 {
-        buf.drain(..start);
-    }
-    let header_end = find_subslice(buf, b"\r\n\r\n")?;
-    let header = std::str::from_utf8(&buf[..header_end]).ok()?;
-    let mut len: Option<usize> = None;
-    for line in header.split("\r\n") {
-        if let Some(rest) = line.strip_prefix("Content-Length:") {
-            len = rest.trim().parse::<usize>().ok();
-        }
-    }
-    let len = len?;
-    let body_start = header_end + 4;
-    let body_end = body_start + len;
-    if buf.len() < body_end {
-        return None; // incomplete message
-    }
-    let json_bytes = buf[body_start..body_end].to_vec();
-    buf.drain(..body_end);
-    Some(json_bytes)
 }
 
 /// Test writer that captures output

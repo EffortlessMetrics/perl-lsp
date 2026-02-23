@@ -1510,6 +1510,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-content-length-framing"
+version = "0.9.1"
+
+[[package]]
 name = "perl-corpus"
 version = "0.9.1"
 dependencies = [
@@ -1537,6 +1541,7 @@ dependencies = [
  "lsp-types",
  "nix",
  "once_cell",
+ "perl-content-length-framing",
  "perl-dap-breakpoint",
  "perl-dap-eval",
  "perl-dap-stack",
@@ -1686,6 +1691,7 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
+ "perl-content-length-framing",
  "perl-dap",
  "perl-lexer",
  "perl-lsp-code-actions",
@@ -1962,6 +1968,7 @@ dependencies = [
 name = "perl-lsp-transport"
 version = "0.9.1"
 dependencies = [
+ "perl-content-length-framing",
  "perl-lsp-protocol",
  "serde_json",
 ]
