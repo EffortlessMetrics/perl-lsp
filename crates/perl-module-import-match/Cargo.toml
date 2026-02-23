@@ -1,5 +1,5 @@
 [package]
-name = "perl-module-rename"
+name = "perl-module-import-match"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,16 +7,16 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Deterministic module-import line edit planning for file rename workflows"
+description = "Import-line module match predicates for deterministic Perl module rename workflows"
 readme = "README.md"
-documentation = "https://docs.rs/perl-module-rename"
-keywords = ["perl", "module", "rename", "lsp", "workspace"]
+documentation = "https://docs.rs/perl-module-import-match"
+keywords = ["perl", "module", "import", "rename", "lsp"]
 categories = ["development-tools", "text-editors"]
 include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
+perl-module-import = { workspace = true }
 perl-module-token = { workspace = true }
-perl-module-import-match = { workspace = true }
 
 [dev-dependencies]
 proptest = "1.9.0"

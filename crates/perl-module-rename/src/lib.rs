@@ -8,8 +8,8 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-use perl_module_import::{ModuleImportKind, parse_module_import_head};
-use perl_module_token::{contains_module_token, module_variant_pairs, replace_module_token};
+use perl_module_import_match::line_references_module_import;
+use perl_module_token::{module_variant_pairs, replace_module_token};
 
 /// A full-line replacement edit for a module rename.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,7 +59,7 @@ pub fn plan_module_rename_edits(
 
         for (old_variant, new_variant) in &variants {
             let current_line = rewritten.as_deref().unwrap_or(line);
-            if !should_rewrite_line(current_line, old_variant) {
+            if !line_references_module_import(current_line, old_variant) {
                 continue;
             }
 
@@ -102,20 +102,6 @@ pub fn apply_module_rename_edits(source: &str, edits: &[ModuleLineEdit]) -> Stri
 
     lines.join("\n")
 }
-
-fn should_rewrite_line(line: &str, module_name: &str) -> bool {
-    let Some(parsed) = parse_module_import_head(line) else {
-        return false;
-    };
-
-    match parsed.kind {
-        ModuleImportKind::Use | ModuleImportKind::Require => parsed.token == module_name,
-        ModuleImportKind::UseParent | ModuleImportKind::UseBase => {
-            contains_module_token(line, module_name)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{ModuleLineEdit, apply_module_rename_edits, plan_module_rename_edits};

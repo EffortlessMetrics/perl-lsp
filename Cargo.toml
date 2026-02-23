@@ -48,6 +48,7 @@ members = [
     "crates/perl-module-name",
     "crates/perl-module-reference",
     "crates/perl-module-import",
+    "crates/perl-module-import-match",
     "crates/perl-module-path",
     "crates/perl-module-rename",
     "crates/perl-module-resolution",
@@ -112,6 +113,7 @@ perl-module-token = { path = "crates/perl-module-token", version = "0.9.1" }
 perl-module-name = { path = "crates/perl-module-name", version = "0.9.1" }
 perl-module-reference = { path = "crates/perl-module-reference", version = "0.9.1" }
 perl-module-import = { path = "crates/perl-module-import", version = "0.9.1" }
+perl-module-import-match = { path = "crates/perl-module-import-match", version = "0.9.1" }
 perl-module-path = { path = "crates/perl-module-path", version = "0.9.1" }
 perl-module-rename = { path = "crates/perl-module-rename", version = "0.9.1" }
 perl-module-resolution = { path = "crates/perl-module-resolution", version = "0.9.1" }
