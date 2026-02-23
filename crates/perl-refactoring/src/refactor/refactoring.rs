@@ -1101,8 +1101,10 @@ impl RefactoringEngine {
 
             match rename_result {
                 Ok(result) => {
-                    let files_modified = self.apply_file_edits(&result.file_edits)?;
-                    let changes_made = result.file_edits.iter().map(|e| e.edits.len()).sum();
+                    let filtered_result = self.filter_rename_result_by_scope(result, scope)?;
+                    let files_modified = self.apply_file_edits(&filtered_result.file_edits)?;
+                    let changes_made =
+                        filtered_result.file_edits.iter().map(|e| e.edits.len()).sum();
                     println!(
                         "perform_symbol_rename DEBUG: result.success=true, files_modified={}, changes_made={}",
                         files_modified, changes_made
@@ -1141,6 +1143,178 @@ impl RefactoringEngine {
                 operation_id: None,
             })
         }
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn filter_rename_result_by_scope(
+        &self,
+        mut result: crate::workspace_refactor::RefactorResult,
+        scope: &RefactoringScope,
+    ) -> ParseResult<crate::workspace_refactor::RefactorResult> {
+        match scope {
+            RefactoringScope::Workspace
+            | RefactoringScope::Directory(_)
+            | RefactoringScope::FileSet(_) => Ok(result),
+            RefactoringScope::File(target_file) => {
+                result
+                    .file_edits
+                    .retain(|file_edit| Self::paths_match(&file_edit.file_path, target_file));
+                Ok(result)
+            }
+            RefactoringScope::Package { file, name } => {
+                let source = fs::read_to_string(file).map_err(|error| ParseError::SyntaxError {
+                    message: format!("Failed to read file {}: {error}", file.display()),
+                    location: 0,
+                })?;
+
+                let Some((start_off, end_off)) = Self::find_package_byte_range(&source, name)
+                else {
+                    result.file_edits.clear();
+                    return Ok(result);
+                };
+
+                result.file_edits = Self::filter_file_edits_to_range(
+                    std::mem::take(&mut result.file_edits),
+                    file,
+                    start_off,
+                    end_off,
+                );
+                Ok(result)
+            }
+            RefactoringScope::Function { file, name } => {
+                let source = fs::read_to_string(file).map_err(|error| ParseError::SyntaxError {
+                    message: format!("Failed to read file {}: {error}", file.display()),
+                    location: 0,
+                })?;
+
+                let Some((start_off, end_off)) = Self::find_function_byte_range(&source, name)
+                else {
+                    result.file_edits.clear();
+                    return Ok(result);
+                };
+
+                result.file_edits = Self::filter_file_edits_to_range(
+                    std::mem::take(&mut result.file_edits),
+                    file,
+                    start_off,
+                    end_off,
+                );
+                Ok(result)
+            }
+            RefactoringScope::Block { file, start, end } => {
+                let source = fs::read_to_string(file).map_err(|error| ParseError::SyntaxError {
+                    message: format!("Failed to read file {}: {error}", file.display()),
+                    location: 0,
+                })?;
+                let line_index = LineIndex::new(source.clone());
+                let start_off =
+                    Self::offset_with_fallback(&line_index, &source, start.0, start.1, false);
+                let end_off = Self::offset_with_fallback(&line_index, &source, end.0, end.1, true);
+
+                let (start_off, end_off) =
+                    if start_off <= end_off { (start_off, end_off) } else { (end_off, start_off) };
+
+                result.file_edits = Self::filter_file_edits_to_range(
+                    std::mem::take(&mut result.file_edits),
+                    file,
+                    start_off,
+                    end_off,
+                );
+                Ok(result)
+            }
+        }
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn filter_file_edits_to_range(
+        file_edits: Vec<crate::workspace_refactor::FileEdit>,
+        target_file: &Path,
+        start_off: usize,
+        end_off: usize,
+    ) -> Vec<crate::workspace_refactor::FileEdit> {
+        file_edits
+            .into_iter()
+            .filter_map(|mut file_edit| {
+                if !Self::paths_match(&file_edit.file_path, target_file) {
+                    return None;
+                }
+
+                file_edit.edits.retain(|edit| edit.start >= start_off && edit.end <= end_off);
+                if file_edit.edits.is_empty() { None } else { Some(file_edit) }
+            })
+            .collect()
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn paths_match(a: &Path, b: &Path) -> bool {
+        if a == b {
+            return true;
+        }
+
+        match (a.canonicalize(), b.canonicalize()) {
+            (Ok(canonical_a), Ok(canonical_b)) => canonical_a == canonical_b,
+            _ => false,
+        }
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn find_package_byte_range(source: &str, package_name: &str) -> Option<(usize, usize)> {
+        let package_decl = format!("package {package_name}");
+        let start = source.find(&package_decl)?;
+        let search_start = start + package_decl.len();
+        let end = source[search_start..]
+            .find("package ")
+            .map(|idx| search_start + idx)
+            .unwrap_or(source.len());
+        Some((start, end))
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn find_function_byte_range(source: &str, function_name: &str) -> Option<(usize, usize)> {
+        let sub_decl = format!("sub {function_name}");
+        let start = source.find(&sub_decl)?;
+        let open_brace =
+            source[start + sub_decl.len()..].find('{').map(|idx| start + sub_decl.len() + idx)?;
+
+        let mut depth = 0usize;
+        for (relative_idx, ch) in source[open_brace..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let end = open_brace + relative_idx + ch.len_utf8();
+                        return Some((start, end));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        None
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn offset_with_fallback(
+        line_index: &LineIndex,
+        source: &str,
+        line: u32,
+        column: u32,
+        end_boundary: bool,
+    ) -> usize {
+        if let Some(offset) = line_index.position_to_offset(line, column) {
+            return offset;
+        }
+
+        if end_boundary {
+            if let Some(next_line_start) = line_index.position_to_offset(line.saturating_add(1), 0)
+            {
+                return next_line_start;
+            }
+            return source.len();
+        }
+
+        line_index.position_to_offset(line, 0).unwrap_or(0)
     }
 
     fn perform_extract_method(

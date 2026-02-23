@@ -28,6 +28,7 @@ use perl_dap_stack::PerlStackParser;
 use perl_dap_variables::{
     PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer,
 };
+use perl_keywords::DAP_COMPLETION_KEYWORDS;
 use perl_module_path::module_path_to_name;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -4881,18 +4882,7 @@ impl DebugAdapter {
             .map(|(pos, matched)| &prefix[pos + matched.len()..])
             .unwrap_or(prefix);
 
-        const PERL_KEYWORDS: &[&str] = &[
-            "my", "our", "local", "sub", "use", "require", "package", "if", "elsif", "else",
-            "unless", "while", "until", "for", "foreach", "do", "eval", "return", "last", "next",
-            "redo", "die", "warn", "print", "say", "printf", "sprintf", "open", "close", "chomp",
-            "chop", "push", "pop", "shift", "unshift", "splice", "join", "split", "sort", "map",
-            "grep", "defined", "exists", "delete", "ref", "bless", "tie", "untie", "scalar",
-            "keys", "values", "each", "length", "substr", "index", "rindex", "reverse", "lc", "uc",
-            "lcfirst", "ucfirst", "hex", "oct", "int", "abs", "sqrt", "chr", "ord", "pack",
-            "unpack", "qw",
-        ];
-
-        let mut targets: Vec<CompletionItem> = PERL_KEYWORDS
+        let mut targets: Vec<CompletionItem> = DAP_COMPLETION_KEYWORDS
             .iter()
             .filter(|kw| stem.is_empty() || kw.starts_with(stem))
             .map(|kw| CompletionItem {

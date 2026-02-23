@@ -1547,6 +1547,7 @@ dependencies = [
  "perl-dap-stack",
  "perl-dap-variables",
  "perl-feature-catalog",
+ "perl-keywords",
  "perl-module-path",
  "perl-parser",
  "perl-path-security",
@@ -1667,11 +1668,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-keywords"
+version = "0.9.1"
+
+[[package]]
 name = "perl-lexer"
 version = "0.9.1"
 dependencies = [
  "criterion",
  "memchr",
+ "perl-keywords",
  "perl-position-tracking",
  "pretty_assertions",
  "proptest",
@@ -1693,6 +1699,7 @@ dependencies = [
  "parking_lot",
  "perl-content-length-framing",
  "perl-dap",
+ "perl-keywords",
  "perl-lexer",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
@@ -1752,6 +1759,7 @@ name = "perl-lsp-completion"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -1934,6 +1942,7 @@ dependencies = [
 name = "perl-lsp-rename"
 version = "0.9.1"
 dependencies = [
+ "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -1991,6 +2000,7 @@ dependencies = [
  "parking_lot",
  "perl-corpus",
  "perl-incremental-parsing",
+ "perl-keywords",
  "perl-lexer",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
