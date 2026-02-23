@@ -3,6 +3,7 @@
 //! Handles resolution of Perl module names to file paths.
 
 use super::super::*;
+use perl_path_security::validate_workspace_path;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -22,7 +23,11 @@ impl LspServer {
         };
 
         for base in &include_paths {
-            let p = if base == "." { root.join(&rel) } else { root.join(base).join(&rel) };
+            let candidate = if base == "." { root.join(&rel) } else { root.join(base).join(&rel) };
+            let p = match validate_workspace_path(&candidate, &root) {
+                Ok(path) => path,
+                Err(_) => continue,
+            };
             if p.exists() {
                 return Some(p);
             }
@@ -115,6 +120,10 @@ impl LspServer {
                 } else {
                     workspace_path.join(dir).join(&relative_path)
                 };
+                let full_path = match validate_workspace_path(&full_path, &workspace_path) {
+                    Ok(path) => path,
+                    Err(_) => continue,
+                };
 
                 match std::fs::metadata(&full_path) {
                     Ok(meta) if meta.is_file() => {
@@ -156,5 +165,70 @@ impl LspServer {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    #[test]
+    fn resolve_module_path_blocks_traversal_include_paths() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let escaped_dir = temp.path().join("escaped");
+        fs::create_dir_all(&workspace)?;
+        fs::create_dir_all(&escaped_dir)?;
+
+        let escaped_file = escaped_dir.join("Target.pm");
+        fs::write(&escaped_file, "package escaped::Target; 1;")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["..".to_string()];
+        }
+
+        let resolved = server
+            .resolve_module_path("escaped::Target")
+            .ok_or("expected resolve_module_path result")?;
+
+        // Traversal include paths must not resolve to files outside workspace.
+        assert!(resolved.starts_with(&workspace));
+        assert_ne!(resolved, escaped_file);
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_module_to_path_blocks_traversal_include_paths() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let escaped_dir = temp.path().join("escaped");
+        fs::create_dir_all(&workspace)?;
+        fs::create_dir_all(&escaped_dir)?;
+
+        let escaped_file = escaped_dir.join("Target.pm");
+        fs::write(&escaped_file, "package escaped::Target; 1;")?;
+
+        let server = LspServer::new();
+        let workspace_uri =
+            url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
+        *server.workspace_folders.lock() = vec![workspace_uri.to_string()];
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["..".to_string()];
+            config.use_system_inc = false;
+        }
+
+        let resolved = server.resolve_module_to_path("escaped::Target");
+        assert!(
+            resolved.is_none(),
+            "module resolution should ignore traversal include path and not return outside URI"
+        );
+        Ok(())
     }
 }
