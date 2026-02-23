@@ -1885,6 +1885,7 @@ name = "perl-lsp-navigation"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-module-import",
  "perl-module-path",
  "perl-parser-core",
  "perl-position-tracking",
@@ -1986,6 +1987,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-module-import"
+version = "0.9.1"
+dependencies = [
+ "perl-module-path",
+ "perl-module-token",
+ "proptest",
+]
+
+[[package]]
 name = "perl-module-path"
 version = "0.9.1"
 
@@ -1993,6 +2003,7 @@ version = "0.9.1"
 name = "perl-module-rename"
 version = "0.9.1"
 dependencies = [
+ "perl-module-import",
  "perl-module-path",
  "perl-module-token",
  "proptest",

@@ -45,6 +45,7 @@ members = [
     "crates/perl-symbol-types",
     "crates/perl-symbol-table",
     "crates/perl-module-token",
+    "crates/perl-module-import",
     "crates/perl-module-path",
     "crates/perl-module-rename",
     "crates/perl-module-resolution",
@@ -106,6 +107,7 @@ perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.9.1" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.9.1" }
 perl-module-token = { path = "crates/perl-module-token", version = "0.9.1" }
+perl-module-import = { path = "crates/perl-module-import", version = "0.9.1" }
 perl-module-path = { path = "crates/perl-module-path", version = "0.9.1" }
 perl-module-rename = { path = "crates/perl-module-rename", version = "0.9.1" }
 perl-module-resolution = { path = "crates/perl-module-resolution", version = "0.9.1" }

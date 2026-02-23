@@ -8,6 +8,7 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+use perl_module_import::{ModuleImportKind, parse_module_import_head};
 use perl_module_token::{contains_module_token, module_variant_pairs, replace_module_token};
 
 /// A full-line replacement edit for a module rename.
@@ -103,34 +104,16 @@ pub fn apply_module_rename_edits(source: &str, edits: &[ModuleLineEdit]) -> Stri
 }
 
 fn should_rewrite_line(line: &str, module_name: &str) -> bool {
-    let trimmed = line.trim_start();
-
-    if let Some(rest) = trimmed.strip_prefix("use ") {
-        let first = first_token(rest);
-        if first == module_name {
-            return true;
-        }
-
-        if (first == "parent" || first == "base") && contains_module_token(line, module_name) {
-            return true;
-        }
-
+    let Some(parsed) = parse_module_import_head(line) else {
         return false;
+    };
+
+    match parsed.kind {
+        ModuleImportKind::Use | ModuleImportKind::Require => parsed.token == module_name,
+        ModuleImportKind::UseParent | ModuleImportKind::UseBase => {
+            contains_module_token(line, module_name)
+        }
     }
-
-    if let Some(rest) = trimmed.strip_prefix("require ") {
-        let first = first_token(rest);
-        return first == module_name;
-    }
-
-    false
-}
-
-fn first_token(input: &str) -> &str {
-    input
-        .split(|ch: char| ch.is_whitespace() || matches!(ch, ';' | '(' | ')'))
-        .next()
-        .unwrap_or_default()
 }
 
 #[cfg(test)]
