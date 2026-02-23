@@ -4,6 +4,27 @@
 //! Perl module names (for example, `Foo::Bar`) and module file paths
 //! (for example, `Foo/Bar.pm`).
 
+use std::borrow::Cow;
+
+/// Normalize legacy package separator `'` to canonical `::`.
+///
+/// # Examples
+///
+/// ```
+/// use perl_module_path::normalize_package_separator;
+///
+/// assert_eq!(normalize_package_separator("Foo'Bar"), "Foo::Bar");
+/// assert_eq!(normalize_package_separator("Foo::Bar"), "Foo::Bar");
+/// ```
+#[must_use]
+pub fn normalize_package_separator(module_name: &str) -> Cow<'_, str> {
+    if module_name.contains('\'') {
+        Cow::Owned(module_name.replace('\'', "::"))
+    } else {
+        Cow::Borrowed(module_name)
+    }
+}
+
 /// Convert a module name into a relative Perl module path.
 ///
 /// # Examples
@@ -16,7 +37,8 @@
 /// ```
 #[must_use]
 pub fn module_name_to_path(module_name: &str) -> String {
-    format!("{}.pm", module_name.replace("::", "/"))
+    let normalized = normalize_package_separator(module_name);
+    format!("{}.pm", normalized.replace("::", "/"))
 }
 
 /// Convert a module path/key into a module name.
@@ -94,12 +116,22 @@ fn strip_perl_extension(path: &str) -> &str {
 
 #[cfg(test)]
 mod tests {
-    use super::{file_path_to_module_name, module_name_to_path, module_path_to_name};
+    use super::{
+        file_path_to_module_name, module_name_to_path, module_path_to_name,
+        normalize_package_separator,
+    };
+
+    #[test]
+    fn normalizes_legacy_package_separator() {
+        assert_eq!(normalize_package_separator("Foo'Bar"), "Foo::Bar");
+        assert_eq!(normalize_package_separator("Foo::Bar"), "Foo::Bar");
+    }
 
     #[test]
     fn converts_module_name_to_path() {
         assert_eq!(module_name_to_path("Foo::Bar"), "Foo/Bar.pm");
         assert_eq!(module_name_to_path("App::Config::Loader"), "App/Config/Loader.pm");
+        assert_eq!(module_name_to_path("Legacy'Package"), "Legacy/Package.pm");
     }
 
     #[test]

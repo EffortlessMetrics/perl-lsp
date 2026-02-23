@@ -2091,6 +2091,7 @@ version = "0.9.1"
 name = "perl-refactoring"
 version = "0.9.1"
 dependencies = [
+ "perl-module-path",
  "perl-parser-core",
  "perl-tdd-support",
  "perl-workspace-index",
