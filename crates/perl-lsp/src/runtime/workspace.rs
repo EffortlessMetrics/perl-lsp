@@ -15,6 +15,7 @@ use crate::state::workspace_symbol_cap;
 #[cfg(feature = "workspace")]
 use parking_lot::Mutex;
 use perl_module_path::file_path_to_module_name;
+use perl_module_rename::plan_module_rename_edits;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
 #[cfg(feature = "workspace")]
@@ -638,25 +639,26 @@ impl LspServer {
                             // Get the document content
                             let documents = self.documents.lock();
                             if let Some(doc) = documents.get(&dependent_uri) {
-                                let mut edits = Vec::new();
-
-                                // Find and replace use statements
-                                for (line_num, line) in doc.text.lines().enumerate() {
-                                    if line.contains(&format!("use {}", old_module))
-                                        || line.contains(&format!("require {}", old_module))
-                                        || line.contains(&format!("use parent '{}'", old_module))
-                                        || line.contains(&format!("use base '{}'", old_module))
-                                    {
-                                        let new_line = line.replace(&old_module, &new_module);
-                                        edits.push(json!({
+                                let planned =
+                                    plan_module_rename_edits(&doc.text, &old_module, &new_module);
+                                let edits: Vec<Value> = planned
+                                    .into_iter()
+                                    .map(|edit| {
+                                        json!({
                                             "range": {
-                                                "start": {"line": line_num, "character": 0},
-                                                "end": {"line": line_num, "character": line.len()}
+                                                "start": {
+                                                    "line": edit.line,
+                                                    "character": edit.start_character,
+                                                },
+                                                "end": {
+                                                    "line": edit.line,
+                                                    "character": edit.end_character,
+                                                }
                                             },
-                                            "newText": new_line
-                                        }));
-                                    }
-                                }
+                                            "newText": edit.new_text
+                                        })
+                                    })
+                                    .collect();
 
                                 if !edits.is_empty() {
                                     workspace_edit["changes"][dependent_uri] = json!(edits);
