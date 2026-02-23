@@ -41,3 +41,14 @@ fn given_legacy_separator_import_when_module_is_renamed_then_legacy_style_is_pre
 
     assert_eq!(rewritten, "use My'Renamed;\n");
 }
+
+#[test]
+fn given_partial_legacy_module_name_when_module_is_renamed_then_line_is_unchanged() {
+    let source = "use My'Module'Child;\n";
+
+    let edits = plan_module_rename_edits(source, "My::Module", "My::Renamed");
+    let rewritten = apply_module_rename_edits(source, &edits);
+
+    assert!(edits.is_empty());
+    assert_eq!(rewritten, source);
+}

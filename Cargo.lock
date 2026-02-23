@@ -1994,6 +1994,7 @@ name = "perl-module-rename"
 version = "0.9.1"
 dependencies = [
  "perl-module-path",
+ "perl-module-token",
  "proptest",
 ]
 
@@ -2007,6 +2008,14 @@ dependencies = [
  "proptest",
  "tempfile",
  "url",
+]
+
+[[package]]
+name = "perl-module-token"
+version = "0.9.1"
+dependencies = [
+ "perl-module-path",
+ "proptest",
 ]
 
 [[package]]

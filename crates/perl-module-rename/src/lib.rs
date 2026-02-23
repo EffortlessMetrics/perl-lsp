@@ -8,6 +8,8 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+use perl_module_token::{contains_module_token, module_variant_pairs, replace_module_token};
+
 /// A full-line replacement edit for a module rename.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModuleLineEdit {
@@ -48,7 +50,7 @@ pub fn plan_module_rename_edits(
         return Vec::new();
     }
 
-    let variants = module_variants(old_module, new_module);
+    let variants = module_variant_pairs(old_module, new_module);
     let mut edits = Vec::new();
 
     for (line_idx, line) in source.lines().enumerate() {
@@ -100,16 +102,6 @@ pub fn apply_module_rename_edits(source: &str, edits: &[ModuleLineEdit]) -> Stri
     lines.join("\n")
 }
 
-fn module_variants(old_module: &str, new_module: &str) -> Vec<(String, String)> {
-    let canonical = (old_module.to_string(), new_module.to_string());
-
-    let legacy_old = old_module.replace("::", "'");
-    let legacy_new = new_module.replace("::", "'");
-    let legacy = (legacy_old, legacy_new);
-
-    if legacy == canonical { vec![canonical] } else { vec![canonical, legacy] }
-}
-
 fn should_rewrite_line(line: &str, module_name: &str) -> bool {
     let trimmed = line.trim_start();
 
@@ -141,68 +133,10 @@ fn first_token(input: &str) -> &str {
         .unwrap_or_default()
 }
 
-fn contains_module_token(line: &str, module_name: &str) -> bool {
-    replace_module_token(line, module_name, module_name).1
-}
-
-fn replace_module_token(line: &str, from: &str, to: &str) -> (String, bool) {
-    if from.is_empty() || line.is_empty() {
-        return (line.to_string(), false);
-    }
-
-    let mut out = String::with_capacity(line.len());
-    let mut search_start = 0usize;
-    let mut replaced = false;
-
-    while let Some(rel_pos) = line[search_start..].find(from) {
-        let start = search_start + rel_pos;
-        let end = start + from.len();
-
-        if has_module_boundaries(line, start, end) {
-            out.push_str(&line[search_start..start]);
-            out.push_str(to);
-            replaced = true;
-        } else {
-            out.push_str(&line[search_start..end]);
-        }
-
-        search_start = end;
-    }
-
-    if replaced {
-        out.push_str(&line[search_start..]);
-        (out, true)
-    } else {
-        (line.to_string(), false)
-    }
-}
-
-fn has_module_boundaries(line: &str, start: usize, end: usize) -> bool {
-    let left_ok = if start == 0 {
-        true
-    } else {
-        !line[..start].chars().next_back().is_some_and(is_module_char)
-    };
-
-    let right_ok = if end >= line.len() {
-        true
-    } else {
-        !line[end..].chars().next().is_some_and(is_module_char)
-    };
-
-    left_ok && right_ok
-}
-
-fn is_module_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_' || ch == ':'
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        ModuleLineEdit, apply_module_rename_edits, module_variants, plan_module_rename_edits,
-        replace_module_token,
-    };
+    use super::{ModuleLineEdit, apply_module_rename_edits, plan_module_rename_edits};
+    use perl_module_token::{module_variant_pairs, replace_module_token};
 
     #[test]
     fn plans_basic_use_and_require_edits() {
@@ -270,7 +204,7 @@ mod tests {
 
     #[test]
     fn module_variant_generation_deduplicates_when_not_needed() {
-        let variants = module_variants("strict", "warnings");
+        let variants = module_variant_pairs("strict", "warnings");
         assert_eq!(variants.len(), 1);
     }
 
