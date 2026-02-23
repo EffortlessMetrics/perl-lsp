@@ -14,6 +14,7 @@ use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
 #[cfg(feature = "workspace")]
 use parking_lot::Mutex;
+use perl_module_path::file_path_to_module_name;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
 #[cfg(feature = "workspace")]
@@ -1160,19 +1161,6 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
         });
     #[cfg(not(feature = "workspace"))]
     let path = uri.trim_start_matches("file://").to_string();
-    let path = path.as_str();
-    let path = path.trim_end_matches(".pm").trim_end_matches(".pl");
 
-    // Find the lib directory and extract module path
-    if let Some(lib_index) = path.rfind("/lib/") {
-        let module_path = &path[lib_index + 5..];
-        return module_path.replace('/', "::");
-    }
-
-    // Fallback: use filename as module name
-    if let Some(last_slash) = path.rfind('/') {
-        return path[last_slash + 1..].to_string();
-    }
-
-    path.to_string()
+    file_path_to_module_name(&path)
 }
