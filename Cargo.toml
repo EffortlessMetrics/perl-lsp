@@ -44,7 +44,20 @@ members = [
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
     "crates/perl-symbol-table",
+    "crates/perl-module-token",
+    "crates/perl-module-name",
+    "crates/perl-module-reference",
+    "crates/perl-module-import",
+    "crates/perl-module-import-match",
+    "crates/perl-module-path",
+    "crates/perl-module-rename",
+    "crates/perl-module-resolution",
+    "crates/perl-keywords",
+    "crates/perl-source-file",
+    "crates/perl-content-length-framing",
     "crates/perl-uri",
+    "crates/perl-path-security",
+    "crates/perl-workspace-discovery",
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
@@ -96,8 +109,21 @@ perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.9.1" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.9.1" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.9.1" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.9.1" }
+perl-module-token = { path = "crates/perl-module-token", version = "0.9.1" }
+perl-module-name = { path = "crates/perl-module-name", version = "0.9.1" }
+perl-module-reference = { path = "crates/perl-module-reference", version = "0.9.1" }
+perl-module-import = { path = "crates/perl-module-import", version = "0.9.1" }
+perl-module-import-match = { path = "crates/perl-module-import-match", version = "0.9.1" }
+perl-module-path = { path = "crates/perl-module-path", version = "0.9.1" }
+perl-module-rename = { path = "crates/perl-module-rename", version = "0.9.1" }
+perl-module-resolution = { path = "crates/perl-module-resolution", version = "0.9.1" }
+perl-keywords = { path = "crates/perl-keywords", version = "0.9.1" }
+perl-source-file = { path = "crates/perl-source-file", version = "0.9.1" }
+perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.9.1" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.9.1" }
 perl-uri = { path = "crates/perl-uri", version = "0.9.1" }
+perl-path-security = { path = "crates/perl-path-security", version = "0.9.1" }
+perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.9.1" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.9.1" }
 perl-dap = { path = "crates/perl-dap", version = "0.9.1" }
 perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.9.1" }

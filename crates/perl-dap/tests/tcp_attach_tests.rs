@@ -9,9 +9,13 @@
 //! - Error recovery and timeout handling
 //! - Cross-platform compatibility
 
+use perl_content_length_framing::frame;
 use perl_dap::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use perl_tdd_support::must;
+use std::io::Write;
+use std::net::TcpListener;
 use std::sync::mpsc::channel;
+use std::thread;
 use std::time::Duration;
 
 /// Test helper to create a valid TCP attach configuration
@@ -210,4 +214,67 @@ fn test_tcp_attach_event_serialization() {
         }
         _ => must(Err::<(), _>("Expected Output event")),
     }
+}
+
+#[test]
+fn test_tcp_attach_reader_handles_concatenated_frames() {
+    let listener = must(TcpListener::bind(("127.0.0.1", 0)));
+    let port = must(listener.local_addr()).port();
+
+    let server_handle = thread::spawn(move || {
+        let (mut socket, _) = must(listener.accept());
+
+        let output_event = serde_json::json!({
+            "type": "event",
+            "seq": 1,
+            "event": "output",
+            "body": {
+                "category": "stdout",
+                "output": "hello"
+            }
+        })
+        .to_string();
+        let continued_event = serde_json::json!({
+            "type": "event",
+            "seq": 2,
+            "event": "continued",
+            "body": {
+                "threadId": 7
+            }
+        })
+        .to_string();
+
+        let mut bytes = frame(output_event.as_bytes());
+        bytes.extend_from_slice(&frame(continued_event.as_bytes()));
+        must(socket.write_all(&bytes));
+        must(socket.flush());
+    });
+
+    let mut session = TcpAttachSession::new();
+    let (event_tx, event_rx) = channel::<DapEvent>();
+    session.set_event_sender(event_tx);
+
+    let config = TcpAttachConfig::new("127.0.0.1".to_string(), port).with_timeout(2000);
+    must(session.connect(&config));
+    must(session.start_reader());
+
+    let first = must(event_rx.recv_timeout(Duration::from_secs(2)));
+    let second = must(event_rx.recv_timeout(Duration::from_secs(2)));
+
+    match first {
+        DapEvent::Output { category, output } => {
+            assert_eq!(category, "stdout");
+            assert_eq!(output, "hello");
+        }
+        other => must(Err::<(), _>(format!("Expected Output event, got {other:?}"))),
+    }
+
+    match second {
+        DapEvent::Continued { thread_id } => {
+            assert_eq!(thread_id, 7);
+        }
+        other => must(Err::<(), _>(format!("Expected Continued event, got {other:?}"))),
+    }
+
+    must(server_handle.join().map_err(|_| "Server thread panicked".to_string()));
 }

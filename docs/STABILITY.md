@@ -111,9 +111,28 @@ Tier 1 platforms are our primary targets for testing and binary distribution:
 
 ---
 
+## API Surface
+
+A brief overview of the main public types per published crate:
+
+| Crate | Key Public Types |
+|-------|-----------------|
+| **perl-parser** | `Parser`, `Node`, `NodeKind`, `ParseError`, `SemanticModel` |
+| **perl-lsp** | `PerlLspServer` (binary entry point), `ServerConfig` |
+| **perl-dap** | `BridgeAdapter`, `DapServer`, `DapConfig` |
+| **perl-lexer** | `PerlLexer`, `Token`, `TokenType`, `LexerContext` |
+| **perl-ast** | `AstNode`, `AstVisitor`, `Span` |
+| **perl-token** | `TokenKind`, `Keyword`, `Sigil`, `Operator` |
+
+All types are subject to change during the alpha phase. Formal API stability commitments are targeted for v0.15.0.
+
+---
+
 ## Performance
 
 ### Alpha Goals
+
+Targets (alpha): See `benches/` directories in individual crates for benchmark suites.
 
 **Parser performance targets:**
 - **Time complexity:** O(n) in input size for valid Perl code
@@ -145,7 +164,7 @@ We take security seriously even in alpha. Coordinated disclosure is preferred fo
 ✅ **Performance:** High-performance O(n) parsing
 ✅ **Security:** Focused on path validation and memory safety
 ✅ **MSRV Policy:** Rust 1.92+ (2024 edition)
-✅ **Testing:** 600+ tests, comprehensive E2E suite
+✅ **Testing:** 1400+ tests, comprehensive E2E suite
 
 **Verification command:**
 ```bash

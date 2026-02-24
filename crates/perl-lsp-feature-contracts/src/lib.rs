@@ -107,6 +107,7 @@ pub const fn feature_profile_specs() -> &'static [FeatureProfileSpec] {
     FEATURE_PROFILE_SPECS
 }
 
+#[allow(dead_code, clippy::all)]
 pub mod catalog {
     include!(concat!(env!("OUT_DIR"), "/feature_contracts.rs"));
 }
@@ -199,6 +200,9 @@ pub fn feature_ids_from_caps(c: &ServerCapabilities) -> Vec<&'static str> {
     }
     if c.definition_provider.is_some() {
         v.push(LSP_DEFINITION);
+    }
+    if c.declaration_provider.is_some() {
+        v.push(LSP_DECLARATION);
     }
     if c.notebook_document_sync.is_some() {
         v.push(LSP_NOTEBOOK_DOCUMENT_SYNC);
@@ -319,6 +323,9 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
             }
             LSP_DEFINITION => {
                 caps.definition_provider = Some(OneOf::Left(true));
+            }
+            LSP_DECLARATION => {
+                caps.declaration_provider = Some(DeclarationCapability::Simple(true));
             }
             LSP_NOTEBOOK_DOCUMENT_SYNC => {
                 caps.notebook_document_sync = Some(OneOf::Left(NotebookDocumentSyncOptions {

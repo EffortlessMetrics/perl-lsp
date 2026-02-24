@@ -77,10 +77,9 @@ fn update_roadmap(
         ));
     }
 
-    // Placeholder for future fenced section replacement
-    let _ = table;
+    // Inject the compliance table into the fenced section
+    content = replace_fence(&content, "COMPLIANCE_TABLE", &table)?;
 
-    // For now, save the updated content
     fs::write(roadmap_path, content)?;
 
     // Keep this side-effect so the BDD-style progress checks can fail fast when catalog
@@ -159,6 +158,25 @@ fn ensure_fence(content: &str, tag: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Replace content between `<!-- BEGIN: TAG -->` and `<!-- END: TAG -->` markers.
+fn replace_fence(content: &str, tag: &str, new_body: &str) -> Result<String> {
+    let begin_marker = format!("<!-- BEGIN: {tag} -->");
+    let end_marker = format!("<!-- END: {tag} -->");
+
+    let begin_pos =
+        content.find(&begin_marker).ok_or_else(|| eyre!("Missing begin marker for {tag}"))?;
+    let end_pos = content.find(&end_marker).ok_or_else(|| eyre!("Missing end marker for {tag}"))?;
+
+    let mut result = String::with_capacity(content.len());
+    result.push_str(&content[..begin_pos]);
+    result.push_str(&begin_marker);
+    result.push('\n');
+    result.push_str(new_body);
+    result.push_str(&end_marker);
+    result.push_str(&content[end_pos + end_marker.len()..]);
+    Ok(result)
 }
 
 fn verify_features() -> Result<()> {
@@ -331,7 +349,8 @@ fn generate_report() -> Result<()> {
 
     println!("\n=== LSP Compliance Report ===");
     println!("Version: {} | LSP: {}", catalog.meta.version, catalog.meta.lsp_version);
-    let overall = if total == 0 { 0 } else { advertised * 100 / total };
+    let overall =
+        if total == 0 { 0 } else { (advertised as f64 / total as f64 * 100.0).round() as usize };
     println!("\nOverall: {}/{} features ({}%)", advertised, total, overall);
     println!("\nBreakdown:");
     println!("  GA:           {} features", ga);

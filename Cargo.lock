@@ -1510,6 +1510,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-content-length-framing"
+version = "0.9.1"
+
+[[package]]
 name = "perl-corpus"
 version = "0.9.1"
 dependencies = [
@@ -1537,12 +1541,16 @@ dependencies = [
  "lsp-types",
  "nix",
  "once_cell",
+ "perl-content-length-framing",
  "perl-dap-breakpoint",
  "perl-dap-eval",
  "perl-dap-stack",
  "perl-dap-variables",
  "perl-feature-catalog",
+ "perl-keywords",
+ "perl-module-path",
  "perl-parser",
+ "perl-path-security",
  "perl-tdd-support",
  "proptest",
  "regex",
@@ -1660,11 +1668,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-keywords"
+version = "0.9.1"
+
+[[package]]
 name = "perl-lexer"
 version = "0.9.1"
 dependencies = [
  "criterion",
  "memchr",
+ "perl-keywords",
  "perl-position-tracking",
  "pretty_assertions",
  "proptest",
@@ -1684,7 +1697,9 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
+ "perl-content-length-framing",
  "perl-dap",
+ "perl-keywords",
  "perl-lexer",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
@@ -1700,9 +1715,15 @@ dependencies = [
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
+ "perl-module-path",
+ "perl-module-reference",
+ "perl-module-rename",
+ "perl-module-resolution",
  "perl-parser",
  "perl-position-tracking",
+ "perl-source-file",
  "perl-tdd-support",
+ "perl-workspace-discovery",
  "predicates",
  "pretty_assertions",
  "proptest",
@@ -1741,6 +1762,7 @@ name = "perl-lsp-completion"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -1864,6 +1886,8 @@ name = "perl-lsp-navigation"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-module-import",
+ "perl-module-path",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-semantic-analyzer",
@@ -1880,6 +1904,7 @@ name = "perl-lsp-protocol"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-lsp-feature-contracts",
  "perl-lsp-feature-flags",
  "serde",
  "serde_json",
@@ -1921,6 +1946,7 @@ dependencies = [
 name = "perl-lsp-rename"
 version = "0.9.1"
 dependencies = [
+ "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -1956,8 +1982,83 @@ dependencies = [
 name = "perl-lsp-transport"
 version = "0.9.1"
 dependencies = [
+ "perl-content-length-framing",
  "perl-lsp-protocol",
  "serde_json",
+]
+
+[[package]]
+name = "perl-module-import"
+version = "0.9.1"
+dependencies = [
+ "perl-module-path",
+ "perl-module-token",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-import-match"
+version = "0.9.1"
+dependencies = [
+ "perl-module-import",
+ "perl-module-path",
+ "perl-module-token",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-name"
+version = "0.9.1"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-path"
+version = "0.9.1"
+dependencies = [
+ "perl-module-name",
+]
+
+[[package]]
+name = "perl-module-reference"
+version = "0.9.1"
+dependencies = [
+ "perl-module-import",
+ "perl-module-name",
+ "perl-module-path",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-rename"
+version = "0.9.1"
+dependencies = [
+ "perl-module-import-match",
+ "perl-module-path",
+ "perl-module-token",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-resolution"
+version = "0.9.1"
+dependencies = [
+ "perl-module-path",
+ "perl-path-security",
+ "perl-uri",
+ "proptest",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "perl-module-token"
+version = "0.9.1"
+dependencies = [
+ "perl-module-name",
+ "perl-module-path",
+ "proptest",
 ]
 
 [[package]]
@@ -1973,6 +2074,7 @@ dependencies = [
  "parking_lot",
  "perl-corpus",
  "perl-incremental-parsing",
+ "perl-keywords",
  "perl-lexer",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
@@ -2041,6 +2143,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-path-security"
+version = "0.9.1"
+dependencies = [
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "perl-position-tracking"
 version = "0.9.1"
 dependencies = [
@@ -2066,6 +2176,7 @@ version = "0.9.1"
 name = "perl-refactoring"
 version = "0.9.1"
 dependencies = [
+ "perl-module-path",
  "perl-parser-core",
  "perl-tdd-support",
  "perl-workspace-index",
@@ -2095,6 +2206,10 @@ dependencies = [
  "rustc-hash",
  "serde",
 ]
+
+[[package]]
+name = "perl-source-file"
+version = "0.9.1"
 
 [[package]]
 name = "perl-symbol-table"
@@ -2206,6 +2321,16 @@ dependencies = [
  "perl-tdd-support",
  "tempfile",
  "url",
+]
+
+[[package]]
+name = "perl-workspace-discovery"
+version = "0.9.1"
+dependencies = [
+ "perl-source-file",
+ "proptest",
+ "tempfile",
+ "walkdir",
 ]
 
 [[package]]
