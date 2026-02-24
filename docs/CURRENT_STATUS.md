@@ -55,7 +55,7 @@ Key terms:
 | **Tier A Tests** | 1383 lib tests (discovered), 2 ignores (tracked) | 100% pass | PASS |
 | **Tracked Test Debt** | 0 (0 bug, 0 manual) | 0 | Near-zero |
 <!-- BEGIN: STATUS_METRICS_TABLE -->
-| **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 93%+ | In progress |
+| **LSP Coverage** | 100% (53/53 advertised features, `features.toml`) | 100% | PASS |
 <!-- END: STATUS_METRICS_TABLE -->
 | **Parser Coverage** | ~100% | 100% | Complete |
 | **Semantic Analyzer** | Phase 1, 2, 3 Complete (100%) | Complete | All NodeKind handlers |
@@ -88,7 +88,7 @@ Key terms:
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server public alpha (`just ci-gate` passing)
 
-**Target**: 93%+ LSP coverage (from current 100%)
+**Target**: 100% LSP coverage (all advertised user-visible features)
 <!-- END: STATUS_METRICS_BULLETS -->
 
 ---

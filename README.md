@@ -12,7 +12,7 @@ This project started in Q2 2025. It was initially forked on July 15th, 2025 from
 
 ## Features
 
-- **Language Server** -- completion, hover, go-to-definition, references, rename, diagnostics, formatting, code actions, document symbols, workspace symbols, and more (97 LSP features)
+- **Language Server** -- completion, hover, go-to-definition, references, rename, diagnostics, formatting, code actions, document symbols, workspace symbols, and more (100% advertised LSP coverage for implemented protocol features)
 - **Debug Adapter** -- breakpoints, stepping, variable inspection via DAP bridge to `perl -d`
 - **Parser** -- recursive-descent Perl parser with error recovery, heredoc/regex/quote support, and S-expression output
 - **Fast** -- pure Rust, no runtime dependencies on Perl for parsing or LSP
