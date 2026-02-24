@@ -88,7 +88,7 @@ Key terms:
 - **Quality Metrics**: 87% mutation score, <50ms LSP response times, 931ns incremental parsing
 - **Production Status**: LSP server public alpha (`just ci-gate` passing)
 
-**Target**: 100% LSP coverage (all advertised user-visible features)
+**Target**: maintain 100% LSP coverage (no regressions)
 <!-- END: STATUS_METRICS_BULLETS -->
 
 ---
