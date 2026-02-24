@@ -21,17 +21,25 @@ This repository contains an **80+ crate** Rust workspace forming a complete Perl
 | **perl-semantic-analyzer** | `/crates/perl-semantic-analyzer/` | Semantic analysis |
 | **perl-corpus** | `/crates/perl-corpus/` | Test corpus |
 
-### Crate Families
+### Crate Families (generated snapshot)
 
 | Family | Count | Purpose |
 |--------|-------|---------|
-| `perl-module-*` | 13 | Module resolution microcrates |
-| `perl-lsp-*` | 21 | LSP feature providers |
-| `perl-lsp-feature-*` | 7 | Feature governance subsystem (subset of `perl-lsp-*`) |
-| `perl-dap-*` | 4 | Debug adapter components |
-| `perl-ts-*` | 5 | Tree-sitter integration |
-| `perl-workspace-*` | 4 | Workspace discovery and indexing |
+| `perl-module-*` | ~13 | Module resolution microcrates |
+| `perl-lsp-*` | ~21 | LSP feature providers |
+| `perl-lsp-feature-*` | ~7 | Feature governance subsystem (subset of `perl-lsp-*`) |
+| `perl-dap-*` | ~4 | Debug adapter components |
+| `perl-ts-*` | ~5 | Tree-sitter integration |
+| `perl-workspace-*` | ~4 | Workspace discovery and indexing |
 | Core leaf crates | ~30 | Token, AST, quote, regex, heredoc, error, etc. |
+
+Regenerate this snapshot with:
+
+```bash
+for prefix in perl-module- perl-lsp- perl-lsp-feature- perl-dap- perl-ts- perl-workspace-; do
+  printf "%-18s %s\n" "$prefix" "$(find crates -maxdepth 1 -mindepth 1 -type d -name "${prefix}*" | wc -l)"
+done
+```
 
 ## Quick Start
 
@@ -41,8 +49,11 @@ This repository contains an **80+ crate** Rust workspace forming a complete Perl
 # Install LSP server
 cargo install perl-lsp
 
-# Or from source
+# From source (default)
 cargo install --path crates/perl-lsp
+
+# Binary installer (best effort, non-canonical)
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 ### Usage
@@ -142,7 +153,7 @@ file_index.references.entry(qualified).or_default().push(symbol_ref);
 ## Key Features
 
 - **~100% Perl Syntax Coverage**: All modern Perl constructs including heredocs, regex, quotes, substitution operators, and enhanced builtin function parsing
-- **LSP Server**: ~92% of LSP features functional with comprehensive workspace support
+- **LSP Server**: 100% advertised user-visible coverage (`53/53`) and 100% protocol compliance (`97/97`), tracked in `features.toml`
 - **Debug Adapter Protocol (DAP)**: Full debugging support via bridge to Perl::LanguageServer
 - **Semantic Analysis**: 100% AST node coverage with lexical scoping, package boundaries, and multi-symbol support
 - **Cross-File Navigation**: Dual indexing with 98% reference coverage

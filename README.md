@@ -12,7 +12,7 @@ This project started in Q2 2025. It was initially forked on July 15th, 2025 from
 
 ## Features
 
-- **Language Server** -- completion, hover, go-to-definition, references, rename, diagnostics, formatting, code actions, document symbols, workspace symbols, and more (100% advertised LSP coverage for implemented protocol features)
+- **Language Server** -- completion, hover, go-to-definition, references, rename, diagnostics, formatting, code actions, document symbols, workspace symbols, and more (**100% advertised user-visible coverage**; `53/53` user-visible and `97/97` protocol methods; `features.toml`)
 - **Debug Adapter** -- breakpoints, stepping, variable inspection via DAP bridge to `perl -d`
 - **Parser** -- recursive-descent Perl parser with error recovery, heredoc/regex/quote support, and S-expression output
 - **Fast** -- pure Rust, no runtime dependencies on Perl for parsing or LSP
@@ -25,7 +25,7 @@ This project started in Q2 2025. It was initially forked on July 15th, 2025 from
 cargo install perl-lsp
 ```
 
-### From source
+### From source (default)
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
@@ -35,7 +35,7 @@ cargo install --path crates/perl-lsp
 
 ### Pre-built binaries
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), or use the installer script:
+Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), or use the installer script (best-effort / non-canonical):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash

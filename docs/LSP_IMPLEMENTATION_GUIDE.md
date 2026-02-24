@@ -79,7 +79,7 @@ As of **Draft PR 159 (SPEC-149)**, all LSP provider implementations must comply 
 //! - **Thread Safety**: Fully thread-safe with atomic workspace updates
 //!
 //! # Protocol Compliance
-//! - **LSP Version**: 3.18 full compliance
+//! - **LSP Version**: LSP 3.18 alignment tracked in ROADMAP.md
 //! - **Capabilities**: Supports completion items, resolve, and snippets
 //! - **Trigger Characters**: `.`, `:`, `$`, `@`, `%` for context-sensitive completion
 
@@ -1889,11 +1889,11 @@ cargo test -p perl-lsp --test lsp_comprehensive_e2e_test      # Full workflow va
 - **AC4**: Enabled previously ignored tests with maintained stability ✅
 - **AC5**: Comprehensive integration test suite with performance validation ✅
 
-The enhanced executeCommand and code actions integration completes the advertised LSP feature set to **100% coverage** while maintaining performance and reliability.
+The enhanced executeCommand and code actions integration completes the advertised LSP feature set to **100% user-visible coverage (53/53)** while maintaining performance and reliability.
 
 ## LSP Feature Status Matrix (*Diataxis: Reference* - Complete feature overview)
 
-The Perl LSP server has achieved **100% user-visible LSP protocol coverage** with comprehensive workspace support:
+The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **100% protocol compliance (97/97)** with comprehensive workspace support:
 
 ### Core LSP Methods (✅ Fully Implemented)
 | Method | Status | Performance | Notes |
@@ -1963,7 +1963,7 @@ The Perl LSP server has achieved **100% user-visible LSP protocol coverage** wit
 | **Overall Suite** | 60s+ | <10s |
 
 ### Protocol Compliance (*Diataxis: Reference* - LSP 3.17+ support)
-- ✅ **LSP 3.17+ Protocol**: Full compliance with latest specification
+- ✅ **LSP 3.17+ Protocol**: Coverage is currently tracked against protocol method implementation in `features.toml`; remaining protocol parity goals are tracked in ROADMAP.md
 - ✅ **JSON-RPC 2.0**: Complete request/response/notification support
 - ✅ **UTF-16 Position Mapping**: Symmetric conversion with vulnerability fixes
 - ✅ **URI Handling**: Proper file:// scheme support with security validation
