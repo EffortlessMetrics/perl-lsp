@@ -91,7 +91,7 @@ just ci-gate
 just ci-full
 ```
 
-See: [Local CI Protocol](docs/ci/LOCAL_CI_PROTOCOL.md)
+See: [Local CI Summary](docs/ci/LOCAL_CI_SUMMARY.md)
 
 **Semantic & LSP Changes**:
 
@@ -297,7 +297,7 @@ These crates have zero system dependencies and work on all platforms:
 - **perl-parser**: Main parser library
 - **perl-lsp**: LSP server binary
 - **perl-lexer**: Tokenizer
-- **tree-sitter-perl**: Pure-Rust tree-sitter bindings (default)
+- **tree-sitter-perl-rs**: Pure-Rust tree-sitter bindings (default)
 
 ### Advanced Components (Opt-in)
 Some functionality requires system dependencies (like `libclang-dev`) and is gated behind Cargo features:
@@ -334,7 +334,7 @@ All API changes are checked for Semantic Versioning (SemVer) compatibility using
 just semver-check
 ```
 
-Breaking changes are allowed in minor version bumps (pre-0.10) but require a migration guide in `CHANGELOG.md`. See [SEMVER_POLICY.md](docs/SEMVER_POLICY.md) for full details.
+Breaking changes are allowed in minor version bumps (pre-0.10) but require a migration guide in `CHANGELOG.md`. See [SEMVER_WORKFLOW.md](docs/SEMVER_WORKFLOW.md) for full details.
 
 ## Testing Guidelines
 

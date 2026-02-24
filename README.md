@@ -93,8 +93,12 @@ crates/
   perl-dap/           DAP server binary
   perl-parser/        Parser entry points and high-level APIs
   perl-lexer/         Tokenizer
-  perl-lsp-*/         LSP feature crates (completion, diagnostics, navigation, ...)
-  perl-*/             Parser support crates (ast, token, quote, regex, heredoc, ...)
+  perl-lsp-*/         LSP feature crates (21 crates: completion, diagnostics, navigation, ...)
+  perl-module-*/      Module resolution microcrates (13 crates)
+  perl-dap-*/         DAP components (4 crates: breakpoint, eval, stack, variables)
+  perl-ts-*/          Tree-sitter integration (5 crates)
+  perl-workspace-*/   Workspace discovery and indexing (4 crates)
+  perl-*/             Core support crates (ast, token, quote, regex, heredoc, error, ...)
 xtask/                Development automation
 book/                 mdbook documentation
 vscode-extension/     VS Code extension source
