@@ -107,6 +107,7 @@ pub const fn feature_profile_specs() -> &'static [FeatureProfileSpec] {
     FEATURE_PROFILE_SPECS
 }
 
+#[allow(dead_code, clippy::all)]
 pub mod catalog {
     include!(concat!(env!("OUT_DIR"), "/feature_contracts.rs"));
 }

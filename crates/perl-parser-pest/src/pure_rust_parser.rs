@@ -2755,6 +2755,14 @@ mod tests {
     }
 
     #[test]
+    fn test_regression_percent_string_in_if_assignment() {
+        let mut parser = PureRustPerlParser::new();
+        let source = r#"if ($a > 0) { $a = "%"; }"#;
+        let result = parser.parse(source);
+        assert!(result.is_ok(), "Failed to parse regression input: {source}");
+    }
+
+    #[test]
     fn test_array_assignment() {
         let mut parser = PureRustPerlParser::new();
         let source = "@array = (1, 2, 3);";

@@ -63,8 +63,56 @@ impl ContentLengthMessageReader {
 /// This is a compatibility helper for one-shot reads. For long-running loops,
 /// prefer [`ContentLengthMessageReader`] to preserve parser state across calls.
 pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcRequest>> {
-    let mut message_reader = ContentLengthMessageReader::new();
-    message_reader.read_next(reader)
+    let mut content_length = None;
+
+    loop {
+        let mut line = String::new();
+        let bytes_read = reader.read_line(&mut line)?;
+        if bytes_read == 0 {
+            return Ok(None);
+        }
+
+        if line == "\r\n" || line == "\n" {
+            break;
+        }
+
+        let header = line.trim_end_matches(&['\r', '\n'][..]);
+        if let Some((name, value)) = header.split_once(':')
+            && name.trim().eq_ignore_ascii_case("Content-Length")
+        {
+            match value.trim().parse::<usize>() {
+                Ok(length) => content_length = Some(length),
+                Err(error) => {
+                    eprintln!("LSP server: invalid Content-Length header - {error}");
+                    return Ok(None);
+                }
+            }
+        }
+    }
+
+    let length = match content_length {
+        Some(length) => length,
+        None => {
+            eprintln!("LSP server: missing Content-Length header");
+            return Ok(None);
+        }
+    };
+
+    let mut body = vec![0u8; length];
+    if let Err(error) = reader.read_exact(&mut body) {
+        if error.kind() == io::ErrorKind::UnexpectedEof {
+            return Ok(None);
+        }
+        return Err(error);
+    }
+
+    match serde_json::from_slice::<JsonRpcRequest>(&body) {
+        Ok(request) => Ok(Some(request)),
+        Err(error) => {
+            eprintln!("LSP server: JSON parse error - {error}");
+            Ok(None)
+        }
+    }
 }
 
 /// Write an LSP response with `Content-Length` framing.
@@ -103,5 +151,63 @@ pub fn log_response(response: &JsonRpcResponse) {
             response.error.is_some(),
             content.len()
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ContentLengthMessageReader, read_message};
+    use std::io::{self, BufReader, Cursor};
+
+    fn framed_request(id: u64, method: &str) -> Vec<u8> {
+        let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"{method}","params":{{}}}}"#);
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        frame
+    }
+
+    #[test]
+    fn read_message_parses_back_to_back_frames_without_losing_buffered_bytes() -> io::Result<()> {
+        let mut payload = framed_request(1, "initialize");
+        payload.extend(framed_request(2, "shutdown"));
+        let mut reader = BufReader::with_capacity(4096, Cursor::new(payload));
+
+        let first = match read_message(&mut reader)? {
+            Some(request) => request,
+            None => panic!("expected first request"),
+        };
+        assert_eq!(first.method, "initialize");
+
+        let second = match read_message(&mut reader)? {
+            Some(request) => request,
+            None => panic!("expected second request"),
+        };
+        assert_eq!(second.method, "shutdown");
+
+        assert!(read_message(&mut reader)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn stateful_reader_keeps_extra_frames_between_reads() -> io::Result<()> {
+        let mut payload = framed_request(1, "textDocument/didOpen");
+        payload.extend(framed_request(2, "textDocument/definition"));
+        let mut cursor = Cursor::new(payload);
+        let mut reader = ContentLengthMessageReader::new();
+
+        let first = match reader.read_next(&mut cursor)? {
+            Some(request) => request,
+            None => panic!("expected first request"),
+        };
+        assert_eq!(first.method, "textDocument/didOpen");
+
+        let second = match reader.read_next(&mut cursor)? {
+            Some(request) => request,
+            None => panic!("expected second request"),
+        };
+        assert_eq!(second.method, "textDocument/definition");
+
+        assert!(reader.read_next(&mut cursor)?.is_none());
+        Ok(())
     }
 }

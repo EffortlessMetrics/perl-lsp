@@ -86,12 +86,13 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
             continue;
         }
 
-        let path = root.join(entry);
-        if path_contains_skipped_component(&path) {
+        let relative_path = Path::new(entry);
+        if path_contains_skipped_component(relative_path) {
             excluded_count += 1;
             continue;
         }
 
+        let path = root.join(relative_path);
         if is_perl_source_path(&path) {
             files.push(path);
         } else {
@@ -209,6 +210,18 @@ mod tests {
         assert!(path_contains_skipped_component(Path::new("/repo/node_modules/pkg.pm")));
         assert!(path_contains_skipped_component(Path::new("/repo/target/build/generated.pm")));
         assert!(!path_contains_skipped_component(Path::new("/repo/lib/My/Module.pm")));
+    }
+
+    #[test]
+    fn parse_git_output_ignores_skipped_names_in_workspace_root_path() {
+        let root = Path::new("/tmp/target/workspace");
+        let payload = b"lib/Foo.pm\0";
+
+        let (files, excluded_count) = parse_git_ls_files_output(root, payload);
+
+        assert_eq!(files.len(), 1);
+        assert!(files[0].ends_with("lib/Foo.pm"));
+        assert_eq!(excluded_count, 0);
     }
 
     #[test]

@@ -77,3 +77,25 @@ fn discovers_files_via_git_and_honors_gitignore() -> TestResult {
 
     Ok(())
 }
+
+#[test]
+fn discovers_git_files_when_repo_root_path_contains_skipped_component_name() -> TestResult {
+    if !git_available() {
+        return Ok(());
+    }
+
+    let tmp = TempDir::new()?;
+    let root = tmp.path().join("target").join("workspace");
+    fs::create_dir_all(&root)?;
+
+    run_git(&root, &["init", "--quiet"])?;
+    create_file(&root, "lib/One.pm")?;
+
+    let result = discover_perl_files(&root);
+
+    assert_eq!(result.method, DiscoveryMethod::Git);
+    assert_eq!(result.files.len(), 1);
+    assert!(result.files.iter().any(|path| path.ends_with("lib/One.pm")));
+
+    Ok(())
+}
