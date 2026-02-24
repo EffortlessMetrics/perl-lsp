@@ -15,12 +15,11 @@ categories = ["development-tools", "text-editors"]
 include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-perl-module-path = { workspace = true }
-perl-path-security = { workspace = true }
-perl-uri = { workspace = true }
-url = "2.5.8"
+perl-module-resolution-path = { workspace = true }
+perl-module-resolution-uri = { workspace = true }
 
 [dev-dependencies]
+url = "2.5.8"
 proptest = "1.9.0"
 tempfile = "3.24.0"
 

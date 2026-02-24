@@ -17,6 +17,7 @@ members = [
     "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
     "crates/perl-workspace-index",
+    "crates/perl-workspace-index-slo",
     "crates/perl-refactoring",
     "crates/perl-incremental-parsing",
     "crates/perl-tdd-support",
@@ -39,19 +40,27 @@ members = [
     "crates/perl-lsp-navigation",
     "crates/perl-lsp-completion",
     "crates/perl-lsp-code-actions",
+    "crates/perl-lsp-cancellation",
     "crates/perl-lsp-feature-policy",
     "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
     "crates/perl-symbol-table",
+    "crates/perl-module-boundary",
+    "crates/perl-module-token-core",
     "crates/perl-module-token",
+    "crates/perl-module-token-parser",
     "crates/perl-module-name",
+    "crates/perl-qualified-name",
     "crates/perl-module-reference",
     "crates/perl-module-import",
     "crates/perl-module-import-match",
     "crates/perl-module-path",
     "crates/perl-module-rename",
     "crates/perl-module-resolution",
+    "crates/perl-module-resolution-path",
+    "crates/perl-module-resolution-uri",
+    "crates/perl-text-line",
     "crates/perl-keywords",
     "crates/perl-source-file",
     "crates/perl-content-length-framing",
@@ -109,16 +118,24 @@ perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.9.1" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.9.1" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.9.1" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.9.1" }
+perl-module-boundary = { path = "crates/perl-module-boundary", version = "0.9.1" }
+perl-module-token-core = { path = "crates/perl-module-token-core", version = "0.9.1" }
 perl-module-token = { path = "crates/perl-module-token", version = "0.9.1" }
+perl-module-token-parser = { path = "crates/perl-module-token-parser", version = "0.9.1" }
 perl-module-name = { path = "crates/perl-module-name", version = "0.9.1" }
+perl-qualified-name = { path = "crates/perl-qualified-name", version = "0.9.1" }
 perl-module-reference = { path = "crates/perl-module-reference", version = "0.9.1" }
 perl-module-import = { path = "crates/perl-module-import", version = "0.9.1" }
 perl-module-import-match = { path = "crates/perl-module-import-match", version = "0.9.1" }
 perl-module-path = { path = "crates/perl-module-path", version = "0.9.1" }
 perl-module-rename = { path = "crates/perl-module-rename", version = "0.9.1" }
 perl-module-resolution = { path = "crates/perl-module-resolution", version = "0.9.1" }
+perl-module-resolution-path = { path = "crates/perl-module-resolution-path", version = "0.9.1" }
+perl-module-resolution-uri = { path = "crates/perl-module-resolution-uri", version = "0.9.1" }
+perl-workspace-folder = { path = "crates/perl-workspace-folder", version = "0.9.1" }
 perl-keywords = { path = "crates/perl-keywords", version = "0.9.1" }
 perl-source-file = { path = "crates/perl-source-file", version = "0.9.1" }
+perl-text-line = { path = "crates/perl-text-line", version = "0.9.1" }
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.9.1" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.9.1" }
 perl-uri = { path = "crates/perl-uri", version = "0.9.1" }
@@ -144,6 +161,7 @@ perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.9.1"
 perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.9.1" }
 perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.9.1" }
 perl-lsp-feature-contracts = { path = "crates/perl-lsp-feature-contracts", version = "0.9.1" }
+perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.9.1" }
 perl-lsp-feature-grid = { path = "crates/perl-lsp-feature-grid", version = "0.9.1" }
 perl-lsp-feature-profile = { path = "crates/perl-lsp-feature-profile", version = "0.9.1" }
 perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "0.9.1" }
@@ -157,6 +175,7 @@ perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.
 
 # Tier 3: Two-level dependencies
 perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.9.1" }
+perl-workspace-index-slo = { path = "crates/perl-workspace-index-slo", version = "0.9.1" }
 perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.9.1" }
 perl-refactoring = { path = "crates/perl-refactoring", version = "0.9.1" }
 

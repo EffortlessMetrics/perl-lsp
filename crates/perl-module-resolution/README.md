@@ -6,7 +6,8 @@ Deterministic, secure Perl module resolution helpers for workspace-aware tools.
 
 - Resolve module names (for example, `Foo::Bar`) to filesystem paths
 - Resolve module names to `file://` URIs across open documents, workspace folders, and optional system `@INC`
-- Enforce workspace path validation to prevent traversal via include paths
+- Enforce workspace path validation to prevent traversal via include paths (via
+  `perl-module-resolution-path`)
 - Apply timeout-aware resolution for responsive editor workflows
 
 ## API

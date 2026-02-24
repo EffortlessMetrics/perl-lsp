@@ -39,6 +39,9 @@ use crate::workspace_index::WorkspaceIndex;
 use crate::workspace_refactor::WorkspaceRefactor;
 use perl_parser_core::line_index::LineIndex;
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
+use perl_qualified_name::{
+    is_valid_identifier_part, validate_perl_qualified_name as validate_package_name,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -696,7 +699,7 @@ impl RefactoringEngine {
                     location: 0,
                 });
             }
-            if !Self::is_valid_identifier_part(part) {
+            if !is_valid_identifier_part(part) {
                 return Err(ParseError::SyntaxError {
                     message: format!(
                         "Invalid Perl identifier in {}: '{}' (must start with letter/underscore)",
@@ -730,7 +733,7 @@ impl RefactoringEngine {
             });
         }
 
-        if !Self::is_valid_identifier_part(bare_name) {
+        if !is_valid_identifier_part(bare_name) {
             return Err(ParseError::SyntaxError {
                 message: format!(
                     "Invalid subroutine name: '{}' (must start with letter/underscore)",
@@ -746,60 +749,10 @@ impl RefactoringEngine {
     /// Validates a qualified Perl name (Package::Subpackage::name).
     /// Used for MoveCode elements - does not allow sigils, leading ::, trailing ::, or double ::.
     fn validate_perl_qualified_name(&self, name: &str) -> ParseResult<()> {
-        if name.is_empty() {
-            return Err(ParseError::SyntaxError {
-                message: "Qualified name cannot be empty".to_string(),
-                location: 0,
-            });
-        }
-
-        // Reject sigils - qualified names are for packages/subs, not variables
-        if name.starts_with(['$', '@', '%', '&', '*']) {
-            return Err(ParseError::SyntaxError {
-                message: format!("Invalid qualified name: '{}' cannot start with a sigil", name),
-                location: 0,
-            });
-        }
-
-        // Each segment must be a valid identifier
-        // Reject leading ::, trailing ::, or double ::
-        let parts: Vec<&str> = name.split("::").collect();
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() {
-                return Err(ParseError::SyntaxError {
-                    message: format!(
-                        "Invalid qualified name: '{}' (contains empty segment at position {})",
-                        name, i
-                    ),
-                    location: 0,
-                });
-            }
-            if !Self::is_valid_identifier_part(part) {
-                return Err(ParseError::SyntaxError {
-                    message: format!(
-                        "Invalid qualified name: '{}' contains invalid segment '{}'",
-                        name, part
-                    ),
-                    location: 0,
-                });
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Checks if a string is a valid Perl identifier component (no sigil, no ::).
-    ///
-    /// Perl allows Unicode identifiers (e.g., `$π`, `Müller::Util`), so we use
-    /// `is_alphabetic`/`is_alphanumeric` rather than ASCII-only checks.
-    fn is_valid_identifier_part(s: &str) -> bool {
-        let mut chars = s.chars();
-        match chars.next() {
-            Some(c) if c.is_alphabetic() || c == '_' => {
-                chars.all(|c| c.is_alphanumeric() || c == '_')
-            }
-            _ => false,
-        }
+        validate_package_name(name).map_err(|error| ParseError::SyntaxError {
+            message: format!("Invalid qualified name '{}': {}", name, error),
+            location: 0,
+        })
     }
 
     /// Extracts the sigil from a Perl identifier, if present.

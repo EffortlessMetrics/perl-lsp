@@ -16,6 +16,8 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 perl-module-name = { workspace = true }
+perl-module-token-parser = { workspace = true }
+perl-text-line = { workspace = true }
 
 [dev-dependencies]
 proptest = "1.9.0"

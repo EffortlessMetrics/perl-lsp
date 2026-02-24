@@ -9,6 +9,8 @@
 #![warn(clippy::all)]
 
 use perl_module_name::normalize_package_separator;
+use perl_module_token_parser::parse_module_token;
+use perl_text_line::{is_keyword_boundary, line_bounds_at, skip_ascii_whitespace};
 
 /// Statement kind for a parsed module reference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,13 +68,6 @@ pub fn extract_module_reference(text: &str, cursor_pos: usize) -> Option<String>
     find_module_reference(text, cursor_pos).map(|reference| reference.canonical_module_name())
 }
 
-fn line_bounds_at(text: &str, cursor_pos: usize) -> (usize, usize) {
-    let cursor = cursor_pos.min(text.len());
-    let start = text[..cursor].rfind('\n').map_or(0, |idx| idx + 1);
-    let end = text[cursor..].find('\n').map_or(text.len(), |idx| cursor + idx);
-    (start, end)
-}
-
 fn find_in_line(
     line: &str,
     line_offset: usize,
@@ -124,15 +119,15 @@ fn find_in_line_for_keyword<'a>(
             continue;
         }
 
-        if let Some(module_end) = parse_module_token(line, module_start)
+        if let Some(span) = parse_module_token(line, module_start)
             && cursor_in_line >= module_start
-            && cursor_in_line <= module_end
+            && cursor_in_line <= span.end
         {
             return Some(ModuleReference {
                 kind,
-                module_name: &line[module_start..module_end],
+                module_name: &line[module_start..span.end],
                 module_start: line_offset + module_start,
-                module_end: line_offset + module_end,
+                module_end: line_offset + span.end,
             });
         }
 
@@ -142,74 +137,9 @@ fn find_in_line_for_keyword<'a>(
     None
 }
 
-fn is_keyword_boundary(bytes: &[u8], start: usize, len: usize) -> bool {
-    if start > 0 && is_identifier_byte(bytes[start - 1]) {
-        return false;
-    }
-
-    let end = start + len;
-    if end < bytes.len() && is_identifier_byte(bytes[end]) {
-        return false;
-    }
-
-    true
-}
-
-fn skip_ascii_whitespace(bytes: &[u8], mut idx: usize) -> usize {
-    while idx < bytes.len() && bytes[idx].is_ascii_whitespace() {
-        idx += 1;
-    }
-    idx
-}
-
-fn parse_module_token(line: &str, start: usize) -> Option<usize> {
-    let bytes = line.as_bytes();
-    let mut idx = parse_identifier_segment(bytes, start)?;
-
-    loop {
-        if line[idx..].starts_with("::") {
-            idx += 2;
-            idx = parse_identifier_segment(bytes, idx)?;
-            continue;
-        }
-
-        if idx < bytes.len() && bytes[idx] == b'\'' {
-            idx += 1;
-            idx = parse_identifier_segment(bytes, idx)?;
-            continue;
-        }
-
-        break;
-    }
-
-    Some(idx)
-}
-
-fn parse_identifier_segment(bytes: &[u8], start: usize) -> Option<usize> {
-    if start >= bytes.len() || !is_identifier_start(bytes[start]) {
-        return None;
-    }
-
-    let mut idx = start + 1;
-    while idx < bytes.len() && is_identifier_byte(bytes[idx]) {
-        idx += 1;
-    }
-    Some(idx)
-}
-
-fn is_identifier_start(byte: u8) -> bool {
-    byte.is_ascii_alphabetic() || byte == b'_'
-}
-
-fn is_identifier_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || byte == b'_'
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        ModuleReferenceKind, extract_module_reference, find_module_reference, parse_module_token,
-    };
+    use super::{ModuleReferenceKind, extract_module_reference, find_module_reference};
 
     #[test]
     fn finds_use_module_reference() {
@@ -261,9 +191,9 @@ mod tests {
     }
 
     #[test]
-    fn parse_module_token_rejects_invalid_segments() {
-        assert_eq!(parse_module_token("Foo::", 0), None);
-        assert_eq!(parse_module_token("Foo'", 0), None);
-        assert_eq!(parse_module_token("5_10", 0), None);
+    fn ignores_invalid_reference_tokens() {
+        assert_eq!(find_module_reference("use Foo::", 0), None);
+        assert_eq!(find_module_reference("use Foo'", 0), None);
+        assert_eq!(find_module_reference("5_10", 0), None);
     }
 }

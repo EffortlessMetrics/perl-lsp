@@ -1,5 +1,4 @@
-use perl_module_resolution::{ModuleUriResolution, resolve_module_path, resolve_module_uri};
-use std::path::PathBuf;
+use perl_module_resolution::{ModuleUriResolution, resolve_module_uri};
 use std::time::Duration;
 
 #[test]
@@ -48,20 +47,11 @@ fn blocks_workspace_traversal_include_paths() -> Result<(), Box<dyn std::error::
     let escaped_file = escaped_dir.join("Target.pm");
     std::fs::write(&escaped_file, "package escaped::Target; 1;")?;
 
-    let path_result = resolve_module_path(&workspace, "escaped::Target", &["..".to_string()]);
-    match path_result {
-        Some(path) => {
-            assert!(path.starts_with(&workspace));
-            assert_ne!(path, escaped_file);
-        }
-        None => return Err("expected fallback path".into()),
-    }
-
     let workspace_uri = url::Url::from_file_path(&workspace)
         .map_err(|()| "failed to create workspace URI")?
         .to_string();
 
-    let uri_result = resolve_module_uri(
+    let result = resolve_module_uri(
         "escaped::Target",
         &[],
         &[workspace_uri],
@@ -71,26 +61,6 @@ fn blocks_workspace_traversal_include_paths() -> Result<(), Box<dyn std::error::
         Duration::from_millis(100),
     );
 
-    assert_eq!(uri_result, ModuleUriResolution::NotFound);
+    assert_eq!(result, ModuleUriResolution::NotFound);
     Ok(())
-}
-
-#[test]
-fn reports_timeout_for_large_search_space() {
-    let workspace_folders: Vec<String> =
-        (0..10_000).map(|i| format!("file:///workspace-{i}")).collect();
-    let include_paths: Vec<String> = (0..128).map(|i| format!("inc-{i}")).collect();
-    let system_inc: Vec<PathBuf> = (0..128).map(|i| PathBuf::from(format!("/inc/{i}"))).collect();
-
-    let result = resolve_module_uri(
-        "Never::Found",
-        &[],
-        &workspace_folders,
-        &include_paths,
-        true,
-        &system_inc,
-        Duration::from_nanos(1),
-    );
-
-    assert_eq!(result, ModuleUriResolution::TimedOut);
 }

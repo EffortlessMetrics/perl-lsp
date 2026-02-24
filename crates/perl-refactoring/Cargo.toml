@@ -26,6 +26,7 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-module-path = { workspace = true }
+perl-qualified-name = { workspace = true }
 regex = "1.12.2"
 serde = { version = "1.0.228", features = ["derive"] }
 url = "2.5.4"
