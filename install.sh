@@ -124,7 +124,11 @@ install_binary() {
     
     if curl -fsSL "$CHECKSUM_URL" -o "$CHECKSUM_PATH" 2>/dev/null; then
         EXPECTED_HASH=$(grep "$ASSET" "$CHECKSUM_PATH" | awk '{print $1}')
-        ACTUAL_HASH=$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')
+        if command -v sha256sum >/dev/null 2>&1; then
+            ACTUAL_HASH=$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')
+        else
+            ACTUAL_HASH=$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')
+        fi
         
         if [ "$EXPECTED_HASH" = "$ACTUAL_HASH" ]; then
             write_success "Checksum verified"
