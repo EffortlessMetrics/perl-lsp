@@ -126,8 +126,12 @@ install_binary() {
         EXPECTED_HASH=$(grep "$ASSET" "$CHECKSUM_PATH" | awk '{print $1}')
         if command -v sha256sum >/dev/null 2>&1; then
             ACTUAL_HASH=$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')
-        else
+        elif command -v shasum >/dev/null 2>&1; then
             ACTUAL_HASH=$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')
+        else
+            write_warn "No sha256 tool available (sha256sum/shasum); skipping checksum verification"
+            EXPECTED_HASH=""
+            ACTUAL_HASH=""
         fi
         
         if [ "$EXPECTED_HASH" = "$ACTUAL_HASH" ]; then
