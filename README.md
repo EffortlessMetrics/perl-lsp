@@ -35,7 +35,7 @@ cargo install --path crates/perl-lsp
 
 ### Pre-built binaries
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), or use the installer script (best-effort / non-canonical):
+Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), or use the installer script (best-effort / non-canonical) to install `perl-lsp`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash

@@ -130,7 +130,7 @@ cargo install perl-lsp
 
 # Or, build from this repository
 git clone https://github.com/EffortlessMetrics/perl-lsp
-cd tree-sitter-perl
+cd perl-lsp
 cargo build --release -p perl-lsp
 # The binary will be in target/release/perl-lsp
 ```

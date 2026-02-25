@@ -334,7 +334,7 @@ All API changes are checked for Semantic Versioning (SemVer) compatibility using
 just semver-check
 ```
 
-Breaking changes are allowed in minor version bumps (pre-0.10) but require a migration guide in `CHANGELOG.md`. See [SEMVER_WORKFLOW.md](docs/SEMVER_WORKFLOW.md) for full details.
+Breaking changes are allowed in minor version bumps, but require a migration guide in `CHANGELOG.md`. See [STABILITY.md](docs/STABILITY.md) for versioning details.
 
 ## Testing Guidelines
 

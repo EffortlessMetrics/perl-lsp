@@ -10,6 +10,24 @@ Common questions about perl-lsp, organized by topic.
 - No runtime dependencies (perl-lsp is a standalone Rust binary)
 - Any operating system: Linux, macOS, Windows
 
+### Where can I get/install perl-lsp?
+
+- **crates.io**: `cargo install perl-lsp`
+- **GitHub Releases**: download from [releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
+- **Installer script** (Linux/macOS, best-effort / non-canonical):
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
+  ```
+
+- **From source**:
+
+  ```bash
+  git clone https://github.com/EffortlessMetrics/perl-lsp.git
+  cd perl-lsp
+  cargo install --path crates/perl-lsp
+  ```
+
 ### Do I need Perl installed?
 
 No. perl-lsp parses Perl code natively without requiring a Perl interpreter.
@@ -104,7 +122,7 @@ perl-lsp implements 100% of advertised LSP 3.18 features:
 | **Advanced** | Code Actions, Code Lens, Inlay Hints, Semantic Tokens |
 | **Hierarchy** | Call Hierarchy, Type Hierarchy |
 
-See [features.toml](../features.toml) for the complete capability catalog.
+See [features.toml](../features.toml) for the complete capability catalog and [CURRENT_STATUS.md](CURRENT_STATUS.md) for measured coverage (`53/53` advertised features, `97/97` protocol methods).
 
 ### Does completion work for CPAN modules?
 
