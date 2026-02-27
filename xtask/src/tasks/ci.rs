@@ -23,7 +23,7 @@ pub fn run() -> Result<()> {
     );
 
     // Change to project root
-    let root = project_root();
+    let root = project_root()?;
     std::env::set_current_dir(&root).context("Failed to change to project root")?;
 
     spinner.set_message("Setting up constrained environment...");
@@ -93,7 +93,7 @@ pub fn check_only() -> Result<()> {
             .context("Failed to create progress spinner template")?,
     );
 
-    let root = project_root();
+    let root = project_root()?;
     std::env::set_current_dir(&root).context("Failed to change to project root")?;
 
     let env_vars = constrained_env_vars();

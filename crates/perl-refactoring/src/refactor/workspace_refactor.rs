@@ -54,6 +54,7 @@ use crate::import_optimizer::ImportOptimizer;
 use crate::workspace_index::{
     SymKind, SymbolKey, WorkspaceIndex, fs_path_to_uri, normalize_var, uri_to_fs_path,
 };
+use perl_module_path::module_name_to_path;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -419,7 +420,8 @@ impl WorkspaceRefactor {
     /// * `file_path` - The path to the file containing the code to extract
     /// * `start_line` - The first line to extract (1-based line number)
     /// * `end_line` - The last line to extract (1-based line number, inclusive)
-    /// * `module_name` - The name of the new module to create (without .pm extension)
+    /// * `module_name` - The name of the new module to create (without .pm extension).
+    ///   Qualified names like `Foo::Bar` are mapped to `Foo/Bar.pm`.
     ///
     /// # Returns
     /// * `Ok(RefactorResult)` - Contains edits for both the original file and new module
@@ -491,7 +493,7 @@ impl WorkspaceRefactor {
         }];
 
         // New module file content
-        let new_path = file_path.with_file_name(format!("{}.pm", module_name));
+        let new_path = file_path.with_file_name(module_name_to_path(module_name));
         let new_edits = vec![TextEdit { start: 0, end: 0, new_text: extracted }];
 
         let file_edits = vec![
@@ -572,7 +574,8 @@ impl WorkspaceRefactor {
     /// # Arguments
     /// * `sub_name` - The name of the subroutine to move (without 'sub' keyword)
     /// * `from_file` - The source file containing the subroutine
-    /// * `to_module` - The name of the target module (without .pm extension)
+    /// * `to_module` - The name of the target module (without .pm extension).
+    ///   Qualified names like `Foo::Bar` are mapped to `Foo/Bar.pm`.
     ///
     /// # Returns
     /// * `Ok(RefactorResult)` - Contains edits for both source and target files
@@ -660,7 +663,7 @@ impl WorkspaceRefactor {
         }];
 
         // Append to new module file
-        let target_path = from_file.with_file_name(format!("{}.pm", to_module));
+        let target_path = from_file.with_file_name(module_name_to_path(to_module));
         let target_uri = fs_path_to_uri(&target_path).map_err(|e| {
             RefactorError::UriConversion(format!("Failed to convert target path to URI: {}", e))
         })?;
@@ -1054,6 +1057,17 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_module_qualified_name_uses_nested_path()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![("a.pl", "my $x = 1;\nprint $x;\n")])?;
+        let refactor = WorkspaceRefactor::new(index);
+        let res = refactor.extract_module(&paths[0], 2, 2, "My::Extracted")?;
+        assert_eq!(res.file_edits.len(), 2);
+        assert_eq!(res.file_edits[1].file_path, paths[0].with_file_name("My/Extracted.pm"));
+        Ok(())
+    }
+
+    #[test]
     fn test_optimize_imports() -> Result<(), Box<dyn std::error::Error>> {
         let (_dir, index, _paths) = setup_index(vec![
             ("a.pl", "use B;\nuse A;\nuse B;\n"),
@@ -1071,6 +1085,17 @@ mod tests {
         let refactor = WorkspaceRefactor::new(index);
         let res = refactor.move_subroutine("foo", &paths[0], "b")?;
         assert_eq!(res.file_edits.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_move_subroutine_qualified_target_uses_nested_path()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let (_dir, index, paths) = setup_index(vec![("a.pl", "sub foo {1}\n"), ("b.pm", "")])?;
+        let refactor = WorkspaceRefactor::new(index);
+        let res = refactor.move_subroutine("foo", &paths[0], "Target::Module")?;
+        assert_eq!(res.file_edits.len(), 2);
+        assert_eq!(res.file_edits[1].file_path, paths[0].with_file_name("Target/Module.pm"));
         Ok(())
     }
 
@@ -1409,7 +1434,7 @@ use JSON; # Duplicate
         let result = refactor.inline_variable_all("$const", &paths[0], (0, 0))?;
 
         // Should affect all files where $const is used
-        assert!(result.file_edits.len() >= 1);
+        assert!(!result.file_edits.is_empty());
         assert!(result.description.contains("workspace"));
         Ok(())
     }

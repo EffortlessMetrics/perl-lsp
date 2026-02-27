@@ -819,6 +819,7 @@ mod workspace_index_unit_tests {
     use perl_parser::workspace_index::{
         DegradationReason, IndexCoordinator, IndexResourceLimits, IndexState, ResourceKind,
     };
+    use perl_tdd_support::must;
 
     // =========================================================================
     // Test: IndexCoordinator query dispatch based on state
@@ -883,7 +884,7 @@ mod workspace_index_unit_tests {
             IndexState::Degraded { reason: DegradationReason::ResourceLimit { kind }, .. } => {
                 assert_eq!(kind, ResourceKind::MaxFiles);
             }
-            other => panic!("Expected MaxFiles degradation, got {:?}", other),
+            other => must(Err::<(), _>(format!("Expected MaxFiles degradation, got {:?}", other))),
         }
         Ok(())
     }
@@ -914,7 +915,9 @@ sub f { } sub g { } sub h { } sub i { } sub j { }
             IndexState::Degraded { reason: DegradationReason::ResourceLimit { kind }, .. } => {
                 assert_eq!(kind, ResourceKind::MaxSymbols);
             }
-            other => panic!("Expected MaxSymbols degradation, got {:?}", other),
+            other => {
+                must(Err::<(), _>(format!("Expected MaxSymbols degradation, got {:?}", other)))
+            }
         }
         Ok(())
     }
@@ -939,7 +942,9 @@ sub f { } sub g { } sub h { } sub i { } sub j { }
             } => {
                 assert!(pending_parses > 10);
             }
-            other => panic!("Expected ParseStorm degradation, got {:?}", other),
+            other => {
+                must(Err::<(), _>(format!("Expected ParseStorm degradation, got {:?}", other)))
+            }
         }
     }
 

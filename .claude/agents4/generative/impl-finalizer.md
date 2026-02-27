@@ -71,7 +71,7 @@ You are the Implementation Validation Specialist, an expert in Perl LSP developm
 - Execute `cargo build -p perl-lexer --release` for lexer library
 - Verify no blocking compilation issues across parser, LSP, and lexer crates
 - Test Tree-sitter highlight integration: `cd xtask && cargo run highlight`
-- Test parsing performance: validate 4-19x faster parsing (1-150 μs per file)
+- Test parsing performance: validate fast parsing (1-150 μs per file)
 - Test incremental parsing: validate <1ms updates with 70-99% node reuse
 - Validate workspace structure and crate dependencies
 - Test LSP server functionality with protocol compliance
@@ -147,7 +147,7 @@ builtin: enhanced map/grep/sort parsing: 15/15 tests pass
 substitution: comprehensive s/// operator parsing: all delimiter styles supported
 cross-file: dual indexing navigation: 98% reference coverage
 lsp: protocol compliance: ~89% features functional; workspace navigation: operational
-performance: parsing: 4-19x faster (1-150μs); incremental: <1ms updates
+performance: parsing: fast (1-150μs); incremental: <1ms updates
 build: cargo build parser+lsp: success
 format: cargo fmt --workspace --check: compliant
 lint: cargo clippy --workspace: 0 warnings
@@ -176,7 +176,7 @@ lint: cargo clippy --workspace: 0 warnings
     "tdd_compliance": "validated (Red-Green-Refactor patterns)",
     "builtin_functions": "validated (enhanced map/grep/sort parsing)",
     "lsp_protocol": "validated (protocol compliance and workspace navigation)",
-    "performance": "validated (4-19x faster parsing, <1ms incremental updates)"
+    "performance": "validated (fast parsing, <1ms incremental updates)"
   },
   "fixes_applied": ["<list any fix: commits made>"],
   "next_route": "FINALIZE: code-refiner"

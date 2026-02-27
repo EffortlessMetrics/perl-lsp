@@ -72,7 +72,6 @@ fn test_or_and_precedence() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[ignore = "word operator: statement modifier handling needs investigation"]
 fn test_statement_with_or_modifier() -> Result<(), Box<dyn std::error::Error>> {
     // open FILE, "test.txt" or die "error" should parse correctly
     let input = "open FILE, \"test.txt\" or die \"error\"";
@@ -153,5 +152,36 @@ fn test_list_context_with_word_operators() -> Result<(), Box<dyn std::error::Err
     assert!(sexp.contains("(binary_or"));
     // Parenthesized list expressions are parsed as arrays
     assert!(sexp.contains("(array"));
+    Ok(())
+}
+
+/// Regression: indirect-call heuristic must treat uppercase bareword + comma as regular call
+/// (`print STDERR, "x"` is NOT an indirect method call on STDERR).
+#[test]
+fn test_print_stderr_comma_or_die() -> Result<(), Box<dyn std::error::Error>> {
+    let input = r#"print STDERR, "x" or die "err""#;
+    let mut parser = Parser::new(input);
+    let ast = parser.parse()?;
+
+    let sexp = ast.to_sexp();
+    // Top-level should be `or` — the call is on the left, die on the right
+    assert!(sexp.contains("(binary_or"), "expected binary_or at top level, got: {sexp}");
+    assert!(sexp.contains("(call print"), "expected (call print ...), got: {sexp}");
+    Ok(())
+}
+
+/// Regression: `WordNot` must terminate indirect-object argument collection.
+/// `open FILE, "x" or not $failed` should parse `not` outside the arg list.
+#[test]
+fn test_word_not_as_terminator() -> Result<(), Box<dyn std::error::Error>> {
+    let input = r#"open FILE, "x" or not $failed"#;
+    let mut parser = Parser::new(input);
+    let ast = parser.parse()?;
+
+    let sexp = ast.to_sexp();
+    // `or` at top level, `not` on the RHS
+    assert!(sexp.contains("(binary_or"), "expected binary_or, got: {sexp}");
+    assert!(sexp.contains("(unary_not"), "expected unary_not on RHS, got: {sexp}");
+    assert!(sexp.contains("(call open"), "expected (call open ...), got: {sexp}");
     Ok(())
 }

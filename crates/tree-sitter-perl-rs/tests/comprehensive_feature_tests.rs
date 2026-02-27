@@ -266,9 +266,8 @@ mod tests {
             r#"print <<~EOF;"#,
             r#"print <<~'EOF';"#,
             r#"print <<~"EOF";"#,
-            // Multiple heredocs - TODO: complex case
-            // r#"print <<EOF1, <<EOF2;"#,
-
+            // Multiple heredocs in single statement
+            r#"print <<EOF1, <<EOF2;"#,
             // In assignments
             r#"my $text = <<EOF;"#,
             r#"my $text = <<'END';"#,

@@ -21,16 +21,16 @@ fn test_simple_array_interpolation() -> TestResult {
                         "Should contain interpolation construct"
                     );
                 } else {
-                    panic!("Expected string initializer");
+                    return Err("Expected string initializer".into());
                 }
             } else {
-                panic!("Expected initializer");
+                return Err("Expected initializer".into());
             }
         } else {
-            panic!("Expected variable declaration");
+            return Err("Expected variable declaration".into());
         }
     } else {
-        panic!("Expected program");
+        return Err("Expected program".into());
     }
     Ok(())
 }
@@ -54,16 +54,16 @@ fn test_complex_map_interpolation() -> TestResult {
                         "Should contain complex interpolation construct"
                     );
                 } else {
-                    panic!("Expected string initializer");
+                    return Err("Expected string initializer".into());
                 }
             } else {
-                panic!("Expected initializer");
+                return Err("Expected initializer".into());
             }
         } else {
-            panic!("Expected variable declaration");
+            return Err("Expected variable declaration".into());
         }
     } else {
-        panic!("Expected program");
+        return Err("Expected program".into());
     }
     Ok(())
 }
@@ -84,16 +84,16 @@ fn test_hash_interpolation() -> TestResult {
                     assert_eq!(interpolated, &true, "String should be interpolated");
                     assert!(value.contains("${hash{key}}"), "Should contain hash interpolation");
                 } else {
-                    panic!("Expected string initializer");
+                    return Err("Expected string initializer".into());
                 }
             } else {
-                panic!("Expected initializer");
+                return Err("Expected initializer".into());
             }
         } else {
-            panic!("Expected variable declaration");
+            return Err("Expected variable declaration".into());
         }
     } else {
-        panic!("Expected program");
+        return Err("Expected program".into());
     }
     Ok(())
 }
@@ -114,16 +114,16 @@ fn test_variable_interpolation() -> TestResult {
                     assert_eq!(interpolated, &true, "String should be interpolated");
                     assert!(value.contains("${name}"), "Should contain variable interpolation");
                 } else {
-                    panic!("Expected string initializer");
+                    return Err("Expected string initializer".into());
                 }
             } else {
-                panic!("Expected initializer");
+                return Err("Expected initializer".into());
             }
         } else {
-            panic!("Expected variable declaration");
+            return Err("Expected variable declaration".into());
         }
     } else {
-        panic!("Expected program");
+        return Err("Expected program".into());
     }
     Ok(())
 }

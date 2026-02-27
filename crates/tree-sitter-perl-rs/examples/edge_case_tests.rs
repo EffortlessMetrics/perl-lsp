@@ -7,7 +7,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Tree-sitter Perl Edge Case Tests ===\n");
 
-    let edge_cases = vec![
+    let edge_cases = [
         // Heredoc edge cases
         (
             "Simple heredoc",
@@ -429,7 +429,7 @@ fn node_type_name(node: &AstNode) -> &'static str {
     }
 }
 
-fn extract_error_position(error: &tree_sitter_perl::error::ParseError) -> Option<(usize, usize)> {
+fn extract_error_position(error: &perl_parser_pest::error::ParseError) -> Option<(usize, usize)> {
     // Try to extract line/column from error message
     let error_str = format!("{}", error);
     if error_str.contains("line") {

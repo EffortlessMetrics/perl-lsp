@@ -1,9 +1,17 @@
 [package]
 name = "perl-pragma"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+description = "Perl pragma extraction and analysis primitives"
+readme = "README.md"
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-pragma"
+keywords = ["perl", "pragma", "strict", "warnings", "static-analysis"]
+categories = ["development-tools", "parser-implementations"]
 
 [dependencies]
 perl-ast = { workspace = true }

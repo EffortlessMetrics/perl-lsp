@@ -12,7 +12,7 @@ Sets up Rust toolchain with caching optimized for perl-lsp.
 ```yaml
 - uses: ./.github/actions/setup-rust
   with:
-    toolchain: '1.89.0'        # or 'stable', 'nightly'
+    toolchain: '1.92.0'        # or 'stable', 'nightly'
     components: rustfmt, clippy
     cache: true
     sccache: false
@@ -98,7 +98,7 @@ jobs:
     with:
       tier: pr-fast
       os: '["ubuntu-latest"]'
-      toolchain: '1.89.0'
+      toolchain: '1.92.0'
     secrets: inherit
 
   full-checks:
@@ -122,7 +122,7 @@ jobs:
 |-------|---------|-------------|
 | `tier` | (required) | `pr-fast`, `merge-gate`, or `nightly` |
 | `os` | `["ubuntu-latest"]` | JSON array of OS runners |
-| `toolchain` | `1.89.0` | Rust toolchain |
+| `toolchain` | `1.92.0` | Rust toolchain |
 | `timeout-minutes` | `30` | Job timeout |
 | `fail-fast` | `true` | Stop on first failure |
 | `upload-receipt` | `true` | Upload gate receipt |

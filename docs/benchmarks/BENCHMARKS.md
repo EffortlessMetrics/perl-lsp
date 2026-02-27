@@ -52,10 +52,10 @@ cargo bench --features pure-rust  # v2 Pest
 - **v3 (Native)**: 120-150 µs ⭐
 
 ### Performance Ratio (v3 vs v1)
-- Simple: **11x faster**
-- Medium: **0.7-1.6x** (comparable)
-- Complex: **0.4-0.5x** (2x slower but 100% coverage)
-- Average: **4-19x faster** on typical workloads
+- Simple: 11x faster
+- Medium: 0.7-1.6x (comparable)
+- Complex: 0.4-0.5x (2x slower but 100% coverage)
+- Performance varies by workload complexity
 
 ## Memory Usage
 

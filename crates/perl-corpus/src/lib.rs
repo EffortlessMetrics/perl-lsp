@@ -309,19 +309,40 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
     };
 
     // Find all section delimiters
-    let mut offs = vec![0usize];
-    for m in sec_re.find_iter(&text) {
-        offs.push(m.start());
+    let raw_delims: Vec<usize> = sec_re.find_iter(&text).map(|m| m.start()).collect();
+
+    // Filter out closing delimiters in paired-delimiter format.
+    // A closing delimiter has only 2 lines (delimiter + title) between
+    // it and the preceding opening delimiter.
+    let mut opening_delims: Vec<usize> = Vec::new();
+    let mut i = 0;
+    while i < raw_delims.len() {
+        opening_delims.push(raw_delims[i]);
+        if i + 1 < raw_delims.len() {
+            let between = &text[raw_delims[i]..raw_delims[i + 1]];
+            if between.lines().count() == 2 {
+                i += 2; // skip closing delimiter
+                continue;
+            }
+        }
+        i += 1;
     }
-    // Add EOF sentinel
+
+    // Build offset array: prelude sentinel + opening delimiters + EOF sentinel
+    let mut offs = vec![0usize];
+    offs.extend(&opening_delims);
+    offs.dedup(); // remove duplicate 0 when first delimiter is at start
     offs.push(text.len());
 
     for w in offs.windows(2) {
         let start = w[0];
         let end = w[1];
-        if start == 0 {
+
+        // Skip prelude (text before first section delimiter)
+        let first_line = text[start..end].lines().next().unwrap_or("");
+        if !sec_re.is_match(first_line) {
             continue;
-        } // skip prelude
+        }
 
         section_index += 1;
 
@@ -336,13 +357,16 @@ pub fn parse_file(path: &Path) -> Result<Vec<Section>> {
         // Title is the line after "===="
         let title = lines[1].trim().to_string();
 
+        // Skip closing delimiter in paired-delimiter format (===\nTitle\n===)
+        let after_title_idx = if lines.len() > 2 && sec_re.is_match(lines[2]) { 3 } else { 2 };
+
         // Gather metadata lines following title
         let mut meta = HashMap::<String, String>::new();
-        let mut body_start_idx = 2;
+        let mut body_start_idx = after_title_idx;
 
         // Use META_RE if available, otherwise skip metadata parsing
         if let Some(meta_re) = META_RE.as_ref() {
-            for (i, line) in lines.iter().enumerate().skip(2) {
+            for (i, line) in lines.iter().enumerate().skip(after_title_idx) {
                 if let Some(cap) = meta_re.captures(line) {
                     meta.insert(cap["k"].to_string(), cap["v"].trim().to_string());
                     body_start_idx = i + 1;
@@ -460,7 +484,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "Pre-existing parsing bug with multiple === delimiters - needs investigation"]
     fn parse_file_strips_ast_and_generates_id() {
         let path = temp_file("perl_corpus_parse");
         let contents = r#"==========================================

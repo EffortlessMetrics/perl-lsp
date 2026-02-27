@@ -16,7 +16,7 @@ Finalize architectural changes by updating documentation links, adjusting crate 
 ### Workspace Structure Validation
 ```text
 crates/              # Validate workspace organization
-├── perl-parser/      # Main parser library API boundary validation (production-ready recursive descent)
+├── perl-parser/      # Main parser library API boundary validation (recursive descent)
 ├── perl-lsp/         # LSP server binary boundary validation with CLI interface
 ├── perl-lexer/       # Context-aware tokenizer boundary with Unicode support
 ├── perl-corpus/      # Comprehensive test corpus boundaries with property-based testing

@@ -104,4 +104,4 @@ While it's slower than C (estimated 5-10x), the benefits in safety, maintainabil
 - Syntax highlighting
 - Build tools
 
-The parser is **production-ready** and recommended for any application where correctness and safety are priorities.
+The parser is **robust** and recommended for any application where correctness and safety are priorities.

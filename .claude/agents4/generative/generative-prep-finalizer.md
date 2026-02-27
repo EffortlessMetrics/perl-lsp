@@ -60,7 +60,7 @@ Your core responsibility is performing the final validation gate before PR creat
    - Validate documentation tests: `cargo test --doc`
 
 2. **Perl LSP Protocol Validation**:
-   - Verify parser performance: `cargo bench` (4-19x faster requirements, 1-150μs parsing)
+   - Verify parser performance: `cargo bench` (fast requirements, 1-150μs parsing)
    - Validate LSP protocol compliance: `cargo test -p perl-lsp --test lsp_comprehensive_e2e_test`
    - Check incremental parsing: Test <1ms updates with 70-99% node reuse efficiency
    - Test cross-file navigation: `cargo test -p perl-parser test_cross_file_definition`
@@ -108,7 +108,7 @@ Your core responsibility is performing the final validation gate before PR creat
 ## Perl LSP Quality Standards
 
 - All workspace crates must build successfully (`perl-parser`, `perl-lsp`, `perl-lexer`, `perl-corpus`)
-- Parser performance tests must pass (4-19x faster than legacy, 1-150μs parsing times)
+- Parser performance tests must pass (fast than legacy, 1-150μs parsing times)
 - LSP protocol compliance validated (~89% features functional with comprehensive workspace support)
 - Perl LSP commit history must follow conventions with parser/lsp/lexer context
 - Branch naming must align with Perl LSP work patterns
@@ -126,7 +126,7 @@ Provide structured GitHub-native receipts:
 - **Ledger Update**: Rebuild prep gate row, append hop, refresh decision
 - **Progress Comment** (if high-signal): Perl LSP-specific validation evidence including:
   - Workspace build status across parser/lsp/lexer crates with standardized evidence format
-  - Parser performance and LSP protocol compliance validation: `parsing: 1-150μs per file; 4-19x faster than legacy parsers`
+  - Parser performance and LSP protocol compliance validation: `parsing: 1-150μs per file; fast than legacy parsers`
   - Incremental parsing validation: `incremental: <1ms updates with 70-99% node reuse efficiency`
   - Perl LSP commit and branch compliance verification
   - Generative quality gate status with evidence: `tests: cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30`

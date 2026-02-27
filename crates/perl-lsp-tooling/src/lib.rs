@@ -19,9 +19,11 @@
 //! ```
 
 #![deny(unsafe_code)]
+#![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
+#![allow(clippy::empty_line_after_outer_attr)]
 
 /// Performance optimizations for large projects.
 pub mod performance;

@@ -1,33 +1,29 @@
 # perl-lexer
 
-A high-performance Perl lexer with context-aware tokenization.
+Context-aware Perl lexer with mode-based tokenization for the
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
-## Features
+## Overview
 
-- **Context-aware tokenization**: Correctly handles Perl's complex syntax including regex vs division disambiguation
-- **Full Perl 5 support**: All operators, keywords, and constructs
-- **Unicode support**: Full Unicode identifier support
-- **Zero dependencies**: Core lexer has minimal dependencies
-- **Fast**: Optimized for speed with SIMD support
+Handles Perl's inherently context-sensitive grammar by tracking lexer mode
+(`ExpectTerm` vs `ExpectOperator`) to disambiguate `/` (division vs regex),
+`%` (modulo vs hash sigil), heredocs, quote-like operators, and more. Provides
+checkpointing for incremental parsing and budget limits to guard against
+pathological input.
 
 ## Usage
 
 ```rust
-use perl_lexer::{Lexer, Token, TokenType};
+use perl_lexer::{PerlLexer, TokenType};
 
-let input = "my $x = 42;";
-let lexer = Lexer::new(input);
-
-for token in lexer {
-    println!("{:?}", token);
+let mut lexer = PerlLexer::new("my $x = 42;");
+while let Some(token) = lexer.next_token() {
+    if matches!(token.token_type, TokenType::EOF) { break; }
+    println!("{:?}: {}", token.token_type, token.text);
 }
 ```
 
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
+Licensed under either of [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
+or [MIT license](http://opensource.org/licenses/MIT) at your option.
