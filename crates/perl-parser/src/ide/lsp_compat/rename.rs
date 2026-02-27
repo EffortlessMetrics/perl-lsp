@@ -56,6 +56,7 @@ use crate::ast::{Node, NodeKind};
 use crate::position::{Position, Range};
 use crate::workspace::workspace_index::{WorkspaceIndex, SymbolReference};
 use lsp_types::*;
+use perl_keywords::is_parser_lsp_keyword;
 use std::collections::HashMap;
 use url::Url;
 
@@ -276,14 +277,7 @@ impl RenameProvider {
         }
         
         // Check for Perl keywords
-        let keywords = [
-            "if", "unless", "elsif", "else", "while", "until", "for", "foreach",
-            "given", "when", "default", "next", "last", "redo", "goto",
-            "return", "continue", "break", "package", "sub", "my", "our", "local",
-            "use", "require", "no", "do", "eval", "die", "warn",
-        ];
-        
-        if keywords.contains(&new_name) {
+        if is_parser_lsp_keyword(new_name) {
             return Err(format!("New name '{}' is a Perl keyword", new_name));
         }
         

@@ -778,14 +778,13 @@ perl-dap --version  # perl-dap 0.1.0
 - ✅ CLI argument parsing (PR #374)
 - ✅ Async BridgeAdapter (PR #369)
 
-**Not Yet Supported:**
-- ❌ Attach mode (connect to running process)
-- ❌ Variable inspection (placeholder only)
-- ❌ Expression evaluation (limited)
-- ❌ Conditional breakpoints
+**Also Supported (added post-Phase 1):**
+- ✅ Attach mode (connect to running process)
+- ✅ Variable inspection (scopes and variables)
+- ✅ Expression evaluation (debug console evaluate)
+- ✅ Conditional breakpoints (hit conditions, logpoints)
 
 **Roadmap:**
-- Phase 2 (planned): Attach mode, variable/evaluate work
 - Phase 3 (planned): Native adapter completeness
 
 ---
@@ -1086,5 +1085,5 @@ Compilation error
 
 ---
 
-*Last Updated: 2026-01-22*
+*Last Updated: 2025-02-22*
 *For latest updates, see: [CHANGELOG.md](../CHANGELOG.md)*

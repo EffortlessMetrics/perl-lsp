@@ -181,7 +181,7 @@ GitHub Actions is currently unavailable due to billing. This PR has been validat
 - ✅ `just ci-gate` passed
 - [x] All quality gates documented
 
-See: [Local CI Protocol](docs/ci/LOCAL_CI_PROTOCOL.md)
+See: [Local CI Protocol](LOCAL_CI_PROTOCOL.md)
 ```
 
 ---

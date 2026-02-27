@@ -17,27 +17,19 @@ Choose one method:
 cargo install perl-lsp
 ```
 
-### Option 2: Download Pre-built Binary
+### Option 2: Install Script (Linux/macOS)
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases):
+Use the installer script (best-effort / non-canonical):
 
 ```bash
-# Linux (x86_64)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
-tar xzf perl-lsp-linux-x86_64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
-
-# macOS (Apple Silicon)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
-tar xzf perl-lsp-darwin-aarch64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 ### Option 3: Build from Source
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
-cd tree-sitter-perl-rs
+cd perl-lsp
 cargo install --path crates/perl-lsp
 ```
 

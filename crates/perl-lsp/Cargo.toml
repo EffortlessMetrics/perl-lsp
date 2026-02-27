@@ -26,6 +26,7 @@ perl-dap = { workspace = true, optional = true }
 perl-parser = { workspace = true, features = ["test-performance"] }
 perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-formatting = { workspace = true }
+perl-lsp-cancellation = { workspace = true }
 perl-lsp-feature-governance = { workspace = true }
 perl-lsp-tooling = { workspace = true }
 perl-lsp-protocol = { workspace = true }
@@ -40,11 +41,19 @@ perl-lsp-semantic-tokens = { workspace = true }
 perl-lsp-launcher = { workspace = true }
 perl-lexer = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
+perl-module-path = { workspace = true }
+perl-module-reference = { workspace = true }
+perl-module-rename = { workspace = true }
+perl-module-resolution = { workspace = true }
+perl-source-file = { workspace = true }
+perl-content-length-framing = { workspace = true }
+perl-workspace-discovery = { workspace = true }
+perl-keywords = { workspace = true }
 lsp-types = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 url = "2.5.8"
-anyhow = "1.0.100"
+anyhow = "1.0.102"
 regex = "1.12.2"
 md5 = "0.8.0"
 parking_lot = "0.12.5"
@@ -57,7 +66,7 @@ once_cell = "1.21.3"
 
 [build-dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
-toml = "0.9.11"
+toml = "1.0.3"
 
 [lints]
 workspace = true

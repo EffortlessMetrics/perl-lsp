@@ -124,12 +124,24 @@ install_binary() {
     
     if curl -fsSL "$CHECKSUM_URL" -o "$CHECKSUM_PATH" 2>/dev/null; then
         EXPECTED_HASH=$(grep "$ASSET" "$CHECKSUM_PATH" | awk '{print $1}')
-        ACTUAL_HASH=$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')
-        
-        if [ "$EXPECTED_HASH" = "$ACTUAL_HASH" ]; then
-            write_success "Checksum verified"
+
+        if [ -z "$EXPECTED_HASH" ]; then
+            write_warn "No checksum entry found for $ASSET; skipping verification"
         else
-            write_warn "Checksum mismatch - expected: $EXPECTED_HASH, got: $ACTUAL_HASH"
+            if command -v sha256sum >/dev/null 2>&1; then
+                ACTUAL_HASH=$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')
+            elif command -v shasum >/dev/null 2>&1; then
+                ACTUAL_HASH=$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')
+            else
+                write_warn "No sha256 tool available (sha256sum/shasum); skipping checksum verification"
+                ACTUAL_HASH=""
+            fi
+
+            if [ -n "$ACTUAL_HASH" ] && [ "$EXPECTED_HASH" = "$ACTUAL_HASH" ]; then
+                write_success "Checksum verified"
+            elif [ -n "$ACTUAL_HASH" ]; then
+                write_warn "Checksum mismatch - expected: $EXPECTED_HASH, got: $ACTUAL_HASH"
+            fi
         fi
     else
         write_warn "Could not download or verify checksums"
