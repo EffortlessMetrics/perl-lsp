@@ -19,6 +19,7 @@
 //! - Cross-command behavior verification
 
 use perl_lsp::execute_command::{ExecuteCommandProvider, get_supported_commands};
+use perl_tdd_support::must;
 use serde_json::Value;
 use std::fs;
 use std::io::Write;
@@ -31,7 +32,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn test_execute_command_not_default_comprehensive() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Create test files for comprehensive testing
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'test execution';\n";
@@ -146,7 +147,10 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
                     description
                 );
             }
-            _ => panic!("Unexpected command: {}", command),
+            _ => {
+                must(Err::<(), _>(format!("Unexpected command: {}", command)));
+                unreachable!()
+            }
         }
     }
 
@@ -161,7 +165,7 @@ fn test_execute_command_not_default_comprehensive() -> TestResult {
 
 #[test]
 fn test_command_routing_specificity_comprehensive() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Create test file
     let test_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'routing test';\n";
@@ -275,7 +279,7 @@ fn test_unknown_command_handling() -> TestResult {
 
 #[test]
 fn test_parameter_validation_comprehensive() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Test missing file path arguments for all commands that require them
     let commands_requiring_file_path =
@@ -358,7 +362,7 @@ fn test_parameter_validation_comprehensive() -> TestResult {
 
 #[test]
 fn test_file_path_extraction_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Test that extract_file_path_argument returns actual values, not hardcoded ones
     // We do this indirectly by testing runCritic with different file paths
@@ -404,7 +408,7 @@ fn test_file_path_extraction_validation() -> TestResult {
 
 #[test]
 fn test_response_structure_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Create test file with known content
     let test_content =
@@ -518,7 +522,7 @@ fn test_file_not_found_error_structure() -> TestResult {
 
 #[test]
 fn test_command_execution_success_failure_logic() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Create files for testing different execution scenarios
     let valid_content = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint \"success\";\n";
@@ -560,7 +564,7 @@ fn test_command_execution_success_failure_logic() -> TestResult {
 
 #[test]
 fn test_comprehensive_edge_cases() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Test empty file handling
     let empty_content = "";
@@ -612,7 +616,7 @@ fn test_supported_commands_structure() -> TestResult {
 
     // MUTATION KILLER: Verify not empty/default list
     assert!(!commands.is_empty(), "Supported commands should not be empty");
-    assert_eq!(commands.len(), 5, "Should have exactly 5 supported commands");
+    assert_eq!(commands.len(), 8, "Should have exactly 8 supported commands");
 
     // Verify specific commands are present
     let expected_commands = vec![
@@ -621,6 +625,9 @@ fn test_supported_commands_structure() -> TestResult {
         "perl.runTestSub",
         "perl.debugTests",
         "perl.runCritic",
+        "perl.runTest",
+        "perl.runTestFile",
+        "perl.debugFile",
     ];
 
     for expected in &expected_commands {
@@ -648,7 +655,7 @@ fn test_supported_commands_structure() -> TestResult {
 
 #[test]
 fn test_comprehensive_workflow_validation() -> TestResult {
-    let provider = ExecuteCommandProvider::new();
+    let provider = ExecuteCommandProvider::with_workspace_roots(vec![std::env::temp_dir()]);
 
     // Create comprehensive test file
     let comprehensive_content = r#"#!/usr/bin/perl

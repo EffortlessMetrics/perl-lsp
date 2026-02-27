@@ -35,15 +35,12 @@ fn test_heredoc_boundary_fix_validation() {
             parser.parse()
         });
 
-        match result {
-            Ok(_) => {
-                println!("✅ SAFE (no crash)");
-                passed_tests += 1;
-            }
-            Err(_) => {
-                println!("❌ CRASHED");
-                panic!("Critical boundary issue detected in: {}", description);
-            }
+        assert!(result.is_ok(), "Critical boundary issue detected in: {}", description);
+        if result.is_ok() {
+            println!("✅ SAFE (no crash)");
+            passed_tests += 1;
+        } else {
+            println!("❌ CRASHED");
         }
     }
 

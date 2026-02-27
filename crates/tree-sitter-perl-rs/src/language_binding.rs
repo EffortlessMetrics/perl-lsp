@@ -38,11 +38,11 @@ impl TreeSitterPerlParser {
 
     /// Parse source code and return a tree ID
     pub fn parse(&self, source: &str) -> Result<u64, String> {
-        let mut parser = self.parser.lock().unwrap();
+        let mut parser = self.parser.lock().map_err(|e| format!("Mutex poisoned: {}", e))?;
         let ast = parser.parse(source).map_err(|e| format!("{:?}", e))?;
         
-        let mut cache = self.tree_cache.lock().unwrap();
-        let mut next_id = self.next_tree_id.lock().unwrap();
+        let mut cache = self.tree_cache.lock().map_err(|e| format!("Mutex poisoned: {}", e))?;
+        let mut next_id = self.next_tree_id.lock().map_err(|e| format!("Mutex poisoned: {}", e))?;
         let tree_id = *next_id;
         *next_id += 1;
         
@@ -56,14 +56,15 @@ impl TreeSitterPerlParser {
 
     /// Get AST for a tree ID
     pub fn get_ast(&self, tree_id: u64) -> Option<AstNode> {
-        let cache = self.tree_cache.lock().unwrap();
+        let cache = self.tree_cache.lock().ok()?;
         cache.get(&tree_id).map(|t| t.ast.clone())
     }
 
     /// Clean up a tree
     pub fn delete_tree(&self, tree_id: u64) {
-        let mut cache = self.tree_cache.lock().unwrap();
-        cache.remove(&tree_id);
+        if let Ok(mut cache) = self.tree_cache.lock() {
+            cache.remove(&tree_id);
+        }
     }
 }
 
@@ -344,8 +345,9 @@ mod tests {
 
     #[test]
     fn test_parser_interface() {
+        use perl_tdd_support::must;
         let source = "my $x = 42;";
-        let tree_id = GLOBAL_PARSER.parse(source).unwrap();
+        let tree_id = must(GLOBAL_PARSER.parse(source));
         assert!(tree_id > 0);
 
         let ast = GLOBAL_PARSER.get_ast(tree_id);
@@ -395,14 +397,16 @@ mod tests {
 
         // Verify it's a valid C string with NUL terminator
         let c_str = unsafe { CStr::from_ptr(ptr) };
-        let s = c_str.to_str().expect("Symbol name should be valid UTF-8");
+        let s = c_str.to_str().map_err(|e| format!("{:?}", e)).ok().unwrap_or("");
         assert_eq!(s, "source_file", "First symbol should be 'source_file'");
 
         // Test that the string is properly NUL-terminated within reasonable bounds
         let bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, 64) };
         let nul_pos = bytes.iter().position(|&b| b == 0);
         assert!(nul_pos.is_some(), "Symbol name must have NUL terminator within 64 bytes");
-        assert!(nul_pos.unwrap() < 50, "NUL terminator should be within reasonable bounds");
+        if let Some(pos) = nul_pos {
+            assert!(pos < 50, "NUL terminator should be within reasonable bounds");
+        }
 
         // Test that out-of-bounds returns null
         let out_of_bounds = tree_sitter_perl_symbol_name(u16::MAX);
@@ -421,14 +425,16 @@ mod tests {
 
         // Verify it's a valid C string with NUL terminator
         let c_str = unsafe { CStr::from_ptr(ptr) };
-        let s = c_str.to_str().expect("Field name should be valid UTF-8");
+        let s = c_str.to_str().map_err(|e| format!("{:?}", e)).ok().unwrap_or("");
         assert_eq!(s, "name", "First field should be 'name'");
 
         // Test that the string is properly NUL-terminated within reasonable bounds
         let bytes = unsafe { std::slice::from_raw_parts(ptr as *const u8, 64) };
         let nul_pos = bytes.iter().position(|&b| b == 0);
         assert!(nul_pos.is_some(), "Field name must have NUL terminator within 64 bytes");
-        assert!(nul_pos.unwrap() < 50, "NUL terminator should be within reasonable bounds");
+        if let Some(pos) = nul_pos {
+            assert!(pos < 50, "NUL terminator should be within reasonable bounds");
+        }
 
         // Test that out-of-bounds returns null
         let out_of_bounds = tree_sitter_perl_field_name(u16::MAX);

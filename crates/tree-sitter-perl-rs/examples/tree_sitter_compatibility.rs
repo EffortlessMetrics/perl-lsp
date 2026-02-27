@@ -134,14 +134,14 @@ fn format_output(output: &tree_sitter_perl::tree_sitter_adapter::TreeSitterOutpu
     let mut result = String::new();
 
     // Tree structure
-    writeln!(&mut result, "Tree:").unwrap();
+    let _ = writeln!(&mut result, "Tree:");
     format_node(&output.tree.root, &mut result, 0);
 
     // Diagnostics (separate from tree)
     if !output.diagnostics.is_empty() {
-        writeln!(&mut result, "\nDiagnostics:").unwrap();
+        let _ = writeln!(&mut result, "\nDiagnostics:");
         for (i, diag) in output.diagnostics.iter().enumerate() {
-            writeln!(
+            let _ = writeln!(
                 &mut result,
                 "  {}. [{}] {} at {}:{}",
                 i + 1,
@@ -154,19 +154,18 @@ fn format_output(output: &tree_sitter_perl::tree_sitter_adapter::TreeSitterOutpu
                 diag.message,
                 diag.start_point.0,
                 diag.start_point.1
-            )
-            .unwrap();
+            );
 
             if let Some(ref code) = diag.code {
-                writeln!(&mut result, "     Code: {}", code).unwrap();
+                let _ = writeln!(&mut result, "     Code: {}", code);
             }
         }
     }
 
     // Metadata
-    writeln!(&mut result, "\nMetadata:").unwrap();
-    writeln!(&mut result, "  Parse coverage: {:.1}%", output.metadata.parse_coverage).unwrap();
-    writeln!(&mut result, "  Edge cases: {}", output.metadata.edge_case_count).unwrap();
+    let _ = writeln!(&mut result, "\nMetadata:");
+    let _ = writeln!(&mut result, "  Parse coverage: {:.1}%", output.metadata.parse_coverage);
+    let _ = writeln!(&mut result, "  Edge cases: {}", output.metadata.edge_case_count);
 
     result
 }
@@ -190,11 +189,11 @@ fn format_node(
         node.node_type.clone()
     };
 
-    writeln!(output, "{}{}", indent_str, type_str).unwrap();
+    let _ = writeln!(output, "{}{}", indent_str, type_str);
 
     // Text content for leaf nodes
     if let Some(ref text) = node.text {
-        writeln!(output, "{}  text: {:?}", indent_str, text).unwrap();
+        let _ = writeln!(output, "{}  text: {:?}", indent_str, text);
     }
 
     // Children

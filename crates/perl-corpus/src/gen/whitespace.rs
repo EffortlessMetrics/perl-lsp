@@ -1,5 +1,5 @@
 use proptest::prelude::*;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 
 /// Insert random whitespace and comments into source code
 pub fn sprinkle_whitespace(src: &str, seed: u64) -> String {

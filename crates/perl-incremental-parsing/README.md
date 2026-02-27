@@ -1,43 +1,25 @@
 # perl-incremental-parsing
 
-Incremental parsing infrastructure for efficient re-parsing of Perl code in response to document edits.
+Incremental parsing infrastructure for efficient re-parsing of Perl source code in response to document edits, designed for LSP integration.
 
-## Purpose
+## Overview
 
-This crate provides efficient incremental parsing capabilities for Perl code, enabling Language Server Protocol features to respond quickly to document edits by reusing portions of the previous parse tree. The incremental parser minimizes re-parsing overhead by identifying which portions of the AST are affected by an edit and only re-parsing the modified regions.
+This crate provides multiple incremental parsing strategies that minimize re-parsing overhead by reusing unaffected AST subtrees when documents change. It converts LSP `textDocument/didChange` events into efficient partial re-parses using lexer checkpoints, subtree caching with LRU eviction, and content-based node hashing.
 
-## Key Features
+## Key Types
 
-- **Efficient Re-parsing**: Reuses unaffected subtrees from previous parses to minimize overhead
-- **Edit Change Detection**: Identifies which portions of the AST are affected by document edits
-- **LSP Integration**: Enables fast document update responses for Language Server Protocol features
-- **Selective Parsing**: Only re-parses modified regions and their dependent nodes
-- **Performance Optimized**: Designed for sub-millisecond incremental parse updates
+- **`IncrementalState`** -- Rope-backed document state with lexer/parse checkpoints and the `apply_edits` entry point
+- **`IncrementalDocument`** -- `Arc<Node>`-based document with subtree cache, priority-aware eviction, and per-cycle `ParseMetrics`
+- **`SimpleIncrementalParser`** -- Lightweight parser tracking reused vs. reparsed node counts
+- **`CheckpointedIncrementalParser`** -- Lexer-checkpoint-driven parser with token cache reuse
+- **`AdvancedReuseAnalyzer`** -- Multi-strategy reuse analyzer (structural, position-shifted, content-updated, aggressive matching)
+- **`DocumentParser`** -- Enum wrapper (`Full` | `Incremental`) for transparent LSP integration
+- **`IncrementalEdit` / `IncrementalEditSet`** -- Edit representation with byte-shift arithmetic and batch application
 
-## Usage
+## Part of the `perl-lsp` Workspace
 
-```rust
-use perl_incremental_parsing::incremental;
-use perl_parser_core::Parser;
-
-// Initial parse
-let source = "sub foo { return 42; }";
-let mut parser = Parser::new(source);
-let ast = parser.parse();
-
-// After edit, incrementally reparse only affected portions
-// (specific APIs depend on incremental module implementation)
-```
-
-## Documentation
-
-For detailed API documentation, see [docs.rs/perl-incremental-parsing](https://docs.rs/perl-incremental-parsing).
+This crate is a Tier 3 member of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace. It depends on `perl-parser-core`, `perl-edit`, and `perl-lexer`.
 
 ## License
 
-Licensed under either of:
-
-- MIT License
-- Apache License, Version 2.0
-
-at your option.
+Licensed under either of [MIT](../../LICENSE-MIT) or [Apache-2.0](../../LICENSE-APACHE) at your option.

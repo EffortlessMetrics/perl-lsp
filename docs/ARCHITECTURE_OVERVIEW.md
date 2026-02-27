@@ -69,7 +69,7 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 - Tree-sitter compatible node types
 - Position tracking for all nodes
 
-### 3. Production-Ready Incremental Parsing (**Diataxis: Explanation**)
+### 3. Incremental Parsing (**Diataxis: Explanation**)
 - **IncrementalParserV2**: Advanced incremental parser with intelligent node reuse
 - **Statistical Validation**: Comprehensive performance analysis framework
   - Performance metrics: 65µs average (Excellent), 205µs moderate (Very Good), 538µs large (Good)
@@ -93,8 +93,8 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 - Dynamic delimiter detection and recovery
 - Clear diagnostics for unparseable constructs
 
-### 6. Revolutionary Testing Strategy (PR #140 Enhanced)
-- **Revolutionary LSP Performance**: 5000x faster behavioral tests, 4700x faster user stories
+### 6. Testing Strategy (PR #140 Enhanced)
+- **LSP Performance**: Significantly faster behavioral and user story tests
 - **Adaptive Timeout Architecture**: Multi-tier timeout scaling with thread awareness
 - **Enhanced Test Harness**: Real JSON-RPC protocol with mock responses and graceful degradation
 - **Optimized Idle Detection**: 1000ms → 200ms cycles (5x improvement)
@@ -111,7 +111,7 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 ## Development Guidelines
 
 ### Choosing a Crate
-1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, production-ready with Rope support
+1. **For Any Perl Parsing**: Use `perl-parser` - fastest, most complete, with Rope support
 2. **For IDE Integration**: Install `perl-lsp` from `perl-parser` crate - includes full Rope-based document management  
 3. **For Testing Parsers**: Use `perl-corpus` for comprehensive test suite
 4. **For Legacy Migration**: Migrate from `perl-parser-pest` to `perl-parser`
@@ -384,15 +384,15 @@ The thread-safe patterns established for semantic tokens provide a template for 
 
 This architecture ensures all LSP features can achieve similar performance and safety characteristics as the semantic token provider.
 
-### Revolutionary Adaptive Timeout System Design (PR #140) (**Diataxis: Explanation** - Game-changing testing architecture)
+### Adaptive Timeout System Design (PR #140) (**Diataxis: Explanation** - Testing architecture)
 
-PR #140 introduces a sophisticated adaptive timeout system that delivers transformative performance improvements:
+PR #140 introduces an adaptive timeout system that delivers significant performance improvements:
 
 #### Performance Achievements
-- **LSP behavioral tests**: 1560s+ → 0.31s (**5000x faster**)
-- **User story tests**: 1500s+ → 0.32s (**4700x faster**) 
-- **Individual workspace tests**: 60s+ → 0.26s (**230x faster**)
-- **Overall test suite**: 60s+ → <10s (**6x faster**)
+- **LSP behavioral tests**: 1560s+ → 0.31s
+- **User story tests**: 1500s+ → 0.32s
+- **Individual workspace tests**: 60s+ → 0.26s
+- **Overall test suite**: 60s+ → <10s
 - **CI reliability**: 100% pass rate (was ~55% due to timeouts)
 
 #### Multi-Tier Adaptive Timeout Architecture
@@ -454,7 +454,7 @@ fn wait_for_idle_optimized(&mut self, timeout: Duration) -> Result<(), String> {
 **2. Enhanced Test Harness with Mock Responses**
 - **Mock responses**: Fast fallback for expected non-responses
 - **Graceful degradation**: CI environment adaptation
-- **Real JSON-RPC protocol**: Maintains protocol compliance while achieving 5000x improvements
+- **Real JSON-RPC protocol**: Maintains protocol compliance with significant improvements
 
 **3. Thread-Aware Sleep Scaling**
 ```rust
@@ -471,13 +471,12 @@ pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
 }
 ```
 
-#### Strategic Value Analysis
+#### Impact Analysis
 
-**Transformational Impact**:
-- **5000x improvement** in behavioral tests = **Transformational**
-- **4700x improvement** in user story tests = **Revolutionary** 
-- **230x improvement** in workspace tests = **Game-changing**
-- **100% CI reliability** = **Production-ready**
+- Behavioral tests: 1560s+ → 0.31s
+- User story tests: 1500s+ → 0.32s
+- Workspace tests: 60s+ → 0.26s
+- 100% CI reliability (was ~55%)
 
 **Architectural Benefits**:
 1. **Multi-tier scaling**: Different timeout strategies for different test types

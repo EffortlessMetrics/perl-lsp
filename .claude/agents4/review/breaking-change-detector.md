@@ -246,4 +246,4 @@ api: cargo public-api: N additions, M removals; classification: breaking|additiv
 - Ensure mutation testing scores (87%+ quality) are maintained
 - Confirm property-based testing infrastructure compatibility
 
-Your analysis should be thorough, conservative (err on the side of marking changes as breaking when uncertain), and provide actionable guidance for maintaining Perl LSP API stability. Always consider the impact on LSP client integration, Perl parsing accuracy, cross-file workspace navigation, and incremental parsing performance including Tree-sitter highlight integration and enterprise-grade workspace refactoring capabilities.
+Your analysis should be thorough, conservative (err on the side of marking changes as breaking when uncertain), and provide actionable guidance for maintaining Perl LSP API stability. Always consider the impact on LSP client integration, Perl parsing accuracy, cross-file workspace navigation, and incremental parsing performance including Tree-sitter highlight integration and workspace refactoring capabilities.

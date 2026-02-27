@@ -1,6 +1,6 @@
 # Milestones
 
-> **Source of Truth**: GitHub Milestones at https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestones
+> **Source of Truth**: GitHub Milestones at https://github.com/EffortlessMetrics/perl-lsp/milestones
 >
 > This document provides context and links. For live issue counts, check GitHub directly.
 
@@ -21,25 +21,18 @@
 
 ---
 
-### v1.0.0: Boring Promises
+### v0.10.0 and Beyond
 
-**Status**: Queued (after v0.9.1)
-**Goal**: Freeze the surfaces you're willing to support.
+**Status**: Planning
+**Goal**: Continue refinement toward the v0.15.0 Stability Contract.
 
-**Exit Criteria**:
-- v0.9.1 released and stable
-- Capability snapshot + docs aligned
-- Benchmarks published under benchmarks/results/
-- Upgrade notes exist from v0.8.x → v1.0
+**Focus Areas**:
+- Moo/Moose semantic depth improvements
+- Native DAP enhancements (variables/evaluate)
+- Stability goal refinement for v0.15.0 contract
+- Benchmark publication under benchmarks/results/
 
-**Deliverables**:
-1. Stability statement (what "GA-lock" means)
-2. Packaging stance (binaries, crates, platforms)
-3. Benchmark publication
-
-**Effort Estimate**: ~40-80 hours after v0.9.1
-
-[View all v1.0.0 issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestone/2)
+See [ROADMAP.md](ROADMAP.md) for the full release plan.
 
 ---
 
@@ -55,15 +48,15 @@
 - `bash scripts/ignored-test-count.sh` shows BUG=0, MANUAL≤1
 - README / CURRENT_STATUS / ROADMAP agree (no unbacked claims)
 - `cargo install --path crates/perl-lsp` works cleanly
-- GA-lock capability snapshot remains stable
+- Capability snapshot remains stable
 - Release notes match advertised capabilities
 
 **Historical blockers**:
-- [#211](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/211) - CI Pipeline Cleanup
-- [#210](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/210) - Merge-Blocking Gates
-- [#143](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/143) - unwrap() panic safety
+- [#211](https://github.com/EffortlessMetrics/perl-lsp/issues/211) - CI Pipeline Cleanup
+- [#210](https://github.com/EffortlessMetrics/perl-lsp/issues/210) - Merge-Blocking Gates
+- [#143](https://github.com/EffortlessMetrics/perl-lsp/issues/143) - unwrap() panic safety
 
-[View all v0.9.0 issues](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/milestone/1)
+[View all v0.9.0 issues](https://github.com/EffortlessMetrics/perl-lsp/milestone/1)
 
 ---
 
@@ -91,8 +84,8 @@ gh issue list --label "phase:stability"
 # All v0.9.0 issues
 gh issue list --milestone "v0.9.0: Semantic-Ready"
 
-# All v1.0.0 issues
-gh issue list --milestone "v1.0.0: Boring Promises"
+# All open issues
+gh issue list --state open
 ```
 
 ---

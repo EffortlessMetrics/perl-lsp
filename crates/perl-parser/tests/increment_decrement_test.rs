@@ -16,16 +16,16 @@ fn test_pre_increment() -> TestResult {
                     assert_eq!(sigil, "$");
                     assert_eq!(name, "x");
                 } else {
-                    panic!("Expected variable operand");
+                    return Err("Expected variable operand".into());
                 }
             } else {
-                panic!("Expected unary expression");
+                return Err("Expected unary expression".into());
             }
         } else {
-            panic!("Expected expression statement");
+            return Err("Expected expression statement".into());
         }
     } else {
-        panic!("Expected program node");
+        return Err("Expected program node".into());
     }
     Ok(())
 }
@@ -44,16 +44,16 @@ fn test_pre_decrement() -> TestResult {
                     assert_eq!(sigil, "$");
                     assert_eq!(name, "y");
                 } else {
-                    panic!("Expected variable operand");
+                    return Err("Expected variable operand".into());
                 }
             } else {
-                panic!("Expected unary expression");
+                return Err("Expected unary expression".into());
             }
         } else {
-            panic!("Expected expression statement");
+            return Err("Expected expression statement".into());
         }
     } else {
-        panic!("Expected program node");
+        return Err("Expected program node".into());
     }
     Ok(())
 }
@@ -72,16 +72,16 @@ fn test_post_increment() -> TestResult {
                     assert_eq!(sigil, "$");
                     assert_eq!(name, "x");
                 } else {
-                    panic!("Expected variable operand");
+                    return Err("Expected variable operand".into());
                 }
             } else {
-                panic!("Expected unary expression");
+                return Err("Expected unary expression".into());
             }
         } else {
-            panic!("Expected expression statement");
+            return Err("Expected expression statement".into());
         }
     } else {
-        panic!("Expected program node");
+        return Err("Expected program node".into());
     }
     Ok(())
 }
@@ -100,16 +100,16 @@ fn test_post_decrement() -> TestResult {
                     assert_eq!(sigil, "$");
                     assert_eq!(name, "y");
                 } else {
-                    panic!("Expected variable operand");
+                    return Err("Expected variable operand".into());
                 }
             } else {
-                panic!("Expected unary expression");
+                return Err("Expected unary expression".into());
             }
         } else {
-            panic!("Expected expression statement");
+            return Err("Expected expression statement".into());
         }
     } else {
-        panic!("Expected program node");
+        return Err("Expected program node".into());
     }
     Ok(())
 }
@@ -132,10 +132,10 @@ fn test_complex_increment_decrement() -> TestResult {
                         assert_eq!(sigil, "$");
                         assert_eq!(name, "a");
                     } else {
-                        panic!("Expected variable in left operand");
+                        return Err("Expected variable in left operand".into());
                     }
                 } else {
-                    panic!("Expected unary expression on left");
+                    return Err("Expected unary expression on left".into());
                 }
 
                 // Check right side (--$b)
@@ -145,19 +145,19 @@ fn test_complex_increment_decrement() -> TestResult {
                         assert_eq!(sigil, "$");
                         assert_eq!(name, "b");
                     } else {
-                        panic!("Expected variable in right operand");
+                        return Err("Expected variable in right operand".into());
                     }
                 } else {
-                    panic!("Expected unary expression on right");
+                    return Err("Expected unary expression on right".into());
                 }
             } else {
-                panic!("Expected binary expression");
+                return Err("Expected binary expression".into());
             }
         } else {
-            panic!("Expected expression statement");
+            return Err("Expected expression statement".into());
         }
     } else {
-        panic!("Expected program node");
+        return Err("Expected program node".into());
     }
     Ok(())
 }
@@ -180,19 +180,19 @@ fn test_chained_increment() -> TestResult {
                         assert_eq!(sigil, "$");
                         assert_eq!(name, "x");
                     } else {
-                        panic!("Expected variable in inner operand");
+                        return Err("Expected variable in inner operand".into());
                     }
                 } else {
-                    panic!("Expected unary + expression");
+                    return Err("Expected unary + expression".into());
                 }
             } else {
-                panic!("Expected unary expression");
+                return Err("Expected unary expression".into());
             }
         } else {
-            panic!("Expected expression statement");
+            return Err("Expected expression statement".into());
         }
     } else {
-        panic!("Expected program node");
+        return Err("Expected program node".into());
     }
     Ok(())
 }

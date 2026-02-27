@@ -438,7 +438,7 @@ impl Default for GateRunnerConfig {
 
 /// Main entry point for gate execution
 pub fn run(config: GateRunnerConfig) -> Result<()> {
-    let root = project_root();
+    let root = project_root()?;
     std::env::set_current_dir(&root).context("Failed to change to project root")?;
 
     // Load gate policy
@@ -594,7 +594,7 @@ fn run_gates(
     policy: &GatePolicy,
     config: &GateRunnerConfig,
 ) -> Result<Receipt> {
-    let root = project_root();
+    let root = project_root()?;
     let start_time = Instant::now();
     let timestamp: DateTime<Utc> = Utc::now();
 

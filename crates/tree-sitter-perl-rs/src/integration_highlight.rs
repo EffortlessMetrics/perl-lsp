@@ -3,6 +3,7 @@ mod integration_highlight {
     use std::fs;
     use std::path::Path;
     use std::time::Instant;
+    use perl_tdd_support::{must, must_some};
     use crate::test_harness::{parse_perl_code, tree_to_string};
     use crate::{parse, language};
     use tree_sitter::{Parser, Query, QueryCursor};
@@ -14,14 +15,14 @@ mod integration_highlight {
         let mut failed_files = Vec::new();
         let mut total_parse_time = 0u128;
 
-        for entry in fs::read_dir(highlight_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(highlight_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
                 test_count += 1;
                 
                 // Read the highlight test file
-                let content = fs::read_to_string(&path).unwrap();
+                let content = must(fs::read_to_string(&path));
                 let start = Instant::now();
                 
                 // Parse each line that contains Perl code
@@ -41,9 +42,9 @@ mod integration_highlight {
                 total_parse_time += parse_time;
                 
                 if line_errors.is_empty() {
-                    println!("✓ {:?} ({} μs)", path.file_name().unwrap(), parse_time);
+                    println!("✓ {:?} ({} μs)", must_some(path.file_name()), parse_time);
                 } else {
-                    println!("✗ {:?}: {} errors ({} μs)", path.file_name().unwrap(), line_errors.len(), parse_time);
+                    println!("✗ {:?}: {} errors ({} μs)", must_some(path.file_name()), line_errors.len(), parse_time);
                     failed_files.push((path, line_errors));
                 }
             }
@@ -58,12 +59,12 @@ mod integration_highlight {
         if !failed_files.is_empty() {
             println!("\nFailed files:");
             for (path, errors) in failed_files {
-                println!("  {:?}:", path.file_name().unwrap());
+                println!("  {:?}:", must_some(path.file_name()));
                 for (line_num, line, error) in errors {
                     println!("    Line {}: '{}' - {}", line_num, line, error);
                 }
             }
-            panic!("Some highlight files failed to parse");
+            must(Err::<(), _>(format!("Some highlight files failed to parse")));
         }
     }
 
@@ -84,7 +85,7 @@ mod integration_highlight {
         for file_path in &test_files {
             let path = Path::new(file_path);
             if path.exists() {
-                let content = fs::read_to_string(path).unwrap();
+                let content = must(fs::read_to_string(path));
                 
                 // Parse each non-empty, non-comment line
                 for (line_num, line) in content.lines().enumerate() {
@@ -107,11 +108,11 @@ mod integration_highlight {
         // Test that highlight files contain valid Perl code
         let highlight_dir = Path::new("test/highlight");
         
-        for entry in fs::read_dir(highlight_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(highlight_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
-                let content = fs::read_to_string(&path).unwrap();
+                let content = must(fs::read_to_string(&path));
                 
                 // Ensure it's not empty
                 assert!(!content.trim().is_empty(), "Highlight file {:?} is empty", path);
@@ -136,7 +137,7 @@ mod integration_highlight {
         // Test that syntax highlighting queries work correctly
         let highlight_dir = Path::new("test/highlight");
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
         // Define basic highlighting queries
         let queries = vec![
@@ -149,15 +150,15 @@ mod integration_highlight {
         ];
         
         for query_str in queries {
-            let query = Query::new(&language(), query_str).unwrap();
+            let query = must(Query::new(&language(), query_str));
             let mut cursor = QueryCursor::new();
             
-            for entry in fs::read_dir(highlight_dir).unwrap() {
-                let entry = entry.unwrap();
+            for entry in must(fs::read_dir(highlight_dir)) {
+                let entry = must(entry);
                 let path = entry.path();
                 if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
-                    let content = fs::read_to_string(&path).unwrap();
-                    let tree = parser.parse(&content, None).unwrap();
+                    let content = must(fs::read_to_string(&path));
+                    let tree = must_some(parser.parse(&content, None));
                     
                     // Execute the query
                     let captures = cursor.captures(&query, tree.root_node(), content.as_bytes());
@@ -176,23 +177,23 @@ mod integration_highlight {
         // Test highlighting performance
         let highlight_dir = Path::new("test/highlight");
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
-        let query = Query::new(&language(), "(variable_declaration) @variable").unwrap();
+        let query = must(Query::new(&language(), "(variable_declaration) @variable"));
         let mut cursor = QueryCursor::new();
         
         let mut total_files = 0;
         let mut total_time = 0u128;
         let mut slow_files = Vec::new();
         
-        for entry in fs::read_dir(highlight_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(highlight_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
-                let content = fs::read_to_string(&path).unwrap();
+                let content = must(fs::read_to_string(&path));
                 let start = Instant::now();
                 
-                let tree = parser.parse(&content, None).unwrap();
+                let tree = must_some(parser.parse(&content, None));
                 let captures = cursor.captures(&query, tree.root_node(), content.as_bytes());
                 
                 let highlight_time = start.elapsed().as_micros();
@@ -200,7 +201,7 @@ mod integration_highlight {
                 total_time += highlight_time;
                 
                 if highlight_time > 500 {
-                    slow_files.push((path.file_name().unwrap().to_string_lossy().to_string(), highlight_time));
+                    slow_files.push((must_some(path.file_name()).to_string_lossy().to_string(), highlight_time));
                 }
                 
                 // Ensure highlighting completed successfully
@@ -230,7 +231,7 @@ mod integration_highlight {
         // Test that highlighting produces consistent tokens
         let highlight_dir = Path::new("test/highlight");
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
         let queries = vec![
             "(variable_declaration) @variable",
@@ -239,15 +240,15 @@ mod integration_highlight {
         ];
         
         for query_str in queries {
-            let query = Query::new(&language(), query_str).unwrap();
+            let query = must(Query::new(&language(), query_str));
             let mut cursor = QueryCursor::new();
             
-            for entry in fs::read_dir(highlight_dir).unwrap() {
-                let entry = entry.unwrap();
+            for entry in must(fs::read_dir(highlight_dir)) {
+                let entry = must(entry);
                 let path = entry.path();
                 if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
-                    let content = fs::read_to_string(&path).unwrap();
-                    let tree = parser.parse(&content, None).unwrap();
+                    let content = must(fs::read_to_string(&path));
+                    let tree = must_some(parser.parse(&content, None));
                     
                     let captures = cursor.captures(&query, tree.root_node(), content.as_bytes());
                     
@@ -280,16 +281,16 @@ mod integration_highlight {
         ];
         
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
-        let query = Query::new(&language(), "(variable_declaration) @variable").unwrap();
+        let query = must(Query::new(&language(), "(variable_declaration) @variable"));
         let mut cursor = QueryCursor::new();
         
         for (i, code) in test_cases.iter().enumerate() {
             let tree = parser.parse(code, None);
             assert!(tree.is_some(), "Failed to parse test case {}: {}", i, code);
             
-            let tree = tree.unwrap();
+            let tree = must_some(tree);
             let captures = cursor.captures(&query, tree.root_node(), code.as_bytes());
             
             // Highlighting should work even with parse errors
@@ -305,20 +306,20 @@ mod integration_highlight {
         // Test memory usage during highlighting
         let highlight_dir = Path::new("test/highlight");
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
-        let query = Query::new(&language(), "(variable_declaration) @variable").unwrap();
+        let query = must(Query::new(&language(), "(variable_declaration) @variable"));
         let mut cursor = QueryCursor::new();
         
         let mut total_captures = 0;
         let mut total_files = 0;
         
-        for entry in fs::read_dir(highlight_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(highlight_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() && path.extension().is_some_and(|ext| ext == "pm") {
-                let content = fs::read_to_string(&path).unwrap();
-                let tree = parser.parse(&content, None).unwrap();
+                let content = must(fs::read_to_string(&path));
+                let tree = must_some(parser.parse(&content, None));
                 
                 let captures = cursor.captures(&query, tree.root_node(), content.as_bytes());
                 let capture_count = captures.count();

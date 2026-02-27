@@ -201,7 +201,6 @@ fn test_extract_delimited_content_escaping_via_public_api() {
 // Comprehensive tests for get_closing_delimiter (tested indirectly)
 // Targets: MatchArm mutations that remove delimiter mappings
 #[test]
-#[ignore = "mutation hardening: parser output format changed"]
 fn test_get_closing_delimiter_comprehensive() {
     let test_cases = vec![
         ('(', ')'), // Parentheses mapping - kills MatchArm removal
@@ -307,7 +306,6 @@ fn test_extract_transliteration_delimiter_detection() {
 // Comprehensive tests for extract_modifiers helper (tested indirectly)
 // Targets: FnValue mutations (String::new() vs "xyzzy")
 #[test]
-#[ignore = "mutation hardening: parser output format changed"]
 fn test_extract_modifiers_comprehensive() {
     // Note: Current implementation filters non-alphabetic characters but does NOT
     // validate against operator-specific modifier lists. Alphabetic characters
@@ -336,7 +334,6 @@ fn test_extract_modifiers_comprehensive() {
 
 // Property-based tests for modifier extraction via public API
 #[test]
-#[ignore = "mutation hardening: parser output format changed"]
 fn test_extract_modifiers_properties() {
     // Property: result should never contain non-alphabetic chars
     // Note: Current implementation has quirky filtering behavior -
@@ -528,7 +525,6 @@ fn test_kill_mutation_logical_operator_boundary_cases() {
 
 // Kill MUT_005: Tests modifier character validation to ensure proper character matching
 #[test]
-#[ignore = "mutation hardening: parser output format changed"]
 fn test_kill_mutation_modifier_validation() {
     // Test valid substitution modifiers - these should be preserved
     let (_, _, modifiers) = extract_substitution_parts("s/test/repl/gimsx");

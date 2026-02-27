@@ -1,7 +1,7 @@
 # clippy.toml
 # Keep pedantic on, but chill some noisy lints for a parser project.
 # warn-on-all-wildcard-imports = false
-msrv = "1.89"
+msrv = "1.92"
 
 # Common pedantic relaxations for parser projects
 allow-private-module-inception = true

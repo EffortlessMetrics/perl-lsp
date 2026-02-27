@@ -1,16 +1,16 @@
 [package]
 name = "perl-uri"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Perl LSP Contributors"]
+authors.workspace = true
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/perl-lsp"
-homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/perl-uri"
 description = "URI ↔ filesystem path conversion and normalization utilities for Perl LSP"
 readme = "README.md"
-keywords = ["perl", "uri", "path", "lsp"]
+keywords = ["perl", "uri", "path", "lsp", "file-uri"]
 categories = ["development-tools", "encoding"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 

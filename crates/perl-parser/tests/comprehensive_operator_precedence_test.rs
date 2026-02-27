@@ -259,7 +259,7 @@ fn test_parse(name: &str, code: &str) {
             }
         }
         Err(e) => {
-            panic!("{}: Failed to parse '{}': {:?}", name, code, e);
+            unreachable!("{}: Failed to parse '{}': {:?}", name, code, e);
         }
     }
 }
@@ -345,7 +345,7 @@ fn test_word_operator_precedence_comprehensive() {
                 // AST successfully parsed
             }
             Err(e) => {
-                panic!("Failed to parse {}: {} - Error: {:?}", test.name, test.input, e);
+                unreachable!("Failed to parse {}: {} - Error: {:?}", test.name, test.input, e);
             }
         }
     }

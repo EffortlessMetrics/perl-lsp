@@ -4,7 +4,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Testing Statement Modifiers ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         ("Simple if modifier", "print 'Hello' if $condition;"),
         ("Simple unless modifier", "die 'Error' unless $valid;"),
         ("Simple while modifier", "next while $iterator->has_next;"),

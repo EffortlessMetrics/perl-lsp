@@ -23,10 +23,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}
 
 **Solutions**:
 
-1. Ensure you have Rust 1.89+ (MSRV):
+1. Ensure you have Rust 1.92+ (MSRV):
    ```bash
    rustup update stable
-   rustc --version  # Should be >= 1.89
+   rustc --version  # Should be >= 1.92
    ```
 
 2. Clean and rebuild:
@@ -301,7 +301,7 @@ chmod +x ~/.cargo/bin/perl-lsp
    perl-lsp --parse test.pl
    ```
 
-3. File an issue at: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues
+3. File an issue at: https://github.com/EffortlessMetrics/perl-lsp/issues
 
 ### Heredoc Issues
 
@@ -419,7 +419,7 @@ For detailed editor configuration and troubleshooting:
 
 ## Getting Help
 
-1. Check existing issues: https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues
+1. Check existing issues: https://github.com/EffortlessMetrics/perl-lsp/issues
 
 2. Enable debug logging and include logs in bug reports:
    ```bash

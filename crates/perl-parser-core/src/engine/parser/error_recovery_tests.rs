@@ -25,7 +25,7 @@ fn test_recovery_missing_expression() {
                     NodeKind::Error { message, .. } => {
                         println!("Found expected error: {}", message);
                     }
-                    _ => panic!(
+                    _ => unreachable!(
                         "Expected Error node for first statement, got: {:?}",
                         statements[0].kind
                     ),
@@ -36,13 +36,13 @@ fn test_recovery_missing_expression() {
                     NodeKind::ExpressionStatement { .. } => {
                         println!("Found valid second statement");
                     }
-                    _ => panic!(
+                    _ => unreachable!(
                         "Expected ExpressionStatement for second statement, got: {:?}",
                         statements[1].kind
                     ),
                 }
             } else {
-                panic!("Expected Program node");
+                unreachable!("Expected Program node");
             }
 
             // Check errors list
@@ -51,7 +51,7 @@ fn test_recovery_missing_expression() {
             println!("Errors: {:?}", errors);
         }
         Err(e) => {
-            panic!("Parser failed to recover: {}", e);
+            unreachable!("Parser failed to recover: {}", e);
         }
     }
 }
@@ -108,26 +108,26 @@ fn test_recovery_inside_block() {
                             NodeKind::Error { message, .. } => {
                                 println!("Found block error: {}", message)
                             }
-                            _ => panic!("Expected Error node in block"),
+                            _ => unreachable!("Expected Error node in block"),
                         }
 
                         match &statements[1].kind {
                             NodeKind::ExpressionStatement { .. } => {
                                 println!("Found valid statement in block")
                             }
-                            _ => panic!("Expected ExpressionStatement in block"),
+                            _ => unreachable!("Expected ExpressionStatement in block"),
                         }
                     } else {
-                        panic!("Expected Block in subroutine body");
+                        unreachable!("Expected Block in subroutine body");
                     }
                 } else {
-                    panic!("Expected Subroutine node, got: {:?}", statements[0].kind);
+                    unreachable!("Expected Subroutine node, got: {:?}", statements[0].kind);
                 }
             }
 
             assert!(!parser.errors().is_empty());
         }
-        Err(e) => panic!("Failed to recover from block error: {}", e),
+        Err(e) => unreachable!("Failed to recover from block error: {}", e),
     }
 }
 

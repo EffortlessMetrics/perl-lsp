@@ -38,12 +38,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const serverOptions: ServerOptions = {
         run: {
             command: serverPath,
-            args: ['--stdio'],
+            args: getServerArgs(['--stdio']),
             transport: TransportKind.stdio
         },
         debug: {
             command: serverPath,
-            args: ['--stdio', '--log'],
+            args: getServerArgs(['--stdio', '--log']),
             transport: TransportKind.stdio
         }
     };
@@ -114,7 +114,7 @@ export async function activate(context: vscode.ExtensionContext) {
             'View Roadmap'
         );
         if (selection === 'View Roadmap') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessSteven/tree-sitter-perl'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp'));
         }
     };
 
@@ -329,6 +329,54 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     
     outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
+}
+
+function getServerArgs(baseArgs: string[]): string[] {
+    const config = vscode.workspace.getConfiguration('perl-lsp');
+    const featureProfile = config.get<string>('featureProfile', 'auto');
+    const canonicalProfile = normalizeFeatureProfile(featureProfile || 'auto');
+
+    if (!canonicalProfile || canonicalProfile === 'auto') {
+        return baseArgs;
+    }
+
+    return [...baseArgs, `--feature-profile=${canonicalProfile}`];
+}
+
+function normalizeFeatureProfile(rawProfile: string): string | null {
+    const normalized = rawProfile.trim().toLowerCase();
+    if (!normalized) {
+        return 'auto';
+    }
+
+    const normalizedProfile = normalized.replace(/_/g, '-');
+    const knownProfiles = getSupportedFeatureProfiles();
+
+    if (!knownProfiles.includes(normalizedProfile)) {
+        outputChannel.appendLine(`Unsupported featureProfile '${rawProfile}'. Falling back to 'auto'.`);
+        return null;
+    }
+
+    return normalizedProfile;
+}
+
+function getSupportedFeatureProfiles(): string[] {
+    const extension = vscode.extensions.getExtension('effortlesssteven.perl-lsp');
+    const schemaEnum =
+        extension?.packageJSON?.contributes?.configuration?.properties?.['perl-lsp.featureProfile']?.enum;
+
+    if (Array.isArray(schemaEnum)) {
+        return schemaEnum.map((value: unknown) => `${value}`).map((profile) => profile.toLowerCase().replace(/_/g, '-'));
+    }
+
+    return [
+        'auto',
+        'ga-lock',
+        'ga',
+        'prod',
+        'production',
+        'all',
+    ];
 }
 
 async function restartServer(context: vscode.ExtensionContext) {
