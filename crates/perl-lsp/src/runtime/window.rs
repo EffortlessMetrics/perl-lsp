@@ -342,11 +342,12 @@ impl LspServer {
             "params": params,
         });
 
-        let request_str = serde_json::to_string(&request)?;
+        let payload = serde_json::to_vec(&request)?;
+        let framed = frame(&payload);
 
         // Send request
         let mut output = self.output.lock();
-        write!(output, "Content-Length: {}\r\n\r\n{}", request_str.len(), request_str)?;
+        output.write_all(&framed)?;
         output.flush()
     }
 }

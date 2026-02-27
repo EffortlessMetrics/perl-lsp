@@ -22,7 +22,7 @@ cargo test --workspace --lib
 
 ## Crate Structure
 
-The workspace contains 40+ crates organized in tiers. Key crates:
+The workspace contains 80+ crates organized in tiers. Key crates:
 
 | Crate | Path | Purpose |
 |-------|------|---------|
@@ -36,7 +36,17 @@ The workspace contains 40+ crates organized in tiers. Key crates:
 | **perl-corpus** | `/crates/perl-corpus/` | Test corpus |
 | **perl-parser-pest** | `/crates/perl-parser-pest/` | Legacy Pest parser |
 
-Supporting crates: `perl-lsp-*` (providers), `perl-dap-*` (debug components), `perl-token`, `perl-ast`, `perl-quote`, `perl-regex`, `perl-heredoc`, `perl-error`
+### Crate Families
+
+| Family | Count | Purpose |
+|--------|-------|---------|
+| `perl-module-*` | 13 | Module resolution microcrates |
+| `perl-lsp-*` | 21 | LSP feature providers |
+| `perl-lsp-feature-*` | 7 | Feature governance subsystem (subset of `perl-lsp-*`) |
+| `perl-dap-*` | 4 | Debug adapter components |
+| `perl-ts-*` | 5 | Tree-sitter integration |
+| `perl-workspace-*` | 4 | Workspace discovery and indexing |
+| Core leaf crates | ~30 | Token, AST, quote, regex, heredoc, error, etc. |
 
 ## Essential Commands
 
@@ -211,13 +221,13 @@ RUSTC_WRAPPER=""        # Disable rustc wrapper
 ### Crate Dependency Tiers
 
 The workspace uses a tiered dependency structure (see `Cargo.toml`):
-- **Tier 1**: Leaf crates with no internal dependencies (`perl-token`, `perl-quote`, `perl-ast`, etc.)
-- **Tier 2**: Single-level dependencies (`perl-parser-core`, `perl-lsp-transport`, `perl-tokenizer`)
-- **Tier 3**: Two-level dependencies (`perl-workspace-index`, `perl-refactoring`)
-- **Tier 4**: Three-level dependencies (`perl-semantic-analyzer`, `perl-lsp-providers`)
-- **Tier 5**: Task runner crates (`xtask`)
-- **Tier 6**: Application/executable crates (`perl-parser`, `perl-lsp`, `perl-dap`)
-- **Tier 7**: Legacy/testing crates (`perl-parser-pest`, `perl-corpus`, `tree-sitter-perl-*`)
+- **Tier 1** (~30): Leaf crates with no internal dependencies (`perl-token`, `perl-quote`, `perl-ast`, `perl-module-token-core`, `perl-lsp-feature-ids`, etc.)
+- **Tier 2** (~15): Single-level dependencies (`perl-parser-core`, `perl-lsp-transport`, `perl-tokenizer`, `perl-module-token`, `perl-module-name`, etc.)
+- **Tier 3** (~15): Two-level dependencies (`perl-workspace-index`, `perl-refactoring`, `perl-module-resolution`, `perl-lsp-feature-governance`, etc.)
+- **Tier 4** (~10): Three-level dependencies (`perl-semantic-analyzer`, `perl-lsp-providers`, `perl-lsp-navigation`, etc.)
+- **Tier 5** (1): Task runner crates (`xtask`)
+- **Tier 6** (3): Application/executable crates (`perl-parser`, `perl-lsp`, `perl-dap`)
+- **Tier 7** (~8): Legacy/testing crates (`perl-parser-pest`, `perl-corpus`, `tree-sitter-perl-*`)
 
 ## Documentation
 

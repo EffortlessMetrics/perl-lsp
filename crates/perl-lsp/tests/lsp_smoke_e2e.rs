@@ -173,8 +173,159 @@ my $value = gre
     let definition_uri = first_location["uri"].as_str().ok_or("definition uri missing")?;
     assert_eq!(definition_uri, uri, "definition should resolve inside opened file");
 
+    // ── Step 5: textDocument/didChange + re-completion ──────────────────
+    let fixture_v2 = r#"use strict;
+use warnings;
+
+my $greeting = 'hello';
+sub greet { return $greeting; }
+sub greetings { return $greeting; }
+my $result = greet();
+my $value = gre
+"#;
+    common::send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didChange",
+            "params": {
+                "textDocument": { "uri": uri, "version": 2 },
+                "contentChanges": [{ "text": fixture_v2 }]
+            }
+        }),
+    );
+    // Brief settle time for text sync
+    std::thread::sleep(Duration::from_millis(50));
+
+    let v2_completion_line = fixture_v2
+        .lines()
+        .position(|line| line.contains("my $value = gre"))
+        .ok_or("v2 completion line missing")?;
+    let v2_completion_col = fixture_v2
+        .lines()
+        .nth(v2_completion_line)
+        .and_then(|line| line.find("gre"))
+        .map(|idx| idx + 3)
+        .ok_or("v2 completion token missing")?;
+
+    let v2_completion_response = send_request_with_timeout(
+        &mut server,
+        5,
+        "textDocument/completion",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": v2_completion_line, "character": v2_completion_col }
+        }),
+        timeout,
+    )?;
+    assert!(
+        v2_completion_response.get("error").is_none(),
+        "re-completion after didChange returned error: {v2_completion_response:#}"
+    );
+    let v2_items = v2_completion_response["result"]["items"]
+        .as_array()
+        .or_else(|| v2_completion_response["result"].as_array())
+        .ok_or("re-completion result missing items array")?;
+    assert!(!v2_items.is_empty(), "re-completion items should not be empty after didChange");
+
+    // ── Step 6: textDocument/references ─────────────────────────────────
+    let (ref_line, ref_col) = line_col(fixture_v2, 4, "$greeting")?;
+    let references_response = send_request_with_timeout(
+        &mut server,
+        6,
+        "textDocument/references",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": ref_line, "character": ref_col },
+            "context": { "includeDeclaration": true }
+        }),
+        timeout,
+    )?;
+    assert!(
+        references_response.get("error").is_none(),
+        "references returned error: {references_response:#}"
+    );
+    // Soft assertion: if the server returns a result, it should be an array
+    if let Some(ref_items) = references_response["result"].as_array() {
+        // $greeting appears in: declaration (line 3), sub greet body (line 4), sub greetings body (line 5)
+        assert!(!ref_items.is_empty(), "references for $greeting should not be empty");
+    }
+
+    // ── Step 7: textDocument/documentSymbol ─────────────────────────────
+    let doc_symbol_response = send_request_with_timeout(
+        &mut server,
+        7,
+        "textDocument/documentSymbol",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+        timeout,
+    )?;
+    assert!(
+        doc_symbol_response.get("error").is_none(),
+        "documentSymbol returned error: {doc_symbol_response:#}"
+    );
+    // Soft assertion: result should be an array containing at least one symbol
+    if let Some(symbols) = doc_symbol_response["result"].as_array() {
+        assert!(
+            !symbols.is_empty(),
+            "documentSymbol should return at least one symbol (e.g. greet)"
+        );
+    }
+
+    // ── Step 8: workspace/symbol ────────────────────────────────────────
+    let ws_symbol_response = send_request_with_timeout(
+        &mut server,
+        8,
+        "workspace/symbol",
+        json!({
+            "query": "greet"
+        }),
+        timeout,
+    )?;
+    assert!(
+        ws_symbol_response.get("error").is_none(),
+        "workspace/symbol returned error: {ws_symbol_response:#}"
+    );
+    // Soft assertion: result should be an array (may be empty if indexing is not ready)
+    if let Some(ws_symbols) = ws_symbol_response["result"].as_array() {
+        // Workspace symbol for a single-file scenario may or may not find results
+        // depending on indexing state; just verify no crash and valid response shape
+        let _ = ws_symbols; // acknowledged
+    }
+
+    // ── Step 9: $/cancelRequest for bogus ID, then valid request ────────
+    // Send cancel for a request ID that was never issued (should not crash)
+    common::send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "$/cancelRequest",
+            "params": { "id": 99999 }
+        }),
+    );
+    // Brief pause to let server process the bogus cancel
+    std::thread::sleep(Duration::from_millis(50));
+
+    // Now send a valid request to confirm the server is still healthy
+    let post_cancel_response = send_request_with_timeout(
+        &mut server,
+        9,
+        "textDocument/hover",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": hover_line, "character": hover_col }
+        }),
+        timeout,
+    )?;
+    assert!(
+        post_cancel_response.get("error").is_none(),
+        "hover after bogus cancelRequest returned error: {post_cancel_response:#}"
+    );
+
+    // ── Shutdown ────────────────────────────────────────────────────────
     let shutdown_response =
-        send_request_with_timeout(&mut server, 5, "shutdown", json!(null), timeout)?;
+        send_request_with_timeout(&mut server, 10, "shutdown", json!(null), timeout)?;
     assert!(
         shutdown_response.get("error").is_none(),
         "shutdown returned error: {shutdown_response:#}"

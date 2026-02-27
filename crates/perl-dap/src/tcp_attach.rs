@@ -18,8 +18,9 @@
 //! - Cross-platform support (Windows, macOS, Linux)
 
 use anyhow::{Context, Result};
+use perl_content_length_framing::{ContentLengthFramer, frame};
 use serde_json::Value;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::net::TcpStream;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
@@ -159,11 +160,8 @@ impl TcpAttachSession {
     /// Send a DAP message to the debugger
     pub fn send_message(&mut self, message: &str) -> Result<()> {
         let stream = self.stream.as_mut().context("Not connected to debugger")?;
-
-        let content_length = message.len();
-        let frame = format!("Content-Length: {}\r\n\r\n{}", content_length, message);
-
-        stream.write_all(frame.as_bytes()).context("Failed to write to debugger")?;
+        let framed = frame(message.as_bytes());
+        stream.write_all(&framed).context("Failed to write to debugger")?;
 
         stream.flush().context("Failed to flush stream")?;
         Ok(())
@@ -178,140 +176,115 @@ impl TcpAttachSession {
 
         thread::spawn(move || {
             let mut reader = BufReader::new(stream);
-            let mut line = String::new();
+            let mut framer = ContentLengthFramer::new();
+            let mut read_buf = [0u8; 8 * 1024];
 
             loop {
-                line.clear();
-
-                // Read headers
-                let mut headers = std::collections::HashMap::new();
-                loop {
-                    match reader.read_line(&mut line) {
-                        Ok(0) => {
-                            eprintln!("TCP connection closed by debugger");
-                            *connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
-                            if let Some(ref sender) = event_sender {
-                                let _ = sender.send(DapEvent::Terminated {
-                                    reason: "connection_closed".to_string(),
-                                });
-                            }
-                            return;
+                let bytes_read = match reader.read(&mut read_buf) {
+                    Ok(0) => {
+                        eprintln!("TCP connection closed by debugger");
+                        *connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
+                        if let Some(ref sender) = event_sender {
+                            let _ = sender.send(DapEvent::Terminated {
+                                reason: "connection_closed".to_string(),
+                            });
                         }
-                        Ok(_) => {
-                            let line = line.trim_end();
-                            if line.is_empty() {
-                                break;
-                            }
-                            if let Some(colon_pos) = line.find(':') {
-                                let key = line[..colon_pos].trim();
-                                let value = line[colon_pos + 1..].trim();
-                                headers.insert(key.to_string(), value.to_string());
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("Error reading from TCP: {}", e);
-                            *connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
-                            if let Some(ref sender) = event_sender {
-                                let _ = sender.send(DapEvent::Error {
-                                    message: format!("TCP read error: {}", e),
-                                });
-                            }
-                            return;
-                        }
+                        return;
                     }
-                }
+                    Ok(n) => n,
+                    Err(e) => {
+                        eprintln!("Error reading from TCP: {}", e);
+                        *connected.lock().unwrap_or_else(|e| e.into_inner()) = false;
+                        if let Some(ref sender) = event_sender {
+                            let _ = sender.send(DapEvent::Error {
+                                message: format!("TCP read error: {}", e),
+                            });
+                        }
+                        return;
+                    }
+                };
 
-                // Read content body
-                if let Some(content_length) = headers.get("Content-Length") {
-                    if let Ok(length) = content_length.parse::<usize>() {
-                        let mut buffer = vec![0u8; length];
-                        if reader.read_exact(&mut buffer).is_ok() {
-                            if let Ok(text) = String::from_utf8(buffer.clone()) {
-                                eprintln!("Received from debugger: {}", text);
+                framer.push(&read_buf[..bytes_read]);
 
-                                // Parse DAP message and emit event
-                                if let Some(ref sender) = event_sender {
-                                    if let Ok(value) = serde_json::from_str::<Value>(&text) {
-                                        if let Some(event_type) =
-                                            value.get("type").and_then(|t| t.as_str())
-                                        {
-                                            if event_type == "event" {
-                                                let event_name = value
-                                                    .get("event")
-                                                    .and_then(|e| e.as_str())
-                                                    .unwrap_or("unknown");
+                loop {
+                    let buffer = match framer.try_next() {
+                        Ok(Some(buffer)) => buffer,
+                        Ok(None) => break,
+                        Err(error) => {
+                            eprintln!("Failed to parse TCP DAP frame: {error}");
+                            continue;
+                        }
+                    };
 
-                                                match event_name {
-                                                    "output" => {
-                                                        let body = value.get("body");
-                                                        let category = body
-                                                            .and_then(|b| b.get("category"))
-                                                            .and_then(|c| c.as_str())
-                                                            .unwrap_or("stdout")
-                                                            .to_string();
-                                                        let output = body
-                                                            .and_then(|b| b.get("output"))
-                                                            .and_then(|o| o.as_str())
-                                                            .unwrap_or("")
-                                                            .to_string();
+                    if let Ok(text) = std::str::from_utf8(&buffer) {
+                        eprintln!("Received from debugger: {}", text);
+                    } else {
+                        eprintln!(
+                            "Received non-UTF8 message from debugger ({} bytes)",
+                            buffer.len()
+                        );
+                    }
 
-                                                        let _ = sender.send(DapEvent::Output {
-                                                            category,
-                                                            output,
-                                                        });
-                                                    }
-                                                    "stopped" => {
-                                                        let body = value.get("body");
-                                                        let reason = body
-                                                            .and_then(|b| b.get("reason"))
-                                                            .and_then(|r| r.as_str())
-                                                            .unwrap_or("unknown")
-                                                            .to_string();
-                                                        let thread_id = body
-                                                            .and_then(|b| b.get("threadId"))
-                                                            .and_then(|t| t.as_i64())
-                                                            .unwrap_or(1)
-                                                            as i32;
+                    // Parse DAP message and emit event
+                    if let Some(ref sender) = event_sender
+                        && let Ok(value) = serde_json::from_slice::<Value>(&buffer)
+                        && let Some(event_type) = value.get("type").and_then(|t| t.as_str())
+                        && event_type == "event"
+                    {
+                        let event_name =
+                            value.get("event").and_then(|e| e.as_str()).unwrap_or("unknown");
 
-                                                        let _ = sender.send(DapEvent::Stopped {
-                                                            reason,
-                                                            thread_id,
-                                                        });
-                                                    }
-                                                    "continued" => {
-                                                        let body = value.get("body");
-                                                        let thread_id = body
-                                                            .and_then(|b| b.get("threadId"))
-                                                            .and_then(|t| t.as_i64())
-                                                            .unwrap_or(1)
-                                                            as i32;
+                        match event_name {
+                            "output" => {
+                                let body = value.get("body");
+                                let category = body
+                                    .and_then(|b| b.get("category"))
+                                    .and_then(|c| c.as_str())
+                                    .unwrap_or("stdout")
+                                    .to_string();
+                                let output = body
+                                    .and_then(|b| b.get("output"))
+                                    .and_then(|o| o.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
 
-                                                        let _ = sender.send(DapEvent::Continued {
-                                                            thread_id,
-                                                        });
-                                                    }
-                                                    "terminated" => {
-                                                        let reason = value
-                                                            .get("body")
-                                                            .and_then(|b| b.get("reason"))
-                                                            .and_then(|r| r.as_str())
-                                                            .unwrap_or("unknown")
-                                                            .to_string();
+                                let _ = sender.send(DapEvent::Output { category, output });
+                            }
+                            "stopped" => {
+                                let body = value.get("body");
+                                let reason = body
+                                    .and_then(|b| b.get("reason"))
+                                    .and_then(|r| r.as_str())
+                                    .unwrap_or("unknown")
+                                    .to_string();
+                                let thread_id =
+                                    body.and_then(|b| b.get("threadId"))
+                                        .and_then(|t| t.as_i64())
+                                        .unwrap_or(1) as i32;
 
-                                                        let _ = sender
-                                                            .send(DapEvent::Terminated { reason });
-                                                    }
-                                                    _ => {
-                                                        eprintln!(
-                                                            "Unhandled DAP event: {}",
-                                                            event_name
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                let _ = sender.send(DapEvent::Stopped { reason, thread_id });
+                            }
+                            "continued" => {
+                                let body = value.get("body");
+                                let thread_id =
+                                    body.and_then(|b| b.get("threadId"))
+                                        .and_then(|t| t.as_i64())
+                                        .unwrap_or(1) as i32;
+
+                                let _ = sender.send(DapEvent::Continued { thread_id });
+                            }
+                            "terminated" => {
+                                let reason = value
+                                    .get("body")
+                                    .and_then(|b| b.get("reason"))
+                                    .and_then(|r| r.as_str())
+                                    .unwrap_or("unknown")
+                                    .to_string();
+
+                                let _ = sender.send(DapEvent::Terminated { reason });
+                            }
+                            _ => {
+                                eprintln!("Unhandled DAP event: {}", event_name);
                             }
                         }
                     }

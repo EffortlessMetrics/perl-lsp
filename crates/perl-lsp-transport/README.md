@@ -13,6 +13,7 @@ or notifications, each wrapped with the required `Content-Length` header.
 
 | Function             | Description                                      |
 |----------------------|--------------------------------------------------|
+| `ContentLengthMessageReader` | Stateful reader for streaming request loops |
 | `read_message`       | Read and parse a `JsonRpcRequest` from a reader  |
 | `write_message`      | Write a `JsonRpcResponse` with Content-Length framing |
 | `write_notification` | Write a JSON-RPC notification with framing       |
