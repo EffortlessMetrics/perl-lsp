@@ -60,9 +60,14 @@ fn test_evaluate_safe_mode_blocks_iterator_and_io() -> Result<(), Box<dyn std::e
         if let DapMessage::Response { success, message, .. } = response {
             assert!(!success, "Operation '{}' should have failed", op);
             if let Some(msg) = message {
-                 assert!(msg.contains("Safe evaluation mode"), "Operation '{}' failed but not due to safety: {}", op, msg);
+                assert!(
+                    msg.contains("Safe evaluation mode"),
+                    "Operation '{}' failed but not due to safety: {}",
+                    op,
+                    msg
+                );
             } else {
-                 panic!("Operation '{}' failed without message", op);
+                panic!("Operation '{}' failed without message", op);
             }
         }
     }
@@ -71,16 +76,10 @@ fn test_evaluate_safe_mode_blocks_iterator_and_io() -> Result<(), Box<dyn std::e
 
 #[test]
 // Sentinel Security Fix: Ensure safe operations are still allowed
-fn test_evaluate_safe_mode_allows_comparisons_and_lookups() -> Result<(), Box<dyn std::error::Error>> {
+fn test_evaluate_safe_mode_allows_comparisons_and_lookups() -> Result<(), Box<dyn std::error::Error>>
+{
     let mut adapter = create_test_adapter();
-    let safe_ops = vec![
-        "$a < $b",
-        "$a > $b",
-        "$hash{key}",
-        "$keys",
-        "$values",
-        "$each",
-    ];
+    let safe_ops = vec!["$a < $b", "$a > $b", "$hash{key}", "$keys", "$values", "$each"];
 
     for op in safe_ops {
         let args = json!({
@@ -94,7 +93,12 @@ fn test_evaluate_safe_mode_allows_comparisons_and_lookups() -> Result<(), Box<dy
         // It likely fails with "No debugger session" or succeeds if mocked
         if let DapMessage::Response { message, .. } = response {
             if let Some(msg) = message {
-                assert!(!msg.contains("Safe evaluation mode"), "Safe operation '{}' was blocked: {}", op, msg);
+                assert!(
+                    !msg.contains("Safe evaluation mode"),
+                    "Safe operation '{}' was blocked: {}",
+                    op,
+                    msg
+                );
             }
         }
     }
