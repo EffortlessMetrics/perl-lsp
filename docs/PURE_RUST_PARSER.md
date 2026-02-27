@@ -134,7 +134,7 @@ let results = harness.run_benchmark(source, 1000);
 
 ### Performance
 
-Production-ready performance benchmarks:
+Performance benchmarks:
 
 - **Simple scripts (1KB)**: ~200 µs
 - **Medium scripts (2.5KB)**: ~450 µs

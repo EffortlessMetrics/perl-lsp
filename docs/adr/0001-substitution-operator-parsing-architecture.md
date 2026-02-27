@@ -3,7 +3,7 @@
 **Status**: Accepted
 **Date**: 2025-01-20
 **Decision Makers**: Parser Development Team
-**Technical Story**: [Issue #147 - Substitution operator parsing incomplete](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/147)
+**Technical Story**: [Issue #147 - Substitution operator parsing incomplete](https://github.com/EffortlessMetrics/perl-lsp/issues/147)
 
 ## Context and Problem Statement
 
@@ -175,7 +175,7 @@ fn parse_substitution_operator(&mut self, delim: char) -> Result<Node, ParseErro
 
 ## References
 
-- [Issue #147: Substitution operator parsing incomplete](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/147)
-- [PR #158: Complete substitution operator parsing implementation](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/pull/158)
-- [perl-lexer enhanced delimiter recognition](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/tree/main/crates/perl-lexer)
+- [Issue #147: Substitution operator parsing incomplete](https://github.com/EffortlessMetrics/perl-lsp/issues/147)
+- [PR #158: Complete substitution operator parsing implementation](https://github.com/EffortlessMetrics/perl-lsp/pull/158)
+- [perl-lexer enhanced delimiter recognition](https://github.com/EffortlessMetrics/perl-lsp/tree/main/crates/perl-lexer)
 - [Perl 5 Substitution Operator Documentation](https://perldoc.perl.org/perlop#s/PATTERN/REPLACEMENT/msixpodualngcer)

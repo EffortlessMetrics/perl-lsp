@@ -38,10 +38,10 @@ Lightning-fast Perl language support with 26+ IDE features powered by tree-sitte
 
 ## 🚀 Performance
 
-- **4-19x faster** than traditional parsers
+- **1-150μs** typical parse times
 - **<50ms response time** for all operations
 - **100% Perl 5 coverage** including edge cases
-- **40-100x faster** position conversions (v0.8.0)
+- **Sub-millisecond** position conversions (v0.8.0)
 
 ## 📦 Installation
 
@@ -57,10 +57,10 @@ brew tap tree-sitter-perl/tap
 brew install perl-lsp
 
 # One-liner (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
 # From source
-cargo install --git https://github.com/EffortlessMetrics/tree-sitter-perl --bin perl-lsp
+cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp
 ```
 
 ## ⚙️ Configuration
@@ -114,10 +114,10 @@ Works with any LSP-compatible editor:
 
 ## 📚 Resources
 
-- [Documentation](https://github.com/EffortlessMetrics/tree-sitter-perl#readme)
-- [Issue Tracker](https://github.com/EffortlessMetrics/tree-sitter-perl/issues)
-- [Changelog](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/CHANGELOG.md)
-- [Migration Guide](https://github.com/EffortlessMetrics/tree-sitter-perl/blob/master/MIGRATION.md)
+- [Documentation](https://github.com/EffortlessMetrics/perl-lsp#readme)
+- [Issue Tracker](https://github.com/EffortlessMetrics/perl-lsp/issues/new/choose)
+- [Changelog](https://github.com/EffortlessMetrics/perl-lsp/blob/master/CHANGELOG.md)
+- [Migration Guide](https://github.com/EffortlessMetrics/perl-lsp/blob/master/MIGRATION.md)
 
 ## 📄 License
 

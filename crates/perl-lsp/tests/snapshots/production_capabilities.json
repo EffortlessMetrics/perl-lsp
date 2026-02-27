@@ -21,6 +21,7 @@
       "->"
     ]
   },
+  "declarationProvider": true,
   "definitionProvider": true,
   "diagnosticProvider": {
     "identifier": "perl-lsp",
@@ -44,7 +45,10 @@
       "perl.runFile",
       "perl.runTestSub",
       "perl.debugTests",
-      "perl.runCritic"
+      "perl.runCritic",
+      "perl.runTest",
+      "perl.runTestFile",
+      "perl.debugFile"
     ]
   },
   "experimental": {
@@ -59,6 +63,19 @@
   "inlineValueProvider": true,
   "linkedEditingRangeProvider": true,
   "monikerProvider": true,
+  "notebookDocumentSync": {
+    "notebookSelector": [
+      {
+        "cells": [
+          {
+            "language": "perl"
+          }
+        ],
+        "notebook": "jupyter-notebook"
+      }
+    ],
+    "save": true
+  },
   "referencesProvider": true,
   "renameProvider": {
     "prepareProvider": true
@@ -114,7 +131,7 @@
     ]
   },
   "textDocumentSync": {
-    "change": 1,
+    "change": 2,
     "openClose": true
   },
   "typeDefinitionProvider": true,

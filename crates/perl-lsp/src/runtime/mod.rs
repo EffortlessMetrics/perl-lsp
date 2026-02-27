@@ -5,6 +5,8 @@
 
 mod diagnostics;
 mod dispatch;
+/// File discovery abstraction for workspace scanning
+pub mod file_discovery;
 mod language;
 mod lifecycle;
 mod notebook;
@@ -35,6 +37,8 @@ use perl_parser::{
 
 use crate::call_hierarchy_provider::CallHierarchyProvider;
 use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
+use perl_content_length_framing::frame;
+use perl_lsp_feature_governance::FeatureProfile;
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)
 use crate::features::{
@@ -67,7 +71,7 @@ use crate::{
         ClientCapabilities, DocumentState, ServerConfig, WorkspaceConfig,
         normalize_package_separator,
     },
-    transport::{log_response, read_message, write_message},
+    transport::{ContentLengthMessageReader, log_response, write_message},
     // Import text processing helpers
     util::{
         byte_to_line_col, byte_to_utf16_col, extract_module_reference, get_text_around_offset,
@@ -168,10 +172,16 @@ pub struct LspServer {
     next_request_id: Arc<AtomicI64>,
     /// Active progress tokens for work done progress tracking
     progress_tokens: Arc<Mutex<HashSet<String>>>,
+    /// Maps progress tokens to their originating request IDs for cancellation routing
+    progress_token_to_request: Arc<Mutex<HashMap<String, Value>>>,
     /// Refresh controller for debounced client refresh requests
     refresh_controller: refresh::RefreshController,
     /// Notebook document store (LSP 3.17)
     pub(crate) notebook_store: notebook::NotebookStore,
+    /// Trace level set by client via $/setTrace (off, messages, verbose)
+    trace_level: Arc<Mutex<String>>,
+    /// Runtime feature profile selected by launch arguments or compiled default.
+    feature_profile: FeatureProfile,
 }
 
 // Note: DocumentState, ServerConfig, and normalize_package_separator are
@@ -181,18 +191,16 @@ pub struct LspServer {
 impl LspServer {
     /// Create a new LSP server
     pub fn new() -> Self {
+        Self::new_with_feature_profile(FeatureProfile::current())
+    }
+
+    /// Create a new LSP server using an explicit feature profile.
+    pub fn new_with_feature_profile(feature_profile: FeatureProfile) -> Self {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
-        let default_features = {
-            let flags = if cfg!(feature = "lsp-ga-lock") {
-                crate::protocol::capabilities::BuildFlags::ga_lock()
-            } else {
-                crate::protocol::capabilities::BuildFlags::production()
-            };
-            flags.to_advertised_features()
-        };
+        let default_features = feature_profile.advertised_features();
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -215,8 +223,11 @@ impl LspServer {
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
+            feature_profile,
         }
     }
 
@@ -256,18 +267,24 @@ impl LspServer {
         R: Read + Send + 'static,
         W: Write + Send + 'static,
     {
+        Self::with_io_and_feature_profile(reader, writer, FeatureProfile::current())
+    }
+
+    /// Create a new LSP server with custom I/O and explicit feature profile.
+    pub fn with_io_and_feature_profile<R, W>(
+        reader: Box<R>,
+        writer: Box<W>,
+        feature_profile: FeatureProfile,
+    ) -> Self
+    where
+        R: Read + Send + 'static,
+        W: Write + Send + 'static,
+    {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
-        let default_features = {
-            let flags = if cfg!(feature = "lsp-ga-lock") {
-                crate::protocol::capabilities::BuildFlags::ga_lock()
-            } else {
-                crate::protocol::capabilities::BuildFlags::production()
-            };
-            flags.to_advertised_features()
-        };
+        let default_features = feature_profile.advertised_features();
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -289,8 +306,11 @@ impl LspServer {
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
+            feature_profile,
         }
     }
 
@@ -299,18 +319,19 @@ impl LspServer {
     /// **Deprecated**: Use `with_io()` instead for full control over I/O.
     /// This method is maintained for backward compatibility.
     pub fn with_output(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
+        Self::with_output_and_feature_profile(output, FeatureProfile::current())
+    }
+
+    /// Create a new LSP server with custom output and explicit feature profile.
+    pub fn with_output_and_feature_profile(
+        output: Arc<Mutex<Box<dyn Write + Send>>>,
+        feature_profile: FeatureProfile,
+    ) -> Self {
         // Initialize workspace indexing with coordinator lifecycle management
         #[cfg(feature = "workspace")]
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
-        let default_features = {
-            let flags = if cfg!(feature = "lsp-ga-lock") {
-                crate::protocol::capabilities::BuildFlags::ga_lock()
-            } else {
-                crate::protocol::capabilities::BuildFlags::production()
-            };
-            flags.to_advertised_features()
-        };
+        let default_features = feature_profile.advertised_features();
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -332,9 +353,17 @@ impl LspServer {
             workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
             next_request_id: Arc::new(AtomicI64::new(1)),
             progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
             refresh_controller: refresh::RefreshController::new(),
             notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
+            feature_profile,
         }
+    }
+
+    /// Active feature profile for this server instance.
+    pub(crate) const fn feature_profile(&self) -> FeatureProfile {
+        self.feature_profile
     }
 
     /// Get the subprocess runtime for external tool execution (perltidy, perlcritic).
@@ -353,10 +382,11 @@ impl LspServer {
             "params": params
         });
 
-        let notification_str = serde_json::to_string(&notification)?;
+        let payload = serde_json::to_vec(&notification)?;
+        let framed = frame(&payload);
         // parking_lot locks cannot be poisoned
         let mut output = self.output.lock();
-        write!(output, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
+        output.write_all(&framed)?;
         output.flush()
     }
 
@@ -488,9 +518,11 @@ impl LspServer {
 
     /// Serve LSP requests from the given reader
     pub fn serve(&mut self, reader: &mut dyn BufRead) -> io::Result<()> {
+        let mut message_reader = ContentLengthMessageReader::new();
+
         loop {
             // Read LSP message using transport module
-            match read_message(reader)? {
+            match message_reader.read_next(reader)? {
                 Some(request) => {
                     eprintln!("Received request: {}", request.method);
 
@@ -518,7 +550,8 @@ impl LspServer {
     /// Handle a message from any reader (for testing)
     pub fn handle_message<R: Read>(&mut self, reader: &mut R) -> io::Result<()> {
         let mut buf_reader = BufReader::new(reader);
-        if let Some(request) = read_message(&mut buf_reader)? {
+        let mut message_reader = ContentLengthMessageReader::new();
+        if let Some(request) = message_reader.read_next(&mut buf_reader)? {
             if let Some(response) = self.handle_request(request) {
                 // Write response to the configured output using transport module
                 let mut output = self.output.lock();
@@ -552,6 +585,15 @@ impl LspServer {
     fn is_cancelled(&self, id: &Value) -> bool {
         let set = self.cancelled.lock();
         set.contains(id)
+    }
+
+    /// Register a mapping from a progress token to its originating request ID
+    ///
+    /// When the client sends `window/workDoneProgress/cancel` for this token,
+    /// the server will look up the request ID and signal cancellation via the
+    /// global cancellation registry.
+    pub(crate) fn register_progress_request(&self, token: &str, request_id: Value) {
+        self.progress_token_to_request.lock().insert(token.to_string(), request_id);
     }
 
     // Note: handle_request is implemented in dispatch.rs
@@ -1059,7 +1101,7 @@ impl LspServer {
                 }
             }
 
-            NodeKind::Foreach { variable: _, list, body } => {
+            NodeKind::Foreach { variable: _, list, body, continue_block: _ } => {
                 count += self.count_references(list, symbol_name, symbol_kind);
                 count += self.count_references(body, symbol_name, symbol_kind);
             }
@@ -1412,13 +1454,14 @@ impl LspServer {
             "params": params
         });
         let mut output = self.output.lock();
-        let msg = serde_json::to_string(&request).map_err(|e| {
+        let payload = serde_json::to_vec(&request).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Failed to serialize request: {}", e),
             )
         })?;
-        write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg)?;
+        let framed = frame(&payload);
+        output.write_all(&framed)?;
         output.flush()
     }
 
@@ -1577,11 +1620,12 @@ mod tests {
                 }
             }
             Err(e) => {
-                if e.to_string().contains("not found") {
+                let err_msg = e.to_string();
+                let is_not_found = err_msg.contains("not found");
+                if is_not_found {
                     eprintln!("Skipping test: perltidy not installed");
-                } else {
-                    panic!("Formatting failed: {}", e);
                 }
+                assert!(is_not_found, "Formatting failed: {}", err_msg);
             }
         }
     }

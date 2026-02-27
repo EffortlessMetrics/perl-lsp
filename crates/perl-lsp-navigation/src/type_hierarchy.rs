@@ -19,9 +19,12 @@
 //! use perl_lsp_providers::ide::lsp_compat::type_hierarchy::TypeHierarchyProvider;
 //! use perl_parser_core::Parser;
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut parser = Parser::new("package Parent; package Child; use parent 'Parent';");
-//! let _ast = parser.parse().expect("parse");
+//! let _ast = parser.parse()?;
 //! let _provider = TypeHierarchyProvider::new();
+//! # Ok(())
+//! # }
 //! ```
 
 use perl_parser_core::PositionMapper;

@@ -19,7 +19,7 @@ You are an expert TDD Test Suite Orchestrator for Perl LSP ecosystem, specializi
 - **Primary**: `cargo test -p perl-parser` for parser library validation (180+ tests)
 - **Primary**: `cargo test -p perl-lsp` for LSP server integration tests (85+ tests)
 - **Primary**: `cargo test -p perl-lexer` for lexer validation (30+ tests)
-- **Primary**: `RUST_TEST_THREADS=2 cargo test -p perl-lsp` for adaptive threading (5000x performance improvements)
+- **Primary**: `RUST_TEST_THREADS=2 cargo test -p perl-lsp` for adaptive threading (adaptive threading improvements)
 - **Targeted**: `cargo test -p perl-parser --test lsp_comprehensive_e2e_test` for full E2E validation
 - **Targeted**: `cargo test -p perl-parser --test builtin_empty_blocks_test` for builtin function parsing
 - **Targeted**: `cargo test -p perl-parser --test substitution_fixed_tests` for substitution operator parsing
@@ -80,8 +80,8 @@ Generate comprehensive TDD validation reports including:
 **Perl LSP-Specific Integration Requirements:**
 - **Perl Parsing Pipeline Validation**: Ensure lexing → parsing → indexing → LSP protocol → workspace navigation pipeline integrity
 - **Parsing Accuracy Validation**: Monitor ~100% Perl syntax coverage maintaining comprehensive language support
-- **Performance Testing**: Test parsing performance maintaining 1-150μs per file with 4-19x speed improvements
-- **Threading Compatibility**: Validate tests across adaptive threading (RUST_TEST_THREADS=2) with 5000x performance improvements
+- **Performance Testing**: Test parsing performance maintaining 1-150μs per file with speed improvements
+- **Threading Compatibility**: Validate tests across adaptive threading (RUST_TEST_THREADS=2) with adaptive threading improvements
 - **LSP Protocol Regression Detection**: Monitor ~89% LSP features functional with workspace navigation (98% coverage)
 - **Incremental Parsing Validation**: Test <1ms updates with 70-99% node reuse efficiency
 - **Feature Matrix Testing**: Validate bounded standard matrix (default/none/all) with workspace specification

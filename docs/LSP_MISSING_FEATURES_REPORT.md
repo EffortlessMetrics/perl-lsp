@@ -1,6 +1,6 @@
 # LSP Missing Features & Test Coverage Report
 
-> **Last Updated**: 2026-01-27
+> **Last Updated**: 2026-02-17
 > **Source of truth**: `features.toml` (capabilities) + `docs/CURRENT_STATUS.md` (metrics)
 >
 > This report lists **non-advertised** or **planned/preview** features only.
@@ -36,8 +36,15 @@
 
 These are DAP items but often requested alongside LSP functionality.
 
-- **`dap.breakpoints`** - preview, not advertised (implemented + tests)
-- **`dap.inline_values`** - preview, not advertised (custom inlineValues request, implemented + tests)
+- **`dap.breakpoints.hit_condition`** - preview, not advertised
+- **`dap.breakpoints.logpoints`** - preview, not advertised
+- **`dap.exceptions.die`** - preview, not advertised
+
+GA DAP features currently advertised:
+
+- **`dap.core`** - core launch/break/step/inspect/evaluate/setVariable loop
+- **`dap.breakpoints.basic`** - verified/unverified breakpoint lifecycle
+- **`dap.inline_values`** - custom inlineValues request support
 
 For DAP roadmap items (attach, variables/evaluate, safe eval), see `docs/ROADMAP.md`.
 

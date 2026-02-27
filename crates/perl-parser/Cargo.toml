@@ -1,16 +1,16 @@
 [package]
 name = "perl-parser"
-version = "0.8.8"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
-description = "Native Perl parser (v3) — Tree-sitter-compatible kinds/fields/points; stable byte↔UTF-16 conversions"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+authors.workspace = true
+description = "Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/perl-parser"
-keywords = ["perl", "parser", "tree-sitter", "lsp", "ast"]
+keywords = ["perl", "parser", "ast", "lsp", "semantic-analysis"]
 categories = ["parsing", "development-tools", "text-editors"]
 include = [
   "src/**",
@@ -41,18 +41,12 @@ perl-lsp-navigation = { workspace = true }
 perl-lsp-rename = { workspace = true }
 perl-lsp-semantic-tokens = { workspace = true }
 perl-lsp-tooling = { workspace = true }
-thiserror = "2.0.18"
-serde = { version = "1.0.228", features = ["derive"] }
+perl-keywords = { workspace = true }
 serde_json = "1.0.149"
 regex = "1.12.2"
-lazy_static = "1.5.0"
 lsp-types = { version = "0.97.0", optional = true }
-tracing = "0.1.44"
 url = "2.5.8"
 rustc-hash = "2.1.1"
-md5 = "0.8.0"
-phf = { version = "0.13.1", features = ["macros"] }
-parking_lot = "0.12.5"
 # Core dependencies for position mapping (unconditional, all targets)
 ropey = "1.6.1"
 
@@ -65,7 +59,7 @@ walkdir = "2.5.0"
 nix = { version = "0.31.1", features = ["signal"] }
 
 # Optional dependencies for incremental parsing
-anyhow = { version = "1.0.100", optional = true }
+anyhow = { version = "1.0.102", optional = true }
 
 [[bin]]
 name = "perl-parse"
@@ -105,6 +99,7 @@ semantic-phase2 = []  # Semantic analyzer Phase 2+ features
 parser-extras = []  # General aspirational parser tests
 crash-repros = []  # Enable crash reproducer tests (may hang - use with timeout)
 slow_tests = []  # Enable slow stress tests (deep nesting, etc.)
+doc-coverage = []  # SPEC-149 documentation coverage tests
 
 [dev-dependencies]
 assert_cmd = "2.1.2"
@@ -114,7 +109,7 @@ parking_lot = "0.12.5"
 predicates = "3.1.3"
 pretty_assertions = "1.4.1"
 regex = "1.12.2"
-serial_test = "3.3.1"
+serial_test = "3.4.0"
 tempfile = "3.24.0"
 proptest = "1.9.0"
 rstest = "0.26.1"
@@ -139,4 +134,3 @@ name = "test_incremental_v2"
 required-features = ["incremental"]
 
 # Edge case test examples
-

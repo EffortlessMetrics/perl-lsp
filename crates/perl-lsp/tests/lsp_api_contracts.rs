@@ -66,19 +66,19 @@ fn test_initialization_contract() -> TestResult {
     assert!(!trigger_set.contains("-"), "Must not have '-' as separate trigger");
     assert!(!trigger_set.contains(">"), "Must not have '>' as separate trigger");
 
-    // Text document sync must support full sync
+    // Text document sync must support incremental sync
     let sync = caps.get("textDocumentSync");
     if let Some(sync_obj) = sync {
         if let Some(obj) = sync_obj.as_object() {
             // If it's an object, check the change field
             assert_eq!(
                 obj.get("change").and_then(|v| v.as_u64()),
-                Some(1),
-                "textDocumentSync.change must be 1 (full sync)"
+                Some(2),
+                "textDocumentSync.change must be 2 (incremental sync)"
             );
         } else if let Some(num) = sync_obj.as_u64() {
             // If it's a number directly
-            assert_eq!(num, 1, "textDocumentSync must be 1 (full sync)");
+            assert_eq!(num, 2, "textDocumentSync must be 2 (incremental sync)");
         }
     }
 
