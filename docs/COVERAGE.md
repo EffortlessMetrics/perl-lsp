@@ -66,7 +66,7 @@ When the `ci:coverage` label is applied to a PR:
 
 The README includes a Codecov badge showing the current coverage on the `master` branch:
 
-[![codecov](https://codecov.io/gh/EffortlessMetrics/tree-sitter-perl-rs/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/tree-sitter-perl-rs)
+[![codecov](https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/perl-lsp)
 
 ## Coverage Thresholds
 

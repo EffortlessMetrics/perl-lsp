@@ -3,6 +3,7 @@ mod integration_corpus {
     use std::fs;
     use std::path::Path;
     use std::time::Instant;
+    use perl_tdd_support::{must, must_some};
     use crate::test_harness::{parse_corpus_file, test_corpus_file_parses, tree_to_string};
     use crate::{parse, language};
     use tree_sitter::Parser;
@@ -14,8 +15,8 @@ mod integration_corpus {
         let mut failed_files = Vec::new();
         let mut total_parse_time = 0u128;
 
-        for entry in fs::read_dir(corpus_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(corpus_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() {
                 test_count += 1;
@@ -24,10 +25,10 @@ mod integration_corpus {
                     Ok(()) => {
                         let parse_time = start.elapsed().as_micros();
                         total_parse_time += parse_time;
-                        println!("✓ {:?} ({} μs)", path.file_name().unwrap(), parse_time);
+                        println!("✓ {:?} ({} μs)", must_some(path.file_name()), parse_time);
                     }
                     Err(e) => {
-                        println!("✗ {:?}: {}", path.file_name().unwrap(), e);
+                        println!("✗ {:?}: {}", must_some(path.file_name()), e);
                         failed_files.push((path, e));
                     }
                 }
@@ -43,9 +44,9 @@ mod integration_corpus {
         if !failed_files.is_empty() {
             println!("\nFailed files:");
             for (path, error) in failed_files {
-                println!("  {:?}: {}", path.file_name().unwrap(), error);
+                println!("  {:?}: {}", must_some(path.file_name()), error);
             }
-            panic!("Some corpus files failed to parse");
+            must(Err::<(), _>(format!("Some corpus files failed to parse")));
         }
     }
 
@@ -82,12 +83,12 @@ mod integration_corpus {
         // Test that we can extract and validate the content of corpus files
         let corpus_dir = Path::new("test/corpus");
         
-        for entry in fs::read_dir(corpus_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(corpus_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() {
                 // Read the file content
-                let content = fs::read_to_string(&path).unwrap();
+                let content = must(fs::read_to_string(&path));
                 
                 // Ensure it's not empty (corpus files should have content)
                 assert!(!content.trim().is_empty(), "Corpus file {:?} is empty", path);
@@ -107,16 +108,16 @@ mod integration_corpus {
         // Test that parsed corpus files produce valid tree structures
         let corpus_dir = Path::new("test/corpus");
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
-        for entry in fs::read_dir(corpus_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(corpus_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() {
-                let content = fs::read_to_string(&path).unwrap();
+                let content = must(fs::read_to_string(&path));
                 
                 // Parse the content
-                let tree = parser.parse(&content, None).unwrap();
+                let tree = must_some(parser.parse(&content, None));
                 let root = tree.root_node();
                 
                 // Basic tree structure validation
@@ -140,17 +141,17 @@ mod integration_corpus {
         // Test parsing performance on corpus files
         let corpus_dir = Path::new("test/corpus");
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
         let mut total_files = 0;
         let mut total_time = 0u128;
         let mut slow_files = Vec::new();
         
-        for entry in fs::read_dir(corpus_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(corpus_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() {
-                let content = fs::read_to_string(&path).unwrap();
+                let content = must(fs::read_to_string(&path));
                 let start = Instant::now();
                 
                 let tree = parser.parse(&content, None);
@@ -160,7 +161,7 @@ mod integration_corpus {
                 total_time += parse_time;
                 
                 if parse_time > 1000 {
-                    slow_files.push((path.file_name().unwrap().to_string_lossy().to_string(), parse_time));
+                    slow_files.push((must_some(path.file_name()).to_string_lossy().to_string(), parse_time));
                 }
                 
                 assert!(tree.is_some(), "Failed to parse {:?}", path);
@@ -188,19 +189,19 @@ mod integration_corpus {
         // Test that corpus files with errors are handled gracefully
         let corpus_dir = Path::new("test/corpus");
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
-        for entry in fs::read_dir(corpus_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(corpus_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() {
-                let content = fs::read_to_string(&path).unwrap();
+                let content = must(fs::read_to_string(&path));
                 
                 // Parse the content
                 let tree = parser.parse(&content, None);
                 assert!(tree.is_some(), "Failed to parse {:?}", path);
                 
-                let tree = tree.unwrap();
+                let tree = must_some(tree);
                 let root = tree.root_node();
                 
                 // Even with errors, we should get a valid tree structure
@@ -215,20 +216,20 @@ mod integration_corpus {
         // Test that parsed corpus files can be serialized and deserialized
         let corpus_dir = Path::new("test/corpus");
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
-        for entry in fs::read_dir(corpus_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(corpus_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() {
-                let content = fs::read_to_string(&path).unwrap();
+                let content = must(fs::read_to_string(&path));
                 
                 // Parse the content
-                let tree1 = parser.parse(&content, None).unwrap();
+                let tree1 = must_some(parser.parse(&content, None));
                 let tree1_string = tree_to_string(&tree1);
                 
                 // Parse again (simulating deserialization)
-                let tree2 = parser.parse(&content, None).unwrap();
+                let tree2 = must_some(parser.parse(&content, None));
                 let tree2_string = tree_to_string(&tree2);
                 
                 // Trees should be identical
@@ -246,17 +247,17 @@ mod integration_corpus {
         // Test memory usage during corpus parsing
         let corpus_dir = Path::new("test/corpus");
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
         let mut total_nodes = 0;
         let mut total_files = 0;
         
-        for entry in fs::read_dir(corpus_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(corpus_dir)) {
+            let entry = must(entry);
             let path = entry.path();
             if path.is_file() {
-                let content = fs::read_to_string(&path).unwrap();
-                let tree = parser.parse(&content, None).unwrap();
+                let content = must(fs::read_to_string(&path));
+                let tree = must_some(parser.parse(&content, None));
                 
                 let node_count = count_nodes(&tree.root_node());
                 total_nodes += node_count;

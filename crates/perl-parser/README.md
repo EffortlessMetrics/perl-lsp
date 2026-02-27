@@ -1,103 +1,36 @@
 # perl-parser
 
-> **Tree-sitter compatible**: node kinds, field names, and byte/point semantics (0-based; UTF-16 for LSP) match the Tree-sitter Perl grammar.
-
-A high-performance Perl parser with full Language Server Protocol support.
-
-## Features
-
-- **100% Perl 5 syntax coverage**: Handles all edge cases including `m!pattern!`, indirect object syntax, and more
-- **Language Server Protocol**: Full LSP implementation with advanced IDE features
-- **Debug Adapter Protocol**: Integrated debugging support
-- **Tree-sitter compatible**: Produces standard S-expression output
-- **Performance**: 4-19x faster than traditional parsers
-- **Enterprise-grade API Documentation** ⭐ **NEW: Issue #149**: Comprehensive API documentation enforced through `#![warn(missing_docs)]`
-
-## Binaries
-
-This crate provides:
-
-- `perl-parse`: CLI parser tool (requires `cli` feature)
-
-For the full-featured Language Server, see the [`perl-lsp`](../perl-lsp) crate.
+Central hub crate for the Perl parser ecosystem. Provides a native recursive-descent
+parser (v3) with Tree-sitter-compatible AST output, semantic analysis, workspace
+indexing, refactoring, and LSP provider re-exports.
 
 ## Usage
 
-### As a library
-
 ```rust
-use perl_parser::{Parser, ParseOptions};
+use perl_parser::Parser;
 
-let source = "my $x = 42;";
-let options = ParseOptions::default();
-let ast = Parser::parse(source, options)?;
-
+let mut parser = Parser::new("my $x = 42;");
+let ast = parser.parse().unwrap();
 println!("{}", ast.to_sexp());
 ```
 
-### As a Language Server
+## Included binary
 
-The LSP server is provided by the `perl-lsp` crate:
+`perl-parse` (requires the `cli` feature) parses Perl files and prints the AST
+in S-expression, JSON, or debug format.
 
-```bash
-# Install
-cargo install perl-lsp
+## Key re-exports
 
-# Run
-perl-lsp --stdio
-```
-
-## LSP Features
-
-- Syntax diagnostics
-- Go to definition
-- Find references
-- Document symbols
-- Signature help
-- Semantic tokens
-- Call hierarchy
-- Inlay hints
-- **Import optimization** - Remove unused imports, add missing imports, remove duplicates, sort alphabetically
-- Code actions and refactoring
-- Test discovery and execution
-- Code formatting
-
-## API Documentation Quality ⭐ **NEW: Issue #149**
-
-This crate enforces enterprise-grade API documentation standards through `#![warn(missing_docs)]`:
-
-### Documentation Requirements
-
-- **All public APIs** have comprehensive documentation with examples and cross-references
-- **Performance-critical modules** document memory usage and large Perl codebase processing implications
-- **Error types** explain Perl parsing workflow context and recovery strategies
-- **Module documentation** describes LSP workflow integration (Parse → Index → Navigate → Complete → Analyze)
-
-### Quality Validation
-
-```bash
-# Run comprehensive documentation tests (12 acceptance criteria)
-cargo test --test missing_docs_ac_tests
-
-# Generate documentation without warnings (perl-parser crate only)
-cargo doc --no-deps --package perl-parser
-```
-
-The documentation validation suite includes:
-
-- **Comprehensive API coverage**: All public structs, enums, and functions
-- **Working examples**: Doctests with assertions for complex functionality
-- **Cross-reference validation**: Proper linking between related APIs
-- **Performance documentation**: Memory usage and scaling characteristics
-- **Error handling guidance**: Recovery strategies and workflow context
-
-See the [API Documentation Standards](../../docs/API_DOCUMENTATION_STANDARDS.md) for complete requirements.
+| Module | Source crate | Purpose |
+|--------|-------------|---------|
+| `engine` | `perl-parser-core` | Recursive-descent parser, AST, error recovery |
+| `analysis` | `perl-semantic-analyzer` | Scope analysis, type inference, symbol tables |
+| `workspace` | `perl-workspace-index` | Cross-file symbol indexing and document store |
+| `refactor` | `perl-refactoring` | Import optimizer, modernization, refactoring engine |
+| `tdd` | `perl-tdd-support` | Test generation and TDD workflow |
+| `completion`, `diagnostics`, `rename`, ... | `perl-lsp-*` | LSP feature providers |
 
 ## License
 
-Licensed under either of:
-
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
+Licensed under either of [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
+or [MIT license](http://opensource.org/licenses/MIT) at your option.

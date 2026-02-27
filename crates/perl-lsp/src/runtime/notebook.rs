@@ -231,6 +231,34 @@ impl Clone for NotebookStore {
 }
 
 impl LspServer {
+    fn parse_notebook_cell(cell: &Value) -> Result<NotebookCellState, JsonRpcError> {
+        let kind = cell
+            .get("kind")
+            .and_then(|v| v.as_i64())
+            .and_then(|v| i32::try_from(v).ok())
+            .unwrap_or(2); // Default to Code
+
+        let document = cell
+            .get("document")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| invalid_params("Missing cell.document"))?
+            .to_string();
+
+        // Extract cell metadata (optional)
+        let metadata = cell.get("metadata").and_then(|v| v.as_object()).cloned();
+
+        // Extract execution summary if present (LSP 3.17)
+        let execution_summary = cell.get("executionSummary").map(|es| ExecutionSummary {
+            execution_order: es
+                .get("executionOrder")
+                .and_then(|v| v.as_u64())
+                .and_then(|v| u32::try_from(v).ok()),
+            success: es.get("success").and_then(|v| v.as_bool()),
+        });
+
+        Ok(NotebookCellState { kind, document, metadata, execution_summary })
+    }
+
     /// Handle notebookDocument/didOpen notification
     pub(crate) fn handle_notebook_did_open(
         &self,
@@ -267,36 +295,7 @@ impl LspServer {
 
         let mut cells = Vec::new();
         for cell in cells_array {
-            let kind = cell
-                .get("kind")
-                .and_then(|v| v.as_i64())
-                .and_then(|v| i32::try_from(v).ok())
-                .unwrap_or(2); // Default to Code
-
-            let document = cell
-                .get("document")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| invalid_params("Missing cell.document"))?
-                .to_string();
-
-            // Extract cell metadata (optional)
-            let cell_metadata = cell.get("metadata").and_then(|v| v.as_object()).cloned();
-
-            // Extract execution summary if present (LSP 3.17)
-            let execution_summary = cell.get("executionSummary").map(|es| ExecutionSummary {
-                execution_order: es
-                    .get("executionOrder")
-                    .and_then(|v| v.as_u64())
-                    .and_then(|v| u32::try_from(v).ok()),
-                success: es.get("success").and_then(|v| v.as_bool()),
-            });
-
-            cells.push(NotebookCellState {
-                kind,
-                document,
-                metadata: cell_metadata,
-                execution_summary,
-            });
+            cells.push(Self::parse_notebook_cell(cell)?);
         }
 
         // Extract cell text documents
@@ -388,18 +387,41 @@ impl LspServer {
             if let Some(cells) = change.get("cells") {
                 // Handle structure changes (add/remove/move cells)
                 if let Some(structure) = cells.get("structure") {
+                    let mut updated_cells = self
+                        .notebook_store
+                        .get_notebook(notebook_uri)
+                        .map_or_else(Vec::new, |notebook| notebook.cells);
+                    let mut structure_changed = false;
+
                     // Handle array operations
                     if let Some(array) = structure.get("array") {
-                        let _start = array.get("start").and_then(|v| v.as_u64());
-                        let _delete_count = array.get("deleteCount").and_then(|v| v.as_u64());
+                        let start = array
+                            .get("start")
+                            .and_then(|v| v.as_u64())
+                            .and_then(|v| usize::try_from(v).ok())
+                            .unwrap_or(0);
+                        let delete_count = array
+                            .get("deleteCount")
+                            .and_then(|v| v.as_u64())
+                            .and_then(|v| usize::try_from(v).ok())
+                            .unwrap_or(0);
+                        let replacement = array
+                            .get("cells")
+                            .and_then(|v| v.as_array())
+                            .map(|new_cells| {
+                                new_cells
+                                    .iter()
+                                    .map(Self::parse_notebook_cell)
+                                    .collect::<Result<Vec<_>, _>>()
+                            })
+                            .transpose()?
+                            .unwrap_or_default();
 
-                        // Handle newly opened cells
-                        if let Some(new_cells) = array.get("cells").and_then(|v| v.as_array()) {
-                            for _cell in new_cells {
-                                // Cell metadata added to notebook
-                                eprintln!("Cell added to notebook structure");
-                            }
-                        }
+                        let splice_start = start.min(updated_cells.len());
+                        let splice_end =
+                            splice_start.saturating_add(delete_count).min(updated_cells.len());
+                        updated_cells.splice(splice_start..splice_end, replacement);
+                        structure_changed = true;
                     }
 
                     // Handle didOpen for new cells
@@ -433,6 +455,16 @@ impl LspServer {
 
                             self.handle_did_open(Some(did_open_params))?;
                             eprintln!("New cell opened: {}", cell_uri);
+
+                            if !updated_cells.iter().any(|cell| cell.document == cell_uri) {
+                                updated_cells.push(NotebookCellState {
+                                    kind: 2,
+                                    document: cell_uri.to_string(),
+                                    metadata: None,
+                                    execution_summary: None,
+                                });
+                                structure_changed = true;
+                            }
                         }
                     }
 
@@ -453,7 +485,17 @@ impl LspServer {
 
                             self.handle_did_close(Some(did_close_params))?;
                             eprintln!("Cell closed: {}", cell_uri);
+
+                            let previous_len = updated_cells.len();
+                            updated_cells.retain(|cell| cell.document != cell_uri);
+                            if updated_cells.len() != previous_len {
+                                structure_changed = true;
+                            }
                         }
+                    }
+
+                    if structure_changed {
+                        self.notebook_store.update_cells(notebook_uri, updated_cells);
                     }
                 }
 
@@ -573,6 +615,186 @@ impl LspServer {
         self.notebook_store.unregister_notebook(notebook_uri);
 
         eprintln!("Notebook closed: {}", notebook_uri);
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn notebook_did_open_registers_cells_and_documents() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let notebook_uri = "file:///open-test.ipynb";
+        let cell_uri = "file:///open-test.ipynb#cell1";
+
+        server.handle_notebook_did_open(Some(json!({
+            "notebookDocument": {
+                "uri": notebook_uri,
+                "notebookType": "jupyter-notebook",
+                "version": 1,
+                "cells": [
+                    {
+                        "kind": 2,
+                        "document": cell_uri
+                    }
+                ]
+            },
+            "cellTextDocuments": [
+                {
+                    "uri": cell_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = 1;\n"
+                }
+            ]
+        })))?;
+
+        assert_eq!(
+            server.notebook_store.get_notebook_for_cell(cell_uri).as_deref(),
+            Some(notebook_uri)
+        );
+        assert!(server.documents_guard().contains_key(cell_uri));
+
+        let notebook = server
+            .notebook_store
+            .get_notebook(notebook_uri)
+            .ok_or("notebook missing from store")?;
+        assert_eq!(notebook.cells.len(), 1);
+        assert_eq!(notebook.cells[0].document, cell_uri);
+
+        Ok(())
+    }
+
+    #[test]
+    fn notebook_structure_change_updates_cell_mapping_and_execution_summary()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::new();
+        let notebook_uri = "file:///change-test.ipynb";
+        let cell1_uri = "file:///change-test.ipynb#cell1";
+        let cell2_uri = "file:///change-test.ipynb#cell2";
+
+        server.handle_notebook_did_open(Some(json!({
+            "notebookDocument": {
+                "uri": notebook_uri,
+                "notebookType": "jupyter-notebook",
+                "version": 1,
+                "cells": [
+                    {
+                        "kind": 2,
+                        "document": cell1_uri
+                    }
+                ]
+            },
+            "cellTextDocuments": [
+                {
+                    "uri": cell1_uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": "my $x = 1;\n"
+                }
+            ]
+        })))?;
+
+        server.handle_notebook_did_change(Some(json!({
+            "notebookDocument": {
+                "uri": notebook_uri,
+                "version": 2
+            },
+            "change": {
+                "cells": {
+                    "structure": {
+                        "array": {
+                            "start": 1,
+                            "deleteCount": 0,
+                            "cells": [
+                                {
+                                    "kind": 2,
+                                    "document": cell2_uri
+                                }
+                            ]
+                        },
+                        "didOpen": [
+                            {
+                                "uri": cell2_uri,
+                                "languageId": "perl",
+                                "version": 1,
+                                "text": "my $y = 2;\n"
+                            }
+                        ]
+                    },
+                    "data": [
+                        {
+                            "document": cell2_uri,
+                            "executionSummary": {
+                                "executionOrder": 7,
+                                "success": true
+                            }
+                        }
+                    ]
+                }
+            }
+        })))?;
+
+        assert_eq!(
+            server.notebook_store.get_notebook_for_cell(cell2_uri).as_deref(),
+            Some(notebook_uri)
+        );
+        assert!(server.documents_guard().contains_key(cell2_uri));
+
+        let notebook = server
+            .notebook_store
+            .get_notebook(notebook_uri)
+            .ok_or("notebook missing after didChange")?;
+        assert_eq!(notebook.cells.len(), 2);
+
+        let cell2 = notebook
+            .cells
+            .iter()
+            .find(|cell| cell.document == cell2_uri)
+            .ok_or("cell2 missing from notebook state")?;
+        assert_eq!(
+            cell2.execution_summary.as_ref().and_then(|summary| summary.execution_order),
+            Some(7)
+        );
+        assert_eq!(
+            cell2.execution_summary.as_ref().and_then(|summary| summary.success),
+            Some(true)
+        );
+
+        server.handle_notebook_did_change(Some(json!({
+            "notebookDocument": {
+                "uri": notebook_uri,
+                "version": 3
+            },
+            "change": {
+                "cells": {
+                    "structure": {
+                        "array": {
+                            "start": 0,
+                            "deleteCount": 1,
+                            "cells": []
+                        },
+                        "didClose": [
+                            { "uri": cell1_uri }
+                        ]
+                    }
+                }
+            }
+        })))?;
+
+        assert!(server.notebook_store.get_notebook_for_cell(cell1_uri).is_none());
+        assert!(!server.documents_guard().contains_key(cell1_uri));
+
+        let notebook = server
+            .notebook_store
+            .get_notebook(notebook_uri)
+            .ok_or("notebook missing after removing cell1")?;
+        assert_eq!(notebook.cells.len(), 1);
+        assert_eq!(notebook.cells[0].document, cell2_uri);
 
         Ok(())
     }

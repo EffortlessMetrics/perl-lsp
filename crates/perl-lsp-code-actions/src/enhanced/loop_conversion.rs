@@ -22,7 +22,7 @@ pub fn convert_loop_style(node: &Node, source: &str) -> Option<CodeAction> {
     }
 
     // Check for foreach that could be improved
-    if let NodeKind::Foreach { variable, list, body } = &node.kind {
+    if let NodeKind::Foreach { variable, list, body, continue_block: _ } = &node.kind {
         // Check if using implicit $_
         if let NodeKind::Variable { name, sigil } = &variable.kind
             && name == "_"

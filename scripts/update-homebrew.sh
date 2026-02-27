@@ -17,7 +17,7 @@ VERSION_NUM="${VERSION#v}"
 echo "Updating Homebrew formula for version $VERSION_NUM..."
 
 # Download SHA256SUMS file
-SUMS_URL="https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/${VERSION}/SHA256SUMS"
+SUMS_URL="https://github.com/EffortlessMetrics/perl-lsp/releases/download/${VERSION}/SHA256SUMS"
 echo "Downloading checksums from $SUMS_URL"
 
 if ! curl -sSfL "$SUMS_URL" -o /tmp/SHA256SUMS; then
@@ -48,26 +48,26 @@ fi
 cat > homebrew/perl-lsp.rb << EOF
 class PerlLsp < Formula
   desc "Fast, reliable Perl language server with 100% syntax coverage"
-  homepage "https://github.com/EffortlessMetrics/tree-sitter-perl"
+  homepage "https://github.com/EffortlessMetrics/perl-lsp"
   version "${VERSION_NUM}"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/${VERSION}/perl-lsp-v${VERSION_NUM}-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/${VERSION}/perl-lsp-v${VERSION_NUM}-aarch64-apple-darwin.tar.gz"
       sha256 "${SHA_AARCH64_DARWIN}"
     else
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/${VERSION}/perl-lsp-v${VERSION_NUM}-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/${VERSION}/perl-lsp-v${VERSION_NUM}-x86_64-apple-darwin.tar.gz"
       sha256 "${SHA_X86_64_DARWIN}"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/${VERSION}/perl-lsp-v${VERSION_NUM}-aarch64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/${VERSION}/perl-lsp-v${VERSION_NUM}-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "${SHA_AARCH64_LINUX}"
     else
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/${VERSION}/perl-lsp-v${VERSION_NUM}-x86_64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/${VERSION}/perl-lsp-v${VERSION_NUM}-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "${SHA_X86_64_LINUX}"
     end
   end

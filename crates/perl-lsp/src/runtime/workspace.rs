@@ -14,8 +14,12 @@ use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
 #[cfg(feature = "workspace")]
 use parking_lot::Mutex;
+use perl_module_path::file_path_to_module_name;
+use perl_module_rename::plan_module_rename_edits;
 #[cfg(feature = "workspace")]
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
+#[cfg(feature = "workspace")]
+use perl_source_file::{is_perl_source_path, is_perl_source_uri};
 #[cfg(feature = "workspace")]
 use std::io::Write;
 #[cfg(feature = "workspace")]
@@ -26,18 +30,17 @@ use std::sync::Arc;
 use std::time::Instant;
 #[cfg(feature = "workspace")]
 use url::Url;
+// Note: WalkDir logic has been extracted to super::file_discovery.
+// These helper functions are retained for potential future use by
+// other workspace operations (e.g., file watcher filtering).
 #[cfg(feature = "workspace")]
-use walkdir::WalkDir;
-
-#[cfg(feature = "workspace")]
+#[allow(dead_code)]
 fn is_perl_source_file(path: &Path) -> bool {
-    let Some(ext) = path.extension().and_then(|s| s.to_str()) else {
-        return false;
-    };
-    matches!(ext.to_ascii_lowercase().as_str(), "pl" | "pm" | "t" | "psgi")
+    is_perl_source_path(path)
 }
 
 #[cfg(feature = "workspace")]
+#[allow(dead_code)]
 fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
     if !entry.file_type().is_dir() {
         return false;
@@ -54,11 +57,10 @@ fn send_index_ready_notification(output: &Arc<Mutex<Box<dyn Write + Send>>>, rea
         "params": { "ready": ready }
     });
 
-    if let Ok(notification_str) = serde_json::to_string(&notification) {
+    if let Ok(payload) = serde_json::to_vec(&notification) {
         let mut out = output.lock();
-        if write!(out, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)
-            .is_ok()
-        {
+        let framed = frame(&payload);
+        if out.write_all(&framed).is_ok() {
             let _ = out.flush();
         }
     }
@@ -491,7 +493,7 @@ impl LspServer {
                     #[cfg(feature = "workspace")]
                     if let Some(coordinator) = self.coordinator() {
                         let workspace_index = coordinator.index();
-                        if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
+                        if is_perl_source_uri(&uri) {
                             if let Some(path) = uri_to_fs_path(&uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if let Ok(url) = url::Url::parse(&uri) {
@@ -637,25 +639,26 @@ impl LspServer {
                             // Get the document content
                             let documents = self.documents.lock();
                             if let Some(doc) = documents.get(&dependent_uri) {
-                                let mut edits = Vec::new();
-
-                                // Find and replace use statements
-                                for (line_num, line) in doc.text.lines().enumerate() {
-                                    if line.contains(&format!("use {}", old_module))
-                                        || line.contains(&format!("require {}", old_module))
-                                        || line.contains(&format!("use parent '{}'", old_module))
-                                        || line.contains(&format!("use base '{}'", old_module))
-                                    {
-                                        let new_line = line.replace(&old_module, &new_module);
-                                        edits.push(json!({
+                                let planned =
+                                    plan_module_rename_edits(&doc.text, &old_module, &new_module);
+                                let edits: Vec<Value> = planned
+                                    .into_iter()
+                                    .map(|edit| {
+                                        json!({
                                             "range": {
-                                                "start": {"line": line_num, "character": 0},
-                                                "end": {"line": line_num, "character": line.len()}
+                                                "start": {
+                                                    "line": edit.line,
+                                                    "character": edit.start_character,
+                                                },
+                                                "end": {
+                                                    "line": edit.line,
+                                                    "character": edit.end_character,
+                                                }
                                             },
-                                            "newText": new_line
-                                        }));
-                                    }
-                                }
+                                            "newText": edit.new_text
+                                        })
+                                    })
+                                    .collect();
 
                                 if !edits.is_empty() {
                                     workspace_edit["changes"][dependent_uri] = json!(edits);
@@ -791,7 +794,7 @@ impl LspServer {
                     // Note: Mutation operation - use coordinator with lifecycle tracking
                     #[cfg(feature = "workspace")]
                     if let Some(coordinator) = self.coordinator() {
-                        if uri.ends_with(".pl") || uri.ends_with(".pm") || uri.ends_with(".t") {
+                        if is_perl_source_uri(uri) {
                             if let Some(path) = uri_to_fs_path(uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     coordinator.notify_change(uri);
@@ -843,10 +846,7 @@ impl LspServer {
                         coordinator.index().remove_file(old_uri);
 
                         // Index new file if it's a Perl file
-                        if new_uri.ends_with(".pl")
-                            || new_uri.ends_with(".pm")
-                            || new_uri.ends_with(".t")
-                        {
+                        if is_perl_source_uri(new_uri) {
                             if let Some(path) = uri_to_fs_path(new_uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if let Ok(url) = url::Url::parse(new_uri) {
@@ -960,40 +960,26 @@ impl LspServer {
                     continue;
                 };
 
-                for entry in WalkDir::new(root)
-                    .follow_links(false)
-                    .into_iter()
-                    .filter_entry(|e| !should_skip_dir(e))
-                {
-                    let entry = match entry {
-                        Ok(entry) => entry,
-                        Err(_) => continue,
-                    };
+                let discovery = super::file_discovery::discover_perl_files(&root);
 
-                    if entry.file_type().is_file() && is_perl_source_file(entry.path()) {
-                        files.push(entry.path().to_path_buf());
-                        let total_files = files.len();
+                for path in discovery.files {
+                    files.push(path);
+                    let total_files = files.len();
 
-                        if total_files.is_multiple_of(64) {
-                            coordinator.update_scan_progress(total_files);
-                        }
+                    if total_files.is_multiple_of(64) {
+                        coordinator.update_scan_progress(total_files);
+                    }
 
-                        let elapsed_ms = budget_start.elapsed().as_millis() as u64;
-                        if total_files >= limits.max_files {
-                            early_exit =
-                                Some((EarlyExitReason::FileLimit, elapsed_ms, 0, total_files));
-                            break 'scan;
-                        }
+                    let elapsed_ms = budget_start.elapsed().as_millis() as u64;
+                    if total_files >= limits.max_files {
+                        early_exit = Some((EarlyExitReason::FileLimit, elapsed_ms, 0, total_files));
+                        break 'scan;
+                    }
 
-                        if elapsed_ms > caps.initial_scan_budget_ms {
-                            early_exit = Some((
-                                EarlyExitReason::InitialTimeBudget,
-                                elapsed_ms,
-                                0,
-                                total_files,
-                            ));
-                            break 'scan;
-                        }
+                    if elapsed_ms > caps.initial_scan_budget_ms {
+                        early_exit =
+                            Some((EarlyExitReason::InitialTimeBudget, elapsed_ms, 0, total_files));
+                        break 'scan;
                     }
                 }
             }
@@ -1172,19 +1158,6 @@ pub(super) fn path_to_module_name(uri: &str) -> String {
         });
     #[cfg(not(feature = "workspace"))]
     let path = uri.trim_start_matches("file://").to_string();
-    let path = path.as_str();
-    let path = path.trim_end_matches(".pm").trim_end_matches(".pl");
 
-    // Find the lib directory and extract module path
-    if let Some(lib_index) = path.rfind("/lib/") {
-        let module_path = &path[lib_index + 5..];
-        return module_path.replace('/', "::");
-    }
-
-    // Fallback: use filename as module name
-    if let Some(last_slash) = path.rfind('/') {
-        return path[last_slash + 1..].to_string();
-    }
-
-    path.to_string()
+    file_path_to_module_name(&path)
 }

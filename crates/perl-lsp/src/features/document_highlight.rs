@@ -170,8 +170,12 @@ impl DocumentHighlightProvider {
                 children.push(body.as_ref());
                 Some(children)
             }
-            NodeKind::Foreach { variable, list, body } => {
-                Some(vec![variable.as_ref(), list.as_ref(), body.as_ref()])
+            NodeKind::Foreach { variable, list, body, continue_block } => {
+                if let Some(cb) = continue_block {
+                    Some(vec![variable.as_ref(), list.as_ref(), body.as_ref(), cb.as_ref()])
+                } else {
+                    Some(vec![variable.as_ref(), list.as_ref(), body.as_ref()])
+                }
             }
             NodeKind::While { condition, body, .. } => {
                 Some(vec![condition.as_ref(), body.as_ref()])

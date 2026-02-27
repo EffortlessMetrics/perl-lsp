@@ -1,43 +1,33 @@
 # perl-refactoring
 
-Refactoring operations for Perl code, including inline expansion, code movement, and extraction.
+Refactoring and modernization utilities for Perl code, part of the
+[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
-## Purpose
+## Features
 
-This crate provides refactoring and modernization utilities for Perl code, enabling automated code transformations that improve code quality while preserving behavior. It supports workspace-wide refactoring operations for cross-file symbol changes.
+- **Import Optimization** -- detect unused/duplicate imports, generate optimized `use` statements (`ImportOptimizer`)
+- **Code Modernization** -- suggest modern Perl idioms (lexical filehandles, three-argument `open`, `say`, `strict`/`warnings`) via `PerlModernizer`
+- **Unified Refactoring Engine** -- `RefactoringEngine` coordinates rename, modernize, and import-optimize operations with backup/rollback support
+- **Workspace Refactoring** -- cross-file rename, extract module, move subroutine, inline variable (`WorkspaceRefactor`)
+- **Workspace Rename** -- scope-aware, atomic symbol rename across an entire workspace with progress reporting (`WorkspaceRename`)
 
-## Key Features
+## Cargo Features
 
-- **Import Optimization**: Organize and optimize Perl module imports
-- **Code Modernization**: Apply Perl best practices and modernization patterns
-- **Refactoring Operations**: Support for extract, inline, and move code transformations
-- **Workspace Refactoring**: Cross-file refactoring with workspace-wide symbol tracking
-- **Symbol-Aware**: Integrates with workspace index for accurate symbol resolution
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `workspace_refactor` | yes | Workspace-wide refactoring via `WorkspaceIndex` |
+| `modernize` | no | Code modernization transforms in `RefactoringEngine` |
 
 ## Usage
 
 ```rust
-use perl_refactoring::refactor;
+use perl_refactoring::import_optimizer::ImportOptimizer;
 
-// Apply refactoring operations to Perl code
-// (specific APIs depend on refactor module implementation)
+let optimizer = ImportOptimizer::new();
+let analysis = optimizer.analyze_content("use Carp qw(croak); print 1;")?;
+let optimized = optimizer.generate_optimized_imports(&analysis);
 ```
-
-## Features
-
-- `default`: Basic refactoring functionality
-- `modernize`: Enable code modernization patterns
-- `workspace_refactor`: Enable workspace-wide refactoring operations
-
-## Documentation
-
-For detailed API documentation, see [docs.rs/perl-refactoring](https://docs.rs/perl-refactoring).
 
 ## License
 
-Licensed under either of:
-
-- MIT License
-- Apache License, Version 2.0
-
-at your option.
+Licensed under either of MIT or Apache-2.0 at your option.

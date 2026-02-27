@@ -26,15 +26,9 @@ fn minimal_transliteration_crash_repro() {
     println!("Actual: ('{}', '{}', '{}')", search, replace, modifiers);
 
     // Demonstrate the bug - these will fail due to the parsing issue
-    if search.as_str() != "abc" {
-        panic!("Search pattern incorrect: expected 'abc', got '{}'", search);
-    }
-    if replace.as_str() != "xyz" {
-        panic!("Replace pattern incorrect: expected 'xyz', got '{}'", replace);
-    }
-    if modifiers.as_str() != "" {
-        panic!("Modifiers incorrect: expected '', got '{}'", modifiers);
-    }
+    assert_eq!(search.as_str(), "abc", "Search pattern incorrect");
+    assert_eq!(replace.as_str(), "xyz", "Replace pattern incorrect");
+    assert_eq!(modifiers.as_str(), "", "Modifiers incorrect");
 }
 
 #[test]

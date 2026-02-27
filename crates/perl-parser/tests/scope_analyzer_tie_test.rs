@@ -5,11 +5,9 @@ use perl_parser::{
 };
 
 fn analyze_code(code: &str) -> Vec<ScopeIssue> {
+    use perl_tdd_support::must;
     let mut parser = Parser::new(code);
-    let ast = match parser.parse() {
-        Ok(ast) => ast,
-        Err(e) => panic!("Failed to parse: {:?}", e),
-    };
+    let ast = must(parser.parse());
     let analyzer = ScopeAnalyzer::new();
     let pragma_map = PragmaTracker::build(&ast);
     analyzer.analyze(&ast, code, &pragma_map)

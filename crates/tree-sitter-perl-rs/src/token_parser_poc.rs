@@ -267,7 +267,9 @@ mod tests {
     #[test]
     fn test_basic_parsing() {
         let code = "my $x = 42;";
-        let ast = TokenParserPoc::parse(code).unwrap();
+        let ast_res = TokenParserPoc::parse(code);
+        assert!(ast_res.is_ok());
+        let ast = ast_res.unwrap_or_else(|_| unreachable!());
         println!("AST: {:?}", ast);
         println!("S-expr: {}", ast.to_sexp());
         
@@ -280,7 +282,9 @@ mod tests {
     #[test]
     fn test_if_statement() {
         let code = "if ($x > 0) { print $x; }";
-        let ast = TokenParserPoc::parse(code).unwrap();
+        let ast_res = TokenParserPoc::parse(code);
+        assert!(ast_res.is_ok());
+        let ast = ast_res.unwrap_or_else(|_| unreachable!());
         println!("AST: {:?}", ast);
         println!("S-expr: {}", ast.to_sexp());
     }
@@ -288,7 +292,9 @@ mod tests {
     #[test]
     fn test_expressions() {
         let code = "my $y = $x + 2 * 3;";
-        let ast = TokenParserPoc::parse(code).unwrap();
+        let ast_res = TokenParserPoc::parse(code);
+        assert!(ast_res.is_ok());
+        let ast = ast_res.unwrap_or_else(|_| unreachable!());
         println!("AST: {:?}", ast);
         println!("S-expr: {}", ast.to_sexp());
     }

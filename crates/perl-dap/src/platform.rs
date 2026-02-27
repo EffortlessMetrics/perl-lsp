@@ -76,7 +76,10 @@ const PERL_EXECUTABLE: &str = "perl";
 pub fn resolve_perl_path() -> Result<PathBuf> {
     // Get PATH environment variable
     let path_env = env::var("PATH").context("PATH environment variable not set")?;
+    resolve_perl_path_from_path_env(&path_env)
+}
 
+fn resolve_perl_path_from_path_env(path_env: &str) -> Result<PathBuf> {
     // Search PATH directories for perl executable
     for path_dir in path_env.split(PATH_SEPARATOR) {
         let perl_path = PathBuf::from(path_dir).join(PERL_EXECUTABLE);
@@ -506,34 +509,13 @@ mod tests {
     #[test]
     fn test_resolve_perl_path_failure_handling() {
         // Test: perl not found scenario
-        // This test verifies graceful error handling when PATH is empty or perl not found
-
-        // Save original PATH
-        let original_path = env::var("PATH").ok();
-
-        // Temporarily set PATH to empty
-        // SAFETY: We immediately restore the original PATH after testing
-        unsafe {
-            env::set_var("PATH", "");
-        }
-
-        let result = resolve_perl_path();
-
-        // Restore original PATH
-        if let Some(path) = original_path {
-            // SAFETY: Restoring the original PATH value
-            unsafe {
-                env::set_var("PATH", path);
-            }
-        }
+        // This test verifies graceful error handling without mutating process-wide env state.
+        let result = resolve_perl_path_from_path_env("");
 
         // Should return error when perl not found
         assert!(result.is_err(), "Should fail when perl not on PATH");
         let err = result.unwrap_err();
-        assert!(
-            err.to_string().contains("not found") || err.to_string().contains("not set"),
-            "Error should mention perl not found or PATH not set"
-        );
+        assert!(err.to_string().contains("not found"), "Error should mention perl not found");
     }
 
     #[test]

@@ -316,8 +316,8 @@ EOF
     default { say "other" }
 }"#;
         let result = parser.parse(code);
-        if result.is_ok() {
-            let sexp = parser.to_sexp(&result.unwrap());
+        if let Ok(ast) = result {
+            let sexp = parser.to_sexp(&ast);
             assert!(sexp.contains("given"));
         }
 

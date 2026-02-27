@@ -1,4 +1,4 @@
-//! Production-ready incremental parsing implementation with comprehensive tree reuse
+//! Incremental parsing implementation with comprehensive tree reuse
 //!
 //! This module provides a high-performance incremental parser that achieves significant
 //! performance improvements over full parsing through intelligent AST node reuse.
@@ -1571,6 +1571,28 @@ mod tests {
     use crate::position::Position;
     use std::time::Instant;
 
+    fn adaptive_perf_budget_micros(base_budget_micros: u128) -> u128 {
+        let thread_count = std::env::var("RUST_TEST_THREADS")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or_else(|| {
+                std::thread::available_parallelism().map_or(8, std::num::NonZeroUsize::get)
+            });
+
+        let mut budget = base_budget_micros;
+        if thread_count <= 2 {
+            budget = budget.saturating_mul(2);
+        } else if thread_count <= 4 {
+            budget = budget.saturating_mul(3) / 2;
+        }
+
+        if std::env::var("CI").is_ok() {
+            budget = budget.saturating_mul(3) / 2;
+        }
+
+        budget
+    }
+
     #[test]
     fn test_basic_compilation() {
         let parser = IncrementalParserV2::new();
@@ -2126,8 +2148,14 @@ if ($condition) {
             parser.reparsed_nodes
         );
 
-        // Unicode handling should not significantly impact performance
-        assert!(incremental_time.as_millis() < 5, "Unicode incremental parsing should be <5ms");
+        // Unicode handling should not significantly impact performance.
+        let unicode_budget_micros = adaptive_perf_budget_micros(5_000);
+        assert!(
+            incremental_time.as_micros() < unicode_budget_micros,
+            "Unicode incremental parsing should be <{}µs (got {}µs)",
+            unicode_budget_micros,
+            incremental_time.as_micros()
+        );
         assert!(parser.reused_nodes > 0 || parser.reparsed_nodes > 0, "Should parse successfully");
 
         Ok(())
@@ -2165,8 +2193,14 @@ if ($condition) {
             parser.reparsed_nodes
         );
 
-        // Boundary edits are tricky but should still be efficient
-        assert!(boundary_edit_time.as_millis() < 5, "AST boundary edit should be <5ms");
+        // Boundary edits are tricky but should still be efficient.
+        let boundary_budget_micros = adaptive_perf_budget_micros(5_000);
+        assert!(
+            boundary_edit_time.as_micros() < boundary_budget_micros,
+            "AST boundary edit should be <{}µs (got {}µs)",
+            boundary_budget_micros,
+            boundary_edit_time.as_micros()
+        );
         assert!(parser.reparsed_nodes >= 1, "Should reparse at least the modified node");
 
         Ok(())
@@ -2236,16 +2270,15 @@ if ($condition) {
             avg_time, min_time, max_time
         );
 
-        // Consistency check - allow reasonable variation for micro-benchmarks
-        // In development environments, timing can vary significantly due to system load
         let variation_factor = max_time as f64 / avg_time as f64;
-        if variation_factor > 10.0 {
-            // Only fail for extreme outliers that indicate real problems
-            panic!(
-                "Extreme performance inconsistency detected: max={}µs, avg={}µs ({}x variation)",
-                max_time, avg_time, variation_factor
-            );
-        } else if variation_factor > 5.0 {
+        assert!(
+            variation_factor <= 10.0,
+            "Extreme performance inconsistency detected: max={}µs, avg={}µs ({}x variation)",
+            max_time,
+            avg_time,
+            variation_factor
+        );
+        if variation_factor > 5.0 {
             println!(
                 "⚠️ High performance variation detected: max={}µs, avg={}µs ({}x variation) - may indicate system load",
                 max_time, avg_time, variation_factor

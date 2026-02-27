@@ -159,7 +159,7 @@ fn parse_heredoc_with_state() -> Node {
 - Simplest solution that addresses the core risk
 - Provides clear user feedback
 - Can be implemented quickly
-- Aligns with production-ready parser architecture
+- Aligns with parser architecture
 
 **Implementation Steps**:
 1. Add `MAX_HEREDOC_DEPTH` constant to parser

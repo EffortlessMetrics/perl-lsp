@@ -148,9 +148,8 @@ mod tests {
 
     #[test]
     fn test_dangerous_ops_regex() {
-        let Some(re) = DANGEROUS_OPS_RE.as_ref().ok() else {
-            panic!("regex should compile");
-        };
+        use perl_tdd_support::must;
+        let re = must(DANGEROUS_OPS_RE.as_ref());
 
         // Should match dangerous ops
         assert!(re.is_match("system('ls')"));
@@ -163,9 +162,8 @@ mod tests {
 
     #[test]
     fn test_regex_mutation_regex() {
-        let Some(re) = REGEX_MUTATION_RE.as_ref().ok() else {
-            panic!("regex should compile");
-        };
+        use perl_tdd_support::must;
+        let re = must(REGEX_MUTATION_RE.as_ref());
 
         // Should match s///, tr///, y///
         assert!(re.is_match("s/foo/bar/"));

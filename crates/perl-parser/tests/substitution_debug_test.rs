@@ -33,7 +33,8 @@ fn debug_substitution_parsing() {
         }
         Err(e) => {
             println!("Parse error: {:?}", e);
-            panic!("Failed to parse: {:?}", e);
+            use perl_tdd_support::must;
+            must(Err::<(), _>(e));
         }
     }
 }
@@ -70,7 +71,8 @@ fn debug_substitution_with_flags() {
         }
         Err(e) => {
             println!("Parse error: {:?}", e);
-            panic!("Failed to parse: {:?}", e);
+            use perl_tdd_support::must;
+            must(Err::<(), _>(e));
         }
     }
 }

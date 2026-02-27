@@ -60,7 +60,7 @@ if rg -n --glob 'crates/**/src/**/*.rs' -A2 -B2 '^[ \t]*///.*\$[a-zA-Z_]' 2>/dev
 fi
 echo ""
 
-# 4. Check for TODO/FIXME in public docs
+# 4. Check for unresolved markers in public docs
 echo -e "${BLUE}Checking for TODOs in public documentation...${NC}"
 if rg -n --glob 'crates/**/src/**/*.rs' '^[ \t]*///.*\b(TODO|FIXME|XXX|HACK)\b' 2>/dev/null; then
     echo -e "${YELLOW}⚠ Found TODO/FIXME in public docs (consider moving to regular comments)${NC}"
