@@ -150,11 +150,13 @@ jobs:
               continue
             fi
 
-            # Publish with retries
+            # Publish with retries.
+            # Use --no-verify because workspace dev-dependency cycles can fail
+            # verification before all crates are indexed on crates.io.
             PUBLISHED=false
             for attempt in 1 2 3; do
-              echo "Attempt $attempt/3: cargo publish -p $CRATE"
-              if cargo publish -p "$CRATE" 2>&1; then
+              echo "Attempt $attempt/3: cargo publish -p $CRATE --no-verify"
+              if cargo publish -p "$CRATE" --no-verify 2>&1; then
                 PUBLISHED=true
                 break
               fi
