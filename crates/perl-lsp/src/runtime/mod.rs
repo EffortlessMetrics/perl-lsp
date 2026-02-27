@@ -37,6 +37,7 @@ use perl_parser::{
 
 use crate::call_hierarchy_provider::CallHierarchyProvider;
 use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
+use perl_content_length_framing::frame;
 use perl_lsp_feature_governance::FeatureProfile;
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)
@@ -70,7 +71,7 @@ use crate::{
         ClientCapabilities, DocumentState, ServerConfig, WorkspaceConfig,
         normalize_package_separator,
     },
-    transport::{log_response, read_message, write_message},
+    transport::{ContentLengthMessageReader, log_response, write_message},
     // Import text processing helpers
     util::{
         byte_to_line_col, byte_to_utf16_col, extract_module_reference, get_text_around_offset,
@@ -381,10 +382,11 @@ impl LspServer {
             "params": params
         });
 
-        let notification_str = serde_json::to_string(&notification)?;
+        let payload = serde_json::to_vec(&notification)?;
+        let framed = frame(&payload);
         // parking_lot locks cannot be poisoned
         let mut output = self.output.lock();
-        write!(output, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
+        output.write_all(&framed)?;
         output.flush()
     }
 
@@ -516,9 +518,11 @@ impl LspServer {
 
     /// Serve LSP requests from the given reader
     pub fn serve(&mut self, reader: &mut dyn BufRead) -> io::Result<()> {
+        let mut message_reader = ContentLengthMessageReader::new();
+
         loop {
             // Read LSP message using transport module
-            match read_message(reader)? {
+            match message_reader.read_next(reader)? {
                 Some(request) => {
                     eprintln!("Received request: {}", request.method);
 
@@ -546,7 +550,8 @@ impl LspServer {
     /// Handle a message from any reader (for testing)
     pub fn handle_message<R: Read>(&mut self, reader: &mut R) -> io::Result<()> {
         let mut buf_reader = BufReader::new(reader);
-        if let Some(request) = read_message(&mut buf_reader)? {
+        let mut message_reader = ContentLengthMessageReader::new();
+        if let Some(request) = message_reader.read_next(&mut buf_reader)? {
             if let Some(response) = self.handle_request(request) {
                 // Write response to the configured output using transport module
                 let mut output = self.output.lock();
@@ -1449,13 +1454,14 @@ impl LspServer {
             "params": params
         });
         let mut output = self.output.lock();
-        let msg = serde_json::to_string(&request).map_err(|e| {
+        let payload = serde_json::to_vec(&request).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("Failed to serialize request: {}", e),
             )
         })?;
-        write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg)?;
+        let framed = frame(&payload);
+        output.write_all(&framed)?;
         output.flush()
     }
 

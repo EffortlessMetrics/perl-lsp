@@ -38,11 +38,11 @@ impl TransportMode {
         }
     }
 
-    /// TCP port used by the transport.
-    pub const fn port(self) -> u16 {
+    /// TCP port used by the transport, if any.
+    pub const fn port(self) -> Option<u16> {
         match self {
-            Self::Stdio => DEFAULT_LSP_PORT,
-            Self::Socket { port } => port,
+            Self::Stdio => None,
+            Self::Socket { port } => Some(port),
         }
     }
 
@@ -180,9 +180,7 @@ where
                     LaunchParseError::MissingValue { option: "--port".to_string() }
                 })?;
                 socket_port = parse_socket_port(raw_port)?;
-                if matches!(config.transport, TransportMode::Socket { .. }) {
-                    config.transport = TransportMode::Socket { port: socket_port };
-                }
+                config.transport = TransportMode::Socket { port: socket_port };
                 index += 2;
             }
             "--log" => {
@@ -293,6 +291,12 @@ mod tests {
 
         let plan = must(parse_args(["perl-lsp", "--port", "8123", "--socket"]));
         assert_eq!(plan.config.transport, TransportMode::Socket { port: 8123 });
+    }
+
+    #[test]
+    fn parse_port_implies_socket() {
+        let plan = must(parse_args(["perl-lsp", "--port", "8080"]));
+        assert_eq!(plan.config.transport, TransportMode::Socket { port: 8080 });
     }
 
     #[test]

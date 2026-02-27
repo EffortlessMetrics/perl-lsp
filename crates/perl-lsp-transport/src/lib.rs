@@ -8,6 +8,7 @@
 //! The LSP Base Protocol uses Content-Length based message framing over stdio (or other
 //! transports). This crate provides:
 //!
+//! - [`ContentLengthMessageReader`] - Stateful framed reader for streaming request loops
 //! - [`read_message`] - Read and parse an LSP message with Content-Length framing
 //! - [`write_message`] - Write an LSP response with proper framing
 //! - [`write_notification`] - Write an LSP notification with proper framing
@@ -41,4 +42,6 @@
 
 mod framing;
 
-pub use framing::{log_response, read_message, write_message, write_notification};
+pub use framing::{
+    ContentLengthMessageReader, log_response, read_message, write_message, write_notification,
+};
