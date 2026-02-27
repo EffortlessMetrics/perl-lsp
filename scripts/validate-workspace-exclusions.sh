@@ -17,7 +17,7 @@ echo
 
 # Check 1: Verify excluded crates exist
 echo "✓ Checking excluded directories exist..."
-for dir in "tree-sitter-perl" "crates/tree-sitter-perl-c" "crates/tree-sitter-perl-rs" "fuzz" "archive"; do
+for dir in "tree-sitter-perl" "crates/tree-sitter-perl-c" "fuzz" "archive"; do
     if [ ! -d "$REPO_ROOT/$dir" ]; then
         echo "❌ ERROR: Excluded directory '$dir' does not exist"
         exit 1
@@ -48,7 +48,7 @@ echo
 
 # Check 4: Verify excluded crates are listed in exclude section
 echo "✓ Checking exclude section..."
-for crate in "tree-sitter-perl" "tree-sitter-perl-c" "crates/tree-sitter-perl-rs" "fuzz" "archive"; do
+for crate in "tree-sitter-perl" "tree-sitter-perl-c" "fuzz" "archive"; do
     if ! grep -A 10 "^exclude = \[" "$CARGO_TOML" | grep -q "\"$crate\""; then
         echo "❌ ERROR: '$crate' not found in exclude section"
         exit 1
@@ -90,7 +90,7 @@ echo "✅ All workspace exclusion checks passed!"
 echo "=========================================="
 echo
 echo "Summary:"
-echo "  - 5 directories excluded from workspace"
+echo "  - 4 directories excluded from workspace"
 echo "  - Exclusion strategy clearly documented"
 echo "  - No accidental dependencies on excluded crates"
 echo "  - workspace.dependencies clean"

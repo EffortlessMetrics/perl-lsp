@@ -95,7 +95,7 @@ The parser should:
 **Pros**:
 - Handles nested delimiters correctly
 - Clear error messages for mismatches
-- Production-ready approach
+- Recommended approach
 
 **Cons**:
 - More complex implementation
@@ -151,7 +151,7 @@ fn parse_nested_delimiters() -> Node {
 **Rationale**:
 - Handles nested delimiters correctly
 - Provides clear error messages
-- Production-ready approach
+- Recommended approach
 - Balances complexity and correctness
 
 **Implementation Steps**:

@@ -30,6 +30,10 @@ impl LspServer {
                 glob_pattern: GlobPattern::String("**/*.t".into()),
                 kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
             },
+            FileSystemWatcher {
+                glob_pattern: GlobPattern::String("**/*.psgi".into()),
+                kind: Some(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
+            },
         ];
 
         let opts = DidChangeWatchedFilesRegistrationOptions { watchers };
@@ -64,9 +68,10 @@ impl LspServer {
 
         // Send using the proper output mechanism with explicit error logging
         let mut output = self.output.lock();
-        match serde_json::to_string(&request) {
-            Ok(msg) => {
-                if let Err(e) = write!(output, "Content-Length: {}\r\n\r\n{}", msg.len(), msg) {
+        match serde_json::to_vec(&request) {
+            Ok(payload) => {
+                let framed = frame(&payload);
+                if let Err(e) = output.write_all(&framed) {
                     eprintln!("[perl-lsp] Failed to write file watcher request: {}", e);
                     return;
                 }

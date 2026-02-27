@@ -1,13 +1,13 @@
 [package]
 name = "perl-lexer"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "High-performance Perl lexer with context-aware tokenization"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 readme = "README.md"
 documentation = "https://docs.rs/perl-lexer"
 keywords = ["perl", "lexer", "tokenizer", "parser", "syntax"]
@@ -22,6 +22,7 @@ memchr = "2.7.6"
 # For better error handling
 thiserror = "2.0.18"
 perl-position-tracking = { workspace = true }
+perl-keywords = { workspace = true }
 
 [dev-dependencies]
 criterion = "0.8.1"

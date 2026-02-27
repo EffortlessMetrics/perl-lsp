@@ -68,8 +68,31 @@ install_udeps() {
     fi
 }
 
-# Run cargo-udeps to detect unused dependencies
-check_unused_deps() {
+# Run cargo-machete to detect unused dependencies (fast)
+check_unused_deps_machete() {
+    log_info "Checking for unused dependencies with cargo-machete..."
+
+    local output_file="target/dead-code/machete-output.txt"
+    mkdir -p "$(dirname "$output_file")"
+
+    if cargo machete 2>&1 | tee "$output_file"; then
+        if grep -q "unused dependencies" "$output_file"; then
+            local unused_count
+            unused_count=$(grep -c "Cargo.toml:" "$output_file") || unused_count=0
+            log_warn "Found $unused_count crates with unused dependencies"
+            return 0
+        else
+            log_success "No unused dependencies detected by machete"
+            return 0
+        fi
+    else
+        log_error "cargo-machete failed to run"
+        return 1
+    fi
+}
+
+# Run cargo-udeps to detect unused dependencies (deep)
+check_unused_deps_udeps() {
     log_info "Checking for unused dependencies with cargo-udeps..."
 
     local output_file="target/dead-code/udeps-output.txt"
@@ -79,7 +102,7 @@ check_unused_deps() {
     # Note: cargo-udeps requires nightly Rust
     if cargo +nightly udeps --workspace --all-targets --locked 2>&1 | tee "$output_file"; then
         local unused_count
-        unused_count=$(grep -c "unused" "$output_file" || echo 0)
+        unused_count=$(grep -c "unused" "$output_file") || unused_count=0
 
         if [ "$unused_count" -eq 0 ]; then
             log_success "No unused dependencies detected"
@@ -111,7 +134,7 @@ check_dead_code_clippy() {
         2>&1 | tee "$output_file"; then
 
         local dead_code_count
-        dead_code_count=$(grep -c "dead_code" "$output_file" || echo 0)
+        dead_code_count=$(grep -c "dead_code" "$output_file") || dead_code_count=0
 
         if [ "$dead_code_count" -eq 0 ]; then
             log_success "No dead code detected by clippy"
@@ -126,7 +149,7 @@ check_dead_code_clippy() {
     else
         # Clippy may exit with error if there are warnings, that's expected
         local dead_code_count
-        dead_code_count=$(grep -c "dead_code" "$output_file" || echo 0)
+        dead_code_count=$(grep -c "dead_code" "$output_file") || dead_code_count=0
 
         if [ "$dead_code_count" -gt 0 ]; then
             log_warn "Found $dead_code_count dead code warnings"
@@ -162,16 +185,16 @@ generate_baseline() {
 
     # Count issues
     local unused_deps_count
-    unused_deps_count=$(grep -c "unused" "$udeps_output" || echo 0)
+    unused_deps_count=$(grep -c "unused" "$udeps_output") || unused_deps_count=0
 
     local dead_code_count
-    dead_code_count=$(grep -c "dead_code" "$clippy_output" || echo 0)
+    dead_code_count=$(grep -c "dead_code" "$clippy_output") || dead_code_count=0
 
     local unused_imports_count
-    unused_imports_count=$(grep -c "unused_imports" "$clippy_output" || echo 0)
+    unused_imports_count=$(grep -c "unused_imports" "$clippy_output") || unused_imports_count=0
 
     local unused_vars_count
-    unused_vars_count=$(grep -c "unused_variables" "$clippy_output" || echo 0)
+    unused_vars_count=$(grep -c "unused_variables" "$clippy_output") || unused_vars_count=0
 
     # Generate YAML baseline
     cat > "$BASELINE_FILE" <<EOF
@@ -284,10 +307,10 @@ check_against_baseline() {
 
     # Count current issues
     local current_unused_deps
-    current_unused_deps=$(grep -c "unused" "$udeps_output" || echo 0)
+    current_unused_deps=$(grep -c "unused" "$udeps_output") || current_unused_deps=0
 
     local current_dead_code
-    current_dead_code=$(grep -c "dead_code" "$clippy_output" || echo 0)
+    current_dead_code=$(grep -c "dead_code" "$clippy_output") || current_dead_code=0
 
     # Extract baseline values
     local baseline_unused_deps
@@ -361,16 +384,16 @@ generate_report() {
         > "$clippy_output" 2>&1 || true
 
     local unused_deps
-    unused_deps=$(grep -c "unused" "$udeps_output" || echo 0)
+    unused_deps=$(grep -c "unused" "$udeps_output") || unused_deps=0
 
     local dead_code
-    dead_code=$(grep -c "dead_code" "$clippy_output" || echo 0)
+    dead_code=$(grep -c "dead_code" "$clippy_output") || dead_code=0
 
     local unused_imports
-    unused_imports=$(grep -c "unused_imports" "$clippy_output" || echo 0)
+    unused_imports=$(grep -c "unused_imports" "$clippy_output") || unused_imports=0
 
     local unused_vars
-    unused_vars=$(grep -c "unused_variables" "$clippy_output" || echo 0)
+    unused_vars=$(grep -c "unused_variables" "$clippy_output") || unused_vars=0
 
     # Generate JSON
     cat > "$report_file" <<EOF
@@ -415,12 +438,11 @@ main() {
             generate_report
             ;;
         check)
-            install_udeps
             if [ -f "$BASELINE_FILE" ]; then
                 check_against_baseline
             else
                 log_info "No baseline file, running basic checks..."
-                check_unused_deps
+                check_unused_deps_machete
                 check_dead_code_clippy
             fi
             ;;

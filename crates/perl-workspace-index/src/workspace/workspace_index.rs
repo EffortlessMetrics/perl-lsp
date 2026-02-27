@@ -1736,9 +1736,12 @@ impl WorkspaceIndex {
     /// use perl_parser::workspace_index::WorkspaceIndex;
     /// use url::Url;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let index = WorkspaceIndex::new();
-    /// let uri = Url::parse("file:///example.pl").unwrap();
+    /// let uri = Url::parse("file:///example.pl")?;
     /// index.remove_file_url(&uri);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn remove_file_url(&self, uri: &Url) {
         self.remove_file(uri.as_str())
@@ -1782,9 +1785,12 @@ impl WorkspaceIndex {
     /// use perl_parser::workspace_index::WorkspaceIndex;
     /// use url::Url;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let index = WorkspaceIndex::new();
-    /// let uri = Url::parse("file:///example.pl").unwrap();
+    /// let uri = Url::parse("file:///example.pl")?;
     /// index.clear_file_url(&uri);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn clear_file_url(&self, uri: &Url) {
         self.clear_file(uri.as_str())
@@ -1814,8 +1820,11 @@ impl WorkspaceIndex {
     /// ```rust,no_run
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let index = WorkspaceIndex::new();
-    /// index.index_file_str("file:///example.pl", "sub hello { }").unwrap();
+    /// index.index_file_str("file:///example.pl", "sub hello { }")?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn index_file_str(&self, uri: &str, text: &str) -> Result<(), String> {
         // Try parsing as URI first
@@ -1855,13 +1864,24 @@ impl WorkspaceIndex {
     /// ```
     pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
         let mut locations = Vec::new();
+        let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
         let files = self.files.read();
 
         for (_uri_key, file_index) in files.iter() {
             // Search for exact match first
             if let Some(refs) = file_index.references.get(symbol_name) {
                 for reference in refs {
-                    locations.push(Location { uri: reference.uri.clone(), range: reference.range });
+                    let key = (
+                        reference.uri.clone(),
+                        reference.range.start.line,
+                        reference.range.start.column,
+                        reference.range.end.line,
+                        reference.range.end.column,
+                    );
+                    if seen.insert(key) {
+                        locations
+                            .push(Location { uri: reference.uri.clone(), range: reference.range });
+                    }
                 }
             }
 
@@ -1870,14 +1890,66 @@ impl WorkspaceIndex {
                 let bare_name = &symbol_name[idx + 2..];
                 if let Some(refs) = file_index.references.get(bare_name) {
                     for reference in refs {
-                        locations
-                            .push(Location { uri: reference.uri.clone(), range: reference.range });
+                        let key = (
+                            reference.uri.clone(),
+                            reference.range.start.line,
+                            reference.range.start.column,
+                            reference.range.end.line,
+                            reference.range.end.column,
+                        );
+                        if seen.insert(key) {
+                            locations.push(Location {
+                                uri: reference.uri.clone(),
+                                range: reference.range,
+                            });
+                        }
                     }
                 }
             }
         }
 
         locations
+    }
+
+    /// Count non-definition references (usages) of a symbol.
+    ///
+    /// Like `find_references` but excludes `ReferenceKind::Definition` entries,
+    /// returning only actual usage sites. This is used by code lens to show
+    /// "N references" where N means call sites, not the definition itself.
+    pub fn count_usages(&self, symbol_name: &str) -> usize {
+        let files = self.files.read();
+        let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
+
+        for (_uri_key, file_index) in files.iter() {
+            if let Some(refs) = file_index.references.get(symbol_name) {
+                for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
+                    seen.insert((
+                        r.uri.clone(),
+                        r.range.start.line,
+                        r.range.start.column,
+                        r.range.end.line,
+                        r.range.end.column,
+                    ));
+                }
+            }
+
+            if let Some(idx) = symbol_name.rfind("::") {
+                let bare_name = &symbol_name[idx + 2..];
+                if let Some(refs) = file_index.references.get(bare_name) {
+                    for r in refs.iter().filter(|r| r.kind != ReferenceKind::Definition) {
+                        seen.insert((
+                            r.uri.clone(),
+                            r.range.start.line,
+                            r.range.start.column,
+                            r.range.end.line,
+                            r.range.end.column,
+                        ));
+                    }
+                }
+            }
+        }
+
+        seen.len()
     }
 
     /// Find the definition of a symbol
@@ -1942,6 +2014,12 @@ impl WorkspaceIndex {
         }
 
         symbols
+    }
+
+    /// Clear all indexed files and symbols from the workspace.
+    pub fn clear(&self) {
+        self.files.write().clear();
+        self.symbols.write().clear();
     }
 
     /// Return the number of indexed files in the workspace
@@ -2607,8 +2685,11 @@ impl IndexVisitor {
                 }
             }
 
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 // Iterator is a write context
+                if let Some(cb) = continue_block {
+                    self.visit_node(cb, file_index);
+                }
                 if let NodeKind::Variable { sigil, name } = &variable.kind {
                     let var_name = format!("{}{}", sigil, name);
                     file_index.references.entry(var_name).or_default().push(SymbolReference {
@@ -3137,12 +3218,12 @@ use Data::Dumper;
         let coordinator = IndexCoordinator::new();
         coordinator.transition_to_scanning();
 
-        match coordinator.state() {
-            IndexState::Building { phase, .. } => {
-                assert_eq!(phase, IndexPhase::Scanning);
-            }
-            other => panic!("Expected Building state after scanning, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { phase: IndexPhase::Scanning, .. }),
+            "Expected Building state after scanning, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3152,13 +3233,15 @@ use Data::Dumper;
         coordinator.update_scan_progress(3);
         coordinator.transition_to_indexing(3);
 
-        match coordinator.state() {
-            IndexState::Building { phase, total_count, .. } => {
-                assert_eq!(phase, IndexPhase::Indexing);
-                assert_eq!(total_count, 3);
-            }
-            other => panic!("Expected Building state after indexing, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Building { phase: IndexPhase::Indexing, total_count: 3, .. }
+            ),
+            "Expected Building state after indexing with total_count 3, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3166,12 +3249,12 @@ use Data::Dumper;
         let coordinator = IndexCoordinator::new();
         coordinator.transition_to_ready(100, 5000);
 
-        match coordinator.state() {
-            IndexState::Ready { file_count, symbol_count, .. } => {
-                assert_eq!(file_count, 100);
-                assert_eq!(symbol_count, 5000);
-            }
-            _ => panic!("Expected Ready state"),
+        let state = coordinator.state();
+        if let IndexState::Ready { file_count, symbol_count, .. } = state {
+            assert_eq!(file_count, 100);
+            assert_eq!(symbol_count, 5000);
+        } else {
+            unreachable!("Expected Ready state, got: {:?}", state);
         }
     }
 
@@ -3185,11 +3268,14 @@ use Data::Dumper;
             coordinator.notify_change("file.pm");
         }
 
-        match coordinator.state() {
-            IndexState::Degraded { reason, .. } => {
-                assert!(matches!(reason, DegradationReason::ParseStorm { .. }));
-            }
-            _ => panic!("Expected Degraded state"),
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Degraded { .. }),
+            "Expected Degraded state, got: {:?}",
+            state
+        );
+        if let IndexState::Degraded { reason, .. } = state {
+            assert!(matches!(reason, DegradationReason::ParseStorm { .. }));
         }
     }
 
@@ -3297,11 +3383,14 @@ use Data::Dumper;
             message: "Test error".to_string(),
         });
 
-        match coordinator.state() {
-            IndexState::Degraded { available_symbols, .. } => {
-                assert_eq!(available_symbols, 5000);
-            }
-            _ => panic!("Expected Degraded state"),
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Degraded { .. }),
+            "Expected Degraded state, got: {:?}",
+            state
+        );
+        if let IndexState::Degraded { available_symbols, .. } = state {
+            assert_eq!(available_symbols, 5000);
         }
     }
 
@@ -3339,18 +3428,18 @@ use Data::Dumper;
         // Enforce limits
         coordinator.enforce_limits();
 
-        // Should have degraded due to max_files limit
-        match coordinator.state() {
-            IndexState::Degraded {
-                reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
-                ..
-            } => {
-                // Success - correct degradation
-            }
-            other => {
-                panic!("Expected Degraded state with ResourceLimit(MaxFiles), got: {:?}", other)
-            }
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded {
+                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
+                    ..
+                }
+            ),
+            "Expected Degraded state with ResourceLimit(MaxFiles), got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3391,18 +3480,18 @@ sub sub10 { }
         // Enforce limits
         coordinator.enforce_limits();
 
-        // Should have degraded due to max_total_symbols limit
-        match coordinator.state() {
-            IndexState::Degraded {
-                reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxSymbols },
-                ..
-            } => {
-                // Success - correct degradation
-            }
-            other => {
-                panic!("Expected Degraded state with ResourceLimit(MaxSymbols), got: {:?}", other)
-            }
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded {
+                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxSymbols },
+                    ..
+                }
+            ),
+            "Expected Degraded state with ResourceLimit(MaxSymbols), got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3453,19 +3542,18 @@ sub sub10 { }
         // Transition to ready - should automatically enforce limits
         coordinator.transition_to_ready(5, 100);
 
-        // Should have degraded immediately due to max_files limit
-        match coordinator.state() {
-            IndexState::Degraded {
-                reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
-                ..
-            } => {
-                // Success - limit enforcement triggered during transition_to_ready
-            }
-            other => panic!(
-                "Expected Degraded state after transition_to_ready with exceeded limits, got: {:?}",
-                other
+        let state = coordinator.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded {
+                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
+                    ..
+                }
             ),
-        }
+            "Expected Degraded state after transition_to_ready with exceeded limits, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3477,13 +3565,12 @@ sub sub10 { }
         // Transition to Ready again with different metrics
         coordinator.transition_to_ready(150, 7500);
 
-        match coordinator.state() {
-            IndexState::Ready { file_count, symbol_count, .. } => {
-                assert_eq!(file_count, 150);
-                assert_eq!(symbol_count, 7500);
-            }
-            other => panic!("Expected Ready state, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Ready { file_count: 150, symbol_count: 7500, .. }),
+            "Expected Ready state with updated metrics, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3494,24 +3581,22 @@ sub sub10 { }
         // Initial building state
         coordinator.transition_to_building(100);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 0);
-                assert_eq!(total_count, 100);
-            }
-            other => panic!("Expected Building state, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 0, total_count: 100, .. }),
+            "Expected Building state, got: {:?}",
+            state
+        );
 
         // Update total count
         coordinator.transition_to_building(200);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 0); // Preserved
-                assert_eq!(total_count, 200); // Updated
-            }
-            other => panic!("Expected Building state, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 0, total_count: 200, .. }),
+            "Expected Building state, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3523,13 +3608,12 @@ sub sub10 { }
         // Trigger re-scan
         coordinator.transition_to_building(150);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 0);
-                assert_eq!(total_count, 150);
-            }
-            other => panic!("Expected Building state after re-scan, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 0, total_count: 150, .. }),
+            "Expected Building state after re-scan, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3543,13 +3627,12 @@ sub sub10 { }
         // Attempt recovery
         coordinator.transition_to_building(100);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 0);
-                assert_eq!(total_count, 100);
-            }
-            other => panic!("Expected Building state after recovery, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 0, total_count: 100, .. }),
+            "Expected Building state after recovery, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3560,24 +3643,22 @@ sub sub10 { }
         // Update progress
         coordinator.update_building_progress(50);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 50);
-                assert_eq!(total_count, 100);
-            }
-            other => panic!("Expected Building state with updated progress, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 50, total_count: 100, .. }),
+            "Expected Building state with updated progress, got: {:?}",
+            state
+        );
 
         // Update progress again
         coordinator.update_building_progress(100);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 100);
-                assert_eq!(total_count, 100);
-            }
-            other => panic!("Expected Building state with completed progress, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 100, total_count: 100, .. }),
+            "Expected Building state with completed progress, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3597,14 +3678,15 @@ sub sub10 { }
         // Update progress should detect timeout
         coordinator.update_building_progress(10);
 
-        match coordinator.state() {
-            IndexState::Degraded {
-                reason: DegradationReason::ScanTimeout { elapsed_ms }, ..
-            } => {
-                assert!(elapsed_ms > 0, "Elapsed time should be recorded");
-            }
-            other => panic!("Expected Degraded state with ScanTimeout, got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded { reason: DegradationReason::ScanTimeout { .. }, .. }
+            ),
+            "Expected Degraded state with ScanTimeout, got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3621,12 +3703,12 @@ sub sub10 { }
         // Update progress immediately (well within limit)
         coordinator.update_building_progress(50);
 
-        match coordinator.state() {
-            IndexState::Building { indexed_count, .. } => {
-                assert_eq!(indexed_count, 50, "Should still be building without timeout");
-            }
-            other => panic!("Expected Building state (no timeout), got: {:?}", other),
-        }
+        let state = coordinator.state();
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 50, .. }),
+            "Expected Building state (no timeout), got: {:?}",
+            state
+        );
     }
 
     #[test]
@@ -3720,5 +3802,54 @@ sub hello {
         let symbols2 = index.file_symbols(uri.as_str());
         // Symbols should still be found, but content hash differs so it re-indexed
         assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+    }
+
+    #[test]
+    fn test_count_usages_no_double_counting_for_qualified_calls() {
+        let index = WorkspaceIndex::new();
+
+        // File 1: defines Utils::process_data
+        let uri1 = "file:///lib/Utils.pm";
+        let code1 = r#"
+package Utils;
+
+sub process_data {
+    return 1;
+}
+"#;
+        must(index.index_file(must(url::Url::parse(uri1)), code1.to_string()));
+
+        // File 2: calls Utils::process_data (qualified call)
+        let uri2 = "file:///app.pl";
+        let code2 = r#"
+use Utils;
+Utils::process_data();
+Utils::process_data();
+"#;
+        must(index.index_file(must(url::Url::parse(uri2)), code2.to_string()));
+
+        // Each qualified call is stored under both "process_data" and "Utils::process_data"
+        // by the dual indexing strategy. count_usages should deduplicate so we get the
+        // actual number of call sites, not double.
+        let count = index.count_usages("Utils::process_data");
+
+        // We expect exactly 2 usage sites (the two calls in app.pl),
+        // not 4 (which would be the double-counted result).
+        assert_eq!(
+            count, 2,
+            "count_usages should not double-count qualified calls, got {} (expected 2)",
+            count
+        );
+
+        // find_references should also deduplicate
+        let refs = index.find_references("Utils::process_data");
+        let non_def_refs: Vec<_> =
+            refs.iter().filter(|loc| loc.uri != "file:///lib/Utils.pm").collect();
+        assert_eq!(
+            non_def_refs.len(),
+            2,
+            "find_references should not return duplicates for qualified calls, got {} non-def refs",
+            non_def_refs.len()
+        );
     }
 }

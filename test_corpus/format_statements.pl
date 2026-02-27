@@ -24,4 +24,41 @@ format =
 $title
 .
 
+my ($dept, $id, $hours, $rate) = ("Engineering", 42, 160, 75.50);
+my $description = "Weekly status report for team lead review";
+
+format EMPLOYEE =
+ID: @####  Name: @<<<<<<<<<<  Dept: @<<<<<<<<<<<<
+$id, $name, $dept
+.
+
+format CENTERED =
+@|||||||||||||||||||||||||||||||||||||||||
+$title
+@|||||||||||||||||||||||||||||||||||||||||
+$description
+.
+
+format NUMERIC =
+Hours: @###  Rate: @####.##  Total: @#####.##
+$hours, $rate, $hours * $rate
+.
+
+format MULTILINE =
+Name: @<<<<<<<<<<<<<<
+$name
+Title: @<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$title
+.
+
+format WRAPPED =
+^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$description
+^<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
+$description
+.
+
+format EMPTY_BODY =
+.
+
 write;

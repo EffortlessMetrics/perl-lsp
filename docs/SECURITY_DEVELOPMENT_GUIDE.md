@@ -1,6 +1,6 @@
 # Security Development Guidelines
 
-This project demonstrates **enterprise-grade security practices** across its parsing infrastructure and LSP implementation. All contributors should follow these security development standards, with particular attention to the UTF-16 position conversion security enhancements implemented in PR #153.
+This project demonstrates **comprehensive security practices** across its parsing infrastructure and LSP implementation. All contributors should follow these security development standards, with particular attention to the UTF-16 position conversion security enhancements implemented in PR #153.
 
 ## Secure Authentication Implementation
 
@@ -157,7 +157,7 @@ The UTF-16 security enhancements were validated through **comprehensive mutation
 
 ## File Path Completion Security (v0.8.7+)
 
-The LSP server includes comprehensive file path completion with enterprise-grade security features:
+The LSP server includes comprehensive file path completion with comprehensive security features:
 
 ### Security Architecture
 - **Path traversal prevention**: Blocks `../` patterns and absolute paths (except `/`)
@@ -287,7 +287,7 @@ cargo test -p perl-parser authentication_timing_tests -- --nocapture
 3. **Mitigation Strategies**: Document how security controls address threats
 4. **Review Requirements**: Specify security review requirements for changes
 
-This security framework ensures that all code contributions maintain enterprise-grade security standards while providing comprehensive protection against common attack vectors.
+This security framework ensures that all code contributions maintain comprehensive security standards while providing comprehensive protection against common attack vectors.
 
 ## Supply Chain Security
 

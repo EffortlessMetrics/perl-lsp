@@ -41,9 +41,10 @@ impl LspServer {
                 let mut parser = Parser::new(code_text);
                 match parser.parse() {
                     Ok(ast) => {
+                        let errors = parser.errors().to_vec();
                         let arc_ast = Arc::new(ast);
                         self.ast_cache.put(uri.to_string(), text, Arc::clone(&arc_ast));
-                        (Some((*arc_ast).clone()), vec![])
+                        (Some((*arc_ast).clone()), errors)
                     }
                     Err(e) => (None, vec![e]),
                 }
@@ -236,9 +237,10 @@ impl LspServer {
                     let mut parser = Parser::new(code_text);
                     match parser.parse() {
                         Ok(ast) => {
+                            let errors = parser.errors().to_vec();
                             let arc_ast = Arc::new(ast);
                             self.ast_cache.put(uri.to_string(), &text, Arc::clone(&arc_ast));
-                            (Some((*arc_ast).clone()), vec![])
+                            (Some((*arc_ast).clone()), errors)
                         }
                         Err(e) => (None, vec![e]),
                     }

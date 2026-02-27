@@ -252,7 +252,7 @@ fi
 
 ### Adaptive Timeout Architecture (*Diataxis: Explanation*)
 
-The LSP server implements **adaptive timeout scaling** based on thread count detection, achieving **5000x performance improvements** in PR #140:
+The LSP server implements **adaptive timeout scaling** based on thread count detection (PR #140):
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -320,11 +320,11 @@ pub fn adaptive_timeout() -> Duration {
 ```
 Before Adaptive Timeouts          After Adaptive Timeouts (RUST_TEST_THREADS=2)
 ─────────────────────────────────  ─────────────────────────────────────────────
-lsp_behavioral_tests: 1560s+    →  0.31s (5000x faster, Revolutionary)
-lsp_user_stories: 1500s+        →  0.32s (4700x faster, Transformational)
-Individual workspace tests: 60s →  0.26s (230x faster, Game-changing)
-Overall test suite: 60s+        →  <10s  (6x faster, Production-ready)
-CI reliability: ~55% pass rate  →  100% pass rate (Zero timeouts)
+lsp_behavioral_tests:            0.31s
+lsp_user_stories:                0.32s
+Individual workspace tests:      0.26s
+Overall test suite:              <10s
+CI reliability:                  100% pass rate
 ```
 
 #### 3. Optimized Idle Detection
@@ -607,7 +607,7 @@ cargo test -p perl-lsp --test lsp_init_torture_test -- --nocapture
 
 ### RUST_TEST_THREADS (*Diataxis: Reference*)
 
-**Revolutionary Enhancement in PR #140**: Adaptive threading achieving 5000x performance gains in CI.
+**Enhancement in PR #140**: Adaptive threading for fast CI test execution.
 
 **Purpose**: Control test parallelism and trigger adaptive timeout scaling.
 

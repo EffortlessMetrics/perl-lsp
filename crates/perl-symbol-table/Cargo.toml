@@ -1,17 +1,17 @@
 [package]
 name = "perl-symbol-table"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Perl LSP Contributors"]
+authors.workspace = true
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/perl-lsp"
-homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/perl-symbol-table"
 description = "Symbol table and scope management for Perl LSP"
 readme = "README.md"
-keywords = ["perl", "symbol", "scope", "lsp"]
-categories = ["parsing", "development-tools"]
+keywords = ["perl", "symbol-table", "scope", "lsp", "ide"]
+categories = ["development-tools", "text-editors"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]

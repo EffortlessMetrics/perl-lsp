@@ -93,7 +93,7 @@ The parser should:
 **Pros**:
 - Comprehensive solution covering all cases
 - Clear error messages for invalid properties
-- Production-ready approach
+- Recommended approach
 
 **Cons**:
 - More complex implementation

@@ -1,0 +1,236 @@
+# Gate Registry for perl-lsp
+# Defines all merge-blocking gates with thresholds and enforcement
+
+[metadata]
+version = "1.0"
+last_updated = "2026-01-29"
+blocking_policy = "all-gates-must-pass"
+
+# ============================================================================
+# Merge-Blocking Gates (REQUIRED for all PRs)
+# ============================================================================
+
+[[gate]]
+id = "format"
+name = "Code Formatting"
+type = "quality"
+blocking = true
+timeout_seconds = 60
+command = "cargo fmt --check --all"
+evidence_pattern = "^Diff in .*"  # Regex to detect failures
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Ensures consistent code formatting via rustfmt"
+docs_url = "CLAUDE.md#lint-and-format"
+cost_tier = "low"  # seconds
+failure_impact = "high"  # Blocks all merges
+
+[[gate]]
+id = "clippy-lib"
+name = "Clippy (Libraries)"
+type = "quality"
+blocking = true
+timeout_seconds = 300
+command = "cargo clippy --workspace --lib --locked -- -D warnings -A missing_docs"
+evidence_pattern = "^error: .*"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Lint library code for common issues (missing_docs allowed during systematic resolution)"
+docs_url = "CLAUDE.md#lint-and-format"
+cost_tier = "low"  # ~1-2 minutes with cache
+failure_impact = "high"
+
+[[gate]]
+id = "test-lib"
+name = "Library Tests"
+type = "correctness"
+blocking = true
+timeout_seconds = 600
+command = "cargo test --workspace --lib --locked"
+evidence_pattern = "test result: .* ([0-9]+) passed"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Runs all library unit tests (fast, essential)"
+docs_url = "CLAUDE.md#test"
+cost_tier = "medium"  # ~2-4 minutes
+failure_impact = "critical"
+
+[[gate]]
+id = "lsp-definition"
+name = "LSP Semantic Definition"
+type = "protocol"
+blocking = true
+timeout_seconds = 120
+command = "RUSTC_WRAPPER='' RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 cargo test -p perl-lsp --test semantic_definition -- --test-threads=1"
+evidence_pattern = "test result: ok"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Validates semantic-aware LSP definition resolution (4 test scenarios)"
+docs_url = "CLAUDE.md#semantic-definition-tests"
+cost_tier = "low"  # ~30-60 seconds
+failure_impact = "high"  # LSP protocol compliance
+
+[[gate]]
+id = "policy"
+name = "Policy Compliance"
+type = "governance"
+blocking = true
+timeout_seconds = 60
+command = "bash ./.ci/scripts/check-from-raw.sh && python3 scripts/update-current-status.py --check"
+evidence_pattern = "^✅"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Enforces ExitStatus policy and CURRENT_STATUS.md freshness"
+docs_url = "docs/ci/LOCAL_CI_PROTOCOL.md#ci-policy"
+cost_tier = "low"  # seconds
+failure_impact = "medium"
+
+[[gate]]
+id = "workflow-audit"
+name = "CI Workflow Spend Audit"
+type = "governance"
+blocking = true
+timeout_seconds = 30
+command = "python3 scripts/ci-audit-workflows.py"
+evidence_pattern = "^✓"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Prevents ungated expensive jobs from running on every PR"
+docs_url = "scripts/ci-audit-workflows.py"
+cost_tier = "low"  # <5 seconds
+failure_impact = "medium"  # Cost control
+
+[[gate]]
+id = "todo-compliance"
+name = "TODO Compliance"
+type = "governance"
+blocking = true
+timeout_seconds = 30
+command = "bash ci/check_todos.sh"
+evidence_pattern = "^✅"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Enforces that all TODOs/FIXMEs link to a GitHub issue"
+docs_url = "ci/check_todos.sh"
+cost_tier = "low"
+failure_impact = "medium"
+
+[[gate]]
+id = "no-nested-lock"
+name = "Nested Lockfile Check"
+type = "hygiene"
+blocking = true
+timeout_seconds = 10
+command = """
+if find . -name 'Cargo.lock' -type f 2>/dev/null | grep -v '^\\./Cargo\\.lock$' | grep -q .; then
+  echo '❌ ERROR: Nested Cargo.lock detected! Run gates from repo root only.'
+  find . -name 'Cargo.lock' -type f 2>/dev/null | grep -v '^\\./Cargo\\.lock$'
+  exit 1
+fi
+echo '✅ No nested lockfiles'"""
+evidence_pattern = "^✅"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Prevents footgun of running gates from subdirectory with nested Cargo.lock"
+docs_url = "justfile#ci-check-no-nested-lock"
+cost_tier = "low"  # <1 second
+failure_impact = "medium"
+
+# ============================================================================
+# Extended Gates (RECOMMENDED for large changes, ci-full)
+# ============================================================================
+
+[[gate]]
+id = "clippy-all"
+name = "Clippy (All Targets)"
+type = "quality"
+blocking = false  # Recommended but not required
+timeout_seconds = 600
+command = "cargo clippy --workspace --all-targets -- -D warnings -A missing_docs"
+evidence_pattern = "^error: .*"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Lint all targets including tests and benchmarks (may hit resource limits)"
+docs_url = "CLAUDE.md#lint-and-format"
+cost_tier = "medium"
+failure_impact = "medium"
+fallback_gate = "clippy-lib"  # Fall back to library-only on resource limits
+
+[[gate]]
+id = "test-lsp"
+name = "LSP Integration Tests"
+type = "protocol"
+blocking = false
+timeout_seconds = 900
+command = "RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- --test-threads=2"
+evidence_pattern = "test result: ok"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Comprehensive LSP E2E tests with adaptive threading"
+docs_url = "CLAUDE.md#test"
+cost_tier = "medium"  # ~5-10 minutes
+failure_impact = "medium"
+
+[[gate]]
+id = "docs"
+name = "Documentation Build"
+type = "quality"
+blocking = false
+timeout_seconds = 300
+command = "cargo doc -p perl-parser -p perl-lsp --no-deps"
+evidence_pattern = "Documenting"
+threshold = { type = "exit_code", pass = 0 }
+
+[gate.metadata]
+description = "Validates API documentation builds"
+docs_url = "CLAUDE.md#documentation"
+cost_tier = "low"
+failure_impact = "low"
+
+# ============================================================================
+# Label-Gated Gates (Expensive, opt-in via PR labels)
+# ============================================================================
+
+[[gate]]
+id = "mutation"
+name = "Mutation Testing"
+type = "quality"
+blocking = false
+label_gate = "ci:mutation"
+timeout_seconds = 3600
+command = "cargo mutants --package perl-parser --timeout 300"
+evidence_pattern = "caught [0-9]+ mutants"
+threshold = { type = "mutation_score", pass = 80.0 }  # 80%+ survival rate
+
+[gate.metadata]
+description = "Comprehensive mutation testing for test suite quality (15-30 min)"
+docs_url = "justfile#ci-test-mutation"
+cost_tier = "high"
+failure_impact = "informational"
+
+[[gate]]
+id = "benchmarks"
+name = "Performance Benchmarks"
+type = "performance"
+blocking = false
+label_gate = "ci:bench"
+timeout_seconds = 1800
+command = "cargo bench --workspace --no-fail-fast"
+evidence_pattern = "test .* bench:"
+threshold = { type = "benchmark_delta", pass = { max_regression_percent = 10.0 } }
+
+[gate.metadata]
+description = "Performance regression detection (10% threshold)"
+docs_url = "justfile#benchmark"
+cost_tier = "high"
+failure_impact = "medium"

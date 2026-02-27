@@ -38,12 +38,12 @@ export async function activate(context: vscode.ExtensionContext) {
     const serverOptions: ServerOptions = {
         run: {
             command: serverPath,
-            args: ['--stdio'],
+            args: getServerArgs(['--stdio']),
             transport: TransportKind.stdio
         },
         debug: {
             command: serverPath,
-            args: ['--stdio', '--log'],
+            args: getServerArgs(['--stdio', '--log']),
             transport: TransportKind.stdio
         }
     };
@@ -114,7 +114,7 @@ export async function activate(context: vscode.ExtensionContext) {
             'View Roadmap'
         );
         if (selection === 'View Roadmap') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessSteven/tree-sitter-perl'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp'));
         }
     };
 
@@ -194,17 +194,46 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     const statusMenuCommand = vscode.commands.registerCommand('perl-lsp.showStatusMenu', async () => {
+        const editor = vscode.window.activeTextEditor;
+        const isPerl = editor ? editor.document.languageId === 'perl' : false;
+        const filePath = editor ? editor.document.uri.fsPath : '';
+        const isTestFile = isPerl && (filePath.endsWith('.t') || filePath.endsWith('.pl'));
+
         interface MenuAction extends vscode.QuickPickItem {
             command?: string;
             args?: any[];
+            disabled?: boolean;
         }
 
         const items: MenuAction[] = [
             { label: 'Actions', kind: vscode.QuickPickItemKind.Separator },
-            { label: '$(refresh) Restart Server', description: 'Shift+Alt+R', detail: 'Restart the language server', command: 'perl-lsp.restart' },
-            { label: '$(organization) Organize Imports', description: 'Shift+Alt+O', detail: 'Sort and organize use statements', command: 'perl-lsp.organizeImports' },
-            { label: '$(beaker) Run Tests in Current File', description: 'Shift+Alt+T', detail: 'Run tests for the active file', command: 'perl-lsp.runTests' },
-            { label: '$(list-flat) Format Document', description: 'Shift+Alt+F', detail: 'Format using perltidy', command: 'editor.action.formatDocument' },
+            {
+                label: '$(refresh) Restart Server',
+                description: 'Shift+Alt+R',
+                detail: 'Restart the language server',
+                command: 'perl-lsp.restart'
+            },
+            {
+                label: '$(organization) Organize Imports',
+                description: 'Shift+Alt+O',
+                detail: isPerl ? 'Sort and organize use statements' : 'Sort and organize use statements (Only available for Perl files)',
+                command: 'perl-lsp.organizeImports',
+                disabled: !isPerl
+            },
+            {
+                label: '$(beaker) Run Tests in Current File',
+                description: 'Shift+Alt+T',
+                detail: isTestFile ? 'Run tests for the active file' : 'Run tests for the active file (Only available for .t/.pl files)',
+                command: 'perl-lsp.runTests',
+                disabled: !isTestFile
+            },
+            {
+                label: '$(list-flat) Format Document',
+                description: 'Shift+Alt+F',
+                detail: isPerl ? 'Format using perltidy' : 'Format using perltidy (Only available for Perl files)',
+                command: 'editor.action.formatDocument',
+                disabled: !isPerl
+            },
 
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
@@ -218,7 +247,7 @@ export async function activate(context: vscode.ExtensionContext) {
             placeHolder: 'Perl Language Server Actions'
         });
 
-        if (selection && selection.command) {
+        if (selection && selection.command && !selection.disabled) {
             vscode.commands.executeCommand(selection.command, ...(selection.args || []));
         }
     });
@@ -300,6 +329,54 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     
     outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
+}
+
+function getServerArgs(baseArgs: string[]): string[] {
+    const config = vscode.workspace.getConfiguration('perl-lsp');
+    const featureProfile = config.get<string>('featureProfile', 'auto');
+    const canonicalProfile = normalizeFeatureProfile(featureProfile || 'auto');
+
+    if (!canonicalProfile || canonicalProfile === 'auto') {
+        return baseArgs;
+    }
+
+    return [...baseArgs, `--feature-profile=${canonicalProfile}`];
+}
+
+function normalizeFeatureProfile(rawProfile: string): string | null {
+    const normalized = rawProfile.trim().toLowerCase();
+    if (!normalized) {
+        return 'auto';
+    }
+
+    const normalizedProfile = normalized.replace(/_/g, '-');
+    const knownProfiles = getSupportedFeatureProfiles();
+
+    if (!knownProfiles.includes(normalizedProfile)) {
+        outputChannel.appendLine(`Unsupported featureProfile '${rawProfile}'. Falling back to 'auto'.`);
+        return null;
+    }
+
+    return normalizedProfile;
+}
+
+function getSupportedFeatureProfiles(): string[] {
+    const extension = vscode.extensions.getExtension('effortlesssteven.perl-lsp');
+    const schemaEnum =
+        extension?.packageJSON?.contributes?.configuration?.properties?.['perl-lsp.featureProfile']?.enum;
+
+    if (Array.isArray(schemaEnum)) {
+        return schemaEnum.map((value: unknown) => `${value}`).map((profile) => profile.toLowerCase().replace(/_/g, '-'));
+    }
+
+    return [
+        'auto',
+        'ga-lock',
+        'ga',
+        'prod',
+        'production',
+        'all',
+    ];
 }
 
 async function restartServer(context: vscode.ExtensionContext) {
