@@ -33,8 +33,13 @@ pub fn resolve_module_path(
             root.join(base).join(&relative_path)
         };
 
-        if validate_workspace_path(&candidate, root).is_ok() && candidate.exists() {
-            return Some(candidate);
+        let safe_candidate = match validate_workspace_path(&candidate, root) {
+            Ok(path) => path,
+            Err(_) => continue,
+        };
+
+        if safe_candidate.exists() {
+            return Some(safe_candidate);
         }
     }
 
