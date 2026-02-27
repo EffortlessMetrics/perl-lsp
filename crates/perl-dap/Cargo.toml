@@ -64,6 +64,10 @@ perl-dap-breakpoint = { workspace = true }
 perl-dap-eval = { workspace = true }
 perl-dap-variables = { workspace = true }
 perl-dap-stack = { workspace = true }
+perl-module-path = { workspace = true }
+perl-path-security = { workspace = true }
+perl-content-length-framing = { workspace = true }
+perl-keywords = { workspace = true }
 
 # Process management
 # Note: tokio-process not needed (using tokio::process)

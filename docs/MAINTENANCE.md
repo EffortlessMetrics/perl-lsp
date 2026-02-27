@@ -919,7 +919,7 @@ memory_usage = { warning = 1.25, critical = 1.5 }
 ### Related Documentation
 
 - [STABILITY.md](STABILITY.md) - API stability guarantees
-- [SEMVER_POLICY.md](SEMVER_POLICY.md) - Semantic versioning policy
+- [STABILITY.md](STABILITY.md) - API stability and versioning policy
 - [RELEASE_PROCESS.md](RELEASE_PROCESS.md) - Release process documentation
 - [PERFORMANCE_SLO.md](PERFORMANCE_SLO.md) - Performance service level objectives
 - [SECURITY_QUICK_REFERENCE.md](SECURITY_QUICK_REFERENCE.md) - Security scanning reference

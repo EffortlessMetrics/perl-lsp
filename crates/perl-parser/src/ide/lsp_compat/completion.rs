@@ -61,6 +61,7 @@
 use crate::ast::{Node, NodeKind};
 use crate::position::Position;
 use lsp_types::*;
+use perl_keywords::PARSER_LSP_KEYWORDS;
 use std::collections::HashMap;
 use url::Url;
 
@@ -134,14 +135,7 @@ impl CompletionProvider {
         }
 
         // Keywords
-        let keywords = [
-            "if", "unless", "elsif", "else", "while", "until", "for", "foreach",
-            "given", "when", "default", "next", "last", "redo", "goto",
-            "return", "continue", "break", "package", "sub", "my", "our", "local",
-            "use", "require", "no", "do", "eval", "die", "warn",
-        ];
-
-        for keyword in keywords {
+        for &keyword in PARSER_LSP_KEYWORDS {
             self.builtin_symbols.insert(
                 keyword.to_string(),
                 CompletionItem {

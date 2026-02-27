@@ -6,6 +6,7 @@
 pub mod uri;
 
 use lsp_types::Position;
+use perl_module_reference::extract_module_reference as extract_module_reference_at_cursor;
 
 // Re-export engine utilities
 pub use perl_parser::util::{code_slice, find_data_marker_byte_lexed};
@@ -423,28 +424,7 @@ pub fn get_text_around_offset(content: &str, offset: usize, radius: usize) -> St
 
 /// Extract module reference from text (e.g., from "use Module::Name" or "require Module::Name")
 pub fn extract_module_reference(text: &str, cursor_pos: usize) -> Option<String> {
-    // Look for patterns like "use Module::Name" or "require Module::Name"
-    let patterns = [
-        r"use\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
-        r"require\s+([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)",
-    ];
-
-    for pattern in patterns {
-        let re = regex::Regex::new(pattern).ok()?;
-        for cap in re.captures_iter(text) {
-            if let Some(module_match) = cap.get(1) {
-                let match_start = module_match.start();
-                let match_end = module_match.end();
-
-                // Check if cursor is within the module name
-                if cursor_pos >= match_start && cursor_pos <= match_end {
-                    return Some(module_match.as_str().to_string());
-                }
-            }
-        }
-    }
-
-    None
+    extract_module_reference_at_cursor(text, cursor_pos)
 }
 
 /// Convert an LSP position to a byte offset in the text (UTF-16 aware, CRLF safe)
@@ -542,4 +522,25 @@ pub fn offset_to_position(content: &str, offset: usize) -> Position {
     }
 
     Position { line, character: col_utf16 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract_module_reference;
+
+    #[test]
+    fn extract_module_reference_detects_use_statement_token() {
+        let line = "use Demo::Worker;";
+        let cursor = line.find("Worker").unwrap_or(0);
+
+        assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+    }
+
+    #[test]
+    fn extract_module_reference_normalizes_legacy_separators() {
+        let line = "require Demo'Worker;";
+        let cursor = line.find("Worker").unwrap_or(0);
+
+        assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+    }
 }

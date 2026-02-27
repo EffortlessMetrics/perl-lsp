@@ -19,6 +19,7 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
+perl-keywords = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

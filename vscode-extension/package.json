@@ -260,7 +260,6 @@
             "auto",
             "ga-lock",
             "ga",
-            "ga_lock",
             "prod",
             "production",
             "all"

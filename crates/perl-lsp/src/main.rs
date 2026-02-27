@@ -48,8 +48,8 @@ fn run_server(launch_config: LaunchConfig) {
     if launch_config.enable_logging {
         eprintln!("Perl Language Server starting...");
         eprintln!("Mode: {}", launch_config.transport.label());
-        if launch_config.transport.is_socket() {
-            eprintln!("Port: {}", launch_config.transport.port());
+        if let Some(port) = launch_config.transport.port() {
+            eprintln!("Port: {port}");
         }
         eprintln!("Feature profile: {}", launch_config.feature_profile.as_str());
     }

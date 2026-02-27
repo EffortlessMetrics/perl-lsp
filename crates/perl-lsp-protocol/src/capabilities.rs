@@ -33,13 +33,22 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     }));
 
     caps.hover_provider = Some(HoverProviderCapability::Simple(true));
-    caps.document_highlight_provider = Some(OneOf::Left(true));
 
-    caps.signature_help_provider = Some(SignatureHelpOptions {
-        trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
-        retrigger_characters: Some(vec![",".to_string()]),
-        work_done_progress_options: WorkDoneProgressOptions::default(),
-    });
+    if build.document_highlight {
+        caps.document_highlight_provider = Some(OneOf::Left(true));
+    }
+
+    if build.signature_help {
+        caps.signature_help_provider = Some(SignatureHelpOptions {
+            trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+            retrigger_characters: Some(vec![",".to_string()]),
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+        });
+    }
+
+    if build.declaration {
+        caps.declaration_provider = Some(DeclarationCapability::Simple(true));
+    }
 
     caps.completion_provider = Some(CompletionOptions {
         resolve_provider: Some(true),
@@ -86,12 +95,6 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
     if build.range_formatting {
         caps.document_range_formatting_provider = Some(OneOf::Left(true));
     }
-
-    caps.signature_help_provider = Some(SignatureHelpOptions {
-        trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
-        retrigger_characters: Some(vec![",".to_string()]),
-        work_done_progress_options: WorkDoneProgressOptions::default(),
-    });
 
     caps.folding_range_provider = Some(FoldingRangeProviderCapability::Simple(true));
 
@@ -310,4 +313,60 @@ pub fn default_capabilities() -> ServerCapabilities {
     let flags = BuildFlags::production();
 
     capabilities_for(flags)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_lsp_feature_contracts::feature_ids_from_caps;
+    use std::collections::BTreeSet;
+
+    /// Feature IDs that `to_feature_ids()` correctly emits but
+    /// `feature_ids_from_caps()` cannot detect because lsp-types 0.97
+    /// lacks the corresponding `ServerCapabilities` field.
+    ///
+    /// - `inline_completion`: advertised via `experimental` JSON, no typed field
+    /// - `type_hierarchy`: injected in `capabilities_json()`, not in struct
+    /// - `notebook_cell_execution`: sub-feature of notebook sync, no own field
+    const KNOWN_STRUCTURAL_GAPS: &[&str] =
+        &["lsp.inline_completion", "lsp.type_hierarchy", "lsp.notebook_cell_execution"];
+
+    /// Guard: feature IDs from BuildFlags must match feature IDs extracted
+    /// from the ServerCapabilities that `capabilities_for()` actually builds.
+    ///
+    /// Any mismatch means `--features-json` under-reports or over-reports
+    /// vs the actual initialize response.
+    fn assert_feature_id_alignment(profile: &str, flags: BuildFlags) {
+        let flag_ids: BTreeSet<&str> = flags.to_feature_ids().into_iter().collect();
+        let caps = capabilities_for(flags);
+        let cap_ids: BTreeSet<&str> = feature_ids_from_caps(&caps).into_iter().collect();
+
+        let gaps: BTreeSet<&str> = KNOWN_STRUCTURAL_GAPS.iter().copied().collect();
+
+        let in_flags_not_caps: BTreeSet<_> =
+            flag_ids.difference(&cap_ids).copied().filter(|id| !gaps.contains(id)).collect();
+        let in_caps_not_flags: BTreeSet<_> = cap_ids.difference(&flag_ids).collect();
+
+        assert!(
+            in_flags_not_caps.is_empty() && in_caps_not_flags.is_empty(),
+            "feature ID mismatch for {profile} profile:\n  \
+             in to_feature_ids() but not in capabilities: {in_flags_not_caps:?}\n  \
+             in capabilities but not in to_feature_ids(): {in_caps_not_flags:?}",
+        );
+    }
+
+    #[test]
+    fn feature_id_alignment_ga_lock() {
+        assert_feature_id_alignment("ga-lock", BuildFlags::ga_lock());
+    }
+
+    #[test]
+    fn feature_id_alignment_production() {
+        assert_feature_id_alignment("production", BuildFlags::production());
+    }
+
+    #[test]
+    fn feature_id_alignment_all() {
+        assert_feature_id_alignment("all", BuildFlags::all());
+    }
 }

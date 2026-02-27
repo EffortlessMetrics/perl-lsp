@@ -5,7 +5,7 @@
 [meta]
 version = "0.9.1"
 lsp_version = "3.18"
-compliance_percent = 65  # Auto-calculated in future
+compliance_percent = 99  # 96/97 features advertised, all GA
 
 # Text Document Features
 

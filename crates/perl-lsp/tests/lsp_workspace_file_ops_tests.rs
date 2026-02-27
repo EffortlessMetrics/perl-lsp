@@ -236,6 +236,80 @@ fn test_will_rename_files() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn std::error::Error>> {
+    let mut server = create_test_server();
+
+    // Initialize the server
+    let init_params = json!({
+        "processId": 1234,
+        "rootUri": "file:///test/workspace",
+        "capabilities": {}
+    });
+    let _ = make_request(&mut server, "initialize", Some(init_params));
+    send_initialized(&mut server);
+
+    // Open the renamed module and a dependent file that imports it.
+    let module_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/lib/MyModule.pm",
+            "languageId": "perl",
+            "version": 1,
+            "text": "package MyModule;\n1;\n"
+        }
+    });
+    let _ = make_request(&mut server, "textDocument/didOpen", Some(module_open));
+
+    let dependent_open = json!({
+        "textDocument": {
+            "uri": "file:///test/workspace/main.pl",
+            "languageId": "perl",
+            "version": 1,
+            "text": "use MyModule;\nuse parent 'MyModule';\nrequire MyModule;\n"
+        }
+    });
+    let _ = make_request(&mut server, "textDocument/didOpen", Some(dependent_open));
+
+    // Request rename edits for module file rename.
+    let params = json!({
+        "files": [
+            {
+                "oldUri": "file:///test/workspace/lib/MyModule.pm",
+                "newUri": "file:///test/workspace/lib/RenamedModule.pm"
+            }
+        ]
+    });
+
+    let edit = make_request(&mut server, "workspace/willRenameFiles", Some(params))?
+        .ok_or("expected workspace edit response")?;
+    let changes =
+        edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
+    let main_changes = changes
+        .get("file:///test/workspace/main.pl")
+        .and_then(Value::as_array)
+        .ok_or("expected edits for dependent main.pl")?;
+
+    let new_texts: Vec<String> = main_changes
+        .iter()
+        .filter_map(|entry| entry.get("newText").and_then(Value::as_str).map(ToString::to_string))
+        .collect();
+
+    assert!(
+        new_texts.contains(&"use RenamedModule;".to_string()),
+        "expected rewritten use import in edits: {new_texts:?}"
+    );
+    assert!(
+        new_texts.contains(&"use parent 'RenamedModule';".to_string()),
+        "expected rewritten parent import in edits: {new_texts:?}"
+    );
+    assert!(
+        new_texts.contains(&"require RenamedModule;".to_string()),
+        "expected rewritten require import in edits: {new_texts:?}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn test_will_rename_files_missing_uri() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = create_test_server();
 

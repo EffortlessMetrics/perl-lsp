@@ -56,6 +56,12 @@ pub struct AdvertisedFeatures {
     pub notebook_document_sync: bool,
     /// Notebook cell execution summary tracking
     pub notebook_cell_execution: bool,
+    /// Signature help for function parameters
+    pub signature_help: bool,
+    /// Document highlight for symbol occurrences
+    pub document_highlight: bool,
+    /// Go-to-declaration navigation
+    pub declaration: bool,
 }
 
 /// Build-time feature flags for conditional LSP capability compilation
@@ -129,6 +135,12 @@ pub struct BuildFlags {
     pub range_formatting: bool,
     /// Folding range provider compilation flag
     pub folding_range: bool,
+    /// Signature help provider compilation flag
+    pub signature_help: bool,
+    /// Document highlight provider compilation flag
+    pub document_highlight: bool,
+    /// Declaration provider compilation flag
+    pub declaration: bool,
 }
 
 impl BuildFlags {
@@ -157,6 +169,9 @@ impl BuildFlags {
             document_color: self.document_color,
             notebook_document_sync: self.notebook_document_sync,
             notebook_cell_execution: self.notebook_cell_execution,
+            signature_help: self.signature_help,
+            document_highlight: self.document_highlight,
+            declaration: self.declaration,
         }
     }
 
@@ -254,6 +269,15 @@ impl BuildFlags {
         if self.folding_range {
             ids.push(LSP_FOLDING_RANGE);
         }
+        if self.signature_help {
+            ids.push(LSP_SIGNATURE_HELP);
+        }
+        if self.document_highlight {
+            ids.push(LSP_DOCUMENT_HIGHLIGHT);
+        }
+        if self.declaration {
+            ids.push(LSP_DECLARATION);
+        }
 
         ids.sort_unstable();
         ids.dedup();
@@ -295,6 +319,9 @@ impl BuildFlags {
             formatting: false,
             range_formatting: false,
             folding_range: true,
+            signature_help: true,
+            document_highlight: true,
+            declaration: true,
         }
     }
 
@@ -333,6 +360,9 @@ impl BuildFlags {
             formatting: true,
             range_formatting: true,
             folding_range: true,
+            signature_help: true,
+            document_highlight: true,
+            declaration: true,
         }
     }
 
@@ -371,6 +401,9 @@ impl BuildFlags {
             formatting: true,
             range_formatting: true,
             folding_range: true,
+            signature_help: true,
+            document_highlight: true,
+            declaration: true,
         }
     }
 }
@@ -452,7 +485,9 @@ mod tests {
                 formatting: false,
                 range_formatting: false,
                 folding_range: true,
-                ..Default::default()
+                signature_help: true,
+                document_highlight: true,
+                declaration: true
             }
         );
     }

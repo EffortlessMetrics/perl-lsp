@@ -337,14 +337,13 @@ function getSupportedFeatureProfiles(): string[] {
         extension?.packageJSON?.contributes?.configuration?.properties?.['perl-lsp.featureProfile']?.enum;
 
     if (Array.isArray(schemaEnum)) {
-        return schemaEnum.map((value: unknown) => `${value}`).map((profile) => profile.toLowerCase());
+        return schemaEnum.map((value: unknown) => `${value}`).map((profile) => profile.toLowerCase().replace(/_/g, '-'));
     }
 
     return [
         'auto',
         'ga-lock',
         'ga',
-        'ga_lock',
         'prod',
         'production',
         'all',
