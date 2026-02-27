@@ -36,7 +36,10 @@ fn test_launch_rejects_path_traversal() {
             } else {
                 let msg = message.unwrap();
                 assert!(msg.contains("Security check failed"), "Unexpected error message: {}", msg);
-                assert!(msg.contains("outside workspace"), "Error should indicate path is outside workspace");
+                assert!(
+                    msg.contains("outside workspace"),
+                    "Error should indicate path is outside workspace"
+                );
             }
         }
         _ => panic!("Expected Response message"),
