@@ -477,8 +477,8 @@ pub fn run(config: GateRunnerConfig) -> Result<()> {
     }
 
     // Exit with appropriate code
-    if receipt.summary.failed > 0 && has_blocking_failures(&receipt) {
-        bail!("One or more required gates failed");
+    if has_blocking_failures(&receipt) {
+        bail!("One or more required gates failed, timed out, or errored");
     }
 
     Ok(())
@@ -659,7 +659,7 @@ fn run_gates(
         }
 
         // Check for fail-fast
-        if config.fail_fast && result.status == "fail" && gate.required {
+        if config.fail_fast && is_blocking_gate_status(&result.status) && gate.required {
             if let Some(ref pb) = spinner {
                 pb.finish_with_message("Gate failed, stopping (fail-fast mode)");
             }
@@ -682,17 +682,8 @@ fn run_gates(
     let timeout = results.iter().filter(|r| r.status == "timeout").count() as u32;
     let error = results.iter().filter(|r| r.status == "error").count() as u32;
 
-    let blocking_failures: Vec<String> = results
-        .iter()
-        .filter(|r| r.status == "fail" && r.required.unwrap_or(true))
-        .map(|r| r.gate_name.clone())
-        .collect();
-
-    let overall_status = if blocking_failures.is_empty() {
-        if failed > 0 { "partial" } else { "pass" }
-    } else {
-        "fail"
-    };
+    let blocking_failures = blocking_failure_gate_names(&results);
+    let overall_status = determine_overall_status(failed, &blocking_failures);
 
     let summary = ReceiptSummary {
         total_gates: results.len() as u32,
@@ -1307,4 +1298,73 @@ fn output_diff(diff: &DiffResult, config: &GateRunnerConfig) -> Result<()> {
 /// Check if there are any blocking failures
 fn has_blocking_failures(receipt: &Receipt) -> bool {
     receipt.summary.blocking_failures.as_ref().map(|f| !f.is_empty()).unwrap_or(false)
+}
+
+fn is_blocking_gate_status(status: &str) -> bool {
+    matches!(status, "fail" | "timeout" | "error")
+}
+
+fn blocking_failure_gate_names(results: &[GateResult]) -> Vec<String> {
+    results
+        .iter()
+        .filter(|result| result.required.unwrap_or(true) && is_blocking_gate_status(&result.status))
+        .map(|result| result.gate_name.clone())
+        .collect()
+}
+
+fn determine_overall_status(failed: u32, blocking_failures: &[String]) -> &'static str {
+    if blocking_failures.is_empty() { if failed > 0 { "partial" } else { "pass" } } else { "fail" }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        GateResult, blocking_failure_gate_names, determine_overall_status, is_blocking_gate_status,
+    };
+
+    fn gate_result(name: &str, status: &str, required: bool) -> GateResult {
+        GateResult {
+            gate_name: name.to_string(),
+            tier: "pr_fast".to_string(),
+            status: status.to_string(),
+            required: Some(required),
+            duration_ms: 1,
+            command: "true".to_string(),
+            exit_code: Some(0),
+            output_summary: None,
+            log_path: None,
+            metrics: None,
+            artifacts: None,
+        }
+    }
+
+    #[test]
+    fn blocking_status_classification_includes_timeout_and_error() {
+        assert!(is_blocking_gate_status("fail"));
+        assert!(is_blocking_gate_status("timeout"));
+        assert!(is_blocking_gate_status("error"));
+        assert!(!is_blocking_gate_status("pass"));
+        assert!(!is_blocking_gate_status("skip"));
+    }
+
+    #[test]
+    fn required_timeout_and_error_are_blocking_failures() {
+        let results = vec![
+            gate_result("req-timeout", "timeout", true),
+            gate_result("req-error", "error", true),
+            gate_result("req-fail", "fail", true),
+            gate_result("opt-timeout", "timeout", false),
+            gate_result("opt-error", "error", false),
+            gate_result("opt-fail", "fail", false),
+        ];
+
+        let blocking = blocking_failure_gate_names(&results);
+        assert_eq!(blocking, vec!["req-timeout", "req-error", "req-fail"]);
+    }
+
+    #[test]
+    fn overall_status_is_fail_when_required_timeout_exists_even_without_fail_count() {
+        let blocking_failures = vec!["req-timeout".to_string()];
+        assert_eq!(determine_overall_status(0, &blocking_failures), "fail");
+    }
 }
