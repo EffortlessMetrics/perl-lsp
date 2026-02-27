@@ -213,13 +213,12 @@ $str =~ /(*SKIP)(*FAIL)/;
     let mut complex_regex = 0;
 
     while let Some(token) = lexer.next_token() {
-        if matches!(token.token_type, TokenType::RegexMatch) {
-            if token.text.contains("(?{")
+        if matches!(token.token_type, TokenType::RegexMatch)
+            && (token.text.contains("(?{")
                 || token.text.contains("(??{")
-                || token.text.contains("(*")
-            {
-                complex_regex += 1;
-            }
+                || token.text.contains("(*"))
+        {
+            complex_regex += 1;
         }
     }
     println!("Complex regex patterns found: {}", complex_regex);

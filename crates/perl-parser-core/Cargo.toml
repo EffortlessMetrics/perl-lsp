@@ -1,16 +1,16 @@
 [package]
 name = "perl-parser-core"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "Core parser engine for perl-parser"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+repository = "https://github.com/EffortlessMetrics/perl-lsp"
+homepage = "https://github.com/EffortlessMetrics/perl-lsp"
 documentation = "https://docs.rs/perl-parser-core"
-keywords = ["perl", "parser", "tree-sitter", "ast"]
+keywords = ["perl", "parser", "ast", "error-recovery", "lsp"]
 categories = ["parsing", "development-tools", "text-editors"]
 include = [
   "src/**",
@@ -35,12 +35,6 @@ perl-regex = { workspace = true }
 perl-heredoc = { workspace = true }
 perl-error = { workspace = true }
 perl-tokenizer = { workspace = true }
-thiserror = "2.0.18"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-phf = { version = "0.13.1", features = ["macros"] }
-ropey = "1.6.1"
-tracing = "0.1.44"
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

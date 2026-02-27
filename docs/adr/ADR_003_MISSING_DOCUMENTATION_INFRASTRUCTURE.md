@@ -5,10 +5,10 @@
 
 ## Context
 
-The perl-parser crate evolved from a research prototype to a production-ready enterprise-grade Perl parsing ecosystem with revolutionary performance (5000x LSP improvements) and comprehensive security features. As the system achieved enterprise scale, inadequate API documentation became a critical barrier to:
+The perl-parser crate evolved from a research prototype to a comprehensive Perl parsing ecosystem with significant performance improvements and security features. As the system grew, inadequate API documentation became a barrier to:
 
 - **Developer Onboarding**: Complex parsing APIs required comprehensive examples and usage patterns
-- **Enterprise Integration**: LSP implementations needed detailed protocol compliance and performance documentation
+- **Integration**: LSP implementations needed detailed protocol compliance and performance documentation
 - **Maintainability**: 605+ undocumented public APIs created knowledge gaps and maintenance risks
 - **Quality Assurance**: No systematic validation of documentation completeness or consistency
 - **Production Deployment**: Enterprise customers required comprehensive API contracts and error handling documentation
@@ -36,7 +36,7 @@ Enterprise adoption required documentation infrastructure supporting:
 
 ## Decision
 
-We will implement comprehensive missing documentation infrastructure through systematic enforcement of `#![warn(missing_docs)]` with enterprise-grade quality validation and automated testing.
+We will implement comprehensive missing documentation infrastructure through systematic enforcement of `#![warn(missing_docs)]` with comprehensive quality validation and automated testing.
 
 ### Implementation Strategy
 
@@ -46,7 +46,7 @@ We will implement comprehensive missing documentation infrastructure through sys
 - Enable `#![warn(missing_docs)]` in `/crates/perl-parser/src/lib.rs` for comprehensive coverage
 - Establish 605+ violation baseline for systematic tracking and resolution
 - Deploy CI enforcement preventing documentation quality regression
-- Validate <1% performance overhead preservation of revolutionary LSP improvements
+- Validate <1% performance overhead preservation of existing LSP improvements
 
 #### 2. Comprehensive Test Framework
 
@@ -110,7 +110,7 @@ We will implement comprehensive missing documentation infrastructure through sys
 // - Comprehensive coverage of all public APIs
 // - Systematic tracking of undocumented items
 // - CI integration for regression prevention
-// - Zero performance impact on revolutionary parsing performance
+// - Zero performance impact on existing parsing performance
 ```
 
 ### Test-Driven Documentation Framework
@@ -173,7 +173,7 @@ cargo doc --no-deps --package perl-parser
 
 4. **Zero Performance Impact**:
    - <1% overhead validated for documentation infrastructure
-   - Revolutionary LSP performance (5000x improvements) preserved
+   - LSP performance preserved
    - Sub-microsecond parsing performance maintained
 
 5. **CI Integration and Automation**:
@@ -206,7 +206,7 @@ cargo doc --no-deps --package perl-parser
    - Continuous integration prevents quality regression
 
 2. **Performance Preservation**:
-   - <1% overhead validation ensures no impact on revolutionary performance
+   - <1% overhead validation ensures no impact on existing performance
    - Documentation generation separated from runtime parsing performance
    - Comprehensive benchmarking during implementation
 
@@ -232,7 +232,7 @@ cargo doc --no-deps --package perl-parser
 **Approach**: Automatically generate documentation from existing code comments and function signatures.
 
 **Rejected Because**:
-- Existing comments insufficient for enterprise-grade documentation requirements
+- Existing comments insufficient for comprehensive documentation requirements
 - Generated content lacks context for LSP workflow integration and performance characteristics
 - No working examples or error handling guidance
 - Quality would be inconsistent and potentially misleading
@@ -323,4 +323,4 @@ cargo doc --no-deps --package perl-parser && cargo test --doc -p perl-parser
 - **Monthly**: Quality review of implemented documentation and acceptance criteria results
 - **Quarterly**: Overall documentation strategy effectiveness and enterprise feedback integration
 
-This decision establishes the foundation for enterprise-grade API documentation in the perl-parser ecosystem, ensuring comprehensive coverage, systematic quality validation, and zero performance impact on revolutionary parsing performance.
+This decision establishes the foundation for comprehensive API documentation in the perl-parser ecosystem, ensuring comprehensive coverage, systematic quality validation, and zero performance impact on existing parsing performance.

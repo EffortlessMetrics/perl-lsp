@@ -64,17 +64,12 @@
 //! # }
 //! ```
 
+use perl_module_path::normalize_package_separator;
 use perl_parser_core::{SourceLocation, ast::Node};
 use perl_position_tracking::{WireLocation, WireRange};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind};
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 use std::collections::HashMap;
-
-/// Normalize legacy package separator ' to ::
-fn norm_pkg<'a>(s: &'a str) -> Cow<'a, str> {
-    if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
-}
 
 /// Extract container name from qualified symbol name.
 ///
@@ -198,7 +193,10 @@ impl WorkspaceSymbolsProvider {
                     name: symbol.name.clone(),
                     kind: symbol.kind.to_lsp_kind() as i32,
                     location: WireLocation::new(uri.clone(), WireRange::default()),
-                    container_name: symbol.container.as_ref().map(|s| norm_pkg(s).into_owned()),
+                    container_name: symbol
+                        .container
+                        .as_ref()
+                        .map(|s| normalize_package_separator(s).into_owned()),
                 });
             }
         }
@@ -383,7 +381,10 @@ impl WorkspaceSymbolsProvider {
             name: symbol.name.clone(),
             kind: symbol.kind.to_lsp_kind() as i32,
             location: WireLocation::new(uri.to_string(), range),
-            container_name: symbol.container.as_ref().map(|s| norm_pkg(s).into_owned()),
+            container_name: symbol
+                .container
+                .as_ref()
+                .map(|s| normalize_package_separator(s).into_owned()),
         }
     }
 }

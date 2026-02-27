@@ -145,7 +145,7 @@ fn test_qualified_function_call() {
         }
         Err(e) => {
             println!("❌ Failed to parse qualified function call: {}", e);
-            panic!("Parsing failed: {}", e);
+            unreachable!("Parsing failed: {}", e);
         }
     }
 }

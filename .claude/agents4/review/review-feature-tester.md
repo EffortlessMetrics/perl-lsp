@@ -28,7 +28,7 @@ Your primary responsibilities:
 
 **Parser Engine Features**:
 - `pest-parser`: Legacy Pest-based parser (v2 implementation)
-- `native-parser`: Native recursive descent parser (v3, production-ready)
+- `native-parser`: Native recursive descent parser (v3)
 - `tree-sitter`: Tree-sitter integration with unified scanner architecture
 
 **Performance Features**:

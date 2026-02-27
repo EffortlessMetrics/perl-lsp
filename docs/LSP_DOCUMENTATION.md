@@ -109,12 +109,12 @@ The recommended way to install is to use the pre-built binaries or a package man
 ### Quick Install (Linux/macOS)
 ```bash
 # One-liner installer
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 ### Quick Install (Windows PowerShell)
 ```powershell
-irm https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 ```
 
 ### Homebrew (macOS/Linux)
@@ -129,14 +129,14 @@ brew install perl-lsp
 cargo install perl-lsp
 
 # Or, build from this repository
-git clone https://github.com/EffortlessMetrics/tree-sitter-perl
-cd tree-sitter-perl
+git clone https://github.com/EffortlessMetrics/perl-lsp
+cd perl-lsp
 cargo build --release -p perl-lsp
 # The binary will be in target/release/perl-lsp
 ```
 
 ### System Requirements
-- Rust 1.70 or later
+- Rust 1.92 or later
 - No runtime dependencies
 - Works on Linux, macOS, and Windows
 
@@ -454,4 +454,4 @@ Key areas for contribution:
 - [Language Server Protocol Specification](https://microsoft.github.io/language-server-protocol/)
 - [LSP Tutorial](https://microsoft.github.io/language-server-protocol/overviews/lsp/overview/)
 - [Perl Parser Documentation](../crates/perl-parser/README.md)
-- [Project Repository](https://github.com/EffortlessMetrics/tree-sitter-perl)
+- [Project Repository](https://github.com/EffortlessMetrics/perl-lsp)

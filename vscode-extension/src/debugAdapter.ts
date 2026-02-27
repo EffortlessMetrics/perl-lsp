@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { BinaryDownloader } from './downloader';
 
 export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDescriptorFactory {
+    constructor(private readonly context: vscode.ExtensionContext) {}
+
     createDebugAdapterDescriptor(
         session: vscode.DebugSession,
         executable: vscode.DebugAdapterExecutable | undefined
@@ -11,7 +14,7 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
         
         if (!dapPath) {
             vscode.window.showErrorMessage(
-                'Perl Debug Adapter not found. Please install it with: cargo install --path crates/perl-parser --bin perl-dap'
+                'Perl Debug Adapter (perl-dap) not found. It ships with perl-lsp — re-download from the release page or install via: cargo install perl-dap'
             );
             return undefined;
         }
@@ -22,19 +25,27 @@ export class PerlDebugAdapterDescriptorFactory implements vscode.DebugAdapterDes
     }
 
     private findDebugAdapter(): string | undefined {
-        // First, try to find perl-dap in PATH
+        // First, check the auto-download directory (ships with perl-lsp)
+        const downloadedDap = BinaryDownloader.getLocalDapPath(this.context);
+        if (this.isExecutable(downloadedDap)) {
+            return downloadedDap;
+        }
+
+        // Next, try to find perl-dap in PATH
         const pathDap = this.findExecutable('perl-dap');
         if (pathDap) {
             return pathDap;
         }
 
         // Otherwise, check common installation locations
-        const possiblePaths = [
-            path.join(process.env.HOME || '', '.cargo', 'bin', 'perl-dap'),
-            path.join(process.env.CARGO_HOME || '', 'bin', 'perl-dap'),
-            '/usr/local/bin/perl-dap',
-            '/usr/bin/perl-dap',
+        const binary = process.platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
+        const possiblePaths: string[] = [
+            path.join(process.env.HOME || '', '.cargo', 'bin', binary),
+            path.join(process.env.CARGO_HOME || '', 'bin', binary),
         ];
+        if (process.platform !== 'win32') {
+            possiblePaths.push('/usr/local/bin/perl-dap', '/usr/bin/perl-dap');
+        }
 
         for (const p of possiblePaths) {
             if (this.isExecutable(p)) {
@@ -110,8 +121,21 @@ export class PerlDebugConfigurationProvider implements vscode.DebugConfiguration
             }
         }
 
+        if (config.request === 'attach') {
+            // Attach supports either processId or host/port.
+            if (config.processId === undefined || config.processId === null) {
+                if (!config.host) {
+                    config.host = 'localhost';
+                }
+                if (config.port === undefined || config.port === null) {
+                    config.port = 13603;
+                }
+            }
+            return config;
+        }
+
         if (!config.program) {
-            return vscode.window.showInformationMessage('Cannot find a Perl file to debug').then(_ => {
+            return vscode.window.showInformationMessage('Cannot find a Perl file to debug').then(() => {
                 return undefined;
             });
         }
@@ -142,6 +166,20 @@ export class PerlDebugConfigurationProvider implements vscode.DebugConfiguration
                 env: {
                     'PERL_TEST_HARNESS_DUMP_TAP': '1'
                 }
+            },
+            {
+                type: 'perl',
+                request: 'attach',
+                name: 'Attach by TCP',
+                host: 'localhost',
+                port: 13603,
+                timeout: 5000
+            },
+            {
+                type: 'perl',
+                request: 'attach',
+                name: 'Attach by Process ID',
+                processId: 12345
             }
         ];
     }
@@ -154,7 +192,7 @@ export function activateDebugger(context: vscode.ExtensionContext) {
         vscode.debug.registerDebugConfigurationProvider('perl', provider)
     );
 
-    const factory = new PerlDebugAdapterDescriptorFactory();
+    const factory = new PerlDebugAdapterDescriptorFactory(context);
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory('perl', factory)
     );

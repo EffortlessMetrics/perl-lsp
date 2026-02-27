@@ -5,6 +5,7 @@
 
 use perl_corpus::tie_interface_cases;
 use perl_parser::{Node, NodeKind, Parser};
+use perl_tdd_support::must;
 
 /// Helper to parse code and return the AST
 fn parse_code(code: &str) -> Result<Node, perl_parser::ParseError> {
@@ -30,7 +31,7 @@ fn find_nodes<'a>(node: &'a Node, kind_name: &str) -> Vec<&'a Node> {
 #[test]
 fn parser_tie_scalar_basic() {
     let code = r#"tie $var, 'Tie::Scalar';"#;
-    let ast = parse_code(code).expect("Failed to parse tie scalar");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -39,7 +40,7 @@ fn parser_tie_scalar_basic() {
 #[test]
 fn parser_tie_scalar_with_my() {
     let code = r#"tie my $var, 'Tie::Scalar';"#;
-    let ast = parse_code(code).expect("Failed to parse tie scalar with my");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -48,7 +49,7 @@ fn parser_tie_scalar_with_my() {
 #[test]
 fn parser_tie_array_basic() {
     let code = r#"tie @arr, 'Tie::Array';"#;
-    let ast = parse_code(code).expect("Failed to parse tie array");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -57,7 +58,7 @@ fn parser_tie_array_basic() {
 #[test]
 fn parser_tie_hash_basic() {
     let code = r#"tie %hash, 'Tie::Hash';"#;
-    let ast = parse_code(code).expect("Failed to parse tie hash");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -66,7 +67,7 @@ fn parser_tie_hash_basic() {
 #[test]
 fn parser_tie_filehandle_basic() {
     let code = r#"tie *FH, 'Tie::Handle';"#;
-    let ast = parse_code(code).expect("Failed to parse tie filehandle");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -75,7 +76,7 @@ fn parser_tie_filehandle_basic() {
 #[test]
 fn parser_tie_with_arguments() {
     let code = r#"tie my %cache, 'DB_File', 'cache.db', O_RDWR|O_CREAT, 0644;"#;
-    let ast = parse_code(code).expect("Failed to parse tie with arguments");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -88,7 +89,7 @@ fn parser_tie_with_arguments() {
 #[test]
 fn parser_tie_with_named_args() {
     let code = r#"tie my $counter, 'Tie::Counter', initial => 0, step => 1;"#;
-    let ast = parse_code(code).expect("Failed to parse tie with named args");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -100,7 +101,7 @@ fn parser_untie_scalar() {
 tie my $var, 'Tie::Scalar';
 untie $var;
 "#;
-    let ast = parse_code(code).expect("Failed to parse untie scalar");
+    let ast = must(parse_code(code));
 
     let untie_nodes = find_nodes(&ast, "Untie");
     assert!(!untie_nodes.is_empty(), "Should find at least one Untie node");
@@ -112,7 +113,7 @@ fn parser_untie_hash() {
 tie my %hash, 'Tie::Hash';
 untie %hash;
 "#;
-    let ast = parse_code(code).expect("Failed to parse untie hash");
+    let ast = must(parse_code(code));
 
     let untie_nodes = find_nodes(&ast, "Untie");
     assert!(!untie_nodes.is_empty(), "Should find at least one Untie node");
@@ -124,7 +125,7 @@ fn parser_tied_function_call() {
 tie my %hash, 'Tie::Hash';
 my $obj = tied %hash;
 "#;
-    let ast = parse_code(code).expect("Failed to parse tied function");
+    let ast = must(parse_code(code));
 
     // tied() is a function call that returns the underlying object
     let function_nodes = find_nodes(&ast, "FunctionCall");
@@ -135,10 +136,9 @@ my $obj = tied %hash;
 }
 
 #[test]
-#[ignore = "parser may not produce Tie nodes for tie return value assignments"]
 fn parser_tie_return_value() {
     let code = r#"my $obj = tie my %hash, 'Tie::StdHash';"#;
-    let ast = parse_code(code).expect("Failed to parse tie return value");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -151,7 +151,7 @@ tie my $scalar, 'Tie::Scalar';
 tie my @array, 'Tie::Array';
 tie my %hash, 'Tie::StdHash';
 "#;
-    let ast = parse_code(code).expect("Failed to parse multiple tie types");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert_eq!(tie_nodes.len(), 3, "Should find exactly 3 Tie nodes");
@@ -166,7 +166,7 @@ my $value = $cache{foo};
 delete $cache{foo};
 untie %cache;
 "#;
-    let ast = parse_code(code).expect("Failed to parse tie with usage");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -183,7 +183,7 @@ if (tied %cache) {
     print "Hash is tied\n";
 }
 "#;
-    let ast = parse_code(code).expect("Failed to parse tie conditional");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -199,7 +199,7 @@ eval {
 };
 warn "Tie failed: $@" if $@;
 "#;
-    let ast = parse_code(code).expect("Failed to parse tie in eval block");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -208,7 +208,7 @@ warn "Tie failed: $@" if $@;
 #[test]
 fn parser_tie_package_qualified() {
     let code = r#"tie my %hash, 'My::Custom::Tie::Hash', option => 'value';"#;
-    let ast = parse_code(code).expect("Failed to parse package-qualified tie");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -224,7 +224,7 @@ tie %cache, 'Tie::StdHash';
 $cache{b} = 2;
 untie %cache;
 "#;
-    let ast = parse_code(code).expect("Failed to parse retie sequence");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert_eq!(tie_nodes.len(), 2, "Should find exactly 2 Tie nodes");
@@ -240,7 +240,7 @@ tie my %data, 'Tie::StdHash';
 $data{users} = [];
 push @{$data{users}}, { id => 1, name => 'Alice' };
 "#;
-    let ast = parse_code(code).expect("Failed to parse nested access");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -253,7 +253,7 @@ tie my %cache, 'Cache::Tie', size => 100;
 my $obj = tied %cache;
 $obj->clear();
 "#;
-    let ast = parse_code(code).expect("Failed to parse method call on tied object");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find at least one Tie node");
@@ -274,13 +274,15 @@ fn parser_tie_corpus_all_cases() {
         }
     }
 
-    if !failures.is_empty() {
-        panic!("Failed to parse {} corpus cases:\n{}", failures.len(), failures.join("\n"));
-    }
+    assert!(
+        failures.is_empty(),
+        "Failed to parse {} corpus cases:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
 }
 
 #[test]
-#[ignore = "corpus cases may not produce expected Tie nodes"]
 fn parser_tie_corpus_tie_nodes_present() {
     // Test that tie cases actually produce Tie nodes
     let cases = tie_interface_cases();
@@ -297,14 +299,16 @@ fn parser_tie_corpus_tie_nodes_present() {
                 }
             }
             Err(e) => {
-                panic!("Case '{}' failed to parse: {:?}", case.id, e);
+                unreachable!("Case '{}' failed to parse: {:?}", case.id, e);
             }
         }
     }
 
-    if !no_tie_node.is_empty() {
-        panic!("The following tie cases did not produce Tie nodes:\n{}", no_tie_node.join("\n"));
-    }
+    assert!(
+        no_tie_node.is_empty(),
+        "The following tie cases did not produce Tie nodes:\n{}",
+        no_tie_node.join("\n")
+    );
 }
 
 #[test]
@@ -323,17 +327,16 @@ fn parser_tie_corpus_untie_nodes_present() {
                 }
             }
             Err(e) => {
-                panic!("Case '{}' failed to parse: {:?}", case.id, e);
+                unreachable!("Case '{}' failed to parse: {:?}", case.id, e);
             }
         }
     }
 
-    if !no_untie_node.is_empty() {
-        panic!(
-            "The following untie cases did not produce Untie nodes:\n{}",
-            no_untie_node.join("\n")
-        );
-    }
+    assert!(
+        no_untie_node.is_empty(),
+        "The following untie cases did not produce Untie nodes:\n{}",
+        no_untie_node.join("\n")
+    );
 }
 
 #[test]
@@ -353,7 +356,7 @@ fn parser_tie_all_variable_types() {
                 assert!(!tie_nodes.is_empty(), "Should find Tie node for {} type", var_type);
             }
             Err(e) => {
-                panic!("Failed to parse tie with {} type: {:?}", var_type, e);
+                unreachable!("Failed to parse tie with {} type: {:?}", var_type, e);
             }
         }
     }
@@ -362,7 +365,7 @@ fn parser_tie_all_variable_types() {
 #[test]
 fn parser_tie_ast_has_children() {
     let code = r#"tie my %hash, 'Tie::StdHash', option => 'value';"#;
-    let ast = parse_code(code).expect("Failed to parse");
+    let ast = must(parse_code(code));
 
     let tie_nodes = find_nodes(&ast, "Tie");
     assert!(!tie_nodes.is_empty(), "Should find Tie node");
@@ -390,7 +393,7 @@ fn parser_tie_with_standard_modules() {
                 assert!(!tie_nodes.is_empty(), "Should find Tie node in: {}", code);
             }
             Err(e) => {
-                panic!("Failed to parse tie with standard module: {:?}\nCode: {}", e, code);
+                unreachable!("Failed to parse tie with standard module: {:?}\nCode: {}", e, code);
             }
         }
     }
@@ -412,7 +415,7 @@ fn parser_tie_with_real_world_modules() {
                 assert!(!tie_nodes.is_empty(), "Should find Tie node in: {}", code);
             }
             Err(e) => {
-                panic!("Failed to parse tie with real-world module: {:?}\nCode: {}", e, code);
+                unreachable!("Failed to parse tie with real-world module: {:?}\nCode: {}", e, code);
             }
         }
     }

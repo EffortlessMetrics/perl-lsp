@@ -342,9 +342,48 @@ impl<'a> Parser<'a> {
                     // Only treat * as a glob sigil if followed by identifier
                     self.parse_variable()
                 } else {
-                    // Check if it's a quote operator (q, qq, qw, qr, qx, m, s)
+                    // Check if it's a quote operator or tie/untie
                     match token.text.as_ref() {
                         "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s" => self.parse_quote_operator(),
+                        "tie" => {
+                            let token = self.tokens.next()?;
+                            let start = token.start;
+                            let variable = if matches!(
+                                self.peek_kind(),
+                                Some(
+                                    TokenKind::My
+                                        | TokenKind::Our
+                                        | TokenKind::Local
+                                        | TokenKind::State
+                                )
+                            ) {
+                                Box::new(self.parse_variable_declaration()?)
+                            } else {
+                                Box::new(self.parse_assignment()?)
+                            };
+                            self.expect(TokenKind::Comma)?;
+                            let package = Box::new(self.parse_assignment()?);
+                            let mut args = vec![];
+                            while self.peek_kind() == Some(TokenKind::Comma) {
+                                self.consume_token()?;
+                                args.push(self.parse_assignment()?);
+                            }
+                            let end = self.previous_position();
+                            Ok(Node::new(
+                                NodeKind::Tie { variable, package, args },
+                                SourceLocation { start, end },
+                            ))
+                        }
+                        "untie" => {
+                            let token = self.tokens.next()?;
+                            let start = token.start;
+                            let variable = Box::new(self.parse_assignment()?);
+                            let end = self.previous_position();
+                            Ok(Node::new(
+                                NodeKind::Untie { variable },
+                                SourceLocation { start, end },
+                            ))
+                        }
                         _ => {
                             // Regular identifier (possibly qualified with ::)
                             self.parse_qualified_identifier()
@@ -508,8 +547,9 @@ impl<'a> Parser<'a> {
 
             // Handle 'sub' specially - it might be an anonymous subroutine
             TokenKind::Sub => {
-                // Check if this is an anonymous subroutine
-                let next = self.peek_kind();
+                // Check if the token AFTER 'sub' is { or ( (anonymous subroutine)
+                // We use peek_second() because peek() is still 'sub' (unconsumed)
+                let next = self.tokens.peek_second().ok().map(|t| t.kind);
                 if matches!(next, Some(k) if matches!(k, TokenKind::LeftBrace | TokenKind::LeftParen))
                 {
                     // It's an anonymous subroutine

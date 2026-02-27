@@ -1,5 +1,8 @@
 name: Deploy Documentation
 
+# Deploy documentation to GitHub Pages
+# Cost: ~$0.02 per deployment
+
 on:
   push:
     branches:
@@ -24,19 +27,31 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
 
+      - name: Cache mdBook
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/bin/mdbook
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-mdbook-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mdbook-
+
       - name: Install mdBook
         run: |
-          cargo install mdbook --version 0.4.40 --locked
+          cargo install mdbook --version 0.4.40 --locked || true
           mdbook --version
 
       - name: Populate documentation
@@ -48,7 +63,7 @@ jobs:
           mdbook build book
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: ./book/book
 
@@ -56,9 +71,28 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     steps:
+      - name: Check whether GitHub Pages is enabled
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          status_code="$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages")"
+
+          if [ "${status_code}" = "200" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages is not enabled (HTTP ${status_code}); skipping deployment."
+          fi
+
       - name: Deploy to GitHub Pages
+        if: steps.pages.outputs.enabled == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
