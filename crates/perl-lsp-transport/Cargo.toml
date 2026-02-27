@@ -22,6 +22,7 @@ include = [
 
 [dependencies]
 perl-lsp-protocol = { workspace = true }
+perl-content-length-framing = { workspace = true }
 serde_json = "1.0.149"
 
 [lints]

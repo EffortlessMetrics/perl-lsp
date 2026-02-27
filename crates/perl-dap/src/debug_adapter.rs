@@ -21,12 +21,15 @@ use crate::protocol::{
     StepInTargetsResponseBody, StepOutArguments, TerminateArguments, VariablesArguments,
 };
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
+use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use perl_dap_eval::SafeEvaluator;
 use perl_dap_stack::PerlStackParser;
 use perl_dap_variables::{
     PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer,
 };
+use perl_keywords::DAP_COMPLETION_KEYWORDS;
+use perl_module_path::module_path_to_name;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -624,10 +627,8 @@ impl DebugAdapter {
 
         thread::spawn(move || {
             while let Ok(msg) = rx.recv() {
-                let frame = match serde_json::to_string(&msg) {
-                    Ok(payload) => {
-                        format!("Content-Length: {}\r\n\r\n{}", payload.len(), payload)
-                    }
+                let framed = match serde_json::to_vec(&msg) {
+                    Ok(payload) => frame(&payload),
                     Err(e) => {
                         eprintln!("Failed to serialize DAP message: {} - {:#?}", e, msg);
                         continue;
@@ -635,7 +636,7 @@ impl DebugAdapter {
                 };
 
                 let mut writer = lock_or_recover(&event_writer, "event_writer");
-                if let Err(e) = writer.write_all(frame.as_bytes()) {
+                if let Err(e) = writer.write_all(&framed) {
                     eprintln!("Failed to write DAP frame in event handler: {}", e);
                     continue;
                 }
@@ -647,73 +648,62 @@ impl DebugAdapter {
         });
 
         let mut reader = BufReader::new(input);
-        let mut line = String::new();
+        let mut framer = ContentLengthFramer::new();
+        let mut read_buf = [0u8; 8 * 1024];
 
         loop {
-            // Read headers.
-            let mut headers = HashMap::new();
-            loop {
-                line.clear();
-                match reader.read_line(&mut line) {
-                    Ok(0) => return Ok(()), // EOF
-                    Ok(_) => {
-                        let trimmed = line.trim_end();
-                        if trimmed.is_empty() {
-                            break;
-                        }
-                        if let Some(colon_pos) = trimmed.find(':') {
-                            let key = trimmed[..colon_pos].trim();
-                            let value = trimmed[colon_pos + 1..].trim();
-                            headers.insert(key.to_string(), value.to_string());
-                        }
-                    }
-                    Err(e) => return Err(e),
-                }
+            let bytes_read = reader.read(&mut read_buf)?;
+            if bytes_read == 0 {
+                return Ok(());
             }
 
-            // Read content body based on Content-Length.
-            let Some(content_length) = headers.get("Content-Length") else {
-                continue;
-            };
-            let Ok(length) = content_length.parse::<usize>() else {
-                eprintln!("Invalid Content-Length header: {content_length}");
-                continue;
-            };
+            framer.push(&read_buf[..bytes_read]);
 
-            let mut buffer = vec![0u8; length];
-            reader.read_exact(&mut buffer)?;
+            loop {
+                let body = match framer.try_next() {
+                    Ok(Some(body)) => body,
+                    Ok(None) => break,
+                    Err(error) => {
+                        eprintln!("Failed to parse DAP transport frame: {error}");
+                        continue;
+                    }
+                };
 
-            let msg = match serde_json::from_slice::<DapMessage>(&buffer) {
-                Ok(msg) => msg,
-                Err(_) => {
-                    eprintln!("Failed to parse DAP message: {}", String::from_utf8_lossy(&buffer));
+                let msg = match serde_json::from_slice::<DapMessage>(&body) {
+                    Ok(msg) => msg,
+                    Err(_) => {
+                        eprintln!(
+                            "Failed to parse DAP message: {}",
+                            String::from_utf8_lossy(&body)
+                        );
+                        continue;
+                    }
+                };
+
+                let DapMessage::Request { seq, command, arguments } = msg else {
                     continue;
+                };
+
+                let response = self.dispatch_request(seq, &command, arguments);
+                let payload = match serde_json::to_vec(&response) {
+                    Ok(payload) => payload,
+                    Err(e) => {
+                        eprintln!("Failed to serialize DAP response: {}", e);
+                        continue;
+                    }
+                };
+
+                let framed = frame(&payload);
+                let mut writer = lock_or_recover(&shared_writer, "response_writer");
+                writer.write_all(&framed)?;
+                writer.flush()?;
+
+                // DAP requires this event only after initialize response is sent.
+                if command == "initialize"
+                    && Self::response_succeeded_for_command(&response, "initialize")
+                {
+                    self.send_event("initialized", None);
                 }
-            };
-
-            let DapMessage::Request { seq, command, arguments } = msg else {
-                continue;
-            };
-
-            let response = self.dispatch_request(seq, &command, arguments);
-            let payload = match serde_json::to_string(&response) {
-                Ok(payload) => payload,
-                Err(e) => {
-                    eprintln!("Failed to serialize DAP response: {}", e);
-                    continue;
-                }
-            };
-
-            let frame = format!("Content-Length: {}\r\n\r\n{}", payload.len(), payload);
-            let mut writer = lock_or_recover(&shared_writer, "response_writer");
-            writer.write_all(frame.as_bytes())?;
-            writer.flush()?;
-
-            // DAP requires this event only after initialize response is sent.
-            if command == "initialize"
-                && Self::response_succeeded_for_command(&response, "initialize")
-            {
-                self.send_event("initialized", None);
             }
         }
     }
@@ -3876,12 +3866,16 @@ impl DebugAdapter {
             .and_then(|lines| Self::parse_evaluate_result_from_lines(lines, expression, true))
             .or_else(|| self.parse_evaluate_result_from_output(expression));
 
-        let (result, result_type) = parsed.unwrap_or_else(|| {
-            (
-                format!("<evaluating: {}> (timeout: {}ms)", expression, timeout_ms),
-                "string".to_string(),
-            )
-        });
+        let Some((result, result_type)) = parsed else {
+            return DapMessage::Response {
+                seq,
+                request_seq,
+                success: false,
+                command: "evaluate".to_string(),
+                body: None,
+                message: Some(format!("evaluate timed out after {timeout_ms}ms")),
+            };
+        };
 
         let eval_body =
             EvaluateResponseBody { result, type_: Some(result_type), variables_reference: 0 };
@@ -4826,7 +4820,7 @@ impl DebugAdapter {
             .into_iter()
             .enumerate()
             .map(|(idx, (key, path))| {
-                let name = key.replace('/', "::").trim_end_matches(".pm").to_string();
+                let name = module_path_to_name(&key);
                 Module { id: idx.to_string(), name, path: Some(path) }
             })
             .collect();
@@ -4888,18 +4882,7 @@ impl DebugAdapter {
             .map(|(pos, matched)| &prefix[pos + matched.len()..])
             .unwrap_or(prefix);
 
-        const PERL_KEYWORDS: &[&str] = &[
-            "my", "our", "local", "sub", "use", "require", "package", "if", "elsif", "else",
-            "unless", "while", "until", "for", "foreach", "do", "eval", "return", "last", "next",
-            "redo", "die", "warn", "print", "say", "printf", "sprintf", "open", "close", "chomp",
-            "chop", "push", "pop", "shift", "unshift", "splice", "join", "split", "sort", "map",
-            "grep", "defined", "exists", "delete", "ref", "bless", "tie", "untie", "scalar",
-            "keys", "values", "each", "length", "substr", "index", "rindex", "reverse", "lc", "uc",
-            "lcfirst", "ucfirst", "hex", "oct", "int", "abs", "sqrt", "chr", "ord", "pack",
-            "unpack", "qw",
-        ];
-
-        let mut targets: Vec<CompletionItem> = PERL_KEYWORDS
+        let mut targets: Vec<CompletionItem> = DAP_COMPLETION_KEYWORDS
             .iter()
             .filter(|kw| stem.is_empty() || kw.starts_with(stem))
             .map(|kw| CompletionItem {
@@ -4946,7 +4929,7 @@ impl DebugAdapter {
             // Add loaded module names from %INC.
             let modules = self.query_inc_entries();
             for (key, _path) in &modules {
-                let name = key.replace('/', "::").trim_end_matches(".pm").to_string();
+                let name = module_path_to_name(key);
                 if stem.is_empty() || name.starts_with(stem) {
                     targets.push(CompletionItem {
                         label: name,

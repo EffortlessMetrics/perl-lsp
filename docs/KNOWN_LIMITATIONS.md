@@ -112,9 +112,9 @@ This document provides a comprehensive list of parsing limitations across all th
 
 ## LSP Server Status
 
-### ✅ ~91% LSP Protocol Coverage (v0.9+)
+### ✅ LSP Coverage (tracked)
 
-The perl-lsp server has achieved **~91% functional LSP protocol coverage** with comprehensive workspace support. See [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) for the complete feature matrix.
+LSP coverage is tracked in `features.toml`; current computed metrics live in [docs/CURRENT_STATUS.md](CURRENT_STATUS.md).
 
 ### ✅ Fully Implemented Core Features
 

@@ -159,7 +159,7 @@ impl DocumentState {
 
 /// Normalize legacy package separator ' to ::
 pub fn normalize_package_separator(s: &str) -> Cow<'_, str> {
-    if s.contains('\'') { Cow::Owned(s.replace('\'', "::")) } else { Cow::Borrowed(s) }
+    perl_module_path::normalize_package_separator(s)
 }
 
 /// Client capabilities received during initialization

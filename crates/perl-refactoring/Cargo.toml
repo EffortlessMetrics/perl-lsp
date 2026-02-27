@@ -25,6 +25,8 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-workspace-index = { workspace = true }
+perl-module-path = { workspace = true }
+perl-qualified-name = { workspace = true }
 regex = "1.12.2"
 serde = { version = "1.0.228", features = ["derive"] }
 url = "2.5.4"
@@ -42,4 +44,3 @@ tempfile = "3.24.0"
 
 [lints]
 workspace = true
-

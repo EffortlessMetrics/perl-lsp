@@ -317,15 +317,37 @@ impl SymbolTable {
     }
 }
 
+/// Classification of Moo/Moose framework variant detected via `use` statements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameworkKind {
+    /// `use Moo;`
+    Moo,
+    /// `use Moo::Role;`
+    MooRole,
+    /// `use Moose;`
+    Moose,
+    /// `use Moose::Role;`
+    MooseRole,
+}
+
+/// Per-package framework detection flags.
+#[derive(Debug, Clone, Default)]
+pub struct FrameworkFlags {
+    /// Moo/Moose framework variant, if any.
+    pub moo: bool,
+    /// Class::Accessor style generated accessors.
+    pub class_accessor: bool,
+    /// Which specific Moo/Moose variant was detected.
+    pub kind: Option<FrameworkKind>,
+}
+
 /// Extract symbols from an AST for Parse/Index workflows.
 pub struct SymbolExtractor {
     table: SymbolTable,
     /// Source code for comment extraction
     source: String,
-    /// True when `use Moo/Moose` style declarations are active in this file.
-    moo_enabled: bool,
-    /// True when Class::Accessor style generated accessors are active in this file.
-    class_accessor_enabled: bool,
+    /// Per-package framework detection flags, keyed by package name.
+    framework_flags: HashMap<String, FrameworkFlags>,
 }
 
 impl Default for SymbolExtractor {
@@ -342,8 +364,7 @@ impl SymbolExtractor {
         SymbolExtractor {
             table: SymbolTable::new(),
             source: String::new(),
-            moo_enabled: false,
-            class_accessor_enabled: false,
+            framework_flags: HashMap::new(),
         }
     }
 
@@ -354,15 +375,36 @@ impl SymbolExtractor {
         SymbolExtractor {
             table: SymbolTable::new(),
             source: source.to_string(),
-            moo_enabled: false,
-            class_accessor_enabled: false,
+            framework_flags: HashMap::new(),
         }
     }
 
     /// Extract symbols from an AST node for Index/Analyze workflows.
     pub fn extract(mut self, node: &Node) -> SymbolTable {
         self.visit_node(node);
+        self.upgrade_package_symbols_from_framework_flags();
         self.table
+    }
+
+    /// Post-processing: upgrade `SymbolKind::Package` to `Class` or `Role`
+    /// based on the framework flags discovered during traversal.
+    fn upgrade_package_symbols_from_framework_flags(&mut self) {
+        for (pkg_name, flags) in &self.framework_flags {
+            let Some(kind) = flags.kind else {
+                continue;
+            };
+            let new_kind = match kind {
+                FrameworkKind::Moo | FrameworkKind::Moose => SymbolKind::Class,
+                FrameworkKind::MooRole | FrameworkKind::MooseRole => SymbolKind::Role,
+            };
+            if let Some(symbols) = self.table.symbols.get_mut(pkg_name) {
+                for symbol in symbols.iter_mut() {
+                    if symbol.kind == SymbolKind::Package {
+                        symbol.kind = new_kind;
+                    }
+                }
+            }
+        }
     }
 
     /// Visit a node and extract symbols
@@ -826,13 +868,24 @@ impl SymbolExtractor {
         statements: &[Node],
         idx: usize,
     ) -> Option<usize> {
-        if self.moo_enabled
-            && let Some(consumed) = self.try_extract_moo_has_declaration(statements, idx)
-        {
-            return Some(consumed);
+        let flags = self.framework_flags.get(&self.table.current_package).cloned();
+        let flags = flags.as_ref();
+
+        let is_moo = flags.is_some_and(|f| f.moo);
+
+        if is_moo {
+            if let Some(consumed) = self.try_extract_moo_has_declaration(statements, idx) {
+                return Some(consumed);
+            }
+            if let Some(consumed) = self.try_extract_method_modifier(statements, idx) {
+                return Some(consumed);
+            }
+            if let Some(consumed) = self.try_extract_extends_with(statements, idx) {
+                return Some(consumed);
+            }
         }
 
-        if self.class_accessor_enabled
+        if flags.is_some_and(|f| f.class_accessor)
             && self.try_extract_class_accessor_declaration(&statements[idx])
         {
             // Keep regular traversal for argument expressions (for example defaults).
@@ -897,6 +950,120 @@ impl SymbolExtractor {
         }
 
         None
+    }
+
+    /// Detect Moo/Moose method modifiers (`around`, `before`, `after`).
+    ///
+    /// Pattern (two statements):
+    /// 1. `ExpressionStatement(Identifier("around"))` (or `before`/`after`)
+    /// 2. `ExpressionStatement(HashLiteral([ (method_name, Subroutine{...}) ]))`
+    fn try_extract_method_modifier(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        if idx + 1 >= statements.len() {
+            return None;
+        }
+
+        let first = &statements[idx];
+        let second = &statements[idx + 1];
+
+        // Check: first is ExpressionStatement(Identifier("around"|"before"|"after"))
+        let modifier_name = match &first.kind {
+            NodeKind::ExpressionStatement { expression } => match &expression.kind {
+                NodeKind::Identifier { name }
+                    if matches!(name.as_str(), "around" | "before" | "after") =>
+                {
+                    name.as_str()
+                }
+                _ => return None,
+            },
+            _ => return None,
+        };
+
+        // Check: second is ExpressionStatement(HashLiteral(...)) with method names
+        let NodeKind::ExpressionStatement { expression } = &second.kind else {
+            return None;
+        };
+        let NodeKind::HashLiteral { pairs } = &expression.kind else {
+            return None;
+        };
+
+        let modifier_location =
+            SourceLocation { start: first.location.start, end: second.location.end };
+        let scope_id = self.table.current_scope();
+        let package = self.table.current_package.clone();
+
+        for (key_node, _value_node) in pairs {
+            let method_names = Self::collect_symbol_names(key_node);
+            for method_name in method_names {
+                self.table.add_symbol(Symbol {
+                    name: method_name.clone(),
+                    qualified_name: format!("{package}::{method_name}"),
+                    kind: SymbolKind::Subroutine,
+                    location: modifier_location,
+                    scope_id,
+                    declaration: Some(modifier_name.to_string()),
+                    documentation: Some(format!(
+                        "Method modifier `{modifier_name}` for `{method_name}`"
+                    )),
+                    attributes: vec![format!("modifier={modifier_name}")],
+                });
+            }
+        }
+
+        // Visit the body of the modifier subroutines
+        self.visit_node(second);
+
+        Some(2)
+    }
+
+    /// Detect Moo/Moose `extends 'Parent'` and `with 'Role'` declarations.
+    ///
+    /// Pattern (two statements):
+    /// 1. `ExpressionStatement(Identifier("extends"))` or `ExpressionStatement(Identifier("with"))`
+    /// 2. `ExpressionStatement(String(...))` or `ExpressionStatement(ArrayLiteral(...))`
+    fn try_extract_extends_with(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        if idx + 1 >= statements.len() {
+            return None;
+        }
+
+        let first = &statements[idx];
+        let second = &statements[idx + 1];
+
+        // Check: first is ExpressionStatement(Identifier("extends"|"with"))
+        let keyword = match &first.kind {
+            NodeKind::ExpressionStatement { expression } => match &expression.kind {
+                NodeKind::Identifier { name } if matches!(name.as_str(), "extends" | "with") => {
+                    name.as_str()
+                }
+                _ => return None,
+            },
+            _ => return None,
+        };
+
+        // Check: second is ExpressionStatement with name(s)
+        let NodeKind::ExpressionStatement { expression } = &second.kind else {
+            return None;
+        };
+
+        let names = Self::collect_symbol_names(expression);
+        if names.is_empty() {
+            return None;
+        }
+
+        let ref_location = SourceLocation { start: first.location.start, end: second.location.end };
+
+        let ref_kind = if keyword == "extends" { SymbolKind::Class } else { SymbolKind::Role };
+
+        for name in names {
+            self.table.add_reference(SymbolReference {
+                name,
+                kind: ref_kind,
+                location: ref_location,
+                scope_id: self.table.current_scope(),
+                is_write: false,
+            });
+        }
+
+        Some(2)
     }
 
     /// Synthesize symbols from parsed `has` key/value pairs.
@@ -1017,13 +1184,25 @@ impl SymbolExtractor {
 
     /// Update framework detection state from `use` statements.
     fn update_framework_context(&mut self, module: &str, args: &[String]) {
-        if matches!(module, "Moo" | "Moose" | "Moo::Role" | "Moose::Role") {
-            self.moo_enabled = true;
+        let pkg = self.table.current_package.clone();
+
+        let framework_kind = match module {
+            "Moo" => Some(FrameworkKind::Moo),
+            "Moo::Role" => Some(FrameworkKind::MooRole),
+            "Moose" => Some(FrameworkKind::Moose),
+            "Moose::Role" => Some(FrameworkKind::MooseRole),
+            _ => None,
+        };
+
+        if let Some(kind) = framework_kind {
+            let flags = self.framework_flags.entry(pkg).or_default();
+            flags.moo = true;
+            flags.kind = Some(kind);
             return;
         }
 
         if module == "Class::Accessor" {
-            self.class_accessor_enabled = true;
+            self.framework_flags.entry(pkg).or_default().class_accessor = true;
             return;
         }
 
@@ -1033,7 +1212,7 @@ impl SymbolExtractor {
                 .filter_map(|arg| Self::normalize_symbol_name(arg))
                 .any(|arg| arg == "Class::Accessor");
             if has_class_accessor_parent {
-                self.class_accessor_enabled = true;
+                self.framework_flags.entry(pkg).or_default().class_accessor = true;
             }
         }
     }

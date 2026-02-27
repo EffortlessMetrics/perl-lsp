@@ -458,9 +458,9 @@ impl CompletionProvider {
             }
         } else {
             // General completion: keywords, functions, variables
-            let keywords = keywords::create_keywords();
-            if context.prefix.is_empty() || self.could_be_keyword(&context.prefix, &keywords) {
-                keywords::add_keyword_completions(&mut completions, &context, &keywords);
+            let keywords = keywords::keywords();
+            if context.prefix.is_empty() || self.could_be_keyword(&context.prefix, keywords) {
+                keywords::add_keyword_completions(&mut completions, &context, keywords);
                 if is_cancelled() {
                     return vec![];
                 }
@@ -789,11 +789,7 @@ impl CompletionProvider {
     }
 
     /// Check if prefix could be a keyword
-    fn could_be_keyword(
-        &self,
-        prefix: &str,
-        keywords: &std::collections::HashSet<&'static str>,
-    ) -> bool {
+    fn could_be_keyword(&self, prefix: &str, keywords: &[&'static str]) -> bool {
         keywords.iter().any(|k| k.starts_with(prefix))
     }
 

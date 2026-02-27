@@ -140,7 +140,7 @@
     clippy::uninlined_format_args
 )]
 
-use std::collections::HashSet;
+use perl_keywords::is_lexer_keyword;
 use std::sync::{Arc, OnceLock};
 
 pub mod checkpoint;
@@ -2783,9 +2783,6 @@ impl<'a> PerlLexer<'a> {
     }
 }
 
-// Pre-computed keyword hash for fast lookup
-static KEYWORDS: OnceLock<HashSet<&'static str>> = OnceLock::new();
-
 // Pre-allocated empty Arc to avoid repeated allocations
 static EMPTY_ARC: OnceLock<Arc<str>> = OnceLock::new();
 
@@ -2796,85 +2793,9 @@ fn empty_arc() -> Arc<str> {
 
 #[inline(always)]
 fn is_keyword(word: &str) -> bool {
-    let keywords = KEYWORDS.get_or_init(|| {
-        [
-            // Single char keywords
-            "q",
-            "m",
-            "s",
-            "y",
-            // Two char keywords
-            "if",
-            "do",
-            "my",
-            "or",
-            "qq",
-            "qw",
-            "qr",
-            "qx",
-            "tr",
-            // Three char keywords
-            "sub",
-            "our",
-            "use",
-            "and",
-            "not",
-            "xor",
-            "die",
-            "say",
-            "for",
-            "try",
-            "END",
-            "cmp",
-            // Four char keywords
-            "else",
-            "when",
-            "next",
-            "last",
-            "redo",
-            "goto",
-            "eval",
-            "warn",
-            "INIT",
-            // Five char keywords
-            "elsif",
-            "while",
-            "until",
-            "local",
-            "state",
-            "given",
-            "break",
-            "print",
-            "catch",
-            "BEGIN",
-            "CHECK",
-            "class",
-            "undef",
-            // Six char keywords
-            "unless",
-            "return",
-            "method",
-            "format",
-            // Seven char keywords
-            "require",
-            "package",
-            "default",
-            "foreach",
-            "finally",
-            // Eight char keywords
-            "continue",
-            // Nine char keywords
-            "UNITCHECK",
-        ]
-        .into_iter()
-        .collect()
-    });
-
-    // Fast length-based rejection for most cases
-    match word.len() {
-        1..=9 => keywords.contains(word),
-        _ => false,
-    }
+    // Fast length-based rejection for most cases.
+    // Lexer keywords are currently bounded to 1..=9 characters.
+    matches!(word.len(), 1..=9) && is_lexer_keyword(word)
 }
 
 /// Fast lookup table for compound operator second characters
