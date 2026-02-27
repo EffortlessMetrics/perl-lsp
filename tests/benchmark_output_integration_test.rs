@@ -2,6 +2,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use serde_json::Value;
+use perl_tdd_support::{must, must_some};
 
 /// Integration test for benchmark output functionality
 /// Tests the actual binary execution and file output
@@ -11,7 +12,7 @@ fn integration_test_benchmark_output() {
     let _ = fs::remove_file("benchmark_results.json");
 
     // Use cargo to run the benchmark binary with default settings
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run",
             "-p",
@@ -21,8 +22,7 @@ fn integration_test_benchmark_output() {
             "--features",
             "pure-rust"
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Check command was successful
     assert!(output.status.success(), "Benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
@@ -31,10 +31,8 @@ fn integration_test_benchmark_output() {
     assert!(Path::new("benchmark_results.json").exists(), "Default output file not created");
 
     // Validate JSON content
-    let json_content = fs::read_to_string("benchmark_results.json")
-        .expect("Could not read output file");
-    let parsed: Value = serde_json::from_str(&json_content)
-        .expect("Invalid JSON output");
+    let json_content = must(fs::read_to_string("benchmark_results.json"));
+    let parsed: Value = must(serde_json::from_str(&json_content));
 
     // Validate key sections
     assert!(parsed["metadata"].is_object(), "Missing metadata section");
@@ -42,7 +40,7 @@ fn integration_test_benchmark_output() {
     assert!(parsed["summary"].is_object(), "Missing summary section");
 
     // Check metadata details
-    let metadata = parsed["metadata"].as_object().expect("Metadata not an object");
+    let metadata = must_some(parsed["metadata"].as_object());
     assert!(metadata.contains_key("generated_at"), "Missing generation timestamp");
     assert!(metadata.contains_key("parser_version"), "Missing parser version");
     assert!(metadata.contains_key("rust_version"), "Missing Rust version");
@@ -50,10 +48,9 @@ fn integration_test_benchmark_output() {
     assert!(metadata.contains_key("total_iterations"), "Missing total iterations");
 
     // Basic performance categories test
-    let summary = parsed["summary"].as_object().expect("Summary not an object");
-    let perf_categories = summary.get("performance_categories")
-        .and_then(|v| v.as_object())
-        .expect("Performance categories missing");
+    let summary = must_some(parsed["summary"].as_object());
+    let perf_categories = must_some(summary.get("performance_categories")
+        .and_then(|v| v.as_object()));
 
     let expected_categories = [
         "small_files", 
@@ -85,7 +82,7 @@ fn test_custom_output_path() {
     let _ = fs::remove_dir_all("test_benchmark_output");
 
     // Run benchmark with custom output
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p",
@@ -100,15 +97,14 @@ fn test_custom_output_path() {
             "--iterations",
             "1"  // Minimized for CI performance
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     assert!(output.status.success(), "Benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
     assert!(Path::new(test_output_path).exists(), "Custom output file not created");
 
     // Validate the content structure
-    let json_content = fs::read_to_string(test_output_path).expect("Could not read custom output file");
-    let parsed: Value = serde_json::from_str(&json_content).expect("Invalid JSON in custom output");
+    let json_content = must(fs::read_to_string(test_output_path));
+    let parsed: Value = must(serde_json::from_str(&json_content));
     
     // Basic structure validation
     assert!(parsed["metadata"].is_object(), "Metadata section missing in custom output");
@@ -129,7 +125,7 @@ fn test_output_directory_creation() {
     let _ = fs::remove_dir_all("new_benchmark_output_dir");
 
     // Run benchmark with path in non-existent directory
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p",
@@ -144,8 +140,7 @@ fn test_output_directory_creation() {
             "--iterations",
             "1"  // Minimized for CI performance
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     assert!(output.status.success(), "Benchmark run failed: {}", String::from_utf8_lossy(&output.stderr));
     assert!(Path::new(test_output_path).exists(), "Output file not created in new directory");
@@ -159,7 +154,7 @@ fn test_output_directory_creation() {
 #[test]
 fn test_error_handling() {
     // Test with zero iterations (should fail)
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p",
@@ -172,8 +167,7 @@ fn test_error_handling() {
             "--iterations",
             "0"  // Invalid: zero iterations
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Command should fail with zero iterations
     assert!(!output.status.success(), "Benchmark should have failed with zero iterations");
@@ -182,7 +176,7 @@ fn test_error_handling() {
 /// Test CLI help output
 #[test] 
 fn test_help_output() {
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p",
@@ -194,8 +188,7 @@ fn test_help_output() {
             "--", 
             "--help"
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Help should succeed
     assert!(output.status.success(), "Help command failed");
@@ -212,7 +205,7 @@ fn test_help_output() {
 /// Test version output  
 #[test]
 fn test_version_output() {
-    let output = Command::new("cargo")
+    let output = must(Command::new("cargo")
         .args(&[
             "run", 
             "-p",
@@ -224,8 +217,7 @@ fn test_version_output() {
             "--", 
             "--version"
         ])
-        .output()
-        .expect("Failed to execute benchmark_parsers");
+        .output());
 
     // Version should succeed
     assert!(output.status.success(), "Version command failed");

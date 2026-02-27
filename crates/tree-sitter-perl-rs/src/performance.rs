@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod performance {
     use std::time::Instant;
+    use perl_tdd_support::{must, must_some};
     use crate::{parse, language, scanner::RustScanner};
     use tree_sitter::{Parser, Query, QueryCursor};
 
@@ -134,16 +135,16 @@ mod performance {
         "#;
 
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
         
-        let query = Query::new(&language(), "(variable_declaration) @variable").unwrap();
+        let query = must(Query::new(&language(), "(variable_declaration) @variable"));
         let mut cursor = QueryCursor::new();
 
         let iterations = 100;
         let start = Instant::now();
         
         for _ in 0..iterations {
-            let tree = parser.parse(test_code, None).unwrap();
+            let tree = must_some(parser.parse(test_code, None));
             let _captures = cursor.captures(&query, tree.root_node(), test_code.as_bytes());
         }
         
@@ -167,7 +168,7 @@ mod performance {
 
         let iterations = 100;
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
 
         let start = Instant::now();
         
@@ -223,12 +224,12 @@ mod performance {
 
         let iterations = 100;
         let mut parser = Parser::new();
-        parser.set_language(&language()).unwrap();
+        must(parser.set_language(&language()));
 
         let start = Instant::now();
         
         for _ in 0..iterations {
-            let tree = parser.parse(large_code, None).unwrap();
+            let tree = must_some(parser.parse(large_code, None));
             let node_count = count_nodes(&tree.root_node());
             
             // Ensure reasonable memory usage
@@ -325,7 +326,7 @@ mod performance {
             .collect();
 
         for handle in handles {
-            handle.join().unwrap();
+            must(handle.join());
         }
         
         let duration = start.elapsed();

@@ -39,6 +39,9 @@ use crate::workspace_index::WorkspaceIndex;
 use crate::workspace_refactor::WorkspaceRefactor;
 use perl_parser_core::line_index::LineIndex;
 use perl_parser_core::{Node, NodeKind, Parser, SourceLocation};
+use perl_qualified_name::{
+    is_valid_identifier_part, validate_perl_qualified_name as validate_package_name,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -696,7 +699,7 @@ impl RefactoringEngine {
                     location: 0,
                 });
             }
-            if !Self::is_valid_identifier_part(part) {
+            if !is_valid_identifier_part(part) {
                 return Err(ParseError::SyntaxError {
                     message: format!(
                         "Invalid Perl identifier in {}: '{}' (must start with letter/underscore)",
@@ -730,7 +733,7 @@ impl RefactoringEngine {
             });
         }
 
-        if !Self::is_valid_identifier_part(bare_name) {
+        if !is_valid_identifier_part(bare_name) {
             return Err(ParseError::SyntaxError {
                 message: format!(
                     "Invalid subroutine name: '{}' (must start with letter/underscore)",
@@ -746,60 +749,10 @@ impl RefactoringEngine {
     /// Validates a qualified Perl name (Package::Subpackage::name).
     /// Used for MoveCode elements - does not allow sigils, leading ::, trailing ::, or double ::.
     fn validate_perl_qualified_name(&self, name: &str) -> ParseResult<()> {
-        if name.is_empty() {
-            return Err(ParseError::SyntaxError {
-                message: "Qualified name cannot be empty".to_string(),
-                location: 0,
-            });
-        }
-
-        // Reject sigils - qualified names are for packages/subs, not variables
-        if name.starts_with(['$', '@', '%', '&', '*']) {
-            return Err(ParseError::SyntaxError {
-                message: format!("Invalid qualified name: '{}' cannot start with a sigil", name),
-                location: 0,
-            });
-        }
-
-        // Each segment must be a valid identifier
-        // Reject leading ::, trailing ::, or double ::
-        let parts: Vec<&str> = name.split("::").collect();
-        for (i, part) in parts.iter().enumerate() {
-            if part.is_empty() {
-                return Err(ParseError::SyntaxError {
-                    message: format!(
-                        "Invalid qualified name: '{}' (contains empty segment at position {})",
-                        name, i
-                    ),
-                    location: 0,
-                });
-            }
-            if !Self::is_valid_identifier_part(part) {
-                return Err(ParseError::SyntaxError {
-                    message: format!(
-                        "Invalid qualified name: '{}' contains invalid segment '{}'",
-                        name, part
-                    ),
-                    location: 0,
-                });
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Checks if a string is a valid Perl identifier component (no sigil, no ::).
-    ///
-    /// Perl allows Unicode identifiers (e.g., `$π`, `Müller::Util`), so we use
-    /// `is_alphabetic`/`is_alphanumeric` rather than ASCII-only checks.
-    fn is_valid_identifier_part(s: &str) -> bool {
-        let mut chars = s.chars();
-        match chars.next() {
-            Some(c) if c.is_alphabetic() || c == '_' => {
-                chars.all(|c| c.is_alphanumeric() || c == '_')
-            }
-            _ => false,
-        }
+        validate_package_name(name).map_err(|error| ParseError::SyntaxError {
+            message: format!("Invalid qualified name '{}': {}", name, error),
+            location: 0,
+        })
     }
 
     /// Extracts the sigil from a Perl identifier, if present.
@@ -1101,8 +1054,10 @@ impl RefactoringEngine {
 
             match rename_result {
                 Ok(result) => {
-                    let files_modified = self.apply_file_edits(&result.file_edits)?;
-                    let changes_made = result.file_edits.iter().map(|e| e.edits.len()).sum();
+                    let filtered_result = self.filter_rename_result_by_scope(result, scope)?;
+                    let files_modified = self.apply_file_edits(&filtered_result.file_edits)?;
+                    let changes_made =
+                        filtered_result.file_edits.iter().map(|e| e.edits.len()).sum();
                     println!(
                         "perform_symbol_rename DEBUG: result.success=true, files_modified={}, changes_made={}",
                         files_modified, changes_made
@@ -1141,6 +1096,178 @@ impl RefactoringEngine {
                 operation_id: None,
             })
         }
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn filter_rename_result_by_scope(
+        &self,
+        mut result: crate::workspace_refactor::RefactorResult,
+        scope: &RefactoringScope,
+    ) -> ParseResult<crate::workspace_refactor::RefactorResult> {
+        match scope {
+            RefactoringScope::Workspace
+            | RefactoringScope::Directory(_)
+            | RefactoringScope::FileSet(_) => Ok(result),
+            RefactoringScope::File(target_file) => {
+                result
+                    .file_edits
+                    .retain(|file_edit| Self::paths_match(&file_edit.file_path, target_file));
+                Ok(result)
+            }
+            RefactoringScope::Package { file, name } => {
+                let source = fs::read_to_string(file).map_err(|error| ParseError::SyntaxError {
+                    message: format!("Failed to read file {}: {error}", file.display()),
+                    location: 0,
+                })?;
+
+                let Some((start_off, end_off)) = Self::find_package_byte_range(&source, name)
+                else {
+                    result.file_edits.clear();
+                    return Ok(result);
+                };
+
+                result.file_edits = Self::filter_file_edits_to_range(
+                    std::mem::take(&mut result.file_edits),
+                    file,
+                    start_off,
+                    end_off,
+                );
+                Ok(result)
+            }
+            RefactoringScope::Function { file, name } => {
+                let source = fs::read_to_string(file).map_err(|error| ParseError::SyntaxError {
+                    message: format!("Failed to read file {}: {error}", file.display()),
+                    location: 0,
+                })?;
+
+                let Some((start_off, end_off)) = Self::find_function_byte_range(&source, name)
+                else {
+                    result.file_edits.clear();
+                    return Ok(result);
+                };
+
+                result.file_edits = Self::filter_file_edits_to_range(
+                    std::mem::take(&mut result.file_edits),
+                    file,
+                    start_off,
+                    end_off,
+                );
+                Ok(result)
+            }
+            RefactoringScope::Block { file, start, end } => {
+                let source = fs::read_to_string(file).map_err(|error| ParseError::SyntaxError {
+                    message: format!("Failed to read file {}: {error}", file.display()),
+                    location: 0,
+                })?;
+                let line_index = LineIndex::new(source.clone());
+                let start_off =
+                    Self::offset_with_fallback(&line_index, &source, start.0, start.1, false);
+                let end_off = Self::offset_with_fallback(&line_index, &source, end.0, end.1, true);
+
+                let (start_off, end_off) =
+                    if start_off <= end_off { (start_off, end_off) } else { (end_off, start_off) };
+
+                result.file_edits = Self::filter_file_edits_to_range(
+                    std::mem::take(&mut result.file_edits),
+                    file,
+                    start_off,
+                    end_off,
+                );
+                Ok(result)
+            }
+        }
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn filter_file_edits_to_range(
+        file_edits: Vec<crate::workspace_refactor::FileEdit>,
+        target_file: &Path,
+        start_off: usize,
+        end_off: usize,
+    ) -> Vec<crate::workspace_refactor::FileEdit> {
+        file_edits
+            .into_iter()
+            .filter_map(|mut file_edit| {
+                if !Self::paths_match(&file_edit.file_path, target_file) {
+                    return None;
+                }
+
+                file_edit.edits.retain(|edit| edit.start >= start_off && edit.end <= end_off);
+                if file_edit.edits.is_empty() { None } else { Some(file_edit) }
+            })
+            .collect()
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn paths_match(a: &Path, b: &Path) -> bool {
+        if a == b {
+            return true;
+        }
+
+        match (a.canonicalize(), b.canonicalize()) {
+            (Ok(canonical_a), Ok(canonical_b)) => canonical_a == canonical_b,
+            _ => false,
+        }
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn find_package_byte_range(source: &str, package_name: &str) -> Option<(usize, usize)> {
+        let package_decl = format!("package {package_name}");
+        let start = source.find(&package_decl)?;
+        let search_start = start + package_decl.len();
+        let end = source[search_start..]
+            .find("package ")
+            .map(|idx| search_start + idx)
+            .unwrap_or(source.len());
+        Some((start, end))
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn find_function_byte_range(source: &str, function_name: &str) -> Option<(usize, usize)> {
+        let sub_decl = format!("sub {function_name}");
+        let start = source.find(&sub_decl)?;
+        let open_brace =
+            source[start + sub_decl.len()..].find('{').map(|idx| start + sub_decl.len() + idx)?;
+
+        let mut depth = 0usize;
+        for (relative_idx, ch) in source[open_brace..].char_indices() {
+            match ch {
+                '{' => depth += 1,
+                '}' => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        let end = open_brace + relative_idx + ch.len_utf8();
+                        return Some((start, end));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        None
+    }
+
+    #[cfg(feature = "workspace_refactor")]
+    fn offset_with_fallback(
+        line_index: &LineIndex,
+        source: &str,
+        line: u32,
+        column: u32,
+        end_boundary: bool,
+    ) -> usize {
+        if let Some(offset) = line_index.position_to_offset(line, column) {
+            return offset;
+        }
+
+        if end_boundary {
+            if let Some(next_line_start) = line_index.position_to_offset(line.saturating_add(1), 0)
+            {
+                return next_line_start;
+            }
+            return source.len();
+        }
+
+        line_index.position_to_offset(line, 0).unwrap_or(0)
     }
 
     fn perform_extract_method(
@@ -1892,9 +2019,14 @@ fn visit_node(
                 );
             }
         }
-        NodeKind::Foreach { variable, list, body } => {
+        NodeKind::Foreach { variable, list, body, continue_block } => {
             // Visit list with outer scope
             visit_node(list, start, end, inputs, outputs, declared_in_scope, declared_in_range);
+
+            // Visit continue block if present
+            if let Some(cb) = continue_block {
+                visit_node(cb, start, end, inputs, outputs, declared_in_scope, declared_in_range);
+            }
 
             // Create inner scope for variable and body
             let mut inner_scope = declared_in_scope.clone();
@@ -2118,6 +2250,7 @@ sub complex {
     mod validation_tests {
         use super::*;
         use perl_tdd_support::{must, must_err};
+        use serial_test::serial;
 
         // --- Perl identifier validation tests ---
 
@@ -2606,31 +2739,24 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: depends on refactor actually modifying files to create backups"]
+        #[serial]
         fn test_cleanup_backup_directories() {
-            use std::io::Write;
+            use std::fs;
 
-            let mut engine = RefactoringEngine::new();
-            engine.config.create_backups = true;
+            let temp_dir = must(tempfile::tempdir());
+            let backup_root = temp_dir.path().to_path_buf();
 
-            // Create a temp file to trigger backup creation
-            let mut file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
-            must(writeln!(file, "sub test {{ }}"));
-            let path = file.path().to_path_buf();
+            // Manually create a backup directory
+            let backup = backup_root.join("refactor_100_0");
+            must(fs::create_dir_all(&backup));
+            must(fs::write(backup.join("file.pl"), "sub test {}"));
 
-            // Perform an operation to create a backup
-            let op = RefactoringType::SymbolRename {
-                old_name: "test".to_string(),
-                new_name: "renamed_test".to_string(),
-                scope: RefactoringScope::File(path.clone()),
+            let config = RefactoringConfig {
+                backup_root: Some(backup_root),
+                max_backup_retention: 0, // Remove all
+                ..RefactoringConfig::default()
             };
-
-            let _ = engine.refactor(op, vec![path.clone()]);
-
-            // Verify backup was created
-            assert!(!engine.operation_history.is_empty());
-
-            // Clean up backups
+            let mut engine = RefactoringEngine::with_config(config);
             let result = must(engine.clear_history());
 
             // Should have removed at least one directory
@@ -2639,7 +2765,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: depends on refactor actually modifying files to create backups"]
+        #[serial]
         fn test_cleanup_respects_retention_count() {
             use std::io::Write;
 
@@ -2676,33 +2802,49 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: race conditions with shared backup directory in parallel tests"]
+        #[serial]
         fn test_cleanup_respects_age_limit() {
             use std::fs;
 
-            let backup_root = std::env::temp_dir().join("perl_refactor_backups");
-            let _ = fs::create_dir_all(&backup_root);
+            let temp_dir = must(tempfile::tempdir());
+            let backup_root = temp_dir.path().to_path_buf();
+            must(fs::create_dir_all(&backup_root));
 
             // Create an old backup directory manually
             let old_backup = backup_root.join("refactor_1000_0");
-            let _ = fs::create_dir_all(&old_backup);
+            must(fs::create_dir_all(&old_backup));
 
             // Create a test file in the old backup
             let test_file = old_backup.join("file_0.pl");
             must(fs::write(&test_file, "sub old_backup { }"));
 
-            // Set the modification time to be old (this is platform-dependent)
-            // For testing, we'll verify that the cleanup logic runs without error
+            // Wait until filesystem metadata reports the backup is older than the age threshold.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut reached_age_limit = false;
+            while std::time::Instant::now() < deadline {
+                if let Ok(metadata) = fs::metadata(&old_backup)
+                    && let Ok(modified) = metadata.modified()
+                    && let Ok(age) = std::time::SystemTime::now().duration_since(modified)
+                    && age > std::time::Duration::from_secs(1)
+                {
+                    reached_age_limit = true;
+                    break;
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            assert!(
+                reached_age_limit,
+                "backup directory did not age past threshold within test timeout"
+            );
 
             let config = RefactoringConfig {
+                backup_root: Some(backup_root),
                 backup_max_age_seconds: 1, // 1 second age limit
                 ..RefactoringConfig::default()
             };
 
             let mut engine = RefactoringEngine::with_config(config);
-
-            // Wait to ensure backup is older than 1 second
-            std::thread::sleep(std::time::Duration::from_secs(2));
 
             // Run cleanup
             let result = engine.clear_history();
@@ -2753,27 +2895,26 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: depends on refactor actually modifying files to create backups"]
+        #[serial]
         fn test_backup_cleanup_result_space_reclaimed() {
-            use std::io::Write;
+            use std::fs;
 
-            let mut engine = RefactoringEngine::new();
-            engine.config.create_backups = true;
+            let temp_dir = must(tempfile::tempdir());
+            let backup_root = temp_dir.path().to_path_buf();
 
-            // Create a file with known size
-            let mut file: tempfile::NamedTempFile = must(tempfile::NamedTempFile::new());
-            let test_content = "sub test { print 'hello world'; }";
-            must(write!(file, "{}", test_content));
-            let path = file.path().to_path_buf();
+            // Create backup directory with files of known size
+            let backup = backup_root.join("refactor_100_0");
+            must(fs::create_dir_all(&backup));
 
-            // Perform operation to create backup
-            let op = RefactoringType::SymbolRename {
-                old_name: "test".to_string(),
-                new_name: "renamed_test".to_string(),
-                scope: RefactoringScope::File(path.clone()),
+            let test_content = "sub test { print 'hello world'; }"; // 33 bytes
+            must(fs::write(backup.join("file.pl"), test_content));
+
+            let config = RefactoringConfig {
+                backup_root: Some(backup_root),
+                max_backup_retention: 0, // Remove all
+                ..RefactoringConfig::default()
             };
-
-            let _ = engine.refactor(op, vec![path]);
+            let mut engine = RefactoringEngine::with_config(config);
 
             // Clean up and verify space was reclaimed
             let result = must(engine.clear_history());
@@ -2783,7 +2924,7 @@ sub complex {
         // --- Robust backup cleanup tests (non-flaky) ---
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_identifies_all_backup_directories() {
             // AC1: When clear_history() is called, all backup directories are identified
             // AC5: Method returns count of backup directories removed
@@ -2820,7 +2961,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_respects_retention_count() {
             // AC2: Backup cleanup removes backup files older than a configurable retention period
             // AC3: Operation provides option to keep recent backups (e.g., last N operations)
@@ -2832,7 +2973,7 @@ sub complex {
             let backup_root = temp_dir.path().to_path_buf();
 
             // Manually create 4 backup directories with different timestamps
-            let backups = vec![
+            let backups = [
                 backup_root.join("refactor_100_0"),
                 backup_root.join("refactor_200_0"),
                 backup_root.join("refactor_300_0"),
@@ -2867,13 +3008,11 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_respects_age_limit() {
             // AC2: Backup cleanup removes backup files older than a configurable retention period
             // AC6: Errors during cleanup are logged but don't prevent operation history clearing
             use std::fs;
-            use std::thread;
-            use std::time::Duration;
 
             let temp_dir = must(tempfile::tempdir());
             let backup_root = temp_dir.path().to_path_buf();
@@ -2886,6 +3025,27 @@ sub complex {
             let test_file = old_backup.join("file_0.pl");
             must(fs::write(&test_file, "sub old_backup { }"));
 
+            // Poll filesystem metadata until the backup is older than the age threshold,
+            // matching the pattern used by `test_cleanup_respects_age_limit` above.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            let mut reached_age_limit = false;
+            while std::time::Instant::now() < deadline {
+                if let Ok(metadata) = fs::metadata(&old_backup)
+                    && let Ok(modified) = metadata.modified()
+                    && let Ok(age) = std::time::SystemTime::now().duration_since(modified)
+                    && age > std::time::Duration::from_secs(1)
+                {
+                    reached_age_limit = true;
+                    break;
+                }
+
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            assert!(
+                reached_age_limit,
+                "backup directory did not age past threshold within test timeout"
+            );
+
             let config = RefactoringConfig {
                 backup_max_age_seconds: 1, // 1 second age limit
                 backup_root: Some(backup_root),
@@ -2893,9 +3053,6 @@ sub complex {
             };
 
             let mut engine = RefactoringEngine::with_config(config);
-
-            // Wait to ensure backup is older than 1 second
-            thread::sleep(Duration::from_secs(2));
 
             // Run cleanup
             let result = engine.clear_history();
@@ -2911,7 +3068,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_space_reclaimed() {
             // AC5: Method returns count of backup directories removed and total disk space reclaimed
             use std::fs;
@@ -2944,7 +3101,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_only_removes_refactor_backups() {
             // AC8: Cleanup respects backup directory naming convention and only removes refactoring engine backups
             use std::fs;
@@ -2978,7 +3135,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: races with parallel tests using shared backup dir; covered by comprehensive_backup_cleanup_all_acs"]
+        #[serial]
         fn cleanup_test_with_zero_retention_removes_all() {
             // AC2: When max_backup_retention is 0, all backups are removed
             use std::fs;
@@ -3009,7 +3166,7 @@ sub complex {
         }
 
         #[test]
-        #[ignore = "flaky: uses hardcoded shared backup dir that can have leftover state; run in isolation with --ignored"]
+        #[serial]
         fn comprehensive_backup_cleanup_all_acs() {
             // Comprehensive test covering all ACs to avoid race conditions from multiple tests
             // AC1: Identifies all backup directories

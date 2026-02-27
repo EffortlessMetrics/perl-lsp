@@ -155,13 +155,22 @@ impl<'a> Parser<'a> {
         );
 
         let body = self.parse_block()?;
+
+        // Handle continue block
+        let continue_block = if self.peek_kind() == Some(TokenKind::Continue) {
+            self.tokens.next()?; // consume 'continue'
+            Some(Box::new(self.parse_block()?))
+        } else {
+            None
+        };
+
         let end = self.previous_position();
 
         Ok(Node::new(
             NodeKind::While {
                 condition: Box::new(negated_condition),
                 body: Box::new(body),
-                continue_block: None,
+                continue_block,
             },
             SourceLocation { start, end },
         ))
@@ -211,6 +220,7 @@ impl<'a> Parser<'a> {
                         variable: Box::new(implicit_var),
                         list: Box::new(expr),
                         body: Box::new(body),
+                        continue_block: None, // No continue block for implicit foreach
                     },
                     SourceLocation { start, end },
                 ));
@@ -273,12 +283,21 @@ impl<'a> Parser<'a> {
 
         let body = self.parse_block()?;
 
+        // Handle continue block
+        let continue_block = if self.peek_kind() == Some(TokenKind::Continue) {
+            self.tokens.next()?; // consume 'continue'
+            Some(Box::new(self.parse_block()?))
+        } else {
+            None
+        };
+
         let end = self.previous_position();
         Ok(Node::new(
             NodeKind::Foreach {
                 variable: Box::new(variable),
                 list: Box::new(list),
                 body: Box::new(body),
+                continue_block,
             },
             SourceLocation { start, end },
         ))
@@ -301,6 +320,14 @@ impl<'a> Parser<'a> {
 
         let body = self.parse_block()?;
 
+        // Handle continue block
+        let continue_block = if self.peek_kind() == Some(TokenKind::Continue) {
+            self.tokens.next()?; // consume 'continue'
+            Some(Box::new(self.parse_block()?))
+        } else {
+            None
+        };
+
         let start = variable.location.start;
         let end = self.previous_position();
 
@@ -309,6 +336,7 @@ impl<'a> Parser<'a> {
                 variable: Box::new(variable),
                 list: Box::new(list),
                 body: Box::new(body),
+                continue_block,
             },
             SourceLocation { start, end },
         ))

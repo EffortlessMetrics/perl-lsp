@@ -493,7 +493,6 @@ impl BuiltInAnalyzer {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use perl_tdd_support::{must, must_some};

@@ -54,7 +54,7 @@ When security vulnerabilities are detected in Perl LSP dependencies, you will:
   - Test corpus: `cargo test -p perl-corpus` (property-based testing infrastructure)
   - Tree-sitter integration: `cargo test -p tree-sitter-perl-rs` (unified scanner architecture tests)
   - Legacy parser: `cargo test -p perl-parser-pest` (legacy compatibility validation)
-  - Adaptive threading LSP tests: `RUST_TEST_THREADS=2 cargo test -p perl-lsp` (5000x performance improvements)
+  - Adaptive threading LSP tests: `RUST_TEST_THREADS=2 cargo test -p perl-lsp` (adaptive threading improvements)
   - Tree-sitter highlight: `cd xtask && cargo run highlight` (Tree-sitter highlight integration)
 - Performance regression detection: `cargo bench` (parsing performance and benchmarking)
 - Security evidence validation: `integrative:gate:security = pass|fail|skipped` with detailed remediation log
@@ -111,7 +111,7 @@ When security vulnerabilities are detected in Perl LSP dependencies, you will:
 - Test validation matrix:
   - Core parsing tests: `cargo test -p perl-parser` (180/180 parser tests)
   - LSP integration tests: `cargo test -p perl-lsp` (85/85 LSP tests)
-  - Adaptive threading LSP tests: `RUST_TEST_THREADS=2 cargo test -p perl-lsp` (5000x performance improvements)
+  - Adaptive threading LSP tests: `RUST_TEST_THREADS=2 cargo test -p perl-lsp` (adaptive threading improvements)
   - Lexer tests: `cargo test -p perl-lexer` (30/30 tokenization tests)
   - Corpus tests: `cargo test -p perl-corpus` (property-based testing)
   - Tree-sitter tests: `cargo test -p tree-sitter-perl-rs` (unified scanner architecture)

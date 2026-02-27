@@ -68,6 +68,11 @@ COMMON_EXCLUDES=(
     --glob '!**/tree-sitter-perl-c/**'
     --glob '!**/tree-sitter-perl-rs/**'
     --glob '!**/perl-tdd-support/**'
+    --glob '!**/perl-ts-heredoc-analysis/**'
+    --glob '!**/perl-ts-logos-lexer/**'
+    --glob '!**/perl-ts-heredoc-parser/**'
+    --glob '!**/perl-ts-partial-ast/**'
+    --glob '!**/perl-ts-advanced-parsers/**'
 )
 
 ERRORS=0

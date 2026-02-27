@@ -1,0 +1,49 @@
+---
+receipt_version: "1.0"
+gate_id: "format"
+gate_name: "format"
+
+execution:
+  timestamp: "2026-01-29T18:03:32Z"
+  duration_ms: 2369
+  exit_code: 1
+  command: |
+        cargo fmt --check --all
+  environment:
+    RUSTC_WRAPPER: "sccache"
+    RUST_TEST_THREADS: ""
+    CARGO_BUILD_JOBS: ""
+
+result:
+  status: "fail"
+  conclusion: "Gate failed with exit code 1"
+  threshold_met: false
+
+evidence:
+  stdout: |
+    Diff in /home/steven/code/Rust/perl-lsp/review/crates/tree-sitter-perl-rs/src/understanding_parser.rs:116:
+                         | AntiPattern::SourceFilterHeredoc { location, .. }
+                         | AntiPattern::RegexCodeBlockHeredoc { location, .. }
+                         | AntiPattern::EvalStringHeredoc { location, .. }
+    [31m-                    | AntiPattern::TiedHandleHeredoc { location, .. } => {
+    (B[m[31m-                        location.offset
+    (B[m[31m-                    }
+    (B[m[32m+                    | AntiPattern::TiedHandleHeredoc { location, .. } => location.offset,
+    (B[m                 };
+     
+                     if pattern_offset > 0 {
+  stderr: |
+    
+  metrics: {}
+
+metadata:
+  commit_sha: "473406c2922ad1bb4ddca7b690e623aa376981c0"
+  branch: "feature/next"
+  executor: "local"
+  agent: "human"
+
+routing:
+  action: "block"
+  rationale: |
+    Gate format failed
+    Blocking merge until fixed

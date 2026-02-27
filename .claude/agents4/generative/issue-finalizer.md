@@ -69,7 +69,7 @@ Always conclude with a routing decision using Perl LSP's NEXT/FINALIZE pattern:
 
 **Perl LSP-Specific Quality Standards:**
 - ACs must be testable with Perl LSP tooling (`cargo test`, `cargo test -p perl-parser`, `cargo test -p perl-lsp`, `cd xtask && cargo run highlight`)
-- Requirements should align with Perl LSP performance targets (~100% Perl syntax coverage, <1ms incremental parsing, 4-19x parser performance)
+- Requirements should align with Perl LSP performance targets (~100% Perl syntax coverage, <1ms incremental parsing, parser performance (1-150μs per file))
 - Component integration must consider Perl LSP's workspace structure (`perl-parser`, `perl-lsp`, `perl-lexer`, `perl-corpus`, `tree-sitter-perl-rs`, `xtask`)
 - Error handling requirements should reference `anyhow` patterns and `Result<T, E>` usage with proper parser recovery
 - TDD considerations must be addressed (Red-Green-Refactor, spec-driven design) with parser and LSP validation patterns

@@ -48,11 +48,13 @@ fuzz_target!(|data: &[u8]| {
             // will be malformed, but the parser should never crash or panic
         }
 
-        // Test specific edge cases that could trigger the original off-by-one error
-        if input.len() > 0 {
+        // Test specific edge cases that could trigger the original off-by-one error.
+        // Use Unicode-safe single-char extraction so arbitrary fuzz input never panics.
+        if let Some(first_char) = input.chars().next() {
+            let first = first_char.to_string();
             let edge_cases = [
-                format!("<<\"{}\"", &input[..1.min(input.len())]), // Single character
-                format!("<<'{}'", &input[..1.min(input.len())]), // Single character
+                format!("<<\"{}\"", first), // Single character
+                format!("<<'{}'", first),   // Single character
             ];
 
             for case in &edge_cases {

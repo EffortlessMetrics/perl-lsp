@@ -104,11 +104,10 @@ fn find_string_content(node: &AstNode, depth: usize) {
         AstNode::Statement(content) => {
             find_string_content(content, depth);
         }
-        AstNode::VariableDeclaration { initializer, .. } => {
-            if let Some(init) = initializer {
-                find_string_content(init, depth);
-            }
+        AstNode::VariableDeclaration { initializer: Some(init), .. } => {
+            find_string_content(init, depth);
         }
+        AstNode::VariableDeclaration { .. } => {}
         AstNode::FunctionCall { args, .. } => {
             for arg in args {
                 find_string_content(arg, depth);

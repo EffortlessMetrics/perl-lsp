@@ -63,8 +63,12 @@ merge-gate: _check-tools-basic pr-fast
     just _timed "clippy-full" "just clippy-full" && \
     just _timed "test-full" "just test-full" && \
     just _timed "lsp-smoke" "just lsp-smoke" && \
+    just _timed "lsp-microcrates" "just ci-lsp-microcrates" && \
+    just _timed "lsp-bdd" "just ci-lsp-bdd" && \
     just _timed "security-audit" "just security-audit" && \
     just _timed "ci-policy" "just ci-policy" && \
+    just _timed "ci-v2-bundle-sync" "just ci-v2-bundle-sync" && \
+    just _timed "ci-v2-parity" "just ci-v2-parity" && \
     just _timed "ci-lsp-def" "just ci-lsp-def" && \
     just _timed "ci-parser-features-check" "just ci-parser-features-check" && \
     just _timed "ci-features-invariants" "just ci-features-invariants"; \
@@ -151,6 +155,37 @@ security-audit:
         echo "SKIP: cargo-audit not installed (run: cargo install cargo-audit)"; \
     fi
 
+# Production hardening security scan
+security-hardening:
+    @echo "Running production hardening security scan..."
+    @./scripts/security-hardening.sh
+
+# Production hardening performance scan
+performance-hardening:
+    @echo "Running production hardening performance scan..."
+    @./scripts/performance-hardening.sh
+
+# Production hardening E2E validation
+e2e-validation:
+    @echo "Running production hardening E2E validation..."
+    @./scripts/e2e-validation.sh
+
+# Complete production hardening validation
+production-hardening: security-hardening performance-hardening e2e-validation
+    @echo "✅ Production hardening validation completed"
+    @echo "📊 Check generated reports for detailed results"
+
+# Production gates validation
+production-gates-validation:
+    @echo "Running production gates validation..."
+    @./scripts/production-gates-validation.sh
+
+# Complete Phase 6 production readiness validation
+phase6-production-readiness: production-hardening production-gates-validation
+    @echo "🎉 Phase 6 Production Hardening completed!"
+    @echo "📋 All security, performance, and validation checks complete"
+    @echo "🚀 Ready for v1.0 release validation"
+
 # Generate SBOM in SPDX format
 sbom-spdx:
     #!/usr/bin/env bash
@@ -199,8 +234,8 @@ mutation-subset:
 # Bounded fuzz run (quick fuzzing for CI/nightly)
 fuzz-bounded:
     @echo "🔥 Running bounded fuzz testing (60 seconds per target)..."
-    @cargo +nightly fuzz run parser_comprehensive -- -max_total_time=60 || echo "  Parser fuzzing complete"
-    @cargo +nightly fuzz run lexer_robustness -- -max_total_time=60 || echo "  Lexer fuzzing complete"
+    @cargo +nightly fuzz run builtin_functions -- -max_total_time=60 || echo "  Builtin functions fuzzing complete"
+    @cargo +nightly fuzz run heredoc_parsing -- -max_total_time=60 || echo "  Heredoc fuzzing complete"
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
     @echo "✅ Fuzz testing complete"
 
@@ -247,8 +282,8 @@ _check-tools-basic:
 # CI Validation Commands (Issue #211)
 # ============================================================================
 
-# MSRV: Rust 1.89 (for OpenAI Codex compatibility)
-# The rust-toolchain.toml pins to 1.89.0, so standard commands use MSRV by default.
+# MSRV: Rust 1.92 (for OpenAI Codex compatibility)
+# The rust-toolchain.toml pins to 1.92.0, so standard commands use MSRV by default.
 # Use these recipes to explicitly verify MSRV compliance:
 
 # Phase 0: publish receipts to review/receipts/YYYY-MM-DD/
@@ -263,10 +298,10 @@ ci-measure:
     @echo "Measuring CI lane runtimes..."
     @bash .ci/scripts/measure-ci-time.sh
 
-# Fast merge gate on MSRV (~2-5 min) - proves 1.89 compatibility
+# Fast merge gate on MSRV (~2-5 min) - proves 1.92 compatibility
 ci-gate-msrv:
-    @echo "🚪 Running fast merge gate on MSRV (Rust 1.89)..."
-    @RUSTUP_TOOLCHAIN=1.89.0 just ci-gate
+    @echo "🚪 Running fast merge gate on MSRV (Rust 1.92)..."
+    @RUSTUP_TOOLCHAIN=1.92.0 just ci-gate
 
 # Low-memory merge gate - for constrained environments (WSL, CI runners, low-RAM)
 # Forces single-threaded builds/tests to prevent OOM crashes
@@ -291,17 +326,25 @@ ci-gate-low-mem:
         just ci-features-invariants'
     @echo "✅ Low-memory merge gate passed!"
 
-# Full CI on MSRV (~10-20 min) - proves 1.89 compatibility for releases
+# Full CI on MSRV (~10-20 min) - proves 1.92 compatibility for releases
 ci-full-msrv:
-    @echo "🚀 Running full CI on MSRV (Rust 1.89)..."
-    @RUSTUP_TOOLCHAIN=1.89.0 just ci-full
+    @echo "🚀 Running full CI on MSRV (Rust 1.92)..."
+    @RUSTUP_TOOLCHAIN=1.92.0 just ci-full
 
 # Check for nested Cargo.lock files (footgun prevention)
 ci-check-no-nested-lock:
     @echo "🔒 Checking for nested Cargo.lock files..."
-    @if find . -name 'Cargo.lock' -type f 2>/dev/null | grep -v '^\./Cargo\.lock$' | grep -q .; then \
+    @if find . -name 'Cargo.lock' -type f \
+        -not -path '*/target/*' \
+        -not -path '*/.runs/*' \
+        -not -path '*/archive/*' \
+        2>/dev/null | grep -v '^\./Cargo\.lock$' | grep -q .; then \
         echo "❌ ERROR: Nested Cargo.lock detected! Run gates from repo root only."; \
-        find . -name 'Cargo.lock' -type f 2>/dev/null | grep -v '^\./Cargo\.lock$'; \
+        find . -name 'Cargo.lock' -type f \
+            -not -path '*/target/*' \
+            -not -path '*/.runs/*' \
+            -not -path '*/archive/*' \
+            2>/dev/null | grep -v '^\./Cargo\.lock$'; \
         exit 1; \
     fi
     @echo "✅ No nested lockfiles"
@@ -321,10 +364,19 @@ ci-gate:
     just ci-clippy-lib && \
     just clippy-prod-no-unwrap && \
     just clippy-no-unwrap-all && \
+    just ci-unwrap-panic-ratchet && \
+    just ci-unsafe-ratchet && \
     just ci-forbid-fatal && \
     just ci-test-lib && \
     just ci-policy && \
+    just ci-v2-bundle-sync && \
+    just ci-v2-parity && \
     just ci-lsp-def && \
+    just ci-lsp-smoke-e2e && \
+    just ci-lsp-microcrates && \
+    just ci-lsp-bdd && \
+    just ci-semantic-frameworks && \
+    just ci-dap-smoke-e2e && \
     just ci-parser-features-check && \
     just ci-features-invariants
     # @START=$$(date +%s); \
@@ -356,6 +408,8 @@ ci-full:
     @just ci-clippy
     @just ci-test-core
     @just ci-test-lsp
+    @just ci-lsp-microcrates
+    @just ci-lsp-bdd
     @just ci-docs
     @echo "✅ Full CI passed!"
 
@@ -393,6 +447,18 @@ clippy-no-unwrap-all:
     cargo clippy --workspace --all-targets -- -D clippy::unwrap_used -D clippy::expect_used
     @echo "✅ Production code is panic-safe (no unwrap/expect)"
 
+# Unwrap/panic-family ratchet (production source only)
+ci-unwrap-panic-ratchet:
+    @echo "🛡️  Checking unwrap/panic-family ratchet..."
+    @bash ci/check_unwraps_prod.sh
+    @echo "✅ Unwrap/panic-family ratchet passed"
+
+# Unsafe syntax ratchet (production source only)
+ci-unsafe-ratchet:
+    @echo "🛡️  Checking unsafe syntax ratchet..."
+    @bash ci/check_unsafe_prod.sh
+    @echo "✅ Unsafe syntax ratchet passed"
+
 # Forbid fatal constructs gate - catches abort/exit/panic that Clippy misses
 ci-forbid-fatal:
     @echo "🚫 Checking for forbidden fatal constructs..."
@@ -410,6 +476,18 @@ ci-test-lib:
     @echo "🧪 Running library tests..."
     cargo test --workspace --lib --locked
     @echo "✅ Library tests passed"
+
+# V2 bundle sync guard (in-crate v2 files must match extracted perl-parser-pest v2 files)
+ci-v2-bundle-sync:
+    @echo "🔍 Checking v2 bundle sync..."
+    bash scripts/check-v2-bundle-sync.sh
+    @echo "✅ V2 bundle sync check passed"
+
+# V2 parser parity guard (in-crate v2 vs extracted perl-parser-pest v2)
+ci-v2-parity:
+    @echo "🧪 Running v2 parity corpus check..."
+    cargo run --locked -p xtask --features legacy -- corpus --scanner v2-parity
+    @echo "✅ V2 parity corpus check passed"
 
 # Targeted parser/DAP verification (low-memory, for heredoc/breakpoint changes)
 # Key fixes: unset RUSTC_WRAPPER (not empty), --no-deps on clippy, targeted tests
@@ -438,6 +516,53 @@ ci-lsp-def:
     @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
         cargo test -p perl-lsp --test semantic_definition -- --test-threads=1
     @echo "✅ LSP semantic definition tests passed"
+
+# LSP process-level smoke receipt (initialize/open/completion/hover/definition/shutdown)
+ci-lsp-smoke-e2e:
+    @echo "💨 Running LSP stdio smoke E2E test..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --test lsp_smoke_e2e -- --test-threads=1
+    @echo "✅ LSP smoke E2E passed"
+
+# LSP BDD workflow tests (serialized to prevent WSL resource exhaustion)
+ci-lsp-bdd:
+    @echo "🎭 Running LSP BDD workflow tests..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --locked --test lsp_bdd_workflows -- --test-threads=1
+    @echo "✅ LSP BDD workflow tests passed"
+
+# LSP microcrate compatibility coverage (feature microcrates + provider re-export contract)
+ci-lsp-microcrates:
+    @echo "🧩 Running LSP microcrate compatibility tests..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp-providers --locked --test microcrate_reexports_compatibility -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test --locked -p perl-feature-catalog \
+                   -p perl-lsp-feature-ids \
+                   -p perl-lsp-feature-profile \
+                   -p perl-lsp-feature-policy \
+                   -p perl-lsp-feature-flags \
+                   -p perl-lsp-feature-contracts \
+                   -p perl-lsp-feature-grid \
+                   -p perl-lsp-feature-governance \
+                   -p perl-lsp-launcher
+    @echo "✅ LSP microcrate compatibility tests passed"
+
+# Framework semantic depth receipts (Moo/Moose/Class::Accessor)
+ci-semantic-frameworks:
+    @echo "🧠 Running framework semantic tests..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-semantic-analyzer --test frameworks_moo -- --test-threads=1
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-lsp --test moo_semantics_e2e -- --test-threads=1
+    @echo "✅ Framework semantic tests passed"
+
+# DAP smoke receipt (launch/breakpoint/step/stack/evaluate/disconnect)
+ci-dap-smoke-e2e:
+    @echo "🐞 Running DAP smoke E2E test..."
+    @env -u RUSTC_WRAPPER RUST_TEST_THREADS=1 CARGO_BUILD_JOBS=1 \
+        cargo test -p perl-dap --test dap_smoke_e2e -- --test-threads=1
+    @echo "✅ DAP smoke E2E passed"
 
 # Documentation build (no deps)
 ci-docs:
@@ -523,14 +648,12 @@ ci-docs-check:
     @bash ci/check_missing_docs.sh
     @echo "✅ Missing docs check passed"
 
-# Policy enforcement checks
+# Policy and governance checks
 ci-policy:
-    @echo "📋 Running policy checks..."
-    @./.ci/scripts/check-from-raw.sh
-    @just status-check
-    @just ci-docs-check
-    @just ci-doc-paths
-    @echo "✅ Policy checks passed"
+    @echo "⚖️  Checking project policies..."
+    just ci-check-todos
+    @bash ./.ci/scripts/check-from-raw.sh
+    @python3 scripts/update-current-status.py --check
 
 # Check for machine-specific paths in documentation
 ci-doc-paths:
@@ -650,6 +773,18 @@ bugs-wave-c:
     cargo test -p perl-parser --test parser_regressions -- print_filehandle_then_variable_is_indirect --nocapture --ignored || true
 
 # ============================================================================
+# Roadmap Gate (informational, never blocks merge)
+# ============================================================================
+
+# Run feature/infra ignored tests and report progress
+roadmap-gate:
+    @echo "=== ROADMAP BACKLOG: running ignored feature/infra tests ==="
+    -cargo test -p perl-semantic-analyzer -- test_anonymous_subroutine --ignored --nocapture
+    -cargo test -p perl-dap -- test_attach_tcp_valid_arguments test_attach_default_values --ignored --nocapture
+    -cargo test -p perl-parser -- test_statement_with_or_modifier --ignored --nocapture
+    -RUST_TEST_THREADS=2 cargo test -p perl-lsp -- test_fix_undefined_variable test_user_story_debugging_workflow test_user_story_refactoring_legacy_code --ignored --test-threads=2 --nocapture
+    @echo "=== Roadmap gate complete (failures = unimplemented features) ==="
+
 # Health Scoreboard (keep yourself honest)
 # ============================================================================
 
@@ -679,6 +814,10 @@ health:
     @echo ""
     @echo "🔧 LSP Crate Size (crates/perl-lsp/src/):"
     @echo "  Lines:      $(find crates/perl-lsp/src -name '*.rs' | xargs wc -l | tail -n 1 | awk '{print $1}' || echo 'N/A')"
+    @echo ""
+    @echo "🧹 Dead Code Metrics:"
+    @echo "  Unused deps: $(cargo machete 2>&1 | grep -c 'Cargo.toml:' || echo 0) crates affected"
+    @echo "  Dead code allows: $(grep -r '#\[allow(dead_code)\]' crates --include='*.rs' 2>/dev/null | wc -l || echo 0)"
     @echo ""
     @echo "💡 Run 'just health-detail' for file-by-file breakdown"
 
@@ -1063,7 +1202,7 @@ _semver-baseline-tag:
 # ============================================================================
 
 # Run fuzzing on specific target (default: 60 seconds)
-fuzz target='parser_comprehensive' duration='60':
+fuzz target='substitution_parsing' duration='60':
     @echo "🔥 Fuzzing {{target}} for {{duration}} seconds..."
     @cargo +nightly fuzz run {{target}} -- -max_total_time={{duration}}
 
@@ -1073,14 +1212,14 @@ fuzz-list:
     @cargo +nightly fuzz list
 
 # Run continuous fuzzing (for local development, Ctrl+C to stop)
-fuzz-continuous target='parser_comprehensive':
+fuzz-continuous target='substitution_parsing':
     @echo "🔥 Running continuous fuzzing on {{target}} (Ctrl+C to stop)..."
     @echo "📊 Corpus: fuzz/corpus/{{target}}"
     @echo "💥 Crashes: fuzz/artifacts/{{target}}"
     @cargo +nightly fuzz run {{target}}
 
 # Check fuzz corpus coverage for a target
-fuzz-coverage target='parser_comprehensive':
+fuzz-coverage target='substitution_parsing':
     @echo "📊 Checking coverage for {{target}}..."
     @cargo +nightly fuzz coverage {{target}}
     @echo ""
@@ -1110,13 +1249,11 @@ fuzz-check-crashes:
 # Run all fuzz targets for regression testing (short duration)
 fuzz-regression duration='30':
     @echo "🔥 Running fuzz regression tests ({{duration}}s per target)..."
-    @just fuzz parser_comprehensive {{duration}} || true
-    @just fuzz lexer_robustness {{duration}} || true
-    @just fuzz substitution_parsing {{duration}} || true
     @just fuzz builtin_functions {{duration}} || true
-    @just fuzz unicode_positions {{duration}} || true
-    @just fuzz lsp_navigation {{duration}} || true
     @just fuzz heredoc_parsing {{duration}} || true
+    @just fuzz substitution_parsing {{duration}} || true
+    @just fuzz lsp_navigation {{duration}} || true
+    @just fuzz unicode_positions {{duration}} || true
     @just fuzz-check-crashes
     @echo "✅ Fuzz regression testing complete"
 
@@ -1249,3 +1386,88 @@ ci-dead-code:
     @echo "🔍 Checking dead code baseline..."
     @bash scripts/dead-code-check.sh check
 
+# ============================================================================
+# CI Gate Execution with Receipt Generation (Issue #210)
+# ============================================================================
+
+# CI gate: check unlinked-item compliance
+ci-check-todos:
+    @bash ci/check_todos.sh
+
+# Fast merge gate with receipt generation
+ci-gate-with-receipts:
+    @echo "🚪 Running fast merge gate with receipts..."
+    @mkdir -p .receipts/$(date +%Y%m%d)
+    @RECEIPT_DIR=".receipts/$(date +%Y%m%d)" bash -c '\
+        ./scripts/execute-gate.sh workflow-audit --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh no-nested-lock --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh format --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh clippy-lib --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh test-lib --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh policy --receipt-dir "$RECEIPT_DIR" && \
+        ./scripts/execute-gate.sh lsp-definition --receipt-dir "$RECEIPT_DIR" \
+    '
+    @echo "✅ Merge gate passed with receipts!"
+    @echo "📁 Receipts: .receipts/$(date +%Y%m%d)/"
+
+# Gate execution for individual gate (with receipt)
+gate-execute gate_id:
+    @./scripts/execute-gate.sh {{gate_id}} --receipt-dir .receipts/$(date +%Y%m%d)
+
+# Show gate registry
+gate-list:
+    @python3 scripts/list-gates.py
+
+# ============================================================================
+# Release Gate (Slice C: Release candidate validation)
+# ============================================================================
+
+# Release build (locked, optimized)
+release-build:
+    @echo "Building release binary..."
+    cargo build -p perl-lsp --release --locked
+    @echo "Release build complete: target/release/perl-lsp"
+
+# Version sync check (Slice B: single source of version truth)
+version-check:
+    @echo "Checking version sync..."
+    @bash scripts/check-version-sync.sh
+
+# Release gate: full validation for release candidates (~10 min)
+# Composes: ci-gate + release-specific checks
+release-gate: ci-gate release-build sbom-verify version-check
+    @echo "=============================================="
+    @echo "  RELEASE GATE PASSED"
+    @echo "=============================================="
+
+# ============================================================================
+# LSP Test Tiering (Slice D: tiered test execution)
+# ============================================================================
+
+# Tier A: fast smoke tests for perl-lsp (<30s)
+# Run on every PR for quick feedback
+lsp-tier-a:
+    @echo "Running LSP Tier A (smoke tests)..."
+    cargo test -p perl-lsp --test cli_smoke --test lsp_capabilities_snapshot --test lsp_capabilities_contract --test lsp_protocol_tests --locked -- --test-threads=1
+    @echo "LSP Tier A passed"
+
+# Tier B: core behavior tests for perl-lsp (~2-5 min)
+# Run at merge gate for thorough validation
+lsp-tier-b: lsp-tier-a
+    @echo "Running LSP Tier B (core behavior)..."
+    env RUST_TEST_THREADS=2 cargo test -p perl-lsp \
+        --test semantic_definition \
+        --test lsp_completion_tests \
+        --test lsp_unhappy_paths \
+        --test lsp_code_actions_test \
+        --test execute_command_security_tests \
+        --test lsp_behavioral_tests \
+        --test lsp_workspace_index_e2e \
+        --locked -- --test-threads=2
+    @echo "LSP Tier B passed"
+
+# Tier C: full suite (nightly, all integration tests)
+lsp-tier-c:
+    @echo "Running LSP Tier C (full suite)..."
+    env RUST_TEST_THREADS=2 cargo test -p perl-lsp --locked -- --test-threads=2
+    @echo "LSP Tier C passed"

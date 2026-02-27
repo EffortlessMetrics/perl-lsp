@@ -24,7 +24,7 @@ fn test_advertised_features_match_capabilities() -> Result<(), Box<dyn std::erro
     let mut from_caps = feature_ids_from_caps(&caps);
     from_caps.sort();
 
-    let mut from_catalog = advertised_features();
+    let mut from_catalog: Vec<_> = advertised_features().to_vec();
     from_catalog.sort();
 
     // Create snapshot data
@@ -38,7 +38,7 @@ fn test_advertised_features_match_capabilities() -> Result<(), Box<dyn std::erro
 
     // Also verify compliance percentage is reasonable
     let p = compliance_percent();
-    assert!((80.0..=85.0).contains(&p), "unexpected compliance percent: {}", p);
+    assert!((95.0..=100.0).contains(&p), "unexpected compliance percent: {}", p);
 
     Ok(())
 }

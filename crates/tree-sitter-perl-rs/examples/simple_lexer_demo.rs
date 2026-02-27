@@ -4,7 +4,7 @@ use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
 fn main() {
     println!("=== Perl Lexer Demo ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         "my $x = 42;",
         "print \"Hello, World!\";",
         "if ($x > 10) { print $x; }",

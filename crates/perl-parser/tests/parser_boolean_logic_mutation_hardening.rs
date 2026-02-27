@@ -72,21 +72,21 @@ fn test_statement_termination_boolean_mutations() {
             }
             (false, false) => {
                 // Expected failure, but should not be due to recursion/infinite loop
-                if let Err(ParseError::RecursionLimit) = parse_result {
-                    panic!(
-                        "MUTATION KILL: {} - hit recursion limit instead of clean parse error, indicates termination mutation: '{}'",
-                        description, perl_code
-                    );
-                }
+                assert!(
+                    !matches!(parse_result, Err(ParseError::RecursionLimit)),
+                    "MUTATION KILL: {} - hit recursion limit instead of clean parse error, indicates termination mutation: '{}'",
+                    description,
+                    perl_code
+                );
             }
             (false, true) => {
                 // Unexpected failure - check if it's due to termination issues
-                if let Err(ParseError::RecursionLimit) = parse_result {
-                    panic!(
-                        "MUTATION KILL: {} - expected success but hit recursion limit, indicates termination mutation: '{}'",
-                        description, perl_code
-                    );
-                }
+                assert!(
+                    !matches!(parse_result, Err(ParseError::RecursionLimit)),
+                    "MUTATION KILL: {} - expected success but hit recursion limit, indicates termination mutation: '{}'",
+                    description,
+                    perl_code
+                );
                 // Other parse errors might be acceptable for edge cases
             }
             (true, false) => {
@@ -140,12 +140,12 @@ fn test_logical_operator_parsing_mutations() {
         );
 
         // Should not hit recursion limits due to logical operator issues
-        if let Err(ParseError::RecursionLimit) = parse_result {
-            panic!(
-                "MUTATION KILL: {} - hit recursion limit, indicates logical operator mutation: '{}'",
-                description, perl_code
-            );
-        }
+        assert!(
+            !matches!(parse_result, Err(ParseError::RecursionLimit)),
+            "MUTATION KILL: {} - hit recursion limit, indicates logical operator mutation: '{}'",
+            description,
+            perl_code
+        );
     }
 }
 
@@ -190,12 +190,12 @@ fn test_postfix_operator_parsing_mutations() {
         );
 
         // Should not hit recursion limits due to postfix operator issues
-        if let Err(ParseError::RecursionLimit) = parse_result {
-            panic!(
-                "MUTATION KILL: {} - hit recursion limit, indicates postfix operator mutation: '{}'",
-                description, perl_code
-            );
-        }
+        assert!(
+            !matches!(parse_result, Err(ParseError::RecursionLimit)),
+            "MUTATION KILL: {} - hit recursion limit, indicates postfix operator mutation: '{}'",
+            description,
+            perl_code
+        );
     }
 }
 
@@ -247,12 +247,12 @@ fn test_variable_sigil_parsing_mutations() {
         );
 
         // Should not hit recursion limits due to sigil issues
-        if let Err(ParseError::RecursionLimit) = parse_result {
-            panic!(
-                "MUTATION KILL: {} - hit recursion limit, indicates variable sigil mutation: '{}'",
-                description, perl_code
-            );
-        }
+        assert!(
+            !matches!(parse_result, Err(ParseError::RecursionLimit)),
+            "MUTATION KILL: {} - hit recursion limit, indicates variable sigil mutation: '{}'",
+            description,
+            perl_code
+        );
     }
 }
 
@@ -307,12 +307,12 @@ fn test_statement_modifier_parsing_mutations() {
         );
 
         // Should not hit recursion limits due to modifier issues
-        if let Err(ParseError::RecursionLimit) = parse_result {
-            panic!(
-                "MUTATION KILL: {} - hit recursion limit, indicates statement modifier mutation: '{}'",
-                description, perl_code
-            );
-        }
+        assert!(
+            !matches!(parse_result, Err(ParseError::RecursionLimit)),
+            "MUTATION KILL: {} - hit recursion limit, indicates statement modifier mutation: '{}'",
+            description,
+            perl_code
+        );
     }
 }
 
@@ -361,11 +361,11 @@ fn test_boolean_logic_integration_mutations() {
         );
 
         // Should not hit recursion limits
-        if let Err(ParseError::RecursionLimit) = parse_result {
-            panic!(
-                "MUTATION KILL: {} - hit recursion limit, indicates boolean logic mutation: '{}'",
-                description, perl_code
-            );
-        }
+        assert!(
+            !matches!(parse_result, Err(ParseError::RecursionLimit)),
+            "MUTATION KILL: {} - hit recursion limit, indicates boolean logic mutation: '{}'",
+            description,
+            perl_code
+        );
     }
 }

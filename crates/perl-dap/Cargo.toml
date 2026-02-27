@@ -1,17 +1,21 @@
 [package]
 name = "perl-dap"
-version = "0.1.0"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "Debug Adapter Protocol server for Perl"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-dap"
 readme = "README.md"
-keywords = ["perl", "parser", "lsp", "dap", "debug"]
-categories = ["development-tools", "parsing"]
+keywords = ["perl", "dap", "debug", "debugger", "adapter"]
+categories = ["development-tools::debugging", "command-line-utilities"]
 include = [
   "src/**",
+  "build.rs",
+  "features_sot.toml",
   "Cargo.toml",
   "README.md",
   "LICENSE*"
@@ -34,7 +38,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 
 # Error handling
-anyhow = "1.0.100"
+anyhow = "1.0.102"
 thiserror = "2.0.18"
 
 # Regex for parsing debugger output
@@ -49,13 +53,21 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 # Command-line argument parsing
-clap = { version = "4.5.55", features = ["derive"] }
+clap = { version = "4.5.60", features = ["derive"] }
 
 # Rope for position mapping (reuse from perl-parser)
 ropey = "1.6.1"
 
 # Perl parser for AST breakpoint validation
-perl-parser = { path = "../perl-parser" }
+perl-parser = { path = "../perl-parser", version = "0.9.1" }
+perl-dap-breakpoint = { workspace = true }
+perl-dap-eval = { workspace = true }
+perl-dap-variables = { workspace = true }
+perl-dap-stack = { workspace = true }
+perl-module-path = { workspace = true }
+perl-path-security = { workspace = true }
+perl-content-length-framing = { workspace = true }
+perl-keywords = { workspace = true }
 
 # Process management
 # Note: tokio-process not needed (using tokio::process)
@@ -71,6 +83,9 @@ criterion = "0.8.1"
 tempfile = "3.24.0"
 
 perl-tdd-support = { workspace = true }
+
+[build-dependencies]
+perl-feature-catalog = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.1", features = ["signal"] }  # For SIGINT handling (AC9)
@@ -95,6 +110,11 @@ path = "tests/bridge_integration_tests.rs"
 name = "dap_adapter_tests"
 path = "tests/dap_adapter_tests.rs"
 # AC5-AC12: Native Rust adapter implementation
+
+[[test]]
+name = "tcp_attach_tests"
+path = "tests/tcp_attach_tests.rs"
+# Phase5: TCP attach functionality tests
 
 [[test]]
 name = "dap_golden_transcript_tests"
@@ -130,6 +150,12 @@ path = "tests/dap_packaging_tests.rs"
 name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
 harness = false
+
+[[bench]]
+name = "dap_native_benchmarks"
+path = "benches/dap_native_benchmarks.rs"
+harness = false
+# Phase5: Native DAP performance benchmarks
 
 [lints]
 workspace = true
