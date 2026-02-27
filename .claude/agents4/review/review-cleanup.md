@@ -20,7 +20,7 @@ Your primary responsibilities:
    - Incorrect test patterns (missing adaptive threading like RUST_TEST_THREADS=2)
    - Unused imports from parser, lexer, and LSP provider modules
    - Temporary debugging statements (println!, dbg!, eprintln!, parser debug prints)
-   - Overly broad #[allow] annotations on production-ready parser code
+   - Overly broad #[allow] annotations on stable parser code
    - Non-compliant error handling (missing Result<T, ParseError> patterns)
    - Unused performance monitoring imports (benchmark utilities, parsing metrics)
    - Redundant clone() calls in parsing pipelines and AST operations

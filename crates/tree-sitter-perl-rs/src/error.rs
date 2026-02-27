@@ -18,17 +18,7 @@ pub enum ParseErrorKind {
 }
 
 /// Error types for tree-sitter Perl parser
-#[derive(
-    Error,
-    Debug,
-    Clone,
-    PartialEq,
-    Eq,
-    serde::Serialize,
-    serde::Deserialize,
-    bincode::Encode,
-    bincode::Decode,
-)]
+#[derive(Error, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ParseError {
     /// Failed to parse the input
     #[error("Failed to parse input")]
@@ -61,6 +51,10 @@ pub enum ParseError {
     /// Scanner error occurred
     #[error("Scanner error: {0}")]
     ScannerError(String),
+
+    /// Language loading failed
+    #[error("Failed to load language")]
+    LanguageLoadFailed,
 }
 
 /// Result type for parsing operations

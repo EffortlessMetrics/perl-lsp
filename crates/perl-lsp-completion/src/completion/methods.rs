@@ -3,6 +3,8 @@
 //! Provides context-aware method completion including DBI methods.
 
 use super::{context::CompletionContext, items::CompletionItem};
+use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
+use std::collections::HashSet;
 
 /// DBI database handle methods
 pub const DBI_DB_METHODS: &[(&str, &str)] = &[
@@ -79,7 +81,40 @@ pub fn add_method_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
     source: &str,
+    symbol_table: &SymbolTable,
 ) {
+    let mut seen = HashSet::new();
+
+    // Prefer discovered in-file methods first (including synthesized framework accessors).
+    let method_prefix = context.prefix.rsplit("->").next().unwrap_or(&context.prefix);
+    for (name, symbols) in &symbol_table.symbols {
+        let is_callable = symbols
+            .iter()
+            .any(|symbol| matches!(symbol.kind, SymbolKind::Subroutine | SymbolKind::Method));
+        if !is_callable {
+            continue;
+        }
+
+        if !method_prefix.is_empty() && !name.starts_with(method_prefix) {
+            continue;
+        }
+
+        let documentation = symbols.iter().find_map(|symbol| symbol.documentation.clone());
+        if seen.insert(name.clone()) {
+            completions.push(CompletionItem {
+                label: name.clone(),
+                kind: crate::completion::items::CompletionItemKind::Function,
+                detail: Some("method".to_string()),
+                documentation,
+                insert_text: Some(format!("{}()", name)),
+                sort_text: Some(format!("1_{}", name)),
+                filter_text: Some(name.clone()),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+            });
+        }
+    }
+
     // Try to infer the receiver type from context
     let receiver_type = infer_receiver_type(context, source);
 
@@ -100,17 +135,20 @@ pub fn add_method_completions(
     };
 
     for (method, desc) in methods {
-        completions.push(CompletionItem {
-            label: method.to_string(),
-            kind: crate::completion::items::CompletionItemKind::Function,
-            detail: Some("method".to_string()),
-            documentation: Some(desc.to_string()),
-            insert_text: Some(format!("{}()", method)),
-            sort_text: Some(format!("2_{}", method)),
-            filter_text: Some(method.to_string()),
-            additional_edits: vec![],
-            text_edit_range: Some((context.prefix_start, context.position)),
-        });
+        let method_name = method.to_string();
+        if seen.insert(method_name.clone()) {
+            completions.push(CompletionItem {
+                label: method_name.clone(),
+                kind: crate::completion::items::CompletionItemKind::Function,
+                detail: Some("method".to_string()),
+                documentation: Some(desc.to_string()),
+                insert_text: Some(format!("{}()", method)),
+                sort_text: Some(format!("2_{}", method)),
+                filter_text: Some(method_name),
+                additional_edits: vec![],
+                text_edit_range: Some((context.prefix_start, context.position)),
+            });
+        }
     }
 
     // If we have a DBI type, also add common methods at lower priority
@@ -119,17 +157,20 @@ pub fn add_method_completions(
             ("isa", "Check if object is of given class"),
             ("can", "Check if object can call method"),
         ] {
-            completions.push(CompletionItem {
-                label: method.to_string(),
-                kind: crate::completion::items::CompletionItemKind::Function,
-                detail: Some("method".to_string()),
-                documentation: Some(desc.to_string()),
-                insert_text: Some(format!("{}()", method)),
-                sort_text: Some(format!("9_{}", method)), // Lower priority
-                filter_text: Some(method.to_string()),
-                additional_edits: vec![],
-                text_edit_range: Some((context.prefix_start, context.position)),
-            });
+            let method_name = method.to_string();
+            if seen.insert(method_name.clone()) {
+                completions.push(CompletionItem {
+                    label: method_name.clone(),
+                    kind: crate::completion::items::CompletionItemKind::Function,
+                    detail: Some("method".to_string()),
+                    documentation: Some(desc.to_string()),
+                    insert_text: Some(format!("{}()", method)),
+                    sort_text: Some(format!("9_{}", method)), // Lower priority
+                    filter_text: Some(method_name),
+                    additional_edits: vec![],
+                    text_edit_range: Some((context.prefix_start, context.position)),
+                });
+            }
         }
     }
 }

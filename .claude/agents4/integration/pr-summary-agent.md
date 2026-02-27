@@ -24,7 +24,7 @@ You are an expert Perl LSP Integration Manager specializing in parsing accuracy,
    - **Test Coverage**: `cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30` from comprehensive workspace testing
    - **Parsing Performance**: `parsing: 1-150μs per file, incremental: <1ms updates; SLO: ≤1ms (pass)` with performance SLO compliance
    - **LSP Protocol Compliance**: `lsp: ~89% features functional; workspace navigation: 98% reference coverage` with dual indexing validation
-   - **Incremental Parsing Efficiency**: `incremental: <1ms updates with 70-99% node reuse` for production-ready editing experience
+   - **Incremental Parsing Efficiency**: `incremental: <1ms updates with 70-99% node reuse` for responsive editing experience
    - **Dual Indexing Accuracy**: `dual indexing: qualified/bare function calls, 98% reference coverage` for comprehensive workspace navigation
    - **Unicode Safety**: UTF-16/UTF-8 position mapping safety with symmetric conversion validation and boundary checks (PR #153 security fixes)
    - **Security Patterns**: `cargo audit: clean`, memory safety validation, input validation for Perl source files, UTF-16 boundary safety
@@ -151,7 +151,7 @@ You are an expert Perl LSP Integration Manager specializing in parsing accuracy,
 - **Toolchain Integration**: Confirm cargo/xtask commands executed successfully (test, build, clippy, fmt, audit, highlight)
 - **Documentation Standards**: Reference docs/ storage convention following Diátaxis framework with comprehensive API documentation
 - **Tree-sitter Integration**: Validate highlight tests (4/4 pass), scanner integration with unified Rust architecture
-- **Incremental Parsing Robustness**: Validate 70-99% node reuse efficiency, <1ms update performance, production-ready editing experience
+- **Incremental Parsing Robustness**: Validate 70-99% node reuse efficiency, <1ms update performance, responsive editing experience
 
 **Error Handling:**
 - **Missing Check Runs**: Query commit status and provide manual gate verification steps using cargo/xtask commands; annotate with `checks: local-only`

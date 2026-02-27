@@ -125,9 +125,15 @@ fn extract_nodekinds_from_content(path: &PathBuf) -> Vec<String> {
 
     if let Ok(ast) = parser.parse() {
         collect_nodekinds_recursive(&ast, &mut nodekinds);
+    } else {
+        eprintln!("   Warning: Failed to parse {}", path.display());
     }
 
-    nodekinds.into_iter().collect()
+    let result: Vec<String> = nodekinds.into_iter().collect();
+    if path.to_string_lossy().contains("basic_constructs") {
+        eprintln!("   Debug: NodeKinds in basic_constructs.pl: {:?}", result);
+    }
+    result
 }
 
 fn collect_nodekinds_recursive(node: &perl_parser::ast::Node, out: &mut HashSet<String>) {
@@ -139,84 +145,9 @@ fn collect_nodekinds_recursive(node: &perl_parser::ast::Node, out: &mut HashSet<
     });
 }
 
-/// Get all NodeKinds from the parser
-///
-/// This is a placeholder. In a real implementation,
-/// this would use reflection or a predefined list from the parser.
+/// Get all NodeKinds from the parser's canonical list.
 fn get_all_nodekinds() -> HashSet<String> {
-    // Comprehensive list of NodeKinds from crates/perl-ast/src/ast.rs
-    let nodekinds = vec![
-        "Program",
-        "ExpressionStatement",
-        "VariableDeclaration",
-        "VariableListDeclaration",
-        "Variable",
-        "VariableWithAttributes",
-        "Assignment",
-        "Binary",
-        "Ternary",
-        "Unary",
-        "Diamond",
-        "Ellipsis",
-        "Undef",
-        "Readline",
-        "Glob",
-        "Typeglob",
-        "Number",
-        "String",
-        "Heredoc",
-        "ArrayLiteral",
-        "HashLiteral",
-        "Block",
-        "Eval",
-        "Do",
-        "Try",
-        "If",
-        "LabeledStatement",
-        "While",
-        "Tie",
-        "Untie",
-        "For",
-        "Foreach",
-        "Given",
-        "When",
-        "Default",
-        "StatementModifier",
-        "Subroutine",
-        "Prototype",
-        "Signature",
-        "MandatoryParameter",
-        "OptionalParameter",
-        "SlurpyParameter",
-        "NamedParameter",
-        "Method",
-        "Return",
-        "LoopControl",
-        "MethodCall",
-        "FunctionCall",
-        "IndirectCall",
-        "Regex",
-        "Match",
-        "Substitution",
-        "Transliteration",
-        "Package",
-        "Use",
-        "No",
-        "PhaseBlock",
-        "DataSection",
-        "Class",
-        "Format",
-        "Identifier",
-        "Error",
-        "HeredocDepthLimit",
-        "MissingExpression",
-        "MissingStatement",
-        "MissingIdentifier",
-        "MissingBlock",
-        "UnknownRest",
-    ];
-
-    nodekinds.into_iter().map(|s| s.to_string()).collect()
+    perl_parser::ast::NodeKind::ALL_KIND_NAMES.iter().map(|s| (*s).to_string()).collect()
 }
 
 #[cfg(test)]
@@ -233,16 +164,19 @@ mod tests {
     fn test_get_all_nodekinds() {
         let nodekinds = get_all_nodekinds();
         assert!(nodekinds.len() > 50);
-        assert!(nodekinds.contains("Statement"));
-        assert!(nodekinds.contains("Expression"));
+        assert!(nodekinds.contains("ExpressionStatement"));
+        assert!(nodekinds.contains("Binary"));
         assert!(nodekinds.contains("Subroutine"));
     }
 
     #[test]
-    #[ignore = "corpus audit: test file 'test.pl' may not exist"]
-    fn test_extract_nodekinds_from_content() {
-        let path = PathBuf::from("test.pl");
+    fn test_extract_nodekinds_from_content() -> Result<(), Box<dyn std::error::Error>> {
+        use std::io::Write;
+        let mut tmp = tempfile::NamedTempFile::new()?;
+        writeln!(tmp, "my $x = 1;\nprint $x;\nsub foo {{ return 42; }}")?;
+        let path = PathBuf::from(tmp.path());
         let nodekinds = extract_nodekinds_from_content(&path);
         assert!(!nodekinds.is_empty());
+        Ok(())
     }
 }

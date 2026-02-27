@@ -2,6 +2,7 @@
 //!
 //! This module provides validation for rename operations.
 
+use perl_keywords::is_rename_keyword;
 use perl_semantic_analyzer::symbol::SymbolKind;
 use perl_semantic_analyzer::symbol::SymbolTable;
 
@@ -55,13 +56,7 @@ pub fn validate_name(
     }
 
     // Check if it's a keyword
-    let keywords = [
-        "my", "our", "local", "state", "if", "elsif", "else", "unless", "while", "until", "for",
-        "foreach", "sub", "package", "use", "require", "return", "last", "next", "redo", "and",
-        "or", "not", "eq", "ne",
-    ];
-
-    if keywords.contains(&name) {
+    if is_rename_keyword(name) {
         return Err("Cannot use a keyword as a name".to_string());
     }
 

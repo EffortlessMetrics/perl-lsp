@@ -19,7 +19,8 @@ fn test_highlight_runner_integration() {
 
     for (source, expected_kinds) in test_cases {
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap_or_else(|e| panic!("Failed to parse test source: {:?}", e));
+        use perl_tdd_support::must;
+        let ast = must(parser.parse());
 
         let mut actual_kinds = HashMap::new();
         collect_node_kinds(&ast, &mut actual_kinds);
@@ -54,7 +55,8 @@ fn test_complex_highlight_constructs() {
 
     for (source, expected_primary_kind) in test_cases {
         let mut parser = Parser::new(source);
-        let ast = parser.parse().unwrap_or_else(|_| panic!("Failed to parse: {}", source));
+        use perl_tdd_support::must;
+        let ast = must(parser.parse());
 
         let mut actual_kinds = HashMap::new();
         collect_node_kinds(&ast, &mut actual_kinds);
@@ -136,7 +138,8 @@ print "Processed items";
 
     let start = Instant::now();
     let mut parser = Parser::new(large_source);
-    let ast = parser.parse().unwrap_or_else(|e| panic!("Failed to parse large source: {:?}", e));
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
 
     let mut actual_kinds = HashMap::new();
     collect_node_kinds(&ast, &mut actual_kinds);

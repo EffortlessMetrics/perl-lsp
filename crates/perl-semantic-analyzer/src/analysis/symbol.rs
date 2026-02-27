@@ -14,11 +14,14 @@
 //! ```no_run
 //! use perl_semantic_analyzer::{Parser, symbol::SymbolExtractor};
 //!
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let mut parser = Parser::new("sub hello { my $x = 1; }");
-//! let ast = parser.parse().expect("parse");
+//! let ast = parser.parse()?;
 //! let extractor = SymbolExtractor::new();
 //! let table = extractor.extract(&ast);
 //! assert!(table.symbols.contains_key("hello"));
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::SourceLocation;
@@ -314,11 +317,37 @@ impl SymbolTable {
     }
 }
 
+/// Classification of Moo/Moose framework variant detected via `use` statements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FrameworkKind {
+    /// `use Moo;`
+    Moo,
+    /// `use Moo::Role;`
+    MooRole,
+    /// `use Moose;`
+    Moose,
+    /// `use Moose::Role;`
+    MooseRole,
+}
+
+/// Per-package framework detection flags.
+#[derive(Debug, Clone, Default)]
+pub struct FrameworkFlags {
+    /// Moo/Moose framework variant, if any.
+    pub moo: bool,
+    /// Class::Accessor style generated accessors.
+    pub class_accessor: bool,
+    /// Which specific Moo/Moose variant was detected.
+    pub kind: Option<FrameworkKind>,
+}
+
 /// Extract symbols from an AST for Parse/Index workflows.
 pub struct SymbolExtractor {
     table: SymbolTable,
     /// Source code for comment extraction
     source: String,
+    /// Per-package framework detection flags, keyed by package name.
+    framework_flags: HashMap<String, FrameworkFlags>,
 }
 
 impl Default for SymbolExtractor {
@@ -332,29 +361,57 @@ impl SymbolExtractor {
     ///
     /// Used during Parse/Index stages when only symbols are required.
     pub fn new() -> Self {
-        SymbolExtractor { table: SymbolTable::new(), source: String::new() }
+        SymbolExtractor {
+            table: SymbolTable::new(),
+            source: String::new(),
+            framework_flags: HashMap::new(),
+        }
     }
 
     /// Create a symbol extractor with source text for documentation extraction.
     ///
     /// Used during Parse/Analyze stages to attach documentation metadata.
     pub fn new_with_source(source: &str) -> Self {
-        SymbolExtractor { table: SymbolTable::new(), source: source.to_string() }
+        SymbolExtractor {
+            table: SymbolTable::new(),
+            source: source.to_string(),
+            framework_flags: HashMap::new(),
+        }
     }
 
     /// Extract symbols from an AST node for Index/Analyze workflows.
     pub fn extract(mut self, node: &Node) -> SymbolTable {
         self.visit_node(node);
+        self.upgrade_package_symbols_from_framework_flags();
         self.table
+    }
+
+    /// Post-processing: upgrade `SymbolKind::Package` to `Class` or `Role`
+    /// based on the framework flags discovered during traversal.
+    fn upgrade_package_symbols_from_framework_flags(&mut self) {
+        for (pkg_name, flags) in &self.framework_flags {
+            let Some(kind) = flags.kind else {
+                continue;
+            };
+            let new_kind = match kind {
+                FrameworkKind::Moo | FrameworkKind::Moose => SymbolKind::Class,
+                FrameworkKind::MooRole | FrameworkKind::MooseRole => SymbolKind::Role,
+            };
+            if let Some(symbols) = self.table.symbols.get_mut(pkg_name) {
+                for symbol in symbols.iter_mut() {
+                    if symbol.kind == SymbolKind::Package {
+                        symbol.kind = new_kind;
+                    }
+                }
+            }
+        }
     }
 
     /// Visit a node and extract symbols
     fn visit_node(&mut self, node: &Node) {
         match &node.kind {
             NodeKind::Program { statements } => {
-                for stmt in statements {
-                    self.visit_node(stmt);
-                }
+                self.visit_statement_list(statements);
             }
 
             NodeKind::VariableDeclaration { declarator, variable, attributes, initializer } => {
@@ -478,9 +535,7 @@ impl SymbolExtractor {
 
             NodeKind::Block { statements } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
-                for stmt in statements {
-                    self.visit_node(stmt);
-                }
+                self.visit_statement_list(statements);
                 self.table.pop_scope();
             }
 
@@ -523,7 +578,7 @@ impl SymbolExtractor {
                 self.table.pop_scope();
             }
 
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block: _ } => {
                 self.table.push_scope(ScopeKind::Block, node.location);
 
                 // The loop variable is implicitly declared
@@ -567,7 +622,18 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::MethodCall { object, method: _, args } => {
+            NodeKind::MethodCall { object, method, args } => {
+                // Track method call sites so semantic definition/hover can resolve generated
+                // accessors (Moo/Moose/Class::Accessor) from usage points.
+                let location = self.method_reference_location(node, object, method);
+                self.table.add_reference(SymbolReference {
+                    name: method.clone(),
+                    kind: SymbolKind::Subroutine,
+                    location,
+                    scope_id: self.table.current_scope(),
+                    is_write: false,
+                });
+
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -621,9 +687,12 @@ impl SymbolExtractor {
                 }
             }
 
-            NodeKind::Use { module: _, args: _, .. } | NodeKind::No { module: _, args: _, .. } => {
-                // We don't extract symbols from use/no statements directly
-                // (except for constants, which might be handled elsewhere)
+            NodeKind::Use { module, args, .. } => {
+                self.update_framework_context(module, args);
+            }
+
+            NodeKind::No { module: _, args: _, .. } => {
+                // We don't currently track framework deactivation via `no`.
             }
 
             NodeKind::PhaseBlock { phase: _, phase_span: _, block } => {
@@ -733,7 +802,15 @@ impl SymbolExtractor {
                 self.visit_node(expr);
             }
 
-            NodeKind::IndirectCall { method: _, object, args } => {
+            NodeKind::IndirectCall { method, object, args } => {
+                self.table.add_reference(SymbolReference {
+                    name: method.clone(),
+                    kind: SymbolKind::Subroutine,
+                    location: node.location,
+                    scope_id: self.table.current_scope(),
+                    is_write: false,
+                });
+
                 self.visit_node(object);
                 for arg in args {
                     self.visit_node(arg);
@@ -763,6 +840,675 @@ impl SymbolExtractor {
                 eprintln!("Warning: Unhandled node type in symbol extractor: {:?}", node.kind);
             }
         }
+    }
+
+    /// Visit a statement list with framework-aware declaration synthesis.
+    ///
+    /// This handles idiomatic Perl framework declarations that are not represented
+    /// as native declaration nodes in the AST (for example Moo `has` and
+    /// Class::Accessor `mk_accessors` patterns).
+    fn visit_statement_list(&mut self, statements: &[Node]) {
+        let mut idx = 0;
+        while idx < statements.len() {
+            if let Some(consumed) = self.try_extract_framework_declarations(statements, idx) {
+                idx += consumed;
+                continue;
+            }
+
+            self.visit_node(&statements[idx]);
+            idx += 1;
+        }
+    }
+
+    /// Detect and synthesize framework declarations from statement patterns.
+    ///
+    /// Returns the number of statements consumed when a pattern is handled.
+    fn try_extract_framework_declarations(
+        &mut self,
+        statements: &[Node],
+        idx: usize,
+    ) -> Option<usize> {
+        let flags = self.framework_flags.get(&self.table.current_package).cloned();
+        let flags = flags.as_ref();
+
+        let is_moo = flags.is_some_and(|f| f.moo);
+
+        if is_moo {
+            if let Some(consumed) = self.try_extract_moo_has_declaration(statements, idx) {
+                return Some(consumed);
+            }
+            if let Some(consumed) = self.try_extract_method_modifier(statements, idx) {
+                return Some(consumed);
+            }
+            if let Some(consumed) = self.try_extract_extends_with(statements, idx) {
+                return Some(consumed);
+            }
+        }
+
+        if flags.is_some_and(|f| f.class_accessor)
+            && self.try_extract_class_accessor_declaration(&statements[idx])
+        {
+            // Keep regular traversal for argument expressions (for example defaults).
+            self.visit_node(&statements[idx]);
+            return Some(1);
+        }
+
+        None
+    }
+
+    /// Extract Moo/Moose `has` declarations represented as:
+    /// 1. `ExpressionStatement(Identifier("has"))`
+    /// 2. `ExpressionStatement(HashLiteral(...))`
+    fn try_extract_moo_has_declaration(
+        &mut self,
+        statements: &[Node],
+        idx: usize,
+    ) -> Option<usize> {
+        let first = &statements[idx];
+
+        // Form A:
+        // 1) ExpressionStatement(Identifier("has"))
+        // 2) ExpressionStatement(HashLiteral(...))
+        if idx + 1 < statements.len() {
+            let second = &statements[idx + 1];
+            let is_has_marker = matches!(
+                &first.kind,
+                NodeKind::ExpressionStatement { expression }
+                    if matches!(&expression.kind, NodeKind::Identifier { name } if name == "has")
+            );
+
+            if is_has_marker
+                && let NodeKind::ExpressionStatement { expression } = &second.kind
+                && let NodeKind::HashLiteral { pairs } = &expression.kind
+            {
+                let has_location =
+                    SourceLocation { start: first.location.start, end: second.location.end };
+                self.synthesize_moo_has_pairs(pairs, has_location, false);
+                self.visit_node(second);
+                return Some(2);
+            }
+        }
+
+        // Form B:
+        // ExpressionStatement(HashLiteral((Binary("[]", Identifier("has"), attr_expr), options)))
+        if let NodeKind::ExpressionStatement { expression } = &first.kind
+            && let NodeKind::HashLiteral { pairs } = &expression.kind
+        {
+            let has_embedded_marker = pairs.iter().any(|(key_node, _)| {
+                matches!(
+                    &key_node.kind,
+                    NodeKind::Binary { op, left, .. }
+                        if op == "[]" && matches!(&left.kind, NodeKind::Identifier { name } if name == "has")
+                )
+            });
+
+            if has_embedded_marker {
+                self.synthesize_moo_has_pairs(pairs, first.location, true);
+                self.visit_node(first);
+                return Some(1);
+            }
+        }
+
+        None
+    }
+
+    /// Detect Moo/Moose method modifiers (`around`, `before`, `after`).
+    ///
+    /// Pattern (two statements):
+    /// 1. `ExpressionStatement(Identifier("around"))` (or `before`/`after`)
+    /// 2. `ExpressionStatement(HashLiteral([ (method_name, Subroutine{...}) ]))`
+    fn try_extract_method_modifier(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        if idx + 1 >= statements.len() {
+            return None;
+        }
+
+        let first = &statements[idx];
+        let second = &statements[idx + 1];
+
+        // Check: first is ExpressionStatement(Identifier("around"|"before"|"after"))
+        let modifier_name = match &first.kind {
+            NodeKind::ExpressionStatement { expression } => match &expression.kind {
+                NodeKind::Identifier { name }
+                    if matches!(name.as_str(), "around" | "before" | "after") =>
+                {
+                    name.as_str()
+                }
+                _ => return None,
+            },
+            _ => return None,
+        };
+
+        // Check: second is ExpressionStatement(HashLiteral(...)) with method names
+        let NodeKind::ExpressionStatement { expression } = &second.kind else {
+            return None;
+        };
+        let NodeKind::HashLiteral { pairs } = &expression.kind else {
+            return None;
+        };
+
+        let modifier_location =
+            SourceLocation { start: first.location.start, end: second.location.end };
+        let scope_id = self.table.current_scope();
+        let package = self.table.current_package.clone();
+
+        for (key_node, _value_node) in pairs {
+            let method_names = Self::collect_symbol_names(key_node);
+            for method_name in method_names {
+                self.table.add_symbol(Symbol {
+                    name: method_name.clone(),
+                    qualified_name: format!("{package}::{method_name}"),
+                    kind: SymbolKind::Subroutine,
+                    location: modifier_location,
+                    scope_id,
+                    declaration: Some(modifier_name.to_string()),
+                    documentation: Some(format!(
+                        "Method modifier `{modifier_name}` for `{method_name}`"
+                    )),
+                    attributes: vec![format!("modifier={modifier_name}")],
+                });
+            }
+        }
+
+        // Visit the body of the modifier subroutines
+        self.visit_node(second);
+
+        Some(2)
+    }
+
+    /// Detect Moo/Moose `extends 'Parent'` and `with 'Role'` declarations.
+    ///
+    /// Pattern (two statements):
+    /// 1. `ExpressionStatement(Identifier("extends"))` or `ExpressionStatement(Identifier("with"))`
+    /// 2. `ExpressionStatement(String(...))` or `ExpressionStatement(ArrayLiteral(...))`
+    fn try_extract_extends_with(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        if idx + 1 >= statements.len() {
+            return None;
+        }
+
+        let first = &statements[idx];
+        let second = &statements[idx + 1];
+
+        // Check: first is ExpressionStatement(Identifier("extends"|"with"))
+        let keyword = match &first.kind {
+            NodeKind::ExpressionStatement { expression } => match &expression.kind {
+                NodeKind::Identifier { name } if matches!(name.as_str(), "extends" | "with") => {
+                    name.as_str()
+                }
+                _ => return None,
+            },
+            _ => return None,
+        };
+
+        // Check: second is ExpressionStatement with name(s)
+        let NodeKind::ExpressionStatement { expression } = &second.kind else {
+            return None;
+        };
+
+        let names = Self::collect_symbol_names(expression);
+        if names.is_empty() {
+            return None;
+        }
+
+        let ref_location = SourceLocation { start: first.location.start, end: second.location.end };
+
+        let ref_kind = if keyword == "extends" { SymbolKind::Class } else { SymbolKind::Role };
+
+        for name in names {
+            self.table.add_reference(SymbolReference {
+                name,
+                kind: ref_kind,
+                location: ref_location,
+                scope_id: self.table.current_scope(),
+                is_write: false,
+            });
+        }
+
+        Some(2)
+    }
+
+    /// Synthesize symbols from parsed `has` key/value pairs.
+    fn synthesize_moo_has_pairs(
+        &mut self,
+        pairs: &[(Node, Node)],
+        has_location: SourceLocation,
+        require_embedded_marker: bool,
+    ) {
+        let scope_id = self.table.current_scope();
+        let package = self.table.current_package.clone();
+
+        for (attr_expr, options_expr) in pairs {
+            let Some(attr_expr) = Self::moo_attribute_expr(attr_expr, require_embedded_marker)
+            else {
+                continue;
+            };
+
+            let attribute_names = Self::collect_symbol_names(attr_expr);
+            if attribute_names.is_empty() {
+                continue;
+            }
+
+            let option_map = Self::extract_hash_options(options_expr);
+            let metadata = Self::attribute_metadata(&option_map);
+            let generated_methods =
+                Self::moo_accessor_names(&attribute_names, &option_map, options_expr);
+
+            for attribute_name in attribute_names {
+                self.table.add_symbol(Symbol {
+                    name: attribute_name.clone(),
+                    qualified_name: format!("{package}::{attribute_name}"),
+                    kind: SymbolKind::scalar(),
+                    location: has_location,
+                    scope_id,
+                    declaration: Some("has".to_string()),
+                    documentation: Some(format!("Moo/Moose attribute `{attribute_name}`")),
+                    attributes: metadata.clone(),
+                });
+            }
+
+            for method_name in generated_methods {
+                self.table.add_symbol(Symbol {
+                    name: method_name.clone(),
+                    qualified_name: format!("{package}::{method_name}"),
+                    kind: SymbolKind::Subroutine,
+                    location: has_location,
+                    scope_id,
+                    declaration: Some("has".to_string()),
+                    documentation: Some("Generated accessor from Moo/Moose `has`".to_string()),
+                    attributes: metadata.clone(),
+                });
+            }
+        }
+    }
+
+    /// Resolve the attribute-expression node used in a parsed `has` declaration pair.
+    fn moo_attribute_expr(attr_expr: &Node, require_embedded_marker: bool) -> Option<&Node> {
+        if let NodeKind::Binary { op, left, right } = &attr_expr.kind
+            && op == "[]"
+            && matches!(&left.kind, NodeKind::Identifier { name } if name == "has")
+        {
+            return Some(right.as_ref());
+        }
+
+        if require_embedded_marker { None } else { Some(attr_expr) }
+    }
+
+    /// Extract Class::Accessor generated accessors from `mk_*_accessors` calls.
+    fn try_extract_class_accessor_declaration(&mut self, statement: &Node) -> bool {
+        let NodeKind::ExpressionStatement { expression } = &statement.kind else {
+            return false;
+        };
+
+        let NodeKind::MethodCall { method, args, .. } = &expression.kind else {
+            return false;
+        };
+
+        let is_accessor_generator = matches!(
+            method.as_str(),
+            "mk_accessors" | "mk_ro_accessors" | "mk_rw_accessors" | "mk_wo_accessors"
+        );
+        if !is_accessor_generator {
+            return false;
+        }
+
+        let mut accessor_names = Vec::new();
+        for arg in args {
+            accessor_names.extend(Self::collect_symbol_names(arg));
+        }
+        if accessor_names.is_empty() {
+            return false;
+        }
+
+        let mut seen = HashSet::new();
+        let scope_id = self.table.current_scope();
+        let package = self.table.current_package.clone();
+
+        for accessor_name in accessor_names {
+            if !seen.insert(accessor_name.clone()) {
+                continue;
+            }
+
+            self.table.add_symbol(Symbol {
+                name: accessor_name.clone(),
+                qualified_name: format!("{package}::{accessor_name}"),
+                kind: SymbolKind::Subroutine,
+                location: statement.location,
+                scope_id,
+                declaration: Some(method.clone()),
+                documentation: Some("Generated accessor (Class::Accessor)".to_string()),
+                attributes: vec!["framework=Class::Accessor".to_string()],
+            });
+        }
+
+        true
+    }
+
+    /// Update framework detection state from `use` statements.
+    fn update_framework_context(&mut self, module: &str, args: &[String]) {
+        let pkg = self.table.current_package.clone();
+
+        let framework_kind = match module {
+            "Moo" => Some(FrameworkKind::Moo),
+            "Moo::Role" => Some(FrameworkKind::MooRole),
+            "Moose" => Some(FrameworkKind::Moose),
+            "Moose::Role" => Some(FrameworkKind::MooseRole),
+            _ => None,
+        };
+
+        if let Some(kind) = framework_kind {
+            let flags = self.framework_flags.entry(pkg).or_default();
+            flags.moo = true;
+            flags.kind = Some(kind);
+            return;
+        }
+
+        if module == "Class::Accessor" {
+            self.framework_flags.entry(pkg).or_default().class_accessor = true;
+            return;
+        }
+
+        if matches!(module, "base" | "parent") {
+            let has_class_accessor_parent = args
+                .iter()
+                .filter_map(|arg| Self::normalize_symbol_name(arg))
+                .any(|arg| arg == "Class::Accessor");
+            if has_class_accessor_parent {
+                self.framework_flags.entry(pkg).or_default().class_accessor = true;
+            }
+        }
+    }
+
+    /// Parse attribute metadata from Moo/Moose option hashes.
+    fn extract_hash_options(node: &Node) -> HashMap<String, String> {
+        let mut options = HashMap::new();
+        let NodeKind::HashLiteral { pairs } = &node.kind else {
+            return options;
+        };
+
+        for (key_node, value_node) in pairs {
+            let Some(key_name) = Self::single_symbol_name(key_node) else {
+                continue;
+            };
+            let value_text = Self::value_summary(value_node);
+            options.insert(key_name, value_text);
+        }
+
+        options
+    }
+
+    /// Convert option metadata into hover-friendly key/value tags.
+    fn attribute_metadata(option_map: &HashMap<String, String>) -> Vec<String> {
+        let preferred_order = [
+            "is",
+            "isa",
+            "required",
+            "lazy",
+            "builder",
+            "default",
+            "reader",
+            "writer",
+            "accessor",
+            "predicate",
+            "clearer",
+            "handles",
+        ];
+
+        let mut metadata = Vec::new();
+        for key in preferred_order {
+            if let Some(value) = option_map.get(key) {
+                metadata.push(format!("{key}={value}"));
+            }
+        }
+        metadata
+    }
+
+    /// Compute accessor method names for a Moo/Moose `has` declaration.
+    fn moo_accessor_names(
+        attribute_names: &[String],
+        option_map: &HashMap<String, String>,
+        options_expr: &Node,
+    ) -> Vec<String> {
+        let mut methods = Vec::new();
+        let mut seen = HashSet::new();
+
+        for key in ["accessor", "reader", "writer", "predicate", "clearer", "builder"] {
+            for name in Self::option_method_names(options_expr, key, attribute_names) {
+                if seen.insert(name.clone()) {
+                    methods.push(name);
+                }
+            }
+        }
+
+        for name in Self::handles_method_names(options_expr) {
+            if seen.insert(name.clone()) {
+                methods.push(name);
+            }
+        }
+
+        // Default accessor when explicit reader/writer/accessor isn't provided.
+        let has_explicit_accessor = option_map.contains_key("accessor")
+            || option_map.contains_key("reader")
+            || option_map.contains_key("writer");
+        if !has_explicit_accessor {
+            for attribute_name in attribute_names {
+                if seen.insert(attribute_name.clone()) {
+                    methods.push(attribute_name.clone());
+                }
+            }
+        }
+
+        methods
+    }
+
+    /// Find an option value node inside a hash-literal options list.
+    fn find_hash_option_value<'a>(options_expr: &'a Node, key: &str) -> Option<&'a Node> {
+        let NodeKind::HashLiteral { pairs } = &options_expr.kind else {
+            return None;
+        };
+
+        for (key_node, value_node) in pairs {
+            if Self::single_symbol_name(key_node).as_deref() == Some(key) {
+                return Some(value_node);
+            }
+        }
+
+        None
+    }
+
+    /// Compute method names from a single Moo/Moose option key.
+    fn option_method_names(
+        options_expr: &Node,
+        key: &str,
+        attribute_names: &[String],
+    ) -> Vec<String> {
+        let Some(value_node) = Self::find_hash_option_value(options_expr, key) else {
+            return Vec::new();
+        };
+
+        let mut names = Self::collect_symbol_names(value_node);
+        if !names.is_empty() {
+            names.sort();
+            names.dedup();
+            return names;
+        }
+
+        // Moo/Moose shorthand: `predicate => 1`, `clearer => 1`, `builder => 1`.
+        if !Self::is_truthy_shorthand(value_node) {
+            return Vec::new();
+        }
+
+        match key {
+            "predicate" => attribute_names.iter().map(|name| format!("has_{name}")).collect(),
+            "clearer" => attribute_names.iter().map(|name| format!("clear_{name}")).collect(),
+            "builder" => attribute_names.iter().map(|name| format!("_build_{name}")).collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Determine if an option node is a static truthy shorthand literal (`1`, `true`, `'1'`).
+    fn is_truthy_shorthand(node: &Node) -> bool {
+        match &node.kind {
+            NodeKind::Number { value } => value.trim() == "1",
+            NodeKind::Identifier { name } => {
+                let lower = name.trim().to_ascii_lowercase();
+                lower == "1" || lower == "true"
+            }
+            NodeKind::String { value, .. } => {
+                Self::normalize_symbol_name(value).is_some_and(|value| {
+                    let lower = value.to_ascii_lowercase();
+                    value == "1" || lower == "true"
+                })
+            }
+            _ => false,
+        }
+    }
+
+    /// Extract delegated method names from a Moo/Moose `handles` option.
+    fn handles_method_names(options_expr: &Node) -> Vec<String> {
+        let Some(handles_node) = Self::find_hash_option_value(options_expr, "handles") else {
+            return Vec::new();
+        };
+
+        let mut names = Vec::new();
+        match &handles_node.kind {
+            NodeKind::HashLiteral { pairs } => {
+                for (key_node, _) in pairs {
+                    names.extend(Self::collect_symbol_names(key_node));
+                }
+            }
+            _ => {
+                names.extend(Self::collect_symbol_names(handles_node));
+            }
+        }
+
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    /// Extract one or more symbol names from a framework declaration expression.
+    fn collect_symbol_names(node: &Node) -> Vec<String> {
+        match &node.kind {
+            NodeKind::String { value, .. } => {
+                Self::normalize_symbol_name(value).into_iter().collect()
+            }
+            NodeKind::Identifier { name } => {
+                Self::normalize_symbol_name(name).into_iter().collect()
+            }
+            NodeKind::ArrayLiteral { elements } => {
+                let mut names = Vec::new();
+                for element in elements {
+                    names.extend(Self::collect_symbol_names(element));
+                }
+                names
+            }
+            _ => Vec::new(),
+        }
+    }
+
+    /// Extract a single symbol name from a key/value expression.
+    fn single_symbol_name(node: &Node) -> Option<String> {
+        Self::collect_symbol_names(node).into_iter().next()
+    }
+
+    /// Normalize a symbol-like literal into a plain name.
+    fn normalize_symbol_name(raw: &str) -> Option<String> {
+        let trimmed = raw.trim().trim_matches('\'').trim_matches('"').trim();
+        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+    }
+
+    /// Produce a short textual value summary for hover metadata.
+    fn value_summary(node: &Node) -> String {
+        match &node.kind {
+            NodeKind::String { value, .. } => {
+                Self::normalize_symbol_name(value).unwrap_or_else(|| value.clone())
+            }
+            NodeKind::Identifier { name } => name.clone(),
+            NodeKind::Number { value } => value.clone(),
+            NodeKind::ArrayLiteral { elements } => {
+                let mut entries = Vec::new();
+                for element in elements {
+                    entries.extend(Self::collect_symbol_names(element));
+                }
+                entries.sort();
+                entries.dedup();
+                if entries.is_empty() {
+                    "array".to_string()
+                } else {
+                    format!("[{}]", entries.join(","))
+                }
+            }
+            NodeKind::HashLiteral { pairs } => {
+                let mut entries = Vec::new();
+                for (key_node, value_node) in pairs {
+                    let Some(key_name) = Self::single_symbol_name(key_node) else {
+                        continue;
+                    };
+                    if let Some(value_name) = Self::single_symbol_name(value_node) {
+                        entries.push(format!("{key_name}->{value_name}"));
+                    } else {
+                        entries.push(key_name);
+                    }
+                }
+                entries.sort();
+                entries.dedup();
+                if entries.is_empty() {
+                    "hash".to_string()
+                } else {
+                    format!("{{{}}}", entries.join(","))
+                }
+            }
+            NodeKind::Undef => "undef".to_string(),
+            _ => "expr".to_string(),
+        }
+    }
+
+    /// Compute a method token location for method-call references.
+    ///
+    /// Some parsed method-call nodes only cover the object span. This helper scans
+    /// source text after the object to anchor references on the method name token.
+    fn method_reference_location(
+        &self,
+        call_node: &Node,
+        object: &Node,
+        method_name: &str,
+    ) -> SourceLocation {
+        if self.source.is_empty() {
+            return call_node.location;
+        }
+
+        let search_start = object.location.end.min(self.source.len());
+        let search_end = search_start.saturating_add(160).min(self.source.len());
+        if search_start >= search_end || !self.source.is_char_boundary(search_start) {
+            return call_node.location;
+        }
+
+        let window = &self.source[search_start..search_end];
+        let Some(arrow_idx) = window.find("->") else {
+            return call_node.location;
+        };
+
+        let mut idx = arrow_idx + 2;
+        while idx < window.len() {
+            let b = window.as_bytes()[idx];
+            if b.is_ascii_whitespace() {
+                idx += 1;
+            } else {
+                break;
+            }
+        }
+
+        let suffix = &window[idx..];
+        if suffix.starts_with(method_name) {
+            let method_start = search_start + idx;
+            return SourceLocation { start: method_start, end: method_start + method_name.len() };
+        }
+
+        if let Some(rel_idx) = suffix.find(method_name) {
+            let method_start = search_start + idx + rel_idx;
+            return SourceLocation { start: method_start, end: method_start + method_name.len() };
+        }
+
+        call_node.location
     }
 
     /// Extract a block of line comments immediately preceding a declaration

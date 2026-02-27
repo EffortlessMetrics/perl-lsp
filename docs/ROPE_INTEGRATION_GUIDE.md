@@ -8,7 +8,7 @@
 
 ## Overview (*Diataxis: Explanation* - Design concepts)
 
-The perl-parser crate includes comprehensive Rope support for efficient document management, enabling sub-millisecond position conversions and scalable text manipulation for large Perl files. Rope integration provides the foundation for production-ready LSP performance with UTF-16/UTF-8 compatibility.
+The perl-parser crate includes comprehensive Rope support for efficient document management, enabling sub-millisecond position conversions and scalable text manipulation for large Perl files. Rope integration provides the foundation for LSP performance with UTF-16/UTF-8 compatibility.
 
 ## Core Rope Modules (*Diataxis: Reference* - API specifications)
 

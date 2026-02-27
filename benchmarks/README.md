@@ -204,7 +204,7 @@ Baselines are JSON files with the following structure:
   "environment": {
     "os": "Linux",
     "cpu": "Intel i7-9700K",
-    "rust_version": "1.89.0"
+    "rust_version": "1.92.0"
   },
   "results": {
     "parser": {
@@ -304,7 +304,7 @@ High variance (> 10% stddev) indicates:
 
 ## Adding New Benchmarks
 
-1. Add benchmark function to appropriate `benches/*.rs` file
+1. Add benchmark function to the appropriate `crates/*/benches/*.rs` file
 2. Register in `criterion_group!` macro
 3. Add target performance to this README
 4. Update baseline after review

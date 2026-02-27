@@ -1,6 +1,7 @@
 //! Integration tests for the LSP server
 
 use perl_lsp::LspServer;
+use perl_tdd_support::must_some;
 use serde_json::{Value, json};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::mpsc;
@@ -243,7 +244,7 @@ fn test_multiple_headers() {
     let parsed = read_lsp_response(&mut reader);
     assert!(parsed.is_some(), "Multiple headers should be parsed correctly");
 
-    let value = parsed.expect("Should have parsed successfully");
+    let value = must_some(parsed);
     assert_eq!(value["jsonrpc"], "2.0");
     assert_eq!(value["id"], 1);
 }
@@ -308,7 +309,7 @@ fn test_concurrent_io_access() {
 
     // Wait for all threads to complete
     for handle in handles {
-        handle.join().expect("Thread should complete successfully");
+        assert!(handle.join().is_ok(), "Thread should complete successfully");
     }
 
     // If we get here, concurrent access was thread-safe

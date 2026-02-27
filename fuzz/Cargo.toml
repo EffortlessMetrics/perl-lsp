@@ -12,6 +12,11 @@ libfuzzer-sys = "0.4"
 
 [dependencies.perl-parser]
 path = "../crates/perl-parser"
+[dependencies.perl-lsp-cancellation]
+path = "../crates/perl-lsp-cancellation"
+
+[dependencies.serde_json]
+version = "1.0.149"
 
 [[bin]]
 name = "substitution_parsing"
@@ -23,6 +28,13 @@ bench = false
 [[bin]]
 name = "builtin_functions"
 path = "fuzz_targets/builtin_functions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lsp_cancellation_registry"
+path = "fuzz_targets/lsp_cancellation_registry.rs"
 test = false
 doc = false
 bench = false
@@ -47,3 +59,5 @@ path = "fuzz_targets/heredoc_parsing.rs"
 test = false
 doc = false
 bench = false
+
+[workspace]

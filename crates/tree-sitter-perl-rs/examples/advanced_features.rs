@@ -43,10 +43,11 @@ print "Result: $result\n";
     }
 
     // Simulate an edit: change 10 to 15
+    let start_byte = initial_source.find("10").unwrap_or(0);
     let edit = Edit {
-        start_byte: initial_source.find("10").unwrap(),
-        old_end_byte: initial_source.find("10").unwrap() + 2,
-        new_end_byte: initial_source.find("10").unwrap() + 2,
+        start_byte,
+        old_end_byte: start_byte + 2,
+        new_end_byte: start_byte + 2,
         start_position: Position { line: 6, column: 25 },
         old_end_position: Position { line: 6, column: 27 },
         new_end_position: Position { line: 6, column: 27 },
@@ -64,7 +65,7 @@ print "Result: $result\n";
     }
 
     // Another edit: add a new line
-    let insert_pos = edited_source.find("print").unwrap();
+    let insert_pos = edited_source.find("print").unwrap_or(0);
     let edit2 = Edit {
         start_byte: insert_pos,
         old_end_byte: insert_pos,

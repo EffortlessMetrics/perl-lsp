@@ -70,8 +70,8 @@ gh auth login
 
 | File | Description |
 |------|-------------|
-| `ci_baseline.json` | Machine-readable metrics in JSON format |
-| `ci_baseline.md` | Human-readable Markdown report |
+| `ci_baseline.json` | Machine-readable metrics in JSON format (generated on demand) |
+| `ci_baseline.md` | Human-readable Markdown report (generated on demand) |
 
 ## Output Format
 

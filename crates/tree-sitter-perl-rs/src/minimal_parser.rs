@@ -34,52 +34,50 @@ impl MinimalParser {
 
             // Create simple nodes for demonstration
             let node = match &token.token_type {
-                TokenType::Identifier(name) if name.as_ref() == "my" => {
+                TokenType::Keyword(name) if name.as_ref() == "my" => {
                     // Variable declaration
                     let mut var_name = Arc::from("$unknown");
                     let mut value_node = None;
 
                     // Look for variable
                     if let Some(var_token) = lexer.next_token() {
-                        if let TokenType::Identifier(name) = &var_token.token_type {
-                            if name.starts_with('$')
+                        if let TokenType::Identifier(name) = &var_token.token_type
+                            && (name.starts_with('$')
                                 || name.starts_with('@')
-                                || name.starts_with('%')
-                            {
-                                var_name = name.clone();
-                            }
+                                || name.starts_with('%'))
+                        {
+                            var_name = name.clone();
                         }
 
                         // Look for assignment
-                        if let Some(eq_token) = lexer.next_token() {
-                            if matches!(eq_token.token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
-                            {
-                                // Get value
-                                if let Some(val_token) = lexer.next_token() {
-                                    value_node = Some(Box::new(match &val_token.token_type {
-                                        TokenType::Number(n) => Node::new(
-                                            NodeKind::Number { value: n.clone() },
-                                            SourceLocation {
-                                                start: val_token.start,
-                                                end: val_token.end,
-                                            },
-                                        ),
-                                        TokenType::StringLiteral => Node::new(
-                                            NodeKind::String { value: val_token.text.clone() },
-                                            SourceLocation {
-                                                start: val_token.start,
-                                                end: val_token.end,
-                                            },
-                                        ),
-                                        _ => Node::new(
-                                            NodeKind::Bareword { value: val_token.text.clone() },
-                                            SourceLocation {
-                                                start: val_token.start,
-                                                end: val_token.end,
-                                            },
-                                        ),
-                                    }));
-                                }
+                        if let Some(eq_token) = lexer.next_token()
+                            && matches!(eq_token.token_type, TokenType::Operator(ref op) if op.as_ref() == "=")
+                        {
+                            // Get value
+                            if let Some(val_token) = lexer.next_token() {
+                                value_node = Some(Box::new(match &val_token.token_type {
+                                    TokenType::Number(n) => Node::new(
+                                        NodeKind::Number { value: n.clone() },
+                                        SourceLocation {
+                                            start: val_token.start,
+                                            end: val_token.end,
+                                        },
+                                    ),
+                                    TokenType::StringLiteral => Node::new(
+                                        NodeKind::String { value: val_token.text.clone() },
+                                        SourceLocation {
+                                            start: val_token.start,
+                                            end: val_token.end,
+                                        },
+                                    ),
+                                    _ => Node::new(
+                                        NodeKind::Bareword { value: val_token.text.clone() },
+                                        SourceLocation {
+                                            start: val_token.start,
+                                            end: val_token.end,
+                                        },
+                                    ),
+                                }));
                             }
                         }
                     }
@@ -115,7 +113,9 @@ impl MinimalParser {
                     }
                 }
 
-                TokenType::Identifier(name) if name.as_ref() == "print" => {
+                TokenType::Keyword(name) | TokenType::Identifier(name)
+                    if name.as_ref() == "print" =>
+                {
                     // Print statement
                     let mut args = Vec::new();
                     let mut end_pos = token.end;
@@ -123,7 +123,7 @@ impl MinimalParser {
                     // Collect arguments
                     while let Some(arg_token) = lexer.next_token() {
                         match &arg_token.token_type {
-                            TokenType::StringLiteral => {
+                            TokenType::StringLiteral | TokenType::InterpolatedString(_) => {
                                 args.push(Node::new(
                                     NodeKind::String { value: arg_token.text.clone() },
                                     SourceLocation { start: arg_token.start, end: arg_token.end },

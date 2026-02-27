@@ -4,7 +4,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Testing Indirect Object Syntax ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         ("Simple new", r#"my $obj = new Class;"#),
         ("Qualified new", r#"my $obj = new Class::Name;"#),
         ("New with args", r#"my $obj = new Class::Name($arg1, $arg2);"#),

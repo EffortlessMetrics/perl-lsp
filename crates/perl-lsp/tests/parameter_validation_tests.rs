@@ -3,7 +3,6 @@ use perl_parser::Parser;
 use std::sync::Arc;
 
 #[test]
-#[ignore = "feature: duplicate parameter detection not yet implemented"]
 fn test_duplicate_parameters() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 sub test($x, $y, $x) {
@@ -28,7 +27,6 @@ sub test($x, $y, $x) {
 }
 
 #[test]
-#[ignore = "feature: parameter shadowing detection not yet implemented"]
 fn test_parameter_shadows_global() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 my $count = 10;
@@ -57,7 +55,6 @@ sub increment($count) {
 }
 
 #[test]
-#[ignore = "feature: unused parameter detection not yet implemented"]
 fn test_unused_parameter() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 sub helper($x, $y, $z) {
@@ -161,7 +158,6 @@ sub callback($event, $_unused_data) {
 }
 
 #[test]
-#[ignore = "feature: duplicate parameter detection not yet implemented"]
 fn test_multiple_duplicate_parameters() -> Result<(), Box<dyn std::error::Error>> {
     let source = r#"
 sub complex($a, $b, $a, $c, $b) {

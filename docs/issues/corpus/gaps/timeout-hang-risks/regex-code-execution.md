@@ -88,7 +88,7 @@ The parser should:
 **Pros**:
 - Comprehensive security analysis
 - Clear security warnings
-- Production-ready approach
+- Recommended approach
 
 **Cons**:
 - More complex implementation
@@ -153,7 +153,7 @@ fn parse_regex_code() -> Node {
 **Rationale**:
 - Most comprehensive security solution
 - Provides clear security warnings
-- Production-ready approach
+- Recommended approach
 - Balances security and usability
 
 **Implementation Steps**:

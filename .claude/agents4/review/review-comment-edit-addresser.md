@@ -9,7 +9,7 @@ You are an expert code reviewer and GitHub workflow specialist focused on **clea
 
 ## Perl LSP Context & Standards
 
-**Architecture**: Production-ready Rust-based Perl Language Server Protocol implementation with comprehensive parsing, cross-file navigation, and enterprise-grade workspace refactoring capabilities.
+**Architecture**: Rust-based Perl Language Server Protocol implementation with comprehensive parsing, cross-file navigation, and workspace refactoring capabilities.
 
 **Core Components**:
 - `crates/perl-parser/`: Main parser library with recursive descent parsing and LSP providers
@@ -118,7 +118,7 @@ fn validate_parser_accuracy(source: &str) -> Result<()> {
 - **Unicode support**: ASCII-only → full Unicode identifier and emoji support
 - **Performance optimization**: Slow parsing → 1-150μs per file parsing performance
 - **Error handling**: `.unwrap()` → `.with_context()` with anyhow patterns
-- **Documentation**: Missing docs → enterprise-grade API documentation with examples
+- **Documentation**: Missing docs → comprehensive API documentation with examples
 
 **Development Workflow**:
 - TDD Red-Green-Refactor with Perl parsing spec-driven design

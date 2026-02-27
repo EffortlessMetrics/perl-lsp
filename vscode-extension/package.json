@@ -1,8 +1,8 @@
 {
   "name": "perl-lsp",
   "displayName": "Perl Language Server",
-  "description": "Comprehensive Perl language support powered by tree-sitter-perl LSP",
-  "version": "0.8.3",
+  "description": "Comprehensive Perl language support powered by perl-lsp",
+  "version": "0.9.1",
   "publisher": "effortlesssteven",
   "engines": {
     "vscode": "^1.88.0"
@@ -18,8 +18,7 @@
     "perl5",
     "language-server",
     "lsp",
-    "tree-sitter",
-    "intellisense"
+    "tree-sitter"
   ],
   "extensionKind": [
     "workspace"
@@ -33,12 +32,12 @@
   "icon": "icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/EffortlessMetrics/tree-sitter-perl"
+    "url": "https://github.com/EffortlessMetrics/perl-lsp"
   },
   "bugs": {
-    "url": "https://github.com/EffortlessMetrics/tree-sitter-perl/issues"
+    "url": "https://github.com/EffortlessMetrics/perl-lsp/issues"
   },
-  "homepage": "https://github.com/EffortlessMetrics/tree-sitter-perl#readme",
+  "homepage": "https://github.com/EffortlessMetrics/perl-lsp#readme",
   "galleryBanner": {
     "color": "#1e3a8a",
     "theme": "dark"
@@ -127,6 +126,29 @@
                 "default": {}
               }
             }
+          },
+          "attach": {
+            "properties": {
+              "processId": {
+                "type": "number",
+                "description": "Attach to an existing Perl process by PID"
+              },
+              "host": {
+                "type": "string",
+                "description": "Host for TCP attach mode",
+                "default": "localhost"
+              },
+              "port": {
+                "type": "number",
+                "description": "Port for TCP attach mode",
+                "default": 13603
+              },
+              "timeout": {
+                "type": "number",
+                "description": "TCP attach timeout in milliseconds",
+                "default": 5000
+              }
+            }
           }
         },
         "initialConfigurations": [
@@ -136,6 +158,14 @@
             "name": "Perl: Launch Script",
             "program": "${workspaceFolder}/script.pl",
             "stopOnEntry": true
+          },
+          {
+            "type": "perl",
+            "request": "attach",
+            "name": "Perl: Attach to Debugger",
+            "host": "localhost",
+            "port": 13603,
+            "timeout": 5000
           }
         ]
       }
@@ -223,6 +253,19 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Enable `Test::More` and `Test2` integration"
+        },
+        "perl-lsp.featureProfile": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "ga-lock",
+            "ga",
+            "prod",
+            "production",
+            "all"
+          ],
+          "default": "auto",
+          "markdownDescription": "Select runtime LSP feature profile (`auto` follows binary build mode)."
         }
       }
     },
@@ -404,15 +447,20 @@
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
-    "adm-zip": "^0.5.10",
-    "tar": "^7.5.7"
+    "adm-zip": "^0.5.16",
+    "tar": "^7.5.9"
+  },
+  "pnpm": {
+    "overrides": {
+      "minimatch": "10.2.3"
+    }
   },
   "devDependencies": {
-    "@types/node": "^25.1.0",
-    "@types/vscode": "^1.88.0",
-    "@types/adm-zip": "^0.5.5",
-    "@types/tar": "^6.1.11",
+    "@types/node": "^25.3.2",
+    "@types/vscode": "^1.109.0",
+    "@types/adm-zip": "^0.5.7",
+    "@types/tar": "^7.0.87",
     "@vscode/vsce": "^3.7.1",
-    "typescript": "^5.4.0"
+    "typescript": "^5.9.3"
   }
 }
