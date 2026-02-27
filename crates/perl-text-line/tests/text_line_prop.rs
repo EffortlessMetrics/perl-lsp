@@ -2,11 +2,7 @@ use perl_text_line::{line_bounds_at, skip_ascii_whitespace};
 use proptest::prelude::*;
 
 fn ascii_text_chars() -> Vec<char> {
-    let mut chars: Vec<char> = Vec::new();
-    chars.push('\n');
-    chars.push(' ');
-    chars.push('\t');
-    chars.push('\r');
+    let mut chars: Vec<char> = vec!['\n', ' ', '\t', '\r'];
     chars.extend('a'..='z');
     chars.extend('A'..='Z');
     chars.extend('0'..='9');
