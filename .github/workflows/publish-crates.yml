@@ -145,8 +145,8 @@ jobs:
             fi
 
             if [ "$DRY_RUN" = "true" ]; then
-              echo "Dry run: cargo package -p $CRATE"
-              cargo package -p "$CRATE"
+              echo "Dry run: scripts/cargo-package-workspace-dry-run.sh $CRATE"
+              bash scripts/cargo-package-workspace-dry-run.sh "$CRATE"
               continue
             fi
 

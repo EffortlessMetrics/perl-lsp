@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <crate> [crate ...]" >&2
+  exit 1
+fi
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+cd "${WORKSPACE_ROOT}"
+
+PATCH_OUTPUT="$(
+  cargo metadata --format-version=1 --no-deps | python3 -c '
+import json
+import os
+import sys
+
+meta = json.load(sys.stdin)
+workspace_members = set(meta["workspace_members"])
+workspace_root = meta["workspace_root"]
+
+for pkg in sorted(meta["packages"], key=lambda p: p["name"]):
+    if pkg["id"] not in workspace_members:
+        continue
+    publish = pkg.get("publish")
+    if publish is not None and len(publish) == 0:
+        continue
+    crate_dir = os.path.dirname(pkg["manifest_path"])
+    rel_path = os.path.relpath(crate_dir, workspace_root)
+    print("--config=patch.crates-io.{}.path=\"{}\"".format(pkg["name"], rel_path))
+'
+)"
+
+mapfile -t PATCH_ARGS <<< "${PATCH_OUTPUT}"
+
+for crate in "$@"; do
+  echo "==> cargo package -p ${crate}"
+  cargo package -p "${crate}" "${PATCH_ARGS[@]}"
+done
