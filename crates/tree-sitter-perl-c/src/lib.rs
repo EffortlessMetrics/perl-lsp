@@ -22,17 +22,23 @@ pub fn language() -> Language {
 }
 
 /// Create a new parser with C scanner
+pub fn try_create_parser() -> Result<Parser, tree_sitter::LanguageError> {
+    let mut parser = Parser::new();
+    parser.set_language(&language())?;
+    Ok(parser)
+}
+
+/// Create a new parser with C scanner, failing silently if language cannot be set
+/// (Legacy API for compatibility)
 pub fn create_parser() -> Parser {
     let mut parser = Parser::new();
-    parser
-        .set_language(&language())
-        .unwrap_or_else(|e| panic!("Failed to set C-scanner language: {:?}", e));
+    let _ = parser.set_language(&language());
     parser
 }
 
 /// Parse Perl code using the C scanner
 pub fn parse_perl_code(code: &str) -> Result<tree_sitter::Tree, Box<dyn std::error::Error>> {
-    let mut parser = create_parser();
+    let mut parser = try_create_parser()?;
     match parser.parse(code, None) {
         Some(tree) => Ok(tree),
         None => Err("Failed to parse code".into()),

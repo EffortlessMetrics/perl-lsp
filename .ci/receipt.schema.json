@@ -92,7 +92,7 @@
         "rustc_version": {
           "type": "string",
           "description": "rustc version string",
-          "examples": ["rustc 1.89.0 (stable-x86_64-unknown-linux-gnu)"]
+          "examples": ["rustc 1.92.0 (stable-x86_64-unknown-linux-gnu)"]
         },
         "rustc_channel": {
           "type": "string",
@@ -104,12 +104,12 @@
           "type": "string",
           "description": "Semantic version of rustc",
           "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9.]+)?$",
-          "examples": ["1.89.0"]
+          "examples": ["1.92.0"]
         },
         "cargo_version": {
           "type": "string",
           "description": "cargo version string",
-          "examples": ["cargo 1.89.0 (stable-x86_64-unknown-linux-gnu)"]
+          "examples": ["cargo 1.92.0 (stable-x86_64-unknown-linux-gnu)"]
         },
         "node_version": {
           "type": ["string", "null"],

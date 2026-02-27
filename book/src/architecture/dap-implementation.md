@@ -3,7 +3,7 @@
 
 **Issue**: #207 - Debug Adapter Protocol Support
 **Status**: Architecture Design Complete
-**Version**: 1.0.0
+**Version**: 0.9.x
 **Date**: 2025-10-04
 
 ---
@@ -244,7 +244,7 @@ async fn main() -> anyhow::Result<()> {
 // crates/perl-dap/src/lib.rs
 //! Debug Adapter Protocol server for Perl
 //!
-//! This crate provides a production-grade DAP adapter for debugging Perl code.
+//! This crate provides a robust DAP adapter for debugging Perl code.
 //! It integrates with the perl-parser crate for AST-based breakpoint validation
 //! and leverages existing LSP infrastructure for position mapping and workspace navigation.
 
@@ -1495,7 +1495,7 @@ export class DapBinaryManager {
 
         // Download from GitHub Releases
         const version = '0.1.0';
-        const downloadUrl = `https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v${version}/${binaryName}`;
+        const downloadUrl = `https://github.com/EffortlessMetrics/perl-lsp/releases/download/v${version}/${binaryName}`;
 
         console.log(`Downloading ${binaryName} from ${downloadUrl}...`);
         await this.downloadFile(downloadUrl, binaryPath);

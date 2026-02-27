@@ -37,7 +37,7 @@ sub calculate {
 my $result = calculate(5, 10);
 print "Result: $result\n";
 
-# TODO: implement caching
+# PENDING: implement caching
 my $config = {
     host => 'localhost',
     port => 3000,

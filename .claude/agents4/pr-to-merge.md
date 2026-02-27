@@ -55,7 +55,7 @@ You orchestrate the Integrative Flow: validate Ready PRs through gate-focused va
 tests: cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30
 parsing: 1-150μs per file, incremental: <1ms updates; SLO: pass
 lsp: ~89% features functional; workspace navigation: 98% coverage
-threading: RUST_TEST_THREADS=2; behavioral tests: 0.31s (5000x improvement)
+threading: RUST_TEST_THREADS=2; behavioral tests: 0.31s
 ```
 
 ## GitHub-Native Receipts (NO ceremony)

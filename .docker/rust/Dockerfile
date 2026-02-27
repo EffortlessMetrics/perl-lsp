@@ -1,7 +1,7 @@
 FROM rust:slim
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     pkg-config \
     libssl-dev \
@@ -36,3 +36,6 @@ ENV NUMEXPR_NUM_THREADS=1
 
 # Build the project
 RUN cargo build --release
+
+RUN useradd --create-home --uid 10001 appuser
+USER appuser

@@ -6,7 +6,7 @@
 use std::env;
 use std::path::PathBuf;
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Always build the C parser (required for tree-sitter)
     build_c_parser();
 
@@ -14,13 +14,15 @@ fn main() {
     build_c_scanner();
 
     // Generate bindings for the C parser
-    generate_bindings();
+    generate_bindings()?;
 
     // Tell cargo to rerun this script if any of these files change
     println!("cargo:rerun-if-changed=src/parser.c");
     println!("cargo:rerun-if-changed=src/scanner.c");
     println!("cargo:rerun-if-changed=src/tree_sitter/");
     println!("cargo:rerun-if-changed=grammar.js");
+
+    Ok(())
 }
 
 fn build_c_parser() {
@@ -95,17 +97,17 @@ fn find_tree_sitter_runtime() -> Option<PathBuf> {
     None
 }
 
-fn generate_bindings() {
+fn generate_bindings() -> Result<(), Box<dyn std::error::Error>> {
     // Generate bindings for the C parser
     let bindings = bindgen::Builder::default()
         .header("src/parser.c")
         .header("src/scanner.c")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
-        .expect("Unable to generate bindings");
+        .map_err(|e| format!("Unable to generate bindings: {}", e))?;
 
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_path = PathBuf::from(env::var("OUT_DIR")?);
     bindings
-        .write_to_file(out_path.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+        .write_to_file(out_path.join("bindings.rs"))?;
+    Ok(())
 }

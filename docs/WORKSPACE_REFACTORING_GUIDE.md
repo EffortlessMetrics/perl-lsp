@@ -2,7 +2,7 @@
 
 ## Overview
 
-The tree-sitter-perl project provides comprehensive workspace refactoring capabilities through the `WorkspaceRefactor` system introduced in v0.8.8. This guide covers all aspects of using and extending these enterprise-grade cross-file refactoring operations.
+The tree-sitter-perl project provides comprehensive workspace refactoring capabilities through the `WorkspaceRefactor` system introduced in v0.8.8. This guide covers all aspects of using and extending these cross-file refactoring operations.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ The tree-sitter-perl project provides comprehensive workspace refactoring capabi
 
 ### Prerequisites
 
-- Rust 1.89+ (MSRV)
+- Rust 1.92+ (MSRV)
 - tree-sitter-perl v0.8.8 or later
 - Workspace with indexed Perl files
 

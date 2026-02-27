@@ -89,7 +89,7 @@ pub fn server_initialization_fixture() -> LspProtocolFixture {
         }),
         expected_response: json!({
             "capabilities": {
-                "textDocumentSync": 1,
+                "textDocumentSync": 2,
                 "hoverProvider": true,
                 "completionProvider": {
                     "triggerCharacters": ["$", "@", "%", ":", ">"]

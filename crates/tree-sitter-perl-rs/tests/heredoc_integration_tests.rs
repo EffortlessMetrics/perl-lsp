@@ -1,5 +1,6 @@
 #[cfg(all(test, feature = "pure-rust"))]
 mod heredoc_integration_tests {
+    use perl_tdd_support::must;
     use tree_sitter_perl::full_parser::FullPerlParser;
     use tree_sitter_perl::heredoc_parser::parse_with_heredocs;
 
@@ -104,7 +105,7 @@ print $result;"#;
         let mut parser = FullPerlParser::new();
         match parser.parse(input) {
             Ok(_) => (),
-            Err(e) => panic!("Failed to parse heredoc in expression: {:?}", e),
+            Err(e) => must(Err::<(), _>(format!("Failed to parse heredoc in expression: {:?}", e))),
         }
     }
 
@@ -232,7 +233,7 @@ print $result;"#;
     #[test]
     fn test_heredoc_error_recovery() {
         // Test various edge cases and potential error conditions
-        let test_cases = vec![
+        let test_cases = [
             // Empty heredoc
             r#"my $x = <<'';
 

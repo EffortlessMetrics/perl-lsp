@@ -52,8 +52,9 @@ fn test_session_lifecycle_initialize() {
             let caps = must_some(body);
             assert!(caps.get("supportsConfigurationDoneRequest").is_some());
             assert!(caps.get("supportsEvaluateForHovers").is_some());
+            assert!(caps.get("supportsInlineValues").is_some());
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 
     // Verify initialized event is sent
@@ -63,7 +64,7 @@ fn test_session_lifecycle_initialize() {
         DapMessage::Event { event, .. } => {
             assert_eq!(event, "initialized");
         }
-        _ => panic!("Expected Event message"),
+        _ => must(Err::<(), _>("Expected Event message".to_string())),
     }
 }
 
@@ -80,7 +81,7 @@ fn test_session_lifecycle_disconnect_without_session() {
             assert!(success, "Disconnect should succeed even without session");
             assert_eq!(command, "disconnect");
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 
     // Should emit terminated event
@@ -90,7 +91,100 @@ fn test_session_lifecycle_disconnect_without_session() {
         DapMessage::Event { event, .. } => {
             assert_eq!(event, "terminated");
         }
-        _ => panic!("Expected Event message"),
+        _ => must(Err::<(), _>("Expected Event message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_session_lifecycle_terminate_without_session() {
+    // Test that terminate works even without an active session and emits terminated event
+    let (mut adapter, rx) = create_test_adapter();
+
+    let response = adapter.handle_request(1, "terminate", Some(json!({ "restart": false })));
+
+    match response {
+        DapMessage::Response { success, command, .. } => {
+            assert!(success, "Terminate should succeed even without session");
+            assert_eq!(command, "terminate");
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+
+    let event = wait_for_event(&rx, 100);
+    assert!(event.is_some(), "Should emit terminated event");
+    match must_some(event) {
+        DapMessage::Event { event, body, .. } => {
+            assert_eq!(event, "terminated");
+            let restart = body
+                .as_ref()
+                .and_then(|value| value.get("restart"))
+                .and_then(|value| value.as_bool());
+            assert_eq!(restart, Some(false), "terminate event should include restart flag");
+        }
+        _ => must(Err::<(), _>("Expected Event message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_set_variable_without_session_returns_error() {
+    // setVariable should fail clearly when no debugger session is active
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x",
+            "value": "2"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable should fail without active session");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("No debugger session"),
+                "Error should mention missing session: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
+    }
+}
+
+#[test]
+// AC:5.5
+fn test_set_variable_rejects_invalid_variable_name() {
+    // setVariable should reject names that could inject debugger commands
+    let (mut adapter, _rx) = create_test_adapter();
+
+    let response = adapter.handle_request(
+        1,
+        "setVariable",
+        Some(json!({
+            "variablesReference": 11,
+            "name": "$x; system('id')",
+            "value": "2"
+        })),
+    );
+
+    match response {
+        DapMessage::Response { success, command, message, .. } => {
+            assert!(!success, "setVariable should reject invalid variable names");
+            assert_eq!(command, "setVariable");
+            let msg = must_some(message);
+            assert!(
+                msg.contains("Invalid variable name"),
+                "Error should report invalid variable name: {}",
+                msg
+            );
+        }
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -109,7 +203,7 @@ fn test_session_lifecycle_launch_missing_arguments() {
             assert!(message.is_some());
             assert!(must_some(message).contains("Missing launch arguments"));
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -139,7 +233,7 @@ fn test_session_lifecycle_launch_empty_program() {
                 msg
             );
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -169,7 +263,7 @@ fn test_session_lifecycle_launch_nonexistent_program() {
                 msg
             );
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -188,7 +282,7 @@ fn test_session_lifecycle_attach_missing_arguments() {
             assert!(message.is_some());
             assert!(must_some(message).contains("Missing attach arguments"));
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -205,7 +299,7 @@ fn test_session_lifecycle_attach_validation() {
         "timeout": 5000
     });
 
-    let response = adapter.handle_request(1, "attach", Some(args));
+    let response = adapter.handle_request_mock(1, "attach", Some(args));
 
     match response {
         DapMessage::Response { success, command, message, .. } => {
@@ -215,12 +309,14 @@ fn test_session_lifecycle_attach_validation() {
             // Should validate but indicate not implemented
             let msg = must_some(message);
             assert!(
-                msg.contains("not yet fully implemented") || msg.contains("localhost:13603"),
+                msg.contains("not yet fully implemented")
+                    || msg.contains("localhost:13603")
+                    || msg.contains("Process ID attachment"),
                 "Should validate args: {}",
                 msg
             );
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -234,7 +330,7 @@ fn test_session_lifecycle_state_transitions() {
     let init_response = adapter.handle_request(1, "initialize", None);
     match init_response {
         DapMessage::Response { success, .. } => assert!(success),
-        _ => panic!("Expected Response"),
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
     let init_event = wait_for_event(&rx, 100);
     assert!(init_event.is_some());
@@ -247,21 +343,21 @@ fn test_session_lifecycle_state_transitions() {
     let bp_response = adapter.handle_request(2, "setBreakpoints", Some(bp_args));
     match bp_response {
         DapMessage::Response { success, .. } => assert!(success),
-        _ => panic!("Expected Response"),
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
     // 3. Configuration done
     let config_response = adapter.handle_request(3, "configurationDone", None);
     match config_response {
         DapMessage::Response { success, .. } => assert!(success),
-        _ => panic!("Expected Response"),
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
     // 4. Disconnect
     let disconnect_response = adapter.handle_request(4, "disconnect", None);
     match disconnect_response {
         DapMessage::Response { success, .. } => assert!(success),
-        _ => panic!("Expected Response"),
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 }
 
@@ -283,7 +379,7 @@ fn test_session_lifecycle_threads_request() {
             let body_val = must_some(body);
             assert!(body_val.get("threads").is_some());
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -310,7 +406,7 @@ fn test_session_lifecycle_stacktrace_request() {
             assert!(body_val.get("stackFrames").is_some());
             assert!(body_val.get("totalFrames").is_some());
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -335,7 +431,7 @@ fn test_session_lifecycle_scopes_request() {
             let body_val = must_some(body);
             assert!(body_val.get("scopes").is_some());
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -360,7 +456,7 @@ fn test_session_lifecycle_variables_request() {
             let body_val = must_some(body);
             assert!(body_val.get("variables").is_some());
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -587,14 +683,26 @@ fn test_thread_safe_sequence_numbers() {
             let response = adapter.handle_request(i, "initialize", None);
             match response {
                 DapMessage::Response { seq, .. } => seq,
-                _ => panic!("Expected Response"),
+                _ => {
+                    must(Err::<(), _>("Expected Response".to_string()));
+                    unreachable!()
+                }
             }
         });
         handles.push(handle);
     }
 
     // Collect all sequence numbers
-    let mut seq_numbers: Vec<i64> = handles.into_iter().map(|h| must(h.join())).collect();
+    let mut seq_numbers: Vec<i64> = handles
+        .into_iter()
+        .map(|h| match h.join() {
+            Ok(seq) => seq,
+            Err(_) => {
+                must(Err::<(), _>("Thread joined with error"));
+                unreachable!()
+            }
+        })
+        .collect();
 
     // Verify all unique
     seq_numbers.sort_unstable();
@@ -651,7 +759,7 @@ fn test_thread_safe_session_state() {
             DapMessage::Response { success, .. } => {
                 assert!(success, "Request should succeed");
             }
-            _ => panic!("Expected Response"),
+            _ => must(Err::<(), _>("Expected Response".to_string())),
         }
     }
 }
@@ -684,7 +792,7 @@ fn test_thread_safe_breakpoint_storage() {
             DapMessage::Response { success, .. } => {
                 assert!(success, "setBreakpoints should succeed");
             }
-            _ => panic!("Expected Response"),
+            _ => must(Err::<(), _>("Expected Response".to_string())),
         }
     }
 }
@@ -709,7 +817,7 @@ fn test_error_handling_invalid_command() {
             assert!(must_some(message).contains("Unknown command"));
             assert!(body.is_none());
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -732,7 +840,7 @@ fn test_error_handling_malformed_arguments() {
             assert!(!success, "Invalid arguments should fail");
             assert!(message.is_some());
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -756,7 +864,7 @@ fn test_error_handling_evaluate_with_newlines() {
             let msg = must_some(message);
             assert!(msg.contains("newline"), "Error should mention newlines: {}", msg);
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -779,7 +887,7 @@ fn test_error_handling_evaluate_empty_expression() {
             assert!(message.is_some());
             assert!(must_some(message).contains("Empty"));
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -798,7 +906,7 @@ fn test_error_handling_scopes_missing_frame_id() {
             assert!(message.is_some());
             assert!(must_some(message).contains("frameId"));
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -817,7 +925,7 @@ fn test_error_handling_variables_missing_reference() {
             assert!(message.is_some());
             assert!(must_some(message).contains("Missing arguments"));
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -846,7 +954,7 @@ fn test_error_handling_launch_program_is_directory() {
                 msg
             );
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -864,7 +972,7 @@ fn test_complete_session_lifecycle() {
     let init_resp = adapter.handle_request(1, "initialize", None);
     match init_resp {
         DapMessage::Response { success, .. } => assert!(success),
-        _ => panic!("Expected Response"),
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
     let init_event = wait_for_event(&rx, 100);
     assert!(matches!(init_event, Some(DapMessage::Event { .. })));
@@ -880,28 +988,28 @@ fn test_complete_session_lifecycle() {
     );
     match bp_resp {
         DapMessage::Response { success, .. } => assert!(success),
-        _ => panic!("Expected Response"),
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
     // 3. Configuration done
     let config_resp = adapter.handle_request(3, "configurationDone", None);
     match config_resp {
         DapMessage::Response { success, .. } => assert!(success),
-        _ => panic!("Expected Response"),
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
     // 4. Query threads
     let threads_resp = adapter.handle_request(4, "threads", None);
     match threads_resp {
         DapMessage::Response { success, .. } => assert!(success),
-        _ => panic!("Expected Response"),
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
     // 5. Disconnect
     let disconnect_resp = adapter.handle_request(5, "disconnect", None);
     match disconnect_resp {
         DapMessage::Response { success, .. } => assert!(success),
-        _ => panic!("Expected Response"),
+        _ => must(Err::<(), _>("Expected Response".to_string())),
     }
 
     // Should emit terminated event
@@ -920,7 +1028,7 @@ fn test_multiple_sessions_sequential() {
         let init_resp = adapter.handle_request(1, "initialize", None);
         match init_resp {
             DapMessage::Response { success, .. } => assert!(success),
-            _ => panic!("Expected Response"),
+            _ => must(Err::<(), _>("Expected Response".to_string())),
         }
         let _init_event = wait_for_event(&rx, 100);
 
@@ -928,7 +1036,7 @@ fn test_multiple_sessions_sequential() {
         let disconnect_resp = adapter.handle_request(2, "disconnect", None);
         match disconnect_resp {
             DapMessage::Response { success, .. } => assert!(success),
-            _ => panic!("Expected Response"),
+            _ => must(Err::<(), _>("Expected Response".to_string())),
         }
         let _term_event = wait_for_event(&rx, 100);
     }

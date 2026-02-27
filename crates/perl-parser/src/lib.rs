@@ -59,7 +59,7 @@
 //!
 //! ### LSP Integration
 //!
-//! Use as a library for LSP features (see [`perl_lsp`] for the standalone server):
+//! Use as a library for LSP features (see `perl-lsp` for the standalone server):
 //!
 //! ```rust
 //! use perl_parser::{Parser, SemanticAnalyzer};
@@ -89,13 +89,15 @@
 //! - **[`quote_parser`]**: Specialized parser for quote-like operators
 //! - **[`heredoc_collector`]**: FIFO heredoc collection with indent stripping
 //!
-//! ### IDE Integration ([`ide`])
+//! ### IDE Integration (LSP Provider Modules)
 //!
-//! - **[`lsp`]**: Core LSP protocol types and message handling
-//! - **[`lsp_compat`]**: LSP feature providers (completion, hover, etc.)
-//! - **[`diagnostics_catalog`]**: Stable diagnostic codes and messages
-//! - **[`cancellation`]**: Request cancellation infrastructure
-//! - **[`call_hierarchy_provider`]**: Function call navigation
+//! - **[`completion`]**: Context-aware completion providers
+//! - **[`diagnostics`]**: Diagnostics generation and formatting
+//! - **[`references`]**: Reference search providers
+//! - **[`rename`]**: Rename providers with validation
+//! - **[`semantic_tokens`]**: Semantic token generation
+//! - **[`type_definition`]**: Type definition providers
+//! - **[`workspace_symbols`]**: Workspace symbol search
 //!
 //! ### Analysis ([`analysis`])
 //!
@@ -125,7 +127,7 @@
 //!
 //! ## LSP Feature Support
 //!
-//! This crate provides the engine for LSP features. The standalone server is in [`perl_lsp`].
+//! This crate provides the engine for LSP features. The standalone server is in `perl-lsp`.
 //!
 //! ### Implemented Features
 //!
@@ -205,7 +207,7 @@
 //!
 //! ## Testing with perl-corpus
 //!
-//! The parser is tested against the comprehensive [`perl_corpus`] test suite:
+//! The parser is tested against the comprehensive `perl-corpus` test suite:
 //!
 //! ```bash
 //! # Run parser tests with full corpus coverage
@@ -273,10 +275,10 @@
 //!
 //! ## Related Crates
 //!
-//! - [`perl_lsp`]: Standalone LSP server runtime (moved from this crate)
-//! - [`perl_lexer`]: Context-aware Perl tokenizer
-//! - [`perl_corpus`]: Comprehensive test corpus and generators
-//! - [`perl_dap`]: Debug Adapter Protocol implementation
+//! - `perl-lsp`: Standalone LSP server runtime (moved from this crate)
+//! - `perl-lexer`: Context-aware Perl tokenizer
+//! - `perl-corpus`: Comprehensive test corpus and generators
+//! - `perl-dap`: Debug Adapter Protocol implementation
 //!
 //! ## Documentation
 //!
@@ -359,12 +361,8 @@
 
 /// Parser engine components and supporting utilities.
 pub mod engine;
-/// IDE integration helpers (LSP/DAP runtime support).
-pub mod ide;
 /// Legacy module aliases for moved engine components.
 pub use engine::{error, parser, position};
-/// Legacy module aliases for IDE compatibility shims.
-pub use ide::{lsp, lsp_compat};
 
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub use engine::ast;
@@ -381,21 +379,13 @@ pub use engine::parser_context;
 pub use engine::pragma_tracker;
 /// Parser for Perl quote and quote-like operators.
 pub use engine::quote_parser;
-/// LSP call hierarchy provider for function call navigation.
-pub use ide::call_hierarchy_provider;
-/// Enhanced LSP cancellation infrastructure.
-pub use ide::cancellation;
-/// Parser utilities and helpers.
-pub use perl_parser_core::util;
-// NOTE: diagnostics_catalog moved to perl-lsp crate
-// pub use ide::diagnostics_catalog;
 #[cfg(not(target_arch = "wasm32"))]
-pub use ide::execute_command;
-
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;
 pub use error::recovery as error_recovery;
 pub use error::recovery_parser;
+/// Parser utilities and helpers.
+pub use perl_parser_core::util;
 
 pub use perl_parser_core::line_index;
 pub use position::{LineEnding, PositionMapper};
@@ -430,10 +420,6 @@ pub use builtins::builtin_signatures_phf;
 pub mod code_actions {
     pub use perl_lsp_code_actions::*;
 }
-pub use ide::lsp_compat::code_actions_pragmas;
-/// LSP code actions provider for automated refactoring and fixes.
-pub use ide::lsp_compat::code_actions_provider;
-pub use ide::lsp_compat::code_lens_provider;
 pub use perl_lsp_code_actions::EnhancedCodeActionsProvider;
 /// LSP completion for code suggestions.
 pub mod completion {
@@ -443,16 +429,10 @@ pub mod completion {
 pub mod diagnostics {
     pub use perl_lsp_diagnostics::*;
 }
-pub use ide::lsp_compat::document_highlight;
 /// LSP document links provider for file and URL navigation.
 pub mod document_links {
     pub use perl_lsp_navigation::*;
 }
-/// Deprecated LSP feature catalog shim (moved to `perl-lsp`).
-#[cfg(feature = "lsp-compat")]
-pub use ide::lsp_compat::features;
-pub use ide::lsp_compat::folding;
-pub use ide::lsp_compat::formatting;
 /// LSP implementation provider.
 pub mod implementation_provider {
     pub use perl_lsp_navigation::*;
@@ -465,19 +445,6 @@ pub mod inlay_hints {
 pub mod inlay_hints_provider {
     pub use perl_lsp_inlay_hints::*;
 }
-pub use ide::lsp_compat::inline_completions;
-/// LSP linked editing provider for synchronized symbol renaming.
-pub use ide::lsp_compat::linked_editing;
-#[cfg(not(target_arch = "wasm32"))]
-pub use ide::lsp_compat::lsp_document_link;
-pub use ide::lsp_compat::lsp_on_type_formatting;
-pub use ide::lsp_compat::lsp_selection_range;
-#[cfg(not(target_arch = "wasm32"))]
-pub use ide::lsp_compat::lsp_server;
-pub use ide::lsp_compat::lsp_utils;
-/// LSP on-type formatting provider for automatic code formatting.
-pub use ide::lsp_compat::on_type_formatting;
-pub use ide::lsp_compat::pull_diagnostics;
 /// LSP references provider for symbol usage analysis.
 pub mod references {
     pub use perl_lsp_navigation::*;
@@ -486,8 +453,6 @@ pub mod references {
 pub mod rename {
     pub use perl_lsp_rename::*;
 }
-/// LSP selection range provider for smart text selection.
-pub use ide::lsp_compat::selection_range;
 /// LSP semantic tokens provider for syntax highlighting.
 pub mod semantic_tokens {
     pub use perl_lsp_semantic_tokens::*;
@@ -496,9 +461,6 @@ pub mod semantic_tokens {
 pub mod semantic_tokens_provider {
     pub use perl_lsp_semantic_tokens::*;
 }
-pub use ide::lsp_compat::signature_help;
-#[cfg(feature = "lsp-compat")]
-pub use ide::lsp_compat::textdoc;
 /// LSP type definition provider.
 #[cfg(feature = "lsp-compat")]
 pub mod type_definition {
@@ -508,7 +470,6 @@ pub mod type_definition {
 pub mod type_hierarchy {
     pub use perl_lsp_navigation::*;
 }
-pub use ide::lsp_compat::uri;
 /// LSP workspace symbols provider.
 pub mod workspace_symbols {
     pub use perl_lsp_navigation::*;
@@ -665,11 +626,12 @@ mod tests {
             let ast = must(result);
             if let NodeKind::Program { statements } = &ast.kind {
                 assert_eq!(statements.len(), 1);
+                let is_var_decl =
+                    matches!(statements[0].kind, NodeKind::VariableDeclaration { .. });
+                assert!(is_var_decl, "Expected VariableDeclaration for: {}", code);
                 if let NodeKind::VariableDeclaration { declarator: decl, .. } = &statements[0].kind
                 {
                     assert_eq!(decl, declarator);
-                } else {
-                    panic!("Expected VariableDeclaration for: {}", code);
                 }
             }
         }
@@ -706,6 +668,12 @@ mod tests {
                     _ => None,
                 };
 
+                assert!(
+                    binary_node.is_some(),
+                    "Expected Binary operator for: {}. Found: {:?}",
+                    code,
+                    statements[0].kind
+                );
                 if let Some((op, left, right)) = binary_node {
                     assert_eq!(op, expected_op, "Operator mismatch for: {}", code);
 
@@ -713,15 +681,13 @@ mod tests {
                     println!("Parsing: {}", code);
                     println!("Left node: {:?}", left);
                     println!("Right node: {:?}", right);
-                } else {
-                    panic!(
-                        "Expected Binary operator for: {}. Found: {:?}",
-                        code, statements[0].kind
-                    );
                 }
-            } else {
-                panic!("Expected Program node, found: {:?}", ast.kind);
             }
+            assert!(
+                matches!(ast.kind, NodeKind::Program { .. }),
+                "Expected Program node, found: {:?}",
+                ast.kind
+            );
         }
     }
 
@@ -759,17 +725,21 @@ mod tests {
                     _ => None,
                 };
 
+                assert!(
+                    binary_node.is_some(),
+                    "Expected Binary operator for: {}. Found: {:?}",
+                    code,
+                    statements[0].kind
+                );
                 if let Some(op) = binary_node {
                     assert_eq!(op, expected_op, "Operator mismatch for: {}", code);
-                } else {
-                    panic!(
-                        "Expected Binary operator for: {}. Found: {:?}",
-                        code, statements[0].kind
-                    );
                 }
-            } else {
-                panic!("Expected Program node, found: {:?}", ast.kind);
             }
+            assert!(
+                matches!(ast.kind, NodeKind::Program { .. }),
+                "Expected Program node, found: {:?}",
+                ast.kind
+            );
         }
     }
 

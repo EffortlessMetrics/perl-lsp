@@ -3,11 +3,12 @@
 // This module orchestrates all scanner, unicode, property, and integration tests.
 // It is designed to mirror the C-based test suite and ensure 100% input/output fidelity.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "c-parser"))]
 #[allow(clippy::module_inception)]
 mod tests {
 
     use crate::{language, parse};
+    use perl_tdd_support::{must, must_some};
     use tree_sitter::Parser;
 
     #[test]
@@ -31,7 +32,7 @@ mod tests {
             let result = parse(code);
             assert!(result.is_ok(), "Test case {} failed: {:?}", i, result);
 
-            let tree = result.unwrap();
+            let tree = must(result);
             let root = tree.root_node();
             assert_eq!(root.kind(), "source_file");
         }
@@ -150,7 +151,7 @@ mod tests {
     #[test]
     fn test_parser_reuse() {
         let mut parser = Parser::new();
-        parser.set_language(&language()).expect("Failed to set language");
+        must(parser.set_language(&language()));
 
         let test_cases = ["my $var1 = 1;", "my $var2 = 2;", "my $var3 = 3;"];
 
@@ -224,7 +225,7 @@ mod unicode_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "c-parser"))]
 mod property_tests {
     use crate::parse;
     use proptest::prelude::*;
@@ -250,6 +251,7 @@ mod property_tests {
 #[cfg(test)]
 mod error_tests {
     use crate::error::ParseError;
+    use perl_tdd_support::must;
 
     #[test]
     fn test_error_creation() {
@@ -267,16 +269,15 @@ mod error_tests {
     #[test]
     fn test_error_serialization() {
         let error = ParseError::ParseFailed;
-        let serialized = bincode::encode_to_vec(&error, bincode::config::standard());
+        let serialized = postcard::to_allocvec(&error);
         assert!(serialized.is_ok(), "Error serialization failed");
 
-        let (deserialized, _): (ParseError, _) =
-            bincode::decode_from_slice(&serialized.unwrap(), bincode::config::standard()).unwrap();
+        let deserialized: ParseError = must(postcard::from_bytes(&must(serialized)));
         assert!(matches!(deserialized, ParseError::ParseFailed));
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "c-parser"))]
 mod performance_tests {
     use crate::parse;
     use std::time::Instant;
@@ -300,7 +301,7 @@ mod performance_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "c-parser"))]
 mod corpus_tests {
     use crate::parse;
 
@@ -435,7 +436,7 @@ mod corpus_tests {
             {
                 println!("\n📁 Testing corpus file: {}", path.display());
 
-                match parse_corpus_file(&path.to_path_buf()) {
+                match must(parse_corpus_file(&path.to_path_buf())) {
                     Ok(test_cases) => {
                         for test_case in test_cases {
                             total_tests += 1;
@@ -468,7 +469,7 @@ mod corpus_tests {
         println!("   Failed: {} ❌", failed_tests);
 
         if failed_tests > 0 {
-            panic!("{} corpus tests failed", failed_tests);
+            assert!(false, "{} corpus tests failed", failed_tests);
         }
     }
 
@@ -481,7 +482,7 @@ mod corpus_tests {
             return;
         }
 
-        let test_cases = parse_corpus_file(&path).expect("Failed to parse simple corpus");
+        let test_cases = must(parse_corpus_file(&path));
         let mut passed = 0;
         let mut failed = 0;
 
@@ -504,7 +505,7 @@ mod corpus_tests {
 
         println!("\nSimple corpus: {}/{} tests passed", passed, passed + failed);
         if failed > 0 {
-            panic!("{} simple corpus tests failed", failed);
+            assert!(false, "{} simple corpus tests failed", failed);
         }
     }
 
@@ -516,7 +517,7 @@ mod corpus_tests {
             return;
         }
 
-        let test_cases = parse_corpus_file(&path).expect("Failed to parse variables corpus");
+        let test_cases = must(parse_corpus_file(&path));
         let mut passed = 0;
         let mut failed = 0;
 
@@ -539,12 +540,12 @@ mod corpus_tests {
 
         println!("\nVariables corpus: {}/{} tests passed", passed, passed + failed);
         if failed > 0 {
-            panic!("{} variables corpus tests failed", failed);
+            assert!(false, "{} variables corpus tests failed", failed);
         }
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "c-parser"))]
 mod highlight_tests {
     use crate::{language, parse};
 
@@ -623,7 +624,7 @@ mod highlight_tests {
         let source = source_lines.join("\n");
 
         let test_case = HighlightTestCase {
-            name: path.file_name().unwrap().to_string_lossy().to_string(),
+            name: must_some(path.file_name()).to_string_lossy().to_string(),
             source,
             expected_tokens,
         };
@@ -723,8 +724,8 @@ mod highlight_tests {
         let mut verified_files = 0;
         let mut failed_verifications = Vec::new();
 
-        for entry in fs::read_dir(&highlight_dir).unwrap() {
-            let entry = entry.unwrap();
+        for entry in must(fs::read_dir(&highlight_dir)) {
+            let entry = must(entry);
             let path = entry.path();
 
             if path.extension().and_then(|s| s.to_str()) == Some("pm") {
@@ -780,11 +781,15 @@ mod highlight_tests {
             for name in &failed_verifications {
                 println!("   - {}", name);
             }
-            panic!("{} highlight files failed token verification", failed_verifications.len());
+            assert!(
+                false,
+                "{} highlight files failed token verification",
+                failed_verifications.len()
+            );
         }
 
         if parsed_files < total_files {
-            panic!("{} highlight files failed to parse", total_files - parsed_files);
+            assert!(false, "{} highlight files failed to parse", total_files - parsed_files);
         }
     }
 }

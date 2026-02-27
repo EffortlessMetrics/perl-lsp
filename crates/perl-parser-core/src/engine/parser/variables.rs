@@ -553,15 +553,22 @@ impl<'a> Parser<'a> {
         match self.tokens.peek_second() {
             Ok(token) => {
                 Ok(match token.kind {
-                    // These are definitely prototype sigils
-                    TokenKind::ScalarSigil
-                    | TokenKind::ArraySigil
-                    | TokenKind::HashSigil
-                    | TokenKind::Star
+                    // These are unambiguously prototype tokens
+                    TokenKind::Star
                     | TokenKind::Backslash
                     | TokenKind::Semicolon
                     | TokenKind::BitwiseAnd
+                    | TokenKind::SubSigil
                     | TokenKind::GlobSigil => true,
+                    // Sigils: peek past to distinguish prototype ($;@%) from signature ($x, @rest)
+                    TokenKind::ScalarSigil
+                    | TokenKind::ArraySigil
+                    | TokenKind::HashSigil => {
+                        match self.tokens.peek_third() {
+                            Ok(third) => !matches!(third.kind, TokenKind::Identifier),
+                            Err(_) => true, // default to prototype on error
+                        }
+                    }
                     // Empty prototype
                     TokenKind::RightParen => true,
                     // Colon indicates named parameter (:$foo), so it's a signature
@@ -612,4 +619,130 @@ impl<'a> Parser<'a> {
         Ok(prototype)
     }
 
+}
+
+#[cfg(test)]
+mod prototype_heuristic_tests {
+    use super::*;
+
+    /// Helper: parse code and extract the first Subroutine node.
+    fn parse_sub(code: &str) -> Option<Node> {
+        let mut parser = Parser::new(code);
+        let ast = parser.parse().ok()?;
+        if let NodeKind::Program { statements } = ast.kind {
+            statements.into_iter().next()
+        } else {
+            None
+        }
+    }
+
+    #[test]
+    fn signature_with_named_params() {
+        let node = parse_sub("sub foo($x) {}");
+        assert!(node.is_some(), "expected parsed subroutine for `sub foo($x) {{}}`");
+        let Some(node) = node else {
+            return;
+        };
+        assert!(
+            matches!(&node.kind, NodeKind::Subroutine { .. }),
+            "expected Subroutine node, got {}",
+            node.kind.kind_name()
+        );
+
+        if let NodeKind::Subroutine { signature, prototype, .. } = &node.kind {
+            assert!(signature.is_some(), "sub foo($x) should have a signature");
+            assert!(prototype.is_none(), "sub foo($x) should not have a prototype");
+        }
+    }
+
+    #[test]
+    fn signature_with_multiple_params() {
+        let node = parse_sub("sub foo($x, $y) {}");
+        assert!(node.is_some(), "expected parsed subroutine for `sub foo($x, $y) {{}}`");
+        let Some(node) = node else {
+            return;
+        };
+        assert!(
+            matches!(&node.kind, NodeKind::Subroutine { .. }),
+            "expected Subroutine node, got {}",
+            node.kind.kind_name()
+        );
+
+        if let NodeKind::Subroutine { signature, .. } = &node.kind {
+            assert!(signature.is_some(), "sub foo($x, $y) should have a signature");
+        }
+    }
+
+    #[test]
+    fn prototype_single_sigil() {
+        let node = parse_sub("sub foo($) {}");
+        assert!(node.is_some(), "expected parsed subroutine for `sub foo($) {{}}`");
+        let Some(node) = node else {
+            return;
+        };
+        assert!(
+            matches!(&node.kind, NodeKind::Subroutine { .. }),
+            "expected Subroutine node, got {}",
+            node.kind.kind_name()
+        );
+
+        if let NodeKind::Subroutine { prototype, signature, .. } = &node.kind {
+            assert!(prototype.is_some(), "sub foo($) should have a prototype");
+            assert!(signature.is_none(), "sub foo($) should not have a signature");
+        }
+    }
+
+    #[test]
+    fn prototype_with_semicolon() {
+        let node = parse_sub("sub foo($;@) {}");
+        assert!(node.is_some(), "expected parsed subroutine for `sub foo($;@) {{}}`");
+        let Some(node) = node else {
+            return;
+        };
+        assert!(
+            matches!(&node.kind, NodeKind::Subroutine { .. }),
+            "expected Subroutine node, got {}",
+            node.kind.kind_name()
+        );
+
+        if let NodeKind::Subroutine { prototype, .. } = &node.kind {
+            assert!(prototype.is_some(), "sub foo($;@) should have a prototype");
+        }
+    }
+
+    #[test]
+    fn prototype_empty() {
+        let node = parse_sub("sub foo() {}");
+        assert!(node.is_some(), "expected parsed subroutine for `sub foo() {{}}`");
+        let Some(node) = node else {
+            return;
+        };
+        assert!(
+            matches!(&node.kind, NodeKind::Subroutine { .. }),
+            "expected Subroutine node, got {}",
+            node.kind.kind_name()
+        );
+
+        if let NodeKind::Subroutine { prototype, .. } = &node.kind {
+            assert!(prototype.is_some(), "sub foo() should have a prototype (empty)");
+        }
+    }
+
+    #[test]
+    fn prototype_with_sub_sigil() {
+        let node = parse_sub("sub foo(&) {}");
+        assert!(node.is_some(), "expected parsed subroutine for `sub foo(&) {{}}`");
+        let Some(node) = node else {
+            return;
+        };
+        assert!(
+            matches!(&node.kind, NodeKind::Subroutine { .. }),
+            "expected Subroutine node, got {}",
+            node.kind.kind_name()
+        );
+
+        if let NodeKind::Subroutine { prototype, .. } = &node.kind {
+            assert!(prototype.is_some(), "sub foo(&) should have a prototype");
+        }
+    }
 }

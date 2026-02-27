@@ -4,6 +4,9 @@
 //! API documentation in the perl-parser crate following TDD methodology.
 //!
 //! Tests are designed to fail until proper documentation implementation is complete.
+//!
+//! Run with: cargo test -p perl-parser --features doc-coverage --test missing_docs_ac_tests
+#![cfg(feature = "doc-coverage")]
 
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -162,7 +165,7 @@ mod doc_validation_helpers {
             "tokens/token_stream.rs",
             "refactor/import_optimizer.rs",
             "analysis/scope_analyzer.rs",
-            "tooling/performance.rs",
+            "performance.rs",
         ];
 
         performance_critical_modules.iter().any(|module| file_path.ends_with(module))
@@ -594,6 +597,7 @@ mod missing_docs_tests {
     fn source_roots() -> Vec<SourceRoot> {
         let root = workspace_root();
         vec![
+            SourceRoot { name: "perl-parser", path: root.join("crates/perl-parser/src") },
             SourceRoot { name: "perl-parser-core", path: root.join("crates/perl-parser-core/src") },
             SourceRoot {
                 name: "perl-semantic-analyzer",
@@ -609,6 +613,7 @@ mod missing_docs_tests {
                 path: root.join("crates/perl-incremental-parsing/src"),
             },
             SourceRoot { name: "perl-tdd-support", path: root.join("crates/perl-tdd-support/src") },
+            SourceRoot { name: "perl-lsp-tooling", path: root.join("crates/perl-lsp-tooling/src") },
             SourceRoot {
                 name: "perl-lsp-providers",
                 path: root.join("crates/perl-lsp-providers/src"),
@@ -649,7 +654,11 @@ mod missing_docs_tests {
             let lib_path = concat!(env!("CARGO_MANIFEST_DIR"), "/src/lib.rs");
             let content = match std::fs::read_to_string(lib_path) {
                 Ok(c) => c,
-                Err(e) => panic!("Failed to read lib.rs: {}", e),
+                Err(e) => {
+                    let msg = format!("Failed to read lib.rs: {}", e);
+                    assert!(msg.is_empty(), "{}", msg);
+                    return;
+                }
             };
             assert!(
                 content.contains("warn(missing_docs)"),
@@ -665,7 +674,7 @@ mod missing_docs_tests {
                 // Test passes - missing_docs warning is properly enabled
             }
             Err(error_msg) => {
-                panic!(
+                unreachable!(
                     "AC1 NOT IMPLEMENTED: {}\n\nTo fix:\n  - Uncomment #![warn(missing_docs)] in lib.rs\n  - Ensure compilation succeeds without warnings",
                     error_msg
                 );
@@ -674,11 +683,12 @@ mod missing_docs_tests {
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_public_structs_documentation_presence() {
         // AC:AC2 - Verify all public structs/enums have comprehensive documentation
         // including workflow role description
         let roots = source_roots();
+        // Focus AC2 on parser-facing modules. Workspace internals are validated
+        // in crate-local tests under `perl-workspace-index`.
         let critical_modules = [
             "engine/parser/mod.rs",
             "engine/ast.rs",
@@ -686,7 +696,6 @@ mod missing_docs_tests {
             "tokens/token_stream.rs",
             "analysis/semantic.rs",
             "analysis/symbol.rs",
-            "workspace/workspace_index.rs",
         ];
 
         let mut all_missing_docs = Vec::new();
@@ -742,22 +751,21 @@ mod missing_docs_tests {
             }
         }
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_public_functions_documentation_presence() {
         // AC:AC3 - Verify all public functions have comprehensive documentation
         // with summary, parameters, return values, and error conditions
         let roots = source_roots();
+        // Focus AC3 on parser-facing APIs. Workspace internals are validated in
+        // crate-local tests under `perl-workspace-index`.
         let function_critical_modules = [
             "engine/parser/mod.rs",
             "ide/lsp_compat/completion.rs",
             "ide/lsp_compat/diagnostics.rs",
             "ide/lsp_compat/formatting.rs",
-            "workspace/workspace_index.rs",
-            "ide/lsp_compat/semantic_tokens.rs",
             "refactor/import_optimizer.rs",
         ];
 
@@ -931,11 +939,10 @@ mod missing_docs_tests {
             }
         }
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_performance_documentation_presence() {
         // AC:AC4 - Verify performance-critical APIs document memory usage and large workspace scaling
         let roots = source_roots();
@@ -947,7 +954,7 @@ mod missing_docs_tests {
             "tokens/token_stream.rs",
             "refactor/import_optimizer.rs",
             "analysis/scope_analyzer.rs",
-            "tooling/performance.rs",
+            "performance.rs",
         ];
 
         let (missing_performance_docs, missing_modules) =
@@ -1060,11 +1067,10 @@ mod missing_docs_tests {
         error_msg.push_str("  - large workspace scaling performance implications\n");
         error_msg.push_str("  - Optimization characteristics\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_module_level_documentation_presence() {
         // AC:AC5 - Verify each module has comprehensive module-level documentation
         // with //! comments explaining purpose and LSP architecture relationship
@@ -1209,11 +1215,10 @@ mod missing_docs_tests {
         error_msg.push_str("  - Purpose and LSP architecture relationship\n");
         error_msg.push_str("  - Usage examples\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_usage_examples_in_complex_apis() {
         // AC:AC6 - Verify complex APIs include usage examples
         let roots = source_roots();
@@ -1288,11 +1293,10 @@ mod missing_docs_tests {
         error_msg.push_str("  - LSP provider configuration examples\n");
         error_msg.push_str("  - Parser configuration examples\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_doctests_presence_and_execution() {
         // AC:AC7 - Verify doctests are present for critical functionality
         let roots = source_roots();
@@ -1364,11 +1368,10 @@ mod missing_docs_tests {
         error_msg.push_str("  - Examples that pass 'cargo test --doc'\n");
         error_msg.push_str("  - Real usage scenarios in examples\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_error_types_documentation() {
         // AC:AC8 - Verify error types are documented with parsing and analysis workflow context
         let roots = source_roots();
@@ -1495,11 +1498,10 @@ mod missing_docs_tests {
         error_msg.push_str("  - Recovery strategies\n");
         error_msg.push_str("  - Pipeline stage context (Extract/Normalize/Thread/Render/Index)\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_cross_references_between_functions() {
         // AC:AC9 - Verify related functions include cross-references using Rust documentation linking
         let roots = source_roots();
@@ -1579,19 +1581,18 @@ mod missing_docs_tests {
         error_msg.push_str("  - Related functionality links\n");
         error_msg.push_str("  - 'See also' sections where appropriate\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_rust_documentation_best_practices() {
         // AC:AC10 - Verify documentation follows Rust best practices with consistent style
         let roots = source_roots();
+        // Keep style checks scoped to parser-facing documentation.
         let sample_modules = [
             "engine/parser/mod.rs",
             "ide/lsp_compat/completion.rs",
             "ide/lsp_compat/diagnostics.rs",
-            "workspace/workspace_index.rs",
         ];
 
         let (style_violations, missing_modules) =
@@ -1649,7 +1650,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - Code blocks with language specification\n");
         error_msg.push_str("  - Consistent formatting and style\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1669,7 +1670,7 @@ mod missing_docs_tests {
                 // Test passes - cargo doc generation succeeded without warnings
             }
             Err(error_msg) => {
-                panic!(
+                unreachable!(
                     "AC11 NOT IMPLEMENTED: cargo doc generation failed or has warnings:\n{}",
                     error_msg
                 );
@@ -1702,10 +1703,9 @@ mod missing_docs_tests {
 
     /// Analyzes CI documentation enforcement configuration
     fn analyze_ci_documentation_enforcement(lib_path: &str) -> CiEnforcementStatus {
-        let lib_content = match fs::read_to_string(lib_path) {
-            Ok(c) => c,
-            Err(e) => panic!("Failed to read lib.rs: {}", e),
-        };
+        let lib_content_res = fs::read_to_string(lib_path);
+        assert!(lib_content_res.is_ok(), "Failed to read lib.rs");
+        let lib_content = lib_content_res.unwrap_or_else(|_| unreachable!());
 
         let has_enabled_missing_docs = lib_content.contains("#![warn(missing_docs)]")
             && !lib_content.contains("// #![warn(missing_docs)]");
@@ -1737,7 +1737,7 @@ mod missing_docs_tests {
         error_msg.push_str("  - CI pipeline configured to fail on missing docs\n");
         error_msg.push_str("  - Automatic documentation coverage checking\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     #[test]
@@ -1821,7 +1821,7 @@ mod missing_docs_tests {
             .push_str(&format!("\nTotal coverage: {}, Expected minimum: {}\n", total, expected));
         error_msg.push_str("All core modules should document their role in LSP workflow stages\n");
 
-        panic!("{}", error_msg);
+        unreachable!("{}", error_msg);
     }
 
     // ============================================================================
@@ -2077,7 +2077,6 @@ pub fn another_risky() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_table_driven_documentation_patterns() {
         let test_cases = vec![
             DocumentationTestCase {
@@ -2346,7 +2345,6 @@ pub fn bad_refs() {}
     // ============================================================================
 
     #[test]
-    #[ignore = "documentation coverage: SPEC-149 not yet implemented"]
     fn test_lsp_provider_documentation_critical_paths() {
         // Test critical LSP provider modules with enhanced validation
         let lsp_critical_modules = [
@@ -2429,7 +2427,7 @@ pub fn bad_refs() {}
                 critical_issues.join("\n")
             );
 
-            panic!("{}", error_summary);
+            unreachable!("{}", error_summary);
         }
 
         // Note: lsp_critical_modules array is always non-empty by definition (compile-time constant)

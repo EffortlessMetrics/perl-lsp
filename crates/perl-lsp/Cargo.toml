@@ -1,19 +1,21 @@
 [package]
 name = "perl-lsp"
-version = "0.8.8"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 readme = "README.md"
 documentation = "https://docs.rs/perl-lsp"
-keywords = ["perl", "lsp", "language-server", "ide"]
+keywords = ["perl", "lsp", "language-server", "ide", "tree-sitter"]
 categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
+  "build.rs",
+  "features_sot.toml",
   "Cargo.toml",
   "README.md",
   "LICENSE*"
@@ -24,6 +26,8 @@ perl-dap = { workspace = true, optional = true }
 perl-parser = { workspace = true, features = ["test-performance"] }
 perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-formatting = { workspace = true }
+perl-lsp-cancellation = { workspace = true }
+perl-lsp-feature-governance = { workspace = true }
 perl-lsp-tooling = { workspace = true }
 perl-lsp-protocol = { workspace = true }
 perl-lsp-transport = { workspace = true }
@@ -34,20 +38,24 @@ perl-lsp-inlay-hints = { workspace = true }
 perl-lsp-navigation = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-rename = { workspace = true }
 perl-lsp-semantic-tokens = { workspace = true }
+perl-lsp-launcher = { workspace = true }
 perl-lexer = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
+perl-module-path = { workspace = true }
+perl-module-reference = { workspace = true }
+perl-module-rename = { workspace = true }
+perl-module-resolution = { workspace = true }
+perl-source-file = { workspace = true }
+perl-content-length-framing = { workspace = true }
+perl-workspace-discovery = { workspace = true }
+perl-keywords = { workspace = true }
 lsp-types = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 url = "2.5.8"
-rustc-hash = "2.1.1"
-anyhow = "1.0.100"
-thiserror = "2.0.18"
+anyhow = "1.0.102"
 regex = "1.12.2"
-lazy_static = "1.5.0"
 md5 = "0.8.0"
-phf = { version = "0.13.1", features = ["macros"] }
-nix = { version = "0.31.1", features = ["signal"] }
 parking_lot = "0.12.5"
 walkdir = "2.5.0"
 
@@ -58,7 +66,7 @@ once_cell = "1.21.3"
 
 [build-dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
-toml = "0.9.11"
+toml = "1.0.3"
 
 [lints]
 workspace = true
@@ -69,7 +77,11 @@ workspace = []  # Workspace-wide indexing for cross-file features
 incremental = ["perl-parser/incremental"]  # Incremental parsing support
 test-performance = []  # Performance optimizations for test environments
 # When enabled, advertise *only* the conservative GA set (for emergency point releases).
-lsp-ga-lock = ["perl-lsp-protocol/lsp-ga-lock"]
+lsp-ga-lock = [
+  "perl-lsp-protocol/lsp-ga-lock",
+  "perl-lsp-feature-governance/lsp-ga-lock",
+  "perl-lsp-launcher/lsp-ga-lock",
+]
 experimental-features = []  # Experimental LSP features for testing
 stress-tests = []  # Enable stress tests that are too slow for CI
 
@@ -91,13 +103,14 @@ assert_cmd = "2.1.2"
 insta = { version = "1.46.1", features = ["yaml"] }
 predicates = "3.1.3"
 pretty_assertions = "1.4.1"
-serial_test = "3.3.1"
+serial_test = "3.4.0"
 tempfile = "3.24.0"
 proptest = "1.9.0"
 perl-tdd-support = { workspace = true }
 which = "8.0.0"
 parking_lot = "0.12.5"
 criterion = "0.8.1"
+uuid = { version = "1.21.0", features = ["v4"] }
 
 [[bench]]
 name = "rope_performance_benchmark"

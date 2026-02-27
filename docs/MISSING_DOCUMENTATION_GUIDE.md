@@ -1,6 +1,6 @@
 # Missing Documentation Guide - SPEC-149 Implementation
 
-*Diataxis: How-to Guide* - Systematic documentation resolution strategy for perl-parser crate enterprise-grade API documentation compliance.
+*Diataxis: How-to Guide* - Systematic documentation resolution strategy for perl-parser crate comprehensive API documentation compliance.
 
 ## Overview
 
@@ -239,7 +239,7 @@ All text processing functions must document:
 ### Example Documentation Pattern
 
 ```rust
-/// Parses Perl source code into an Abstract Syntax Tree with enterprise-grade error recovery.
+/// Parses Perl source code into an Abstract Syntax Tree with comprehensive error recovery.
 ///
 /// This function serves as the primary entry point for parsing, generating structured
 /// AST representations. Supports incremental parsing with <1ms updates and comprehensive
