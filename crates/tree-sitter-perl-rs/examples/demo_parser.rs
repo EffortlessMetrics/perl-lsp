@@ -10,7 +10,7 @@ fn main() {
     println!("=== Perl Parser Demo ===\n");
 
     // Test cases
-    let test_cases = vec![
+    let test_cases = [
         // Basic variable declaration
         "my $x = 42;",
         // String assignment
@@ -38,8 +38,10 @@ print "Sum: $sum\n";
         #[cfg(feature = "pure-rust")]
         {
             let mut parser = PureRustPerlParser::new();
-            let ast = parser.parse(source).unwrap();
-            println!("AST:\n{:#?}\n", ast);
+            match parser.parse(source) {
+                Ok(ast) => println!("AST:\n{:#?}\n", ast),
+                Err(e) => println!("Parse error: {}\n", e),
+            }
         }
     }
 
@@ -61,10 +63,13 @@ print "5! = $result\n";
     #[cfg(feature = "pure-rust")]
     {
         let mut parser = PureRustPerlParser::new();
-        let ast = parser.parse(complex).unwrap();
-
-        // Show AST structure
-        println!("\n=== AST Debug Output ===");
-        println!("{:#?}", ast);
+        match parser.parse(complex) {
+            Ok(ast) => {
+                // Show AST structure
+                println!("\n=== AST Debug Output ===");
+                println!("{:#?}", ast);
+            }
+            Err(e) => println!("Parse error: {}", e),
+        }
     }
 }

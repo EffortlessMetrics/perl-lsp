@@ -1,0 +1,239 @@
+name: Publish to crates.io
+
+# Automated publishing of all crates to crates.io
+# Uses cargo metadata for correct dependency-order publishing
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 0.9.1)'
+        required: true
+        type: string
+      dry_run:
+        description: 'Dry run (no actual publishing)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+jobs:
+  # Step 1: Compute topological publish order from cargo metadata
+  compute-order:
+    name: Compute publish order
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      crates: ${{ steps.topo.outputs.crates }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compute topological order
+        id: topo
+        run: |
+          cargo metadata --format-version=1 --no-deps | python3 -c '
+          import json, sys
+
+          meta = json.load(sys.stdin)
+          workspace_members = set(meta["workspace_members"])
+
+          # Build name -> package info map (only workspace members)
+          packages = {}
+          for pkg in meta["packages"]:
+              if pkg["id"] in workspace_members:
+                  packages[pkg["name"]] = pkg
+
+          # Build dependency graph (only internal deps)
+          deps = {}
+          for name, pkg in packages.items():
+              deps[name] = set()
+              for dep in pkg["dependencies"]:
+                  if dep["name"] in packages and dep.get("kind") != "dev":
+                      deps[name].add(dep["name"])
+
+          # Topological sort (Kahn algorithm)
+          in_degree = {name: len(d) for name, d in deps.items()}
+          queue = sorted([n for n, d in in_degree.items() if d == 0])
+          order = []
+
+          while queue:
+              node = queue.pop(0)
+              order.append(node)
+              for name, d in deps.items():
+                  if node in d:
+                      in_degree[name] -= 1
+                      if in_degree[name] == 0:
+                          queue.append(name)
+                          queue.sort()
+
+          if len(order) != len(packages):
+              print("ERROR: cycle detected in dependency graph", file=sys.stderr)
+              sys.exit(1)
+
+          # Filter to only crates that should be published (have publish != [])
+          result = []
+          for name in order:
+              pkg = packages[name]
+              publish = pkg.get("publish")
+              if publish is not None and len(publish) == 0:
+                  continue
+              result.append({"name": name, "version": pkg["version"]})
+
+          print(json.dumps(result))
+          ' > /tmp/crates.json
+
+          echo "crates=$(cat /tmp/crates.json)" >> $GITHUB_OUTPUT
+          echo "Publish order ($(cat /tmp/crates.json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))') crates):"
+          cat /tmp/crates.json | python3 -c '
+          import json, sys
+          for i, c in enumerate(json.load(sys.stdin), 1):
+              print(f"  {i}. {c[\"name\"]}@{c[\"version\"]}")
+          '
+
+  # Step 2: Publish crates sequentially in dependency order
+  publish:
+    name: Publish crates
+    needs: compute-order
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          cache-all-crates: true
+
+      - name: Publish all crates
+        env:
+          CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          TOTAL=$(echo "$CRATES_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
+          echo "Publishing $TOTAL crates..."
+
+          CRATES_LIST="$(mktemp)"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
+          while read -r CRATE VERSION; do
+            echo ""
+            echo "===> $CRATE@$VERSION"
+
+            # Check if already published
+            SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
+            if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
+              echo "::warning::$CRATE@$VERSION already published, skipping"
+              continue
+            fi
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "Dry run: cargo package -p $CRATE"
+              cargo package -p "$CRATE"
+              continue
+            fi
+
+            # Publish with retries
+            PUBLISHED=false
+            for attempt in 1 2 3; do
+              echo "Attempt $attempt/3: cargo publish -p $CRATE"
+              if cargo publish -p "$CRATE" 2>&1; then
+                PUBLISHED=true
+                break
+              fi
+              echo "Attempt $attempt failed, waiting 30s..."
+              sleep 30
+            done
+
+            if [ "$PUBLISHED" != "true" ]; then
+              echo "::error::Failed to publish $CRATE after 3 attempts"
+              exit 1
+            fi
+
+            # Wait for crates.io sparse index to pick up the new version
+            echo "Waiting for $CRATE@$VERSION to appear in index..."
+            for i in $(seq 1 30); do
+              SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
+              if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
+                echo "$CRATE@$VERSION indexed successfully"
+                break
+              fi
+              if [ "$i" = "30" ]; then
+                echo "::warning::$CRATE@$VERSION not yet indexed after 5 min, proceeding anyway"
+              fi
+              sleep 10
+            done
+          done < "$CRATES_LIST"
+
+          echo ""
+          echo "All crates processed."
+
+  # Step 3: Verify all crates are published
+  verify:
+    name: Verify all crates published
+    needs: [compute-order, publish]
+    if: github.event.inputs.dry_run != 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify all crates
+        env:
+          CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
+        run: |
+          FAILED=""
+          TOTAL=0
+          OK=0
+
+          CRATES_LIST="$(mktemp)"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
+          while read -r CRATE VERSION; do
+            TOTAL=$((TOTAL + 1))
+
+            SEARCH_OUT=$(cargo search "$CRATE" --limit 1 2>/dev/null || true)
+            if echo "$SEARCH_OUT" | grep -q "^${CRATE} = \"${VERSION}\""; then
+              echo "OK $CRATE@$VERSION"
+              OK=$((OK + 1))
+            else
+              echo "FAIL $CRATE@$VERSION"
+              FAILED="${FAILED} ${CRATE}"
+            fi
+          done < "$CRATES_LIST"
+
+          echo ""
+          echo "Published: ${OK}/${TOTAL}"
+
+          if [ -n "$FAILED" ]; then
+            echo "::error::Failed crates:${FAILED}"
+            exit 1
+          fi
+
+      - name: Summary
+        env:
+          CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
+        run: |
+          COUNT=$(echo "$CRATES_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
+          echo "## All Crates Published Successfully :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Crates**: ${COUNT} published in topological order" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: All crates verified on crates.io" >> $GITHUB_STEP_SUMMARY

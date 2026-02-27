@@ -23,8 +23,8 @@ interface Release {
 }
 
 export class BinaryDownloader {
-    private static readonly REPO_OWNER = 'EffortlessSteven';
-    private static readonly REPO_NAME = 'tree-sitter-perl';
+    private static readonly REPO_OWNER = 'EffortlessMetrics';
+    private static readonly REPO_NAME = 'perl-lsp';
     private static readonly BINARY_NAME = 'perl-lsp';
     
     constructor(
@@ -81,7 +81,7 @@ export class BinaryDownloader {
                     'Install Manually'
                 ).then(choice => {
                     if (choice === 'Install Manually') {
-                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/tree-sitter-perl#quick-install'));
+                        vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp#quick-install'));
                     }
                 });
             } else {
@@ -245,7 +245,23 @@ export class BinaryDownloader {
                 if (process.platform !== 'win32') {
                     fs.chmodSync(finalPath, 0o755);
                 }
-                
+
+                // Best-effort: copy perl-dap if found in archive
+                const dapName = process.platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
+                const extractedDap = this.findBinary(extractDir, dapName);
+                if (extractedDap) {
+                    const dapDest = path.join(finalDir, dapName);
+                    try {
+                        fs.copyFileSync(extractedDap, dapDest);
+                        if (process.platform !== 'win32') {
+                            fs.chmodSync(dapDest, 0o755);
+                        }
+                        this.outputChannel.appendLine(`Debug adapter installed to: ${dapDest}`);
+                    } catch (e) {
+                        this.outputChannel.appendLine(`Note: could not install perl-dap: ${e}`);
+                    }
+                }
+
                 progress.report({ increment: 5, message: 'Complete!' });
                 this.outputChannel.appendLine(`Binary installed to: ${finalPath}`);
                 
@@ -528,6 +544,23 @@ export class BinaryDownloader {
         );
     }
     
+    /**
+     * Returns the path where perl-dap would be placed inside the auto-download
+     * directory.  Used by debugAdapter.ts to locate the binary without
+     * duplicating path logic.
+     */
+    static getLocalDapPath(context: vscode.ExtensionContext): string {
+        const platform = process.platform;
+        const arch = process.arch;
+        const dapName = platform === 'win32' ? 'perl-dap.exe' : 'perl-dap';
+        return path.join(
+            context.globalStorageUri.fsPath,
+            'bin',
+            `${platform}-${arch}`,
+            dapName
+        );
+    }
+
     private findBinary(dir: string, name: string): string | null {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         

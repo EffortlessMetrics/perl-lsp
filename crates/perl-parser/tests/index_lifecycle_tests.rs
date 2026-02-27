@@ -128,10 +128,7 @@ pub struct IndexMetrics {
     /// Parse storm threshold
     parse_storm_threshold: usize,
 
-    /// Last successful index time
-    ///
-    /// TODO: Future use - telemetry reporting and cache invalidation timestamps
-    #[allow(dead_code)]
+    /// Last successful index time (epoch millis)
     last_indexed: std::sync::atomic::AtomicU64,
 }
 
@@ -142,6 +139,20 @@ impl IndexMetrics {
             parse_storm_threshold,
             last_indexed: std::sync::atomic::AtomicU64::new(0),
         }
+    }
+
+    /// Record the current time as the last indexed timestamp
+    fn record_indexed(&self) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        self.last_indexed.store(now, std::sync::atomic::Ordering::SeqCst);
+    }
+
+    /// Return the last indexed timestamp (epoch millis), or 0 if never indexed
+    fn last_indexed_at(&self) -> u64 {
+        self.last_indexed.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -263,6 +274,9 @@ impl IndexCoordinator {
         // Update internal counters
         self.current_file_count.store(file_count, std::sync::atomic::Ordering::SeqCst);
         self.current_symbol_count.store(symbol_count, std::sync::atomic::Ordering::SeqCst);
+
+        // Record index timestamp
+        self.metrics.record_indexed();
     }
 
     /// Notify of file change (may trigger state transition)
@@ -325,6 +339,13 @@ impl IndexCoordinator {
         *state = IndexState::Ready { file_count, symbol_count, completed_at: Instant::now() };
     }
 
+    /// Return the last indexed timestamp (epoch millis), or 0 if never indexed
+    ///
+    /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#indexmetrics
+    pub fn last_indexed_at(&self) -> u64 {
+        self.metrics.last_indexed_at()
+    }
+
     /// Index a file (may trigger resource limit degradation)
     ///
     /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#test_max_files_triggers_degradation
@@ -332,6 +353,9 @@ impl IndexCoordinator {
         use std::sync::atomic::Ordering;
 
         let new_count = self.current_file_count.fetch_add(1, Ordering::SeqCst) + 1;
+
+        // Record index timestamp
+        self.metrics.record_indexed();
 
         // Check resource limit
         if new_count > self.limits.max_files {
@@ -376,14 +400,12 @@ mod tests {
         coord.complete_initial_scan(100, 5000);
 
         // State should transition to Ready
-        let ready_state = coord.state();
-        match ready_state {
-            IndexState::Ready { file_count, symbol_count, .. } => {
-                assert_eq!(file_count, 100, "File count should match scan result");
-                assert_eq!(symbol_count, 5000, "Symbol count should match scan result");
-            }
-            other => panic!("Expected Ready state after scan completion, got: {:?}", other),
-        }
+        let state = coord.state();
+        assert!(
+            matches!(state, IndexState::Ready { file_count: 100, symbol_count: 5000, .. }),
+            "Expected Ready state after scan completion, got: {:?}",
+            state
+        );
     }
 
     /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#test_ready_to_degraded_on_parse_storm
@@ -407,27 +429,30 @@ mod tests {
             coord.notify_change(&format!("file{}.pm", i));
         }
 
-        // State should transition to Degraded with ParseStorm reason
-        let degraded_state = coord.state();
-        match degraded_state {
-            IndexState::Degraded {
-                reason: DegradationReason::ParseStorm { pending_parses },
-                available_symbols,
-                ..
-            } => {
-                assert!(
-                    pending_parses > 10,
-                    "Parse storm should trigger at threshold (10), got: {}",
-                    pending_parses
-                );
-                assert_eq!(
-                    available_symbols, 5000,
-                    "Available symbols should be preserved during degradation"
-                );
-            }
-            other => {
-                panic!("Expected Degraded state with ParseStorm after 15 changes, got: {:?}", other)
-            }
+        let state = coord.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded { reason: DegradationReason::ParseStorm { .. }, .. }
+            ),
+            "Expected Degraded state with ParseStorm after 15 changes, got: {:?}",
+            state
+        );
+        if let IndexState::Degraded {
+            reason: DegradationReason::ParseStorm { pending_parses },
+            available_symbols,
+            ..
+        } = state
+        {
+            assert!(
+                pending_parses > 10,
+                "Parse storm should trigger at threshold (10), got: {}",
+                pending_parses
+            );
+            assert_eq!(
+                available_symbols, 5000,
+                "Available symbols should be preserved during degradation"
+            );
         }
     }
 
@@ -479,20 +504,18 @@ mod tests {
             coord.index_file(&format!("file{}.pm", i), "");
         }
 
-        // State should transition to Degraded with ResourceLimit reason
-        let degraded_state = coord.state();
-        match degraded_state {
-            IndexState::Degraded {
-                reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
-                ..
-            } => {
-                // Success - correct degradation reason
-            }
-            other => panic!(
-                "Expected Degraded state with ResourceLimit(MaxFiles) after exceeding limit, got: {:?}",
-                other
+        let state = coord.state();
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded {
+                    reason: DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles },
+                    ..
+                }
             ),
-        }
+            "Expected Degraded state with ResourceLimit(MaxFiles) after exceeding limit, got: {:?}",
+            state
+        );
     }
 
     /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#test_coordinator_new_starts_building
@@ -504,18 +527,11 @@ mod tests {
         let coord = IndexCoordinator::new();
 
         let state = coord.state();
-        match state {
-            IndexState::Building { indexed_count, total_count, .. } => {
-                assert_eq!(indexed_count, 0, "New coordinator should start with 0 indexed files");
-                assert_eq!(
-                    total_count, 0,
-                    "New coordinator should start with 0 total files discovered"
-                );
-            }
-            other => {
-                panic!("IndexCoordinator::new() must start in Building state, got: {:?}", other)
-            }
-        }
+        assert!(
+            matches!(state, IndexState::Building { indexed_count: 0, total_count: 0, .. }),
+            "IndexCoordinator::new() must start in Building state with 0 files, got: {:?}",
+            state
+        );
     }
 
     /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#test_state_is_clone_safe
@@ -535,14 +551,12 @@ mod tests {
         assert_eq!(state1, state2, "Multiple state() calls should return equal states");
         assert_eq!(state1, state3, "Cloned state should equal original");
 
-        // Verify state contents
-        match state1 {
-            IndexState::Ready { file_count, symbol_count, .. } => {
-                assert_eq!(file_count, 100, "State should preserve file count");
-                assert_eq!(symbol_count, 5000, "State should preserve symbol count");
-            }
-            other => panic!("Expected Ready state, got: {:?}", other),
-        }
+        let state = coord.state();
+        assert!(
+            matches!(state, IndexState::Ready { file_count: 100, symbol_count: 5000, .. }),
+            "Expected Ready state, got: {:?}",
+            state
+        );
     }
 
     /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#state-transitions
@@ -562,16 +576,18 @@ mod tests {
         // Simulate scan timeout
         coord.transition_to_degraded(DegradationReason::ScanTimeout { elapsed_ms: 35000 });
 
-        // Verify transition to Degraded
         let state = coord.state();
-        match state {
-            IndexState::Degraded {
-                reason: DegradationReason::ScanTimeout { elapsed_ms }, ..
-            } => {
-                assert_eq!(elapsed_ms, 35000, "Timeout duration should be preserved");
-            }
-            other => panic!("Expected Degraded state with ScanTimeout, got: {:?}", other),
-        }
+        assert!(
+            matches!(
+                state,
+                IndexState::Degraded {
+                    reason: DegradationReason::ScanTimeout { elapsed_ms: 35000 },
+                    ..
+                }
+            ),
+            "Expected Degraded state with ScanTimeout (35000ms), got: {:?}",
+            state
+        );
     }
 
     /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#state-transitions
@@ -725,6 +741,38 @@ mod tests {
             coord.metrics.pending_parses.load(Ordering::SeqCst),
             2,
             "Pending parses should decrement with notify_parse_complete"
+        );
+    }
+
+    /// Tests feature spec: INDEX_LIFECYCLE_V1_SPEC.md#indexmetrics
+    ///
+    /// Validates that last_indexed timestamp is updated during lifecycle
+    /// transitions: initial scan completion and file indexing.
+    #[test]
+    fn test_last_indexed_timestamp() {
+        let coord = IndexCoordinator::new();
+
+        // Before any indexing, timestamp should be 0
+        assert_eq!(coord.last_indexed_at(), 0, "last_indexed_at should be 0 before any indexing");
+
+        // Complete initial scan
+        coord.complete_initial_scan(10, 500);
+
+        let after_scan = coord.last_indexed_at();
+        assert!(after_scan > 0, "last_indexed_at should be set after complete_initial_scan");
+
+        // Small sleep to ensure timestamps differ
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        // Index a new file
+        coord.index_file("new_file.pm", "package Foo;");
+
+        let after_index = coord.last_indexed_at();
+        assert!(
+            after_index >= after_scan,
+            "last_indexed_at should update after index_file (got {} >= {})",
+            after_index,
+            after_scan
         );
     }
 }

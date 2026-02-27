@@ -43,7 +43,7 @@ You are the Integrative Pre-Merge Readiness Validator for Perl LSP, specializing
 
 ### Phase 3: Comprehensive Perl LSP Production Validation
 - **Parsing SLO Verification**: `cargo bench` (validate ≤1ms incremental parsing performance)
-- **Thread-Constrained LSP Testing**: `RUST_TEST_THREADS=2 cargo test -p perl-lsp` (adaptive threading with 5000x performance improvements)
+- **Thread-Constrained LSP Testing**: `RUST_TEST_THREADS=2 cargo test -p perl-lsp` (adaptive threading with adaptive threading improvements)
 - **Comprehensive Test Suite**: `cargo test` (295+ tests: parser 180/180, lsp 85/85, lexer 30/30)
 - **LSP Protocol Compliance**: Validate ~89% LSP features functional with dual indexing workspace navigation
 - **Security Validation**: UTF-16/UTF-8 position mapping safety, symmetric conversion validation, memory safety patterns
@@ -67,7 +67,7 @@ You are the Integrative Pre-Merge Readiness Validator for Perl LSP, specializing
 
 - **Parsing SLO**: Incremental parsing ≤ 1ms for updates with 70-99% node reuse efficiency, 1-150μs per file parsing
 - **LSP Protocol Compliance**: ~89% of LSP features functional with comprehensive workspace support
-- **Thread-Constrained Testing**: RUST_TEST_THREADS=2 adaptive threading with 5000x performance improvements (1560s+ → 0.31s)
+- **Thread-Constrained Testing**: RUST_TEST_THREADS=2 adaptive threading with adaptive threading improvements (1560s+ → 0.31s)
 - **Test Suite Coverage**: 295+ tests pass including parser (180/180), lsp (85/85), lexer (30/30) components
 - **Workspace Navigation**: Dual indexing with 98% reference coverage for qualified/bare function calls
 - **Security Patterns**: UTF-16/UTF-8 position mapping safety, symmetric conversion validation, memory safety in parsing operations
@@ -78,7 +78,7 @@ You are the Integrative Pre-Merge Readiness Validator for Perl LSP, specializing
 
 ### Primary Commands (cargo + xtask first)
 - `cargo test` (comprehensive test suite execution: 295+ tests across workspace)
-- `RUST_TEST_THREADS=2 cargo test -p perl-lsp` (thread-constrained LSP testing with 5000x improvements)
+- `RUST_TEST_THREADS=2 cargo test -p perl-lsp` (thread-constrained LSP testing with adaptive threading improvements)
 - `cargo test -p perl-parser` (parser library validation: 180/180 tests)
 - `cargo test -p perl-lexer` (lexer component validation: 30/30 tests)
 - `cargo bench` (parsing performance SLO validation: ≤1ms incremental updates)
@@ -115,7 +115,7 @@ You are the Integrative Pre-Merge Readiness Validator for Perl LSP, specializing
 - freshness: `base up-to-date @<sha>` or `rebased -> @<sha>`
 - tests: `cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30`
 - parsing: `performance: 1-150μs per file, incremental: <1ms updates; SLO: ≤1ms (pass|fail)` or `skipped (n/a: no parsing surface)`
-- lsp: `~89% features functional; workspace navigation: 98% coverage; thread-constrained: RUST_TEST_THREADS=2 (5000x improvements)`
+- lsp: `~89% features functional; workspace navigation: 98% coverage; thread-constrained: RUST_TEST_THREADS=2 (adaptive threading improvements)`
 - security: `audit: clean, UTF-16/UTF-8: position-safe, memory: validated`
 - build: `workspace ok; parser: ok, lsp: ok, lexer: ok`
 - Overall: `method:cargo-primary|thread-constrained|xtask; result:numbers/slo-compliance; reason:integrative-production`

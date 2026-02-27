@@ -3,78 +3,23 @@
 //! Provides completion for Perl keywords with snippet expansion.
 
 use super::{context::CompletionContext, items::CompletionItem};
-use std::collections::HashSet;
+use perl_keywords::LSP_COMPLETION_KEYWORDS;
 
-/// Create the keywords HashSet
-pub fn create_keywords() -> HashSet<&'static str> {
-    [
-        "my",
-        "our",
-        "local",
-        "state",
-        "sub",
-        "package",
-        "use",
-        "require",
-        "if",
-        "elsif",
-        "else",
-        "unless",
-        "while",
-        "until",
-        "for",
-        "foreach",
-        "do",
-        "eval",
-        "goto",
-        "last",
-        "next",
-        "redo",
-        "return",
-        "die",
-        "warn",
-        "exit",
-        "and",
-        "or",
-        "not",
-        "xor",
-        "eq",
-        "ne",
-        "lt",
-        "le",
-        "gt",
-        "ge",
-        "cmp",
-        "defined",
-        "undef",
-        "ref",
-        "blessed",
-        "scalar",
-        "wantarray",
-        "__PACKAGE__",
-        "__FILE__",
-        "__LINE__",
-        "BEGIN",
-        "END",
-        "CHECK",
-        "INIT",
-        "UNITCHECK",
-        "DESTROY",
-        "AUTOLOAD",
-    ]
-    .into_iter()
-    .collect()
+/// Canonical Perl keywords for completion.
+#[must_use]
+pub fn keywords() -> &'static [&'static str] {
+    LSP_COMPLETION_KEYWORDS
 }
 
 /// Add keyword completions
 pub fn add_keyword_completions(
     completions: &mut Vec<CompletionItem>,
     context: &CompletionContext,
-    keywords: &HashSet<&'static str>,
+    keywords: &[&'static str],
 ) {
-    for keyword in keywords {
+    for &keyword in keywords {
         if keyword.starts_with(&context.prefix) {
-            let (insert_text, snippet) = match *keyword {
+            let (insert_text, snippet) = match keyword {
                 "sub" => ("sub ${1:name} {\n    $0\n}", true),
                 "if" => ("if ($1) {\n    $0\n}", true),
                 "elsif" => ("elsif ($1) {\n    $0\n}", true),
@@ -85,7 +30,7 @@ pub fn add_keyword_completions(
                 "foreach" => ("foreach my $${1:item} (@${2:array}) {\n    $0\n}", true),
                 "package" => ("package ${1:Name};\n\n$0", true),
                 "use" => ("use ${1:Module};\n$0", true),
-                _ => (*keyword, false),
+                _ => (keyword, false),
             };
 
             completions.push(CompletionItem {

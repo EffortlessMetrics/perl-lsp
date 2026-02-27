@@ -14,6 +14,7 @@
 
 #![allow(unused_imports, dead_code)] // Scaffolding may have unused imports initially
 
+use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -24,12 +25,9 @@ use std::time::{Duration, Instant, SystemTime};
 mod common;
 use common::*;
 
-// Import expected infrastructure types (will be implemented)
-// TODO: Uncomment when implementing infrastructure components
-// use perl_parser::cancellation::{
-//     CancellationInfrastructure, ResourceManager, ThreadSafetyValidator,
-//     MemoryLeakDetector, IntegrationTestHarness
-// };
+use perl_lsp::cancellation::{
+    CancellationRegistry, PerlLspCancellationToken, ProviderCleanupContext,
+};
 
 /// Infrastructure quality test fixture with comprehensive monitoring
 struct InfrastructureTestFixture {
@@ -741,7 +739,8 @@ fn test_infrastructure_cleanup_and_resource_management_ac9() {
     // Take baseline resource measurements
     fixture.resource_monitor.take_memory_snapshot("baseline");
 
-    // TODO: Uncomment when implementing cancellation infrastructure
+    // Blocked: requires CancellationInfrastructure and ResourceManager types
+    // (not yet in perl_lsp::cancellation). Wire up when those are added.
     /*
     let cancellation_infrastructure = CancellationInfrastructure::new();
     let resource_manager = ResourceManager::new();
@@ -1127,7 +1126,8 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
     for scenario in thread_safety_scenarios {
         println!("Testing thread safety scenario: {}", scenario.name);
 
-        // TODO: Uncomment when implementing thread-safe cancellation infrastructure
+        // Blocked: requires ThreadSafetyValidator type and extended CancellationRegistry API
+        // (cleanup_completed_requests, get_internal_state). Wire up when those are added.
         /*
         let thread_safe_validator = ThreadSafetyValidator::new();
         let shared_cancellation_registry = Arc::new(CancellationRegistry::new());
@@ -1238,7 +1238,10 @@ fn test_concurrent_cancellation_thread_safety_ac10() {
         for handle in worker_handles {
             match handle.join() {
                 Ok(result) => thread_results.push(result),
-                Err(_) => panic!("Thread panicked during concurrency testing"),
+                Err(_) => {
+                    must(Err::<(), _>("Thread panicked during concurrency testing"));
+                    unreachable!()
+                },
             }
         }
 
@@ -1397,7 +1400,8 @@ fn test_deadlock_detection_and_prevention_ac10() {
     for scenario in deadlock_test_scenarios {
         println!("Testing deadlock detection scenario: {}", scenario.name);
 
-        // TODO: Uncomment when implementing deadlock detection
+        // Blocked: requires enhanced DeadlockDetector with check_potential_deadlock
+        // and generate_report methods. Wire up when those are added.
         /*
         let deadlock_detector = DeadlockDetector::new();
 
@@ -1510,7 +1514,10 @@ fn test_deadlock_detection_and_prevention_ac10() {
         for handle in thread_handles {
             match handle.join() {
                 Ok(result) => thread_results.push(result),
-                Err(_) => panic!("Thread panicked during deadlock detection testing"),
+                Err(_) => {
+                    must(Err::<(), _>("Thread panicked during deadlock detection testing"));
+                    unreachable!()
+                },
             }
         }
 

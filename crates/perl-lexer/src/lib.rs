@@ -140,7 +140,7 @@
     clippy::uninlined_format_args
 )]
 
-use std::collections::HashSet;
+use perl_keywords::is_lexer_keyword;
 use std::sync::{Arc, OnceLock};
 
 pub mod checkpoint;
@@ -683,10 +683,20 @@ impl<'a> PerlLexer<'a> {
 
     #[allow(clippy::inline_always)] // Performance critical in lexer hot path
     #[inline(always)]
+    fn byte_at(bytes: &[u8], index: usize) -> u8 {
+        debug_assert!(index < bytes.len());
+        match bytes.get(index) {
+            Some(&byte) => byte,
+            None => 0,
+        }
+    }
+
+    #[allow(clippy::inline_always)] // Performance critical in lexer hot path
+    #[inline(always)]
     fn current_char(&self) -> Option<char> {
         if self.position < self.input_bytes.len() {
             // For ASCII, direct access is safe
-            let byte = unsafe { *self.input_bytes.get_unchecked(self.position) };
+            let byte = Self::byte_at(self.input_bytes, self.position);
             if byte < 128 {
                 Some(byte as char)
             } else {
@@ -703,7 +713,7 @@ impl<'a> PerlLexer<'a> {
         let pos = self.position + offset;
         if pos < self.input_bytes.len() {
             // For ASCII, direct access is safe
-            let byte = unsafe { *self.input_bytes.get_unchecked(pos) };
+            let byte = Self::byte_at(self.input_bytes, pos);
             if byte < 128 {
                 Some(byte as char)
             } else {
@@ -719,7 +729,7 @@ impl<'a> PerlLexer<'a> {
     #[inline(always)]
     fn advance(&mut self) {
         if self.position < self.input_bytes.len() {
-            let byte = unsafe { *self.input_bytes.get_unchecked(self.position) };
+            let byte = Self::byte_at(self.input_bytes, self.position);
             if byte < 128 {
                 // ASCII fast path
                 self.position += 1;
@@ -756,14 +766,14 @@ impl<'a> PerlLexer<'a> {
         }
 
         while self.position < self.input_bytes.len() {
-            let byte = unsafe { *self.input_bytes.get_unchecked(self.position) };
+            let byte = Self::byte_at(self.input_bytes, self.position);
             match byte {
                 // Fast path for ASCII whitespace - batch process
                 b' ' => {
                     // Batch skip spaces for better cache efficiency
                     let start = self.position;
                     while self.position < self.input_bytes.len()
-                        && unsafe { *self.input_bytes.get_unchecked(self.position) } == b' '
+                        && Self::byte_at(self.input_bytes, self.position) == b' '
                     {
                         self.position += 1;
                     }
@@ -776,7 +786,7 @@ impl<'a> PerlLexer<'a> {
                     // Batch skip tabs
                     let start = self.position;
                     while self.position < self.input_bytes.len()
-                        && unsafe { *self.input_bytes.get_unchecked(self.position) } == b'\t'
+                        && Self::byte_at(self.input_bytes, self.position) == b'\t'
                     {
                         self.position += 1;
                     }
@@ -1016,16 +1026,14 @@ impl<'a> PerlLexer<'a> {
 
         // Fast byte check for digits - optimized bounds checking
         let bytes = self.input_bytes;
-        if self.position >= bytes.len()
-            || !unsafe { bytes.get_unchecked(self.position) }.is_ascii_digit()
-        {
+        if self.position >= bytes.len() || !Self::byte_at(bytes, self.position).is_ascii_digit() {
             return None;
         }
 
         // Consume initial digits - unrolled for better performance
         let mut pos = self.position;
         while pos < bytes.len() {
-            let byte = unsafe { *bytes.get_unchecked(pos) };
+            let byte = Self::byte_at(bytes, pos);
             if byte.is_ascii_digit() || byte == b'_' {
                 pos += 1;
             } else {
@@ -1035,7 +1043,7 @@ impl<'a> PerlLexer<'a> {
         self.position = pos;
 
         // Check for decimal point - optimized with single bounds check
-        if pos < bytes.len() && unsafe { *bytes.get_unchecked(pos) } == b'.' {
+        if pos < bytes.len() && Self::byte_at(bytes, pos) == b'.' {
             // Peek ahead to see what follows the dot
             let has_following_digit = pos + 1 < bytes.len() && bytes[pos + 1].is_ascii_digit();
 
@@ -1966,7 +1974,13 @@ impl<'a> PerlLexer<'a> {
         }
 
         let text = &self.input[start..self.position];
-        self.mode = LexerMode::ExpectTerm;
+        // Postfix ++ and -- complete a term expression, so next token is an operator
+        // (e.g., "$x++ / 2" → / is division, not regex)
+        if (text == "++" || text == "--") && self.mode == LexerMode::ExpectOperator {
+            // Postfix: stay in ExpectOperator
+        } else {
+            self.mode = LexerMode::ExpectTerm;
+        }
 
         Some(Token {
             token_type: TokenType::Operator(Arc::from(text)),
@@ -2769,9 +2783,6 @@ impl<'a> PerlLexer<'a> {
     }
 }
 
-// Pre-computed keyword hash for fast lookup
-static KEYWORDS: OnceLock<HashSet<&'static str>> = OnceLock::new();
-
 // Pre-allocated empty Arc to avoid repeated allocations
 static EMPTY_ARC: OnceLock<Arc<str>> = OnceLock::new();
 
@@ -2782,85 +2793,9 @@ fn empty_arc() -> Arc<str> {
 
 #[inline(always)]
 fn is_keyword(word: &str) -> bool {
-    let keywords = KEYWORDS.get_or_init(|| {
-        [
-            // Single char keywords
-            "q",
-            "m",
-            "s",
-            "y",
-            // Two char keywords
-            "if",
-            "do",
-            "my",
-            "or",
-            "qq",
-            "qw",
-            "qr",
-            "qx",
-            "tr",
-            // Three char keywords
-            "sub",
-            "our",
-            "use",
-            "and",
-            "not",
-            "xor",
-            "die",
-            "say",
-            "for",
-            "try",
-            "END",
-            "cmp",
-            // Four char keywords
-            "else",
-            "when",
-            "next",
-            "last",
-            "redo",
-            "goto",
-            "eval",
-            "warn",
-            "INIT",
-            // Five char keywords
-            "elsif",
-            "while",
-            "until",
-            "local",
-            "state",
-            "given",
-            "break",
-            "print",
-            "catch",
-            "BEGIN",
-            "CHECK",
-            "class",
-            "undef",
-            // Six char keywords
-            "unless",
-            "return",
-            "method",
-            "format",
-            // Seven char keywords
-            "require",
-            "package",
-            "default",
-            "foreach",
-            "finally",
-            // Eight char keywords
-            "continue",
-            // Nine char keywords
-            "UNITCHECK",
-        ]
-        .into_iter()
-        .collect()
-    });
-
-    // Fast length-based rejection for most cases
-    match word.len() {
-        1..=9 => keywords.contains(word),
-        _ => false,
-    }
+    // Fast length-based rejection for most cases.
+    // Lexer keywords are currently bounded to 1..=9 characters.
+    matches!(word.len(), 1..=9) && is_lexer_keyword(word)
 }
 
 /// Fast lookup table for compound operator second characters

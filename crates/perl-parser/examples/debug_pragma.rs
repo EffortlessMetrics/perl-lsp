@@ -1,7 +1,6 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 use perl_parser::{Parser, pragma_tracker::PragmaTracker};
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"use strict;
 my $x = $h{key};
 print FOO;"#;
@@ -9,7 +8,7 @@ print FOO;"#;
     println!("Code:\n{}", code);
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
 
     println!("AST: {}", ast.to_sexp());
 
@@ -30,4 +29,5 @@ print FOO;"#;
         let state = PragmaTracker::state_for_offset(&pragma_map, offset);
         println!("  Offset {}: strict_subs={}", offset, state.strict_subs);
     }
+    Ok(())
 }

@@ -119,6 +119,9 @@ impl TriviaLexer {
         // Then get the next meaningful token
         let token = self.lexer.next_token()?;
 
+        // Sync position past this token so next collect_trivia() starts after it
+        self.position = self.position.max(token.end);
+
         // Edge case fix: If we hit EOF but have trailing trivia, return it with the EOF token
         if matches!(token.token_type, TokenType::EOF) {
             if !trivia.is_empty() {

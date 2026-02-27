@@ -1,9 +1,0 @@
-{
-  "sha": "a524b752c89de71a09f3c4f652312555b199888e",
-  "loc": {"total": 747918, "by_crate": {"perl-corpus": 1508, "perl-dap": 18675, "perl-lexer": 4259, "perl-lsp": 54139, "perl-parser": 92052, "tree-sitter-perl": 25, "tree-sitter-perl-c": 192, "tree-sitter-perl-rs": 577068}},
-  "clippy_warnings": 65,
-  "tests": {"passed": null, "failed": null, "ignored": null, "total": null},
-  "dependency_count": 344,
-  "unsafe_count": null,
-  "duplicate_dependencies": null
-}

@@ -149,14 +149,15 @@ EOF"#;
         Err(e) => println!("Interpolation error: {:?}", e),
     }
 
-    // Example 3: Substitution with heredoc
-    let text = "Replace THIS with heredoc";
-    let pattern = "THIS";
-    let replacement = "<<'REPLACEMENT'\nNew Content\nREPLACEMENT";
-    let flags = "e";
+    // Example 3: Substitution with heredoc via eval
+    let sub_code = r#"my $text = "Replace THIS with heredoc";
+$text =~ s/THIS/<<'REPLACEMENT'/e;
+New Content
+REPLACEMENT
+print $text;"#;
 
-    match runtime.substitute_with_heredoc(text, pattern, replacement, flags) {
-        Ok(_result) => println!("Substitution: processed successfully"),
+    match runtime.eval_with_heredoc(sub_code) {
+        Ok(result) => println!("Substitution via eval: {}", result),
         Err(e) => println!("Substitution error: {:?}", e),
     }
 

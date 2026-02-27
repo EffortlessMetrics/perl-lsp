@@ -765,7 +765,7 @@ impl ScopeAnalyzer {
                 self.collect_unused_variables(&loop_scope, issues, context);
             }
 
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 let loop_scope = Rc::new(Scope::with_parent(scope.clone()));
 
                 ancestors.push(node);
@@ -774,6 +774,9 @@ impl ScopeAnalyzer {
                 self.analyze_node(variable, &loop_scope, ancestors, issues, context);
                 self.analyze_node(list, &loop_scope, ancestors, issues, context);
                 self.analyze_node(body, &loop_scope, ancestors, issues, context);
+                if let Some(cb) = continue_block {
+                    self.analyze_node(cb, &loop_scope, ancestors, issues, context);
+                }
 
                 ancestors.pop();
 
@@ -946,7 +949,10 @@ impl ScopeAnalyzer {
     fn extract_variable_name<'a>(&self, node: &'a Node) -> ExtractedName<'a> {
         match &node.kind {
             NodeKind::Variable { sigil, name } => ExtractedName::Parts(sigil, name),
-            NodeKind::MandatoryParameter { variable } => self.extract_variable_name(variable),
+            NodeKind::MandatoryParameter { variable }
+            | NodeKind::OptionalParameter { variable, .. }
+            | NodeKind::SlurpyParameter { variable }
+            | NodeKind::NamedParameter { variable } => self.extract_variable_name(variable),
             NodeKind::ArrayLiteral { elements } => {
                 // Handle array reference patterns like @{$ref}
                 if elements.len() == 1 {

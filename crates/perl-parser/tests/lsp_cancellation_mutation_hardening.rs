@@ -632,9 +632,8 @@ mod cancellation_property_tests {
 
             // All operations should complete without panic
             for handle in handles {
-                if handle.join().is_err() {
-                    panic!("Concurrent operation should not panic");
-                }
+                let res = handle.join();
+                assert!(res.is_ok(), "Concurrent operation should not panic");
             }
 
             // Final state should be consistent (all cleared)
