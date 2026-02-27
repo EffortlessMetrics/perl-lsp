@@ -460,7 +460,7 @@ SKIP: {
 
 TODO: {
     local $TODO = "Feature not implemented yet";
-    
+
     ok($obj->new_feature, 'New feature works');
 }
 

@@ -14,7 +14,8 @@
 //! - Dangerous operations are blocked in safe evaluation mode
 
 use anyhow::Result;
-use std::path::{Component, Path, PathBuf};
+use perl_path_security::{WorkspacePathError, validate_workspace_path};
+use std::path::{Path, PathBuf};
 
 /// Security validation errors
 #[derive(Debug, thiserror::Error)]
@@ -49,6 +50,20 @@ pub const MAX_TIMEOUT_MS: u32 = 300_000;
 
 /// Default timeout in milliseconds (5 seconds)
 pub const DEFAULT_TIMEOUT_MS: u32 = 5_000;
+
+impl From<WorkspacePathError> for SecurityError {
+    fn from(error: WorkspacePathError) -> Self {
+        match error {
+            WorkspacePathError::PathTraversalAttempt(message) => {
+                Self::PathTraversalAttempt(message)
+            }
+            WorkspacePathError::PathOutsideWorkspace(message) => {
+                Self::PathOutsideWorkspace(message)
+            }
+            WorkspacePathError::InvalidPathCharacters => Self::InvalidPathCharacters,
+        }
+    }
+}
 
 /// Validate that a path is within the workspace boundary
 ///
@@ -91,91 +106,7 @@ pub const DEFAULT_TIMEOUT_MS: u32 = 5_000;
 /// # }
 /// ```
 pub fn validate_path(path: &Path, workspace_root: &Path) -> Result<PathBuf, SecurityError> {
-    // Check for null bytes and control characters
-    if let Some(path_str) = path.to_str() {
-        if path_str.contains('\0') || path_str.chars().any(|c| c.is_control() && c != '\t') {
-            return Err(SecurityError::InvalidPathCharacters);
-        }
-    }
-
-    // Get canonical workspace root (must exist for validation)
-    let workspace_canonical = workspace_root.canonicalize().map_err(|e| {
-        SecurityError::PathOutsideWorkspace(format!(
-            "Workspace root not accessible: {} ({})",
-            workspace_root.display(),
-            e
-        ))
-    })?;
-
-    // Resolve the path: join relative paths with workspace, keep absolute as-is
-    let resolved = if path.is_absolute() { path.to_path_buf() } else { workspace_root.join(path) };
-
-    // Try to canonicalize the resolved path
-    // For existing paths, this resolves symlinks and normalizes .. and .
-    let final_path = if let Ok(canonical) = resolved.canonicalize() {
-        // Path exists - check if within workspace
-        if !canonical.starts_with(&workspace_canonical) {
-            return Err(SecurityError::PathOutsideWorkspace(format!(
-                "Path resolves outside workspace: {} (workspace: {})",
-                canonical.display(),
-                workspace_canonical.display()
-            )));
-        }
-        canonical
-    } else {
-        // Path doesn't exist - manually normalize components
-        // Process components relative to workspace
-        let mut stack: Vec<Component> = workspace_canonical.components().collect();
-        let workspace_depth = stack.len();
-
-        // Process the user-provided path components
-        for component in path.components() {
-            match component {
-                Component::ParentDir => {
-                    if stack.len() <= workspace_depth {
-                        // Trying to go above workspace
-                        return Err(SecurityError::PathTraversalAttempt(format!(
-                            "Path attempts to escape workspace: {}",
-                            path.display()
-                        )));
-                    }
-                    stack.pop();
-                }
-                Component::Normal(name) => {
-                    stack.push(Component::Normal(name));
-                }
-                Component::CurDir => {
-                    // Skip current directory
-                }
-                Component::RootDir | Component::Prefix(_) => {
-                    // Relative paths shouldn't have these
-                    return Err(SecurityError::PathTraversalAttempt(format!(
-                        "Invalid component in relative path: {}",
-                        path.display()
-                    )));
-                }
-            }
-        }
-
-        // Reconstruct the path from the stack
-        let mut result = PathBuf::new();
-        for component in stack {
-            result.push(component);
-        }
-
-        result
-    };
-
-    // Final validation - ensure we're within workspace
-    if !final_path.starts_with(&workspace_canonical) {
-        return Err(SecurityError::PathOutsideWorkspace(format!(
-            "Path outside workspace: {} (workspace: {})",
-            final_path.display(),
-            workspace_canonical.display()
-        )));
-    }
-
-    Ok(final_path)
+    validate_workspace_path(path, workspace_root).map_err(SecurityError::from)
 }
 
 /// Validate an expression for safe evaluation
@@ -298,8 +229,9 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_path_parent_traversal() {
-        let tempdir = tempfile::tempdir().expect("Failed to create tempdir");
+    fn test_validate_path_parent_traversal() -> Result<()> {
+        use perl_tdd_support::must;
+        let tempdir = must(tempfile::tempdir());
         let workspace = tempdir.path();
 
         let unsafe_path = PathBuf::from("../../../etc/passwd");
@@ -313,24 +245,27 @@ mod tests {
                 // Either error is acceptable - both indicate the path was rejected
             }
             Err(e) => {
-                panic!("Expected PathTraversalAttempt or PathOutsideWorkspace error, got: {:?}", e)
+                return Err(anyhow::anyhow!(
+                    "Expected PathTraversalAttempt or PathOutsideWorkspace error, got: {:?}",
+                    e
+                ));
             }
-            Ok(_) => panic!("Expected error, got Ok"),
+            Ok(_) => return Err(anyhow::anyhow!("Expected error, got Ok")),
         }
+        Ok(())
     }
 
     #[test]
-    fn test_validate_path_absolute_outside() {
+    fn test_validate_path_absolute_outside() -> Result<()> {
+        use perl_tdd_support::{must, must_some};
         // Use a specific subdirectory as workspace to ensure separation
-        let workspace =
-            std::env::current_dir().expect("Failed to get current dir").join("test_workspace");
+        let workspace = must(std::env::current_dir()).join("test_workspace");
 
         // Create workspace directory for the test
         fs::create_dir_all(&workspace).ok();
 
         // Use a path that's definitely outside the workspace
-        let unsafe_path =
-            workspace.parent().expect("workspace should have parent").join("etc/passwd");
+        let unsafe_path = must_some(workspace.parent()).join("etc/passwd");
 
         let result = validate_path(&unsafe_path, &workspace);
 
@@ -342,10 +277,11 @@ mod tests {
             "Absolute path outside workspace should be rejected: {:?}",
             result
         );
+        Ok(())
     }
 
     #[test]
-    fn test_validate_path_null_byte() {
+    fn test_validate_path_null_byte() -> Result<()> {
         let workspace = PathBuf::from("/workspace");
         let unsafe_path = PathBuf::from("valid.pl\0../../etc/passwd");
 
@@ -354,8 +290,9 @@ mod tests {
 
         match result {
             Err(SecurityError::InvalidPathCharacters) => {}
-            _ => panic!("Expected InvalidPathCharacters error"),
+            _ => return Err(anyhow::anyhow!("Expected InvalidPathCharacters error")),
         }
+        Ok(())
     }
 
     #[test]
@@ -367,14 +304,15 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_expression_newline() {
+    fn test_validate_expression_newline() -> Result<()> {
         let result = validate_expression("1\nprint 'hacked'");
         assert!(result.is_err(), "Newline should be rejected");
 
         match result {
             Err(SecurityError::InvalidExpression) => {}
-            _ => panic!("Expected InvalidExpression error"),
+            _ => return Err(anyhow::anyhow!("Expected InvalidExpression error")),
         }
+        Ok(())
     }
 
     #[test]
@@ -441,18 +379,30 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_path_mixed_separators() {
+    fn test_validate_path_mixed_separators() -> Result<()> {
+        use perl_tdd_support::must;
         // Use current directory as workspace to ensure it exists
-        let workspace = std::env::current_dir().expect("Failed to get current dir");
-        // Windows-style path with mixed separators - on Unix this is just weird filename chars
+        let workspace = must(std::env::current_dir());
+        // Windows-style path with mixed separators
         let path = PathBuf::from("..\\../etc/passwd");
 
         let result = validate_path(&path, &workspace);
-        // On Unix, backslash is just a character, so ..\ is a directory name, not parent ref
-        // We should still reject the .. component though
-        if path.to_string_lossy().contains("..") {
-            // Path normalization should handle this
-            assert!(result.is_ok() || result.is_err(), "Path should be validated");
+        if cfg!(windows) {
+            // On Windows, backslash is a path separator so this is a traversal attempt
+            assert!(
+                result.is_err(),
+                "Mixed separators should be rejected on Windows: {:?}",
+                result
+            );
+        } else {
+            // On Unix, backslash is a valid filename character, so `..\\..` is a
+            // single directory name component — not a parent traversal
+            assert!(
+                result.is_ok(),
+                "On Unix, backslash is a literal char, not a separator: {:?}",
+                result
+            );
         }
+        Ok(())
     }
 }

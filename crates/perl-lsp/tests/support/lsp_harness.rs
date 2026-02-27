@@ -3,10 +3,13 @@
 //! Provides a test harness that communicates with the LSP server using real JSON-RPC protocol.
 
 #![allow(dead_code)]
+#![allow(clippy::assertions_on_constants)]
 #![allow(clippy::collapsible_if)]
 
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
+use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_lsp::LspServer;
+use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::fs;
@@ -48,7 +51,7 @@ impl TempWorkspace {
         let path = self.dir.path().join(relative_path);
         match Url::from_file_path(&path) {
             Ok(url) => url.to_string(),
-            Err(_) => panic!("Failed to create file URL from path: {}", path.display()),
+            Err(_) => must(Url::from_file_path(&path)).to_string(),
         }
     }
 }
@@ -57,7 +60,10 @@ impl TempWorkspace {
 pub struct LspHarness {
     sender: mpsc::Sender<Vec<u8>>,
     output_buffer: Arc<Mutex<Vec<u8>>>,
+    output_framer: ContentLengthFramer,
+    output_signal: Arc<Condvar>,
     notification_buffer: Arc<Mutex<VecDeque<Value>>>,
+    server_requests: Arc<Mutex<VecDeque<Value>>>,
     next_request_id: i32,
     handle: Option<thread::JoinHandle<()>>,
     canceled_ids: Arc<Mutex<Vec<i32>>>, // Track canceled request IDs
@@ -70,12 +76,16 @@ impl LspHarness {
     /// Lowest-level constructor: spawn server and wire pipes, no messages sent.
     pub fn new_raw() -> Self {
         let output_buffer = Arc::new(Mutex::new(Vec::new()));
+        let output_signal = Arc::new(Condvar::new());
         let notification_buffer = Arc::new(Mutex::new(VecDeque::new()));
+        let server_requests = Arc::new(Mutex::new(VecDeque::new()));
 
         // Create server with captured output
         let writer = Arc::new(Mutex::new(Box::new(TestWriter {
             buffer: output_buffer.clone(),
+            signal: output_signal.clone(),
             notifications: notification_buffer.clone(),
+            server_requests: server_requests.clone(),
         }) as Box<dyn Write + Send>));
         let server = SendableServer(LspServer::with_output(writer));
 
@@ -94,7 +104,10 @@ impl LspHarness {
         Self {
             sender: tx,
             output_buffer,
+            output_framer: ContentLengthFramer::new(),
+            output_signal,
             notification_buffer,
+            server_requests,
             next_request_id: 1,
             handle: Some(handle),
             canceled_ids: Arc::new(Mutex::new(Vec::new())),
@@ -509,10 +522,8 @@ impl LspHarness {
             "params": params
         });
 
-        let request_str = format!("{}\r\n", notification);
-        let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
-
-        let _ = self.sender.send(content.into_bytes());
+        let request_str = notification.to_string();
+        let _ = self.sender.send(frame(request_str.as_bytes()));
     }
 
     /// Drain notifications from the buffer
@@ -533,16 +544,20 @@ impl LspHarness {
         let mut notifications = self.notification_buffer.lock();
         let mut result = Vec::new();
 
-        while let Some(notif) = notifications.pop_front() {
-            if let Some(filter_method) = method {
+        if let Some(filter_method) = method {
+            // Drain the entire deque, collecting matches and keeping non-matches in order
+            let mut remaining = VecDeque::with_capacity(notifications.len());
+            while let Some(notif) = notifications.pop_front() {
                 if notif["method"].as_str() == Some(filter_method) {
                     result.push(notif);
                 } else {
-                    // Put it back if it doesn't match
-                    notifications.push_back(notif);
-                    break;
+                    remaining.push_back(notif);
                 }
-            } else {
+            }
+            *notifications = remaining;
+        } else {
+            // No filter: drain all
+            while let Some(notif) = notifications.pop_front() {
                 result.push(notif);
             }
         }
@@ -560,6 +575,34 @@ impl LspHarness {
         let result = self.request(method, params)?;
         let duration = start.elapsed();
         Ok((result, duration))
+    }
+
+    // Stash a non-matching message into the appropriate buffer by type.
+    // Called from response drain loops to avoid discarding server-initiated messages.
+    fn stash_non_matching_message(&self, msg: Value) {
+        let has_method = msg.get("method").is_some();
+        let has_id = msg.get("id").is_some();
+        if has_method && !has_id {
+            // Server notification
+            self.notification_buffer.lock().push_back(msg);
+        } else if has_method && has_id {
+            // Server-initiated request
+            self.server_requests.lock().push_back(msg);
+        }
+        // Responses with non-matching ids are intentionally dropped
+        // (they belong to canceled or timed-out requests)
+    }
+
+    fn try_take_one_framed_message(&mut self) -> Option<Vec<u8>> {
+        loop {
+            match self.output_framer.try_next() {
+                Ok(Some(body)) => return Some(body),
+                Ok(None) => return None,
+                Err(error) => {
+                    eprintln!("LSP harness framing error: {error}");
+                }
+            }
+        }
     }
 
     // Private helper to send request and get response with adaptive timeout
@@ -580,75 +623,57 @@ impl LspHarness {
         request: Value,
         timeout: Duration,
     ) -> Result<Value, String> {
-        // Clear output buffer
-        self.output_buffer.lock().clear();
+        let expect_id = request.get("id").and_then(|v| v.as_i64());
 
-        // Format request with Content-Length header
+        // Format request with Content-Length framing
         let request_str = request.to_string();
-        let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
+        let content = frame(request_str.as_bytes());
 
         // Send to server thread
-        if let Err(e) = self.sender.send(content.into_bytes()) {
+        if let Err(e) = self.sender.send(content) {
             return Err(format!("Server send error: {}", e));
         }
 
-        // Wait for response with timeout
+        // Wait for response with timeout using condvar signaling.
+        // Lock the buffer once, then drain complete messages.
         let start = Instant::now();
+        let mut guard = self.output_buffer.lock();
         loop {
             if start.elapsed() > timeout {
                 return Err(format!("Request timed out after {:?}", timeout));
             }
 
-            // Check if we have a response
-            if let Some(output) = self.output_buffer.try_lock() {
-                let output_str = String::from_utf8_lossy(&output);
-
-                // Parse all messages in the output (might be multiple)
-                let mut remaining = output_str.as_ref();
-                while !remaining.is_empty() {
-                    // Look for Content-Length header
-                    if let Some(content_start) = remaining.find("Content-Length:") {
-                        remaining = &remaining[content_start..];
-
-                        // Parse content length
-                        if let Some(header_end) = remaining.find("\r\n\r\n") {
-                            let header = &remaining[..header_end];
-                            if let Some(length_str) = header.strip_prefix("Content-Length:") {
-                                if let Ok(length) = length_str.trim().parse::<usize>() {
-                                    let json_start = header_end + 4; // Skip \r\n\r\n
-                                    if remaining.len() >= json_start + length {
-                                        let json_str = &remaining[json_start..json_start + length];
-                                        if let Ok(msg) = serde_json::from_str::<Value>(json_str) {
-                                            // Check if this is our response (has matching id)
-                                            if msg.get("id").is_some() {
-                                                if let Some(error) = msg.get("error") {
-                                                    return Err(format!("LSP error: {:?}", error));
-                                                }
-                                                if let Some(result) = msg.get("result") {
-                                                    return Ok(result.clone());
-                                                }
-                                            }
-                                        }
-                                        // Move to next message
-                                        remaining = &remaining[json_start + length..];
-                                        continue;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    break; // No more complete messages
-                }
-
-                drop(output);
+            if !guard.is_empty() {
+                let chunk = std::mem::take(&mut *guard);
+                self.output_framer.push(&chunk);
             }
 
-            // If no response yet, wait a bit
-            if start.elapsed() < timeout {
-                thread::sleep(Duration::from_millis(10));
-            } else {
+            drop(guard);
+
+            while let Some(msg_bytes) = self.try_take_one_framed_message() {
+                if let Ok(msg) = serde_json::from_slice::<Value>(&msg_bytes) {
+                    if msg.get("id").and_then(|v| v.as_i64()) == expect_id {
+                        if let Some(error) = msg.get("error") {
+                            return Err(format!("LSP error: {:?}", error));
+                        }
+                        if let Some(result) = msg.get("result") {
+                            return Ok(result.clone());
+                        }
+                    } else {
+                        // Non-matching message: stash by type instead of discarding
+                        self.stash_non_matching_message(msg);
+                    }
+                }
+            }
+
+            guard = self.output_buffer.lock();
+
+            // Wait for signal from TestWriter with bounded timeout
+            let remaining = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
                 break;
             }
+            self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(100)));
         }
 
         Err("No response received".to_string())
@@ -660,71 +685,53 @@ impl LspHarness {
         request: Value,
         timeout: Duration,
     ) -> Result<Value, String> {
-        // Clear output buffer
-        self.output_buffer.lock().clear();
+        let expect_id = request.get("id").and_then(|v| v.as_i64());
 
-        // Format request with Content-Length header
+        // Format request with Content-Length framing
         let request_str = request.to_string();
-        let content = format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str);
+        let content = frame(request_str.as_bytes());
 
         // Send to server thread
-        if let Err(e) = self.sender.send(content.into_bytes()) {
+        if let Err(e) = self.sender.send(content) {
             return Err(format!("Server send error: {}", e));
         }
 
-        // Wait for response with timeout
+        // Wait for response with timeout using condvar signaling.
+        // Lock the buffer once, then drain complete messages.
         let start = Instant::now();
+        let mut guard = self.output_buffer.lock();
         loop {
             if start.elapsed() > timeout {
                 return Err(format!("Request timed out after {:?}", timeout));
             }
 
-            // Check if we have a response
-            if let Some(output) = self.output_buffer.try_lock() {
-                let output_str = String::from_utf8_lossy(&output);
-
-                // Parse all messages in the output (might be multiple)
-                let mut remaining = output_str.as_ref();
-                while !remaining.is_empty() {
-                    // Look for Content-Length header
-                    if let Some(content_start) = remaining.find("Content-Length:") {
-                        remaining = &remaining[content_start..];
-
-                        // Parse content length
-                        if let Some(header_end) = remaining.find("\r\n\r\n") {
-                            let header = &remaining[..header_end];
-                            if let Some(length_str) = header.strip_prefix("Content-Length:") {
-                                if let Ok(length) = length_str.trim().parse::<usize>() {
-                                    let json_start = header_end + 4; // Skip \r\n\r\n
-                                    if remaining.len() >= json_start + length {
-                                        let json_str = &remaining[json_start..json_start + length];
-                                        if let Ok(msg) = serde_json::from_str::<Value>(json_str) {
-                                            // Check if this is our response (has matching id)
-                                            if msg.get("id").is_some() {
-                                                // Return the full message for schema validation tests
-                                                return Ok(msg);
-                                            }
-                                        }
-                                        // Move to next message
-                                        remaining = &remaining[json_start + length..];
-                                        continue;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    break; // No more complete messages
-                }
-
-                drop(output);
+            if !guard.is_empty() {
+                let chunk = std::mem::take(&mut *guard);
+                self.output_framer.push(&chunk);
             }
 
-            // If no response yet, wait a bit
-            if start.elapsed() < timeout {
-                thread::sleep(Duration::from_millis(10));
-            } else {
+            drop(guard);
+
+            while let Some(msg_bytes) = self.try_take_one_framed_message() {
+                if let Ok(msg) = serde_json::from_slice::<Value>(&msg_bytes) {
+                    if msg.get("id").and_then(|v| v.as_i64()) == expect_id {
+                        // Return the full message for schema validation tests
+                        return Ok(msg);
+                    } else {
+                        // Non-matching message: stash by type instead of discarding
+                        self.stash_non_matching_message(msg);
+                    }
+                }
+            }
+
+            guard = self.output_buffer.lock();
+
+            // Wait for signal from TestWriter with bounded timeout
+            let remaining = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
                 break;
             }
+            self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(100)));
         }
 
         Err("No response received".to_string())
@@ -800,17 +807,17 @@ impl LspHarness {
 
         // Wait for timeout period to ensure no response arrives
         while start.elapsed() < timeout {
-            let output = self.output_buffer.lock();
-            let output_str = String::from_utf8_lossy(&output);
-
-            // Check if we got a response for this ID
-            if output_str.contains(&format!("\"id\":{}", request_id))
-                || output_str.contains(&format!("\"id\": {}", request_id))
             {
-                drop(output);
-                panic!("Received response for canceled request ID {}", request_id);
+                let output = self.output_buffer.lock();
+                let output_str = String::from_utf8_lossy(&output);
+
+                // Check if we got a response for this ID
+                if output_str.contains(&format!("\"id\":{}", request_id))
+                    || output_str.contains(&format!("\"id\": {}", request_id))
+                {
+                    assert!(false, "Received response for canceled request ID {}", request_id);
+                }
             }
-            drop(output);
 
             thread::sleep(Duration::from_millis(10));
         }
@@ -824,12 +831,15 @@ impl LspHarness {
         if cfg!(target_os = "linux") && std::env::var("WSL_DISTRO_NAME").is_ok() {
             // In WSL, convert Windows paths like C:\foo to /mnt/c/foo
             if path.len() >= 3 && path.chars().nth(1) == Some(':') {
-                let drive = match path.chars().next() {
-                    Some(c) => c.to_lowercase(),
-                    None => panic!("Path should have at least one character: {path}"),
+                let drive_char = match path.chars().next() {
+                    Some(c) => c.to_lowercase().next().unwrap_or(c),
+                    None => {
+                        assert!(false, "Path should have at least one character: {path}");
+                        ' '
+                    }
                 };
                 let rest = path[2..].replace('\\', "/");
-                return format!("/mnt/{}{}", drive, rest);
+                return format!("/mnt/{}{}", drive_char, rest);
             }
         }
 
@@ -851,25 +861,32 @@ impl LspHarness {
     ) -> Result<Value, String> {
         let start = Instant::now();
 
-        while start.elapsed() < timeout {
-            let mut notifications = self.notification_buffer.lock();
-
-            // Search for matching notification
-            if let Some(pos) = notifications
-                .iter()
-                .position(|n| n.get("method").and_then(|m| m.as_str()) == Some(method))
+        loop {
             {
-                let notif = match notifications.remove(pos) {
-                    Some(n) => n,
-                    None => panic!("Notification at position {pos} should exist"),
-                };
-                drop(notifications);
+                let mut notifications = self.notification_buffer.lock();
 
-                return Ok(notif.get("params").cloned().unwrap_or(json!({})));
+                // Search for matching notification
+                if let Some(pos) = notifications
+                    .iter()
+                    .position(|n| n.get("method").and_then(|m| m.as_str()) == Some(method))
+                {
+                    let notif = match notifications.remove(pos) {
+                        Some(n) => n,
+                        None => return Err(format!("Notification at position {pos} vanished")),
+                    };
+                    drop(notifications);
+
+                    return Ok(notif.get("params").cloned().unwrap_or(json!({})));
+                }
             }
 
-            drop(notifications);
-            thread::sleep(Duration::from_millis(10));
+            // Wait for signal from TestWriter with bounded timeout
+            let remaining = timeout.saturating_sub(start.elapsed());
+            if remaining.is_zero() {
+                break;
+            }
+            let mut guard = self.output_buffer.lock();
+            self.output_signal.wait_for(&mut guard, remaining.min(Duration::from_millis(100)));
         }
 
         Err(format!("Notification '{}' not received within {:?}", method, timeout))
@@ -969,13 +986,9 @@ impl LspHarness {
         // Try to send shutdown request
         let _shutdown_result = self.request_with_timeout("shutdown", json!({}), shutdown_timeout);
 
-        // Send exit notification
-        self.notify("exit", json!({}));
-
-        // Give server time to process shutdown
-        thread::sleep(Duration::from_millis(50));
-
-        // Signal server thread to terminate
+        // Signal server thread to terminate via empty message.
+        // Do NOT send "exit" notification — the server's handle_exit_dispatch calls
+        // std::process::exit() which would kill the entire test process.
         let _ = self.sender.send(Vec::new());
 
         // Wait for server thread to complete with timeout
@@ -1014,26 +1027,35 @@ impl LspHarness {
 /// Test writer that captures output
 struct TestWriter {
     buffer: Arc<Mutex<Vec<u8>>>,
+    signal: Arc<Condvar>,
     notifications: Arc<Mutex<VecDeque<Value>>>,
+    server_requests: Arc<Mutex<VecDeque<Value>>>,
 }
 
 impl Write for TestWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut buffer = self.buffer.lock();
-        buffer.extend_from_slice(buf);
-
-        // Try to parse as notification
+        {
+            let mut buffer = self.buffer.lock();
+            buffer.extend_from_slice(buf);
+        }
+        // Parse and classify message outside buffer lock to avoid contention
         let content = String::from_utf8_lossy(buf);
-        if let Some(json_start) = content.find("{") {
+        if let Some(json_start) = content.find('{') {
             let json_str = &content[json_start..];
             if let Ok(value) = serde_json::from_str::<Value>(json_str) {
-                if value.get("method").is_some() && value.get("id").is_none() {
-                    // It's a notification
+                let has_method = value.get("method").is_some();
+                let has_id = value.get("id").is_some();
+                if has_method && !has_id {
+                    // Server-initiated notification (no id)
                     self.notifications.lock().push_back(value);
+                } else if has_method && has_id {
+                    // Server-initiated request (e.g., workspace/configuration)
+                    self.server_requests.lock().push_back(value);
                 }
+                // Responses (has id, no method) stay in the raw buffer only
             }
         }
-
+        self.signal.notify_all();
         Ok(buf.len())
     }
 
@@ -1104,11 +1126,11 @@ macro_rules! with_open_doc {
         let mut $harness = LspHarness::new();
         match $harness.initialize(None) {
             Ok(_) => {}
-            Err(e) => panic!("Failed to initialize: {e}"),
+            Err(e) => assert!(false, "Failed to initialize: {e}"),
         }
         match $harness.open($uri, $text) {
             Ok(_) => {}
-            Err(e) => panic!("Failed to open document: {e}"),
+            Err(e) => assert!(false, "Failed to open document: {e}"),
         }
         $body
     }};
@@ -1121,7 +1143,7 @@ macro_rules! assert_locations {
         {
             let locations = match $response.as_array() {
                 Some(arr) => arr,
-                None => panic!("Response should be array: {:?}", $response),
+                None => assert!(false, "Response should be array: {:?}", $response),
             };
             let expected = vec![
                 $( (
@@ -1152,7 +1174,7 @@ macro_rules! assert_highlights {
         {
             let highlights = match $response.as_array() {
                 Some(arr) => arr,
-                None => panic!("Response should be array: {:?}", $response),
+                None => assert!(false, "Response should be array: {:?}", $response),
             };
             let expected = vec![
                 $( (
@@ -1264,7 +1286,7 @@ impl TestContext {
     pub fn initialize_with(&mut self, root_uri: &str, capabilities: Option<Value>) -> Value {
         match self.harness.initialize_ready(root_uri, capabilities) {
             Ok(v) => v,
-            Err(e) => panic!("initialization should succeed: {e}"),
+            Err(e) => must(Err::<Value, _>(format!("initialization should succeed: {e}"))),
         }
     }
 
@@ -1288,7 +1310,7 @@ impl TestContext {
     pub fn open_document(&mut self, uri: &str, text: &str) {
         match self.harness.open(uri, text) {
             Ok(_) => {}
-            Err(e) => panic!("open should succeed: {e}"),
+            Err(e) => assert!(false, "open should succeed: {e}"),
         }
     }
 
@@ -1297,7 +1319,7 @@ impl TestContext {
         self.version_counter += 1;
         match self.harness.change_full(uri, self.version_counter, text) {
             Ok(_) => {}
-            Err(e) => panic!("change should succeed: {e}"),
+            Err(e) => assert!(false, "change should succeed: {e}"),
         }
     }
 
@@ -1305,7 +1327,7 @@ impl TestContext {
     pub fn close_document(&mut self, uri: &str) {
         match self.harness.close(uri) {
             Ok(_) => {}
-            Err(e) => panic!("close should succeed: {e}"),
+            Err(e) => assert!(false, "close should succeed: {e}"),
         }
     }
 

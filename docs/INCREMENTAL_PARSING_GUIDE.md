@@ -2,7 +2,7 @@
 
 ## Overview
 
-The native parser includes **production-ready incremental parsing** with **statistical validation framework** achieving 99.7% node reuse efficiency and 65µs average update times for efficient real-time LSP editing.
+The native parser includes **incremental parsing** with **statistical validation framework** achieving 99.7% node reuse efficiency and 65µs average update times for efficient real-time LSP editing.
 
 ## Architecture
 
@@ -85,7 +85,7 @@ doc.subtree_cache.set_max_size(2000); // Larger caches for complex codebases
 
 ### Advanced Incremental Parsing (IncrementalParserV2)
 
-**Production-Ready Features**:
+**Features**:
 - **Smart Node Reuse**: Automatically detects which AST nodes can be preserved across edits with 99.7% peak efficiency
 - **Statistical Validation**: Comprehensive performance analysis with coefficient of variation tracking
 - **Sub-millisecond Performance**: 65µs average for simple edits with consistent performance
@@ -95,7 +95,7 @@ doc.subtree_cache.set_max_size(2000); // Larger caches for complex codebases
 
 **Production Example**:
 ```rust
-// Production-ready incremental parsing with statistical validation
+// Incremental parsing with statistical validation
 use perl_parser::{incremental_v2::IncrementalParserV2, edit::Edit, position::Position};
 
 let mut parser = IncrementalParserV2::new();

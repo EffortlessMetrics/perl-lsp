@@ -1,16 +1,16 @@
 [package]
 name = "perl-incremental-parsing"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
-description = "Incremental parsing support for Perl"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Incremental parsing support for Perl with subtree reuse and LSP integration"
 readme = "README.md"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
 documentation = "https://docs.rs/perl-incremental-parsing"
-keywords = ["perl", "incremental", "parser", "lsp"]
+keywords = ["perl", "incremental", "parser", "lsp", "rope"]
 categories = ["parsing", "development-tools", "text-editors"]
 include = [
   "src/**",
@@ -26,7 +26,7 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-edit = { workspace = true }
 perl-lexer = { workspace = true }
-anyhow = "1.0.100"
+anyhow = "1.0.102"
 lsp-types = "0.97.0"
 ropey = "1.6.1"
 serde_json = "1.0.149"

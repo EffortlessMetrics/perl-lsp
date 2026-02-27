@@ -173,7 +173,6 @@ fn test_kill_extract_transliteration_parts_boundary_mutations() {
 // MUTATION KILLER TARGET: Match Guard mutations (c == closing)
 // Specifically targets match guard conditions that control delimiter detection
 #[test]
-#[ignore = "mutation hardening: parser output format changed"]
 fn test_kill_match_guard_closing_delimiter_mutations() {
     // Test case 1: Critical closing delimiter detection in substitution
     // If c == closing is mutated to true/false, parsing fails catastrophically

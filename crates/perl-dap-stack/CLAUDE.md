@@ -4,9 +4,9 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-dap-stack` is a **Tier 7 DAP feature module** providing stack trace handling for debugging.
+`perl-dap-stack` is a **Tier 1 leaf crate** (no internal workspace dependencies) providing stack trace parsing and frame classification for Perl DAP debugging.
 
-**Purpose**: Stack trace handling for Perl DAP — parses and formats stack traces from the Perl debugger.
+**Purpose**: Parses Perl debugger stack output into DAP-compatible `StackFrame` structures and classifies frames as user code, library code, core, or eval.
 
 **Version**: 0.1.0
 
@@ -21,74 +21,77 @@ cargo doc -p perl-dap-stack --open       # View documentation
 
 ## Architecture
 
+### Modules
+
+| Module | File | Purpose |
+|--------|------|---------|
+| `lib` | `src/lib.rs` | `StackFrame`, `Source`, `StackTraceProvider` trait, presentation hints |
+| `parser` | `src/parser.rs` | `PerlStackParser`, `StackParseError`, regex-based debugger output parsing |
+| `classifier` | `src/classifier.rs` | `FrameClassifier` trait, `PerlFrameClassifier`, `FrameCategory` enum |
+
 ### Dependencies
 
-- `serde`, `serde_json` - Serialization
-- `regex` - Stack frame parsing
-- `once_cell` - Lazy patterns
-- `thiserror` - Error definitions
+- `serde`, `serde_json` -- Serialization (DAP protocol JSON)
+- `regex` -- Stack frame line parsing (five lazy-compiled patterns)
+- `once_cell` -- Lazy regex initialization
+- `thiserror` -- Error type definitions
 
 ### Key Types
 
 | Type | Purpose |
 |------|---------|
-| `StackFrame` | Single stack frame |
-| `StackTrace` | Complete stack trace |
-| `FrameParser` | Parses debugger output |
-
-### Stack Frame Information
-
-```rust
-pub struct StackFrame {
-    pub id: i64,
-    pub name: String,          // Subroutine name
-    pub source: Source,        // File path
-    pub line: i64,             // Line number
-    pub column: Option<i64>,   // Column (if available)
-    pub module_name: Option<String>,  // Package name
-}
-```
+| `StackFrame` | Single DAP stack frame (id, name, source, line, column, presentation hint, module_id) |
+| `Source` | Source file reference (path, name, source_reference, origin, presentation hint) |
+| `StackFramePresentationHint` | Normal / Label / Subtle rendering hint |
+| `SourcePresentationHint` | Normal / Emphasize / Deemphasize rendering hint |
+| `StackTraceProvider` | Trait for stack trace retrieval (get_stack_trace, total_frames, get_frame) |
+| `PerlStackParser` | Parses debugger text output into `StackFrame` values |
+| `StackParseError` | UnrecognizedFormat / RegexError |
+| `FrameClassifier` | Trait for classifying frames (classify, apply_classification, classify_all) |
+| `PerlFrameClassifier` | Path-based heuristic classifier (user/library/core/eval paths) |
+| `FrameCategory` | User / Library / Core / Eval / Unknown |
 
 ## Usage
 
 ```rust
-use perl_dap_stack::{StackTrace, FrameParser};
+use perl_dap_stack::{StackFrame, Source, PerlStackParser};
 
-// Parse debugger stack output
-let parser = FrameParser::new();
-let trace = parser.parse(debugger_output)?;
-
-// Access frames
-for frame in trace.frames() {
-    println!(
-        "#{}: {} at {}:{}",
-        frame.id,
-        frame.name,
-        frame.source.path,
-        frame.line
-    );
+// Parse a single debugger line
+let mut parser = PerlStackParser::new();
+if let Some(frame) = parser.parse_frame("  #0  main::foo at script.pl line 42", 0) {
+    assert_eq!(frame.name, "main::foo");
+    assert_eq!(frame.line, 42);
 }
+
+// Parse multi-line stack trace (Perl debugger 'T' command output)
+let output = r#"
+$ = My::Module::foo() called from file `/lib/My/Module.pm' line 10
+$ = main::run() called from file `script.pl' line 5
+"#;
+let frames = parser.parse_stack_trace(output);
+
+// Classify frames as user vs library code
+use perl_dap_stack::{FrameClassifier, PerlFrameClassifier};
+let classifier = PerlFrameClassifier::new()
+    .with_user_path("/home/user/project/");
+let classified = classifier.classify_all(frames, true);
 ```
 
-### Debugger Output Format
+### Debugger Output Formats
 
-The parser handles Perl debugger stack format:
+The parser handles multiple Perl debugger stack formats:
 
-```
-$ = main::foo() called from file `script.pl' line 10
-$ = MyModule::bar(1, 2, 3) called from file `lib/MyModule.pm' line 25
-```
-
-### DAP Stack Response
-
-```rust
-// Convert to DAP protocol format
-let dap_frames: Vec<dap::StackFrame> = trace.to_dap_frames();
-```
+- Standard: `#0  main::foo at script.pl line 10`
+- Verbose (`T` command): `$ = Package::method('arg') called from file '/path' line 42`
+- Simple: `. = main::run() called from '-e' line 1`
+- Context: `main::(script.pl):42:`
+- Eval: `(eval 10)[/path/file.pm:42]`
 
 ## Important Notes
 
-- Parses Perl debugger's native stack format
-- Handles anonymous subs and closures
-- Extracts package/module information
-- Frame IDs are stable for the debug session
+- Regex patterns are compiled lazily via `once_cell::sync::Lazy` and stored as `Result` to avoid panics
+- `StackFrame::for_subroutine()` omits the `main::` prefix for the main package
+- `Source::is_eval()` checks both the path pattern `(eval` and the `origin` field
+- `PerlFrameClassifier` defaults unknown frames to `User` category (show by default)
+- Auto-ID assignment resets on each `parse_stack_trace()` call
+- No internal workspace dependencies; uses only external crates

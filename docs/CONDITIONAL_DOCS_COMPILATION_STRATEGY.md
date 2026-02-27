@@ -13,18 +13,18 @@ As part of **Issue #149** implementation, the perl-parser crate employs a sophis
 The perl-parser crate uses feature-gated conditional compilation to enable documentation warnings only in appropriate environments:
 
 ```rust
-// Strategy: Preserve documentation quality while enabling revolutionary 5000x LSP performance
-// - Enterprise development: warnings enforced for quality assurance
+// Strategy: Preserve documentation quality while enabling fast LSP performance
+// - Development: warnings enforced for quality assurance
 // - Test environments: warnings conditionally disabled for sub-second execution
 #![cfg_attr(all(not(test), not(feature = "test-compat"), not(feature = "test-performance")), warn(missing_docs))]
 ```
 
 ### Performance Context
 
-This strategy addresses the **Revolutionary Performance Requirements** (PR #140):
-- **LSP behavioral tests**: 1560s+ → 0.31s (**5000x faster**)
-- **User story tests**: 1500s+ → 0.32s (**4700x faster**)
-- **Individual workspace tests**: 60s+ → 0.26s (**230x faster**)
+This strategy addresses the performance requirements (PR #140):
+- **LSP behavioral tests**: 1560s+ → 0.31s
+- **User story tests**: 1500s+ → 0.32s
+- **Individual workspace tests**: 60s+ → 0.26s
 
 ### Feature Flag Strategy
 
@@ -51,7 +51,7 @@ Documentation warnings are **DISABLED** when:
 ### Performance Preservation
 - **Zero compilation overhead** during performance testing
 - **Sub-second test execution** maintained across all test suites
-- **Revolutionary LSP performance** preserved (5000x improvements)
+- **LSP performance** preserved
 - **CI reliability** maintained at 100% pass rate
 
 ### Documentation Quality Maintenance
@@ -97,10 +97,10 @@ cargo test -p perl-parser --features test-compat       # Documentation warnings 
 ### Performance Benchmarking
 
 ```bash
-# Revolutionary LSP performance benchmarking
+# LSP performance benchmarking
 RUST_TEST_THREADS=2 cargo test -p perl-lsp --features test-performance -- --test-threads=2
 
-# Maintains 5000x performance improvements without documentation compilation overhead
+# Maintains performance improvements without documentation compilation overhead
 ```
 
 ## Technical Implementation Details
@@ -174,7 +174,7 @@ The conditional compilation strategy has zero performance impact:
 - **Professional documentation standards** maintained
 
 ### Performance Requirements
-- **Revolutionary LSP improvements** preserved (5000x faster)
+- **LSP improvements** preserved
 - **Sub-second test execution** maintained
 - **CI reliability** at 100% pass rate
 - **Scalable testing** across large codebases
@@ -201,7 +201,7 @@ The strategy requires minimal ongoing maintenance:
 
 - **Implementation Details**: [SPEC-149.md](../SPEC-149.md) - Comprehensive specification
 - **Quality Standards**: [API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md) - Enterprise documentation requirements
-- **Performance Context**: [THREADING_CONFIGURATION_GUIDE.md](THREADING_CONFIGURATION_GUIDE.md) - Revolutionary performance achievements
+- **Performance Context**: [THREADING_CONFIGURATION_GUIDE.md](THREADING_CONFIGURATION_GUIDE.md) - Performance achievements
 - **Test Framework**: `/crates/perl-parser/tests/missing_docs_ac_tests.rs` - 25 comprehensive validation tests
 - **Architecture Decision**: [ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) - Strategic context
 
@@ -209,4 +209,4 @@ The strategy requires minimal ongoing maintenance:
 
 The conditional documentation compilation strategy successfully balances enterprise documentation quality requirements with revolutionary LSP performance achievements. By intelligently enabling `#![warn(missing_docs)]` only in appropriate environments, the perl-parser crate maintains both comprehensive API documentation and sub-second test execution performance.
 
-This approach demonstrates how modern Rust compilation features can be leveraged to achieve seemingly conflicting requirements: enterprise-grade documentation quality and revolutionary performance optimization.
+This approach demonstrates how modern Rust compilation features can be leveraged to achieve seemingly conflicting requirements: documentation quality and performance optimization.
