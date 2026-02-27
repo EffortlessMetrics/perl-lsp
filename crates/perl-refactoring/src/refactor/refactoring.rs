@@ -2732,7 +2732,12 @@ sub complex {
 
         #[test]
         fn test_cleanup_no_backups() {
-            let mut engine = RefactoringEngine::new();
+            let temp_dir = must(tempfile::tempdir());
+            let config = RefactoringConfig {
+                backup_root: Some(temp_dir.path().to_path_buf()),
+                ..RefactoringConfig::default()
+            };
+            let mut engine = RefactoringEngine::with_config(config);
             let result = must(engine.clear_history());
             assert_eq!(result.directories_removed, 0);
             assert_eq!(result.space_reclaimed, 0);
