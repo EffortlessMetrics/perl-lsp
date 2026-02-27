@@ -14,11 +14,9 @@ fn test_regex_modifiers_integration() {
     ];
 
     for (code, expected_modifiers) in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse regex '{}': {}", code, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("regex"), "Expected regex node for: {}", code);
@@ -44,11 +42,9 @@ fn test_substitution_integration() {
     ];
 
     for (code, desc) in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("substitution"), "{}: Expected substitution in: {}", desc, sexp);
@@ -65,11 +61,9 @@ fn test_transliteration_integration() {
     ];
 
     for (code, desc) in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         assert!(
@@ -93,11 +87,9 @@ fn test_qw_integration() {
     ];
 
     for (code, desc) in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("array"), "{}: Expected array in: {}", desc, sexp);
@@ -115,11 +107,9 @@ fn test_statement_modifiers_integration() {
     ];
 
     for (code, desc) in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         assert!(
@@ -137,11 +127,9 @@ fn test_isa_operator_integration() {
         vec!["$x ISA 'Class'", "$obj ISA $class", "ref($x) ISA 'ARRAY'", "$self ISA My::Class"];
 
     for code in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse ISA '{}': {}", code, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("binary_ISA"), "Expected ISA operator in: {}", sexp);
@@ -154,11 +142,9 @@ fn test_file_test_operators_integration() {
         vec!["-f $file", "-d $dir", "-e $path", "-r $file", "-w $file", "-x $file", "-s $file"];
 
     for code in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse file test '{}': {}", code, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("unary_-"), "Expected unary file test in: {}", sexp);
@@ -170,11 +156,9 @@ fn test_smart_match_integration() {
     let tests = vec!["$x ~~ $y", "$x ~~ @array", "$x ~~ /pattern/", "$x ~~ 'string'"];
 
     for code in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse smart match '{}': {}", code, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains("~~"), "Expected smart match operator in: {}", sexp);
@@ -192,11 +176,9 @@ fn test_special_blocks_integration() {
     ];
 
     for (code, block_type) in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse {} block: {}", block_type, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         assert!(sexp.contains(block_type), "Expected {} block in: {}", block_type, sexp);
@@ -213,11 +195,9 @@ fn test_attributes_integration() {
     ];
 
     for (code, desc) in tests {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(code);
-        let ast = match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Failed to parse '{}': {}", desc, e),
-        };
+        let ast = must(parser.parse());
         let sexp = ast.to_sexp();
 
         // Skip test case if attributes aren't represented yet

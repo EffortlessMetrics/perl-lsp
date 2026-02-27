@@ -7,7 +7,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Heredoc Edge Case Tests ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         (
             "Simple unquoted heredoc",
             r#"
@@ -267,11 +267,10 @@ fn find_heredoc_node(node: &AstNode) -> bool {
         AstNode::Statement(content) => {
             return find_heredoc_node(content);
         }
-        AstNode::VariableDeclaration { initializer, .. } => {
-            if let Some(init) = initializer {
-                return find_heredoc_node(init);
-            }
+        AstNode::VariableDeclaration { initializer: Some(init), .. } => {
+            return find_heredoc_node(init);
         }
+        AstNode::VariableDeclaration { .. } => {}
         AstNode::BinaryOp { left, right, .. } => {
             return find_heredoc_node(left) || find_heredoc_node(right);
         }
@@ -310,11 +309,10 @@ fn print_heredoc_nodes(node: &AstNode, depth: usize) {
         AstNode::Statement(content) => {
             print_heredoc_nodes(content, depth);
         }
-        AstNode::VariableDeclaration { initializer, .. } => {
-            if let Some(init) = initializer {
-                print_heredoc_nodes(init, depth + 1);
-            }
+        AstNode::VariableDeclaration { initializer: Some(init), .. } => {
+            print_heredoc_nodes(init, depth + 1);
         }
+        AstNode::VariableDeclaration { .. } => {}
         _ => {}
     }
 }

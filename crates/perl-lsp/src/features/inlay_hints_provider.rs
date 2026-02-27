@@ -394,8 +394,11 @@ impl InlayHintsProvider {
                 }
                 self.visit_node(body, hints, range);
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 self.visit_node(variable, hints, range);
+                if let Some(cb) = continue_block {
+                    self.visit_node(cb, hints, range);
+                }
                 self.visit_node(list, hints, range);
                 self.visit_node(body, hints, range);
             }

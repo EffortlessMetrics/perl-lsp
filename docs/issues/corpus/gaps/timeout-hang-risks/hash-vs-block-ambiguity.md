@@ -90,7 +90,7 @@ The parser should:
 **Pros**:
 - Comprehensive solution covering all cases
 - Clear disambiguation rules
-- Production-ready approach
+- Recommended approach
 
 **Cons**:
 - More complex implementation

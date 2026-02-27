@@ -39,5 +39,8 @@ pub mod workspace_rename;
 pub mod workspace_symbols;
 
 pub use feature_catalog::{
-    LSP_VERSION, VERSION, advertised_features, catalog, compliance_percent, has_feature, to_json,
+    LSP_VERSION, VERSION, advertised_features, advertised_trackable_feature_count_for_grid,
+    catalog, compliance_percent, compliance_percent_for_grid, compliance_percent_for_profile,
+    has_feature, to_json, to_json_for_all_profiles, to_json_for_profile,
+    trackable_feature_count_for_grid,
 };

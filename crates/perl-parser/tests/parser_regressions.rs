@@ -2,20 +2,17 @@ use perl_parser::Parser;
 
 /// Helper to assert code parses successfully
 fn assert_parses(code: &str) {
+    use perl_tdd_support::must;
     let mut parser = Parser::new(code);
-    match parser.parse() {
-        Ok(_) => {}
-        Err(e) => panic!("Failed to parse code:\n{}\nError: {:?}", code, e),
-    }
+    must(parser.parse());
 }
 
 /// Helper to assert code fails to parse
 #[allow(dead_code)]
 fn assert_parse_fails(code: &str) {
     let mut parser = Parser::new(code);
-    if let Ok(ast) = parser.parse() {
-        panic!("Expected parse to fail but got AST:\n{:?}", ast)
-    }
+    let result = parser.parse();
+    assert!(result.is_err(), "Expected parse to fail but got AST:\n{:?}", result.ok());
 }
 
 #[test]

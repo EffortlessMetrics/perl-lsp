@@ -4,9 +4,9 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-dap-breakpoint` is a **Tier 7 DAP feature module** providing breakpoint validation for the Perl debugger.
+`perl-dap-breakpoint` is a **DAP feature module** providing AST-based breakpoint validation for the Perl debugger.
 
-**Purpose**: Breakpoint validation for Perl DAP — validates and normalizes breakpoint locations against Perl source.
+**Purpose**: Validates breakpoint locations against parsed Perl source to ensure breakpoints land on executable lines, rejecting comments, blank lines, heredoc interiors, and out-of-range lines.
 
 **Version**: 0.1.0
 
@@ -23,66 +23,63 @@ cargo doc -p perl-dap-breakpoint --open  # View documentation
 
 ### Dependencies
 
-- `perl-parser` - Source parsing
-- `ropey` - Text rope handling
-- `thiserror` - Error definitions
+- `perl-parser` -- Parses Perl source into an AST (`Parser`, `Node`, `NodeKind`)
+- `ropey` -- Rope data structure for efficient line-to-byte position mapping
+- `thiserror` -- Error type derivation for `BreakpointError`
+
+### Modules
+
+| Module | File | Purpose |
+|--------|------|---------|
+| `lib` | `src/lib.rs` | Re-exports public API, defines `BreakpointError` enum |
+| `validator` | `src/validator.rs` | `BreakpointValidator` trait, `AstBreakpointValidator` struct, `BreakpointValidation`, `ValidationReason` |
+| `suggestion` | `src/suggestion.rs` | `find_nearest_valid_line` function, `SearchDirection` enum |
 
 ### Key Types
 
 | Type | Purpose |
 |------|---------|
-| `BreakpointValidator` | Validates breakpoint locations |
-| `ValidatedBreakpoint` | Normalized breakpoint |
-| `BreakpointError` | Validation errors |
+| `BreakpointValidator` | Trait with `validate(line)`, `validate_with_column(line, col)`, `is_executable_line(line)` |
+| `AstBreakpointValidator` | Struct holding parsed AST, Rope, and source; implements `BreakpointValidator` |
+| `BreakpointValidation` | Result struct: `verified`, `line`, `column`, `reason`, `message` |
+| `ValidationReason` | Enum: `BlankLine`, `CommentLine`, `HeredocInterior`, `LineOutOfRange`, `ParseError` |
+| `BreakpointError` | Error enum: `ParseError(String)`, `LineOutOfRange(i64, usize)` |
+| `SearchDirection` | Enum: `Forward`, `Backward`, `Both` (in `suggestion` module, not re-exported from root) |
 
-### Breakpoint Types
+### Validation Logic
 
-| Type | Description |
-|------|-------------|
-| Line | Break at line number |
-| Conditional | Break when condition true |
-| Function | Break at function entry |
-| Logpoint | Log message without stopping |
+1. Parse source with `perl_parser::Parser` to get an AST `Node`
+2. For a given 1-based line number, convert to byte range via `Rope`
+3. Check heredoc interior first (AST `NodeKind::Heredoc` with `body_span`)
+4. Check comment/blank: fast-path text checks, then AST-based check for executable nodes in range
+5. If all checks pass, the line is executable and the breakpoint is verified
 
 ## Usage
 
 ```rust
-use perl_dap_breakpoint::{BreakpointValidator, Breakpoint};
+use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator, find_nearest_valid_line};
+use perl_dap_breakpoint::suggestion::SearchDirection;
 
-let validator = BreakpointValidator::new(source);
+let source = "# comment\nmy $x = 1;\n\nprint $x;\n";
+let validator = AstBreakpointValidator::new(source)?;
 
-// Validate a line breakpoint
-let bp = Breakpoint::line(10);
-match validator.validate(bp) {
-    Ok(validated) => {
-        // Line might be adjusted to valid location
-        println!("Breakpoint at line {}", validated.line);
-    },
-    Err(e) => {
-        println!("Invalid breakpoint: {}", e);
-    }
-}
-```
+// Line 1 is a comment -- rejected
+let result = validator.validate(1);
+assert!(!result.verified);
 
-### Line Adjustment
+// Line 2 is executable -- verified
+let result = validator.validate(2);
+assert!(result.verified);
 
-Breakpoints on non-executable lines are adjusted:
-
-```perl
-# Line 1: comment - not executable
-my $x = 1;  # Line 2: executable
-            # Line 3: blank - not executable
-print $x;   # Line 4: executable
-```
-
-```rust
-// Breakpoint on line 1 → adjusted to line 2
-// Breakpoint on line 3 → adjusted to line 4
+// Find nearest executable line from line 1
+let nearest = find_nearest_valid_line(&validator, 1, SearchDirection::Forward, None);
+assert_eq!(nearest, Some(2));
 ```
 
 ## Important Notes
 
-- Validates against actual Perl syntax
-- Adjusts to nearest executable line
-- Handles POD, comments, blank lines
-- Used by `perl-dap` for breakpoint requests
+- `SearchDirection` is public in `suggestion` module but not re-exported from the crate root; access via `perl_dap_breakpoint::suggestion::SearchDirection`
+- All line numbers are 1-based (`i64`)
+- Comments are detected by text inspection (lines starting with `#`), not AST nodes, because comments are stripped during lexing
+- Heredoc interior detection uses `NodeKind::Heredoc { body_span }` from the AST
+- Used by `perl-dap` for breakpoint request handling

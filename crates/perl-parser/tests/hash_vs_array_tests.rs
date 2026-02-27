@@ -24,7 +24,7 @@ fn test_parenthesized_hash_with_fat_comma() -> TestResult {
             }
         }
     }
-    panic!("Failed to find expected structure");
+    Err("Failed to find expected structure".into())
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn test_parenthesized_array_without_fat_comma() -> TestResult {
             }
         }
     }
-    panic!("Failed to find expected structure");
+    Err("Failed to find expected structure".into())
 }
 
 #[test]
@@ -70,7 +70,7 @@ fn test_parenthesized_array_with_identifier_pairs() -> TestResult {
             }
         }
     }
-    panic!("Failed to find expected structure");
+    Err("Failed to find expected structure".into())
 }
 
 #[test]
@@ -93,5 +93,5 @@ fn test_mixed_commas_still_hash() -> TestResult {
             }
         }
     }
-    panic!("Failed to find expected structure");
+    Err("Failed to find expected structure".into())
 }

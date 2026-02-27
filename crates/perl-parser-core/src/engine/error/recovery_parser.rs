@@ -411,7 +411,7 @@ mod tests {
             NodeKind::Program { statements } => {
                 assert_eq!(statements.len(), 2);
             }
-            _ => panic!("Expected program node"),
+            _ => unreachable!("Expected program node"),
         }
 
         // Should have recorded at least one error
@@ -429,7 +429,7 @@ mod tests {
             NodeKind::Program { statements } => {
                 assert_eq!(statements.len(), 2);
             }
-            _ => panic!("Expected program node"),
+            _ => unreachable!("Expected program node"),
         }
     }
 
@@ -448,12 +448,12 @@ mod tests {
                         NodeKind::Block { statements } => {
                             assert_eq!(statements.len(), 1);
                         }
-                        _ => panic!("Expected block"),
+                        _ => unreachable!("Expected block"),
                     },
-                    _ => panic!("Expected if statement"),
+                    _ => unreachable!("Expected if statement"),
                 }
             }
-            _ => panic!("Expected program node"),
+            _ => unreachable!("Expected program node"),
         }
 
         // Should have error about missing brace

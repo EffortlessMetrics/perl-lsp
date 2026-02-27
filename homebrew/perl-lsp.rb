@@ -1,25 +1,25 @@
 class PerlLsp < Formula
   desc "Fast, reliable Perl language server with 100% syntax coverage"
-  homepage "https://github.com/EffortlessMetrics/tree-sitter-perl"
+  homepage "https://github.com/EffortlessMetrics/perl-lsp"
   version "0.8.3"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-apple-darwin.tar.gz"
       sha256 "PLACEHOLDER_SHA256_AARCH64_DARWIN"
     else
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz"
       sha256 "PLACEHOLDER_SHA256_X86_64_DARWIN"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "PLACEHOLDER_SHA256_AARCH64_LINUX"
     else
-      url "https://github.com/EffortlessMetrics/tree-sitter-perl/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "8af781a0e0aed47f22517ab15cce80dbf78e7bcafb62e1eed5ab236b481b920d"
     end
   end

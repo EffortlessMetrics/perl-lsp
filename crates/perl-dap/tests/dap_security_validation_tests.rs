@@ -10,6 +10,7 @@ use perl_dap::security::{
     DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS, SecurityError, validate_condition, validate_expression,
     validate_path, validate_timeout,
 };
+use perl_tdd_support::must;
 use std::path::PathBuf;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -36,7 +37,7 @@ fn test_path_validation_safe_relative_paths() -> TestResult {
 
 #[test]
 fn test_path_validation_parent_traversal_attempts() {
-    let workspace = std::env::current_dir().expect("Failed to get cwd").join("test_workspace");
+    let workspace = must(std::env::current_dir()).join("test_workspace");
     std::fs::create_dir_all(&workspace).ok();
 
     // Malicious paths with parent directory references
@@ -64,11 +65,16 @@ fn test_path_validation_parent_traversal_attempts() {
             result
         );
 
-        // Verify it's the right error type
         if let Err(e) = result {
             match e {
                 SecurityError::PathTraversalAttempt(_) => {}
-                _ => panic!("Expected PathTraversalAttempt error for '{}', got: {:?}", path_str, e),
+                _ => {
+                    must(Err::<(), _>(format!(
+                        "Expected PathTraversalAttempt error for '{}', got: {:?}",
+                        path_str, e
+                    )));
+                    unreachable!()
+                }
             }
         }
     }
@@ -78,7 +84,7 @@ fn test_path_validation_parent_traversal_attempts() {
 
 #[test]
 fn test_path_validation_absolute_paths() {
-    let workspace = std::env::current_dir().expect("Failed to get cwd").join("test_workspace");
+    let workspace = must(std::env::current_dir()).join("test_workspace");
     std::fs::create_dir_all(&workspace).ok();
 
     // Absolute paths outside workspace should be rejected
@@ -109,7 +115,10 @@ fn test_path_validation_null_byte_injection() {
 
     match result {
         Err(SecurityError::InvalidPathCharacters) => {}
-        _ => panic!("Expected InvalidPathCharacters error"),
+        _ => {
+            must(Err::<(), _>("Expected InvalidPathCharacters error"));
+            unreachable!()
+        }
     }
 }
 
@@ -140,7 +149,10 @@ fn test_expression_validation_newline_injection() {
 
         match result {
             Err(SecurityError::InvalidExpression) => {}
-            _ => panic!("Expected InvalidExpression error"),
+            _ => {
+                must(Err::<(), _>("Expected InvalidExpression error"));
+                unreachable!()
+            }
         }
     }
 }
@@ -204,12 +216,11 @@ fn test_security_comprehensive_path_traversal_matrix() {
         ("./.gitignore", false),
     ];
 
-    let workspace =
-        std::env::current_dir().expect("Failed to get cwd").join("test_workspace_comprehensive");
+    let workspace = must(std::env::current_dir()).join("test_workspace_comprehensive");
 
     for (path_str, should_reject) in test_cases {
         // Ensure workspace exists for each test case
-        std::fs::create_dir_all(&workspace).expect("Failed to create workspace");
+        must(std::fs::create_dir_all(&workspace));
 
         let path = PathBuf::from(path_str);
         let result = validate_path(&path, &workspace);

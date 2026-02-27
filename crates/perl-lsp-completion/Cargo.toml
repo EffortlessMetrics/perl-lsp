@@ -3,13 +3,14 @@ name = "perl-lsp-completion"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
-description = "LSP completion provider for Perl"
+authors.workspace = true
+description = "Context-aware LSP completion engine for Perl — variables, functions, methods, packages, and file paths"
+readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-completion"
-keywords = ["perl", "lsp", "completion", "autocomplete"]
+keywords = ["perl", "lsp", "completion", "autocomplete", "ide"]
 categories = ["development-tools", "text-editors"]
 
 [lib]
@@ -19,6 +20,7 @@ doctest = false
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }
+perl-keywords = { workspace = true }
 lsp-types = { version = "0.97.0", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"

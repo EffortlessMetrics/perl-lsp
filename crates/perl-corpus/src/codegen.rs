@@ -5,7 +5,7 @@ use proptest::strategy::BoxedStrategy;
 use proptest::test_runner::{Config, RngAlgorithm, TestRng, TestRunner};
 use rand::rngs::StdRng;
 use rand::seq::SliceRandom;
-use rand::{Rng, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::r#gen;

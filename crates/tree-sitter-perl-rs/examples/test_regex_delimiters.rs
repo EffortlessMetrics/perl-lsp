@@ -4,7 +4,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Testing Regex with Various Delimiters ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         ("Standard slash", r#"$text =~ /pattern/;"#),
         ("Match with m//", r#"$text =~ m/pattern/;"#),
         ("Match with m!!", r#"$text =~ m!pattern!;"#),

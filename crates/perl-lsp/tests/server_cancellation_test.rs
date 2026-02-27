@@ -2,7 +2,6 @@ use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 #[test]
-#[ignore = "feature: server-side cancellation not returning error response"]
 fn server_side_cancellation_emits_err_server_cancelled() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = LspServer::new();
 
