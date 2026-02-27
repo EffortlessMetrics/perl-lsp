@@ -59,7 +59,7 @@ walkdir = "2.5.0"
 nix = { version = "0.31.1", features = ["signal"] }
 
 # Optional dependencies for incremental parsing
-anyhow = { version = "1.0.100", optional = true }
+anyhow = { version = "1.0.102", optional = true }
 
 [[bin]]
 name = "perl-parse"

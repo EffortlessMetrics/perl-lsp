@@ -4,7 +4,7 @@ fn next_u64(state: &mut u64) -> u64 {
     *state ^= *state >> 12;
     *state ^= *state << 25;
     *state ^= *state >> 27;
-    state.wrapping_mul(0x2545_F4_91_4F_6C_DD_1D)
+    state.wrapping_mul(0x2545_F491_4F6C_DD1D)
 }
 
 fn fuzz_text(state: &mut u64, max_len: usize) -> String {
