@@ -92,7 +92,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -103,14 +103,14 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "anyhow"
-version = "1.0.101"
+version = "1.0.102"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e0fee31ef5ed1ba1316088939cea399010ed7731dba877ed44aeb407a75ea"
+checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
 name = "ar_archive_writer"
@@ -356,9 +356,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.59"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5caf74d17c3aec5495110c34cc3f78644bfa89af6c8993ed4de2790e49b6499"
+checksum = "2797f34da339ce31042b27d23607e051786132987f595b02ba4f6a6dffb7030a"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -366,9 +366,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.59"
+version = "4.5.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "370daa45065b80218950227371916a1633217ae42b2715b2287b606dcd618e24"
+checksum = "24a241312cea5059b13574bb9b3861cabf758b879c15190b37b6d6fd63ab6876"
 dependencies = [
  "anstream",
  "anstyle",
@@ -673,7 +673,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1394,7 +1394,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1440,7 +1440,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d8fae84b431384b68627d0f9b3b1245fcf9f46f6c0e3dc902e9dce64edd1967"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1510,6 +1510,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-content-length-framing"
+version = "0.9.1"
+
+[[package]]
 name = "perl-corpus"
 version = "0.9.1"
 dependencies = [
@@ -1537,12 +1541,16 @@ dependencies = [
  "lsp-types",
  "nix",
  "once_cell",
+ "perl-content-length-framing",
  "perl-dap-breakpoint",
  "perl-dap-eval",
  "perl-dap-stack",
  "perl-dap-variables",
  "perl-feature-catalog",
+ "perl-keywords",
+ "perl-module-path",
  "perl-parser",
+ "perl-path-security",
  "perl-tdd-support",
  "proptest",
  "regex",
@@ -1660,11 +1668,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-keywords"
+version = "0.9.1"
+
+[[package]]
 name = "perl-lexer"
 version = "0.9.1"
 dependencies = [
  "criterion",
  "memchr",
+ "perl-keywords",
  "perl-position-tracking",
  "pretty_assertions",
  "proptest",
@@ -1684,8 +1697,11 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
+ "perl-content-length-framing",
  "perl-dap",
+ "perl-keywords",
  "perl-lexer",
+ "perl-lsp-cancellation",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
  "perl-lsp-diagnostics",
@@ -1700,9 +1716,15 @@ dependencies = [
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
+ "perl-module-path",
+ "perl-module-reference",
+ "perl-module-rename",
+ "perl-module-resolution",
  "perl-parser",
  "perl-position-tracking",
+ "perl-source-file",
  "perl-tdd-support",
+ "perl-workspace-discovery",
  "predicates",
  "pretty_assertions",
  "proptest",
@@ -1718,6 +1740,14 @@ dependencies = [
  "uuid",
  "walkdir",
  "which",
+]
+
+[[package]]
+name = "perl-lsp-cancellation"
+version = "0.9.1"
+dependencies = [
+ "proptest",
+ "serde_json",
 ]
 
 [[package]]
@@ -1741,6 +1771,7 @@ name = "perl-lsp-completion"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -1864,6 +1895,8 @@ name = "perl-lsp-navigation"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-module-import",
+ "perl-module-path",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-semantic-analyzer",
@@ -1880,6 +1913,7 @@ name = "perl-lsp-protocol"
 version = "0.9.1"
 dependencies = [
  "lsp-types",
+ "perl-lsp-feature-contracts",
  "perl-lsp-feature-flags",
  "serde",
  "serde_json",
@@ -1921,6 +1955,7 @@ dependencies = [
 name = "perl-lsp-rename"
 version = "0.9.1"
 dependencies = [
+ "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -1956,8 +1991,134 @@ dependencies = [
 name = "perl-lsp-transport"
 version = "0.9.1"
 dependencies = [
+ "perl-content-length-framing",
  "perl-lsp-protocol",
  "serde_json",
+]
+
+[[package]]
+name = "perl-module-boundary"
+version = "0.9.1"
+dependencies = [
+ "perl-module-import",
+ "perl-module-name",
+ "perl-module-token-core",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-import"
+version = "0.9.1"
+dependencies = [
+ "perl-module-path",
+ "perl-module-token",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-import-match"
+version = "0.9.1"
+dependencies = [
+ "perl-module-boundary",
+ "perl-module-import",
+ "perl-module-path",
+ "perl-module-token",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-name"
+version = "0.9.1"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-path"
+version = "0.9.1"
+dependencies = [
+ "perl-module-name",
+]
+
+[[package]]
+name = "perl-module-reference"
+version = "0.9.1"
+dependencies = [
+ "perl-module-import",
+ "perl-module-name",
+ "perl-module-path",
+ "perl-module-token-parser",
+ "perl-text-line",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-rename"
+version = "0.9.1"
+dependencies = [
+ "perl-module-import-match",
+ "perl-module-path",
+ "perl-module-token",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-resolution"
+version = "0.9.1"
+dependencies = [
+ "perl-module-resolution-path",
+ "perl-module-resolution-uri",
+ "proptest",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "perl-module-resolution-path"
+version = "0.9.1"
+dependencies = [
+ "perl-module-path",
+ "perl-path-security",
+ "proptest",
+ "tempfile",
+]
+
+[[package]]
+name = "perl-module-resolution-uri"
+version = "0.9.1"
+dependencies = [
+ "perl-module-path",
+ "perl-path-security",
+ "perl-workspace-folder",
+ "proptest",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "perl-module-token"
+version = "0.9.1"
+dependencies = [
+ "perl-module-boundary",
+ "perl-module-name",
+ "perl-module-path",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-token-core"
+version = "0.9.1"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-token-parser"
+version = "0.9.1"
+dependencies = [
+ "perl-module-reference",
+ "perl-module-token-core",
+ "proptest",
 ]
 
 [[package]]
@@ -1973,6 +2134,7 @@ dependencies = [
  "parking_lot",
  "perl-corpus",
  "perl-incremental-parsing",
+ "perl-keywords",
  "perl-lexer",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
@@ -2041,6 +2203,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-path-security"
+version = "0.9.1"
+dependencies = [
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
 name = "perl-position-tracking"
 version = "0.9.1"
 dependencies = [
@@ -2059,6 +2229,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-qualified-name"
+version = "0.9.1"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "perl-quote"
 version = "0.9.1"
 
@@ -2066,7 +2243,9 @@ version = "0.9.1"
 name = "perl-refactoring"
 version = "0.9.1"
 dependencies = [
+ "perl-module-path",
  "perl-parser-core",
+ "perl-qualified-name",
  "perl-tdd-support",
  "perl-workspace-index",
  "regex",
@@ -2097,6 +2276,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-source-file"
+version = "0.9.1"
+
+[[package]]
 name = "perl-symbol-table"
 version = "0.9.1"
 dependencies = [
@@ -2122,6 +2305,14 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "perl-text-line"
+version = "0.9.1"
+dependencies = [
+ "perl-module-token-parser",
+ "proptest",
 ]
 
 [[package]]
@@ -2209,6 +2400,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-workspace-discovery"
+version = "0.9.1"
+dependencies = [
+ "perl-source-file",
+ "proptest",
+ "tempfile",
+ "walkdir",
+]
+
+[[package]]
+name = "perl-workspace-folder"
+version = "0.9.1"
+dependencies = [
+ "perl-uri",
+ "proptest",
+ "tempfile",
+ "url",
+]
+
+[[package]]
 name = "perl-workspace-index"
 version = "0.9.1"
 dependencies = [
@@ -2221,10 +2432,19 @@ dependencies = [
  "perl-symbol-types",
  "perl-tdd-support",
  "perl-uri",
+ "perl-workspace-index-slo",
  "regex",
  "serde",
  "tempfile",
  "url",
+]
+
+[[package]]
+name = "perl-workspace-index-slo"
+version = "0.9.1"
+dependencies = [
+ "parking_lot",
+ "proptest",
 ]
 
 [[package]]
@@ -2721,7 +2941,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3085,7 +3305,7 @@ dependencies = [
  "getrandom 0.4.1",
  "once_cell",
  "rustix",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3686,7 +3906,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

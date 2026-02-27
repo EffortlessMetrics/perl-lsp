@@ -21,6 +21,7 @@
       "->"
     ]
   },
+  "declarationProvider": true,
   "definitionProvider": true,
   "diagnosticProvider": {
     "identifier": "perl-lsp",

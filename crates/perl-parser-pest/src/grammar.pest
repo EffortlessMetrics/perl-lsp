@@ -659,7 +659,6 @@ interpolation = {
     | special_variable
     | scalar_variable
     | array_variable
-    | hash_variable
     | array_element 
     | hash_element_access 
 }

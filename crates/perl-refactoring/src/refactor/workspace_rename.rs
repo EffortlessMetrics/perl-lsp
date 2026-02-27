@@ -50,6 +50,7 @@
 use crate::refactor::refactoring::BackupInfo;
 use crate::refactor::workspace_refactor::{FileEdit, TextEdit};
 use crate::workspace_index::WorkspaceIndex;
+use perl_qualified_name::split_qualified_name;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -809,15 +810,6 @@ impl WorkspaceRename {
         }
 
         Ok(())
-    }
-}
-
-/// Split a potentially qualified name into (package, bare_name)
-fn split_qualified_name(name: &str) -> (Option<&str>, &str) {
-    if let Some(idx) = name.rfind("::") {
-        (Some(&name[..idx]), &name[idx + 2..])
-    } else {
-        (None, name)
     }
 }
 

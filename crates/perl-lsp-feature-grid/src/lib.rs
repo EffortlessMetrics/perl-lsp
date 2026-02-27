@@ -92,7 +92,7 @@ fn feature_grid_payload(
                 advertised_trackable_feature_count(&advertised);
             (advertised, advertised_trackable_feature_count)
         }
-        None => (advertised_features(), advertised_trackable_feature_count_for_grid()),
+        None => (advertised_features().to_vec(), advertised_trackable_feature_count_for_grid()),
     };
     let trackable_feature_count = trackable_feature_count_for_grid();
     let compliance_percent = if trackable_feature_count == 0 {
