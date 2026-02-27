@@ -8,8 +8,8 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+use perl_module_boundary::contains_standalone_module_token;
 use perl_module_import::{ModuleImportKind, parse_module_import_head};
-use perl_module_token::contains_module_token;
 
 /// Return `true` when `line` references `module_name` in an import statement.
 ///
@@ -30,7 +30,7 @@ pub fn line_references_module_import(line: &str, module_name: &str) -> bool {
     match parsed.kind {
         ModuleImportKind::Use | ModuleImportKind::Require => parsed.token == module_name,
         ModuleImportKind::UseParent | ModuleImportKind::UseBase => {
-            contains_module_token(line, module_name)
+            contains_standalone_module_token(line, module_name)
         }
     }
 }

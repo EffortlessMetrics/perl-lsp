@@ -1701,6 +1701,7 @@ dependencies = [
  "perl-dap",
  "perl-keywords",
  "perl-lexer",
+ "perl-lsp-cancellation",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
  "perl-lsp-diagnostics",
@@ -1739,6 +1740,14 @@ dependencies = [
  "uuid",
  "walkdir",
  "which",
+]
+
+[[package]]
+name = "perl-lsp-cancellation"
+version = "0.9.1"
+dependencies = [
+ "proptest",
+ "serde_json",
 ]
 
 [[package]]
@@ -1988,6 +1997,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-module-boundary"
+version = "0.9.1"
+dependencies = [
+ "perl-module-import",
+ "perl-module-name",
+ "perl-module-token-core",
+ "proptest",
+]
+
+[[package]]
 name = "perl-module-import"
 version = "0.9.1"
 dependencies = [
@@ -2000,6 +2019,7 @@ dependencies = [
 name = "perl-module-import-match"
 version = "0.9.1"
 dependencies = [
+ "perl-module-boundary",
  "perl-module-import",
  "perl-module-path",
  "perl-module-token",
@@ -2027,6 +2047,8 @@ dependencies = [
  "perl-module-import",
  "perl-module-name",
  "perl-module-path",
+ "perl-module-token-parser",
+ "perl-text-line",
  "proptest",
 ]
 
@@ -2044,9 +2066,30 @@ dependencies = [
 name = "perl-module-resolution"
 version = "0.9.1"
 dependencies = [
+ "perl-module-resolution-path",
+ "perl-module-resolution-uri",
+ "proptest",
+ "tempfile",
+ "url",
+]
+
+[[package]]
+name = "perl-module-resolution-path"
+version = "0.9.1"
+dependencies = [
  "perl-module-path",
  "perl-path-security",
- "perl-uri",
+ "proptest",
+ "tempfile",
+]
+
+[[package]]
+name = "perl-module-resolution-uri"
+version = "0.9.1"
+dependencies = [
+ "perl-module-path",
+ "perl-path-security",
+ "perl-workspace-folder",
  "proptest",
  "tempfile",
  "url",
@@ -2056,8 +2099,25 @@ dependencies = [
 name = "perl-module-token"
 version = "0.9.1"
 dependencies = [
+ "perl-module-boundary",
  "perl-module-name",
  "perl-module-path",
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-token-core"
+version = "0.9.1"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
+name = "perl-module-token-parser"
+version = "0.9.1"
+dependencies = [
+ "perl-module-reference",
+ "perl-module-token-core",
  "proptest",
 ]
 
@@ -2169,6 +2229,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-qualified-name"
+version = "0.9.1"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "perl-quote"
 version = "0.9.1"
 
@@ -2178,6 +2245,7 @@ version = "0.9.1"
 dependencies = [
  "perl-module-path",
  "perl-parser-core",
+ "perl-qualified-name",
  "perl-tdd-support",
  "perl-workspace-index",
  "regex",
@@ -2237,6 +2305,14 @@ dependencies = [
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "perl-text-line"
+version = "0.9.1"
+dependencies = [
+ "perl-module-token-parser",
+ "proptest",
 ]
 
 [[package]]
@@ -2334,6 +2410,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-workspace-folder"
+version = "0.9.1"
+dependencies = [
+ "perl-uri",
+ "proptest",
+ "tempfile",
+ "url",
+]
+
+[[package]]
 name = "perl-workspace-index"
 version = "0.9.1"
 dependencies = [
@@ -2346,10 +2432,19 @@ dependencies = [
  "perl-symbol-types",
  "perl-tdd-support",
  "perl-uri",
+ "perl-workspace-index-slo",
  "regex",
  "serde",
  "tempfile",
  "url",
+]
+
+[[package]]
+name = "perl-workspace-index-slo"
+version = "0.9.1"
+dependencies = [
+ "parking_lot",
+ "proptest",
 ]
 
 [[package]]

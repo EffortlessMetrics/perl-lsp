@@ -15,6 +15,7 @@ categories = ["development-tools", "text-editors"]
 include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
+perl-module-boundary = { workspace = true }
 perl-module-name = { workspace = true }
 
 [dev-dependencies]

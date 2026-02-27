@@ -12,7 +12,7 @@ This project started in Q2 2025. It was initially forked on July 15th, 2025 from
 
 ## Features
 
-- **Language Server** -- completion, hover, go-to-definition, references, rename, diagnostics, formatting, code actions, document symbols, workspace symbols, and more (97 LSP features)
+- **Language Server** -- completion, hover, go-to-definition, references, rename, diagnostics, formatting, code actions, document symbols, workspace symbols, and more (**100% advertised user-visible coverage**; `53/53` user-visible and `97/97` protocol methods; `features.toml`)
 - **Debug Adapter** -- breakpoints, stepping, variable inspection via DAP bridge to `perl -d`
 - **Parser** -- recursive-descent Perl parser with error recovery, heredoc/regex/quote support, and S-expression output
 - **Fast** -- pure Rust, no runtime dependencies on Perl for parsing or LSP
@@ -25,7 +25,7 @@ This project started in Q2 2025. It was initially forked on July 15th, 2025 from
 cargo install perl-lsp
 ```
 
-### From source
+### From source (default)
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
@@ -35,7 +35,7 @@ cargo install --path crates/perl-lsp
 
 ### Pre-built binaries
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), or use the installer script:
+Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), or use the installer script (best-effort / non-canonical) to install `perl-lsp`:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
@@ -93,8 +93,12 @@ crates/
   perl-dap/           DAP server binary
   perl-parser/        Parser entry points and high-level APIs
   perl-lexer/         Tokenizer
-  perl-lsp-*/         LSP feature crates (completion, diagnostics, navigation, ...)
-  perl-*/             Parser support crates (ast, token, quote, regex, heredoc, ...)
+  perl-lsp-*/         LSP feature crates (21 crates: completion, diagnostics, navigation, ...)
+  perl-module-*/      Module resolution microcrates (13 crates)
+  perl-dap-*/         DAP components (4 crates: breakpoint, eval, stack, variables)
+  perl-ts-*/          Tree-sitter integration (5 crates)
+  perl-workspace-*/   Workspace discovery and indexing (4 crates)
+  perl-*/             Core support crates (ast, token, quote, regex, heredoc, error, ...)
 xtask/                Development automation
 book/                 mdbook documentation
 vscode-extension/     VS Code extension source

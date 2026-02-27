@@ -16,11 +16,12 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 perl-module-import = { workspace = true }
-perl-module-token = { workspace = true }
+perl-module-boundary = { workspace = true }
 
 [dev-dependencies]
 proptest = "1.9.0"
 perl-module-path = { workspace = true }
+perl-module-token = { workspace = true }
 
 [lints]
 workspace = true

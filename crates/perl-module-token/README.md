@@ -5,8 +5,8 @@ Boundary-safe Perl module token replacement and variant helpers.
 ## Scope
 
 - Generate canonical + legacy module-name rename variant pairs
-- Detect standalone module tokens on a single source line
-- Replace standalone module tokens without partial-name false positives
+- Delegate standalone token boundary matching to `perl-module-boundary`
+- Replace standalone module tokens using boundary-safe ranges
 
 ## API
 

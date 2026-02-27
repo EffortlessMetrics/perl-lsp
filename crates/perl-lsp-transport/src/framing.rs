@@ -172,16 +172,14 @@ mod tests {
         payload.extend(framed_request(2, "shutdown"));
         let mut reader = BufReader::with_capacity(4096, Cursor::new(payload));
 
-        let first = match read_message(&mut reader)? {
-            Some(request) => request,
-            None => panic!("expected first request"),
-        };
+        let first = read_message(&mut reader)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected first request")
+        })?;
         assert_eq!(first.method, "initialize");
 
-        let second = match read_message(&mut reader)? {
-            Some(request) => request,
-            None => panic!("expected second request"),
-        };
+        let second = read_message(&mut reader)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected second request")
+        })?;
         assert_eq!(second.method, "shutdown");
 
         assert!(read_message(&mut reader)?.is_none());
@@ -195,16 +193,14 @@ mod tests {
         let mut cursor = Cursor::new(payload);
         let mut reader = ContentLengthMessageReader::new();
 
-        let first = match reader.read_next(&mut cursor)? {
-            Some(request) => request,
-            None => panic!("expected first request"),
-        };
+        let first = reader.read_next(&mut cursor)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected first request")
+        })?;
         assert_eq!(first.method, "textDocument/didOpen");
 
-        let second = match reader.read_next(&mut cursor)? {
-            Some(request) => request,
-            None => panic!("expected second request"),
-        };
+        let second = reader.read_next(&mut cursor)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected second request")
+        })?;
         assert_eq!(second.method, "textDocument/definition");
 
         assert!(reader.read_next(&mut cursor)?.is_none());

@@ -2,12 +2,14 @@
 //!
 //! This crate provides a small, focused API used by module-rename workflows.
 //! It handles canonical (`Foo::Bar`) and legacy (`Foo'Bar`) separator variants
-//! and performs boundary-aware token replacement on a single line.
+//! and delegates standalone token scanning to `perl-module-boundary`.
 
 #![deny(unsafe_code)]
 #![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
+
+use perl_module_boundary::{contains_standalone_module_token, find_standalone_module_token_ranges};
 
 /// Build canonical + legacy module rename pairs.
 ///
@@ -34,7 +36,7 @@ pub use perl_module_name::module_variant_pairs;
 /// token, respecting module boundaries.
 #[must_use]
 pub fn contains_module_token(line: &str, module_name: &str) -> bool {
-    replace_module_token(line, module_name, module_name).1
+    contains_standalone_module_token(line, module_name)
 }
 
 /// Replace standalone `from` module token occurrences in `line` with `to`.
@@ -46,84 +48,22 @@ pub fn replace_module_token(line: &str, from: &str, to: &str) -> (String, bool) 
         return (line.to_string(), false);
     }
 
+    let mut ranges = find_standalone_module_token_ranges(line, from).peekable();
+    if ranges.peek().is_none() {
+        return (line.to_string(), false);
+    }
+
     let mut out = String::with_capacity(line.len());
-    let mut search_start = 0usize;
-    let mut replaced = false;
+    let mut cursor = 0usize;
 
-    while let Some(rel_pos) = line[search_start..].find(from) {
-        let start = search_start + rel_pos;
-        let end = start + from.len();
-
-        if has_module_boundaries(line, start, end) {
-            out.push_str(&line[search_start..start]);
-            out.push_str(to);
-            replaced = true;
-        } else {
-            out.push_str(&line[search_start..end]);
-        }
-
-        search_start = end;
+    for range in ranges {
+        out.push_str(&line[cursor..range.start]);
+        out.push_str(to);
+        cursor = range.end;
     }
 
-    if replaced {
-        out.push_str(&line[search_start..]);
-        (out, true)
-    } else {
-        (line.to_string(), false)
-    }
-}
-
-fn has_module_boundaries(line: &str, start: usize, end: usize) -> bool {
-    let left_ok = !left_context_is_module_char(line, start);
-    let right_ok = !right_context_is_module_char(line, end);
-
-    left_ok && right_ok
-}
-
-fn is_module_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_' || ch == ':'
-}
-
-fn is_identifier_char(ch: char) -> bool {
-    ch.is_ascii_alphanumeric() || ch == '_'
-}
-
-fn left_context_is_module_char(line: &str, start: usize) -> bool {
-    if start == 0 {
-        return false;
-    }
-
-    let mut left = line[..start].char_indices();
-    let Some((left_idx, ch)) = left.next_back() else {
-        return false;
-    };
-
-    if ch != '\'' {
-        return is_module_char(ch);
-    }
-
-    if left_idx == 0 {
-        return false;
-    }
-
-    line[..left_idx].chars().next_back().is_some_and(is_identifier_char)
-}
-
-fn right_context_is_module_char(line: &str, end: usize) -> bool {
-    if end >= line.len() {
-        return false;
-    }
-
-    let mut right = line[end..].chars();
-    let Some(ch) = right.next() else {
-        return false;
-    };
-
-    if ch != '\'' {
-        return is_module_char(ch);
-    }
-
-    right.next().is_some_and(is_identifier_char)
+    out.push_str(&line[cursor..]);
+    (out, true)
 }
 
 #[cfg(test)]
