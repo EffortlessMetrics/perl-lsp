@@ -183,25 +183,6 @@ impl Scope {
         if shadows { Some(IssueKind::VariableShadowing) } else { None }
     }
 
-    fn lookup_variable_parts(&self, sigil: &str, name: &str) -> Option<Rc<Variable>> {
-        let idx = sigil_to_index(sigil);
-        let mut current_scope = self;
-
-        loop {
-            if let Some(map) = &current_scope.variables.borrow()[idx] {
-                if let Some(var) = map.get(name) {
-                    return Some(var.clone());
-                }
-            }
-            if let Some(ref parent) = current_scope.parent {
-                current_scope = parent;
-            } else {
-                break;
-            }
-        }
-        None
-    }
-
     fn has_variable_parts(&self, sigil: &str, name: &str) -> bool {
         let idx = sigil_to_index(sigil);
         let mut current_scope = self;
@@ -790,16 +771,17 @@ impl ScopeAnalyzer {
                 let mut param_names = std::collections::HashSet::new();
 
                 // Extract parameters from signature if present
-                let params_to_check = if let Some(sig) = signature {
+                // Optimization: Use slice to avoid cloning the parameters vector (deep copy of AST nodes)
+                let params_to_check: &[Node] = if let Some(sig) = signature {
                     match &sig.kind {
-                        NodeKind::Signature { parameters } => parameters.clone(),
-                        _ => Vec::new(),
+                        NodeKind::Signature { parameters } => parameters.as_slice(),
+                        _ => &[],
                     }
                 } else {
-                    Vec::new()
+                    &[]
                 };
 
-                for param in &params_to_check {
+                for param in params_to_check {
                     let extracted = self.extract_variable_name(param);
                     if !extracted.is_empty() {
                         let full_name = extracted.as_string();
@@ -862,18 +844,26 @@ impl ScopeAnalyzer {
                                 if name.starts_with('_') {
                                     continue;
                                 }
-                                if let Some(var) = sub_scope.lookup_variable_parts(sigil, name) {
-                                    if !*var.is_used.borrow() {
-                                        issues.push(ScopeIssue {
-                                            kind: IssueKind::UnusedParameter,
-                                            variable_name: full_name.clone(),
-                                            line: context.get_line(param.location.start),
-                                            range: (param.location.start, param.location.end),
-                                            description: format!(
-                                                "Parameter '{}' is declared but never used",
-                                                full_name
-                                            ),
-                                        });
+
+                                // Optimization: Access variable directly from current scope to avoid Rc clone
+                                let idx = sigil_to_index(sigil);
+                                let vars = sub_scope.variables.borrow();
+                                if let Some(map) = vars[idx].as_ref() {
+                                    if let Some(var) = map.get(name) {
+                                        if !*var.is_used.borrow() {
+                                            issues.push(ScopeIssue {
+                                                kind: IssueKind::UnusedParameter,
+                                                variable_name: full_name.clone(),
+                                                line: context.get_line(param.location.start),
+                                                range: (param.location.start, param.location.end),
+                                                description: format!(
+                                                    "Parameter '{}' is declared but never used",
+                                                    full_name
+                                                ),
+                                            });
+                                            // Mark as used to prevent double reporting
+                                            *var.is_used.borrow_mut() = true;
+                                        }
                                     }
                                 }
                             }
