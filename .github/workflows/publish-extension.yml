@@ -59,7 +59,7 @@ jobs:
       - name: Package extension
         working-directory: vscode-extension
         run: |
-          vsce package --no-dependencies
+          vsce package
           echo "VSIX_FILE=$(ls *.vsix)" >> $GITHUB_ENV
 
       - name: Publish to VSCode Marketplace

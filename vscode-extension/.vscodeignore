@@ -8,8 +8,6 @@ src/**
 **/.eslintrc.json
 **/*.map
 **/*.ts
-node_modules/**
-!node_modules/vscode-languageclient/**
 scripts/**
 *.vsix
 *.tgz
