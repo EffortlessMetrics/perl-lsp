@@ -12,6 +12,7 @@ node_modules/**
 !node_modules/vscode-languageclient/**
 scripts/**
 *.vsix
+*.tgz
 .github/**
 **/*.md
 !README.md
