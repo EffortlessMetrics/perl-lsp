@@ -1440,6 +1440,15 @@ impl DebugAdapter {
             }
         }
 
+        // Enforce workspace-bound launch paths when a workspace root is known.
+        // This prevents launching scripts outside the active project tree.
+        let workspace_root =
+            lock_or_recover(&self.workspace_root, "debug_adapter.workspace_root").clone();
+        if let Some(root) = workspace_root.as_ref() {
+            security::validate_path(path, root)
+                .map_err(|e| format!("Security check failed: {}", e))?;
+        }
+
         let mut cmd = Command::new("perl");
         cmd.arg("-d");
 
