@@ -487,8 +487,7 @@ mod tests {
                 folding_range: true,
                 signature_help: true,
                 document_highlight: true,
-                declaration: true,
-                ..Default::default()
+                declaration: true
             }
         );
     }
