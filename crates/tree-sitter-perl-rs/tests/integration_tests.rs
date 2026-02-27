@@ -238,7 +238,7 @@ print "Done\n";
 
         // Should detect multiple edge cases
         assert!(!analysis.diagnostics.is_empty());
-        assert!(analysis.delimiter_resolutions.len() > 0);
+        assert!(!analysis.delimiter_resolutions.is_empty());
 
         // Convert to tree-sitter format
         let ts_output =

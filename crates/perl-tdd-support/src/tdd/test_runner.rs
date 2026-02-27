@@ -352,10 +352,13 @@ impl TestRunner {
                 }
                 self.visit_node_for_tests(body, tests);
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block } => {
                 self.visit_node_for_tests(variable, tests);
                 self.visit_node_for_tests(list, tests);
                 self.visit_node_for_tests(body, tests);
+                if let Some(cb) = continue_block {
+                    self.visit_node_for_tests(cb, tests);
+                }
             }
             _ => {}
         }

@@ -40,7 +40,7 @@ pub trait PerlScanner {
 }
 
 /// Scanner configuration options
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScannerConfig {
     /// Enable strict mode for better error reporting
     pub strict_mode: bool,
@@ -64,7 +64,7 @@ impl Default for ScannerConfig {
 }
 
 /// Scanner state for tracking parsing context
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, bincode::Encode, bincode::Decode)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ScannerState {
     /// Current line number (1-based)
     pub line: usize,

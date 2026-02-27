@@ -1,9 +1,17 @@
 [package]
 name = "perl-regex"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+description = "Regex parsing and validation helpers for Perl syntax"
+readme = "README.md"
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-regex"
+keywords = ["perl", "regex", "validation", "security", "backtracking"]
+categories = ["parsing", "text-processing"]
 
 [dependencies]
 thiserror = "2.0.18"

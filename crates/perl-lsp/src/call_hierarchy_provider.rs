@@ -396,7 +396,7 @@ impl CallHierarchyProvider {
                     return Some(result);
                 }
             }
-            NodeKind::Foreach { variable, list, body } => {
+            NodeKind::Foreach { variable, list, body, continue_block: _ } => {
                 if let Some(result) = f(variable) {
                     return Some(result);
                 }
@@ -734,10 +734,10 @@ sub target_func {
             assert!(caller_names.contains(&&"caller2".to_string()));
 
             // caller2 should have 2 ranges (called twice)
-            if let Some(caller2) = incoming.iter().find(|c| c.from.name == "caller2") {
+            let caller2_opt = incoming.iter().find(|c| c.from.name == "caller2");
+            assert!(caller2_opt.is_some(), "caller2 not found in incoming calls");
+            if let Some(caller2) = caller2_opt {
                 assert_eq!(caller2.from_ranges.len(), 2);
-            } else {
-                panic!("caller2 not found in incoming calls");
             }
         }
     }

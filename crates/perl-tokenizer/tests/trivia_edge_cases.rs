@@ -11,7 +11,6 @@ use perl_tokenizer::trivia::{Trivia, TriviaLexer};
 use perl_tokenizer::trivia_parser::TriviaPreservingParser;
 
 #[test]
-#[ignore = "Known limitation: POD without =cut - see trivia_demo.rs edge cases documentation"]
 fn test_pod_without_cut() {
     // Edge case: POD at end of file without =cut
     let source = r#"my $x = 1;
@@ -58,7 +57,6 @@ package MyModule;
 }
 
 #[test]
-#[ignore = "Known limitation: Comments at EOF without newline - see trivia_demo.rs edge cases documentation"]
 fn test_comment_without_newline_at_eof() {
     // Edge case: Comment at end of file without trailing newline
     let source = "my $x = 1; # comment without newline".to_string();
@@ -123,18 +121,21 @@ fn test_mixed_tabs_and_spaces() {
     let parser = TriviaPreservingParser::new(source);
     let result = parser.parse();
 
-    if let Some(first_token) = result.leading_trivia.first() {
+    let found_expected = if let Some(first_token) = result.leading_trivia.first() {
         if let Trivia::Whitespace(ws) = &first_token.trivia {
             assert_eq!(ws, " \t \t ", "Should preserve exact whitespace sequence");
-            return;
+            true
+        } else {
+            false
         }
-    }
+    } else {
+        false
+    };
 
-    panic!("Should capture leading whitespace with mixed tabs/spaces");
+    assert!(found_expected, "Should capture leading whitespace with mixed tabs/spaces");
 }
 
 #[test]
-#[ignore = "Known limitation: Shebang positioning - see trivia_demo.rs edge cases documentation"]
 fn test_shebang_variations() {
     // Edge case: Different shebang variations
     let test_cases = vec![
@@ -157,7 +158,6 @@ fn test_shebang_variations() {
 }
 
 #[test]
-#[ignore = "Known limitation: Multiple consecutive blank lines - see trivia_demo.rs edge cases documentation"]
 fn test_empty_lines_sequence() {
     // Edge case: Multiple empty lines in a row
     let source = "my $x = 1;\n\n\n\nmy $y = 2;".to_string();
@@ -265,7 +265,6 @@ fn test_pod_false_start() {
 }
 
 #[test]
-#[ignore = "Known limitation: POD in middle of code - see trivia_demo.rs edge cases documentation"]
 fn test_inline_pod_preservation() {
     // Edge case: POD in the middle of code (not at file start)
     let source = r#"sub foo {

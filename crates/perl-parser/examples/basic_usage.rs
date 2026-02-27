@@ -5,7 +5,21 @@
 use perl_parser::Parser;
 
 fn main() {
-    let code = r#"
+    // Read from file if provided, otherwise use default code
+    let code = if let Some(filename) = std::env::args().nth(1) {
+        match std::fs::read_to_string(&filename) {
+            Ok(content) => {
+                println!("🔍 Parsing file: {}", filename);
+                println!("📊 File size: {} bytes", content.len());
+                content
+            }
+            Err(e) => {
+                eprintln!("Error reading file '{}': {}", filename, e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        r#"
 # A simple Perl script
 my $name = "World";
 my $count = 42;
@@ -20,11 +34,13 @@ greet($name);
 for (my $i = 0; $i < $count; $i++) {
     print "$i ";
 }
-print "\n";
-"#;
+print "\n;
+"#
+        .to_string()
+    };
 
     // Create a parser and parse the code
-    let mut parser = Parser::new(code);
+    let mut parser = Parser::new(&code);
 
     match parser.parse() {
         Ok(ast) => {

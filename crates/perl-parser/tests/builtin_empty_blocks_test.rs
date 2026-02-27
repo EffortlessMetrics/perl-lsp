@@ -3,11 +3,9 @@ mod builtin_empty_blocks_tests {
     use perl_parser::Parser;
 
     fn parse_and_check(input: &str, expected_contains: &str) {
+        use perl_tdd_support::must;
         let mut parser = Parser::new(input);
-        let result = match parser.parse() {
-            Ok(r) => r,
-            Err(e) => panic!("Failed to parse '{}': {}", input, e),
-        };
+        let result = must(parser.parse());
         let sexp = result.to_sexp();
         assert!(
             sexp.contains(expected_contains),

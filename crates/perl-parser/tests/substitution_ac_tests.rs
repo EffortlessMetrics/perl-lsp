@@ -85,7 +85,6 @@ fn test_ac2_all_valid_flags() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 // MUT_005 FIXED: Invalid modifier validation now properly rejects invalid modifiers
-#[ignore = "substitution AC: flag combination handling needs investigation"]
 fn test_ac2_invalid_flag_combinations() {
     // AC2: Must reject invalid flag combinations where applicable
     // Note: Only alphanumeric characters are considered modifiers by the lexer.
@@ -311,7 +310,6 @@ fn test_ac5_complex_replacements() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-#[ignore = "substitution AC: malformed input handling needs investigation"]
 fn test_ac5_negative_malformed() {
     // AC5: Must include negative tests for malformed substitution operators
     // Note: With IDE-friendly error recovery, parser may return Ok with ERROR nodes

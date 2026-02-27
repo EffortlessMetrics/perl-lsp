@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Transform perl-parser S-expressions to standard Tree-sitter format
 //!
 //! This example shows how to transform our concise S-expression format
@@ -6,6 +5,31 @@
 
 use perl_parser::Parser;
 use regex::Regex;
+use std::sync::LazyLock;
+
+static VAR_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\(variable (\S) (\w+)\)").unwrap_or_else(|_| unreachable!()));
+static BINARY_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\(binary_(\S+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)")
+        .unwrap_or_else(|_| unreachable!())
+});
+static DECL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\((\w+)_declaration ([^()]+|\([^)]*\))([^()]+|\([^)]*\))?\)")
+        .unwrap_or_else(|_| unreachable!())
+});
+static CALL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\(call (\w+) \(([^)]*)\)\)").unwrap_or_else(|_| unreachable!()));
+static METHOD_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\(method_call ([^()]+|\([^)]*\)) (\w+) \(([^)]*)\)\)")
+        .unwrap_or_else(|_| unreachable!())
+});
+static ASSIGN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\(assignment_(\w+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)")
+        .unwrap_or_else(|_| unreachable!())
+});
+static IF_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\(if ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap_or_else(|_| unreachable!())
+});
 
 fn main() {
     let examples = vec![
@@ -43,19 +67,15 @@ fn transform_to_standard(sexp: &str) -> String {
     let mut result = sexp.to_string();
 
     // Transform variables: (variable $ x) -> (variable name: "$x")
-    let var_re = Regex::new(r"\(variable (\S) (\w+)\)").unwrap();
-    result = var_re.replace_all(&result, "(variable name: \"$1$2\")").to_string();
+    result = VAR_RE.replace_all(&result, "(variable name: \"$1$2\")").to_string();
 
     // Transform binary operators: (binary_+ ...) -> (binary_expression operator: "+" ...)
-    let binary_re = Regex::new(r"\(binary_(\S+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
-    result = binary_re
+    result = BINARY_RE
         .replace_all(&result, "(binary_expression left: $2 operator: \"$1\" right: $3)")
         .to_string();
 
     // Transform declarations: (my_declaration ...) -> (variable_declaration kind: "my" ...)
-    let decl_re =
-        Regex::new(r"\((\w+)_declaration ([^()]+|\([^)]*\))([^()]+|\([^)]*\))?\)").unwrap();
-    result = decl_re
+    result = DECL_RE
         .replace_all(&result, |caps: &regex::Captures| {
             let kind = &caps[1];
             let var = &caps[2];
@@ -73,8 +93,7 @@ fn transform_to_standard(sexp: &str) -> String {
         .to_string();
 
     // Transform function calls: (call func (...)) -> (call_expression function: func arguments: (...))
-    let call_re = Regex::new(r"\(call (\w+) \(([^)]*)\)\)").unwrap();
-    result = call_re
+    result = CALL_RE
         .replace_all(
             &result,
             "(call_expression function: (identifier \"$1\") arguments: (argument_list $2))",
@@ -82,19 +101,15 @@ fn transform_to_standard(sexp: &str) -> String {
         .to_string();
 
     // Transform method calls: (method_call obj method (...)) -> (method_call_expression object: obj method: method arguments: (...))
-    let method_re = Regex::new(r"\(method_call ([^()]+|\([^)]*\)) (\w+) \(([^)]*)\)\)").unwrap();
-    result = method_re.replace_all(&result, "(method_call_expression object: $1 method: (identifier \"$2\") arguments: (argument_list $3))").to_string();
+    result = METHOD_RE.replace_all(&result, "(method_call_expression object: $1 method: (identifier \"$2\") arguments: (argument_list $3))").to_string();
 
     // Transform assignments: (assignment_assign ...) -> (assignment_expression operator: "=" ...)
-    let assign_re =
-        Regex::new(r"\(assignment_(\w+) ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
-    result = assign_re
+    result = ASSIGN_RE
         .replace_all(&result, "(assignment_expression left: $2 operator: \"$1\" right: $3)")
         .to_string();
 
     // Transform conditionals: (if cond then) -> (if_statement condition: cond consequence: then)
-    let if_re = Regex::new(r"\(if ([^()]+|\([^)]*\)) ([^()]+|\([^)]*\))\)").unwrap();
-    result = if_re.replace_all(&result, "(if_statement condition: $1 consequence: $2)").to_string();
+    result = IF_RE.replace_all(&result, "(if_statement condition: $1 consequence: $2)").to_string();
 
     result
 }

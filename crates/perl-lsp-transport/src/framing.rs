@@ -1,95 +1,129 @@
-//! Message framing for LSP Base Protocol
-//!
-//! Implements Content-Length based message framing as specified in
-//! the LSP Base Protocol.
+//! Message framing for the LSP base protocol.
 
+use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_lsp_protocol::{JsonRpcRequest, JsonRpcResponse};
-use std::collections::HashMap;
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, Read, Write};
 
-/// Read an LSP message from a buffered reader
+/// Stateful reader for `Content-Length` framed JSON-RPC requests.
 ///
-/// Returns `Ok(None)` on EOF or parse error (recoverable).
-/// Returns `Err` only on I/O errors (non-recoverable).
-pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcRequest>> {
-    let mut headers = HashMap::new();
+/// This reader keeps partial frame state across reads, which allows it to
+/// handle split headers, split bodies, and multiple messages arriving in a
+/// single transport read.
+#[derive(Default)]
+pub struct ContentLengthMessageReader {
+    framer: ContentLengthFramer,
+}
 
-    // Read headers
-    loop {
-        let mut line = String::new();
-        if reader.read_line(&mut line)? == 0 {
-            return Ok(None); // EOF
-        }
-
-        let line = line.trim_end();
-        if line.is_empty() {
-            break; // End of headers
-        }
-
-        if let Some((key, value)) = line.split_once(": ") {
-            headers.insert(key.to_string(), value.to_string());
-        }
+impl ContentLengthMessageReader {
+    /// Create a new reader with empty frame state.
+    #[must_use]
+    pub fn new() -> Self {
+        Self { framer: ContentLengthFramer::new() }
     }
 
-    // Read content
-    if let Some(content_length) = headers.get("Content-Length") {
-        if let Ok(length) = content_length.parse::<usize>() {
-            let mut content = vec![0u8; length];
-            let mut bytes_read = 0;
+    /// Read and parse the next JSON-RPC request from the underlying byte stream.
+    ///
+    /// Returns:
+    /// - `Ok(Some(request))` when a complete request is decoded
+    /// - `Ok(None)` on EOF
+    /// - `Err(io::Error)` on non-recoverable I/O failure
+    ///
+    /// Malformed frames are logged and skipped so the caller can continue
+    /// processing subsequent requests.
+    pub fn read_next(&mut self, reader: &mut dyn Read) -> io::Result<Option<JsonRpcRequest>> {
+        let mut chunk = [0u8; 8 * 1024];
 
-            // Read content in chunks to handle partial reads
-            while bytes_read < length {
-                let bytes_to_read = length - bytes_read;
-                let mut chunk = vec![0u8; bytes_to_read];
-                match reader.read(&mut chunk)? {
-                    0 => return Ok(None), // Unexpected EOF
-                    n => {
-                        content[bytes_read..bytes_read + n].copy_from_slice(&chunk[..n]);
-                        bytes_read += n;
+        loop {
+            match self.framer.try_next() {
+                Ok(Some(body)) => match serde_json::from_slice::<JsonRpcRequest>(&body) {
+                    Ok(request) => return Ok(Some(request)),
+                    Err(error) => {
+                        eprintln!("LSP server: JSON parse error - {error}");
+                        continue;
                     }
+                },
+                Ok(None) => {}
+                Err(error) => {
+                    eprintln!("LSP server: frame parse error - {error}");
+                    continue;
                 }
             }
 
-            // Parse JSON-RPC request with enhanced error handling
-            match serde_json::from_slice(&content) {
-                Ok(request) => return Ok(Some(request)),
-                Err(e) => {
-                    // Enhanced malformed frame recovery
-                    eprintln!("LSP server: JSON parse error - {}", e);
+            let bytes_read = reader.read(&mut chunk)?;
+            if bytes_read == 0 {
+                return Ok(None);
+            }
+            self.framer.push(&chunk[..bytes_read]);
+        }
+    }
+}
 
-                    // Attempt to extract malformed content safely (no sensitive data logging)
-                    let content_str = String::from_utf8_lossy(&content);
-                    if content_str.len() > 100 {
-                        eprintln!(
-                            "LSP server: Malformed frame (truncated): {}...",
-                            &content_str[..100]
-                        );
-                    } else {
-                        eprintln!("LSP server: Malformed frame: {}", content_str);
-                    }
+/// Read an LSP message from a buffered reader.
+///
+/// This is a compatibility helper for one-shot reads. For long-running loops,
+/// prefer [`ContentLengthMessageReader`] to preserve parser state across calls.
+pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcRequest>> {
+    let mut content_length = None;
 
-                    // Continue processing - don't crash the server on malformed input
+    loop {
+        let mut line = String::new();
+        let bytes_read = reader.read_line(&mut line)?;
+        if bytes_read == 0 {
+            return Ok(None);
+        }
+
+        if line == "\r\n" || line == "\n" {
+            break;
+        }
+
+        let header = line.trim_end_matches(&['\r', '\n'][..]);
+        if let Some((name, value)) = header.split_once(':')
+            && name.trim().eq_ignore_ascii_case("Content-Length")
+        {
+            match value.trim().parse::<usize>() {
+                Ok(length) => content_length = Some(length),
+                Err(error) => {
+                    eprintln!("LSP server: invalid Content-Length header - {error}");
                     return Ok(None);
                 }
             }
         }
     }
 
-    Ok(None)
+    let length = match content_length {
+        Some(length) => length,
+        None => {
+            eprintln!("LSP server: missing Content-Length header");
+            return Ok(None);
+        }
+    };
+
+    let mut body = vec![0u8; length];
+    if let Err(error) = reader.read_exact(&mut body) {
+        if error.kind() == io::ErrorKind::UnexpectedEof {
+            return Ok(None);
+        }
+        return Err(error);
+    }
+
+    match serde_json::from_slice::<JsonRpcRequest>(&body) {
+        Ok(request) => Ok(Some(request)),
+        Err(error) => {
+            eprintln!("LSP server: JSON parse error - {error}");
+            Ok(None)
+        }
+    }
 }
 
-/// Write an LSP message to a writer with proper framing
+/// Write an LSP response with `Content-Length` framing.
 pub fn write_message<W: Write>(writer: &mut W, response: &JsonRpcResponse) -> io::Result<()> {
-    let content = serde_json::to_string(response)?;
-    let content_length = content.len();
-
-    write!(writer, "Content-Length: {}\r\n\r\n{}", content_length, content)?;
-    writer.flush()?;
-
-    Ok(())
+    let content = serde_json::to_vec(response)?;
+    let framed = frame(&content);
+    writer.write_all(&framed)?;
+    writer.flush()
 }
 
-/// Write an LSP notification to a writer
+/// Write an LSP notification with `Content-Length` framing.
 pub fn write_notification<W: Write>(
     writer: &mut W,
     method: &str,
@@ -101,12 +135,13 @@ pub fn write_notification<W: Write>(
         "params": params
     });
 
-    let notification_str = serde_json::to_string(&notification)?;
-    write!(writer, "Content-Length: {}\r\n\r\n{}", notification_str.len(), notification_str)?;
+    let payload = serde_json::to_vec(&notification)?;
+    let framed = frame(&payload);
+    writer.write_all(&framed)?;
     writer.flush()
 }
 
-/// Log outgoing response for debugging
+/// Log outgoing response metadata for transport debugging.
 pub fn log_response(response: &JsonRpcResponse) {
     if let Ok(content) = serde_json::to_string(response) {
         eprintln!(
@@ -116,5 +151,59 @@ pub fn log_response(response: &JsonRpcResponse) {
             response.error.is_some(),
             content.len()
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ContentLengthMessageReader, read_message};
+    use std::io::{self, BufReader, Cursor};
+
+    fn framed_request(id: u64, method: &str) -> Vec<u8> {
+        let body = format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"{method}","params":{{}}}}"#);
+        let mut frame = format!("Content-Length: {}\r\n\r\n", body.len()).into_bytes();
+        frame.extend_from_slice(body.as_bytes());
+        frame
+    }
+
+    #[test]
+    fn read_message_parses_back_to_back_frames_without_losing_buffered_bytes() -> io::Result<()> {
+        let mut payload = framed_request(1, "initialize");
+        payload.extend(framed_request(2, "shutdown"));
+        let mut reader = BufReader::with_capacity(4096, Cursor::new(payload));
+
+        let first = read_message(&mut reader)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected first request")
+        })?;
+        assert_eq!(first.method, "initialize");
+
+        let second = read_message(&mut reader)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected second request")
+        })?;
+        assert_eq!(second.method, "shutdown");
+
+        assert!(read_message(&mut reader)?.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn stateful_reader_keeps_extra_frames_between_reads() -> io::Result<()> {
+        let mut payload = framed_request(1, "textDocument/didOpen");
+        payload.extend(framed_request(2, "textDocument/definition"));
+        let mut cursor = Cursor::new(payload);
+        let mut reader = ContentLengthMessageReader::new();
+
+        let first = reader.read_next(&mut cursor)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected first request")
+        })?;
+        assert_eq!(first.method, "textDocument/didOpen");
+
+        let second = reader.read_next(&mut cursor)?.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::UnexpectedEof, "expected second request")
+        })?;
+        assert_eq!(second.method, "textDocument/definition");
+
+        assert!(reader.read_next(&mut cursor)?.is_none());
+        Ok(())
     }
 }

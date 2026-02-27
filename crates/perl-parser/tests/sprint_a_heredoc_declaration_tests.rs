@@ -25,23 +25,16 @@ use perl_parser::Parser;
 
 /// Helper function to parse code and return AST S-expression
 fn parse_to_sexp(input: &str) -> String {
+    use perl_tdd_support::must;
     let mut parser = Parser::new(input);
-    match parser.parse() {
-        Ok(ast) => ast.to_sexp(),
-        Err(e) => panic!("Parse error for input '{}': {}", input, e),
-    }
+    must(parser.parse()).to_sexp()
 }
 
 /// Helper function to parse code and verify it succeeds
-fn parse_and_verify_success(input: &str, test_name: &str) {
+fn parse_and_verify_success(input: &str, _test_name: &str) {
+    use perl_tdd_support::must;
     let mut parser = Parser::new(input);
-    match parser.parse() {
-        Ok(_) => {}
-        Err(e) => panic!(
-            "Test '{}' failed to parse heredoc declaration: {}\nInput: {}",
-            test_name, e, input
-        ),
-    }
+    must(parser.parse());
 }
 
 // ============================================================================
@@ -123,7 +116,6 @@ EOF
 /// Validates that escape sequences in double-quoted labels are properly
 /// handled according to Perl string interpolation rules.
 #[test]
-#[ignore = "heredoc: label escape handling needs investigation"]
 fn test_heredoc_decl_double_quoted_label_with_escapes() {
     let input = r#"my $x = <<"END\nLINE";
 content here
@@ -244,7 +236,6 @@ CMD
 /// Validates that escape sequences in heredoc labels are properly recognized
 /// and handled according to the quoting style.
 #[test]
-#[ignore = "heredoc: label escape handling needs investigation"]
 fn test_heredoc_decl_label_with_escapes() {
     let input = r#"my $x = <<"END\tTAB";
 content with tab in label
@@ -266,7 +257,6 @@ END	TAB
 /// Validates that backslash escape sequences are handled correctly in
 /// double-quoted heredoc labels.
 #[test]
-#[ignore = "heredoc: label escape handling needs investigation"]
 fn test_heredoc_decl_label_backslash_escapes() {
     let input = r#"my $x = <<"END\\SLASH";
 content here
@@ -416,7 +406,6 @@ content without terminator"#;
 /// Validates that empty heredoc labels (<<) are handled appropriately,
 /// either with error or by using empty string as label.
 #[test]
-#[ignore = "heredoc: empty label handling needs investigation"]
 fn test_heredoc_decl_empty_label() {
     let input = "my $x = <<;\ncontent\n\n";
 

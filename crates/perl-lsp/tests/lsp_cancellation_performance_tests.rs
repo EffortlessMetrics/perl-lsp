@@ -955,7 +955,7 @@ fn test_incremental_parsing_performance_preservation_ac12() -> Result<(), Box<dy
     // Measure baseline incremental parsing performance (without cancellation)
     let mut baseline_durations = Vec::new();
     for _iteration in 0..20 {
-        // TODO: Uncomment when implementing incremental parser
+        // Blocked: requires IncrementalParser type (not yet implemented)
         /*
         let mut parser = IncrementalParser::new();
         let start = Instant::now();
@@ -982,7 +982,7 @@ fn test_incremental_parsing_performance_preservation_ac12() -> Result<(), Box<dy
     // Measure incremental parsing with cancellation support
     let mut cancellation_durations = Vec::new();
     for _iteration in 0..20 {
-        // TODO: Uncomment when implementing cancellation-aware parser
+        // Blocked: requires IncrementalParserWithCancellation type (not yet implemented)
         // Note: IncrementalParserWithCancellation is not yet implemented.
         // The following code is kept as reference for future implementation.
         /*

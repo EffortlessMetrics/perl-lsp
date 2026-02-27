@@ -52,12 +52,16 @@ def _run(cmd: list[str], timeout_s: int) -> str:
 def _count_tier_a_lib_tests() -> int | None:
     """Count Tier A lib tests by enumerating test names.
 
-    This matches the shape of `just ci-test-lib` (workspace lib tests).
+    This matches `just ci-test-lib` (workspace lib tests excluding the internal
+    tree-sitter validation harness crate).
     We avoid parsing the fragile per-crate "X tests, Y benchmarks" summaries and instead count
     actual test entries:
       `foo::bar::baz: test`
     """
-    output = _run(["cargo", "test", "--workspace", "--lib", "--", "--list"], timeout_s=180)
+    output = _run(
+        ["cargo", "test", "--workspace", "--lib", "--exclude", "tree-sitter-perl", "--", "--list"],
+        timeout_s=180,
+    )
     if not output:
         return None
     return len(re.findall(r":\s*test\s*$", output, re.MULTILINE))
@@ -279,7 +283,12 @@ def _update_current_status() -> str:
         baseline_suffix = f" (baseline {missing_docs_baseline})"
 
     # Build the table row content - uses UX coverage (headline metric)
-    lsp_table_row = f"| **LSP Coverage** | {ux_percent}% ({ux_impl}/{ux_total} advertised features, `features.toml`) | 93%+ | In progress |"
+    lsp_target_pct = 100
+    lsp_status = "PASS" if ux_percent >= lsp_target_pct else "In progress"
+    lsp_table_row = (
+        f"| **LSP Coverage** | {ux_percent}% ({ux_impl}/{ux_total} advertised features, `features.toml`) "
+        f"| {lsp_target_pct}% | {lsp_status} |"
+    )
 
     def _replace_row(pattern: str, replacement: str, text: str) -> str:
         updated, count = re.subn(pattern, replacement, text, flags=re.MULTILINE)
@@ -311,9 +320,12 @@ def _update_current_status() -> str:
         "931ns incremental parsing"
     )
     production_status = (
-        "- **Production Status**: LSP server production-ready (`just ci-gate` passing)"
+        "- **Production Status**: LSP server public alpha (`just ci-gate` passing)"
     )
-    lsp_target = f"**Target**: 93%+ LSP coverage (from current {ux_percent}%)"
+    if ux_percent >= lsp_target_pct:
+        lsp_target = "**Target**: maintain 100% LSP coverage (no regressions)"
+    else:
+        lsp_target = f"**Target**: 100% LSP coverage (from current {ux_percent}%)"
 
     bullets_content = "\n".join([
         lsp_coverage,

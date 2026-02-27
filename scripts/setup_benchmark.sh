@@ -86,9 +86,9 @@ log_info "Checking Rust toolchain..."
 RUST_VERSION=$(cargo --version | cut -d' ' -f2)
 log_info "Rust version: $RUST_VERSION"
 
-# Ensure we have the required Rust version (1.89+)
-REQUIRED_RUST_VERSION="1.89"
-if ! cargo --version | grep -q "1.89" && ! cargo --version | grep -q "1.9[0-9]"; then
+# Ensure we have the required Rust version (1.92+)
+REQUIRED_RUST_VERSION="1.92"
+if ! cargo --version | grep -q "1.9[2-9]" && ! cargo --version | grep -q "1.[1-9][0-9][0-9]"; then
     log_warning "Rust version may be too old. Required: $REQUIRED_RUST_VERSION+"
     log_warning "Current version: $RUST_VERSION"
     log_info "Consider updating with: rustup update"

@@ -3,8 +3,11 @@
 //! Handles resolution of Perl module names to file paths.
 
 use super::super::*;
+use perl_module_resolution::{
+    ModuleUriResolution, resolve_module_path as resolve_workspace_module_path, resolve_module_uri,
+};
 use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 impl LspServer {
     /// Enhanced module path resolver using workspace configuration
@@ -13,22 +16,13 @@ impl LspServer {
     /// hardcoded directories. Returns absolute filesystem path for a module.
     pub(crate) fn resolve_module_path(&self, module: &str) -> Option<PathBuf> {
         let root = self.root_path.lock().clone()?;
-        let rel = module.replace("::", "/") + ".pm";
 
-        // Use configured include paths
         let include_paths = {
             let config = self.workspace_config.lock();
             config.include_paths.clone()
         };
 
-        for base in &include_paths {
-            let p = if base == "." { root.join(&rel) } else { root.join(base).join(&rel) };
-            if p.exists() {
-                return Some(p);
-            }
-        }
-        // Best-effort fallback for test workspaces
-        Some(root.join("lib").join(rel))
+        resolve_workspace_module_path(&root, module, &include_paths)
     }
 
     /// Resolve a module name to a file path URI
@@ -60,101 +54,134 @@ impl LspServer {
     /// - Timeout: Configurable (default 50ms) to prevent blocking
     /// - Returns None on timeout, allowing graceful degradation
     pub(crate) fn resolve_module_to_path(&self, module_name: &str) -> Option<String> {
-        let start_time = Instant::now();
-        let relative_path = format!("{}.pm", module_name.replace("::", "/"));
-
-        // Get configuration upfront to minimize lock contention
         let (include_paths, timeout_ms, use_system_inc) = {
             let config = self.workspace_config.lock();
             (config.include_paths.clone(), config.resolution_timeout_ms, config.use_system_inc)
         };
         let timeout = Duration::from_millis(timeout_ms);
 
-        // TIER 1: Open documents (fastest path - in-memory lookup)
-        let documents = self.documents.lock();
-        for (uri, _doc) in documents.iter() {
-            if uri.ends_with(&relative_path) {
-                return Some(uri.clone());
-            }
-        }
-        drop(documents);
+        let open_document_uris: Vec<String> = {
+            let documents = self.documents.lock();
+            documents.keys().cloned().collect()
+        };
 
-        // TIER 2 & 3: Workspace folders with configured include paths
         let workspace_folders = self.workspace_folders.lock().clone();
 
-        for workspace_folder in workspace_folders.iter() {
-            // Early timeout check
-            if start_time.elapsed() > timeout {
-                eprintln!(
-                    "Module resolution timeout for: {} (elapsed: {:?})",
-                    module_name,
-                    start_time.elapsed()
-                );
-                return None;
+        let system_paths = if use_system_inc {
+            let mut config = self.workspace_config.lock();
+            config.get_system_inc().to_vec()
+        } else {
+            Vec::new()
+        };
+
+        match resolve_module_uri(
+            module_name,
+            &open_document_uris,
+            &workspace_folders,
+            &include_paths,
+            use_system_inc,
+            &system_paths,
+            timeout,
+        ) {
+            ModuleUriResolution::Resolved(uri) => Some(uri),
+            ModuleUriResolution::TimedOut => {
+                eprintln!("Module resolution timeout for: {}", module_name);
+                None
             }
+            ModuleUriResolution::NotFound => None,
+        }
+    }
+}
 
-            // Parse the workspace folder URI to get the file path
-            // Use PathBuf for cross-platform path handling (Windows + Unix)
-            let workspace_path = if workspace_folder.starts_with("file://") {
-                std::path::PathBuf::from(
-                    workspace_folder.strip_prefix("file://").unwrap_or(workspace_folder),
-                )
-            } else {
-                std::path::PathBuf::from(workspace_folder)
-            };
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
 
-            // Search configured include paths within this workspace folder
-            for dir in &include_paths {
-                if start_time.elapsed() > timeout {
-                    return None;
-                }
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-                // Use PathBuf::join for cross-platform path construction
-                let full_path = if dir == "." {
-                    workspace_path.join(&relative_path)
-                } else {
-                    workspace_path.join(dir).join(&relative_path)
-                };
+    #[test]
+    fn resolve_module_path_blocks_traversal_include_paths() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let escaped_dir = temp.path().join("escaped");
+        fs::create_dir_all(&workspace)?;
+        fs::create_dir_all(&escaped_dir)?;
 
-                match std::fs::metadata(&full_path) {
-                    Ok(meta) if meta.is_file() => {
-                        // Use Url::from_file_path for proper URI construction
-                        if let Ok(url) = url::Url::from_file_path(&full_path) {
-                            return Some(url.to_string());
-                        }
-                    }
-                    _ => continue,
-                }
-            }
+        let escaped_file = escaped_dir.join("Target.pm");
+        fs::write(&escaped_file, "package escaped::Target; 1;")?;
+
+        let server = LspServer::new();
+        *server.root_path.lock() = Some(workspace.clone());
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["..".to_string()];
         }
 
-        // TIER 4: System @INC (opt-in only)
-        if use_system_inc {
-            if start_time.elapsed() > timeout {
-                return None;
-            }
+        let resolved = server
+            .resolve_module_path("escaped::Target")
+            .ok_or("expected resolve_module_path result")?;
 
-            // Get system @INC paths (lazily populated)
-            let system_paths = {
-                let mut config = self.workspace_config.lock();
-                config.get_system_inc().to_vec()
-            };
+        // Traversal include paths must not resolve to files outside workspace.
+        assert!(resolved.starts_with(&workspace));
+        assert_ne!(resolved, escaped_file);
+        Ok(())
+    }
 
-            for inc_path in system_paths {
-                if start_time.elapsed() > timeout {
-                    return None;
-                }
+    #[test]
+    fn resolve_module_to_path_blocks_traversal_include_paths() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let escaped_dir = temp.path().join("escaped");
+        fs::create_dir_all(&workspace)?;
+        fs::create_dir_all(&escaped_dir)?;
 
-                let full_path = inc_path.join(&relative_path);
-                if full_path.is_file() {
-                    // Use Url::from_file_path for proper URI construction (Windows-safe)
-                    if let Ok(url) = url::Url::from_file_path(&full_path) {
-                        return Some(url.to_string());
-                    }
-                }
-            }
+        let escaped_file = escaped_dir.join("Target.pm");
+        fs::write(&escaped_file, "package escaped::Target; 1;")?;
+
+        let server = LspServer::new();
+        let workspace_uri =
+            url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
+        *server.workspace_folders.lock() = vec![workspace_uri.to_string()];
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["..".to_string()];
+            config.use_system_inc = false;
         }
 
-        None
+        let resolved = server.resolve_module_to_path("escaped::Target");
+        assert!(
+            resolved.is_none(),
+            "module resolution should ignore traversal include path and not return outside URI"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn resolve_module_to_path_finds_workspace_module() -> TestResult {
+        let temp = tempfile::tempdir()?;
+        let workspace = temp.path().join("workspace");
+        let module_file = workspace.join("lib").join("Demo").join("Worker.pm");
+
+        fs::create_dir_all(module_file.parent().ok_or("missing module parent")?)?;
+        fs::write(&module_file, "package Demo::Worker; 1;")?;
+
+        let server = LspServer::new();
+        let workspace_uri =
+            url::Url::from_file_path(&workspace).map_err(|_| "failed to create workspace URI")?;
+        *server.workspace_folders.lock() = vec![workspace_uri.to_string()];
+        {
+            let mut config = server.workspace_config.lock();
+            config.include_paths = vec!["lib".to_string()];
+            config.use_system_inc = false;
+        }
+
+        let resolved = server.resolve_module_to_path("Demo::Worker");
+        let resolved = resolved.ok_or("expected resolved module URI")?;
+
+        assert!(resolved.starts_with("file://"));
+        assert!(resolved.contains("Demo"));
+        assert!(resolved.contains("Worker.pm"));
+        Ok(())
     }
 }

@@ -1,17 +1,17 @@
 [package]
 name = "perl-refactoring"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
+authors.workspace = true
 description = "Refactoring and modernization utilities for Perl"
 readme = "README.md"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/perl-refactoring"
-keywords = ["perl", "refactor", "import", "lsp"]
-categories = ["parsing", "development-tools", "text-editors"]
+keywords = ["perl", "refactoring", "modernization", "lsp", "import"]
+categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
   "Cargo.toml",
@@ -25,6 +25,8 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-workspace-index = { workspace = true }
+perl-module-path = { workspace = true }
+perl-qualified-name = { workspace = true }
 regex = "1.12.2"
 serde = { version = "1.0.228", features = ["derive"] }
 url = "2.5.4"
@@ -33,11 +35,12 @@ url = "2.5.4"
 default = ["workspace_refactor"]
 modernize = []
 workspace_refactor = []
+workspace-rename-tests = []  # Workspace rename integration tests (requires WorkspaceIndex)
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
+serial_test = "3.4.0"
 tempfile = "3.24.0"
 
 [lints]
 workspace = true
-
