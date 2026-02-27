@@ -17,7 +17,7 @@ include = ["src/**", "Cargo.toml", "README.md"]
 [dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
-toml = "0.9.12"
+toml = "1.0.3"
 
 [lints]
 workspace = true
