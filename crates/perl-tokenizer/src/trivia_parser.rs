@@ -114,18 +114,31 @@ impl TriviaParserContext {
             }
         }
 
-        // Edge case fix: Collect any remaining trivia at EOF (e.g., trailing comments without newline)
-        if position < source.len() {
-            let trailing_trivia = Self::collect_trivia_at(&source, &mut position);
-            if !trailing_trivia.is_empty() {
-                // Create a synthetic EOF token to hold the trailing trivia
-                let eof_token = Token::new(TokenType::EOF, String::new(), position, position);
-                let eof_pos = position_tracker.offset_to_position(position);
-                tokens.push_back(TokenWithTrivia {
-                    token: eof_token,
-                    leading_trivia: trailing_trivia,
-                    range: Range::new(eof_pos, eof_pos),
-                });
+        // Handle remaining trivia at EOF, or source that was entirely trivia
+        if tokens.is_empty() || position < source.len() {
+            let remaining_trivia = if position < source.len() {
+                Self::collect_trivia_at(&source, &mut position)
+            } else {
+                Vec::new()
+            };
+            if !remaining_trivia.is_empty() || tokens.is_empty() {
+                let trivia = if tokens.is_empty() {
+                    // Source was entirely trivia — re-collect from start
+                    let mut pos = 0;
+                    Self::collect_trivia_at(&source, &mut pos)
+                } else {
+                    remaining_trivia
+                };
+                if !trivia.is_empty() {
+                    let eof_pos = position_tracker.offset_to_position(source.len());
+                    let eof_token =
+                        Token::new(TokenType::EOF, String::new(), source.len(), source.len());
+                    tokens.push_back(TokenWithTrivia {
+                        token: eof_token,
+                        leading_trivia: trivia,
+                        range: Range::new(eof_pos, eof_pos),
+                    });
+                }
             }
         }
 
@@ -315,10 +328,11 @@ impl TriviaPreservingParser {
         let start_pos = Position::new(0, 1, 1);
         let mut statement_nodes = Vec::new();
 
-        // Collect any leading trivia before first statement
+        // Collect all trivia from all tokens (including EOF) so that
+        // blank lines between statements and inline POD are surfaced.
         let mut leading_trivia = Vec::new();
-        if let Some(first_token) = self.context.current_token() {
-            leading_trivia = first_token.leading_trivia.clone();
+        for token in &self.context.tokens {
+            leading_trivia.extend(token.leading_trivia.iter().cloned());
         }
 
         // Parse statements

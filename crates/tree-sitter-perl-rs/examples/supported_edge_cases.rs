@@ -7,7 +7,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Testing Supported Edge Cases ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         // Basic heredocs that should work
         (
             "Basic heredoc",
@@ -254,7 +254,7 @@ if ($@) {
     }
 
     println!("\n=== Detailed Results ===");
-    println!("{:<25} {:<8} {}", "Test Case", "Result", "Details");
+    println!("{:<25} {:<8} Details", "Test Case", "Result");
     println!("{}", "-".repeat(70));
 
     for (name, passed, detail) in details {

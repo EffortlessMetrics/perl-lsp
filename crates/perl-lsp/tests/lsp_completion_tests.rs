@@ -697,7 +697,7 @@ MyModule::"#
         }),
     );
 
-    // This tests package member completion (currently TODO in implementation)
+    // Test package member completion (qualified name after ::)
     let response = send_request(
         &mut server,
         json!({

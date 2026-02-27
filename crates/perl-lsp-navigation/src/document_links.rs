@@ -3,6 +3,8 @@
 //! This module provides document link detection for Perl source files,
 //! identifying `use`, `require` module statements, and file includes.
 
+use perl_module_import::{ModuleImportKind, parse_module_import_head};
+use perl_module_path::module_name_to_path;
 use serde_json::{Value, json};
 use url::Url;
 
@@ -25,33 +27,39 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
     let mut out = Vec::new();
 
     for (i, line) in text.lines().enumerate() {
-        // "use Foo::Bar;" — defer resolution to documentLink/resolve
-        if let Some(rest) = line.trim().strip_prefix("use ")
-            && let Some(pkg) = rest.split_whitespace().next()
-        {
-            let pkg = pkg.trim_end_matches(';');
-            // Skip pragmas and core modules
-            if !is_pragma(pkg) {
-                // Defer expensive resolution - use data field
-                if let Some(link) = make_deferred_module_link(uri, i as u32, line, pkg) {
-                    out.push(link);
+        if let Some(import) = parse_module_import_head(line) {
+            match import.kind {
+                ModuleImportKind::Use => {
+                    if !is_pragma(import.token)
+                        && let Some(link) = make_deferred_module_link(
+                            uri,
+                            i as u32,
+                            import.token,
+                            import.token_start as u32,
+                            import.token_end as u32,
+                        )
+                    {
+                        out.push(link);
+                    }
                 }
-            }
-        }
-
-        // "require Module::Name" (module form)
-        if let Some(rest) = line.trim().strip_prefix("require ")
-            && let Some(pkg) = rest.split_whitespace().next()
-        {
-            let pkg = pkg.trim_end_matches(';');
-            // Check if it's a module name (not a quoted file path)
-            if !pkg.starts_with('"')
-                && !pkg.starts_with('\'')
-                && pkg.contains("::")
-                && !is_pragma(pkg)
-                && let Some(link) = make_deferred_module_link(uri, i as u32, line, pkg)
-            {
-                out.push(link);
+                ModuleImportKind::Require => {
+                    // Check if it's a module name (not a quoted file path)
+                    if !import.token.starts_with('"')
+                        && !import.token.starts_with('\'')
+                        && import.token.contains("::")
+                        && !is_pragma(import.token)
+                        && let Some(link) = make_deferred_module_link(
+                            uri,
+                            i as u32,
+                            import.token,
+                            import.token_start as u32,
+                            import.token_end as u32,
+                        )
+                    {
+                        out.push(link);
+                    }
+                }
+                ModuleImportKind::UseParent | ModuleImportKind::UseBase => {}
             }
         }
 
@@ -93,27 +101,29 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
 ///
 /// Returns a link structure with a `data` field that will be used
 /// by `documentLink/resolve` to compute the actual target URI.
-fn make_deferred_module_link(uri: &str, line: u32, line_text: &str, module: &str) -> Option<Value> {
-    // Find the module name position in the line
-    if let Some(start) = line_text.find(module) {
-        let col_start = start as u32;
-        let col_end = (start + module.len()) as u32;
-
-        Some(json!({
-            "range": {
-                "start": {"line": line, "character": col_start},
-                "end": {"line": line, "character": col_end}
-            },
-            "tooltip": format!("Open {}", module),
-            "data": {
-                "type": "module",
-                "module": module,
-                "baseUri": uri
-            }
-        }))
-    } else {
-        None
+fn make_deferred_module_link(
+    uri: &str,
+    line: u32,
+    module: &str,
+    col_start: u32,
+    col_end: u32,
+) -> Option<Value> {
+    if module.is_empty() || col_start >= col_end {
+        return None;
     }
+
+    Some(json!({
+        "range": {
+            "start": {"line": line, "character": col_start},
+            "end": {"line": line, "character": col_end}
+        },
+        "tooltip": format!("Open {}", module),
+        "data": {
+            "type": "module",
+            "module": module,
+            "baseUri": uri
+        }
+    }))
 }
 
 fn is_pragma(pkg: &str) -> bool {
@@ -158,7 +168,7 @@ fn is_pragma(pkg: &str) -> bool {
 
 #[allow(dead_code)] // Reserved for future document link resolution
 fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
-    let rel = pkg.replace("::", "/") + ".pm";
+    let rel = module_name_to_path(pkg);
     // Try each workspace root
     if let Some(base) = roots.first() {
         let mut u = base.clone();
@@ -210,5 +220,37 @@ fn make_link(_src: &str, line: u32, line_text: &str, pkg: &str, target: String) 
         }))
     } else {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::compute_links;
+    use serde_json::Value;
+
+    #[test]
+    fn emits_module_link_for_use_statement() {
+        let links = compute_links("file:///workspace/test.pl", "use Foo::Bar;\n", &[]);
+        assert_eq!(links.len(), 1);
+        if let Some(link) = links.first() {
+            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
+            assert_eq!(link.pointer("/data/module").and_then(Value::as_str), Some("Foo::Bar"));
+        }
+    }
+
+    #[test]
+    fn emits_module_link_for_module_form_require_statement() {
+        let links = compute_links("file:///workspace/test.pl", "require Foo::Bar;\n", &[]);
+        assert_eq!(links.len(), 1);
+        if let Some(link) = links.first() {
+            assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
+            assert_eq!(link.pointer("/data/module").and_then(Value::as_str), Some("Foo::Bar"));
+        }
+    }
+
+    #[test]
+    fn does_not_emit_module_link_for_use_parent_statement() {
+        let links = compute_links("file:///workspace/test.pl", "use parent 'Foo::Bar';\n", &[]);
+        assert!(links.is_empty());
     }
 }

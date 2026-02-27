@@ -230,22 +230,22 @@ impl BenchmarkRunner {
                         // Pre-filter to avoid expensive operations on irrelevant files
                         e.path()
                             .extension()
-                            .map_or(false, |ext| ext == "pl" || ext == "pm" || ext == "t")
+                            .is_some_and(|ext| ext == "pl" || ext == "pm" || ext == "t")
                     })
                     .filter_map(|e| e.ok())
                 {
-                    if entry.file_type().is_file() {
-                        if let Ok(content) = fs::read_to_string(entry.path()) {
-                            let name = entry
-                                .path()
-                                .file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("unknown")
-                                .to_string();
-                            test_files.push((name, content));
-                        }
-                        // Skip warning for CI performance
+                    if entry.file_type().is_file()
+                        && let Ok(content) = fs::read_to_string(entry.path())
+                    {
+                        let name = entry
+                            .path()
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+                        test_files.push((name, content));
                     }
+                    // Skip warning for CI performance
                 }
             }
             // Skip non-existent path warnings in CI for cleaner output
@@ -316,8 +316,8 @@ impl BenchmarkRunner {
             durations_ns: durations,
             mean_duration_ns: mean,
             std_dev_ns: std_dev,
-            min_duration_ns: *sorted_durations.first().unwrap(),
-            max_duration_ns: *sorted_durations.last().unwrap(),
+            min_duration_ns: *sorted_durations.first().unwrap_or(&0),
+            max_duration_ns: *sorted_durations.last().unwrap_or(&0),
             median_duration_ns: median,
             success_rate: success_count as f64 / self.config.iterations as f64,
             memory_usage_bytes: None, // Would require additional instrumentation
@@ -389,13 +389,21 @@ impl BenchmarkRunner {
 
         let fastest_test = results
             .iter()
-            .min_by(|a, b| a.1.mean_duration_ns.partial_cmp(&b.1.mean_duration_ns).unwrap())
+            .min_by(|a, b| {
+                a.1.mean_duration_ns
+                    .partial_cmp(&b.1.mean_duration_ns)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .map(|(name, _)| name.clone())
             .unwrap_or_else(|| "unknown".to_string());
 
         let slowest_test = results
             .iter()
-            .max_by(|a, b| a.1.mean_duration_ns.partial_cmp(&b.1.mean_duration_ns).unwrap())
+            .max_by(|a, b| {
+                a.1.mean_duration_ns
+                    .partial_cmp(&b.1.mean_duration_ns)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .map(|(name, _)| name.clone())
             .unwrap_or_else(|| "unknown".to_string());
 
@@ -467,15 +475,13 @@ impl BenchmarkRunner {
         let output_path = Path::new(&self.config.output_path);
 
         // Ensure parent directory exists
-        if let Some(parent) = output_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).map_err(|e| {
-                    BenchmarkError::DirectoryCreationFailed {
-                        path: parent.display().to_string(),
-                        source: e,
-                    }
-                })?;
-            }
+        if let Some(parent) = output_path.parent()
+            && !parent.exists()
+        {
+            fs::create_dir_all(parent).map_err(|e| BenchmarkError::DirectoryCreationFailed {
+                path: parent.display().to_string(),
+                source: e,
+            })?;
         }
 
         let json_output =

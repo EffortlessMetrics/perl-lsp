@@ -161,7 +161,7 @@ fn bench_legacy_c(code: &str) -> Result<Duration> {
     let start = Instant::now();
     for _ in 0..ITERATIONS {
         let mut parser = Parser::new();
-        parser.set_language(&tree_sitter_perl::language()).unwrap();
+        parser.set_language(&tree_sitter_perl::language())?;
 
         let tree = parser.parse(code, None);
         if tree.is_none() {
@@ -203,13 +203,17 @@ fn run_json_format(verbose: bool) -> Result<()> {
         let legacy_c_time = bench_legacy_c(code)?;
         let modern_time = bench_modern(code)?;
 
-        results["test_cases"].as_array_mut().unwrap().push(serde_json::json!({
-            "name": name,
-            "code_size": code.len(),
-            "pure_rust_µs": pure_rust_time.as_secs_f64() * 1_000_000.0,
-            "legacy_c_µs": legacy_c_time.as_secs_f64() * 1_000_000.0,
-            "modern_µs": modern_time.as_secs_f64() * 1_000_000.0,
-        }));
+        if let Some(arr) = results["test_cases"].as_array_mut() {
+            arr.push(serde_json::json!({
+                "name": name,
+                "code_size": code.len(),
+                "pure_rust_µs": pure_rust_time.as_secs_f64() * 1_000_000.0,
+                "legacy_c_µs": legacy_c_time.as_secs_f64() * 1_000_000.0,
+                "modern_µs": modern_time.as_secs_f64() * 1_000_000.0,
+            }));
+        } else {
+            bail!("Failed to access test_cases array in results");
+        }
     }
 
     println!("{}", serde_json::to_string_pretty(&results)?);

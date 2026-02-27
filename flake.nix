@@ -16,9 +16,9 @@
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
 
-        # MSRV: Rust 1.89.0 - pinned for OpenAI Codex compatibility
+        # MSRV: Rust 1.92.0 - pinned for OpenAI Codex compatibility
         # This matches rust-toolchain.toml and CI workflows
-        rustVersion = "1.89.0";
+        rustVersion = "1.92.0";
         rustToolchain = pkgs.rust-bin.stable.${rustVersion}.default.override {
           extensions = [ "rust-src" "clippy" "rustfmt" ];
           targets = [ "wasm32-unknown-unknown" ];  # For WASM determinism checks
@@ -41,7 +41,7 @@
           cargo-audit       # Security vulnerability scanner
           gh                # GitHub CLI for PR operations
           jq                # JSON processing for scripts
-          python3           # Used by CI scripts
+          (python3.withPackages (ps: [ ps.pyyaml ]))  # Used by CI scripts
         ];
 
         # Optional expensive CI tools (available but not required)
@@ -197,7 +197,7 @@
 
           perl-lsp = pkgs.rustPlatform.buildRustPackage {
             pname = "perl-lsp";
-            version = "0.9.0";  # Keep in sync with CLAUDE.md
+            version = "0.9.1";  # Keep in sync with CLAUDE.md
             src = self;
             cargoLock.lockFile = ./Cargo.lock;
 
@@ -211,7 +211,7 @@
 
             meta = with pkgs.lib; {
               description = "Lightning-fast Perl LSP server";
-              homepage = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs";
+              homepage = "https://github.com/EffortlessMetrics/perl-lsp";
               license = licenses.mit;
               mainProgram = "perl-lsp";
             };

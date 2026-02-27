@@ -1,9 +1,17 @@
 [package]
 name = "perl-edit"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
+authors.workspace = true
+description = "Text edit representation and helpers for incremental Perl parsing"
+readme = "README.md"
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-edit"
+keywords = ["perl", "edit", "incremental", "lsp", "parsing"]
+categories = ["development-tools", "text-editors"]
 
 [dependencies]
 perl-position-tracking = { workspace = true }

@@ -156,7 +156,6 @@ impl SubprocessRuntime for OsSubprocessRuntime {
 /// This implementation allows tests to define expected command invocations
 /// and their responses without actually executing subprocesses.
 #[cfg(test)]
-
 pub mod mock {
     use super::*;
     use perl_tdd_support::must;
@@ -277,7 +276,6 @@ pub mod mock {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use perl_tdd_support::must;

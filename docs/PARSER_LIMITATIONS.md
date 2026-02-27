@@ -145,7 +145,7 @@ cargo test -p perl-parser --test substitution_ac_tests -- test_ac5_negative_malf
 ## Related Documentation
 
 - **[IGNORED_TESTS_ROADMAP.md](IGNORED_TESTS_ROADMAP.md)**: Test tracking and resolution status
-- **[Issue #188](https://github.com/EffortlessMetrics/tree-sitter-perl-rs/issues/188)**: Semantic Analyzer (for deeper analysis needs)
+- **[Issue #188](https://github.com/EffortlessMetrics/perl-lsp/issues/188)**: Semantic Analyzer (for deeper analysis needs)
 - **[LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)**: LSP feature coverage
 
 ## Version History

@@ -1,0 +1,28 @@
+[package]
+name = "perl-lsp-launcher"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Typed CLI launch configuration for the Perl LSP runtime."
+documentation = "https://docs.rs/perl-lsp-launcher"
+readme = "README.md"
+keywords = ["perl", "lsp", "cli", "launcher", "startup"]
+categories = ["development-tools", "development-tools::debugging"]
+
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+perl-lsp-feature-governance = { workspace = true }
+
+[features]
+lsp-ga-lock = ["perl-lsp-feature-governance/lsp-ga-lock"]
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true

@@ -55,7 +55,7 @@ You orchestrate the Generative Flow: transform requirements into Draft PRs throu
 tests: cargo test: 295/295 pass; parser: 180/180, lsp: 85/85, lexer: 30/30
 parsing: ~100% Perl syntax coverage; incremental: <1ms updates with 70-99% node reuse
 lsp: ~89% features functional; workspace navigation: 98% reference coverage
-benchmarks: parsing: 1-150μs per file; 4-19x faster than legacy parsers
+benchmarks: parsing: 1-150μs per file
 ```
 
 ## GitHub-Native Receipts (NO ceremony)

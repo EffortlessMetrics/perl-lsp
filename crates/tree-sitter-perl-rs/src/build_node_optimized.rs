@@ -23,12 +23,12 @@ impl PureRustPerlParser {
             // Fast path for simple variable assignment
             Rule::simple_assignment => {
                 let mut inner = pair.into_inner();
-                let var = inner.next().unwrap();
-                let value = inner.next().unwrap();
+                let var = inner.next().ok_or("missing assignment target")?;
+                let value = inner.next().ok_or("missing assignment value")?;
                 
                 // Build without intermediate allocations
-                let var_node = self.build_node_optimized(var)?.unwrap();
-                let value_node = self.build_node_optimized(value)?.unwrap();
+                let var_node = self.build_node_optimized(var)?.ok_or("invalid assignment target")?;
+                let value_node = self.build_node_optimized(value)?.ok_or("invalid assignment value")?;
                 
                 Ok(Some(AstNode::BinaryOp {
                     op: "=".into(), // Use static string
@@ -83,13 +83,13 @@ impl PureRustPerlParser {
                 
                 // Process without cloning pairs
                 let condition = {
-                    let cond_pair = inner.next().unwrap();
-                    Box::new(self.build_node_optimized(cond_pair)?.unwrap())
+                    let cond_pair = inner.next().ok_or("missing if condition")?;
+                    Box::new(self.build_node_optimized(cond_pair)?.ok_or("invalid if condition")?)
                 };
                 
                 let then_block = {
-                    let block_pair = inner.next().unwrap();
-                    Box::new(self.build_node_optimized(block_pair)?.unwrap())
+                    let block_pair = inner.next().ok_or("missing then block")?;
+                    Box::new(self.build_node_optimized(block_pair)?.ok_or("invalid then block")?)
                 };
                 
                 // Pre-allocate for elsif clauses
@@ -100,14 +100,14 @@ impl PureRustPerlParser {
                     match remaining.as_rule() {
                         Rule::elsif_clause => {
                             let mut elsif_inner = remaining.into_inner();
-                            let cond = self.build_node_optimized(elsif_inner.next().unwrap())?.unwrap();
-                            let block = self.build_node_optimized(elsif_inner.next().unwrap())?.unwrap();
+                            let cond = self.build_node_optimized(elsif_inner.next().ok_or("missing elsif condition")?)?.ok_or("invalid elsif condition")?;
+                            let block = self.build_node_optimized(elsif_inner.next().ok_or("missing elsif block")?)?.ok_or("invalid elsif block")?;
                             elsif_clauses.push((cond, block));
                         }
                         Rule::else_clause => {
                             let mut else_inner = remaining.into_inner();
                             else_block = Some(Box::new(
-                                self.build_node_optimized(else_inner.next().unwrap())?.unwrap()
+                                self.build_node_optimized(else_inner.next().ok_or("missing else block")?)?.ok_or("invalid else block")?
                             ));
                         }
                         _ => {}
@@ -136,8 +136,8 @@ impl PureRustPerlParser {
         let mut inner = pair.into_inner();
         
         // Build first operand
-        let first = inner.next().unwrap();
-        let mut result = self.build_node_optimized(first)?.unwrap();
+        let first = inner.next().ok_or("missing binary chain operand")?;
+        let mut result = self.build_node_optimized(first)?.ok_or("invalid binary chain operand")?;
         
         // Process remaining operator-operand pairs without collecting
         while let Some(op_pair) = inner.next() {
@@ -152,7 +152,7 @@ impl PureRustPerlParser {
                     other => other,
                 };
                 
-                let right = self.build_node_optimized(operand_pair)?.unwrap();
+                let right = self.build_node_optimized(operand_pair)?.ok_or("invalid binary chain right operand")?;
                 result = AstNode::BinaryOp {
                     op: op.into(),
                     left: Box::new(result),

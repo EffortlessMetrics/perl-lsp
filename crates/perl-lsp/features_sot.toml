@@ -1,0 +1,953 @@
+# LSP Feature Catalog - Single Source of Truth
+# This file defines all LSP features and their maturity status
+# Used to generate capabilities, documentation, and compliance reports
+
+[meta]
+version = "0.9.1"
+lsp_version = "3.18"
+compliance_percent = 65  # Auto-calculated in future
+
+# Text Document Features
+
+[[feature]]
+id = "lsp.completion"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_completion_tests.rs"]
+description = "Code completion with 150+ built-in functions"
+
+[[feature]]
+id = "lsp.hover"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_hover_tests.rs"]
+description = "Hover information with documentation"
+
+[[feature]]
+id = "lsp.signature_help"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_signature_help_tests.rs"]
+description = "Signature help with parameter hints"
+
+[[feature]]
+id = "lsp.definition"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_definition_tests.rs"]
+description = "Go to definition"
+
+[[feature]]
+id = "lsp.declaration"
+spec = "LSP 3.14"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_definition_tests.rs"]
+description = "Go to declaration"
+
+[[feature]]
+id = "lsp.references"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_references_tests.rs"]
+description = "Find references across workspace"
+
+[[feature]]
+id = "lsp.document_symbol"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_symbols_tests.rs"]
+description = "Document symbols with hierarchy"
+
+[[feature]]
+id = "lsp.code_action"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_code_actions_tests.rs"]
+description = "Code actions and quick fixes"
+
+[[feature]]
+id = "lsp.code_lens"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_code_lens_tests.rs"]
+description = "Code lens with reference counts"
+
+[[feature]]
+id = "lsp.formatting"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_formatting_tests.rs"]
+description = "Document formatting with Perl::Tidy"
+
+[[feature]]
+id = "lsp.range_formatting"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_formatting_tests.rs"]
+description = "Range formatting (single range)"
+
+[[feature]]
+id = "lsp.ranges_formatting"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_formatting_e2e.rs"]
+description = "Multi-range formatting (textDocument/rangesFormatting) (@proposed)"
+
+[[feature]]
+id = "lsp.on_type_formatting"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_on_type_formatting.rs"]
+description = "On-type formatting with auto-indent"
+
+[[feature]]
+id = "lsp.rename"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_rename_tests.rs"]
+description = "Rename symbol across files"
+
+[[feature]]
+id = "lsp.document_link"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_document_links_test.rs"]
+description = "Document links to modules and docs"
+
+[[feature]]
+id = "lsp.folding_range"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_folding_ranges_test.rs"]
+description = "Folding ranges with fallback"
+
+[[feature]]
+id = "lsp.selection_range"
+spec = "LSP 3.15"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_selection_range_tests.rs"]
+description = "Smart selection expansion"
+
+[[feature]]
+id = "lsp.semantic_tokens"
+spec = "LSP 3.16"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_semantic_tokens.rs"]
+description = "Enhanced syntax highlighting"
+
+[[feature]]
+id = "lsp.inlay_hint"
+spec = "LSP 3.17"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_inlay_hints.rs"]
+description = "Parameter names and type hints"
+
+[[feature]]
+id = "lsp.type_hierarchy"
+spec = "LSP 3.17"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_type_hierarchy_test.rs"]
+description = "Type hierarchy for classes/roles"
+
+[[feature]]
+id = "lsp.call_hierarchy"
+spec = "LSP 3.16"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_call_hierarchy_tests.rs"]
+description = "Call hierarchy navigation"
+
+[[feature]]
+id = "lsp.pull_diagnostics"
+spec = "LSP 3.17"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/pull_diagnostics_tests.rs"]
+description = "Pull model diagnostics"
+
+[[feature]]
+id = "lsp.inline_completion"
+spec = "LSP 3.18"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_inline_completion_tests.rs"]
+description = "Inline AI-powered completions (@proposed)"
+
+[[feature]]
+id = "lsp.type_definition"
+spec = "LSP 3.6"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_type_definition_tests.rs"]
+description = "Go to type definition"
+
+[[feature]]
+id = "lsp.implementation"
+spec = "LSP 3.6"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_implementation_tests.rs"]
+description = "Go to implementation"
+
+[[feature]]
+id = "lsp.document_color"
+spec = "LSP 3.6"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_color_tests.rs"]
+description = "Color decorators"
+
+[[feature]]
+id = "lsp.linked_editing_range"
+spec = "LSP 3.16"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_linked_editing_tests.rs"]
+description = "Linked editing of related tokens"
+
+# Workspace Features
+
+[[feature]]
+id = "lsp.workspace_symbol"
+spec = "LSP 3.0"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_symbol_tests.rs"]
+description = "Search symbols across workspace"
+
+[[feature]]
+id = "lsp.workspace_diagnostics"
+spec = "LSP 3.17"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/pull_diagnostics_tests.rs"]
+description = "Workspace-wide pull diagnostics"
+
+[[feature]]
+id = "lsp.execute_command"
+spec = "LSP 3.0"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_execute_command_tests.rs"]
+description = "Execute commands (Perl::Critic, etc)"
+
+[[feature]]
+id = "lsp.workspace_folders"
+spec = "LSP 3.6"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_tests.rs"]
+description = "Multi-root workspace support"
+
+[[feature]]
+id = "lsp.file_operations"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_file_operations_tests.rs"]
+description = "File rename/create/delete tracking"
+
+[[feature]]
+id = "lsp.workspace_edit"
+spec = "LSP 3.0"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
+description = "Apply workspace-wide edits"
+
+[[feature]]
+id = "lsp.moniker"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Cross-project symbol identity"
+
+# Window Features
+
+[[feature]]
+id = "lsp.progress"
+spec = "LSP 3.0"
+area = "window"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_progress_tests.rs"]
+description = "Progress reporting"
+
+[[feature]]
+id = "lsp.show_message"
+spec = "LSP 3.0"
+area = "window"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = []
+description = "Show messages to user"
+
+[[feature]]
+id = "lsp.log_message"
+spec = "LSP 3.0"
+area = "window"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = []
+description = "Log messages"
+
+[[feature]]
+id = "lsp.work_done_progress"
+spec = "LSP 3.15"
+area = "window"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Detailed work progress"
+
+# Notebook Features
+
+[[feature]]
+id = "lsp.notebook_document_sync"
+spec = "LSP 3.17"
+area = "notebook"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Notebook document synchronization (didOpen/didChange/didSave/didClose handlers)"
+
+[[feature]]
+id = "lsp.notebook_cell_execution"
+spec = "LSP 3.17"
+area = "notebook"
+maturity = "ga"
+advertised = false
+counts_in_coverage = false
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Notebook cell execution summary tracking (LSP does not execute cells; this tracks executionSummary metadata)"
+
+# Debug Features (DAP)
+
+[[feature]]
+id = "dap.core"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_smoke_e2e.rs", "crates/perl-dap/tests/session_lifecycle_tests.rs"]
+description = "Core VS Code debug loop: initialize/launch/configurationDone, break/step, stack/scopes/variables, evaluate/setVariable, disconnect/terminate"
+
+[[feature]]
+id = "dap.breakpoints.basic"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_smoke_e2e.rs", "crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs"]
+description = "Verified/unverified source breakpoints with replace semantics and deterministic stopped(reason=breakpoint) behavior"
+
+[[feature]]
+id = "dap.breakpoints.hit_condition"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
+description = "Hit-count breakpoints (e.g., >= N, == N, %N) with runtime counter gating"
+
+[[feature]]
+id = "dap.breakpoints.logpoints"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_breakpoint_matrix_tests.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
+description = "Logpoint breakpoints (`logMessage`) emit output events and continue execution"
+
+[[feature]]
+id = "dap.exceptions.die"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs", "crates/perl-dap/tests/dap_preview_e2e_receipts.rs"]
+description = "Exception breakpoint handling for `die`/uncaught exception categories with exceptionInfo support"
+
+[[feature]]
+id = "dap.inline_values"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_comprehensive_test.rs"]
+description = "Inline variable values while debugging (native adapter)"
+
+[[feature]]
+id = "dap.completions"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_completions_tests.rs"]
+description = "Debug console autocomplete with Perl keywords"
+
+[[feature]]
+id = "dap.modules"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_modules_tests.rs"]
+description = "Loaded modules view via %INC inspection"
+
+[[feature]]
+id = "dap.watchpoints"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_watchpoints_tests.rs"]
+description = "Data breakpoints (watchpoints) via Perl debugger w/W commands"
+
+[[feature]]
+id = "dap.exceptions.warn"
+spec = "DAP 1.0"
+area = "debug"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["crates/perl-dap/tests/dap_warn_exception_tests.rs"]
+description = "Exception breakpoint handling for warn/carp/cluck warnings"
+
+# Protocol / Lifecycle Features
+
+[[feature]]
+id = "lsp.initialize"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Initialize handshake"
+
+[[feature]]
+id = "lsp.initialized"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Initialized notification"
+
+[[feature]]
+id = "lsp.shutdown"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Graceful shutdown request"
+
+[[feature]]
+id = "lsp.exit"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Exit notification with proper exit codes"
+
+[[feature]]
+id = "lsp.cancel_request"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Request cancellation ($/cancelRequest)"
+
+[[feature]]
+id = "lsp.client_register_capability"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_registration_tests.rs"]
+description = "Dynamic capability registration (server->client)"
+
+[[feature]]
+id = "lsp.client_unregister_capability"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_registration_tests.rs"]
+description = "Dynamic capability unregistration (server->client)"
+
+[[feature]]
+id = "lsp.set_trace"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_trace_tests.rs"]
+description = "Client sets server trace level ($/setTrace)"
+
+[[feature]]
+id = "lsp.log_trace"
+spec = "LSP 3.0"
+area = "protocol"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_trace_tests.rs"]
+description = "Server trace logging ($/logTrace)"
+
+# Text Document Synchronization
+
+[[feature]]
+id = "lsp.text_document_sync"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_text_sync_tests.rs"]
+description = "didOpen/didChange/didClose text synchronization"
+
+[[feature]]
+id = "lsp.did_save"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_text_sync_tests.rs"]
+description = "didSave notifications"
+
+[[feature]]
+id = "lsp.will_save"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_text_sync_tests.rs"]
+description = "willSave notifications"
+
+[[feature]]
+id = "lsp.will_save_wait_until"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_text_sync_tests.rs"]
+description = "willSaveWaitUntil request with format-on-save"
+
+# Additional Language Features
+
+[[feature]]
+id = "lsp.document_highlight"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_document_highlight_tests.rs"]
+description = "Document highlights (local references)"
+
+[[feature]]
+id = "lsp.prepare_rename"
+spec = "LSP 3.12"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_rename_tests.rs"]
+description = "Validate rename and compute placeholder/range"
+
+[[feature]]
+id = "lsp.inline_value"
+spec = "LSP 3.17"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
+description = "Inline values during debugging (LSP inlineValue)"
+
+[[feature]]
+id = "lsp.color_presentation"
+spec = "LSP 3.6"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_color_tests.rs"]
+description = "Color presentation request (pairs with documentColor)"
+
+# Resolve Routes
+
+[[feature]]
+id = "lsp.completion_item_resolve"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_completion_tests.rs"]
+description = "Resolve additional completion item details"
+
+[[feature]]
+id = "lsp.code_action_resolve"
+spec = "LSP 3.16"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_code_actions_tests.rs"]
+description = "Resolve additional code action details"
+
+[[feature]]
+id = "lsp.code_lens_resolve"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_code_lens_tests.rs"]
+description = "Resolve code lens command"
+
+[[feature]]
+id = "lsp.document_link_resolve"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_document_link_resolve_tests.rs"]
+description = "Resolve document link target"
+
+[[feature]]
+id = "lsp.inlay_hint_resolve"
+spec = "LSP 3.17"
+area = "text_document"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_inlay_hint_resolve_tests.rs"]
+description = "Resolve inlay hint label locations"
+
+[[feature]]
+id = "lsp.workspace_symbol_resolve"
+spec = "LSP 3.17"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_symbol_tests.rs"]
+description = "Resolve additional workspace symbol info"
+
+# Refresh Routes (Server -> Client)
+
+[[feature]]
+id = "lsp.code_lens_refresh"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_refresh_methods_tests.rs"]
+description = "Request client to refresh code lenses"
+
+[[feature]]
+id = "lsp.semantic_tokens_refresh"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_refresh_methods_tests.rs"]
+description = "Request client to refresh semantic tokens"
+
+[[feature]]
+id = "lsp.inlay_hint_refresh"
+spec = "LSP 3.17"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_refresh_methods_tests.rs"]
+description = "Request client to refresh inlay hints"
+
+[[feature]]
+id = "lsp.inline_value_refresh"
+spec = "LSP 3.17"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_refresh_methods_tests.rs"]
+description = "Request client to refresh inline values"
+
+[[feature]]
+id = "lsp.diagnostic_refresh"
+spec = "LSP 3.17"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_refresh_methods_tests.rs"]
+description = "Request client to refresh pulled diagnostics"
+
+[[feature]]
+id = "lsp.folding_range_refresh"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_refresh_methods_tests.rs"]
+description = "Request client to refresh folding ranges (workspace/foldingRange/refresh, @proposed)"
+
+# Workspace Plumbing
+
+[[feature]]
+id = "lsp.configuration"
+spec = "LSP 3.6"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_workspace_tests.rs"]
+description = "workspace/configuration request (server->client)"
+
+[[feature]]
+id = "lsp.did_change_configuration"
+spec = "LSP 3.0"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_workspace_tests.rs"]
+description = "workspace/didChangeConfiguration notification"
+
+[[feature]]
+id = "lsp.did_change_watched_files"
+spec = "LSP 3.0"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_workspace_tests.rs"]
+description = "workspace/didChangeWatchedFiles notification"
+
+[[feature]]
+id = "lsp.apply_edit"
+spec = "LSP 3.0"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_workspace_tests.rs"]
+description = "workspace/applyEdit request (server->client)"
+
+[[feature]]
+id = "lsp.publish_diagnostics"
+spec = "LSP 3.0"
+area = "text_document"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/pull_diagnostics_tests.rs"]
+description = "Push diagnostics via textDocument/publishDiagnostics"
+
+# Window / Telemetry
+
+[[feature]]
+id = "lsp.show_message_request"
+spec = "LSP 3.0"
+area = "window"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_window_tests.rs"]
+description = "Prompt user with choices (showMessageRequest)"
+
+[[feature]]
+id = "lsp.show_document"
+spec = "LSP 3.16"
+area = "window"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_window_tests.rs"]
+description = "Ask client to open/display a URI (showDocument)"
+
+[[feature]]
+id = "lsp.work_done_progress_create"
+spec = "LSP 3.15"
+area = "window"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_window_tests.rs"]
+description = "Create server-initiated work done progress"
+
+[[feature]]
+id = "lsp.work_done_progress_cancel"
+spec = "LSP 3.15"
+area = "window"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_window_tests.rs"]
+description = "Client cancels server-initiated work done progress"
+
+[[feature]]
+id = "lsp.telemetry_event"
+spec = "LSP 3.0"
+area = "window"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_window_tests.rs"]
+description = "Server telemetry events (telemetry/event)"
+
+# LSP 3.18 Additions
+
+[[feature]]
+id = "lsp.text_document_content"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_virtual_content_tests.rs"]
+description = "workspace/textDocumentContent request (@proposed)"
+
+[[feature]]
+id = "lsp.text_document_content_refresh"
+spec = "LSP 3.18"
+area = "workspace"
+maturity = "ga"
+advertised = true
+counts_in_coverage = false
+tests = ["tests/lsp_virtual_content_tests.rs"]
+description = "workspace/textDocumentContent/refresh request (@proposed)"
+
+# File Operations (method-level breakdown)
+
+[[feature]]
+id = "lsp.will_create_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
+description = "workspace/willCreateFiles request"
+
+[[feature]]
+id = "lsp.did_create_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
+description = "workspace/didCreateFiles notification"
+
+[[feature]]
+id = "lsp.will_rename_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_file_operations_tests.rs"]
+description = "workspace/willRenameFiles request"
+
+[[feature]]
+id = "lsp.did_rename_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_file_operations_tests.rs"]
+description = "workspace/didRenameFiles notification"
+
+[[feature]]
+id = "lsp.will_delete_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
+description = "workspace/willDeleteFiles request"
+
+[[feature]]
+id = "lsp.did_delete_files"
+spec = "LSP 3.16"
+area = "workspace"
+maturity = "ga"
+advertised = true
+tests = ["tests/lsp_workspace_file_ops_tests.rs"]
+description = "workspace/didDeleteFiles notification"

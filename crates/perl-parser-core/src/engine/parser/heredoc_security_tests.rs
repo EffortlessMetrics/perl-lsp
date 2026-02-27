@@ -29,7 +29,7 @@ fn test_recursive_heredoc_terminator_hang() {
 
     match result {
         Ok(_) => {}
-        Err(err) => panic!("parse should complete without fatal error: {}", err),
+        Err(err) => unreachable!("parse should complete without fatal error: {}", err),
     }
 
     let errors = parser.errors();

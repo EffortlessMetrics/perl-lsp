@@ -79,28 +79,19 @@ See **[CI & Automation](./docs/CI.md)** for comprehensive details about our GitH
 - Add `ci:mac` label if your changes affect macOS
 - Add `ci:semver` label to check for breaking API changes
 
-### Local CI Validation (While GitHub Actions Is Unavailable)
+### Local CI Validation
 
-**⚠️ IMPORTANT**: GitHub Actions is currently unavailable due to billing issues. During this period:
-
-- **REQUIRED**: Run `just ci-gate` before every merge
-- **RECOMMENDED**: Run `just ci-full` for large/structural changes
-- See **[Local CI Protocol](./docs/ci/LOCAL_CI_PROTOCOL.md)** for complete details
+It is recommended to run `just ci-gate` before pushing your changes to ensure they pass the core checks.
 
 ```bash
-# Fast merge gate (~2-5 min, required for all merges)
+# Fast merge gate (~2-5 min)
 just ci-gate
 
 # Comprehensive validation (~10-20 min, for large changes)
 just ci-full
 ```
 
-**Note in PR descriptions**:
-```markdown
-## Local CI Validation
-✅ `just ci-gate` passed
-See: [Local CI Protocol](docs/ci/LOCAL_CI_PROTOCOL.md)
-```
+See: [Local CI Summary](docs/ci/LOCAL_CI_SUMMARY.md)
 
 **Semantic & LSP Changes**:
 
@@ -189,12 +180,12 @@ Add the `ci:semver` label to your PR to run automated breaking change detection:
 
 | Change Type | Example | Version Bump | Allowed In |
 |-------------|---------|--------------|------------|
-| **Breaking** | Remove public function | Major (1.0 → 2.0) | Major releases only |
-| **Breaking** | Change function signature | Major (1.0 → 2.0) | Major releases only |
-| **Additive** | Add new public function | Minor (1.0 → 1.1) | Minor releases |
-| **Additive** | Add new enum variant | Minor (1.0 → 1.1) | Minor releases (with `#[non_exhaustive]`) |
-| **Patch** | Fix bug, same behavior | Patch (1.0.0 → 1.0.1) | Patch releases |
-| **Patch** | Documentation update | Patch (1.0.0 → 1.0.1) | Patch releases |
+| **Breaking** | Remove public function | Major (0.9 → 1.0) | Major releases only |
+| **Breaking** | Change function signature | Major (0.9 → 1.0) | Major releases only |
+| **Additive** | Add new public function | Minor (0.9 → 0.10) | Minor releases |
+| **Additive** | Add new enum variant | Minor (0.9 → 0.10) | Minor releases (with `#[non_exhaustive]`) |
+| **Patch** | Fix bug, same behavior | Patch (0.9.x → 0.9.2) | Patch releases |
+| **Patch** | Documentation update | Patch (0.9.x → 0.9.2) | Patch releases |
 
 ### Breaking Change Workflow
 
@@ -240,8 +231,8 @@ SemVer checking is configured in `.cargo-semver-checks.toml`:
 
 - **SemVer spec:** https://semver.org/
 - **cargo-semver-checks:** https://github.com/obi1kenobi/cargo-semver-checks
-- **Project stability policy:** `docs/STABILITY.md`
-- **API stability guarantees:** `docs/STABILITY.md#api-surface-stability`
+- **Project stability policy:** [`docs/STABILITY.md`](docs/STABILITY.md)
+- **API stability guarantees:** [`docs/STABILITY.md`](docs/STABILITY.md)
 
 ## Coding Standards
 
@@ -297,7 +288,34 @@ Run the policy check locally anytime:
 ./.ci/scripts/check-from-raw.sh
 ```
 
-## Project Structure
+## Workspace Architecture
+
+We use a unified Rust workspace for all core and auxiliary crates.
+
+### Core Crates (Build Everywhere)
+These crates have zero system dependencies and work on all platforms:
+- **perl-parser**: Main parser library
+- **perl-lsp**: LSP server binary
+- **perl-lexer**: Tokenizer
+- **tree-sitter-perl-rs**: Pure-Rust tree-sitter bindings (default)
+
+### Advanced Components (Opt-in)
+Some functionality requires system dependencies (like `libclang-dev`) and is gated behind Cargo features:
+
+| Feature | Crate | Dependency | Description |
+|---------|-------|------------|-------------|
+| `bindings` | tree-sitter-perl | `libclang-dev` | Generates C bindings via bindgen |
+| `c-parser` | tree-sitter-perl | C compiler | Builds the native C parser/scanner |
+
+#### Building with Advanced Features
+```bash
+# Ubuntu/Debian
+sudo apt-get install libclang-dev
+cargo build -p tree-sitter-perl --features bindings,c-parser
+```
+
+### Testing
+
 
 - **`crates/perl-parser/`** - Core parser implementation and LSP providers
 - **`crates/perl-lsp/`** - LSP server binary and CLI
@@ -306,6 +324,17 @@ Run the policy check locally anytime:
 - **`crates/perl-corpus/`** - Test corpus and property-based testing
 - **`xtask/`** - Advanced testing and development tools
 - **`docs/`** - Comprehensive project documentation
+
+### SemVer Compliance
+
+All API changes are checked for Semantic Versioning (SemVer) compatibility using `cargo-semver-checks`.
+
+#### Check for breaking changes locally
+```bash
+just semver-check
+```
+
+Breaking changes are allowed in minor version bumps, but require a migration guide in `CHANGELOG.md`. See [STABILITY.md](docs/STABILITY.md) for versioning details.
 
 ## Testing Guidelines
 
@@ -335,7 +364,26 @@ cargo test -- --nocapture
 cargo test --test determinism_test
 ```
 
-## Documentation
+### Dead Code Detection
+
+We use `cargo-machete` and `clippy` to identify unused dependencies and code.
+
+#### Check for dead code locally
+```bash
+just dead-code
+```
+
+#### Handling False Positives
+If a dependency is detected as unused but is actually required (e.g., used only via macros or in tests), add it to the ignore list in the crate's `Cargo.toml`:
+
+```toml
+[package.metadata.cargo-machete]
+ignored = ["crate-name"]
+```
+
+For unreachable code warnings from clippy, use `#[allow(dead_code)]` with a comment explaining why it should be preserved.
+
+### Documentation
 
 - **Public APIs** must have documentation comments (`///`)
 - **Modules** should have module-level documentation (`//!`)
@@ -379,12 +427,235 @@ For quick reference, see **[Dependency Quick Reference](./docs/DEPENDENCY_QUICK_
 
 ## Code of Conduct
 
-We follow the Rust Code of Conduct. Please be respectful and constructive in all interactions.
+We follow the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). Please be respectful and constructive in all interactions.
 
 ## License
 
 By contributing, you agree that your contributions will be licensed under the same license as the project (typically MIT or Apache-2.0).
 
+## Release Process
+
+This section describes the release process for Perl LSP.
+
+### Version Policy
+
+We follow [Semantic Versioning 2.0.0](https://semver.org/):
+
+- **Major (X.0.0)**: Breaking changes, requires migration guide
+- **Minor (X.Y.0)**: New features, backward compatible
+- **Patch (X.Y.Z)**: Bug fixes, security updates, documentation
+
+### Release Types
+
+| Release Type | Frequency | Examples | Requirements |
+|--------------|-----------|----------|--------------|
+| **Major** | As needed | 0.x → 1.0.0 | Breaking changes, migration guide, extensive testing |
+| **Minor** | Quarterly | 0.9.x → 0.10.0 | New features, API additions, performance improvements |
+| **Patch** | As needed | 0.9.1 → 0.9.2 | Bug fixes, security updates, documentation updates |
+
+### Release Process Workflow
+
+#### 1. Pre-Release Preparation
+
+```bash
+# Update version numbers in Cargo.toml files
+# Then run cargo check to verify
+
+# Run comprehensive validation
+just ci-full
+just security-scan
+just semver-check
+
+# Update documentation
+# - UPDATE_CHANGELOG.md
+# - Update version references in README.md
+# - Update feature matrix in docs/FEATURES.md
+```
+
+#### 2. Release Checklist
+
+Before any release, ensure:
+
+- [ ] All tests pass: `just ci-full`
+- [ ] Security scan passes: `just security-scan`
+- [ ] No breaking changes (for minor/patch): `just semver-check`
+- [ ] Documentation updated: `CHANGELOG.md`, version references
+- [ ] Performance benchmarks run: `cargo bench`
+- [ ] Release notes drafted: `RELEASE_NOTES.md`
+- [ ] Version numbers updated in all crates
+- [ ] Git tag prepared: `git tag -a v0.9.1 -m "Release v0.9.1"`
+
+#### 3. Release Execution
+
+```bash
+# Create release branch
+git checkout -b release/v0.9.1
+
+# Final validation
+just ci-full
+
+# Merge to main
+git checkout main
+git merge release/v0.9.1
+
+# Tag and push
+git tag v0.9.1
+git push origin main --tags
+
+# Publish to crates.io
+cargo publish -p perl-parser
+cargo publish -p perl-lexer
+cargo publish -p perl-lsp
+# ... other crates in dependency order
+
+# Create GitHub Release
+gh release create v0.9.1 --title "v0.9.1 - Initial Public Alpha" --notes-file RELEASE_NOTES.md
+```
+
+#### 4. Post-Release Tasks
+
+- [ ] Update website/documentation
+- [ ] Announce on community channels
+- [ ] Monitor for issues
+- [ ] Begin next development cycle
+
+### Code Review Process for Releases
+
+#### Release Reviewers
+
+All releases require review from:
+
+- **Core Maintainer**: Technical approval
+- **Release Manager**: Process validation
+- **Security Lead**: Security assessment (for major/minor releases)
+
+#### Review Criteria
+
+**Technical Review:**
+- Code quality and performance
+- Test coverage and quality
+- Documentation completeness
+- Breaking change justification
+
+**Process Review:**
+- Version compliance with SemVer
+- Release checklist completion
+- Changelog accuracy
+- Migration guide quality (for breaking changes)
+
+**Security Review:**
+- Dependency vulnerability scan
+- Security best practices
+- Attack surface analysis
+- Security best practices
+
+### Testing Requirements for Releases
+
+#### Release Testing Matrix
+
+| Release Type | Required Tests | Performance Tests | Security Tests |
+|--------------|----------------|-------------------|----------------|
+| **Major** | Full test suite | Comprehensive benchmarks | Full security scan |
+| **Minor** | Full test suite | Regression benchmarks | Security scan |
+| **Patch** | Core tests | N/A | Security scan (if security patch) |
+
+#### Test Execution
+
+```bash
+# Full test suite (required for all releases)
+cargo test --workspace
+
+# Performance benchmarks (required for major/minor)
+cargo bench
+
+# Security scan (required for all releases)
+just security-scan
+
+# Mutation testing (required for major releases)
+just mutation-test
+
+# Integration tests (required for major/minor)
+just integration-test
+```
+
+### Version Policy Details
+
+#### Breaking Changes Definition
+
+Breaking changes include:
+- API signature changes
+- Removal of public functions/types
+- Changes in behavior that affect existing code
+- Configuration format changes
+- Dependency requirement changes
+
+#### Compatibility Guarantees
+
+**For v1.x series:**
+- API stability within major version
+- Configuration format stability
+- LSP protocol compatibility
+- File format compatibility
+
+**Migration Support:**
+- Automated migration tools when possible
+- Comprehensive migration guides
+- Deprecation warnings before removal
+- Backward compatibility periods
+
+### Emergency Releases
+
+For critical security issues:
+
+1. **Immediate Assessment**: Triage within 24 hours
+2. **Rapid Fix**: Develop and test fix in 48-72 hours
+3. **Expedited Release**: Bypass normal process if needed
+4. **Security Advisory**: Coordinate disclosure
+5. **Post-Mortem**: Document and improve process
+
+### Release Communication
+
+#### Release Channels
+
+- **GitHub Releases**: Primary announcement channel
+- **CHANGELOG.md**: Detailed change log
+- **Security Advisories**: For security-related releases
+- **Community Forums**: Discussion and support
+- **Email Lists**: For enterprise notifications
+
+#### Release Notes Template
+
+```markdown
+# Release v0.9.1
+
+## Highlights
+- Key features and improvements
+- Performance metrics
+- Security enhancements
+
+## Breaking Changes
+- Detailed list with migration guidance
+
+## New Features
+- Comprehensive feature list with examples
+
+## Bug Fixes
+- Bug fixes with issue references
+
+## Security Updates
+- Security fixes and CVE references
+
+## Performance Improvements
+- Benchmarks and performance metrics
+
+## Upgrade Instructions
+- Step-by-step upgrade guide
+- Migration considerations
+
+## Known Issues
+- Any known limitations or issues
+```
+
 ---
 
-Thank you for contributing to Perl LSP! =�
+Thank you for contributing to Perl LSP! 🚀

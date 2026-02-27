@@ -5,7 +5,7 @@ use tree_sitter_perl::{EnhancedFullParser, pure_rust_parser::AstNode};
 fn main() {
     println!("=== Testing Dereferencing ===\n");
 
-    let test_cases = vec![
+    let test_cases = [
         ("Simple scalar deref", r#"my $value = $$ref;"#),
         ("Scalar deref with braces", r#"my $value = ${$scalar_ref};"#),
         ("Array deref", r#"my @arr = @{$array_ref};"#),
@@ -28,14 +28,12 @@ fn main() {
             Err(e) => {
                 println!("✗ Parse error: {}", e);
                 let error_str = format!("{:?}", e);
-                if error_str.contains("positives") {
-                    // Extract expected tokens
-                    if let Some(start) = error_str.find("positives: [") {
-                        if let Some(end) = error_str.find("], negatives") {
-                            let expected = &error_str[start + 12..end];
-                            println!("Expected: {}", expected);
-                        }
-                    }
+                if error_str.contains("positives")
+                    && let Some(start) = error_str.find("positives: [")
+                    && let Some(end) = error_str.find("], negatives")
+                {
+                    let expected = &error_str[start + 12..end];
+                    println!("Expected: {}", expected);
                 }
             }
         }

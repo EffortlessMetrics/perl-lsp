@@ -1,5 +1,6 @@
 //! Tests for dynamic heredoc delimiter recovery
 
+use perl_tdd_support::must_some;
 use tree_sitter_perl::heredoc_recovery::{HeredocRecovery, RecoveryConfig};
 use tree_sitter_perl::perl_lexer::{PerlLexer, TokenType};
 
@@ -25,10 +26,8 @@ EOF
     }
 
     // Find the heredoc token
-    let heredoc_token = tokens
-        .iter()
-        .find(|t| matches!(t.token_type, TokenType::HeredocStart))
-        .expect("Should find heredoc token");
+    let heredoc_token =
+        must_some(tokens.iter().find(|t| matches!(t.token_type, TokenType::HeredocStart)));
 
     // Should have recovered to <<EOF
     assert_eq!(heredoc_token.text.as_ref(), "<<EOF");
@@ -137,14 +136,14 @@ fn test_error_token_generation() {
     let mut error_found = false;
 
     while let Some(token) = lexer.next_token() {
-        if let TokenType::Error(msg) = &token.token_type {
-            if msg.contains("heredoc") {
-                error_found = true;
-                // Should provide helpful error message
-                assert!(msg.contains("Unresolved") || msg.contains("dynamic"));
-                // Should suggest alternatives
-                assert!(msg.contains("possible") || msg.contains("EOF"));
-            }
+        if let TokenType::Error(msg) = &token.token_type
+            && msg.contains("heredoc")
+        {
+            error_found = true;
+            // Should provide helpful error message
+            assert!(msg.contains("Unresolved") || msg.contains("dynamic"));
+            // Should suggest alternatives
+            assert!(msg.contains("possible") || msg.contains("EOF"));
         }
         if matches!(token.token_type, TokenType::EOF) {
             break;

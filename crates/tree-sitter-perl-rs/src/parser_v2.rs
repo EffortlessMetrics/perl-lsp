@@ -510,9 +510,16 @@ impl<'a> ParserV2<'a> {
 
             let value = self.parse_expression()?;
 
+            // Consume optional trailing semicolon
+            self.skip_whitespace();
+            if self.check(&TokenType::Semicolon) {
+                self.advance();
+            }
+
             // If single variable, convert to assignment
             if variables.len() == 1 {
-                let var = variables.into_iter().next().unwrap();
+                let var =
+                    variables.into_iter().next().ok_or(crate::error::ParseError::ParseFailed)?;
                 return Ok(Node::new(
                     NodeKind::Assignment {
                         left: Box::new(var),
@@ -536,6 +543,12 @@ impl<'a> ParserV2<'a> {
                     SourceLocation { start, end: self.current_pos() },
                 ));
             }
+        }
+
+        // Consume optional trailing semicolon
+        self.skip_whitespace();
+        if self.check(&TokenType::Semicolon) {
+            self.advance();
         }
 
         let end = self.current_pos();
@@ -1320,6 +1333,12 @@ impl<'a> ParserV2<'a> {
             Some(Box::new(self.parse_expression()?))
         };
 
+        // Consume optional trailing semicolon
+        self.skip_whitespace();
+        if self.check(&TokenType::Semicolon) {
+            self.advance();
+        }
+
         let end = self.current_pos();
         Ok(Node::new(NodeKind::Return { value }, SourceLocation { start, end }))
     }
@@ -1334,6 +1353,12 @@ impl<'a> ParserV2<'a> {
         } else {
             None
         };
+
+        // Consume optional trailing semicolon
+        self.skip_whitespace();
+        if self.check(&TokenType::Semicolon) {
+            self.advance();
+        }
 
         let end = self.current_pos();
         Ok(Node::new(NodeKind::LoopControl { control_type, label }, SourceLocation { start, end }))
@@ -1530,57 +1555,62 @@ mod tests {
 
     #[test]
     fn test_basic_parsing() {
+        use perl_tdd_support::must;
         let source = "my $x = 42;";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("AST: {:#?}", ast);
         println!("S-expression: {}", ast.to_sexp());
     }
 
     #[test]
     fn test_complex_expression() {
+        use perl_tdd_support::must;
         let source = "$a + $b * $c";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("S-expression: {}", ast.to_sexp());
     }
 
     #[test]
     fn test_if_statement() {
+        use perl_tdd_support::must;
         let source = "if ($x > 10) { print \"big\"; } else { print \"small\"; }";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("S-expression: {}", ast.to_sexp());
     }
 
     #[test]
     fn test_subroutine() {
+        use perl_tdd_support::must;
         let source = "sub hello { my $name = shift; print \"Hello, $name!\\n\"; }";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("S-expression: {}", ast.to_sexp());
     }
 
     #[test]
     fn test_foreach_loop() {
+        use perl_tdd_support::must;
         let source = "foreach my $item (@list) { print $item; }";
         let mut parser = ParserV2::new(source);
         let result = parser.parse();
 
         assert!(result.is_ok());
-        let ast = result.unwrap();
+        let ast = must(result);
         println!("S-expression: {}", ast.to_sexp());
     }
 }

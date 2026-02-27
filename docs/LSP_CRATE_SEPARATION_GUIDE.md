@@ -32,7 +32,7 @@ The comprehensive LSP crate separation in v0.8.8 represents a major architectura
 - **Command-line interface** - argument parsing, logging, health checks
 - **Server lifecycle management** - initialization, shutdown, error handling
 - **Editor integration** - protocol compliance, feature advertisement
-- **Binary distribution** - production-ready executable for end users
+- **Binary distribution** - executable for end users
 
 ## Migration Guide
 
