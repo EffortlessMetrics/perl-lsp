@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used, clippy::expect_used)]
 use perl_parser::{
     Parser,
     ast::{Node, NodeKind},
@@ -38,14 +37,15 @@ fn print_ast_structure(node: &Node, depth: usize) {
     }
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let code = "my $x = $h{key};";
     println!("Code: {}", code);
 
     let mut parser = Parser::new(code);
-    let ast = parser.parse().unwrap();
+    let ast = parser.parse()?;
 
     println!("S-expression: {}", ast.to_sexp());
     println!("AST structure:");
     print_ast_structure(&ast, 0);
+    Ok(())
 }

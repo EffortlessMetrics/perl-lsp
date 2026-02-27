@@ -2,7 +2,7 @@
 # Usage:
 #   - uses: ./.github/actions/setup-rust
 #     with:
-#       toolchain: stable  # or '1.89.0', 'nightly', etc.
+#       toolchain: stable  # or '1.92.0', 'nightly', etc.
 #       components: rustfmt, clippy
 #       cache: true
 #       sccache: false
@@ -12,7 +12,7 @@ description: 'Sets up Rust toolchain with caching for perl-lsp CI'
 
 inputs:
   toolchain:
-    description: 'Rust toolchain to install (stable, beta, nightly, or version like 1.89.0)'
+    description: 'Rust toolchain to install (stable, beta, nightly, or version like 1.92.0)'
     required: false
     default: 'stable'
   components:

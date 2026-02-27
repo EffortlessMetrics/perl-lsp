@@ -2,7 +2,7 @@
 
 ## Overview
 
-The import optimization system provides comprehensive analysis and optimization of Perl import statements with enterprise-grade reliability and performance.
+The import optimization system provides comprehensive analysis and optimization of Perl import statements.
 
 ## Architecture
 

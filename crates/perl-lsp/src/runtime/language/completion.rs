@@ -16,6 +16,7 @@ use crate::{
     runtime::routing::{IndexAccessMode, route_index_access},
     state::{completion_cap, completion_deadline},
 };
+use perl_keywords::LSP_RUNTIME_COMPLETION_KEYWORDS;
 use perl_parser::type_inference::TypeInferenceEngine;
 use regex::Regex;
 use serde_json::{Value, json};
@@ -557,15 +558,6 @@ impl LspServer {
             return completions; // Return early for method completions
         }
 
-        // Basic keywords that match the prefix
-        let keywords = [
-            "my", "our", "local", "state", "sub", "package", "use", "require", "if", "elsif",
-            "else", "unless", "while", "until", "for", "foreach", "given", "when", "default",
-            "return", "last", "next", "redo", "goto", "die", "warn", "print", "say", "open",
-            "close", "read", "write", "push", "pop", "shift", "unshift", "splice", "grep", "map",
-            "sort",
-        ];
-
         match sigil {
             Some('$') => {
                 // Scalar variables - suggest common ones
@@ -630,7 +622,7 @@ impl LspServer {
             }
             _ => {
                 // No sigil - suggest keywords
-                for kw in &keywords {
+                for kw in LSP_RUNTIME_COMPLETION_KEYWORDS {
                     if kw.starts_with(&prefix) {
                         completions.push(crate::completion::CompletionItem {
                             label: kw.to_string(),

@@ -1,14 +1,17 @@
 [package]
 name = "perl-dap-stack"
-version = "0.1.0"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Tree-sitter Perl Contributors"]
-description = "Stack trace handling for Perl DAP"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/tree-sitter-perl-rs"
-keywords = ["perl", "dap", "debug", "stack-trace"]
-categories = ["development-tools"]
+authors.workspace = true
+description = "Stack trace parsing and frame classification for the Perl Debug Adapter Protocol"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-dap-stack"
+keywords = ["perl", "dap", "debug", "stack-trace", "debugger"]
+categories = ["development-tools::debugging"]
 
 [dependencies]
 # Serialization for DAP protocol

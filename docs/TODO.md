@@ -1,6 +1,6 @@
 # TODOs & Missing Features
 
-> **Last Updated**: 2026-01-27
+> **Last Updated**: 2026-02-17
 > **Sources of truth**: `docs/ROADMAP.md` (plans), `docs/CURRENT_STATUS.md` (metrics), `features.toml` (capabilities)
 > **Rule**: If this file conflicts with those sources, update this file (not the sources).
 
@@ -24,20 +24,20 @@
 - [x] Add instrumentation (state durations, early-exit reasons, transition counts)
 - [x] Add targeted tests + benchmarks (small/medium/large workspaces)
 - [x] Document invariants and failure modes (docs + inline commentary)
-- [ ] Capture receipts (ci-gate + targeted tests/benchmarks)
+- [x] Capture receipts (ci-gate + targeted tests/benchmarks)
 
 ### Documentation Cleanup (missing_docs + module-level docs)
 
-- [ ] Run `cargo test -p perl-parser --test missing_docs_ac_tests` and capture receipts
-- [ ] Add or verify module-level docs for public modules (perl-parser + other public crates)
-- [ ] Ensure `cargo doc --no-deps -p perl-parser` is clean
-- [ ] Align wording across `START_HERE.md`, `CURRENT_STATUS.md`, `ROADMAP.md`, `CHANGELOG.md`
+- [x] Run `cargo test -p perl-parser --features doc-coverage --test missing_docs_ac_tests` and capture receipts
+- [x] Add or verify module-level docs for public modules (perl-parser + other public crates)
+- [x] Ensure `cargo doc --no-deps -p perl-parser` is clean
+- [x] Align wording across `START_HERE.md`, `CURRENT_STATUS.md`, `ROADMAP.md`, `CHANGELOG.md`
 
 ### Release Notes + Doc Alignment
 
-- [ ] v0.9.1 release notes draft (CHANGELOG + release summary)
-- [ ] Ensure `features.toml` and capability snapshots remain consistent
-- [ ] Verify `docs/CURRENT_STATUS.md` narrative matches receipts
+- [x] v0.9.1 release notes draft (CHANGELOG + release summary)
+- [x] Ensure `features.toml` and capability snapshots remain consistent
+- [x] Verify `docs/CURRENT_STATUS.md` narrative matches receipts
 
 ---
 
@@ -55,27 +55,31 @@
 
 ### DAP (Preview / Not Advertised)
 
-- **`dap.breakpoints`** (preview, not advertised)
-  - [x] Confirm semantics (REPLACE behavior, storage, validation)
-  - [x] Add integration tests around breakpoint lifecycle
+- **`dap.breakpoints.hit_condition`** (preview, not advertised)
+  - [x] Validate hit-count parsing and runtime counter behavior
+  - [ ] Add dedicated E2E fixture coverage for multi-hit workflows
 
-- **`dap.inline_values`** (preview, not advertised)
-  - [x] Decide mapping to LSP `inlineValue`
-  - [x] Add handler(s) and tests
+- **`dap.breakpoints.logpoints`** (preview, not advertised)
+  - [x] Implement logMessage parsing and output emission path
+  - [ ] Add dedicated E2E fixture for output+continue semantics
+
+- **`dap.exceptions.die`** (preview, not advertised)
+  - [x] Implement `setExceptionBreakpoints` filter handling
+  - [ ] Add E2E fixture proving stop behavior changes when enabled
 
 ---
 
-## Next (v1.0.0 Readiness) - TODOs
+## Next (v0.9.1 Readiness) - TODOs
 
-- [ ] Stability statement (GA-lock + versioning rules)
+- [ ] Stability statement (versioning rules)
 - [ ] Packaging stance (what ships; supported platforms)
 - [ ] Benchmark receipts committed under `benchmarks/results/`
-- [ ] Upgrade notes from v0.8.x -> v1.0
+- [ ] Upgrade notes from v0.8.x -> v0.9.x
 - [ ] Merge-gate work unblocked by CI pipeline cleanup (#211 -> #210)
 
 ---
 
-## Later (Post v1.0)
+## Later (Post v0.9.x)
 
 - [ ] Native DAP completeness: attach, variables/evaluate, safe eval
 - [ ] Full LSP 3.18 compliance audit vs spec (add missing catalog items to `features.toml`)

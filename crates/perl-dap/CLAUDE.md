@@ -4,106 +4,89 @@ This file provides guidance to Claude Code when working with code in this reposi
 
 ## Crate Overview
 
-`perl-dap` is the **Debug Adapter Protocol server** providing debugging support for Perl programs.
-
-**Purpose**: Debug Adapter Protocol server for Perl — bridges to perl's built-in debugger with IDE-compatible debugging features.
-
-**Version**: 0.1.0
+- **Tier**: 6 (application/executable crate)
+- **Purpose**: Debug Adapter Protocol server for Perl. Provides a native adapter that drives `perl -d` directly, and a `BridgeAdapter` library that proxies DAP messages to Perl::LanguageServer.
+- **Version**: 0.1.0
 
 ## Commands
 
 ```bash
-cargo build -p perl-dap               # Build this crate
+cargo build -p perl-dap               # Build
 cargo build -p perl-dap --release     # Build optimized
 cargo test -p perl-dap                # Run tests
 cargo clippy -p perl-dap              # Lint
-cargo doc -p perl-dap --open          # View documentation
-```
-
-## Running the Server
-
-```bash
-# Run DAP server
-./target/release/perl-dap
-
-# With debug logging
-RUST_LOG=debug ./target/release/perl-dap
+cargo doc -p perl-dap --open          # View docs
+./target/release/perl-dap --stdio     # Run native adapter (stdio)
+./target/release/perl-dap --socket --port 13603  # Run native adapter (TCP)
+./target/release/perl-dap --bridge    # Run bridge adapter
+RUST_LOG=debug ./target/release/perl-dap  # Run with debug logging
 ```
 
 ## Architecture
 
-### Role in Workspace
+### Dependencies
 
-This is a **Tier 6 executable crate** — the debug adapter binary for Perl.
+**Internal crates**:
+- `perl-parser` -- AST for breakpoint validation
+- `perl-dap-breakpoint` -- `AstBreakpointValidator`, `BreakpointValidator` trait
+- `perl-dap-eval` -- `SafeEvaluator` for expression evaluation
+- `perl-dap-stack` -- `PerlStackParser` for stack trace extraction
+- `perl-dap-variables` -- `PerlVariableRenderer`, `VariableParser`, `VariableRenderer`
 
-### Key Dependencies
+**External crates**: `tokio` (async runtime), `lsp-types` (shared types with LSP), `serde`/`serde_json` (protocol serialization), `anyhow`/`thiserror` (errors), `clap` (CLI), `tracing` (logging), `regex` (debugger output parsing), `ropey` (position mapping), `nix` (Unix signals), `winapi` (Windows process control)
 
-**Internal**:
-- `perl-parser` - For source analysis
+### Key Types and Modules
 
-**External**:
-- `tokio` (full features) - Async runtime
-- `lsp-types` - Shared types with LSP
-- `serde`, `serde_json` - Protocol serialization
-- `anyhow` - Error handling
-- `tracing` - Logging
-- `clap` - CLI argument parsing
-- `ropey` - Rope text handling
-- `regex` - Pattern matching
-- Platform-specific: `nix` (Unix), `winapi` (Windows)
+| Module | Key types | Purpose |
+|--------|-----------|---------|
+| `lib.rs` | `DapServer`, `DapConfig`, `DapMode` | Server entry point; dispatches to Native or Bridge mode |
+| `main.rs` | `Args` (clap) | CLI binary; parses `--stdio`, `--socket`, `--bridge`, `--port`, `--log-level` |
+| `debug_adapter.rs` | `DebugAdapter`, `DapMessage` | Native adapter: manages `perl -d` process, handles all DAP requests |
+| `bridge_adapter.rs` | `BridgeAdapter` | Spawns Perl::LanguageServer in DAP mode, proxies messages via stdio |
+| `protocol.rs` | `Request`, `Response`, `Event`, `Capabilities`, `SourceBreakpoint`, `Breakpoint`, ... | Full DAP protocol type definitions (serde-annotated) |
+| `breakpoints.rs` | `BreakpointStore`, `BreakpointRecord`, `BreakpointHitOutcome` | Breakpoint storage with REPLACE semantics, AST validation |
+| `dispatcher.rs` | `DapDispatcher` (deprecated), `DispatchResult` | Legacy message router; use `DebugAdapter` instead |
+| `configuration.rs` | `LaunchConfiguration`, `AttachConfiguration`, `create_launch_json_snippet()`, `create_attach_json_snippet()` | Launch/attach config structs with validation |
+| `platform.rs` | `resolve_perl_path()`, `normalize_path()`, `setup_environment()` | Cross-platform path resolution and env setup |
+| `security.rs` | `SecurityError`, `validate_path()`, `validate_expression()` | Path traversal prevention, expression sanitization, timeout caps |
+| `tcp_attach.rs` | `TcpAttachConfig`, `TcpAttachSession`, `DapEvent` | TCP socket attachment to running Perl debuggers |
+| `inline_values.rs` | `collect_inline_values()` | Regex-based inline value extraction for scalar variables |
+| `feature_catalog.rs` | `has_feature()`, `advertised_features()` | Auto-generated from `features.toml` at build time |
 
-### DAP Feature Modules
-
-| Crate | Purpose |
-|-------|---------|
-| `perl-dap-breakpoint` | Breakpoint validation |
-| `perl-dap-eval` | Safe expression evaluation |
-| `perl-dap-stack` | Stack trace handling |
-| `perl-dap-variables` | Variable rendering |
-
-### Main Modules
-
-| File | Purpose |
-|------|---------|
-| `main.rs` | Server entry point |
-| `lib.rs` | DAP library interface |
-
-## Features
+### Feature Flags
 
 | Feature | Purpose |
 |---------|---------|
-| `dap-phase1` | Phase 1 debugging features |
-| `dap-phase2` | Phase 2 extended features |
-| `dap-phase3` | Phase 3 advanced features |
+| `dap-phase1` | Phase 1: bridge to Perl::LanguageServer (AC1-AC4) |
+| `dap-phase2` | Phase 2: native adapter features (AC5-AC16) |
+| `dap-phase3` | Phase 3: production hardening (AC17-AC19) |
 
-## Test Suites
+## Usage Examples
 
-The crate has extensive acceptance testing:
+```rust
+// Native mode (default)
+use perl_dap::{DapConfig, DapMode, DapServer};
+let config = DapConfig { log_level: "info".into(), mode: DapMode::Native, workspace_root: None };
+let mut server = DapServer::new(config)?;
+server.run()?; // stdio transport
 
-| Test Suite | Purpose |
-|------------|---------|
-| `bridge_integration_tests` | Debugger bridge integration |
-| `dap_adapter_tests` | DAP adapter protocol |
-| `dap_golden_transcript_tests` | Golden file testing |
-| `dap_breakpoint_matrix_tests` | Breakpoint behavior matrix |
-| `dap_performance_tests` | Performance validation |
-| `dap_security_tests` | Security validation |
-| `dap_dependency_tests` | Dependency testing |
-| `dap_packaging_tests` | Package validation |
+// Bridge mode
+use perl_dap::BridgeAdapter;
+let mut adapter = BridgeAdapter::new();
+adapter.spawn_pls_dap().await?;
+adapter.proxy_messages().await?;
+adapter.shutdown().await?;
 
-Tests cover acceptance criteria AC1-AC19.
-
-## Bridge Mode
-
-The DAP server operates in "bridge mode" — it communicates with Perl's built-in debugger (`perl -d`) via a PTY/pipe interface:
-
-```
-IDE <--DAP--> perl-dap <--PTY--> perl -d script.pl
+// Configuration generation
+use perl_dap::{create_launch_json_snippet, create_attach_json_snippet};
+println!("{}", create_launch_json_snippet());
 ```
 
 ## Important Notes
 
-- Currently in phase 1 development
-- Platform-specific code for Unix/Windows process handling
-- Security validation for expression evaluation (via `perl-dap-eval`)
-- See `perl-dap-*` crates for individual feature documentation
+- `DapDispatcher` is deprecated; use `DebugAdapter` directly for new code
+- Platform-specific code gated with `cfg(unix)` / `cfg(windows)` for signal handling
+- Security module enforces workspace-boundary path checks and expression sanitization
+- All regex patterns use `OnceLock<Result<Regex, regex::Error>>` or `Lazy<Option<Regex>>` for graceful degradation
+- Build script generates `dap_feature_catalog.rs` from `features.toml`
+- Test suites cover acceptance criteria AC1-AC19 across 10 test targets

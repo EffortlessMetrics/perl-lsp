@@ -8,13 +8,13 @@
 # =============================================================================
 toolchain:
   # MSRV - Minimum Supported Rust Version (for OpenAI Codex compatibility)
-  msrv: '1.89.0'
+  msrv: '1.92.0'
   # Default toolchain for most checks
-  default: '1.89.0'
+  default: '1.92.0'
   # Toolchains tested in matrix builds
   matrix:
     - stable
-    - '1.89.0'
+    - '1.92.0'
     - beta
     # Nightly only on Linux to catch regressions early
     - nightly
@@ -85,7 +85,7 @@ env:
 # =============================================================================
 cache:
   # Key pattern: {os}-{toolchain}-{suffix}-{lockfile_hash}
-  # Example: Linux-1.89.0-merge-gate-abc123
+  # Example: Linux-1.92.0-merge-gate-abc123
   shared-key: perl-lsp
 
   # Suffixes for different job types

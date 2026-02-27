@@ -1,6 +1,6 @@
-# tree-sitter-perl PR Agent Workflow
+# perl-lsp PR Agent Workflow
 
-This directory contains specialized agents for managing the complete PR lifecycle in the tree-sitter-perl repository. The agents work together to provide automated review, testing, cleanup, and merge processes while maintaining the high quality standards required for the Perl parser ecosystem.
+This directory contains specialized agents for managing the complete PR lifecycle in the perl-lsp repository. The agents work together to provide automated review, testing, cleanup, and merge processes while maintaining the high quality standards required for the Perl parser ecosystem.
 
 ## Workflow Overview
 
@@ -197,8 +197,8 @@ All agents are configured with deep knowledge of:
 - **perl-parser-pest**: Legacy Pest-based parser (deprecated)
 
 ### Development Standards
-- **Rust 2024** edition with MSRV 1.89+ compatibility
-- **Performance targets**: 1-150 µs parsing speeds, 4-19x improvement over legacy
+- **Rust 2024** edition with MSRV 1.92+ compatibility
+- **Performance targets**: 1-150 µs parsing speeds
 - **Test coverage**: ~100% Perl 5 syntax coverage including ALL edge cases
 - **LSP compliance**: LSP 3.18+ protocol, ~75% feature coverage
 - **Quality tools**: cargo-nextest, xtask automation, comprehensive corpus validation

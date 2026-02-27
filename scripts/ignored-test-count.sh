@@ -9,7 +9,7 @@
 # Categories tracked:
 #   - brokenpipe: BrokenPipe/transport flakes
 #   - feature: Feature-gated/not implemented
-#   - infra: Infrastructure/TODO items
+#   - infra: Infrastructure/pending items
 #   - protocol: Protocol compliance issues
 #   - manual: Manual helper tests (snapshot regen, etc.)
 #   - stress: Stress tests (run with --features stress-tests)
@@ -80,8 +80,8 @@ categorize_ignore() {
     # Check for known bugs that need fixing (explicit BUG: prefix FIRST)
     elif [[ "$lower_reason" =~ ^bug:|bug:\ |known.bug|regression|incorrect.behavior|parser.bug|missing.*notification|missing.*initialize|server.returns.*instead|exposes.*|will.kill|mut_[0-9]+|known.inconsistencies|matching.issue|investigate|instead.of.expected|different.error.format|expects.*but.implementation ]]; then
         echo "bug"
-    # Check for infrastructure/TODO (explicit TODO: prefix BEFORE brokenpipe patterns)
-    # Also match TODO anywhere in the string for inline TODOs like "edge case - TODO: fix later"
+    # Check for infrastructure/pending (explicit prefix BEFORE brokenpipe patterns)
+    # Also match inline pending markers like "edge case - needs fix later"
     elif [[ "$lower_reason" =~ ^todo:|^infra:|infra\ |todo:|fixme|needs|requires|setup|config|environment|run.with|only.run.after|only.run.when ]]; then
         echo "infra"
     # Check for feature-gated/not implemented (before brokenpipe)
@@ -257,6 +257,15 @@ base_total=${baseline[total]:-0}
 delta=$(format_delta "$total" "$base_total")
 printf "%-12s %8d %8d %8b\n" "TOTAL" "$total" "$base_total" "$delta"
 echo "==============================================="
+
+# Two-number split: CI_DEBT vs BACKLOG vs PERMANENT
+ci_debt=$((${counts[brokenpipe]} + ${counts[bug]} + ${counts[bare]} + ${counts[other]}))
+backlog=$((${counts[feature]} + ${counts[infra]}))
+permanent=$((${counts[manual]} + ${counts[stress]}))
+echo ""
+printf "CI_DEBT    = %-3d  (brokenpipe + bug + bare + other; must be 0)\n" "$ci_debt"
+printf "BACKLOG    = %-3d  (feature + infra; planned work)\n" "$backlog"
+printf "PERMANENT  = %-3d  (manual + stress; bench/helpers)\n" "$permanent"
 echo ""
 
 # Show details by category if verbose

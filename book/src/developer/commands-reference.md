@@ -7,7 +7,7 @@
 ### LSP Server
 ```bash
 # Quick install (Linux/macOS)
-curl -fsSL https://raw.githubusercontent.com/EffortlessSteven/tree-sitter-perl/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/main/install.sh | bash
 
 # Homebrew (macOS)
 brew tap tree-sitter-perl/tap
@@ -201,20 +201,20 @@ CARGO_BUILD_JOBS=4 RUST_TEST_THREADS=2 ./scripts/gate-local.sh
 | `RUST_TEST_THREADS` | 1 | Test parallelism (1 = serial) |
 | `GATE_RELEASE` | unset | Set to "1" for release builds |
 
-### Revolutionary Performance Testing (PR #140) (*Diataxis: How-to Guide* - Game-changing test reliability)
+### Fast Performance Testing (PR #140) (*Diataxis: How-to Guide* - Fast test reliability)
 
 PR #140 delivers transformative performance optimizations achieving unprecedented test speed and reliability:
 
-- **LSP behavioral tests**: 1560s+ → 0.31s (**5000x faster**)
-- **User story tests**: 1500s+ → 0.32s (**4700x faster**)
-- **Workspace tests**: 60s+ → 0.26s (**230x faster**)
+- **LSP behavioral tests**: 1560s+ → 0.31s (0.31s)
+- **User story tests**: 1500s+ → 0.32s (0.32s)
+- **Workspace tests**: 60s+ → 0.26s (0.26s)
 - **Overall suite**: 60s+ → <10s (**6x faster**)
 
 The testing infrastructure includes sophisticated adaptive threading configuration that scales timeouts and concurrency based on system constraints, enhanced with intelligent symbol waiting and optimized idle detection cycles.
 
 ```bash
-# Revolutionary CI testing with adaptive timeouts (PR #140 optimizations)
-RUST_TEST_THREADS=2 cargo test -p perl-lsp              # 5000x faster behavioral tests
+# Fast CI testing with adaptive timeouts (PR #140 optimizations)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp              # fast faster behavioral tests
 RUST_TEST_THREADS=2 cargo test -p perl-parser           # Enhanced with intelligent symbol waiting
 
 # Optimized single-threaded testing (maximum reliability)
@@ -233,13 +233,13 @@ LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --nocapture
 RUST_LOG=debug cargo test -p perl-lsp -- --nocapture    # Monitor timeout scaling
 ```
 
-#### Revolutionary Performance Matrix (*Diataxis: Reference* - PR #140 achievements)
+#### Fast Performance Matrix (*Diataxis: Reference* - PR #140 achievements)
 
 | Test Suite | Before PR #140 | After PR #140 | Improvement | Strategic Value |
 |------------|----------------|----------------|-------------|----------------|
-| **lsp_behavioral_tests** | 1560s+ | 0.31s | **5000x faster** | Transformational |
-| **lsp_full_coverage_user_stories** | 1500s+ | 0.32s | **4700x faster** | Revolutionary |
-| **Individual workspace tests** | 60s+ | 0.26s | **230x faster** | Game-changing |
+| **lsp_behavioral_tests** | 1560s+ | 0.31s | 0.31s | Fast |
+| **lsp_full_coverage_user_stories** | 1500s+ | 0.32s | 0.32s | Fast |
+| **Individual workspace tests** | 60s+ | 0.26s | 0.26s | Fast |
 | **lsp_golden_tests** | 45s | 2.1s | **21x faster** | Significant |
 | **Overall test suite** | 60s+ | <10s | **6x faster** | Production-ready |
 
@@ -301,15 +301,15 @@ cargo test -p perl-parser lsp
 # Run LSP integration tests with controlled threading (recommended)
 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 
-# Revolutionary performance testing with enhanced test harness (PR #140)
+# Fast performance testing with enhanced test harness (PR #140)
 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp             # Fast mode with mock responses
 
 # Optimal CI performance with adaptive configuration
 RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp -- --test-threads=2
 
 # Enhanced test harness features (PR #140)
-cargo test -p perl-lsp --test lsp_behavioral_tests       # 5000x performance improvement
-cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 4700x performance improvement
+cargo test -p perl-lsp --test lsp_behavioral_tests       # fast performance improvement
+cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # fast performance improvement
 
 # Run specific performance-sensitive tests with threading control
 RUST_TEST_THREADS=2 cargo test -p perl-lsp test_completion_detail_formatting -- --test-threads=2
@@ -322,7 +322,7 @@ cargo test -p perl-lsp --test lsp_perltidy_test test_formatting_provider_capabil
 # Test LSP server manually
 echo -e 'Content-Length: 58\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | perl-lsp --stdio
 
-# Run with incremental parsing enabled (production-ready feature)
+# Run with incremental parsing enabled (well-tested feature)
 PERL_LSP_INCREMENTAL=1 perl-lsp --stdio
 
 # Test incremental parsing with LSP protocol
@@ -334,24 +334,24 @@ perl-lsp --stdio < test_requests.jsonrpc
 
 ### LSP Testing Environment Variables (*Diataxis: Reference* - Configuration options)
 
-**RUST_TEST_THREADS** (**Revolutionary Enhancement in PR #140**):
+**RUST_TEST_THREADS** (**Fast Enhancement in PR #140**):
 ```bash
 # Control test thread concurrency for transformative performance
-export RUST_TEST_THREADS=2                # Achieves 5000x performance gains in CI
+export RUST_TEST_THREADS=2                # Achieves fast performance gains in CI
 
-# Revolutionary performance testing with adaptive timeouts
+# Fast performance testing with adaptive timeouts
 RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests     # 0.31s (was 1560s+)
 RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_full_coverage_user_stories  # 0.32s (was 1500s+)
 
 # Enhanced benefits of PR #140 threading optimization:
-# - 5000x faster behavioral test execution
-# - 4700x faster user story completion
+# - fast faster behavioral test execution
+# - fast faster user story completion
 # - 100% test pass rate (was ~55% due to timeouts)
 # - Intelligent symbol waiting with exponential backoff
 # - Optimized idle detection (1000ms → 200ms cycles)
 # - Enhanced test harness with mock responses and graceful degradation
 
-# Revolutionary thread configuration examples:
+# Fast thread configuration examples:
 cargo test -p perl-lsp -- --test-threads=2              # Optimal CI configuration
 RUST_TEST_THREADS=1 cargo test -p perl-lsp              # Maximum reliability mode
 RUST_TEST_THREADS=4 cargo test -p perl-lsp              # High-performance development
@@ -380,7 +380,7 @@ LSP_TEST_FALLBACKS=1 cargo check --workspace # Fast build verification
 
 **PERL_LSP_INCREMENTAL**:
 ```bash
-# Enable incremental parsing (production-ready)
+# Enable incremental parsing (well-tested)
 export PERL_LSP_INCREMENTAL=1
 perl-lsp --stdio
 
@@ -650,7 +650,7 @@ cargo test -p perl-lsp --test lsp_code_actions_tests -- test_ac3_advanced_refact
 cargo test -p perl-lsp --test lsp_behavioral_tests | grep -v "ignored"  # Verify test enablement
 ```
 
-The enhanced executeCommand and code actions integration delivers enterprise-grade LSP functionality with <50ms response times, comprehensive error handling, and production-ready tool integration patterns.
+The enhanced executeCommand and code actions integration delivers comprehensive LSP functionality with <50ms response times, comprehensive error handling, and well-tested tool integration patterns.
 
 ## Benchmark Commands
 
@@ -734,22 +734,24 @@ cargo test --doc                      # Documentation tests
 sudo apt-get install libclang-dev  # Ubuntu/Debian
 brew install llvm                  # macOS
 
-# Run dual-scanner corpus comparison (requires xtask excluded from workspace)
-cd xtask && cargo run corpus                              # Default: compare both scanners
-cd xtask && cargo run corpus -- --scanner both           # Explicit dual-scanner mode
-cd xtask && cargo run corpus -- --scanner both --diagnose # With detailed analysis
+# Run corpus comparison modes (requires legacy feature)
+cargo run -p xtask --features legacy -- corpus                          # Corpus vs selected parser (default scanner: v3)
+cargo run -p xtask --features legacy -- corpus --scanner both           # C vs v3 comparison mode
+cargo run -p xtask --features legacy -- corpus --scanner both --diagnose
 
 # Individual scanner testing
-cd xtask && cargo run corpus -- --scanner c              # C scanner (delegates to Rust)
-cd xtask && cargo run corpus -- --scanner rust           # Rust scanner implementation  
-cd xtask && cargo run corpus -- --scanner v3             # V3 parser only
+cargo run -p xtask --features legacy -- corpus --scanner c                    # C scanner
+cargo run -p xtask --features legacy -- corpus --scanner rust                 # In-crate v2 pest parser
+cargo run -p xtask --features legacy -- corpus --scanner v2-pest-microcrate   # Extracted perl-parser-pest v2
+cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose # v2<->v2 drift detector
+cargo run -p xtask --features legacy -- corpus --scanner v3                   # V3 parser only
 
 # Diagnostic analysis (*Diataxis: Reference* - detailed comparison)
-cd xtask && cargo run corpus -- --diagnose               # Analyze first failing test
-cd xtask && cargo run corpus -- --test                   # Test current parser behavior
+cargo run -p xtask --features legacy -- corpus --diagnose  # Analyze first failing test
+cargo run -p xtask --features legacy -- corpus --test      # Test current parser behavior
 
 # Custom corpus path
-cd xtask && cargo run corpus -- --path ../test/corpus    # Custom corpus directory
+cargo run -p xtask --features legacy -- corpus --path tree-sitter-perl/test/corpus
 ```
 
 ### Dual-Scanner Output Analysis (*Diataxis: Explanation* - Understanding results)
@@ -795,19 +797,21 @@ cd xtask && cargo run corpus -- --path ../test/corpus    # Custom corpus directo
 
 ```bash
 # Basic corpus command structure
-cd xtask && cargo run corpus [OPTIONS]
+cargo run -p xtask --features legacy -- corpus [OPTIONS]
 
 # Command line options:
---path <PATH>              # Corpus directory path (default: ../c/test/corpus)
---scanner <SCANNER>        # Scanner type: c, rust, v3, both (default: both)
+--path <PATH>              # Corpus directory path (default: tree-sitter-perl/test/corpus)
+--scanner <SCANNER>        # Scanner type: c, rust, v2-pest-microcrate, v2-parity, v3, both
 --diagnose                 # Run diagnostic analysis on first failing test
 --test                     # Test current parser behavior with simple expressions
 
 # Scanner type options:
 c       # Use C tree-sitter scanner only (baseline for comparison)
-rust    # Use Rust tree-sitter scanner only (PureRustPerlParser)
+rust    # Use in-crate v2 pest parser (tree_sitter_perl::PureRustPerlParser)
+v2-pest-microcrate  # Use extracted perl-parser-pest v2 parser
+v2-parity  # Compare in-crate v2 vs extracted v2 output only (ignores corpus expected)
 v3      # Use V3 native parser only (perl_parser::Parser)
-both    # Compare C scanner vs Rust scanner (legacy testing - C now delegates to Rust)
+both    # Compare C scanner vs V3 parser output before corpus expectation check
 
 # Prerequisites for dual-scanner mode:
 # Ubuntu/Debian: sudo apt-get install libclang-dev

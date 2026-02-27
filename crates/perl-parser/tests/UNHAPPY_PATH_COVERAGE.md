@@ -179,4 +179,4 @@ With 70+ unhappy path scenarios tested, the Perl LSP server is:
 - **Stable** under concurrent load
 - **Performant** at scale
 
-The server is production-ready for enterprise deployment with comprehensive protection against real-world edge cases and failure modes.
+The server has comprehensive protection against real-world edge cases and failure modes.

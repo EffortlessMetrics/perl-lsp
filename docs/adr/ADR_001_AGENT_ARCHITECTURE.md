@@ -4,18 +4,18 @@
 Accepted - **Fully Implemented in PR #153** with 94 specialized agents and comprehensive agent customization framework
 
 ## Context
-The tree-sitter-perl project initially used generic Claude Code agents stored in `.claude/agents/` directory. As the project matured with 5 published crates, enterprise-grade LSP features, and specialized Perl parsing requirements, it became clear that generic agents could not adequately address the domain-specific needs of the Perl parser ecosystem.
+The tree-sitter-perl project initially used generic Claude Code agents stored in `.claude/agents/` directory. As the project matured with 5 published crates, comprehensive LSP features, and specialized Perl parsing requirements, it became clear that generic agents could not adequately address the domain-specific needs of the Perl parser ecosystem.
 
 The project required specialized agents that understand:
 - **Perl 5 syntax coverage requirements** (~100% with enhanced builtin function parsing)
 - **Dual indexing architecture patterns** for cross-file navigation (98% reference coverage)
-- **Revolutionary performance benchmarks** (sub-microsecond parsing, 5000x LSP improvements)
-- **Incremental parsing** with statistical validation and enterprise-grade reliability
-- **Enterprise security patterns** including UTF-16 position conversion security (PR #153)
+- **Performance benchmarks** (sub-microsecond parsing, significant LSP improvements)
+- **Incremental parsing** with statistical validation
+- **Security patterns** including UTF-16 position conversion security (PR #153)
 - **Comprehensive mutation testing methodology** for parser validation (87% quality score)
 - **Multi-crate workspace patterns** across 5 published crates with unified development workflow
 - **Adaptive threading configuration** for CI environments and concurrent testing
-- **Production-ready LSP features** (~89% functional with comprehensive workspace support)
+- **LSP features** (~89% functional with comprehensive workspace support)
 
 ## Decision
 We will implement a specialized agent architecture with domain-specific agents organized in `.claude/agents2/` directory structure:
@@ -57,8 +57,8 @@ Total: **97 specialized agents** (vs. 53 generic agents) organized by functional
 
 1. **Domain Specialization**: Each agent includes comprehensive Perl parsing ecosystem context:
    - Multi-crate workspace architecture (5 published crates)
-   - Revolutionary performance standards (5000x LSP improvements, sub-microsecond parsing)
-   - Enterprise security requirements (UTF-16 safety, path traversal prevention)
+   - Performance standards (sub-microsecond parsing)
+   - Security requirements (UTF-16 safety, path traversal prevention)
    - Comprehensive quality metrics (87% mutation score, zero clippy warnings)
 
 2. **Workflow Integration**: Sophisticated agent routing with specialized successors:
@@ -66,9 +66,9 @@ Total: **97 specialized agents** (vs. 53 generic agents) organized by functional
    - **Integration Chain**: test-coordinator → workspace-validator → performance-monitor → release-gate
    - **Development Chain**: code-enhancer → test-creator → doc-generator → review-prep
 
-3. **Quality Enforcement**: Built-in understanding of enterprise standards:
+3. **Quality Enforcement**: Built-in understanding of project standards:
    - **Mutation Testing**: 87% quality score with comprehensive edge case coverage
-   - **Performance Benchmarks**: Revolutionary LSP performance maintenance (5000x improvements)
+   - **Performance Benchmarks**: LSP performance maintenance
    - **Security Standards**: UTF-16 position conversion security, Unicode safety validation
    - **Code Quality**: Zero clippy warnings, consistent formatting, comprehensive test coverage
 
@@ -82,17 +82,17 @@ Total: **97 specialized agents** (vs. 53 generic agents) organized by functional
    - **Contextual Adaptation**: Agents understand project-specific patterns and requirements
    - **Intelligent Routing**: Context-aware successor selection based on task requirements
    - **Quality Integration**: Built-in understanding of parser ecosystem quality standards
-   - **Performance Awareness**: Revolutionary performance requirement integration
+   - **Performance Awareness**: Performance requirement integration
 
 ## Consequences
 
 ### Positive
 - **Dramatically Improved Accuracy**: Agents understand comprehensive Perl parsing domain requirements
 - **Sophisticated Workflow Orchestration**: Specialized agent chains for parser-specific workflows with intelligent routing
-- **Comprehensive Quality Enforcement**: Built-in understanding of mutation testing (87% score), revolutionary performance standards, and enterprise security
+- **Comprehensive Quality Enforcement**: Built-in understanding of mutation testing (87% score), performance standards, and security
 - **Enhanced Maintenance Efficiency**: Self-documenting agents with inline expertise and parser ecosystem context
-- **Security Integration**: Built-in UTF-16 security validation and enterprise-grade security pattern understanding
-- **Performance Awareness**: Revolutionary performance requirements (5000x LSP improvements) integrated throughout workflow
+- **Security Integration**: Built-in UTF-16 security validation and security pattern understanding
+- **Performance Awareness**: Performance requirements integrated throughout workflow
 - **Real Bug Discovery**: Mutation testing integration revealed and eliminated critical UTF-16 security vulnerabilities
 
 ### Negative
@@ -115,10 +115,10 @@ Total: **97 specialized agents** (vs. 53 generic agents) organized by functional
 - **Security Integration**: Built-in UTF-16 position conversion security and enterprise security pattern validation
 
 ### Quality Metrics and Validation
-- **Comprehensive Test Coverage**: 147+ mutation hardening tests (enterprise-grade test suite)
-- **Quality Achievement**: Mutation score improved from ~70% to **87%** (exceeded 85% enterprise target)
+- **Comprehensive Test Coverage**: 147+ mutation hardening tests
+- **Quality Achievement**: Mutation score improved from ~70% to **87%**
 - **Security Validation**: Real vulnerability discovery through mutation testing (UTF-16 boundary violations)
-- **Performance Preservation**: All revolutionary performance achievements maintained (5000x LSP improvements)
+- **Performance Preservation**: Performance achievements maintained
 
 ### Technical Architecture
 - **Directory Structure**: `.claude/agents2/` with organized functional domains (review/, integration/, generative/, mantle/, other/)

@@ -5,9 +5,16 @@ mod tests {
     use crate::pure_rust_parser::PureRustPerlParser;
     use proptest::prelude::*;
 
+    fn regex_strategy(pattern: &'static str, fallback: &'static str) -> BoxedStrategy<String> {
+        match prop::string::string_regex(pattern) {
+            Ok(strategy) => strategy.boxed(),
+            Err(_err) => Just(fallback.to_string()).boxed(),
+        }
+    }
+
     // Strategy for generating valid Perl identifiers
-    fn identifier_strategy() -> impl Strategy<Value = String> {
-        prop::string::string_regex("[a-zA-Z_][a-zA-Z0-9_]{0,20}").unwrap()
+    fn identifier_strategy() -> BoxedStrategy<String> {
+        regex_strategy("[a-zA-Z_][a-zA-Z0-9_]{0,20}", "a")
     }
 
     // Strategy for generating scalar variable names
@@ -27,33 +34,33 @@ mod tests {
     }
 
     // Strategy for generating numbers
-    fn number_strategy() -> impl Strategy<Value = String> {
+    fn number_strategy() -> BoxedStrategy<String> {
         prop_oneof![
             // Integers
-            prop::string::string_regex("[0-9]+").unwrap(),
+            regex_strategy("[0-9]+", "0"),
             // Floats
-            prop::string::string_regex("[0-9]+\\.[0-9]+").unwrap(),
+            regex_strategy("[0-9]+\\.[0-9]+", "0.0"),
             // Scientific notation
-            prop::string::string_regex("[0-9]+\\.[0-9]+[eE][+-]?[0-9]+").unwrap(),
+            regex_strategy("[0-9]+\\.[0-9]+[eE][+-]?[0-9]+", "1.0e1"),
             // Hex numbers
-            prop::string::string_regex("0x[0-9a-fA-F]+").unwrap(),
+            regex_strategy("0x[0-9a-fA-F]+", "0x0"),
             // Octal numbers
-            prop::string::string_regex("0[0-7]+").unwrap(),
+            regex_strategy("0[0-7]+", "00"),
             // Binary numbers
-            prop::string::string_regex("0b[01]+").unwrap()
+            regex_strategy("0b[01]+", "0b0")
         ]
+        .boxed()
     }
 
     // Strategy for generating string literals
-    fn string_strategy() -> impl Strategy<Value = String> {
+    fn string_strategy() -> BoxedStrategy<String> {
         prop_oneof![
             // Single quoted strings - avoid backslash at end
-            prop::string::string_regex("[^'\\\\]*").unwrap().prop_map(|s| format!("'{}'", s)),
+            regex_strategy("[^'\\\\]*", "").prop_map(|s| format!("'{}'", s)),
             // Double quoted strings (avoid control chars and quotes)
-            prop::string::string_regex("[^\"\\\\\\n\\r]*")
-                .unwrap()
-                .prop_map(|s| format!("\"{}\"", s)),
+            regex_strategy("[^\"\\\\\\n\\r]*", "").prop_map(|s| format!("\"{}\"", s)),
         ]
+        .boxed()
     }
 
     // Strategy for generating simple expressions

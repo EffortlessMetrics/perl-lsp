@@ -1,17 +1,17 @@
 [package]
 name = "perl-diagnostics-codes"
-version = "0.8.8"
+version = "0.9.1"
 edition.workspace = true
 rust-version.workspace = true
-authors = ["Perl LSP Contributors"]
+authors.workspace = true
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/perl-lsp"
-homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/perl-diagnostics-codes"
 description = "Stable diagnostic codes and severity levels for Perl LSP"
 readme = "README.md"
-keywords = ["perl", "diagnostics", "lsp", "errors"]
-categories = ["development-tools"]
+keywords = ["perl", "diagnostics", "lsp", "severity", "lint"]
+categories = ["development-tools", "development-tools::testing"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
