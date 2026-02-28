@@ -23,18 +23,16 @@
 //!
 //! ## Basic Tokenization
 //!
-//! ```rust,ignore
+//! ```rust
 //! use perl_lexer::{PerlLexer, TokenType};
 //!
-//! let code = r#"my $x = 42;"#;
-//! let mut lexer = PerlLexer::new(code);
+//! let mut lexer = PerlLexer::new("my $x = 42;");
+//! let tokens = lexer.collect_tokens();
 //!
-//! while let Some(token) = lexer.next_token() {
-//!     println!("{:?}: {}", token.token_type, token.text);
-//!     if matches!(token.token_type, TokenType::EOF) {
-//!         break;
-//!     }
-//! }
+//! // First token is the keyword `my`
+//! assert!(matches!(&tokens[0].token_type, TokenType::Keyword(k) if &**k == "my"));
+//! // Tokens include variables, operators, literals, and EOF
+//! assert!(matches!(&tokens.last().unwrap().token_type, TokenType::EOF));
 //! ```
 //!
 //! ## Context-Aware Parsing

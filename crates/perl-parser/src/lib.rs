@@ -40,7 +40,8 @@
 //! Generate tests automatically from parsed code:
 //!
 //! ```rust
-//! use perl_parser::{Parser, TestGenerator, TestFramework};
+//! use perl_parser::Parser;
+//! use perl_parser::tdd::test_generator::{TestGenerator, TestFramework};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = r#"sub add { my ($a, $b) = @_; return $a + $b; }"#;
@@ -48,11 +49,10 @@
 //! let ast = parser.parse()?;
 //!
 //! let generator = TestGenerator::new(TestFramework::TestMore);
-//! let tests = generator.generate_tests(&ast, "");
+//! let tests = generator.generate_tests(&ast, code);
 //!
-//! // Outputs test cases with intelligent assertions
-//! // Auto-detects that add(1, 2) should return 3
-//! println!("{}", tests);
+//! // Returns test cases with intelligent assertions
+//! assert!(!tests.is_empty());
 //! # Ok(())
 //! # }
 //! ```
@@ -62,7 +62,8 @@
 //! Use as a library for LSP features (see `perl-lsp` for the standalone server):
 //!
 //! ```rust
-//! use perl_parser::{Parser, SemanticAnalyzer};
+//! use perl_parser::Parser;
+//! use perl_parser::analysis::semantic::SemanticAnalyzer;
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! let code = "my $x = 42;";
@@ -70,8 +71,7 @@
 //! let ast = parser.parse()?;
 //!
 //! // Semantic analysis for hover, completion, etc.
-//! let analyzer = SemanticAnalyzer::new();
-//! let model = analyzer.analyze(&ast);
+//! let model = SemanticAnalyzer::analyze(&ast);
 //! # Ok(())
 //! # }
 //! ```

@@ -2,6 +2,26 @@
 //!
 //! This crate provides the shared token definitions used by the Perl parser
 //! and related tools.
+//!
+//! # Examples
+//!
+//! Create and inspect tokens:
+//!
+//! ```rust
+//! use perl_token::{Token, TokenKind};
+//!
+//! // Create a keyword token for `my`
+//! let token = Token::new(TokenKind::My, "my", 0, 2);
+//! assert_eq!(token.kind, TokenKind::My);
+//! assert_eq!(&*token.text, "my");
+//! assert_eq!(token.start, 0);
+//! assert_eq!(token.end, 2);
+//!
+//! // Create a numeric literal token
+//! let num = Token::new(TokenKind::Number, "42", 7, 9);
+//! assert_eq!(num.kind, TokenKind::Number);
+//! assert_eq!(&*num.text, "42");
+//! ```
 
 use std::sync::Arc;
 
