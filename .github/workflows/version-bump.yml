@@ -65,8 +65,10 @@ jobs:
 
           curl -fsSL "$ASSET_URL" -o /tmp/git-cliff.tar.gz
           tar -xzf /tmp/git-cliff.tar.gz -C /tmp
+          extracted_dir="$(tar -tzf /tmp/git-cliff.tar.gz | head -n 1 | cut -d'/' -f1)"
           mkdir -p /usr/local/bin
-          sudo mv /tmp/git-cliff-*/*/git-cliff /usr/local/bin/
+          sudo mv "/tmp/${extracted_dir}/git-cliff" /usr/local/bin/
+          sudo chmod +x /usr/local/bin/git-cliff
 
       - name: Resolve release target
         id: resolved-version
