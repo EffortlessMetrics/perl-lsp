@@ -6,12 +6,12 @@ We actively support security updates for the following versions:
 
 | Version | Supported          | Status |
 | ------- | ------------------ | -------- |
-| 0.9.x   | :white_check_mark: | **Current Release** |
-| 0.8.x   | :white_check_mark: | Legacy Support |
+| 0.10.x  | :white_check_mark: | **Current Release** |
+| 0.9.x   | :white_check_mark: | Legacy Support |
 | 0.8.x   | :white_check_mark: | Legacy Support |
 | < 0.8   | :x:                | End of Life |
 
-**v0.9.x Security Guarantee**: v0.9.x receives priority security support with rapid response times and comprehensive security validation.
+**v0.10.x Security Guarantee**: v0.10.x receives priority security support with rapid response times and comprehensive security validation.
 
 ## Reporting a Vulnerability
 
@@ -69,7 +69,7 @@ This project uses comprehensive automated security scanning:
 - **Mutation Testing**: Security-focused mutation hardening with 87% quality score
 - **Fuzz Testing**: Property-based testing with crash detection and AST invariant validation
 
-### v0.9.x Security Features
+### v0.10.x Security Features
 
 - **Comprehensive Security**: Path traversal prevention, input validation, secure defaults
 - **UTF-16 Boundary Protection**: Fixes for symmetric position conversion vulnerabilities
@@ -104,7 +104,7 @@ When using perl-lsp:
 
 ## Known Security Considerations
 
-### v0.9.x Security
+### v0.10.x Security
 
 **Parser Security**:
 - **Input validation**: The parser handles arbitrary Perl code with bounded recursion to prevent stack overflow
@@ -132,7 +132,7 @@ When using perl-lsp:
 
 ## Security Updates
 
-### v0.9.x Security Update Process
+### v0.10.x Security Update Process
 
 **Notification Channels**:
 1. **GitHub Security Advisories**: https://github.com/EffortlessMetrics/perl-lsp/security/advisories
@@ -201,7 +201,7 @@ We track vulnerabilities in:
 
 We currently **do not** have a formal bug bounty program. However:
 
-- **v0.9.x Security Focus**: Increased attention to security vulnerabilities
+- **v0.10.x Security Focus**: Increased attention to security vulnerabilities
 - **Responsible Disclosure**: We appreciate and reward responsible disclosure
 - **Security Credits**: We provide credit in security advisories and annual security report
 - **Contributor Recognition**: Security researchers recognized in our contributors page and release notes
@@ -219,9 +219,9 @@ We currently **do not** have a formal bug bounty program. However:
 - **General inquiries**: Open a non-security issue on GitHub
 - **Security Discord**: Private channel for security researchers (request access via security email)
 
-## v0.9.x Security Commitments
+## v0.10.x Security Commitments
 
-We target the following for v0.9.x:
+We target the following for v0.10.x:
 
 - **48-hour response** for critical security vulnerabilities
 - **Comprehensive security testing** for all releases
