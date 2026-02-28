@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    # Core parser/token model crates
     "crates/perl-ast",
     "crates/perl-token",
     "crates/perl-quote",
@@ -16,36 +17,49 @@ members = [
     "crates/perl-parser-core",
     "crates/perl-parser-pest",
     "crates/perl-semantic-analyzer",
+
+    # Workspace/indexing crates
     "crates/perl-workspace-index",
-    "crates/perl-workspace-index-slo",
+    "crates/perl-workspace-discovery",
     "crates/perl-refactoring",
     "crates/perl-incremental-parsing",
     "crates/perl-tdd-support",
+
+    # LSP orchestration crates
     "crates/perl-lsp-providers",
-    "crates/perl-lsp-rename",
     "crates/perl-lsp-protocol",
     "crates/perl-lsp-transport",
     "crates/perl-lsp-tooling",
-    "crates/perl-lsp-formatting",
-    "crates/perl-lsp-diagnostics",
-    "crates/perl-lsp-semantic-tokens",
-    "crates/perl-lsp-inlay-hints",
+    "crates/perl-lsp-launcher",
+    "crates/perl-lsp-cancellation",
+
+    # SRP microcrates: LSP feature governance
+    "crates/perl-feature-catalog",
     "crates/perl-lsp-feature-contracts",
     "crates/perl-lsp-feature-flags",
     "crates/perl-lsp-feature-grid",
     "crates/perl-lsp-feature-ids",
     "crates/perl-lsp-feature-profile",
     "crates/perl-lsp-feature-governance",
-    "crates/perl-lsp-launcher",
+    "crates/perl-lsp-feature-policy",
+
+    # SRP microcrates: LSP providers
+    "crates/perl-lsp-formatting",
+    "crates/perl-lsp-diagnostics",
+    "crates/perl-lsp-semantic-tokens",
+    "crates/perl-lsp-inlay-hints",
     "crates/perl-lsp-navigation",
+    "crates/perl-lsp-rename",
     "crates/perl-lsp-completion",
     "crates/perl-lsp-code-actions",
-    "crates/perl-lsp-cancellation",
-    "crates/perl-lsp-feature-policy",
+
+    # SRP microcrates: diagnostics + symbol/navigation utility
     "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
     "crates/perl-symbol-table",
+
+    # SRP microcrates: module resolution pipeline
     "crates/perl-module-boundary",
     "crates/perl-module-token-core",
     "crates/perl-module-token",
@@ -60,27 +74,38 @@ members = [
     "crates/perl-module-resolution",
     "crates/perl-module-resolution-path",
     "crates/perl-module-resolution-uri",
+
+    # SRP microcrates: text/io/path primitives
     "crates/perl-text-line",
     "crates/perl-keywords",
     "crates/perl-source-file",
     "crates/perl-content-length-framing",
     "crates/perl-uri",
     "crates/perl-path-security",
-    "crates/perl-workspace-discovery",
+
+    # Application binaries + top-level libraries
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
+
+    # SRP microcrates: DAP internals
     "crates/perl-dap-breakpoint",
     "crates/perl-dap-eval",
     "crates/perl-dap-stack",
     "crates/perl-dap-variables",
-    "crates/perl-feature-catalog",
+
+    # Tree-sitter integration
     "crates/tree-sitter-perl-rs",
     "crates/perl-ts-heredoc-analysis",
     "crates/perl-ts-logos-lexer",
     "crates/perl-ts-heredoc-parser",
     "crates/perl-ts-partial-ast",
     "crates/perl-ts-advanced-parsers",
+
+    # SRP microcrates: workspace SLO
+    "crates/perl-workspace-index-slo",
+
+    # Development tooling
     "xtask",
 ]
 
