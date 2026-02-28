@@ -29,7 +29,6 @@ perl-symbol-types = { workspace = true }
 perl-uri = { workspace = true }
 perl-workspace-index-slo = { workspace = true }
 parking_lot = "0.12.5"
-regex = "1.12.2"
 serde = { version = "1.0.228", features = ["derive"] }
 url = "2.5.8"
 lsp-types = { version = "0.97.0", optional = true }
