@@ -94,41 +94,102 @@ exclude = [
 
 [workspace.metadata.publish]
 allow = [
-    # Leaf crates (verified via cargo publish --dry-run)
+    # Complete publish allowlist in topological dependency order.
+    # All 73 workspace crates needed for perl-lsp, perl-parser, and perl-dap.
 
+    # Tier 1 — Leaf crates (no workspace deps)
     "perl-position-tracking",
     "perl-token",
     "perl-ast",
     "perl-builtins",
     "perl-content-length-framing",
-    "perl-corpus",
     "perl-keywords",
     "perl-lexer",
-    "perl-module-name",
-    "perl-qualified-name",
-    "perl-quote",
     "perl-regex",
     "perl-error",
-    "perl-tokenizer",
-    "perl-edit",
-    "perl-pragma",
     "perl-heredoc",
+    "perl-pragma",
+    "perl-quote",
+    "perl-tokenizer",
+
+    # Tier 2 — Core infrastructure
     "perl-parser-core",
-    "perl-symbol-types",
-    "perl-workspace-index-slo",
     "perl-tdd-support",
-    "perl-parser",
-    "perl-path-security",
-    "perl-dap",
-    "perl-diagnostics-codes",
-    "perl-feature-catalog",
-    "perl-lsp-feature-ids",
+    "perl-edit",
+    "perl-incremental-parsing",
+    "perl-symbol-types",
+    "perl-uri",
+    "perl-workspace-index-slo",
+
+    # Tier 3 — Analysis and indexing
+    "perl-workspace-index",
+    "perl-semantic-analyzer",
+    "perl-lsp-diagnostics",
+    "perl-lsp-rename",
+    "perl-lsp-code-actions",
+    "perl-lsp-completion",
+    "perl-lsp-inlay-hints",
+
+    # Tier 3 — Module resolution chain
+    "perl-module-name",
+    "perl-module-path",
     "perl-module-token-core",
-    "perl-source-file",
+    "perl-module-boundary",
+    "perl-module-token",
+    "perl-module-import",
+
+    # Tier 4 — LSP providers
+    "perl-lsp-navigation",
+    "perl-lsp-tooling",
+    "perl-lsp-formatting",
+    "perl-lsp-semantic-tokens",
+    "perl-lsp-providers",
+    "perl-qualified-name",
+    "perl-refactoring",
+
+    # Tier 5 — Application crates
+    "perl-parser",
+    "perl-corpus",
+
+    # Tier 5 — DAP components
+    "perl-dap-breakpoint",
+    "perl-dap-eval",
+    "perl-dap-stack",
+    "perl-dap-variables",
+    "perl-path-security",
+    "perl-feature-catalog",
+    "perl-dap",
+
+    # Tier 5 — LSP governance and infrastructure
     "perl-lsp-cancellation",
+    "perl-lsp-feature-ids",
+    "perl-lsp-feature-contracts",
+    "perl-lsp-feature-flags",
+    "perl-lsp-feature-profile",
+    "perl-lsp-feature-policy",
+    "perl-lsp-feature-grid",
+    "perl-lsp-feature-governance",
+    "perl-lsp-launcher",
+    "perl-lsp-limits",
+    "perl-lsp-protocol",
+    "perl-lsp-transport",
+
+    # Tier 6 — Module resolution higher tiers
+    "perl-module-token-parser",
+    "perl-text-line",
+    "perl-module-reference",
+    "perl-module-import-match",
+    "perl-module-rename",
+    "perl-module-resolution-path",
+    "perl-workspace-folder",
+    "perl-module-resolution-uri",
+    "perl-module-resolution",
+    "perl-source-file",
+    "perl-workspace-discovery",
+    "perl-diagnostics-codes",
+
+    # Tier 7 — Top-level application
     "perl-lsp",
-
-
 ]
 
 # Workspace-level package metadata
