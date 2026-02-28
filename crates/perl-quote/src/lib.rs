@@ -1,9 +1,10 @@
-/// Uniform quote operator parsing for the parser
-///
-/// This module provides consistent parsing for quote-like operators,
-/// properly extracting patterns, bodies, and modifiers.
+//! Uniform quote operator parsing for the Perl parser.
+//!
+//! This module provides consistent parsing for quote-like operators,
+//! properly extracting patterns, bodies, and modifiers.
+
 use std::borrow::Cow;
-///
+
 /// Extract pattern and modifiers from a regex-like token (qr, m, or bare //)
 pub fn extract_regex_parts(text: &str) -> (String, String, String) {
     // Handle different prefixes
