@@ -160,6 +160,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [CODE_OF_CONDUCT.md](CODE
 - [LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md) -- server architecture
 - [DAP User Guide](docs/DAP_USER_GUIDE.md) -- debugger setup and usage
 - [Stability Policy](docs/STABILITY.md) -- API versioning and compatibility
+- [SRP Microcrates](docs/SRP_MICROCRATES.md) -- inventory of single-responsibility microcrates
 - [features.toml](features.toml) -- canonical LSP feature catalog
 
 ## License
