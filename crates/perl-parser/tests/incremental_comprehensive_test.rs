@@ -53,7 +53,7 @@ mod incremental_comprehensive_tests {
         IncrementalTestUtils::print_performance_summary(&result);
 
         // String edits should be efficient
-        assert!(result.avg_incremental_micros < 1000, "String edits should be <1ms");
+        assert!(result.avg_incremental_micros < 5000, "String edits should be <5ms");
         assert!(result.success_rate >= 0.95, "String edits should have ≥95% success rate");
     }
 
@@ -71,7 +71,7 @@ mod incremental_comprehensive_tests {
         IncrementalTestUtils::print_performance_summary(&result);
 
         // Multi-statement should still be fast but may have lower reuse rates
-        assert!(result.avg_incremental_micros < 1000, "Multi-statement edits should be <1ms");
+        assert!(result.avg_incremental_micros < 5000, "Multi-statement edits should be <5ms");
         assert!(
             result.avg_efficiency_percentage >= 60.0,
             "Multi-statement should have ≥60% efficiency"

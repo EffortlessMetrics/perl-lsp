@@ -453,8 +453,9 @@ just ci-gate
 **Solution:**
 
 ```bash
-# Remove nested lockfiles
-find . -name 'Cargo.lock' -not -path './Cargo.lock' -delete
+# Remove unexpected nested lockfiles (preserve fuzz/ and tree-sitter-perl/ which are expected)
+find . -name 'Cargo.lock' -not -path './Cargo.lock' \
+  -not -path './fuzz/Cargo.lock' -not -path './tree-sitter-perl/Cargo.lock' -delete
 
 # Always run from repo root
 cd /path/to/perl-lsp
@@ -462,6 +463,8 @@ just ci-gate
 ```
 
 The merge gate includes `ci-check-no-nested-lock` to catch this automatically.
+Note: `fuzz/` and `tree-sitter-perl/` are excluded workspace directories with their own
+legitimate `Cargo.lock` files — the gate excludes these.
 
 ### Threading Configuration
 
