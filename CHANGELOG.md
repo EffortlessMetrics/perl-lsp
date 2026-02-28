@@ -10,18 +10,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.10.0] - 2026-02-28
 
 ### Added
-- **Document Highlight Improvements**: Support for modern Perl syntax (try/catch parameters, method/sub signatures, string interpolation).
-- **CI Workflow Hardening**: Concurrency groups to prevent duplicate release runs, fixed asset URLs, scoop/chocolatey packaging fixes.
-- **Semver-Aware Benchmark Sorting**: Correct version comparison for benchmark baseline selection.
+- **Document Highlight Improvements**: Support for modern Perl syntax (try/catch parameters, method/sub signatures, string interpolation) (#882).
+- **CI Workflow Hardening**: Concurrency groups to prevent duplicate release runs, fixed asset URLs, scoop/chocolatey packaging fixes (#890).
+- **Semver-Aware Benchmark Sorting**: Correct version comparison for benchmark baseline selection (#885).
+- **crates.io Publishing Readiness**: All crate metadata verified, publish-ignore lists normalized, crate badges added (#871).
+- **Module Infrastructure Crates**: Content-Length framing and LSP hardening (#857).
+- **Feature Governance Microcrates**: Extracted into 9 dedicated crates (#848).
+- **InlineValues Lifecycle Coverage**: Added test coverage for inlineValues support (#729).
+- **Context-Aware Status Menu**: Improved UX with context-aware states (#646).
 
 ### Changed
-- **Version Consistency**: All workspace crates, documentation, VS Code extension, and feature catalogs updated to v0.10.0.
+- **Version Consistency**: All workspace crates, documentation, VS Code extension, and feature catalogs updated to v0.10.0 (77+ files).
 - **Documentation Refresh**: Updated editor setup guides, roadmap, milestones, and stability policy for v0.10.0.
 - **features.toml**: Version bumped to 0.10.0 with 100% LSP coverage maintained (53/53 user-visible, 97/97 protocol).
-- **VS Code Extension**: Version synchronized to 0.10.0.
+- **VS Code Extension**: Version synchronized to 0.10.0 with packaging fixes (#863, #866, #869).
 
 ### Fixed
-- **Version Drift**: Resolved version inconsistencies between workspace root (0.10.0) and satellite files still referencing 0.9.1.
+- **Build Fixes**: Resolved 4 compilation errors in the release candidate build (#881).
+- **Version Drift**: Resolved version inconsistencies between workspace root (0.10.0) and satellite files still referencing 0.9.1 (#884).
+- **[HIGH] Path Traversal in DAP Launch**: Fixed path traversal vulnerability in debug adapter (#640).
+- **[HIGH] Argument Injection in TestRunner**: Fixed argument injection vulnerability (#633).
+- **[MEDIUM] Safe Evaluation Bypass**: Fixed bypass for iterator/IO operations (#647).
+- **VS Code Extension Security**: Pinned minimatch to 10.2.3 (#861).
+- **Checksum Verification**: Hardened checksum verification and stabilized incremental parsing CI (#858).
+
+### Performance
+- **Symbol Extraction**: Optimized regex compilation for faster workspace indexing (#645).
+- **Semantic Analyzer**: Eliminated deep cloning of AST nodes in subroutine analysis (#632).
+- **Scope Analyzer**: Optimized unused parameter detection (#638).
 
 ## [0.9.1] - 2026-02-20
 
@@ -66,7 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Future Milestones
 
-### v0.10.0
+### Next Release
 - Enhanced DAP native implementation (Phase 2).
 - Semantic depth improvements for Moo/Moose.
 

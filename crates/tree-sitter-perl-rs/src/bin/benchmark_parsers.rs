@@ -12,14 +12,14 @@
 //! - Regression detection
 //!
 //! Usage:
-//!   benchmark_parsers [OPTIONS]
+//!   benchmark_parsers \[OPTIONS\]
 //!
 //! Options:
-//!   -o, --output <PATH>    Output file path (default: benchmark_results.json)
+//!   -o, --output `<PATH>`    Output file path (default: benchmark_results.json)
 //!   -s, --save             Save results to file (implied when --output is used)
-//!   -c, --config <PATH>    Configuration file path
-//!   -i, --iterations <N>   Number of benchmark iterations (default: 100)
-//!   -w, --warmup <N>       Number of warmup iterations (default: 10)
+//!   -c, --config `<PATH>`    Configuration file path
+//!   -i, --iterations `<N>`   Number of benchmark iterations (default: 100)
+//!   -w, --warmup `<N>`       Number of warmup iterations (default: 10)
 //!   -h, --help             Print help information
 //!   -V, --version          Print version information
 
