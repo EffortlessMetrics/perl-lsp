@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-02-20)**: **Initial Public Alpha (v0.10.0)**. Hardening underway with native DAP preview validated.
+> **Status (2026-02-28)**: **Initial Public Alpha (v0.10.0)**. Hardening underway with native DAP preview validated.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -107,7 +107,7 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - Semantic Analyzer Phase 2-6 Complete (2026-01-21)
 - Refactoring Engine: inline + move_code (2026-01-21)
 - Security Hardening: path traversal + command injection (2026-01-21)
-- v0.10.0 Initial Public Alpha Preparation (2026-02-20)
+- v0.10.0 Initial Public Alpha Preparation (2026-02-28)
 
 ---
 
@@ -119,4 +119,4 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - Project learnings
 
-<!-- Last Updated: 2026-02-20 -->
+<!-- Last Updated: 2026-02-28 -->

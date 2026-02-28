@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/perl-lsp)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
-A fast, native Perl language server and parser toolkit written in Rust. Currently in **initial public alpha**.
+A fast, native Perl language server and parser toolkit written in Rust. Currently in **Initial Public Alpha (v0.10.0)**.
 
 ## Origins
 
