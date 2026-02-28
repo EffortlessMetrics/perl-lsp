@@ -8,8 +8,7 @@
 
 mod config;
 mod document;
-mod limits;
 
 pub use config::*;
 pub use document::*;
-pub use limits::*;
+pub use perl_lsp_limits::*;

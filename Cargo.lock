@@ -1723,6 +1723,7 @@ dependencies = [
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
  "perl-lsp-launcher",
+ "perl-lsp-limits",
  "perl-lsp-navigation",
  "perl-lsp-protocol",
  "perl-lsp-providers",
@@ -1885,6 +1886,13 @@ version = "0.10.0"
 dependencies = [
  "perl-lsp-feature-governance",
  "perl-tdd-support",
+]
+
+[[package]]
+name = "perl-lsp-limits"
+version = "0.10.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
