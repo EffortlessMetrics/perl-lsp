@@ -149,6 +149,9 @@ cargo clippy --workspace --lib && cargo fmt --all
 
 # Full local gate (requires Nix)
 nix develop -c just ci-gate
+
+# Find SRP-focused microcrates in the workspace
+scripts/find_srp_microcrates.sh
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for our community standards, [SUPPORT.md](SUPPORT.md) for how to get help, and [CLAUDE.md](CLAUDE.md) for the full command reference.
