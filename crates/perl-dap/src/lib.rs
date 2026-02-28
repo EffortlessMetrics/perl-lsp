@@ -357,19 +357,28 @@
 //! All tests are tagged with `// AC:ID` comments for traceability to specifications.
 
 // Phase 1 modules (AC1-AC4) - IMPLEMENTED
+/// Bridge adapter for communicating with Perl::LanguageServer's DAP implementation.
 pub mod bridge_adapter;
+/// Launch and attach configuration structures for DAP debugging sessions.
 pub mod configuration;
 /// Debug Adapter Protocol (DAP) implementation for Perl debugging.
 pub mod debug_adapter;
+/// DAP feature catalog and capability gating helpers.
 pub mod feature_catalog;
+/// Cross-platform utilities for Perl path resolution and environment setup.
 pub mod platform;
 
 // Phase 2 modules (AC5-AC12) - IN PROGRESS
+/// Breakpoint storage and management for the DAP adapter.
 pub mod breakpoints;
-pub mod dispatcher; // AC5: Message dispatcher
-pub mod inline_values; // Inline value extraction for debug sessions
-pub mod protocol; // AC5: DAP protocol types // AC7: Breakpoint manager
-pub mod tcp_attach; // TCP attach functionality for connecting to running Perl debugger
+/// Message dispatcher for routing incoming DAP requests to handlers.
+pub mod dispatcher;
+/// Inline value extraction for DAP `inlineValues` requests.
+pub mod inline_values;
+/// DAP protocol types following the JSON-RPC 2.0 message format.
+pub mod protocol;
+/// TCP-based attachment to running Perl debugger processes.
+pub mod tcp_attach;
 
 // Phase 2 modules (AC5-AC12) - Tracked in GitHub issues
 // See #449: Implement session management (AC5)
@@ -380,7 +389,8 @@ pub mod tcp_attach; // TCP attach functionality for connecting to running Perl d
 // See #455: Implement safe evaluation (AC10)
 
 // Phase 3 modules (AC13-AC19) - Tracked in GitHub issues
-pub mod security; // #358: Security validation and hardening (AC16)
+/// Security validation and hardening for DAP sessions.
+pub mod security;
 
 // Re-export Phase 1 public types
 pub use bridge_adapter::BridgeAdapter;
