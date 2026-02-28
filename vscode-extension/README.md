@@ -69,15 +69,24 @@ cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp
 {
   // Auto-download server if not found
   "perl-lsp.autoDownload": true,
-  
+
   // Custom server path (optional)
   "perl-lsp.serverPath": "/usr/local/bin/perl-lsp",
-  
-  // Enable strict mode warnings
-  "perl-lsp.enableStrictMode": false,
-  
-  // Maximum diagnostics per file
-  "perl-lsp.maxNumberOfProblems": 100
+
+  // Enable real-time syntax diagnostics
+  "perl-lsp.enableDiagnostics": true,
+
+  // Enable semantic syntax highlighting
+  "perl-lsp.enableSemanticTokens": true,
+
+  // Enable document formatting (requires perltidy)
+  "perl-lsp.enableFormatting": true,
+
+  // Additional library include paths
+  "perl-lsp.includePaths": ["lib", "local/lib/perl5"],
+
+  // LSP trace level for debugging
+  "perl-lsp.trace.server": "off"
 }
 ```
 
@@ -121,4 +130,4 @@ Works with any LSP-compatible editor:
 
 ## 📄 License
 
-MIT © Tree-sitter Perl Team
+MIT © Steven Zimmerman
