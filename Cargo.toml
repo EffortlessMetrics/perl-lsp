@@ -94,31 +94,40 @@ exclude = [
 [workspace.metadata.publish]
 allow = [
     # Leaf crates (verified via cargo publish --dry-run)
+
+    "perl-position-tracking",
+    "perl-token",
+    "perl-ast",
     "perl-builtins",
     "perl-content-length-framing",
-    "perl-diagnostics-codes",
-    "perl-feature-catalog",
+    "perl-corpus",
     "perl-keywords",
-    "perl-lsp-cancellation",
-    "perl-lsp-feature-ids",
+    "perl-lexer",
     "perl-module-name",
-    "perl-module-token-core",
-    "perl-path-security",
-    "perl-position-tracking",
     "perl-qualified-name",
     "perl-quote",
     "perl-regex",
-    "perl-source-file",
+    "perl-error",
+    "perl-tokenizer",
+    "perl-edit",
+    "perl-pragma",
+    "perl-heredoc",
+    "perl-parser-core",
     "perl-symbol-types",
-    "perl-token",
     "perl-workspace-index-slo",
-    # Core crates (already published)
-    "perl-lexer",
+    "perl-tdd-support",
     "perl-parser",
-    "perl-corpus",
-    # Binary crates
-    "perl-lsp",
+    "perl-path-security",
     "perl-dap",
+    "perl-diagnostics-codes",
+    "perl-feature-catalog",
+    "perl-lsp-feature-ids",
+    "perl-module-token-core",
+    "perl-source-file",
+    "perl-lsp-cancellation",
+    "perl-lsp",
+
+
 ]
 
 # Workspace-level package metadata
