@@ -100,7 +100,7 @@ jobs:
           cat /tmp/crates.json | python3 -c '
           import json, sys
           for i, c in enumerate(json.load(sys.stdin), 1):
-              print(f"  {i}. {c[\"name\"]}@{c[\"version\"]}")
+              print("  {}. {}@{}".format(i, c["name"], c["version"]))
           '
 
   # Step 2: Publish crates sequentially in dependency order
@@ -132,7 +132,7 @@ jobs:
           echo "Publishing $TOTAL crates..."
 
           CRATES_LIST="$(mktemp)"
-          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print("{} {}".format(c["name"], c["version"])) for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
             echo ""
             echo "===> $CRATE@$VERSION"
@@ -145,8 +145,10 @@ jobs:
             fi
 
             if [ "$DRY_RUN" = "true" ]; then
-              echo "Dry run: scripts/cargo-package-workspace-dry-run.sh $CRATE"
-              bash scripts/cargo-package-workspace-dry-run.sh "$CRATE"
+              TARGET_DIR="${RUNNER_TEMP}/cargo-package-${CRATE//\//-}"
+              rm -rf "$TARGET_DIR"
+              echo "Dry run: scripts/cargo-package-workspace-dry-run.sh $CRATE (CARGO_TARGET_DIR=$TARGET_DIR)"
+              CARGO_TARGET_DIR="$TARGET_DIR" CARGO_PACKAGE_NO_VERIFY=1 bash scripts/cargo-package-workspace-dry-run.sh "$CRATE"
               continue
             fi
 
@@ -208,7 +210,7 @@ jobs:
           OK=0
 
           CRATES_LIST="$(mktemp)"
-          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print("{} {}".format(c["name"], c["version"])) for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
             TOTAL=$((TOTAL + 1))
 

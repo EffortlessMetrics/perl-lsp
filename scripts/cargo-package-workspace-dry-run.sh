@@ -35,7 +35,13 @@ for pkg in sorted(meta["packages"], key=lambda p: p["name"]):
 
 mapfile -t PATCH_ARGS <<< "${PATCH_OUTPUT}"
 
+NO_VERIFY="${CARGO_PACKAGE_NO_VERIFY:-0}"
+
 for crate in "$@"; do
   echo "==> cargo package -p ${crate}"
-  cargo package -p "${crate}" "${PATCH_ARGS[@]}"
+  CMD=(cargo package -p "${crate}" "${PATCH_ARGS[@]}")
+  if [[ "${NO_VERIFY}" == "1" ]]; then
+    CMD+=(--no-verify)
+  fi
+  "${CMD[@]}"
 done
