@@ -1626,6 +1626,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-dead-code"
+version = "0.10.0"
+dependencies = [
+ "perl-workspace-index",
+ "serde",
+]
+
+[[package]]
 name = "perl-diagnostics-codes"
 version = "0.10.0"
 dependencies = [
@@ -2116,6 +2124,7 @@ dependencies = [
  "nix",
  "parking_lot",
  "perl-corpus",
+ "perl-dead-code",
  "perl-incremental-parsing",
  "perl-keywords",
  "perl-lexer",

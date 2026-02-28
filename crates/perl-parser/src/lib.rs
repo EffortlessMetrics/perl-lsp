@@ -415,7 +415,7 @@ pub mod workspace;
 
 /// Dead code detection for Perl workspaces.
 #[cfg(not(target_arch = "wasm32"))]
-pub use analysis::dead_code_detector;
+pub use perl_dead_code as dead_code_detector;
 /// Variable and subroutine declaration analysis.
 pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
