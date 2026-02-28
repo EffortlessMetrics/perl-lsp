@@ -136,7 +136,6 @@ sub documented_sub {
 }
 
 #[test]
-#[ignore = "stress: benchmark"]
 fn benchmark_symbol_extraction_with_interpolation() {
     // Generate a large perl script with many interpolated strings
     let mut code = String::from("sub test {\n");

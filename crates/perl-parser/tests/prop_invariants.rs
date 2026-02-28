@@ -284,7 +284,6 @@ proptest! {
             }
             Err(_) => {
                 // Parse error is acceptable for very deep nesting
-                prop_assert!(true);
             }
         }
     }

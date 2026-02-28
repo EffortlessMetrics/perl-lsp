@@ -38,7 +38,7 @@ proptest! {
             let parent = match path.parent() {
                 Some(parent) => parent,
                 None => {
-                    prop_assert!(false);
+                    prop_assert!(false, "path.parent() returned None for joined path: {:?}", path);
                     return Ok(());
                 }
             };
