@@ -47,6 +47,7 @@ jobs:
 
       - name: Install cargo-release
         run: |
+          install_dir="$(mktemp -d)"
           CARGO_RELEASE_TAG="$(curl -s https://api.github.com/repos/crate-ci/cargo-release/releases/latest | jq -r '.tag_name // ""')"
           if [ -z "$CARGO_RELEASE_TAG" ] || [ "$CARGO_RELEASE_TAG" = "null" ]; then
             echo "::error::Failed to resolve latest cargo-release tag"
@@ -60,15 +61,16 @@ jobs:
             exit 1
           fi
 
-          curl -fsSL "$CARGO_RELEASE_ASSET_URL" -o /tmp/cargo-release.tar.gz
-          tar -xzf /tmp/cargo-release.tar.gz -C /tmp
-          cargo_release_dir="$(tar -tzf /tmp/cargo-release.tar.gz | head -n 1 | cut -d'/' -f1)"
+          curl -fsSL "$CARGO_RELEASE_ASSET_URL" -o "${install_dir}/cargo-release.tar.gz"
+          tar -xzf "${install_dir}/cargo-release.tar.gz" -C "$install_dir"
+          cargo_release_dir="$(tar -tzf "${install_dir}/cargo-release.tar.gz" | head -n 1 | cut -d'/' -f1)"
           mkdir -p /usr/local/bin
-          sudo mv "/tmp/${cargo_release_dir}/cargo-release" /usr/local/bin/
+          sudo mv "${install_dir}/${cargo_release_dir}/cargo-release" /usr/local/bin/
           sudo chmod +x /usr/local/bin/cargo-release
 
       - name: Install git-cliff
         run: |
+          install_dir="$(mktemp -d)"
           GIT_CLIFF_TAG="$(curl -s https://api.github.com/repos/orhun/git-cliff/releases/latest | jq -r '.tag_name // ""')"
           if [ -z "$GIT_CLIFF_TAG" ] || [ "$GIT_CLIFF_TAG" = "null" ]; then
             echo "::error::Failed to resolve latest git-cliff release tag"
@@ -82,11 +84,11 @@ jobs:
             exit 1
           fi
 
-          curl -fsSL "$ASSET_URL" -o /tmp/git-cliff.tar.gz
-          tar -xzf /tmp/git-cliff.tar.gz -C /tmp
-          extracted_dir="$(tar -tzf /tmp/git-cliff.tar.gz | head -n 1 | cut -d'/' -f1)"
+          curl -fsSL "$ASSET_URL" -o "${install_dir}/git-cliff.tar.gz"
+          tar -xzf "${install_dir}/git-cliff.tar.gz" -C "$install_dir"
+          extracted_dir="$(tar -tzf "${install_dir}/git-cliff.tar.gz" | head -n 1 | cut -d'/' -f1)"
           mkdir -p /usr/local/bin
-          sudo mv "/tmp/${extracted_dir}/git-cliff" /usr/local/bin/
+          sudo mv "${install_dir}/${extracted_dir}/git-cliff" /usr/local/bin/
           sudo chmod +x /usr/local/bin/git-cliff
 
       - name: Resolve release target
