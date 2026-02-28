@@ -1,4 +1,8 @@
 //! Refactoring and modernization helpers for Perl.
+//!
+//! Provides AST-driven refactoring operations including import optimization,
+//! code modernization, and workspace-wide symbol rename. These are consumed by
+//! the LSP code-action and rename providers to offer automated transformations.
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
