@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g., 0.9.0)'
+        description: 'Release version (e.g., 0.x.y)'
         required: true
         type: string
       prerelease:
@@ -70,7 +70,6 @@ jobs:
             exit 1
           fi
 
-          # Check workspace Cargo.toml
           WORKSPACE_VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
           if [ "$WORKSPACE_VERSION" != "$VERSION" ]; then
             echo "::error::Workspace version ${WORKSPACE_VERSION} does not match release version ${VERSION}"
@@ -115,7 +114,6 @@ jobs:
 
       - name: Check for unreleased changes
         run: |
-          # Check if CHANGELOG.md has unreleased section
           if grep -q "## \[Unreleased\]" CHANGELOG.md; then
             echo "::warning::CHANGELOG.md has unreleased section"
           fi
@@ -124,15 +122,15 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Release Validation Complete :white_check_mark:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Prerelease**: ${{ github.event.inputs.prerelease }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Skip crates.io**: ${{ github.event.inputs.skip_crates }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Skip VSCode**: ${{ github.event.inputs.skip_extension }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Skip Docker**: ${{ github.event.inputs.skip_docker }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All checks passed! Proceeding with release." >> $GITHUB_STEP_SUMMARY
+          echo "## Release Validation Complete :white_check_mark:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version**: ${{ github.event.inputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Prerelease**: ${{ github.event.inputs.prerelease }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Skip crates.io**: ${{ github.event.inputs.skip_crates }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Skip VSCode**: ${{ github.event.inputs.skip_extension }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Skip Docker**: ${{ github.event.inputs.skip_docker }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "All checks passed! Proceeding with release." >> "$GITHUB_STEP_SUMMARY"
 
   create-tag:
     name: Create Release Tag
@@ -186,10 +184,10 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Tag Created :bookmark:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tag**: v${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Pushed**: Yes" >> $GITHUB_STEP_SUMMARY
+          echo "## Tag Created :bookmark:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag**: v${{ github.event.inputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Pushed**: Yes" >> "$GITHUB_STEP_SUMMARY"
 
   trigger-release:
     name: Trigger Release Workflows
@@ -204,7 +202,7 @@ jobs:
         run: |
           TAG="${{ needs.validate.outputs.tag }}"
           VERSION="${{ needs.validate.outputs.version }}"
-          REF="${{ github.ref_name }}"
+          REF="${TAG}"
           PRERELEASE="${{ github.event.inputs.prerelease }}"
 
           echo "Dispatching release workflow for ${TAG}"
@@ -252,31 +250,31 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Release Triggered :rocket:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "The following workflows have been triggered:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Build & Release" >> $GITHUB_STEP_SUMMARY
-          echo "- [Release](https://github.com/${{ github.repository }}/actions/workflows/release.yml) - Build binaries and create GitHub release" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Publishing" >> $GITHUB_STEP_SUMMARY
+          echo "## Release Triggered :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "The following workflows have been triggered:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Build & Release" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Release](https://github.com/${{ github.repository }}/actions/workflows/release.yml) - Build binaries and create GitHub release" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Publishing" >> "$GITHUB_STEP_SUMMARY"
           if [ "${{ github.event.inputs.skip_crates }}" != "true" ]; then
-            echo "- [Publish to crates.io](https://github.com/${{ github.repository }}/actions/workflows/publish-crates.yml)" >> $GITHUB_STEP_SUMMARY
+            echo "- [Publish to crates.io](https://github.com/${{ github.repository }}/actions/workflows/publish-crates.yml)" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- ~~Publish to crates.io~~ (skipped)" >> $GITHUB_STEP_SUMMARY
+            echo "- ~~Publish to crates.io~~ (skipped)" >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ "${{ github.event.inputs.skip_extension }}" != "true" ]; then
-            echo "- [Publish VSCode Extension](https://github.com/${{ github.repository }}/actions/workflows/publish-extension.yml)" >> $GITHUB_STEP_SUMMARY
+            echo "- [Publish VSCode Extension](https://github.com/${{ github.repository }}/actions/workflows/publish-extension.yml)" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- ~~Publish VSCode Extension~~ (skipped)" >> $GITHUB_STEP_SUMMARY
+            echo "- ~~Publish VSCode Extension~~ (skipped)" >> "$GITHUB_STEP_SUMMARY"
           fi
           if [ "${{ github.event.inputs.skip_docker }}" != "true" ]; then
-            echo "- [Publish Docker Images](https://github.com/${{ github.repository }}/actions/workflows/docker-publish.yml)" >> $GITHUB_STEP_SUMMARY
+            echo "- [Publish Docker Images](https://github.com/${{ github.repository }}/actions/workflows/docker-publish.yml)" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- ~~Publish Docker Images~~ (skipped)" >> $GITHUB_STEP_SUMMARY
+            echo "- ~~Publish Docker Images~~ (skipped)" >> "$GITHUB_STEP_SUMMARY"
           fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Package Manager Updates" >> $GITHUB_STEP_SUMMARY
-          echo "- [Homebrew Bump](https://github.com/${{ github.repository }}/actions/workflows/brew-bump.yml)" >> $GITHUB_STEP_SUMMARY
-          echo "- [Scoop Bump](https://github.com/${{ github.repository }}/actions/workflows/scoop-bump.yml)" >> $GITHUB_STEP_SUMMARY
-          echo "- [Chocolatey Bump](https://github.com/${{ github.repository }}/actions/workflows/chocolatey-bump.yml)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Package Manager Updates" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Homebrew Bump](https://github.com/${{ github.repository }}/actions/workflows/brew-bump.yml)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Scoop Bump](https://github.com/${{ github.repository }}/actions/workflows/scoop-bump.yml)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- [Chocolatey Bump](https://github.com/${{ github.repository }}/actions/workflows/chocolatey-bump.yml)" >> "$GITHUB_STEP_SUMMARY"

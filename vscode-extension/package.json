@@ -2,7 +2,7 @@
   "name": "perl-lsp",
   "displayName": "Perl Language Server",
   "description": "Comprehensive Perl language support powered by perl-lsp",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "publisher": "effortlesssteven",
   "engines": {
     "vscode": "^1.88.0"

@@ -8,13 +8,13 @@
 
 ## Active Milestones
 
-### v0.9.1: Post-Release Optimization
+### v0.10.0: Post-Release Optimization
 
 **Status**: Active (local; see GitHub milestones for live counts)
-**Goal**: Close out v0.9.1 hardening and documentation cleanup.
+**Goal**: Close out v0.10.0 hardening and documentation cleanup.
 
 **Exit Criteria**:
-- See `ROADMAP.md` v0.9.1 section (index state machine, documentation cleanup, test debt)
+- See `ROADMAP.md` v0.10.0 section (index state machine, documentation cleanup, test debt)
 
 **Constraints**:
 - CI pipeline cleanup (#211) blocks merge gates (#210)

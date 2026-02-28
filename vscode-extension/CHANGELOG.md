@@ -90,13 +90,12 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
-### Added
-- **TCP Socket Mode**: LSP server can now listen on TCP sockets in addition to stdio
-- **Uninitialized Variable Detection**: Semantic analyzer detects use of uninitialized variables
+## [0.10.0] - 2026-02-28
 
 ### Changed
-- **Performance**: O(1) symbol lookups, optimized scope analysis
-- **Code Quality**: Unified position/range types, improved code formatting
+- **Version Sync**: Extension version aligned with workspace v0.10.0.
+- **LSP Coverage**: Maintained 100% user-visible feature coverage (53/53).
+- **Protocol Compliance**: Maintained 100% protocol compliance (97/97).
 
 ## [0.9.0] - 2026-01-18
 

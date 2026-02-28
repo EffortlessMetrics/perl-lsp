@@ -182,10 +182,10 @@ Add the `ci:semver` label to your PR to run automated breaking change detection:
 |-------------|---------|--------------|------------|
 | **Breaking** | Remove public function | Major (0.9 → 1.0) | Major releases only |
 | **Breaking** | Change function signature | Major (0.9 → 1.0) | Major releases only |
-| **Additive** | Add new public function | Minor (0.9 → 0.10) | Minor releases |
-| **Additive** | Add new enum variant | Minor (0.9 → 0.10) | Minor releases (with `#[non_exhaustive]`) |
-| **Patch** | Fix bug, same behavior | Patch (0.9.x → 0.9.2) | Patch releases |
-| **Patch** | Documentation update | Patch (0.9.x → 0.9.2) | Patch releases |
+| **Additive** | Add new public function | Minor (0.x → 0.x+1.0) | Minor releases |
+| **Additive** | Add new enum variant | Minor (0.x → 0.x+1.0) | Minor releases (with `#[non_exhaustive]`) |
+| **Patch** | Fix bug, same behavior | Patch (0.x.y → 0.x.y+1) | Patch releases |
+| **Patch** | Documentation update | Patch (0.x.y → 0.x.y+1) | Patch releases |
 
 ### Breaking Change Workflow
 
@@ -450,8 +450,8 @@ We follow [Semantic Versioning 2.0.0](https://semver.org/):
 | Release Type | Frequency | Examples | Requirements |
 |--------------|-----------|----------|--------------|
 | **Major** | As needed | 0.x → 1.0.0 | Breaking changes, migration guide, extensive testing |
-| **Minor** | Quarterly | 0.9.x → 0.10.0 | New features, API additions, performance improvements |
-| **Patch** | As needed | 1.2.3 → 1.2.4 | Bug fixes, security updates, documentation updates |
+| **Minor** | Quarterly | 0.x → 0.x+1.0 | New features, API additions, performance improvements |
+| **Patch** | As needed | 0.x.y → 0.x.y+1 | Bug fixes, security updates, documentation updates |
 
 ### Release Process Workflow
 
@@ -483,31 +483,30 @@ Before any release, ensure:
 - [ ] Performance benchmarks run: `cargo bench`
 - [ ] Release notes drafted: `RELEASE_NOTES.md`
 - [ ] Version numbers updated in all crates
-- [ ] Git tag prepared: `git tag -a v{VERSION} -m "Release v{VERSION}"`
+- [ ] Git tag prepared: `git tag -a v<0.x.y> -m "Release v<0.x.y>"`
 
 #### 3. Release Execution
 
 ```bash
-# Create release branch
-git checkout -b release/v{VERSION}
-
-# Final validation
-just ci-full
-
-# Merge to master
+# Ensure you are aligned with origin/master and clean.
+git fetch origin master
 git checkout master
-git merge release/v{VERSION}
+git reset --hard origin/master
+git status --short
 
-# Tag and push
-git tag v{VERSION}
-git push origin master --tags
+# One-command release orchestration (recommended).
+# Authoritative release command path:
+# `scripts/release-turnkey-pr.sh` is the canonical RC flow.
+# Legacy release scripts are listed in `scripts/DEPRECATED_RELEASE_SCRIPTS.md`.
+scripts/release-turnkey-pr.sh <0.x.y>
 
-# Publish to crates.io
-# Release orchestration triggers `publish-crates` workflow, which handles dependency order.
-# You can also run this workflow manually from GitHub Actions for recovery if needed.
+# Manual equivalent flow:
+# 1) Dispatch "Version Bump & Changelog Generation" with version=<0.x.y>
+# 2) Review and merge the generated release/v<0.x.y> PR
+# 3) Dispatch "Release Orchestration" with version=<0.x.y>
 
-# Create GitHub Release
-gh release create v{VERSION} --title "v{VERSION}" --notes-file RELEASE_NOTES.md
+# Optional controls:
+# --skip-crates, --skip-extension, --skip-docker, --prerelease
 ```
 
 #### 4. Post-Release Tasks
@@ -624,7 +623,7 @@ For critical security issues:
 #### Release Notes Template
 
 ```markdown
-# Release v{VERSION}
+# Release v<0.x.y>
 
 ## Highlights
 - Key features and improvements

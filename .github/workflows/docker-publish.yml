@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.9.0)'
+        description: 'Version to publish (e.g., 0.x.y)'
         required: true
         type: string
       push:
@@ -15,6 +15,10 @@ on:
         required: false
         type: boolean
         default: true
+
+concurrency:
+  group: publish-docker-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io

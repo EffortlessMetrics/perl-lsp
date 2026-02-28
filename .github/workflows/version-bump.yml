@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'New version (e.g., 0.9.0)'
+        description: 'New version (e.g., 0.x.y)'
         required: false
         type: string
       bump_type:
@@ -46,28 +46,65 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-release
-        run: cargo install cargo-release --locked
+        run: |
+          install_dir="$(mktemp -d)"
+          CARGO_RELEASE_TAG="$(curl -s https://api.github.com/repos/crate-ci/cargo-release/releases/latest | jq -r '.tag_name // ""')"
+          if [ -z "$CARGO_RELEASE_TAG" ] || [ "$CARGO_RELEASE_TAG" = "null" ]; then
+            echo "::error::Failed to resolve latest cargo-release tag"
+            exit 1
+          fi
+
+          CARGO_RELEASE_ASSET_URL="$(curl -s "https://api.github.com/repos/crate-ci/cargo-release/releases/tags/${CARGO_RELEASE_TAG}" | \
+            jq -r '.assets[].browser_download_url | select(test("x86_64-unknown-linux-musl\\.tar\\.gz$"))' | head -n 1)"
+          if [ -z "$CARGO_RELEASE_ASSET_URL" ] || [ "$CARGO_RELEASE_ASSET_URL" = "null" ]; then
+            echo "::error::Failed to resolve linux x86_64 cargo-release asset from ${CARGO_RELEASE_TAG}"
+            exit 1
+          fi
+
+          curl -fsSL "$CARGO_RELEASE_ASSET_URL" -o "${install_dir}/cargo-release.tar.gz"
+          tar -xzf "${install_dir}/cargo-release.tar.gz" -C "$install_dir"
+          cargo_release_dir="$(tar -tzf "${install_dir}/cargo-release.tar.gz" | head -n 1 | cut -d'/' -f1)"
+          mkdir -p /usr/local/bin
+          sudo mv "${install_dir}/${cargo_release_dir}/cargo-release" /usr/local/bin/
+          sudo chmod +x /usr/local/bin/cargo-release
 
       - name: Install git-cliff
         run: |
-          wget -qO- https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-ubuntu.tar.gz | \
-            tar -xz -C /tmp
-          sudo mv /tmp/git-cliff /usr/local/bin/
+          install_dir="$(mktemp -d)"
+          GIT_CLIFF_TAG="$(curl -s https://api.github.com/repos/orhun/git-cliff/releases/latest | jq -r '.tag_name // ""')"
+          if [ -z "$GIT_CLIFF_TAG" ] || [ "$GIT_CLIFF_TAG" = "null" ]; then
+            echo "::error::Failed to resolve latest git-cliff release tag"
+            exit 1
+          fi
 
-      - name: Determine version input
-        id: version
+          ASSET_URL="$(curl -s "https://api.github.com/repos/orhun/git-cliff/releases/tags/${GIT_CLIFF_TAG}" | \
+            jq -r '.assets[].browser_download_url | select(test("x86_64-unknown-linux-gnu\\.tar\\.gz$"))' | head -n 1)"
+          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+            echo "::error::Failed to resolve linux x86_64 git-cliff asset from ${GIT_CLIFF_TAG}"
+            exit 1
+          fi
+
+          curl -fsSL "$ASSET_URL" -o "${install_dir}/git-cliff.tar.gz"
+          tar -xzf "${install_dir}/git-cliff.tar.gz" -C "$install_dir"
+          extracted_dir="$(tar -tzf "${install_dir}/git-cliff.tar.gz" | head -n 1 | cut -d'/' -f1)"
+          mkdir -p /usr/local/bin
+          sudo mv "${install_dir}/${extracted_dir}/git-cliff" /usr/local/bin/
+          sudo chmod +x /usr/local/bin/git-cliff
+
+      - name: Resolve release target
+        id: resolved-version
         run: |
           VERSION="${{ github.event.inputs.version }}"
           BUMP_TYPE="${{ github.event.inputs.bump_type }}"
 
-          if [ -n "$VERSION" ]; then
+          if [ -n "${VERSION}" ]; then
             if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
-              echo "::error::Invalid version format: $VERSION"
+              echo "::error::Invalid version format: ${VERSION}"
               exit 1
             fi
-            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
             echo "mode=explicit" >> "$GITHUB_OUTPUT"
-            echo "Current version: ${VERSION}"
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "bump_type=${BUMP_TYPE}" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -76,37 +113,38 @@ jobs:
             exit 1
           fi
 
-          CURRENT_VERSION="$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
-          echo "version=${CURRENT_VERSION}" >> "$GITHUB_OUTPUT"
-          echo "mode=bump" >> "$GITHUB_OUTPUT"
-          echo "Current version: ${CURRENT_VERSION} (auto-bump enabled)"
+          echo "mode=auto" >> "$GITHUB_OUTPUT"
+          echo "bump_type=${BUMP_TYPE}" >> "$GITHUB_OUTPUT"
 
       - name: Bump workspace version
-        id: resolved-version
+        id: bump-version
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          MODE="${{ steps.version.outputs.mode }}"
-          BUMP_TYPE="${{ github.event.inputs.bump_type }}"
+          BUMP_TYPE="${{ steps.resolved-version.outputs.bump_type }}"
+          VERSION="${{ steps.resolved-version.outputs.version }}"
 
-          if [ "$MODE" = "explicit" ]; then
-            cargo release version "$VERSION" --workspace --execute
+          if [ -n "$VERSION" ]; then
+            cargo release version "$VERSION" --workspace -x --no-confirm
           else
-            cargo release version "$BUMP_TYPE" --workspace --execute
-            VERSION="$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
+            cargo release version "$BUMP_TYPE" --workspace -x --no-confirm
           fi
 
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Version bumped to: ${VERSION}"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          fi
+
+          if [ -n "${VERSION}" ]; then
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "Current workspace version: ${VERSION}"
+          fi
 
       - name: Generate changelog
         id: changelog
         run: |
-          VERSION="${{ steps.resolved-version.outputs.version }}"
+          VERSION="${{ steps.bump-version.outputs.version }}"
+          PRERELEASE="${{ github.event.inputs.prerelease }}"
 
-          # Generate changelog for the new version
           git cliff --tag "v${VERSION}" --config cliff.toml > CHANGELOG.new.md
 
-          # Prepend to existing CHANGELOG.md
           if [ -f CHANGELOG.md ]; then
             cat CHANGELOG.new.md CHANGELOG.md > CHANGELOG.md.tmp
             mv CHANGELOG.md.tmp CHANGELOG.md
@@ -114,22 +152,25 @@ jobs:
             mv CHANGELOG.new.md CHANGELOG.md
           fi
 
-          # Clean up
           rm -f CHANGELOG.new.md
 
-          echo "Changelog generated for v${VERSION}"
+          if [ "${PRERELEASE}" = "true" ]; then
+            echo "Release ${VERSION} changelog generated (prerelease)."
+          else
+            echo "Changelog generated for v${VERSION}"
+          fi
 
       - name: Create version branch
         id: branch
         run: |
-          VERSION="${{ steps.resolved-version.outputs.version }}"
+          VERSION="${{ steps.bump-version.outputs.version }}"
           BRANCH_NAME="release/v${VERSION}"
           echo "branch=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
-          git checkout -b ${BRANCH_NAME}
+          git checkout -b "${BRANCH_NAME}"
 
       - name: Commit changes
         run: |
-          VERSION="${{ steps.resolved-version.outputs.version }}"
+          VERSION="${{ steps.bump-version.outputs.version }}"
           BRANCH_NAME="${{ steps.branch.outputs.branch }}"
 
           git config user.name "github-actions[bot]"
@@ -146,7 +187,7 @@ jobs:
             > /tmp/release-commit-message.txt
           git commit -F /tmp/release-commit-message.txt
 
-          git push origin ${BRANCH_NAME}
+          git push origin "${BRANCH_NAME}"
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v8
@@ -154,12 +195,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ steps.branch.outputs.branch }}
           base: ${{ github.event.repository.default_branch }}
-          title: "Release v${{ steps.resolved-version.outputs.version }}"
+          title: "Release v${{ steps.bump-version.outputs.version }}"
           body: |
-            ## Release v${{ steps.resolved-version.outputs.version }}
+            ## Release v${{ steps.bump-version.outputs.version }}
 
             This PR prepares the release with:
-            - Version bump to ${{ steps.resolved-version.outputs.version }}
+            - Version bump to ${{ steps.bump-version.outputs.version }}
             - Updated changelog
 
             ### Checklist
@@ -182,10 +223,9 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Version Bump Complete :rocket:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: v${{ steps.resolved-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Bump Type**: ${{ github.event.inputs.bump_type }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch**: ${{ steps.branch.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **PR**: Created" >> $GITHUB_STEP_SUMMARY
-          echo "- **Changelog**: Generated" >> $GITHUB_STEP_SUMMARY
+          echo "## Version Bump Complete :rocket:" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Version**: v${{ steps.bump-version.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Branch**: ${{ steps.branch.outputs.branch }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **PR**: Created" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Changelog**: Generated" >> "$GITHUB_STEP_SUMMARY"

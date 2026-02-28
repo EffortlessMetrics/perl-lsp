@@ -709,7 +709,7 @@ cargo audit -p perl-dap
 
 ### 7.1 Vulnerability Reporting
 
-**Contact**: security@tree-sitter-perl.org
+**Contact**: See SECURITY.md
 **Response Time**: 72 hours
 **Disclosure Timeline**: 90 days coordinated disclosure
 

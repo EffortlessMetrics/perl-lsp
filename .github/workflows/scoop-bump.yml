@@ -94,6 +94,11 @@ jobs:
           sed -i "s/\"url\": \"[^\"]*x86_64-pc-windows-msvc.zip\"/\"url\": \"https:\/\/github.com\/EffortlessMetrics\/perl-lsp\/releases\/download\/v${VERSION}\/perl-lsp-v${VERSION}-x86_64-pc-windows-msvc.zip\"/" distribution/scoop/perl-lsp.json
           sed -i "s/\"hash\": \"[^\"]*\"/\"hash\": \"${SHA}\"/" distribution/scoop/perl-lsp.json
 
+          if grep -q "__RELEASE_VERSION__\|__RELEASE_HASH__" distribution/scoop/perl-lsp.json; then
+            echo "::error::Scoop manifest still contains unreplaced placeholders after update."
+            exit 1
+          fi
+
           # Show updated manifest
           cat distribution/scoop/perl-lsp.json
 

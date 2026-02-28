@@ -3,7 +3,7 @@
 > **Canonical**: This is a summary. See [docs/ROADMAP.md](../../../../docs/ROADMAP.md) for the full roadmap.
 > **Metrics**: See [CURRENT_STATUS.md](../../../../docs/CURRENT_STATUS.md) for computed metrics.
 
-> **Status (2026-02-20)**: **Initial Public Alpha (v0.9.1)**. Hardening underway with native DAP preview validated.
+> **Status (2026-02-20)**: **Initial Public Alpha (v0.10.0)**. Hardening underway with native DAP preview validated.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 
@@ -11,11 +11,11 @@
 
 ## Alpha Disclaimer
 
-Perl LSP is currently in **Initial Public Alpha**. Version 0.9.1 represents a substantially complete feature set, but APIs and protocols are still evolving. We value early adopter feedback to refine the project toward the v0.15.0 Stability Contract milestone.
+Perl LSP is currently in **Initial Public Alpha**. Version 0.10.0 represents a substantially complete feature set, but APIs and protocols are still evolving. We value early adopter feedback to refine the project toward the v0.15.0 Stability Contract milestone.
 
 ---
 
-## Current State (v0.9.1)
+## Current State (v0.10.0)
 
 | Component | Release Stance | Evidence | Notes |
 |-----------|----------------|----------|-------|
@@ -31,7 +31,7 @@ Perl LSP is currently in **Initial Public Alpha**. Version 0.9.1 represents a su
 
 ## Now / Next / Later
 
-**Now (v0.9.1 Initial Public Alpha)**
+**Now (v0.10.0 Initial Public Alpha)**
 - Keep close-out receipts green (`just ci-gate`)
 - Public Alpha hardening: focus on correctness and performance for early adopters
 - Publish benchmark outputs under `benchmarks/results/`
@@ -53,12 +53,12 @@ Perl LSP is currently in **Initial Public Alpha**. Version 0.9.1 represents a su
 
 | Crate | Version | Status | Purpose |
 |-------|---------|--------|---------|
-| **perl-parser** | v0.9.1 | Public Alpha | Main parser library |
-| **perl-lsp** | v0.9.1 | Public Alpha | LSP server |
-| **perl-lexer** | v0.9.1 | Public Alpha | Context-aware tokenizer |
-| **perl-corpus** | v0.9.1 | Public Alpha | Test corpus |
+| **perl-parser** | v0.10.0 | Public Alpha | Main parser library |
+| **perl-lsp** | v0.10.0 | Public Alpha | LSP server |
+| **perl-lexer** | v0.10.0 | Public Alpha | Context-aware tokenizer |
+| **perl-corpus** | v0.10.0 | Public Alpha | Test corpus |
 | **perl-dap** | v0.2.0 | Preview (Native + Bridge) | Debug Adapter Protocol |
-| **perl-parser-pest** | v0.9.1 | Legacy | Pest-based parser (maintained) |
+| **perl-parser-pest** | v0.10.0 | Legacy | Pest-based parser (maintained) |
 
 ---
 
@@ -66,7 +66,7 @@ Perl LSP is currently in **Initial Public Alpha**. Version 0.9.1 represents a su
 
 > For the full honest assessment, see [docs/HONEST_ASSESSMENT.md](../../../../docs/HONEST_ASSESSMENT.md).
 
-### Resolved (v0.9.1)
+### Resolved (v0.10.0)
 - Comprehensive corpus (732KB, 78 files, 611+ sections)
 - Budget-protected lexer, recursion limits, fuzz testing
 - Fixed workspace root security boundary

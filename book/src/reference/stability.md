@@ -1,6 +1,6 @@
 # API Stability & Version Policy
 
-**MSRV:** 1.92 | **Edition:** 2024 | **Status:** Initial Public Alpha (v0.9.1)
+**MSRV:** 1.92 | **Edition:** 2024 | **Status:** Initial Public Alpha (v0.10.0)
 
 > For the full stability policy, see [docs/STABILITY.md](../../../../docs/STABILITY.md).
 
@@ -8,7 +8,7 @@
 
 ## Current Status
 
-Perl LSP v0.9.1 is an **Initial Public Alpha**. While the feature set is substantially complete and the project is well-tested, APIs, protocols, and behaviors are subject to change based on user feedback and technical requirements.
+Perl LSP v0.10.0 is an **Initial Public Alpha**. While the feature set is substantially complete and the project is well-tested, APIs, protocols, and behaviors are subject to change based on user feedback and technical requirements.
 
 A formal **Stability Contract** (including locked APIs and wire protocol invariants) is targeted for **v0.15.0**.
 

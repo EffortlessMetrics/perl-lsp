@@ -1,6 +1,9 @@
 //! Publishing functionality for crates and VSCode extension
 
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{Result, bail, eyre};
+use serde::Deserialize;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
@@ -8,10 +11,13 @@ use std::time::Duration;
 pub fn publish_crates(yes: bool, dry_run: bool) -> Result<()> {
     println!("📦 Publishing crates to crates.io");
 
+    let publish_targets = load_publish_targets()?;
+
     if !yes {
         println!("This will publish:");
-        println!("  - perl-lexer");
-        println!("  - perl-parser");
+        for target in &publish_targets {
+            println!("  - {}", target.name);
+        }
         println!();
         print!("Continue? [y/N] ");
 
@@ -26,39 +32,116 @@ pub fn publish_crates(yes: bool, dry_run: bool) -> Result<()> {
         }
     }
 
-    // Publish perl-lexer first
-    println!("Publishing perl-lexer...");
     let mut args = vec!["publish", "--no-verify"];
     if dry_run {
         args.push("--dry-run");
     }
 
-    let output = Command::new("cargo").current_dir("crates/perl-lexer").args(&args).output()?;
+    for (index, target) in publish_targets.iter().enumerate() {
+        println!("Publishing {}...", target.name);
+        let crate_dir = target.manifest_path.parent().ok_or_else(|| {
+            eyre!(
+                "Invalid manifest path for publish target '{}': {:?}",
+                target.name,
+                target.manifest_path
+            )
+        })?;
 
-    if !output.status.success() {
-        bail!("Failed to publish perl-lexer: {}", String::from_utf8_lossy(&output.stderr));
+        let output = Command::new("cargo").current_dir(crate_dir).args(&args).output()?;
+        if !output.status.success() {
+            bail!("Failed to publish {}: {}", target.name, String::from_utf8_lossy(&output.stderr));
+        }
+        println!("✅ {} published", target.name);
+
+        if !dry_run && index + 1 != publish_targets.len() {
+            // Wait for crates.io to process before publishing the next package.
+            println!("Waiting 30 seconds for crates.io to process...");
+            thread::sleep(Duration::from_secs(30));
+        }
     }
-    println!("✅ perl-lexer published");
-
-    if !dry_run {
-        // Wait for crates.io to process
-        println!("Waiting 30 seconds for crates.io to process...");
-        thread::sleep(Duration::from_secs(30));
-    }
-
-    // Publish perl-parser
-    println!("Publishing perl-parser...");
-    let output = Command::new("cargo").current_dir("crates/perl-parser").args(&args).output()?;
-
-    if !output.status.success() {
-        bail!("Failed to publish perl-parser: {}", String::from_utf8_lossy(&output.stderr));
-    }
-    println!("✅ perl-parser published");
-
     println!();
     println!("✅ All crates published successfully!");
 
     Ok(())
+}
+
+#[derive(Deserialize)]
+struct CargoMetadata {
+    metadata: Option<WorkspaceMetadata>,
+    packages: Vec<MetadataPackage>,
+}
+
+#[derive(Deserialize)]
+struct WorkspaceMetadata {
+    publish: Option<PublishMetadata>,
+}
+
+#[derive(Deserialize)]
+struct PublishMetadata {
+    allow: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+struct MetadataPackage {
+    name: String,
+    manifest_path: PathBuf,
+}
+
+struct PublishTarget {
+    name: String,
+    manifest_path: PathBuf,
+}
+
+fn load_publish_targets() -> Result<Vec<PublishTarget>> {
+    let output =
+        Command::new("cargo").args(["metadata", "--format-version", "1", "--no-deps"]).output()?;
+    if !output.status.success() {
+        bail!(
+            "Failed to load workspace metadata for publish allowlist: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let metadata: CargoMetadata = serde_json::from_slice(&output.stdout)?;
+
+    let allowlist = metadata
+        .metadata
+        .and_then(|workspace| workspace.publish)
+        .and_then(|publish| publish.allow)
+        .ok_or_else(|| {
+            eyre!(
+                "Publish allowlist missing. Add [workspace.metadata.publish.allow] in the workspace Cargo.toml."
+            )
+        })?;
+
+    if allowlist.is_empty() {
+        bail!("Publish allowlist is empty. Add crates to [workspace.metadata.publish.allow].");
+    }
+
+    let mut package_map = HashMap::new();
+    for package in metadata.packages {
+        package_map.insert(package.name, package.manifest_path);
+    }
+
+    let mut seen = HashSet::new();
+    let mut targets = Vec::new();
+
+    for crate_name in allowlist {
+        if !seen.insert(crate_name.clone()) {
+            continue;
+        }
+
+        let manifest_path = package_map.get(&crate_name).ok_or_else(|| {
+            eyre!(
+                "Crate '{}' listed in [workspace.metadata.publish.allow] is not a workspace member.",
+                crate_name
+            )
+        })?;
+
+        targets.push(PublishTarget { name: crate_name, manifest_path: manifest_path.clone() });
+    }
+
+    Ok(targets)
 }
 
 pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {

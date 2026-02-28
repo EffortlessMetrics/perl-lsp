@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code when working with this repository.
 
-**Latest Release**: v0.9.1 - Initial Public Alpha
+**Latest Release**: v0.10.0 - Initial Public Alpha
 **API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
 
 ## Project Overview

@@ -7,13 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.8.0)'
+        description: 'Version to publish (e.g., 0.x.y)'
         required: true
         type: string
 
 # Cancel in-flight runs
 concurrency:
-  group: publish-extension-${{ github.ref }}
+  group: publish-extension-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
   cancel-in-progress: false  # Don't cancel publishing
 
 jobs:
@@ -40,10 +40,21 @@ jobs:
 
       - name: Set version
         working-directory: vscode-extension
+        id: version
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            if [ "${{ github.ref_type }}" = "tag" ]; then
+              VERSION="${GITHUB_REF#refs/tags/v}"
+            else
+              echo "::error::Version input is required for workflow_dispatch"
+              exit 1
+            fi
+          fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           npm version $VERSION --no-git-tag-version
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release_tag=v${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Compile extension
         working-directory: vscode-extension
@@ -96,4 +107,14 @@ jobs:
             - Platform detection for Linux/macOS/Windows
             - Automatic checksum verification
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "::warning::Release ${RELEASE_TAG} does not exist yet. Skipping VSIX attachment."
+            exit 0
+          fi
+
+          gh release upload "${RELEASE_TAG}" \
+            "vscode-extension/${{ env.VSIX_FILE }}" \
+            --clobber

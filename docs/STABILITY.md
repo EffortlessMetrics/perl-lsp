@@ -1,14 +1,14 @@
-# API Stability & Version Policy - v0.9.1 Public Alpha
+# API Stability & Version Policy - v0.10.0 Public Alpha
 
 **MSRV:** 1.92 • **Edition:** 2024 • **Status:** Initial Public Alpha
 
 ## Executive Summary
 
-This document defines the stability goals for Perl LSP. **Please note that v0.9.1 is an initial public alpha.** While we strive for a reliable experience, the project is still evolving and APIs, protocols, and behaviors are subject to change based on user feedback and technical requirements.
+This document defines the stability goals for Perl LSP. **Please note that v0.10.0 is an initial public alpha.** While we strive for a reliable experience, the project is still evolving and APIs, protocols, and behaviors are subject to change based on user feedback and technical requirements.
 
 Formal **Stability Contract** guarantees (including contract-locked APIs and wire protocol invariants) are currently targeted for the **v0.15.0** milestone.
 
-**What "Alpha" means for v0.9.1:**
+**What "Alpha" means for v0.10.x:**
 - APIs and features are substantially complete but may still evolve
 - Breaking changes may occur in minor (0.x) releases without full deprecation cycles
 - Wire protocol capabilities are experimental and subject to refinement
@@ -33,7 +33,7 @@ Formal **Stability Contract** guarantees (including contract-locked APIs and wir
 
 ## Published Artifacts
 
-### What We Ship (v0.9.x (Public Alpha)+)
+### What We Ship (v0.10.x (Public Alpha)+)
 
 | Distribution | Format | Support Level | Update Cadence |
 |--------------|--------|---------------|----------------|
@@ -43,16 +43,16 @@ Formal **Stability Contract** guarantees (including contract-locked APIs and wir
 | **Homebrew** | Formula (macOS/Linux) | Alpha | Automated on release |
 | **Source** | GitHub releases + tags | Alpha | Every release |
 
-### Published Crates (v0.9.1 Alpha)
+### Published Crates (v0.10.0 Alpha)
 
 | Crate | Version | Purpose | Status | SemVer Commitment |
 |-------|---------|---------|--------|-------------------|
-| [perl-parser](https://crates.io/crates/perl-parser) | 0.9.x (Public Alpha) | Parser & AST | Evolving | Best-effort |
-| [perl-lexer](https://crates.io/crates/perl-lexer) | 0.9.x (Public Alpha) | Tokenizer | Evolving | Best-effort |
-| [perl-lsp](https://crates.io/crates/perl-lsp) | 0.9.x (Public Alpha) | LSP Server Binary | Evolving | Best-effort |
-| [perl-corpus](https://crates.io/crates/perl-corpus) | 0.9.x (Public Alpha) | Test corpus | Evolving | Best-effort |
+| [perl-parser](https://crates.io/crates/perl-parser) | 0.10.x (Public Alpha) | Parser & AST | Evolving | Best-effort |
+| [perl-lexer](https://crates.io/crates/perl-lexer) | 0.10.x (Public Alpha) | Tokenizer | Evolving | Best-effort |
+| [perl-lsp](https://crates.io/crates/perl-lsp) | 0.10.x (Public Alpha) | LSP Server Binary | Evolving | Best-effort |
+| [perl-corpus](https://crates.io/crates/perl-corpus) | 0.10.x (Public Alpha) | Test corpus | Evolving | Best-effort |
 | [perl-dap](https://crates.io/crates/perl-dap) | 0.2.0 | Debug Adapter | **Preview** | No - pre-0.15 |
-| [perl-parser-pest](https://crates.io/crates/perl-parser-pest) | 0.9.x (Public Alpha) | Legacy parser | **Deprecated** | Maintenance only |
+| [perl-parser-pest](https://crates.io/crates/perl-parser-pest) | 0.10.x (Public Alpha) | Legacy parser | **Deprecated** | Maintenance only |
 
 **Note:** Formal stability contracts are deferred until v0.15.0.
 
@@ -77,7 +77,7 @@ Perl LSP currently follows a "pre-stability" versioning model:
 
 **Breaking changes are allowed** in minor releases (e.g., 0.9.0 → 0.10.0). We will provide migration guidance in the CHANGELOG whenever possible, but full multi-release deprecation cycles are not guaranteed until v0.15.0.
 
-### Patch Releases (0.9.Z)
+### Patch Releases (0.10.Z)
 
 Patch releases are reserved for bug fixes, performance improvements, and documentation updates that do not change public APIs.
 
@@ -150,13 +150,13 @@ Targets (alpha): See `benches/` directories in individual crates for benchmark s
 
 ### Security Policy
 
-**Report security issues to:** security@perl-lsp.org (or GitHub Security Advisories)
+**Report security issues to:** See SECURITY.md (or GitHub Security Advisories)
 
 We take security seriously even in alpha. Coordinated disclosure is preferred for any vulnerabilities discovered.
 
 ---
 
-## Summary Checklist: v0.9.1 Initial Public Alpha
+## Summary Checklist: v0.10.0 Initial Public Alpha
 
 ✅ **Functional Completeness:** Handles almost all modern Perl constructs
 ✅ **LSP Protocol:** Broad coverage of LSP 3.18 methods (alpha-validated)

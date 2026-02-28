@@ -70,7 +70,7 @@ impl LspServer {
             // Store document state with normalized URI
             let normalized_uri = self.normalize_uri_key(uri);
             self.documents.lock().insert(
-                normalized_uri,
+                normalized_uri.clone(),
                 DocumentState {
                     rope: rope.clone(),
                     text: text.to_string(),
@@ -146,7 +146,7 @@ impl LspServer {
             }
 
             // Send diagnostics
-            self.publish_diagnostics(uri);
+            self.publish_diagnostics(&normalized_uri);
         }
 
         Ok(())
@@ -332,7 +332,7 @@ impl LspServer {
                 }
 
                 // Send diagnostics
-                self.publish_diagnostics(uri);
+                self.publish_diagnostics(&normalized_uri);
             }
         }
 
@@ -349,6 +349,7 @@ impl LspServer {
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
+            let normalized_uri = self.normalize_uri_key(uri);
 
             eprintln!("Document closed: {}", uri);
 
@@ -359,7 +360,8 @@ impl LspServer {
             }
 
             // Remove from documents
-            self.documents.lock().remove(uri);
+            let mut documents = self.documents.lock();
+            documents.remove(&normalized_uri).or_else(|| documents.remove(uri));
 
             // Clear from workspace index
             // Note: Mutation operation - use coordinator.index() directly
@@ -378,7 +380,7 @@ impl LspServer {
             let _ = self.notify(
                 "textDocument/publishDiagnostics",
                 json!({
-                    "uri": uri,
+                    "uri": normalized_uri,
                     "diagnostics": []
                 }),
             );
@@ -394,6 +396,7 @@ impl LspServer {
                 .pointer("/textDocument/uri")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| invalid_params("Missing required parameter: textDocument.uri"))?;
+            let normalized_uri = self.normalize_uri_key(uri);
             let _version = params
                 .pointer("/textDocument/version")
                 .and_then(|v| v.as_i64())
@@ -403,7 +406,7 @@ impl LspServer {
 
             // Re-run diagnostics on save to catch any changes
             let documents = self.documents.lock();
-            if let Some(doc) = self.get_document(&documents, uri) {
+            if let Some(doc) = self.get_document(&documents, &normalized_uri) {
                 if let Some(ref ast) = doc.ast {
                     // Run diagnostics
                     let provider = DiagnosticsProvider::new(ast, doc.text.clone());
@@ -437,7 +440,7 @@ impl LspServer {
                     let _ = self.notify(
                         "textDocument/publishDiagnostics",
                         json!({
-                            "uri": uri,
+                            "uri": normalized_uri,
                             "diagnostics": lsp_diagnostics
                         }),
                     );

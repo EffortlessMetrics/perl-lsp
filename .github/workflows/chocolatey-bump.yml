@@ -97,6 +97,11 @@ jobs:
           sed -i "s/  checksum      = '[^']*'/  checksum      = '${SHA}'/" distribution/chocolatey/tools/chocolateyinstall.ps1
           sed -i "s/perl-lsp-[0-9.]*/perl-lsp-${VERSION}/g" distribution/chocolatey/tools/chocolateyinstall.ps1
 
+          if grep -q "__RELEASE_VERSION__\|__RELEASE_SHA256__" distribution/chocolatey/perl-lsp.nuspec distribution/chocolatey/tools/chocolateyinstall.ps1; then
+            echo "::error::Chocolatey files still contain unreplaced placeholders after update."
+            exit 1
+          fi
+
           # Show updated files
           echo "=== perl-lsp.nuspec ==="
           cat distribution/chocolatey/perl-lsp.nuspec

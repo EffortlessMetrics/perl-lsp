@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.9.1)'
+        description: 'Version to publish (e.g., 0.x.y)'
         required: true
         type: string
       dry_run:
@@ -88,13 +88,48 @@ jobs:
               print("ERROR: cycle detected in dependency graph", file=sys.stderr)
               sys.exit(1)
 
-          # Filter to only crates that should be published (have publish != [])
+          # Filter to only crates listed in the workspace publish allowlist
+          allowlist = meta.get("metadata", {}).get("publish", {}).get("allow", [])
+          if not isinstance(allowlist, list):
+              print(
+                  "ERROR: Workspace publish allowlist must be a list at [workspace.metadata.publish.allow].",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          allowed = []
+          for crate_name in allowlist:
+              if not isinstance(crate_name, str):
+                  print(
+                      f"ERROR: Invalid publish allowlist entry (not a string): {crate_name}",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
+
+              if crate_name in allowed:
+                  continue
+
+              if crate_name not in packages:
+                  print(
+                      f"ERROR: Crate in publish allowlist is not a workspace member: {crate_name}",
+                      file=sys.stderr,
+                  )
+                  sys.exit(1)
+
+              allowed.append(crate_name)
+
+          if len(allowed) == 0:
+              print(
+                  "ERROR: Publish allowlist is empty. Set [workspace.metadata.publish.allow] in workspace Cargo.toml.",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
           result = []
           for name in order:
-              pkg = packages[name]
-              publish = pkg.get("publish")
-              if publish is not None and len(publish) == 0:
+              if name not in allowed:
                   continue
+              pkg = packages[name]
               result.append({"name": name, "version": pkg["version"]})
 
           print(json.dumps(result))

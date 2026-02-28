@@ -338,12 +338,14 @@ ci-check-no-nested-lock:
         -not -path '*/target/*' \
         -not -path '*/.runs/*' \
         -not -path '*/archive/*' \
+        -not -path './fuzz/*' \
         2>/dev/null | grep -v '^\./Cargo\.lock$' | grep -q .; then \
         echo "❌ ERROR: Nested Cargo.lock detected! Run gates from repo root only."; \
         find . -name 'Cargo.lock' -type f \
             -not -path '*/target/*' \
             -not -path '*/.runs/*' \
             -not -path '*/archive/*' \
+            -not -path './fuzz/*' \
             2>/dev/null | grep -v '^\./Cargo\.lock$'; \
         exit 1; \
     fi
@@ -1432,6 +1434,10 @@ release-build:
 version-check:
     @echo "Checking version sync..."
     @bash scripts/check-version-sync.sh
+
+# Turnkey PR-driven release orchestrator for 0.x.y releases.
+release-turnkey VERSION:
+    @bash scripts/release-turnkey-pr.sh "{{VERSION}}"
 
 # Release gate: full validation for release candidates (~10 min)
 # Composes: ci-gate + release-specific checks

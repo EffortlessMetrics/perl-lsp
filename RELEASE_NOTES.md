@@ -1,11 +1,11 @@
-# Perl LSP v0.9.1 - Initial Public Alpha Release
+# Perl LSP v0.10.0 - Public Alpha
 
 ## Release Date
-February 20, 2026
+February 28, 2026
 
 ## Overview
 
-We're excited to announce the **Initial Public Alpha** release of Perl LSP v0.9.1! This milestone represents significant development and brings a fast, native Perl language server implementation to the community. This is an early-stage release intended for testing and feedback. While feature-complete in many areas, the project is still evolving toward the v0.15.0 Stability Contract milestone.
+Perl LSP v0.10.0 continues the **Public Alpha** series with version consistency improvements, expanded documentation, and release infrastructure hardening. This release transitions from the initial v0.10.0 alpha to a more polished, release-candidate-quality package while maintaining the project's trajectory toward the v0.15.0 Stability Contract milestone.
 
 ## 🚀 Key Highlights
 
@@ -30,7 +30,7 @@ We're excited to announce the **Initial Public Alpha** release of Perl LSP v0.9.
 - **Memory Safe**: Full Rust memory safety guarantees.
 - **Process Isolation**: Controlled execution for external tool integration.
 
-## 🎯 What's New in v0.9.1
+## 🎯 What's New in v0.10.0
 
 ### Complete Semantic Analyzer
 The semantic analyzer now provides a deep understanding of Perl code:
@@ -106,6 +106,6 @@ Dual licensed under [MIT License](LICENSE-MIT) or [Apache License 2.0](LICENSE-A
 
 ---
 
-**Try Perl LSP v0.9.1 today and help shape the future of Perl development!**
+**Try Perl LSP v0.10.0 today and help shape the future of Perl development!**
 
 🚀 [Get Started Now](docs/GETTING_STARTED.md) | 📖 [Documentation](docs/INDEX.md) | 💬 [Community](https://github.com/EffortlessMetrics/perl-lsp/discussions)
