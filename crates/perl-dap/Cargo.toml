@@ -60,6 +60,7 @@ perl-module-path = { workspace = true }
 perl-path-security = { workspace = true }
 perl-content-length-framing = { workspace = true }
 perl-keywords = { workspace = true }
+perl-lsp-launcher = { workspace = true }
 
 # Process management
 # Note: tokio-process not needed (using tokio::process)

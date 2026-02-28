@@ -12,17 +12,8 @@ use tracing_subscriber::{EnvFilter, fmt};
 #[derive(Parser, Debug)]
 #[command(name = "perl-dap", version, about, long_about = None)]
 struct Args {
-    /// Use stdio for communication (default)
-    #[arg(long, default_value_t = true)]
-    stdio: bool,
-
-    /// Use TCP socket for communication
-    #[arg(long, conflicts_with = "stdio")]
-    socket: bool,
-
-    /// Port to listen on (for socket mode)
-    #[arg(long, default_value_t = 13603)]
-    port: u16,
+    #[command(flatten)]
+    transport: perl_lsp_launcher::TransportArgs,
 
     /// Use bridge mode (proxy to Perl::LanguageServer)
     #[arg(long)]
@@ -55,9 +46,10 @@ fn main() -> anyhow::Result<()> {
 
     let mut server = DapServer::new(config)?;
 
-    if args.socket {
-        tracing::info!("Starting DAP server on port {}", args.port);
-        server.run_socket(args.port)?;
+    if args.transport.socket || args.transport.port.is_some() {
+        let port = args.transport.port.unwrap_or(perl_lsp_launcher::DEFAULT_LSP_PORT);
+        tracing::info!("Starting DAP server on port {}", port);
+        server.run_socket(port)?;
         return Ok(());
     }
 

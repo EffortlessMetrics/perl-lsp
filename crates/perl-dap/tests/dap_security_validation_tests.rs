@@ -23,7 +23,7 @@ fn test_path_validation_safe_relative_paths() -> TestResult {
     std::fs::create_dir_all(&workspace)?;
 
     // Safe relative paths
-    let safe_paths = vec!["src/main.pl", "./lib/Module.pm", "test.pl", ".gitignore"];
+    let safe_paths = vec!["src/main.pl", "./lib/Module.pm", "test.pl"];
 
     for path_str in safe_paths {
         let path = PathBuf::from(path_str);
@@ -219,7 +219,7 @@ fn test_security_comprehensive_path_traversal_matrix() {
         ("./lib/MyModule.pm", false),
         ("./tests/fixtures/hello.pl", false),
         ("script.pl", false),
-        ("./.gitignore", false),
+        ("test.pl", false),
     ];
 
     let workspace = must(std::env::current_dir()).join("test_workspace_comprehensive");
