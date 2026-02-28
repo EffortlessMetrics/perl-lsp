@@ -158,6 +158,20 @@ impl DocumentHighlightProvider {
             }
         }
 
+        // Check for subroutine/method name at cursor position
+        if let NodeKind::Subroutine { name: Some(sub_name), name_span: Some(span), .. } =
+            &node.kind
+        {
+            if offset >= span.start && offset <= span.end {
+                return Some(SymbolInfo {
+                    name: sub_name.clone(),
+                    sigil: None,
+                    is_method: false,
+                    is_function: true,
+                });
+            }
+        }
+
         // Recurse into children
         if let Some(children) = self.get_children(node) {
             for child in children {
@@ -402,6 +416,39 @@ impl DocumentHighlightProvider {
             let kind = self.determine_highlight_kind_with_parent(node, parent);
             // Use the full location including the sigil
             highlights.push(DocumentHighlight { location: node.location, kind });
+        }
+
+        // Cross-sigil matching: %hash <-> $hash{key}, @array <-> $array[idx]
+        if let NodeKind::Variable { sigil, name } = &node.kind {
+            if name == &target.name && !self.node_matches_symbol(node, source, target) {
+                if let Some(target_sigil) = &target.sigil {
+                    if let Some(parent_node) = parent {
+                        if let NodeKind::Binary { op, .. } = &parent_node.kind {
+                            let cross_match =
+                                (target_sigil == "%" && sigil == "$" && op == "{}")
+                                    || (target_sigil == "@" && sigil == "$" && op == "[]");
+                            if cross_match {
+                                let kind =
+                                    self.determine_highlight_kind_with_parent(node, parent);
+                                highlights
+                                    .push(DocumentHighlight { location: node.location, kind });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Emit highlight for subroutine definition name_span
+        if let NodeKind::Subroutine { name: Some(sub_name), name_span: Some(span), .. } =
+            &node.kind
+        {
+            if target.is_function && sub_name == &target.name {
+                highlights.push(DocumentHighlight {
+                    location: *span,
+                    kind: DocumentHighlightKind::Write,
+                });
+            }
         }
 
         // Recursively check children with this node as parent
