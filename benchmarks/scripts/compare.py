@@ -11,6 +11,7 @@ and the simplified format (with results structure).
 """
 
 import json
+import re
 import sys
 import argparse
 from pathlib import Path
@@ -216,13 +217,21 @@ def compare_benchmarks(baseline_file: Path, current_file: Path,
         return 0
 
 
+def _semver_key(path: Path) -> Tuple[int, ...]:
+    """Extract (major, minor, patch) from a filename like v0.9.1.json."""
+    m = re.search(r'v(\d+)\.(\d+)\.(\d+)', path.stem)
+    if m:
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    return (0, 0, 0)
+
+
 def find_latest_baseline(base_path: Path) -> Optional[Path]:
-    """Find the most recent baseline file."""
+    """Find the most recent baseline file by semver."""
     baselines_dir = base_path / "benchmarks" / "baselines"
     if not baselines_dir.exists():
         return None
 
-    baseline_files = sorted(baselines_dir.glob("*.json"), reverse=True)
+    baseline_files = sorted(baselines_dir.glob("*.json"), key=_semver_key, reverse=True)
     return baseline_files[0] if baseline_files else None
 
 

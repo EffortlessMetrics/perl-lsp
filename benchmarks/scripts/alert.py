@@ -13,6 +13,7 @@ Usage:
 
 import argparse
 import json
+import re
 import sys
 import yaml
 from pathlib import Path
@@ -410,6 +411,14 @@ def generate_alert_markdown(baseline_file: Path, current_file: Path, config: dic
     return "\n".join(md)
 
 
+def _semver_key(path: Path) -> Tuple[int, ...]:
+    """Extract (major, minor, patch) from a filename like v0.9.1.json."""
+    m = re.search(r'v(\d+)\.(\d+)\.(\d+)', path.stem)
+    if m:
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    return (0, 0, 0)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate performance regression alerts")
     parser.add_argument("baseline", nargs="?", help="Baseline JSON file")
@@ -437,7 +446,7 @@ def main():
         baseline_file = Path(args.baseline)
     else:
         baselines_dir = repo_root / "benchmarks" / "baselines"
-        baseline_files = sorted(baselines_dir.glob("*.json"), reverse=True)
+        baseline_files = sorted(baselines_dir.glob("*.json"), key=_semver_key, reverse=True)
         baseline_file = baseline_files[0] if baseline_files else None
 
     if baseline_file is None or not baseline_file.exists():
