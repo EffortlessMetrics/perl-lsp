@@ -100,7 +100,7 @@ jobs:
           cat /tmp/crates.json | python3 -c '
           import json, sys
           for i, c in enumerate(json.load(sys.stdin), 1):
-              print(f"  {i}. {c[\"name\"]}@{c[\"version\"]}")
+              print("  {}. {}@{}".format(i, c["name"], c["version"]))
           '
 
   # Step 2: Publish crates sequentially in dependency order
