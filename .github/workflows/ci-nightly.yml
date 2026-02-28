@@ -112,7 +112,8 @@ jobs:
       id: compare
       continue-on-error: true
       run: |
-        if [ -f "benchmarks/baselines/v0.9.0.json" ]; then
+        LATEST_BASELINE=$(ls -t benchmarks/baselines/v*.json 2>/dev/null | head -1)
+        if [ -n "$LATEST_BASELINE" ]; then
           ./benchmarks/scripts/compare.sh --fail-on-regression 2>&1 | tee comparison.txt
           echo "REGRESSION=$?" >> $GITHUB_OUTPUT
         else
@@ -133,7 +134,8 @@ jobs:
       id: alert
       continue-on-error: true
       run: |
-        if [ -f "benchmarks/baselines/v0.9.0.json" ]; then
+        LATEST_BASELINE=$(ls -t benchmarks/baselines/v*.json 2>/dev/null | head -1)
+        if [ -n "$LATEST_BASELINE" ]; then
           python3 ./benchmarks/scripts/alert.py --format markdown > alert.md
           python3 ./benchmarks/scripts/alert.py --check 2>&1
           echo "CRITICAL=$?" >> $GITHUB_OUTPUT
