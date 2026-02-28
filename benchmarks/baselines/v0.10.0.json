@@ -1,0 +1,354 @@
+{
+  "metadata": {
+    "version": "0.10.0",
+    "date": "2026-02-28",
+    "timestamp": "2026-02-28T23:00:20Z",
+    "git_sha": "4380c16a85729fd7e216e01c0315d3f254cd2924",
+    "machine": {
+      "model": "AMD Ryzen 9 9950X3D 16-Core Processor",
+      "cores": 16,
+      "threads": 32,
+      "memory_gb": 196,
+      "os": "Linux 6.6.87.2-microsoft-standard-WSL2"
+    },
+    "rust": {
+      "rustc": "1.93.1 (01f6ddf75 2026-02-11)"
+    },
+    "benchmark_framework": "Criterion.rs",
+    "note": "v0.10.0 baseline - full benchmark suite"
+  },
+  "benchmarks": {
+    "parser": {
+      "parse_simple_script": {
+        "description": "Basic Perl script with variables, conditionals, and functions",
+        "mean_us": 14.489,
+        "low_us": 14.064,
+        "high_us": 14.914,
+        "unit": "\u00b5s",
+        "target": "<150\u00b5s",
+        "meets_target": true
+      },
+      "parse_complex_script": {
+        "description": "OO Perl with packages, regex, and complex control flow",
+        "mean_us": 38.68,
+        "low_us": 37.186,
+        "high_us": 40.187,
+        "unit": "\u00b5s",
+        "target": "<1ms",
+        "meets_target": true
+      },
+      "ast_to_sexp": {
+        "description": "AST serialization performance",
+        "mean_us": 25.201,
+        "low_us": 20.094,
+        "high_us": 30.241,
+        "unit": "\u00b5s"
+      },
+      "lexer_only": {
+        "description": "Isolated lexer performance (parser crate)",
+        "mean_us": 11.075,
+        "low_us": 10.915,
+        "high_us": 11.232,
+        "unit": "\u00b5s"
+      },
+      "scope_analysis": {
+        "description": "Scope analysis for simple script",
+        "mean_us": 3.999,
+        "low_us": 3.834,
+        "high_us": 4.169,
+        "unit": "\u00b5s"
+      }
+    },
+    "scope": {
+      "scope_analysis_many_vars": {
+        "description": "Scope analysis with many variables",
+        "mean_us": 297.0,
+        "low_us": 282.93,
+        "high_us": 312.85,
+        "unit": "\u00b5s"
+      },
+      "scope_analysis_strict_barewords": {
+        "description": "Scope analysis with strict barewords",
+        "mean_us": 78.963,
+        "low_us": 76.327,
+        "high_us": 81.652,
+        "unit": "\u00b5s"
+      }
+    },
+    "incremental": {
+      "incremental_small_edit": {
+        "description": "Single small incremental edit",
+        "mean_us": 1.08,
+        "low_us": 1.037,
+        "high_us": 1.126,
+        "unit": "\u00b5s",
+        "note": "21.8x faster than full reparse"
+      },
+      "full_reparse": {
+        "description": "Full reparse (baseline for incremental comparison)",
+        "mean_us": 23.602,
+        "low_us": 22.57,
+        "high_us": 24.772,
+        "unit": "\u00b5s"
+      },
+      "incremental_multiple_edits": {
+        "description": "Multiple incremental edits",
+        "mean_us": 504.27,
+        "low_us": 479.12,
+        "high_us": 527.09,
+        "unit": "\u00b5s"
+      },
+      "incremental_document_single_edit": {
+        "description": "Document-level single incremental edit",
+        "mean_us": 13.845,
+        "low_us": 12.484,
+        "high_us": 15.235,
+        "unit": "\u00b5s"
+      },
+      "incremental_document_multiple_edits": {
+        "description": "Document-level multiple incremental edits",
+        "mean_us": 37.382,
+        "low_us": 33.568,
+        "high_us": 41.609,
+        "unit": "\u00b5s"
+      }
+    },
+    "lexer": {
+      "simple_tokens": {
+        "description": "Basic tokenization",
+        "mean_us": 1.129,
+        "low_us": 1.025,
+        "high_us": 1.246,
+        "unit": "\u00b5s"
+      },
+      "slash_disambiguation": {
+        "description": "Context-aware slash handling",
+        "mean_us": 3.509,
+        "low_us": 3.14,
+        "high_us": 3.917,
+        "unit": "\u00b5s"
+      },
+      "string_interpolation": {
+        "description": "String interpolation parsing",
+        "mean_us": 3.367,
+        "low_us": 3.091,
+        "high_us": 3.647,
+        "unit": "\u00b5s"
+      },
+      "large_file": {
+        "description": "1000-line file tokenization",
+        "mean_ms": 2.076,
+        "low_ms": 1.907,
+        "high_ms": 2.269,
+        "unit": "ms",
+        "target": "<10ms",
+        "meets_target": true
+      },
+      "whitespace_heavy": {
+        "description": "Whitespace-heavy tokenization",
+        "mean_us": 1.209,
+        "low_us": 1.109,
+        "high_us": 1.324,
+        "unit": "\u00b5s"
+      },
+      "operator_heavy": {
+        "description": "Operator-heavy tokenization",
+        "mean_us": 2.553,
+        "low_us": 2.392,
+        "high_us": 2.757,
+        "unit": "\u00b5s"
+      },
+      "number_parsing": {
+        "description": "Number literal tokenization",
+        "mean_us": 1.468,
+        "low_us": 1.1,
+        "high_us": 1.651,
+        "unit": "\u00b5s"
+      },
+      "keyword_heavy": {
+        "description": "Keyword-heavy tokenization",
+        "mean_us": 344.66,
+        "low_us": 279.78,
+        "high_us": 386.53,
+        "unit": "\u00b5s"
+      }
+    },
+    "lsp": {
+      "rope_insertion": {
+        "description": "Rope-based text insertion",
+        "mean_us": 14.638,
+        "low_us": 14.315,
+        "high_us": 15.021,
+        "unit": "\u00b5s",
+        "target": "<1ms",
+        "meets_target": true
+      },
+      "string_insertion": {
+        "description": "String-based text insertion (comparison)",
+        "mean_ns": 665.88,
+        "low_ns": 654.8,
+        "high_ns": 678.31,
+        "unit": "ns"
+      },
+      "utf16_pos_to_byte": {
+        "description": "UTF-16 position to byte offset conversion",
+        "mean_ns": 666.37,
+        "low_ns": 637.37,
+        "high_ns": 696.04,
+        "unit": "ns",
+        "target": "<100\u00b5s",
+        "meets_target": true
+      },
+      "byte_to_utf16_pos": {
+        "description": "Byte to UTF-16 position conversion",
+        "mean_ns": 375.64,
+        "low_ns": 364.07,
+        "high_ns": 389.01,
+        "unit": "ns"
+      },
+      "utf8_pos_to_byte": {
+        "description": "UTF-8 position to byte offset conversion",
+        "mean_ns": 620.42,
+        "low_ns": 595.27,
+        "high_ns": 649.26,
+        "unit": "ns"
+      },
+      "multiple_small_edits": {
+        "description": "Multiple incremental edits (rope)",
+        "mean_us": 12.997,
+        "low_us": 12.705,
+        "high_us": 13.309,
+        "unit": "\u00b5s",
+        "target": "<5ms",
+        "meets_target": true
+      },
+      "single_large_edit": {
+        "description": "Single large edit (rope)",
+        "mean_us": 15.125,
+        "low_us": 14.9,
+        "high_us": 15.363,
+        "unit": "\u00b5s"
+      },
+      "line_operations": {
+        "description": "Rope line navigation",
+        "mean_ns": 130.88,
+        "low_ns": 125.24,
+        "high_ns": 136.74,
+        "unit": "ns"
+      },
+      "char_operations": {
+        "description": "Rope character navigation",
+        "mean_ns": 64.35,
+        "low_ns": 60.4,
+        "high_ns": 68.7,
+        "unit": "ns"
+      },
+      "slice_operations": {
+        "description": "Rope slice operations",
+        "mean_ns": 559.35,
+        "low_ns": 521.32,
+        "high_ns": 599.56,
+        "unit": "ns"
+      }
+    },
+    "workspace_index": {
+      "initial_index_small_workspace": {
+        "description": "5-file workspace initial indexing",
+        "mean_us": 304.94,
+        "low_us": 290.65,
+        "high_us": 320.4,
+        "unit": "\u00b5s",
+        "target": "<100ms",
+        "meets_target": true
+      },
+      "initial_index_medium_workspace": {
+        "description": "10-file workspace initial indexing",
+        "mean_us": 682.12,
+        "low_us": 639.96,
+        "high_us": 723.52,
+        "unit": "\u00b5s",
+        "target": "<200ms",
+        "meets_target": true
+      },
+      "incremental_update_single_file": {
+        "description": "Single file incremental update",
+        "mean_us": 209.39,
+        "low_us": 197.64,
+        "high_us": 222.68,
+        "unit": "\u00b5s",
+        "target": "<10ms",
+        "meets_target": true
+      },
+      "symbol_lookup_by_name": {
+        "description": "Definition lookup by qualified name",
+        "mean_us": 29.964,
+        "low_us": 26.556,
+        "high_us": 34.114,
+        "unit": "\u00b5s",
+        "target": "<1ms",
+        "meets_target": true
+      },
+      "find_references": {
+        "description": "Find references lookup",
+        "mean_ns": 194.55,
+        "low_ns": 188.44,
+        "high_ns": 200.66,
+        "unit": "ns"
+      },
+      "workspace_symbol_search": {
+        "description": "Workspace-wide symbol search",
+        "mean_us": 69.774,
+        "low_us": 64.733,
+        "high_us": 75.245,
+        "unit": "\u00b5s"
+      },
+      "multi_file_cross_reference": {
+        "description": "Cross-file reference resolution",
+        "mean_us": 141.11,
+        "low_us": 128.56,
+        "high_us": 157.42,
+        "unit": "\u00b5s"
+      },
+      "state_transitions": {
+        "description": "Index state machine transitions",
+        "mean_ns": 648.23,
+        "low_ns": 620.0,
+        "high_ns": 676.49,
+        "unit": "ns"
+      },
+      "state_query_hot_path": {
+        "description": "Hot path state query",
+        "mean_ns": 11.493,
+        "low_ns": 11.189,
+        "high_ns": 11.806,
+        "unit": "ns"
+      }
+    }
+  },
+  "performance_targets": {
+    "parser": {
+      "target": "1-150\u00b5s parsing time",
+      "actual": "14.5-38.7\u00b5s",
+      "status": "PASS - 3.9x to 10.3x under target"
+    },
+    "incremental_parsing": {
+      "target": "<1ms updates",
+      "actual": "1.08\u00b5s single edit, 13.8\u00b5s document edit",
+      "speedup": "21.8x faster than full reparse (single edit)",
+      "status": "PASS"
+    },
+    "lsp_operations": {
+      "keystroke_response_target": "<50ms",
+      "actual_edit_latency": "13-15\u00b5s",
+      "position_conversion": "<670ns",
+      "status": "PASS - orders of magnitude under target"
+    },
+    "workspace": {
+      "initial_index_target": "<2s",
+      "actual_5_files": "305\u00b5s",
+      "actual_10_files": "682\u00b5s",
+      "incremental_update": "209\u00b5s",
+      "status": "PASS - well under target"
+    }
+  }
+}
