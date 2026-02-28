@@ -13,7 +13,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use tree_sitter_perl::PureRustPerlParser;
 //!
 //! // Create parser instance

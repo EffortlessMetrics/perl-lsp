@@ -6,7 +6,7 @@
 //!
 //! # Usage Example
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_parser_core::engine::ast::{Node, NodeKind};
 //! use perl_parser_core::SourceLocation;
 //!

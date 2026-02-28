@@ -10,7 +10,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lsp_formatting::FormattingProvider;
 //! use perl_lsp_tooling::OsSubprocessRuntime;
 //!

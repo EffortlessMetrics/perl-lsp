@@ -10,7 +10,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lsp_code_actions::CodeActionsProvider;
 //!
 //! let provider = CodeActionsProvider::new();

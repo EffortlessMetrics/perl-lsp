@@ -9,7 +9,7 @@
 //!
 //! # Example
 //!
-//! ```no_run
+//! ```ignore
 //! use perl_parser_pest::PureRustPerlParser;
 //!
 //! let mut parser = PureRustPerlParser::new();

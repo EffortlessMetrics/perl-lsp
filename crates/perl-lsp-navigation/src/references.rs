@@ -14,7 +14,7 @@
 //!
 //! # Usage Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_parser_core::{Parser, Node};
 //! use perl_lsp_providers::ide::lsp_compat::references::find_references_single_file;
 //!

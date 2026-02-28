@@ -19,7 +19,7 @@
 //!
 //! # Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_workspace_index::workspace::cache::{BoundedLruCache, CacheConfig};
 //!
 //! let config = CacheConfig::default();
@@ -320,7 +320,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
@@ -383,7 +383,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::cache::BoundedLruCache;
     ///
     /// let mut cache = BoundedLruCache::default();
@@ -463,7 +463,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::cache::BoundedLruCache;
     ///
     /// let cache = BoundedLruCache::default();

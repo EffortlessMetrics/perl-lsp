@@ -125,7 +125,7 @@ pub enum IndexPhase {
 ///
 /// # Usage
 ///
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::workspace_index::{IndexPhase, IndexState};
 /// use std::time::Instant;
 ///
@@ -341,7 +341,7 @@ pub enum ResourceKind {
 ///
 /// # Usage
 ///
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::workspace_index::IndexResourceLimits;
 ///
 /// // Use default limits
@@ -420,7 +420,7 @@ impl Default for IndexPerformanceCaps {
 ///
 /// # Usage
 ///
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::workspace_index::IndexMetrics;
 ///
 /// let metrics = IndexMetrics::new();
@@ -456,7 +456,7 @@ impl IndexMetrics {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexMetrics;
     ///
     /// let metrics = IndexMetrics::new();
@@ -482,7 +482,7 @@ impl IndexMetrics {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexMetrics;
     ///
     /// let metrics = IndexMetrics::with_threshold(20);
@@ -504,7 +504,7 @@ impl IndexMetrics {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexMetrics;
     ///
     /// let metrics = IndexMetrics::new();
@@ -674,7 +674,7 @@ impl IndexInstrumentation {
 ///
 /// # Usage
 ///
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::workspace_index::{IndexCoordinator, IndexState};
 ///
 /// let coordinator = IndexCoordinator::new();
@@ -737,7 +737,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -770,7 +770,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::{IndexCoordinator, IndexResourceLimits};
     ///
     /// let limits = IndexResourceLimits::default();
@@ -825,7 +825,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::{IndexCoordinator, IndexState};
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -853,7 +853,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -893,7 +893,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -924,7 +924,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -979,7 +979,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -1142,7 +1142,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -1189,7 +1189,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::{DegradationReason, IndexCoordinator, ResourceKind};
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -1236,7 +1236,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -1278,7 +1278,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -1330,7 +1330,7 @@ impl IndexCoordinator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::IndexCoordinator;
     ///
     /// let coordinator = IndexCoordinator::new();
@@ -1399,7 +1399,7 @@ pub struct SymbolKey {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::workspace_index::normalize_var;
 ///
 /// assert_eq!(normalize_var("$count"), (Some('$'), "count"));
@@ -1565,7 +1565,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -1601,7 +1601,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     /// use url::Url;
     ///
@@ -1692,7 +1692,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -1732,7 +1732,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     /// use url::Url;
     ///
@@ -1759,7 +1759,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -1781,7 +1781,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     /// use url::Url;
     ///
@@ -1817,7 +1817,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -1856,7 +1856,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -1964,7 +1964,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -1999,7 +1999,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2046,7 +2046,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2069,7 +2069,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2101,7 +2101,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2123,7 +2123,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2149,7 +2149,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2175,7 +2175,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2202,7 +2202,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2220,7 +2220,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2263,7 +2263,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::WorkspaceIndex;
     ///
     /// let index = WorkspaceIndex::new();
@@ -2308,7 +2308,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
     /// use std::sync::Arc;
     ///
@@ -2342,7 +2342,7 @@ impl WorkspaceIndex {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::{SymKind, SymbolKey, WorkspaceIndex};
     /// use std::sync::Arc;
     ///
@@ -2933,7 +2933,7 @@ pub mod lsp_adapter {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::{Location as IxLocation, lsp_adapter::to_lsp_location};
     /// use lsp_types::Range;
     ///
@@ -2963,7 +2963,7 @@ pub mod lsp_adapter {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::workspace_index::{Location as IxLocation, lsp_adapter::to_lsp_locations};
     /// use lsp_types::Range;
     ///

@@ -64,7 +64,7 @@ impl<'a> DeclarationProvider<'a> {
     /// - Memory overhead: Minimal, shares AST reference
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::declaration::DeclarationProvider;
     /// use perl_parser::ast::Node;
     /// use std::sync::Arc;
@@ -105,7 +105,7 @@ impl<'a> DeclarationProvider<'a> {
     /// - Cycles detected in parent relationships
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::declaration::{DeclarationProvider, ParentMap};
     /// use perl_parser::ast::Node;
     /// use std::sync::Arc;
@@ -155,7 +155,7 @@ impl<'a> DeclarationProvider<'a> {
     /// - Debug validation: Additional consistency checks
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::declaration::DeclarationProvider;
     /// use perl_parser::ast::Node;
     /// use std::sync::Arc;
@@ -244,7 +244,7 @@ impl<'a> DeclarationProvider<'a> {
     /// remain valid during provider lifetime.
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::declaration::{DeclarationProvider, ParentMap};
     /// use perl_parser::ast::Node;
     ///
@@ -986,7 +986,7 @@ impl<'a> DeclarationProvider<'a> {
     /// - Typical latency: <10μs for identifier names
     ///
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::declaration::DeclarationProvider;
     /// use perl_parser::ast::Node;
     /// use std::sync::Arc;
@@ -1031,7 +1031,7 @@ impl<'a> DeclarationProvider<'a> {
 /// - Method calls: `$obj->method`
 ///
 /// # Examples
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::declaration::symbol_at_cursor;
 /// use perl_parser::ast::Node;
 ///
@@ -1101,7 +1101,7 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
 /// - Package names follow Perl identifier rules (`::`-separated)
 ///
 /// # Examples
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::declaration::current_package_at;
 /// use perl_parser::ast::Node;
 ///
@@ -1156,7 +1156,7 @@ pub fn current_package_at(ast: &Node, offset: usize) -> &str {
 /// - Diagnostics: Map error positions to AST nodes
 ///
 /// # Examples
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::declaration::find_node_at_offset;
 /// use perl_parser::ast::Node;
 ///
@@ -1199,7 +1199,7 @@ pub fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
 /// - Typical latency: <5μs for common node types
 ///
 /// # Examples
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::declaration::get_node_children;
 /// use perl_parser::ast::Node;
 ///

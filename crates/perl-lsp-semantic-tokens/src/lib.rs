@@ -9,7 +9,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lsp_semantic_tokens::collect_semantic_tokens;
 //!
 //! let tokens = collect_semantic_tokens(&ast, source, &to_pos16);

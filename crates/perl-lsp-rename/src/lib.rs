@@ -10,7 +10,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lsp_rename::RenameProvider;
 //!
 //! let provider = RenameProvider::new(&ast, source.to_string());

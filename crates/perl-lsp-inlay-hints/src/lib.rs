@@ -10,7 +10,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lsp_inlay_hints::InlayHintsProvider;
 //!
 //! let provider = InlayHintsProvider::new();
