@@ -82,7 +82,7 @@
 //!
 //! ## LSP Integration Example
 //!
-//! ```ignore
+//! ```text
 //! use crate::Node;
 //!
 //! // Parse Perl code and extract symbols for LSP

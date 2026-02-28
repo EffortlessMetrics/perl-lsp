@@ -34,6 +34,6 @@
 //!
 //! - [`crate::ide::lsp_compat::completion`] for completion support
 //! - [`crate::ide::lsp_compat::diagnostics`] for diagnostic publishing
-//! - [`perl_lsp_code_actions::CodeActionProvider`] for the main implementation
+//! - [`perl_lsp_code_actions::CodeActionsProvider`] for the main implementation
 
 pub use perl_lsp_code_actions::*;
