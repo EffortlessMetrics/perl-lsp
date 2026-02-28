@@ -372,6 +372,7 @@ pub use engine::ast_v2;
 pub use engine::edit;
 /// Heredoc content collector with FIFO ordering and indent stripping.
 pub use engine::heredoc_collector;
+/// Recursive descent Perl parser with error recovery and AST generation.
 pub use engine::parser::Parser;
 /// Parser context with error recovery support.
 pub use engine::parser_context;
@@ -382,37 +383,55 @@ pub use engine::quote_parser;
 #[cfg(not(target_arch = "wasm32"))]
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;
+/// Error recovery strategies for resilient parsing.
 pub use error::recovery as error_recovery;
+/// Recovery-mode parser that continues after syntax errors.
 pub use error::recovery_parser;
 /// Parser utilities and helpers.
 pub use perl_parser_core::util;
 
+/// Line-to-byte offset index for fast position lookups.
 pub use perl_parser_core::line_index;
+/// Line ending detection and UTF-16 position mapping for LSP compliance.
 pub use position::{LineEnding, PositionMapper};
 
+/// Semantic analysis, scope resolution, and type inference.
 pub mod analysis;
+/// Perl builtin function signatures and metadata.
 pub mod builtins;
 #[cfg(feature = "incremental")]
+/// Incremental parsing for efficient re-parsing during editing.
 pub mod incremental;
+/// Code refactoring, modernization, and import optimization.
 pub mod refactor;
+/// Test-driven development support and test generation.
 pub mod tdd;
+/// Token stream, trivia, and token wrapper utilities.
 pub mod tokens;
+/// External tooling integration (perltidy, perlcritic, performance).
 pub mod tooling;
+/// Workspace indexing, document store, and cross-file operations.
 pub mod workspace;
 
 /// Dead code detection for Perl workspaces.
 #[cfg(not(target_arch = "wasm32"))]
 pub use analysis::dead_code_detector;
+/// Variable and subroutine declaration analysis.
 pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
+/// File and symbol indexing for workspace-wide navigation.
 pub use analysis::index;
 /// Scope analysis for variable and subroutine resolution.
 pub use analysis::scope_analyzer;
+/// Semantic model with hover information and token classification.
 pub use analysis::semantic;
+/// Symbol table, extraction, and reference tracking.
 pub use analysis::symbol;
 /// Type inference engine for Perl variable analysis.
 pub use analysis::type_inference;
+/// Builtin function signature lookup tables.
 pub use builtins::builtin_signatures;
+/// Perfect hash function (PHF) based builtin signature lookup.
 pub use builtins::builtin_signatures_phf;
 
 // Re-exports from extracted microcrates
@@ -420,6 +439,7 @@ pub use builtins::builtin_signatures_phf;
 pub mod code_actions {
     pub use perl_lsp_code_actions::*;
 }
+/// Enhanced code actions provider with workspace-aware refactoring.
 pub use perl_lsp_code_actions::EnhancedCodeActionsProvider;
 /// LSP completion for code suggestions.
 pub mod completion {
@@ -475,6 +495,7 @@ pub mod workspace_symbols {
     pub use perl_lsp_navigation::*;
 }
 
+/// Import statement analysis and optimization.
 pub use refactor::import_optimizer;
 /// Code modernization utilities for Perl best practices.
 pub use refactor::modernize;
@@ -482,64 +503,95 @@ pub use refactor::modernize;
 pub use refactor::modernize_refactored;
 /// Unified refactoring engine for comprehensive code transformations.
 pub use refactor::refactoring;
+/// Token stream with position-aware iteration.
 pub use tokens::token_stream;
+/// Lightweight token wrapper for AST integration.
 pub use tokens::token_wrapper;
+/// Trivia (whitespace and comments) representation.
 pub use tokens::trivia;
+/// Parser that preserves trivia tokens for formatting.
 pub use tokens::trivia_parser;
+/// Performance measurement and caching utilities.
 pub use tooling::performance;
+/// Perl::Critic integration for lint diagnostics.
 pub use tooling::perl_critic;
+/// Perltidy integration for code formatting.
 pub use tooling::perltidy;
 
 #[cfg(feature = "incremental")]
+/// Advanced AST node reuse strategies for incremental parsing.
 pub use incremental::incremental_advanced_reuse;
 #[cfg(feature = "incremental")]
+/// Checkpoint-based incremental parsing with rollback support.
 pub use incremental::incremental_checkpoint;
 #[cfg(feature = "incremental")]
+/// Document-level incremental parsing state management.
 pub use incremental::incremental_document;
 #[cfg(feature = "incremental")]
+/// Edit representation and application for incremental updates.
 pub use incremental::incremental_edit;
 #[cfg(feature = "incremental")]
 #[deprecated(note = "LSP server moved to perl-lsp; perl-parser no longer handles didChange")]
+/// Legacy incremental handler (deprecated, use `perl-lsp` crate instead).
 pub use incremental::incremental_handler_v2;
 #[cfg(feature = "incremental")]
+/// Integration layer connecting incremental parsing with the full parser.
 pub use incremental::incremental_integration;
 #[cfg(feature = "incremental")]
+/// Simplified incremental parsing interface for common use cases.
 pub use incremental::incremental_simple;
 #[cfg(feature = "incremental")]
+/// Second-generation incremental parsing with improved node reuse.
 pub use incremental::incremental_v2;
 
+/// Basic TDD utilities and test helpers.
 pub use tdd::tdd_basic;
 /// TDD workflow integration for Test-Driven Development support.
 pub use tdd::tdd_workflow;
+/// Intelligent test case generation from parsed Perl code.
 pub use tdd::test_generator;
 /// Test execution and TDD support functionality.
 pub use tdd::test_runner;
 
+/// In-memory document storage for open editor buffers.
 pub use workspace::document_store;
+/// Cross-file symbol index for workspace-wide navigation.
 pub use workspace::workspace_index;
 #[cfg(not(target_arch = "wasm32"))]
+/// Multi-file refactoring operations across a workspace.
 pub use workspace::workspace_refactor;
+/// Cross-file symbol renaming with conflict detection.
 pub use workspace::workspace_rename;
 
+/// AST node, node kind enum, and source location types.
 pub use ast::{Node, NodeKind, SourceLocation};
+/// Parse error and result types for parser output.
 pub use error::{ParseError, ParseResult};
 #[cfg(feature = "incremental")]
+/// Checkpointed incremental parser with simple edit tracking.
 pub use incremental_checkpoint::{CheckpointedIncrementalParser, SimpleEdit};
+/// Pragma state tracking for `use strict`, `use warnings`, etc.
 pub use pragma_tracker::{PragmaState, PragmaTracker};
+/// Recovery-mode parser that builds partial ASTs from malformed input.
 pub use recovery_parser::RecoveryParser;
+/// Token types and token stream for lexer output.
 pub use token_stream::{Token, TokenKind, TokenStream};
+/// Trivia (whitespace/comments) attached to AST nodes.
 pub use trivia::{NodeWithTrivia, Trivia, TriviaToken};
+/// Trivia-preserving parser and formatting utilities.
 pub use trivia_parser::{TriviaPreservingParser, format_with_trivia};
 
 // Incremental parsing exports (feature-gated)
 #[cfg(feature = "incremental")]
+/// Core incremental parsing types: edit representation, state, and application.
 pub use incremental::{Edit, IncrementalState, apply_edits};
 
-// IDE feature exports
+/// Semantic analysis types for hover, tokens, and code understanding.
 pub use semantic::{
     HoverInfo, SemanticAnalyzer, SemanticModel, SemanticToken, SemanticTokenModifier,
     SemanticTokenType,
 };
+/// Symbol extraction, table, and reference types for navigation.
 pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTable};
 
 // =============================================================================
@@ -569,26 +621,30 @@ pub use symbol::{Symbol, SymbolExtractor, SymbolKind, SymbolReference, SymbolTab
 // pub use workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
 // =============================================================================
 
-// Engine exports (these stay in perl-parser)
+/// Import analysis, optimization, and unused import detection.
 pub use import_optimizer::{
     DuplicateImport, ImportAnalysis, ImportEntry, ImportOptimizer, MissingImport,
     OrganizationSuggestion, SuggestionPriority, UnusedImport,
 };
+/// Scope analysis issue types and analyzer.
 pub use scope_analyzer::{IssueKind, ScopeAnalyzer, ScopeIssue};
+/// Test generation, coverage reporting, and refactoring suggestions.
 pub use test_generator::{
     CoverageReport, Priority, RefactoringCategory, RefactoringSuggester, RefactoringSuggestion,
     TestCase, TestFramework, TestGenerator, TestGeneratorOptions, TestResults, TestRunner,
 };
+/// Type inference types: Perl types, constraints, and inference engine.
 pub use type_inference::{
     PerlType, ScalarType, TypeBasedCompletion, TypeConstraint, TypeEnvironment,
     TypeInferenceEngine, TypeLocation,
 };
 
-// TDD workflow and refactoring exports
+/// Refactoring engine types: configuration, operations, and results.
 pub use refactoring::{
     ModernizationPattern, RefactoringConfig, RefactoringEngine, RefactoringOperation,
     RefactoringResult, RefactoringScope, RefactoringType,
 };
+/// TDD workflow types: actions, configuration, and cycle management.
 pub use tdd_workflow::{
     AnnotationSeverity, CoverageAnnotation, TddAction, TddConfig, TddCycleResult, TddWorkflow,
     TestType, WorkflowState, WorkflowStatus,
