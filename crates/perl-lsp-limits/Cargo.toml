@@ -1,0 +1,17 @@
+[package]
+name = "perl-lsp-limits"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "SRP microcrate for bounded LSP limits and deadline policy"
+readme = "README.md"
+
+[dependencies]
+serde_json = "1.0.149"
+
+[lints]
+workspace = true

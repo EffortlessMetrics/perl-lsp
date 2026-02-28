@@ -14,7 +14,7 @@
 //! # Usage
 //!
 //! ```rust,ignore
-//! use perl_parser::lsp::state::LspLimits;
+//! use perl_lsp_limits::LspLimits;
 //!
 //! let limits = LspLimits::default();
 //! let results = my_query().take(limits.references_result_cap);
