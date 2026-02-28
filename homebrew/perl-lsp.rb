@@ -6,27 +6,27 @@ class PerlLsp < Formula
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-0.8.3-aarch64-apple-darwin.tar.gz"
       sha256 "PLACEHOLDER_SHA256_AARCH64_DARWIN"
     else
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-0.8.3-x86_64-apple-darwin.tar.gz"
       sha256 "PLACEHOLDER_SHA256_X86_64_DARWIN"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-aarch64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-0.8.3-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "PLACEHOLDER_SHA256_AARCH64_LINUX"
     else
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-v0.8.3-x86_64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-0.8.3-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "8af781a0e0aed47f22517ab15cce80dbf78e7bcafb62e1eed5ab236b481b920d"
     end
   end
 
   def install
     # Find the extracted directory (should be perl-lsp-v0.8.3-{target})
-    extracted_dir = Dir.glob("perl-lsp-v*").first
+    extracted_dir = Dir.glob("perl-lsp-*").first
     if extracted_dir && File.directory?(extracted_dir)
       bin.install "#{extracted_dir}/perl-lsp"
     else
