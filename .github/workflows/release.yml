@@ -4,9 +4,6 @@ name: Release
 # Cost: ~$0.50 per release (across all platforms)
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       tag:
@@ -18,23 +15,8 @@ on:
         required: false
         type: boolean
         default: false
-      skip_extension:
-        description: 'Skip VSCode extension publishing'
-        required: false
-        type: boolean
-        default: false
-      skip_docker:
-        description: 'Skip Docker image publishing'
-        required: false
-        type: boolean
-        default: false
-      skip_crates:
-        description: 'Skip crates.io publishing'
-        required: false
-        type: boolean
-        default: false
 
-# Cancel in-flight runs on new pushes
+# Cancel in-flight runs on concurrent release dispatches
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false  # Don't cancel release builds
@@ -57,13 +39,8 @@ jobs:
       - name: Resolve and validate tag
         id: meta
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-            PRERELEASE_INPUT="${{ github.event.inputs.prerelease }}"
-          else
-            TAG="${{ github.ref_name }}"
-            PRERELEASE_INPUT=""
-          fi
+          TAG="${{ github.event.inputs.tag }}"
+          PRERELEASE_INPUT="${{ github.event.inputs.prerelease }}"
 
           if [ -z "$TAG" ]; then
             echo "::error::Release tag is missing"

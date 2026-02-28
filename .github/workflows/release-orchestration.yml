@@ -198,7 +198,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Dispatch release orchestration
+      - name: Dispatch release workflows
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -213,10 +213,7 @@ jobs:
             /repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
             -f ref="${REF}" \
             -F inputs[tag]="${TAG}" \
-            -F inputs[prerelease]="${PRERELEASE}" \
-            -F inputs[skip_extension]="${{ github.event.inputs.skip_extension }}" \
-            -F inputs[skip_docker]="${{ github.event.inputs.skip_docker }}" \
-            -F inputs[skip_crates]="${{ github.event.inputs.skip_crates }}"
+            -F inputs[prerelease]="${PRERELEASE}"
 
           if [ "${{ github.event.inputs.skip_crates }}" != "true" ]; then
             echo "Dispatching crates publish workflow for ${VERSION}"
@@ -230,11 +227,26 @@ jobs:
             echo "Skipping crates publish workflow due to skip_crates=true"
           fi
 
-          if [ "${{ github.event.inputs.skip_extension }}" = "true" ]; then
+          if [ "${{ github.event.inputs.skip_extension }}" != "true" ]; then
+            echo "Dispatching VSCode extension publish workflow for ${VERSION}"
+            gh api \
+              -X POST \
+              /repos/${{ github.repository }}/actions/workflows/publish-extension.yml/dispatches \
+              -f ref="${REF}" \
+              -F inputs[version]="${VERSION}"
+          else
             echo "Skipping VSCode publish via orchestration due to skip_extension=true"
           fi
 
-          if [ "${{ github.event.inputs.skip_docker }}" = "true" ]; then
+          if [ "${{ github.event.inputs.skip_docker }}" != "true" ]; then
+            echo "Dispatching Docker publish workflow for ${VERSION}"
+            gh api \
+              -X POST \
+              /repos/${{ github.repository }}/actions/workflows/docker-publish.yml/dispatches \
+              -f ref="${REF}" \
+              -F inputs[version]="${VERSION}" \
+              -F inputs[push]="true"
+          else
             echo "Skipping Docker publish via orchestration due to skip_docker=true"
           fi
 
