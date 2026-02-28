@@ -66,9 +66,9 @@ jobs:
           mkdir -p /tmp/choco-assets
           cd /tmp/choco-assets
 
-          echo "Downloading perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip..."
+          echo "Downloading perl-lsp-v${VERSION}-x86_64-pc-windows-msvc.zip..."
           gh release download "${TAG}" \
-            --pattern "perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip" \
+            --pattern "perl-lsp-v${VERSION}-x86_64-pc-windows-msvc.zip" \
             --dir /tmp/choco-assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,7 +80,7 @@ jobs:
           cd /tmp/choco-assets
 
           # Compute SHA256
-          SHA=$(sha256sum "perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip" | cut -d' ' -f1)
+          SHA=$(sha256sum "perl-lsp-v${VERSION}-x86_64-pc-windows-msvc.zip" | cut -d' ' -f1)
           echo "sha256=${SHA}" >> $GITHUB_OUTPUT
           echo "SHA256: ${SHA}"
 
@@ -93,7 +93,7 @@ jobs:
           sed -i "s/<version>[^<]*<\/version>/<version>${VERSION}<\/version>/" distribution/chocolatey/perl-lsp.nuspec
 
           # Update URL and checksum in install script
-          sed -i "s|url           = '[^']*'|url           = 'https:\/\/github.com\/EffortlessMetrics\/perl-lsp\/releases\/download\/v${VERSION}\/perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip'|" distribution/chocolatey/tools/chocolateyinstall.ps1
+          sed -i "s|url           = '[^']*'|url           = 'https:\/\/github.com\/EffortlessMetrics\/perl-lsp\/releases\/download\/v${VERSION}\/perl-lsp-v${VERSION}-x86_64-pc-windows-msvc.zip'|" distribution/chocolatey/tools/chocolateyinstall.ps1
           sed -i "s/  checksum      = '[^']*'/  checksum      = '${SHA}'/" distribution/chocolatey/tools/chocolateyinstall.ps1
           sed -i "s/perl-lsp-[0-9.]*/perl-lsp-${VERSION}/g" distribution/chocolatey/tools/chocolateyinstall.ps1
 

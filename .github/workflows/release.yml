@@ -169,7 +169,7 @@ jobs:
           fi
 
           # Copy additional files
-          cp README.md LICENSE "${PKG_NAME}/" 2>/dev/null || true
+          cp README.md LICENSE-APACHE LICENSE-MIT "${PKG_NAME}/" 2>/dev/null || true
 
           # Generate checksums
           cd "${PKG_NAME}"
