@@ -164,7 +164,7 @@ technical_debt:
     target: "v1.0"
     issue: "#197"
     added: "2026-01-24"
-    notes: "8 doc warnings fixed in #894; ratcheting baseline in place, working toward 100%"
+    notes: "0 doc warnings achieved; 10+ doc PRs merged (#903, #904, #914, #916, #919, #931, #935); 118 doc examples marked ignore in #935; ratcheting baseline at zero"
 
   - area: "dependencies"
     description: "Unused dependencies in legacy/excluded crates"
@@ -172,7 +172,7 @@ technical_debt:
     target: "v1.1"
     issue: null
     added: "2026-02-28"
-    notes: "cargo-machete reports deps in tree-sitter-perl-c, perl-parser-pest, tree-sitter-perl (excluded from workspace) and perl-lsp-feature-contracts (perl-feature-catalog)"
+    notes: "cargo-machete reports deps in tree-sitter-perl-c, perl-parser-pest, tree-sitter-perl (excluded/legacy) and workspace crates perl-lsp-feature-contracts, perl-lsp-completion, perl-ts-advanced-parsers, perl-ts-logos-lexer"
 
 # =============================================================================
 # Historical Records
@@ -187,8 +187,8 @@ history:
       known_issues: 0
       technical_debt: 4
       added: 1
-      resolved: 5
-      notes: "Major cleanup campaign: 37 unused deps removed, 8 doc warnings fixed, 2 stale files cleaned, .gitignore hardened, 3 highlight test regressions fixed"
+      resolved: 7
+      notes: "Major cleanup campaign: 37 unused deps removed, 8 doc warnings fixed, 2 stale files cleaned, .gitignore hardened, 3 highlight test regressions fixed, clippy warnings resolved across all targets (#901), comprehensive public API doc campaign (10+ PRs)"
     # Example:
     # - week: "2026-W04"
     #   quarantined_tests: 2
@@ -200,6 +200,20 @@ history:
 
   # Resolved items (last 90 days, older archived)
   resolved:
+    - type: "technical_debt"
+      name: "Clippy warnings across all targets"
+      resolved: "2026-02-28"
+      resolution: "Fixed clippy warnings on --workspace --all-targets including tests and benches"
+      pr: "#901"
+      days_open: 35
+
+    - type: "technical_debt"
+      name: "Comprehensive public API documentation"
+      resolved: "2026-02-28"
+      resolution: "10+ doc PRs adding crate-level docs, usage examples, and pub mod docs; 0 doc warnings baseline achieved"
+      pr: "#903, #904, #914, #916, #919, #931, #935"
+      days_open: 35
+
     - type: "technical_debt"
       name: "37 unused dependencies across workspace"
       resolved: "2026-02-28"
@@ -314,6 +328,15 @@ alerts:
 # =============================================================================
 
 version_history:
+  - version: "1.2.0"
+    date: "2026-02-28"
+    changes:
+      - "Added clippy all-targets resolution (#901) to resolved history"
+      - "Added comprehensive doc campaign (10+ PRs) to resolved history"
+      - "Updated documentation debt notes: 0 doc warnings baseline achieved"
+      - "Updated dependencies debt notes: added newly discovered unused deps in workspace crates"
+      - "Updated W09 weekly summary with additional resolved items"
+
   - version: "1.1.0"
     date: "2026-02-28"
     changes:
