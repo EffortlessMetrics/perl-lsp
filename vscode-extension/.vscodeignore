@@ -2,6 +2,7 @@
 .vscode-test/**
 out/test/**
 src/**
+test/**
 .gitignore
 .yarnrc
 **/tsconfig.json
@@ -16,3 +17,10 @@ scripts/**
 !README.md
 !CHANGELOG.md
 !LICENSE
+build.sh
+icon.svg
+icon_generator.py
+pnpm-lock.yaml
+test-extension.pl
+INTERNAL_DEPLOYMENT.md
+PUBLISHING.md
