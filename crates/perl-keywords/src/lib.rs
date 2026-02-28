@@ -1,4 +1,9 @@
 //! Canonical Perl keyword inventories and allocation-free lookup helpers.
+//!
+//! Exports a single [`KEYWORDS`] constant containing the full set of Perl
+//! reserved words, pragmas, and special tokens. The list is used by the lexer,
+//! completion provider, and semantic-token highlighter to distinguish keywords
+//! from user-defined identifiers.
 
 /// Canonical union of keyword inventories used by the workspace.
 pub const KEYWORDS: &[&str] = &[
