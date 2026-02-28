@@ -55,9 +55,21 @@ fn fetch_perldoc(module: &str) -> Option<String> {
     // Run perldoc -T Module::Name to get plain text documentation
     // Use -- to prevent argument injection if module starts with -
     let output =
-        std::process::Command::new("perldoc").arg("-T").arg("--").arg(module).output().ok()?;
+        match std::process::Command::new("perldoc").arg("-T").arg("--").arg(module).output() {
+            Ok(output) => output,
+            Err(e) => {
+                eprintln!("Failed to run perldoc for module {}: {}", module, e);
+                return None;
+            }
+        };
 
-    if output.status.success() { String::from_utf8(output.stdout).ok() } else { None }
+    if output.status.success() {
+        String::from_utf8(output.stdout)
+            .map_err(|e| eprintln!("Invalid UTF-8 in perldoc output for {}: {}", module, e))
+            .ok()
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

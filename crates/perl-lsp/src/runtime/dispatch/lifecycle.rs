@@ -68,7 +68,9 @@ impl LspServer {
                 params["verbose"] = json!(v);
             }
         }
-        let _ = self.notify("$/logTrace", params);
+        if let Err(e) = self.notify("$/logTrace", params) {
+            eprintln!("Failed to send logTrace notification: {}", e);
+        }
     }
 
     /// Handle initialized notification
@@ -86,7 +88,9 @@ impl LspServer {
         self.start_workspace_indexing();
 
         // Send index-ready notification
-        let _ = self.send_index_ready_notification();
+        if let Err(e) = self.send_index_ready_notification() {
+            eprintln!("Failed to send index-ready notification: {}", e);
+        }
 
         Ok(None)
     }

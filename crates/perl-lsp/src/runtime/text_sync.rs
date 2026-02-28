@@ -377,13 +377,15 @@ impl LspServer {
             }
 
             // Clear diagnostics for this file using centralized notify
-            let _ = self.notify(
+            if let Err(e) = self.notify(
                 "textDocument/publishDiagnostics",
                 json!({
                     "uri": normalized_uri,
                     "diagnostics": []
                 }),
-            );
+            ) {
+                eprintln!("Failed to clear diagnostics for {}: {}", normalized_uri, e);
+            }
         }
 
         Ok(())
@@ -437,13 +439,15 @@ impl LspServer {
                         .collect();
 
                     // Send diagnostics notification
-                    let _ = self.notify(
+                    if let Err(e) = self.notify(
                         "textDocument/publishDiagnostics",
                         json!({
                             "uri": normalized_uri,
                             "diagnostics": lsp_diagnostics
                         }),
-                    );
+                    ) {
+                        eprintln!("Failed to publish diagnostics for {}: {}", normalized_uri, e);
+                    }
                 }
             }
 
