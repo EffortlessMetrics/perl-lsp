@@ -353,6 +353,13 @@ enum Commands {
         command: FeaturesCommand,
     },
 
+    /// Generate SRP microcrate inventory and split-candidate report
+    SrpMicrocrates {
+        /// Optional output path (default: docs/SRP_MICROCRATES.md)
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
@@ -499,6 +506,7 @@ fn main() -> Result<()> {
             FeaturesCommand::Verify => features::verify(),
             FeaturesCommand::Report => features::report(),
         },
+        Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
         Commands::Gates {
             tier,

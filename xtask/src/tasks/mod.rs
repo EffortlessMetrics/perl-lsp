@@ -25,5 +25,6 @@ pub mod highlight;
 pub mod parse_rust;
 pub mod publish;
 pub mod release;
+pub mod srp_microcrates;
 pub mod test;
 pub mod test_lsp;
