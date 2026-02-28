@@ -89,9 +89,9 @@ jobs:
           BUMP_TYPE="${{ github.event.inputs.bump_type }}"
 
           if [ "$MODE" = "explicit" ]; then
-            sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
+            cargo release version "$VERSION" --workspace --execute
           else
-            cargo release version "$BUMP_TYPE" --workspace
+            cargo release version "$BUMP_TYPE" --workspace --execute
             VERSION="$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
           fi
 

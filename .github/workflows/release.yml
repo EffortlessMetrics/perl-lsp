@@ -18,7 +18,7 @@ on:
 
 # Cancel in-flight runs on concurrent release dispatches
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false  # Don't cancel release builds
 
 env:
@@ -141,7 +141,7 @@ jobs:
         run: |
           NAME="perl-lsp"
           TARGET="${{ matrix.target }}"
-          VERSION="${{ needs.release-metadata.outputs.tag }}"
+          VERSION="${{ needs.release-metadata.outputs.version }}"
 
           # Binary names with .exe for Windows
           if [[ "$TARGET" == *"windows"* ]]; then
