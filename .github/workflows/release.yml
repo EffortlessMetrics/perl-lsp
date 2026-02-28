@@ -144,7 +144,7 @@ jobs:
         run: |
           NAME="perl-lsp"
           TARGET="${{ matrix.target }}"
-          VERSION="${{ needs.release-metadata.outputs.tag }}"
+          VERSION="${{ needs.release-metadata.outputs.version }}"
 
           if [[ "$TARGET" == *"windows"* ]]; then
             BIN="${NAME}.exe"
@@ -167,7 +167,8 @@ jobs:
             strip "${PKG_NAME}/${DAP_BIN}" 2>/dev/null || true
           fi
 
-          cp README.md LICENSE "${PKG_NAME}/" 2>/dev/null || true
+          # Copy additional files
+          cp README.md LICENSE-APACHE LICENSE-MIT "${PKG_NAME}/" 2>/dev/null || true
 
           cd "${PKG_NAME}"
           if command -v sha256sum >/dev/null; then

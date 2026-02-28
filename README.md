@@ -62,6 +62,13 @@ require('lspconfig').perl_ls.setup {
 (add-to-list 'eglot-server-programs '(perl-mode "perl-lsp" "--stdio"))
 ```
 
+## Access Paths
+
+- **Rust crates on crates.io**: install binaries with `cargo install perl-lsp` / `cargo install perl-dap`, and consume libraries with `cargo add perl-parser` / `cargo add perl-lexer`.
+- **Editor integrations**: the VS Code extension is the primary packaged integration; any LSP-compatible editor can connect to `perl-lsp --stdio` (Neovim, Emacs, etc.).
+- **Debug adapter**: `perl-dap` for VS Code and other DAP-compatible editors.
+- **FFI / non-Rust integration**: the tree-sitter workspace exposes optional C interoperability through `tree-sitter-perl-rs` (`c-parser` feature) for existing C/FFI consumers.
+
 ## Quick Start
 
 ```bash

@@ -29,9 +29,29 @@ permissions:
   packages: write
 
 jobs:
+  init:
+    name: Prepare version metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      major_minor: ${{ steps.version.outputs.major_minor }}
+      major: ${{ steps.version.outputs.major }}
+    steps:
+      - name: Parse version
+        id: version
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          BASE_VERSION="${VERSION%%-*}"
+          MAJOR="$(echo "$BASE_VERSION" | cut -d. -f1)"
+          MINOR="$(echo "$BASE_VERSION" | cut -d. -f2)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "major_minor=${MAJOR}.${MINOR}" >> "$GITHUB_OUTPUT"
+          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.platform }}
     runs-on: ubuntu-24.04
+    needs: init
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -62,12 +82,13 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # Keep deterministic semver-like tags for manual dispatch runs.
+          # `version` input is provided by release orchestration.
           tags: |
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ needs.init.outputs.version }}
+            type=raw,value=${{ needs.init.outputs.major_minor }}
+            type=raw,value=${{ needs.init.outputs.major }}
+            type=raw,value=latest
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -86,6 +107,7 @@ jobs:
   publish-dockerhub:
     name: Publish to Docker Hub
     runs-on: ubuntu-24.04
+    needs: init
     timeout-minutes: 30
     if: github.event.inputs.push != 'false'
 
@@ -111,11 +133,10 @@ jobs:
         with:
           images: effortlessmetrics/perl-lsp
           tags: |
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ needs.init.outputs.version }}
+            type=raw,value=${{ needs.init.outputs.major_minor }}
+            type=raw,value=${{ needs.init.outputs.major }}
+            type=raw,value=latest
 
       - name: Build and push multi-arch
         uses: docker/build-push-action@v6
@@ -141,12 +162,7 @@ jobs:
       - name: Get version
         id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
-            VERSION="${VERSION#v}"
-          fi
+          VERSION="${{ github.event.inputs.version }}"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Summary

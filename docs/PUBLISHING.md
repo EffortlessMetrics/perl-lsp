@@ -1,20 +1,36 @@
 # Publishing Guide
 
-This guide describes how `perl-lsp` is published to crates.io as part of the PR-driven release flow.
+This guide covers crates.io publishing for release alignment during the initial and subsequent release train.
+
+## Publishing Model
+
+Publishing is handled by the GitHub workflow [`publish-crates`](../.github/workflows/publish-crates.yml), which:
+
+- computes publish order from workspace metadata
+- filters out crates with `publish = false` / `publish = []`
+- runs each crate publish in dependency order
+- verifies each published version
+
+This is the same path used by the `release-orchestration` workflow.
 
 ## Automated Crates.io Path
 
-Publishing to crates.io is handled by the [`publish-crates`](../.github/workflows/publish-crates.yml) workflow, which is normally triggered by [Release Orchestration](./RELEASE_PROCESS.md) on the resolved release tag:
+1. Create or confirm an account on [crates.io](https://crates.io)
+2. Authenticate locally with `cargo login`
+3. Ensure release checks pass (`just ci-full`, `just security-scan`, `just semver-check`)
+4. Confirm release version and changelog are finalized
 
-1. Merge the version bump PR created by `Version Bump & Changelog Generation`.
-2. Dispatch `Release Orchestration` with the target `version`.
-3. Release orchestration creates the tag and dispatches publish workflows, including `Publish to crates.io`.
-4. Publish workflow resolves publish order from `[workspace.metadata.publish.allow]` in the root `Cargo.toml` and runs listed crates in dependency order.
+## Recommended Path (Automated)
+
+1. Complete the release branch and tag workflow as documented in [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
+2. In GitHub Actions, run **Release Orchestration** with:
+   - `version: <release version>` (for example `0.x.y`)
+   - `skip_crates: false`
+3. Validate that the **Publish to crates.io** workflow completes and reports all crates published.
 
 ## Workspace Coverage
 
-The publish workflow includes only crates explicitly listed in the allowlist.
-
+Crates listed in `[workspace.metadata.publish.allow]` are published in dependency order.
 To inspect the configured publish allowlist, run:
 
 ```bash
@@ -22,15 +38,17 @@ cargo metadata --no-deps --format-version=1 |\
   jq '.metadata.publish.allow'
 ```
 
-## Reusable Manual Checks
+To inspect the exact publish order used by the workflow, read the "Compute topological order" output in the workflow run.
 
-For investigation or recovery during release:
+## Manual Fallback (Use with caution)
+
+If automated publish fails and needs recovery, publish remaining crates one-by-one using the workflow summary order:
 
 ```bash
 # Verify the target version for a single crate
 cargo search <crate-name> --limit 1
 
-# Dry-run publish for a single crate through repo tooling
+# Dry-run publish for a single crate
 cargo publish --dry-run -p <crate-name>
 
 # Full publish (requires CARGO_REGISTRY_TOKEN in environment)
@@ -41,9 +59,22 @@ cargo publish -p <crate-name>
 
 After publish completes:
 
+1. Verify `RELEASE_NOTES.md` and release artifacts are complete.
+2. Confirm `cargo install perl-lsp` works for the new release version.
+3. Update documentation links where versioned examples are present.
+4. Announce release in project channels.
+
 - Confirm `Release` and `Publish to crates.io` workflows completed successfully.
 - Spot-check package index visibility with `cargo search` for critical crates (`perl-lsp`, `perl-parser`, `perl-dap`).
 - Validate `cargo install perl-lsp` succeeds and executes `perl-lsp --version`.
+
+## Pre-Publish Checklist
+
+- [ ] Workspace version updated for the release
+- [ ] `CHANGELOG.md` finalized
+- [ ] Release tag prepared
+- [ ] Required publish dependencies available on crates.io
+- [ ] Release checklist completed in `RELEASE_PROCESS.md`
 
 ## Turnkey Workflow Integration
 

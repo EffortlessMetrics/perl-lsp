@@ -123,6 +123,12 @@ Configure your editor to use the command:
 perl-lsp --stdio
 ```
 
+### API Access Patterns
+
+- **Direct Rust integration**: add `perl-lsp`, `perl-parser`, `perl-lexer`, and `perl-dap` via your normal Cargo workflow for library and binary usage.
+- **DAP / debugging clients**: run `perl-dap` in native or bridge mode from any DAP-compatible editor.
+- **FFI / non-Rust integration**: use the `tree-sitter-perl-rs` crate with its optional `c-parser` feature for C-oriented Tree-sitter integration where needed.
+
 ## Features
 
 - **~100% Perl Syntax Coverage**: Handles all modern Perl constructs

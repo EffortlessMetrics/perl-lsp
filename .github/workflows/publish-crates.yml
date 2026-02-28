@@ -18,6 +18,10 @@ on:
         type: boolean
         default: false
 
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -33,6 +37,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       crates: ${{ steps.topo.outputs.crates }}
+      version: ${{ steps.release-version.outputs.version }}
 
     steps:
       - name: Checkout
@@ -137,6 +142,24 @@ jobs:
           for i, c in enumerate(json.load(sys.stdin), 1):
               print("  {}. {}@{}".format(i, c["name"], c["version"]))
           '
+
+      - name: Resolve and validate target version
+        id: release-version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${{ github.event.release.tag_name }}"
+            VERSION="${VERSION#v}"
+          fi
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Invalid release version: ${VERSION}"
+            exit 1
+          fi
+
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Resolved target version: ${VERSION}"
 
   # Step 2: Publish crates sequentially in dependency order
   publish:
@@ -270,9 +293,11 @@ jobs:
       - name: Summary
         env:
           CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
+          TARGET_VERSION: ${{ needs.compute-order.outputs.version }}
         run: |
           COUNT=$(echo "$CRATES_JSON" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
           echo "## All Crates Published Successfully :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Crates**: ${COUNT} published in topological order" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target version**: ${TARGET_VERSION}" >> $GITHUB_STEP_SUMMARY
           echo "- **Status**: All crates verified on crates.io" >> $GITHUB_STEP_SUMMARY

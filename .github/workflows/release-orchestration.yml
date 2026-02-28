@@ -98,6 +98,7 @@ jobs:
             exit 1
           fi
 
+          echo "Checking CI status for ${HEAD_SHA}..."
           CI_STATE="$(gh api repos/${{ github.repository }}/commits/${HEAD_SHA}/status --jq '.state')"
           if [ -z "$CI_STATE" ]; then
             echo "::error::Unable to determine CI state for ${HEAD_SHA}"
@@ -154,6 +155,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Extract changelog section for this version
           CHANGELOG_SECTION="$(mktemp)"
           awk -v ver="${VERSION}" '
             $0 ~ "^## \\[" ver "\\]" { in_section=1; next }
@@ -172,6 +174,7 @@ jobs:
             fi
           } > "$TAG_MESSAGE"
 
+          # Create annotated tag with changelog
           git tag -a "$TAG" -F "$TAG_MESSAGE"
           rm -f "$CHANGELOG_SECTION" "$TAG_MESSAGE"
 

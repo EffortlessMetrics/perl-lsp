@@ -115,8 +115,9 @@ For manual control, trigger the version bump workflow to prepare for release:
 1. Go to Actions tab
 2. Select "Version Bump & Changelog Generation"
 3. Click "Run workflow"
-4. Enter version (e.g., <0.x.y>)
-5. Select bump type (major/minor/patch)
+4. Either enter a version (e.g., `0.x.y`) or rely on
+   bump type (major/minor/patch) to auto-increment the current workspace version.
+5. Select bump type only if you are not setting an explicit version.
 6. Click "Run workflow"
 ```
 
@@ -202,22 +203,9 @@ After all workflows complete, verify:
 
 ### crates.io
 
-Crates listed in `[workspace.metadata.publish.allow]` are published to crates.io in dependency order:
+The publish workflow computes dependency order from workspace metadata and publishes crates listed in `[workspace.metadata.publish.allow]`.
+The exact crate list and count are printed in the `Compute publish order` step of the `publish-crates` workflow.
 
-```
-perl-lexer → perl-parser-core → perl-position-tracking →
-perl-symbol-types → perl-symbol-table → perl-uri →
-perl-diagnostics-codes → perl-semantic-analyzer →
-perl-workspace-index → perl-refactoring →
-perl-incremental-parsing → perl-tdd-support →
-perl-lsp-protocol → perl-lsp-transport → perl-lsp-tooling →
-perl-lsp-formatting → perl-lsp-diagnostics →
-perl-lsp-semantic-tokens → perl-lsp-inlay-hints →
-perl-lsp-navigation → perl-lsp-completion →
-perl-lsp-code-actions → perl-lsp-rename →
-perl-lsp-providers → perl-parser → perl-lsp →
-perl-dap → tree-sitter-perl-rs
-```
 
 **Installation:**
 ```bash
@@ -531,7 +519,7 @@ All binaries include SHA256 checksums in their packages.
 
 ## Additional Resources
 
-- [Production Readiness Roadmap](../plans/production_readiness_roadmap.md)
+- [Roadmap](ROADMAP.md)
 - [Commands Reference](COMMANDS_REFERENCE.md)
 - [API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
