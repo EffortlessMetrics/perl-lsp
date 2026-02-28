@@ -318,8 +318,8 @@ impl SymbolTable {
     }
 }
 
+/// Classification of Moo/Moose framework variant detected via `use` statements.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Classification of Moo/Moose framework variant detected via `use` statements during Parse/Analyze workflows.
 pub enum FrameworkKind {
     /// `use Moo;`
     Moo,
@@ -331,8 +331,8 @@ pub enum FrameworkKind {
     MooseRole,
 }
 
+/// Per-package framework detection flags.
 #[derive(Debug, Clone, Default)]
-/// Per-package framework detection flags used in Parse/Analyze workflows.
 pub struct FrameworkFlags {
     /// Moo/Moose framework variant, if any.
     pub moo: bool,
