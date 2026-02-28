@@ -111,14 +111,14 @@ Every release artifact includes a cryptographically signed attestation that reco
 # https://cli.github.com/
 
 # Verify an artifact's provenance
-gh attestation verify perl-lsp-v0.9.0-x86_64-unknown-linux-gnu.tar.gz \
+gh attestation verify perl-lsp-v0.10.0-x86_64-unknown-linux-gnu.tar.gz \
   --owner EffortlessMetrics
 
 # Verify SBOM provenance
 gh attestation verify sbom-spdx.json --owner EffortlessMetrics
 
 # View attestation details
-gh attestation verify perl-lsp-v0.9.0-x86_64-unknown-linux-gnu.tar.gz \
+gh attestation verify perl-lsp-v0.10.0-x86_64-unknown-linux-gnu.tar.gz \
   --owner EffortlessMetrics \
   --format json | jq
 ```
@@ -173,7 +173,7 @@ cargo audit --json > audit-report.json
 
 SBOMs are automatically generated during the release process:
 
-1. **Trigger**: Release workflow runs from Release Orchestration dispatch on the resolved tag (e.g., `v0.9.0`)
+1. **Trigger**: Release workflow runs from Release Orchestration dispatch on the resolved tag (e.g., `v0.10.0`)
 2. **Generation**: Both SPDX and CycloneDX SBOMs generated
 3. **Checksums**: SHA256 hashes computed for all artifacts including SBOMs
 4. **Provenance**: SLSA attestations generated and signed
@@ -294,5 +294,5 @@ Current supply chain security posture:
 
 ---
 
-*Last Updated: 2026-01-28*
-*Version: 0.9.0*
+*Last Updated: 2026-02-20*
+*Version: 0.10.0*
