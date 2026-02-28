@@ -48,13 +48,17 @@ impl DocumentHighlightProvider {
         byte_offset: usize,
     ) -> Vec<DocumentHighlight> {
         // Find the node at the cursor position
-        let target_node = match self.find_node_at_offset(ast, byte_offset) {
-            Some(node) => node,
-            None => return Vec::new(),
-        };
+        let target_node = self.find_node_at_offset(ast, byte_offset);
 
         // Get the symbol name and kind
-        let symbol_info = match self.extract_symbol_info(&target_node, source) {
+        let symbol_info = if let Some(ref node) = target_node {
+            self.extract_symbol_info(node, source)
+        } else {
+            // Fallback: check for synthetic positions (e.g., catch parameters)
+            self.extract_symbol_at_offset(ast, source, byte_offset)
+        };
+
+        let symbol_info = match symbol_info {
             Some(info) => info,
             None => return Vec::new(),
         };
@@ -112,6 +116,55 @@ impl DocumentHighlightProvider {
         // Check if this node is a relevant symbol
         if self.is_symbol_node(node) {
             return Some(node.clone());
+        }
+
+        None
+    }
+
+    /// Extract symbol info at an offset not covered by normal AST nodes
+    /// (e.g., catch parameter variables stored as strings in Try nodes)
+    fn extract_symbol_at_offset(
+        &self,
+        node: &Node,
+        source: &str,
+        offset: usize,
+    ) -> Option<SymbolInfo> {
+        if offset < node.location.start || offset > node.location.end {
+            return None;
+        }
+
+        // Check for Try catch parameters
+        if let NodeKind::Try { catch_blocks, .. } = &node.kind {
+            for (param, _) in catch_blocks {
+                if let Some(var_str) = param {
+                    // Find the catch parameter location in the source within this node
+                    let node_source = source.get(node.location.start..node.location.end)?;
+                    let relative_offset = offset - node.location.start;
+                    // Search for the variable string near the offset
+                    for (pos, _) in node_source.match_indices(var_str.as_str()) {
+                        if pos <= relative_offset && relative_offset < pos + var_str.len() {
+                            let first_char = var_str.chars().next()?;
+                            if matches!(first_char, '$' | '@' | '%') {
+                                return Some(SymbolInfo {
+                                    name: var_str.get(1..)?.to_string(),
+                                    sigil: Some(first_char.to_string()),
+                                    is_method: false,
+                                    is_function: false,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Recurse into children
+        if let Some(children) = self.get_children(node) {
+            for child in children {
+                if let Some(info) = self.extract_symbol_at_offset(child, source, offset) {
+                    return Some(info);
+                }
+            }
         }
 
         None
@@ -180,7 +233,19 @@ impl DocumentHighlightProvider {
             NodeKind::While { condition, body, .. } => {
                 Some(vec![condition.as_ref(), body.as_ref()])
             }
-            NodeKind::Subroutine { body, .. } => Some(vec![body.as_ref()]),
+            NodeKind::Subroutine { body, signature, .. } => {
+                let mut children = Vec::new();
+                if let Some(sig) = signature {
+                    // Signature node may have zero-width span; expose parameters directly
+                    if let NodeKind::Signature { parameters } = &sig.kind {
+                        children.extend(parameters.iter());
+                    } else {
+                        children.push(sig.as_ref());
+                    }
+                }
+                children.push(body.as_ref());
+                Some(children)
+            }
             NodeKind::Return { value } => value.as_ref().map(|v| vec![v.as_ref()]),
             NodeKind::ArrayLiteral { elements } => Some(elements.iter().collect()),
             NodeKind::HashLiteral { pairs } => {
@@ -223,13 +288,35 @@ impl DocumentHighlightProvider {
                 Some(children)
             }
             // Method declarations (Issue #191)
-            NodeKind::Method { body, .. } => Some(vec![body.as_ref()]),
+            NodeKind::Method { body, signature, .. } => {
+                let mut children = Vec::new();
+                if let Some(sig) = signature {
+                    // Signature node may have zero-width span; expose parameters directly
+                    if let NodeKind::Signature { parameters } = &sig.kind {
+                        children.extend(parameters.iter());
+                    } else {
+                        children.push(sig.as_ref());
+                    }
+                }
+                children.push(body.as_ref());
+                Some(children)
+            }
             // Indirect calls (Issue #191)
             NodeKind::IndirectCall { object, args, .. } => {
                 let mut children = vec![object.as_ref()];
                 children.extend(args.iter());
                 Some(children)
             }
+            // Class declarations (Issue #191)
+            NodeKind::Class { body, .. } => Some(vec![body.as_ref()]),
+            // Signature and parameter types (Issue #191)
+            NodeKind::Signature { parameters } => Some(parameters.iter().collect()),
+            NodeKind::MandatoryParameter { variable } => Some(vec![variable.as_ref()]),
+            NodeKind::OptionalParameter { variable, default_value } => {
+                Some(vec![variable.as_ref(), default_value.as_ref()])
+            }
+            NodeKind::SlurpyParameter { variable } => Some(vec![variable.as_ref()]),
+            NodeKind::NamedParameter { variable } => Some(vec![variable.as_ref()]),
             _ => None,
         }
     }
@@ -274,7 +361,7 @@ impl DocumentHighlightProvider {
             }),
             _ => {
                 // Try to extract from source text
-                let text = &source[node.location.start..node.location.end];
+                let text = source.get(node.location.start..node.location.end)?;
                 // Check for sigil prefix and extract safely
                 let first = text.chars().next();
                 match first {
@@ -323,6 +410,70 @@ impl DocumentHighlightProvider {
                 self.collect_highlights_with_parent(child, source, target, highlights, Some(node));
             }
         }
+
+        // Emit synthetic highlights for Try catch parameter variables
+        if let NodeKind::Try { catch_blocks, body, .. } = &node.kind {
+            if let Some(target_sigil) = &target.sigil {
+                let expected = format!("{}{}", target_sigil, target.name);
+                let mut search_from = body.location.end;
+                for (param, catch_body) in catch_blocks {
+                    if let Some(var_str) = param {
+                        if var_str == &expected {
+                            // Search between previous body/catch end and catch body start
+                            let search_end = catch_body.location.start;
+                            if search_from < search_end && search_end <= source.len() {
+                                if let Some(search_area) = source.get(search_from..search_end) {
+                                    if let Some(pos) = search_area.find(var_str.as_str()) {
+                                        let var_start = search_from + pos;
+                                        highlights.push(DocumentHighlight {
+                                            location: SourceLocation {
+                                                start: var_start,
+                                                end: var_start + var_str.len(),
+                                            },
+                                            kind: DocumentHighlightKind::Write,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    search_from = catch_body.location.end;
+                }
+            }
+        }
+
+        // Scan interpolated strings for variable references
+        if let NodeKind::String { interpolated: true, .. } = &node.kind {
+            if let Some(target_sigil) = &target.sigil {
+                let expected = format!("{}{}", target_sigil, target.name);
+                if let Some(node_text) = source.get(node.location.start..node.location.end) {
+                    for (pos, _) in node_text.match_indices(expected.as_str()) {
+                        // Avoid matching prefixes of longer variable names
+                        let end_pos = pos + expected.len();
+                        if end_pos < node_text.len() {
+                            let next = node_text.as_bytes()[end_pos];
+                            if next.is_ascii_alphanumeric() || next == b'_' {
+                                continue;
+                            }
+                        }
+                        let abs_start = node.location.start + pos;
+                        // Skip if this is the whole node (already matched by normal traversal)
+                        if abs_start == node.location.start
+                            && node.location.end == abs_start + expected.len()
+                        {
+                            continue;
+                        }
+                        highlights.push(DocumentHighlight {
+                            location: SourceLocation {
+                                start: abs_start,
+                                end: abs_start + expected.len(),
+                            },
+                            kind: DocumentHighlightKind::Read,
+                        });
+                    }
+                }
+            }
+        }
     }
 
     /// Check if a node matches the target symbol
@@ -344,8 +495,9 @@ impl DocumentHighlightProvider {
                 // Check source text as fallback
                 if let Some(target_sigil) = &target.sigil {
                     let expected = format!("{}{}", target_sigil, target.name);
-                    let text = &source[node.location.start..node.location.end];
-                    text == expected
+                    source
+                        .get(node.location.start..node.location.end)
+                        .is_some_and(|text| text == expected)
                 } else {
                     false
                 }
