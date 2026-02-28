@@ -2,6 +2,7 @@
 
 use perl_tdd_support::must;
 use tree_sitter_perl::PureRustPerlParser;
+use tree_sitter_perl::full_parser::FullPerlParser;
 
 #[test]
 fn test_basic_parsing() {
@@ -19,7 +20,7 @@ fn test_basic_parsing() {
 
 #[test]
 fn test_heredoc_parsing() {
-    let mut parser = PureRustPerlParser::new();
+    let mut parser = FullPerlParser::new();
     let input = r#"
 my $text = <<EOF;
 This is a heredoc

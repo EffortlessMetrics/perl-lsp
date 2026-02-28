@@ -64,12 +64,22 @@ impl FullPerlParser {
 
     /// Restore heredoc content in the AST
     fn restore_heredoc_content(&self, node: &mut AstNode) {
-        // Map placeholder IDs to heredoc content
-        let placeholder_map: HashMap<String, Arc<str>> = self
+        // Map placeholder IDs to the full HeredocDeclaration struct details
+        let placeholder_map: HashMap<String, (Arc<str>, bool, bool, Arc<str>)> = self
             .heredoc_declarations
             .iter()
             .filter_map(|decl| {
-                decl.content.as_ref().map(|content| (decl.placeholder_id.clone(), content.clone()))
+                decl.content.as_ref().map(|content| {
+                    (
+                        decl.placeholder_id.clone(),
+                        (
+                            Arc::from(decl.terminator.as_str()),
+                            decl.indented,
+                            !decl.interpolated, // quoted is true if not interpolated
+                            content.clone(),
+                        ),
+                    )
+                })
             })
             .collect();
 
@@ -79,7 +89,7 @@ impl FullPerlParser {
     fn restore_node_content(
         &self,
         node: &mut AstNode,
-        placeholder_map: &HashMap<String, Arc<str>>,
+        placeholder_map: &HashMap<String, (Arc<str>, bool, bool, Arc<str>)>,
     ) {
         self.restore_node_content_with_depth(node, placeholder_map, 0);
     }
@@ -88,7 +98,7 @@ impl FullPerlParser {
     fn restore_node_content_with_depth(
         &self,
         node: &mut AstNode,
-        placeholder_map: &HashMap<String, Arc<str>>,
+        placeholder_map: &HashMap<String, (Arc<str>, bool, bool, Arc<str>)>,
         depth: usize,
     ) {
         if depth > 100 {
@@ -99,10 +109,19 @@ impl FullPerlParser {
 
         let next_depth = depth + 1;
         match node {
-            AstNode::String(value) => {
+            AstNode::String(value)
+            | AstNode::Identifier(value)
+            | AstNode::Bareword(value)
+            | AstNode::Comment(value) => {
                 // Check if this is a heredoc placeholder
-                if let Some(content) = placeholder_map.get(value.as_ref()) {
-                    *value = content.clone();
+                if let Some(details) = placeholder_map.get(value.as_ref()) {
+                    let (marker, indented, quoted, content_str) = details;
+                    *node = AstNode::Heredoc {
+                        marker: marker.clone(),
+                        indented: *indented,
+                        quoted: *quoted,
+                        content: content_str.clone(),
+                    };
                 }
             }
             AstNode::Block(statements) | AstNode::Program(statements) => {
@@ -242,11 +261,8 @@ impl FullPerlParser {
 
             // Handle literals and simple types that don't need recursion
             AstNode::Number(_)
-            | AstNode::Identifier(_)
             | AstNode::SpecialLiteral(_)
-            | AstNode::Bareword(_)
             | AstNode::EmptyExpression
-            | AstNode::Comment(_)
             | AstNode::Label(_)
             | AstNode::ScalarVariable(_)
             | AstNode::ArrayVariable(_)
@@ -383,10 +399,8 @@ my $y = $x / 2;"#;
         match parser.parse_to_sexp(input) {
             Ok(result) => {
                 println!("Parse result:\n{}", result);
-                // The S-expression shows the heredoc placeholder (content is
-                // restored in the AST but the placeholder identifier remains
-                // in the S-expression representation).
-                assert!(result.contains("__HEREDOC_1__"));
+                // The heredoc placeholder is restored to actual heredoc content
+                assert!(result.contains("heredoc"));
                 // Should also parse the division correctly
                 assert!(result.contains("binary_expression"));
             }
