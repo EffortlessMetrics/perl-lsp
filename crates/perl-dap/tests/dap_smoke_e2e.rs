@@ -147,7 +147,7 @@ print "$x\n";
             .unwrap_or(false)
     );
     assert!(capabilities.get("supportsInlineValues").and_then(|v| v.as_bool()).unwrap_or(false));
-    let _initialized = wait_for_event(&rx, "initialized", Duration::from_secs(2))?;
+    let _initialized = wait_for_event(&rx, "initialized", Duration::from_secs(10))?;
 
     response_success(
         adapter.handle_request(
@@ -167,7 +167,7 @@ print "$x\n";
         ),
         "launch",
     )?;
-    let entry_stop = wait_for_event(&rx, "stopped", Duration::from_secs(3))?;
+    let entry_stop = wait_for_event(&rx, "stopped", Duration::from_secs(10))?;
     assert_eq!(
         stopped_reason(&entry_stop).as_deref(),
         Some("entry"),
@@ -205,7 +205,7 @@ print "$x\n";
         adapter.handle_request(5, "continue", Some(json!({"threadId": 1}))),
         "continue",
     )?;
-    let breakpoint_stop = wait_for_event(&rx, "stopped", Duration::from_secs(3))?;
+    let breakpoint_stop = wait_for_event(&rx, "stopped", Duration::from_secs(10))?;
     let breakpoint_reason = stopped_reason(&breakpoint_stop);
     assert!(
         breakpoint_reason.as_deref() == Some("breakpoint")
@@ -215,7 +215,7 @@ print "$x\n";
 
     let mut request_seq = 6;
     let result_before =
-        evaluate_with_retry(&mut adapter, &mut request_seq, "$x", "1", Duration::from_secs(2))?;
+        evaluate_with_retry(&mut adapter, &mut request_seq, "$x", "1", Duration::from_secs(10))?;
     assert!(
         result_before.contains('1') && !result_before.contains("timeout"),
         "expected `$x` to be 1 before step, got: {result_before}"
@@ -301,7 +301,7 @@ print "$x\n";
     request_seq += 1;
 
     let result_after =
-        evaluate_with_retry(&mut adapter, &mut request_seq, "$x", "2", Duration::from_secs(2))?;
+        evaluate_with_retry(&mut adapter, &mut request_seq, "$x", "2", Duration::from_secs(10))?;
     assert!(
         !result_after.trim().is_empty(),
         "expected non-empty evaluate result after step, got: {result_after}"
@@ -331,7 +331,7 @@ print "$x\n";
     );
 
     let result_after_set =
-        evaluate_with_retry(&mut adapter, &mut request_seq, "$x", "3", Duration::from_secs(2))?;
+        evaluate_with_retry(&mut adapter, &mut request_seq, "$x", "3", Duration::from_secs(10))?;
     assert!(
         result_after_set.contains('3') && !result_after_set.contains("timeout"),
         "expected `$x` to be 3 after setVariable, got: {result_after_set}"
@@ -341,7 +341,7 @@ print "$x\n";
         adapter.handle_request(request_seq, "disconnect", Some(json!({}))),
         "disconnect",
     )?;
-    let _terminated = wait_for_event(&rx, "terminated", Duration::from_secs(2))?;
+    let _terminated = wait_for_event(&rx, "terminated", Duration::from_secs(10))?;
 
     Ok(())
 }

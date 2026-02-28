@@ -1568,6 +1568,7 @@ dependencies = [
  "perl-dap-variables",
  "perl-feature-catalog",
  "perl-keywords",
+ "perl-lsp-launcher",
  "perl-module-path",
  "perl-parser",
  "perl-path-security",
@@ -1906,6 +1907,7 @@ dependencies = [
 name = "perl-lsp-launcher"
 version = "0.10.0"
 dependencies = [
+ "clap",
  "perl-lsp-feature-governance",
  "perl-tdd-support",
 ]

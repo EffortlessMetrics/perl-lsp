@@ -9,6 +9,7 @@
 use std::error::Error;
 use std::fmt;
 
+use clap::{Args, Parser};
 pub use perl_lsp_feature_governance::{
     FeatureProfile, catalog_advertised_feature_ids, to_json_for_profile,
 };
@@ -16,6 +17,57 @@ use perl_lsp_feature_governance::{feature_profile_supported_tokens, parse_featur
 
 /// Default port used by socket transport.
 pub const DEFAULT_LSP_PORT: u16 = 9257;
+
+/// Transport options shared by server binaries.
+#[derive(Args, Debug, Clone)]
+pub struct TransportArgs {
+    /// Use stdio for communication (default)
+    #[arg(long, default_value_t = false, conflicts_with = "socket")]
+    pub stdio: bool,
+
+    /// Use TCP socket for communication
+    #[arg(long, conflicts_with = "stdio")]
+    pub socket: bool,
+
+    /// Port to listen on (for socket mode)
+    #[arg(long)]
+    pub port: Option<u16>,
+}
+
+impl TransportArgs {
+    /// Returns the resolved transport mode.
+    pub fn mode(&self) -> TransportMode {
+        if self.socket || self.port.is_some() {
+            TransportMode::Socket { port: self.port.unwrap_or(DEFAULT_LSP_PORT) }
+        } else {
+            TransportMode::Stdio
+        }
+    }
+}
+
+/// Command line arguments for the Perl LSP binary.
+#[derive(Parser, Debug, Clone)]
+#[command(name = "perl-lsp", version, about = "Perl Language Server", long_about = None)]
+pub struct LspArgs {
+    #[command(flatten)]
+    pub transport: TransportArgs,
+
+    /// Enable logging to stderr
+    #[arg(long)]
+    pub log: bool,
+
+    /// Quick health check (prints 'ok <version>')
+    #[arg(long)]
+    pub health: bool,
+
+    /// Output features catalog as JSON
+    #[arg(long)]
+    pub features_json: bool,
+
+    /// Set feature profile
+    #[arg(long)]
+    pub feature_profile: Option<String>,
+}
 
 /// How the server should connect to the editor or test client.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -157,67 +209,49 @@ impl Error for LaunchParseError {}
 pub fn parse_args<I>(args: I) -> Result<LaunchPlan, LaunchParseError>
 where
     I: IntoIterator,
-    I::Item: AsRef<str>,
+    I::Item: Into<std::ffi::OsString> + Clone,
 {
-    let args: Vec<String> = args.into_iter().map(|arg| arg.as_ref().to_string()).collect();
+    match LspArgs::try_parse_from(args) {
+        Ok(parsed_args) => {
+            let mut config = LaunchConfig::new(FeatureProfile::current());
 
-    let mut config = LaunchConfig::new(FeatureProfile::current());
-    let mut socket_port = DEFAULT_LSP_PORT;
-    let mut index = 1;
+            config.transport = parsed_args.transport.mode();
+            config.enable_logging = parsed_args.log;
 
-    while index < args.len() {
-        match args[index].as_str() {
-            "--stdio" => {
-                config.transport = TransportMode::Stdio;
-                index += 1;
+            if let Some(raw_profile) = parsed_args.feature_profile {
+                config.feature_profile = parse_feature_profile(&raw_profile)?;
             }
-            "--socket" => {
-                config.transport = TransportMode::Socket { port: socket_port };
-                index += 1;
+
+            let action = if parsed_args.health {
+                LaunchAction::Health
+            } else if parsed_args.features_json {
+                LaunchAction::FeaturesJson
+            } else {
+                LaunchAction::Run
+            };
+
+            Ok(LaunchPlan { action, config })
+        }
+        Err(err) => {
+            let is_help = err.kind() == clap::error::ErrorKind::DisplayHelp
+                || err.kind() == clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand;
+            let is_version = err.kind() == clap::error::ErrorKind::DisplayVersion;
+
+            if is_help {
+                return Ok(LaunchPlan {
+                    action: LaunchAction::Help,
+                    config: LaunchConfig::new(FeatureProfile::current()),
+                });
+            } else if is_version {
+                return Ok(LaunchPlan {
+                    action: LaunchAction::Version,
+                    config: LaunchConfig::new(FeatureProfile::current()),
+                });
             }
-            "--port" => {
-                let raw_port = args.get(index + 1).ok_or_else(|| {
-                    LaunchParseError::MissingValue { option: "--port".to_string() }
-                })?;
-                socket_port = parse_socket_port(raw_port)?;
-                config.transport = TransportMode::Socket { port: socket_port };
-                index += 2;
-            }
-            "--log" => {
-                config.enable_logging = true;
-                index += 1;
-            }
-            "--health" => {
-                return Ok(LaunchPlan { action: LaunchAction::Health, config });
-            }
-            "--feature-profile" => {
-                let raw_profile = args.get(index + 1).ok_or_else(|| {
-                    LaunchParseError::MissingValue { option: "--feature-profile".to_string() }
-                })?;
-                config.feature_profile = parse_feature_profile(raw_profile)?;
-                index += 2;
-            }
-            arg if arg.starts_with("--feature-profile=") => {
-                let raw_profile = arg.trim_start_matches("--feature-profile=");
-                config.feature_profile = parse_feature_profile(raw_profile)?;
-                index += 1;
-            }
-            "--features-json" => {
-                return Ok(LaunchPlan { action: LaunchAction::FeaturesJson, config });
-            }
-            "--version" => {
-                return Ok(LaunchPlan { action: LaunchAction::Version, config });
-            }
-            "--help" | "-h" => {
-                return Ok(LaunchPlan { action: LaunchAction::Help, config });
-            }
-            arg => {
-                return Err(LaunchParseError::UnknownOption { option: arg.to_string() });
-            }
+
+            Err(LaunchParseError::UnknownOption { option: err.to_string() })
         }
     }
-
-    Ok(LaunchPlan { action: LaunchAction::Run, config })
 }
 
 /// Human-readable CLI help text shared by CLI consumers.
@@ -259,13 +293,6 @@ Examples:\n\
 fn parse_feature_profile(raw_profile: &str) -> Result<FeatureProfile, LaunchParseError> {
     parse_feature_profile_arg(raw_profile).map_err(|_| LaunchParseError::InvalidFeatureProfile {
         raw_profile: raw_profile.to_string(),
-    })
-}
-
-fn parse_socket_port(raw_port: &str) -> Result<u16, LaunchParseError> {
-    raw_port.parse::<u16>().map_err(|error| LaunchParseError::InvalidPort {
-        raw_port: raw_port.to_string(),
-        reason: error.to_string(),
     })
 }
 
