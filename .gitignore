@@ -193,3 +193,6 @@ issue_updates/
 
 # Generated audit data
 corpus_audit_report.json
+
+# Rust ICE crash reports
+rustc-ice-*
