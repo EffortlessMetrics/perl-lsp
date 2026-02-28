@@ -392,3 +392,47 @@ with 'SomeRole';
         "should not emit with reference without Moo"
     );
 }
+
+#[test]
+fn moo_has_multiple_attributes_list() {
+    let code = r#"
+use Moose;
+has 'first_name', 'last_name' => (is => 'ro');
+"#;
+
+    let table = extract_symbols(code);
+
+    for attr in ["first_name", "last_name"] {
+        assert!(has_symbol(&table, attr, SymbolKind::scalar()), "expected attribute `{attr}`");
+        assert!(
+            has_symbol(&table, attr, SymbolKind::Subroutine),
+            "expected generated accessor `{attr}`"
+        );
+    }
+}
+
+#[test]
+fn moo_role_requires_emits_subroutine_symbol() {
+    let code = r#"
+package MyApp::Role;
+use Moo::Role;
+requires 'some_method', 'another_method';
+"#;
+
+    let table = extract_symbols(code);
+
+    let some_method =
+        find_symbol_with_declaration(&table, "some_method", SymbolKind::Subroutine, "requires");
+    assert!(
+        some_method.is_some(),
+        "expected Subroutine symbol with declaration='requires' for `some_method`"
+    );
+    assert!(some_method.unwrap().attributes.contains(&"requires=true".to_string()));
+
+    let another_method =
+        find_symbol_with_declaration(&table, "another_method", SymbolKind::Subroutine, "requires");
+    assert!(
+        another_method.is_some(),
+        "expected Subroutine symbol with declaration='requires' for `another_method`"
+    );
+}

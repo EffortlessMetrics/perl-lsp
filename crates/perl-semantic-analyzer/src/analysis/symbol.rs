@@ -884,6 +884,9 @@ impl SymbolExtractor {
             if let Some(consumed) = self.try_extract_extends_with(statements, idx) {
                 return Some(consumed);
             }
+            if let Some(consumed) = self.try_extract_role_requires(statements, idx) {
+                return Some(consumed);
+            }
         }
 
         if flags.is_some_and(|f| f.class_accessor)
@@ -910,6 +913,9 @@ impl SymbolExtractor {
         // Form A:
         // 1) ExpressionStatement(Identifier("has"))
         // 2) ExpressionStatement(HashLiteral(...))
+        // OR
+        // 1) ExpressionStatement(Identifier("has"))
+        // 2) ExpressionStatement(ArrayLiteral([..., HashLiteral]))
         if idx + 1 < statements.len() {
             let second = &statements[idx + 1];
             let is_has_marker = matches!(
@@ -918,15 +924,40 @@ impl SymbolExtractor {
                     if matches!(&expression.kind, NodeKind::Identifier { name } if name == "has")
             );
 
-            if is_has_marker
-                && let NodeKind::ExpressionStatement { expression } = &second.kind
-                && let NodeKind::HashLiteral { pairs } = &expression.kind
-            {
-                let has_location =
-                    SourceLocation { start: first.location.start, end: second.location.end };
-                self.synthesize_moo_has_pairs(pairs, has_location, false);
-                self.visit_node(second);
-                return Some(2);
+            if is_has_marker {
+                if let NodeKind::ExpressionStatement { expression } = &second.kind {
+                    let has_location =
+                        SourceLocation { start: first.location.start, end: second.location.end };
+
+                    match &expression.kind {
+                        NodeKind::HashLiteral { pairs } => {
+                            self.synthesize_moo_has_pairs(pairs, has_location, false);
+                            self.visit_node(second);
+                            return Some(2);
+                        }
+                        NodeKind::ArrayLiteral { elements } => {
+                            if let Some(Node { kind: NodeKind::HashLiteral { pairs }, .. }) =
+                                elements.last()
+                            {
+                                // Extract the names from the preceding elements
+                                let mut names = Vec::new();
+                                for el in elements.iter().take(elements.len() - 1) {
+                                    names.extend(Self::collect_symbol_names(el));
+                                }
+                                if !names.is_empty() {
+                                    self.synthesize_moo_has_attrs_with_options(
+                                        &names,
+                                        pairs,
+                                        has_location,
+                                    );
+                                    self.visit_node(second);
+                                    return Some(2);
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
             }
         }
 
@@ -1067,6 +1098,59 @@ impl SymbolExtractor {
         Some(2)
     }
 
+    /// Detect Moo/Moose `requires 'method'` declarations.
+    ///
+    /// Pattern:
+    /// `ExpressionStatement(Identifier("requires"))` followed by `ExpressionStatement(String(...))` or similar
+    fn try_extract_role_requires(&mut self, statements: &[Node], idx: usize) -> Option<usize> {
+        if idx + 1 >= statements.len() {
+            return None;
+        }
+
+        let first = &statements[idx];
+        let second = &statements[idx + 1];
+
+        // Check: first is ExpressionStatement(Identifier("requires"))
+        let is_requires = match &first.kind {
+            NodeKind::ExpressionStatement { expression } => {
+                matches!(&expression.kind, NodeKind::Identifier { name } if name == "requires")
+            }
+            _ => false,
+        };
+
+        if !is_requires {
+            return None;
+        }
+
+        let NodeKind::ExpressionStatement { expression } = &second.kind else {
+            return None;
+        };
+
+        let names = Self::collect_symbol_names(expression);
+        if names.is_empty() {
+            return None;
+        }
+
+        let location = SourceLocation { start: first.location.start, end: second.location.end };
+        let scope_id = self.table.current_scope();
+        let package = self.table.current_package.clone();
+
+        for name in names {
+            self.table.add_symbol(Symbol {
+                name: name.clone(),
+                qualified_name: format!("{package}::{name}"),
+                kind: SymbolKind::Subroutine,
+                location,
+                scope_id,
+                declaration: Some("requires".to_string()),
+                documentation: Some(format!("Required method `{name}` from role")),
+                attributes: vec!["requires=true".to_string()],
+            });
+        }
+
+        Some(2)
+    }
+
     /// Synthesize symbols from parsed `has` key/value pairs.
     fn synthesize_moo_has_pairs(
         &mut self,
@@ -1074,9 +1158,6 @@ impl SymbolExtractor {
         has_location: SourceLocation,
         require_embedded_marker: bool,
     ) {
-        let scope_id = self.table.current_scope();
-        let package = self.table.current_package.clone();
-
         for (attr_expr, options_expr) in pairs {
             let Some(attr_expr) = Self::moo_attribute_expr(attr_expr, require_embedded_marker)
             else {
@@ -1088,36 +1169,62 @@ impl SymbolExtractor {
                 continue;
             }
 
-            let option_map = Self::extract_hash_options(options_expr);
-            let metadata = Self::attribute_metadata(&option_map);
-            let generated_methods =
-                Self::moo_accessor_names(&attribute_names, &option_map, options_expr);
-
-            for attribute_name in attribute_names {
-                self.table.add_symbol(Symbol {
-                    name: attribute_name.clone(),
-                    qualified_name: format!("{package}::{attribute_name}"),
-                    kind: SymbolKind::scalar(),
-                    location: has_location,
-                    scope_id,
-                    declaration: Some("has".to_string()),
-                    documentation: Some(format!("Moo/Moose attribute `{attribute_name}`")),
-                    attributes: metadata.clone(),
-                });
+            if let NodeKind::HashLiteral { pairs: option_pairs } = &options_expr.kind {
+                self.synthesize_moo_has_attrs_with_options(
+                    &attribute_names,
+                    option_pairs,
+                    has_location,
+                );
             }
+        }
+    }
 
-            for method_name in generated_methods {
-                self.table.add_symbol(Symbol {
-                    name: method_name.clone(),
-                    qualified_name: format!("{package}::{method_name}"),
-                    kind: SymbolKind::Subroutine,
-                    location: has_location,
-                    scope_id,
-                    declaration: Some("has".to_string()),
-                    documentation: Some("Generated accessor from Moo/Moose `has`".to_string()),
-                    attributes: metadata.clone(),
-                });
-            }
+    /// Synthesize Moo symbols for a known list of attributes and options.
+    fn synthesize_moo_has_attrs_with_options(
+        &mut self,
+        attribute_names: &[String],
+        option_pairs: &[(Node, Node)],
+        has_location: SourceLocation,
+    ) {
+        let scope_id = self.table.current_scope();
+        let package = self.table.current_package.clone();
+
+        // Create a dummy options_expr Node to pass to existing helpers
+        // (a bit hacky, but avoids rewriting the helpers that take Node)
+        let options_expr = Node {
+            kind: NodeKind::HashLiteral { pairs: option_pairs.to_vec() },
+            location: has_location,
+        };
+
+        let option_map = Self::extract_hash_options(&options_expr);
+        let metadata = Self::attribute_metadata(&option_map);
+        let generated_methods =
+            Self::moo_accessor_names(attribute_names, &option_map, &options_expr);
+
+        for attribute_name in attribute_names {
+            self.table.add_symbol(Symbol {
+                name: attribute_name.clone(),
+                qualified_name: format!("{package}::{attribute_name}"),
+                kind: SymbolKind::scalar(),
+                location: has_location,
+                scope_id,
+                declaration: Some("has".to_string()),
+                documentation: Some(format!("Moo/Moose attribute `{attribute_name}`")),
+                attributes: metadata.clone(),
+            });
+        }
+
+        for method_name in generated_methods {
+            self.table.add_symbol(Symbol {
+                name: method_name.clone(),
+                qualified_name: format!("{package}::{method_name}"),
+                kind: SymbolKind::Subroutine,
+                location: has_location,
+                scope_id,
+                declaration: Some("has".to_string()),
+                documentation: Some("Generated accessor from Moo/Moose `has`".to_string()),
+                attributes: metadata.clone(),
+            });
         }
     }
 
