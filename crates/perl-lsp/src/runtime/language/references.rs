@@ -431,6 +431,15 @@ impl LspServer {
                 if let Some(ref ast) = doc.ast {
                     let offset = self.pos16_to_offset(doc, line, character);
 
+                    // Guard: if the resolved offset doesn't map back to the
+                    // requested line, the character position overflowed the
+                    // line boundary (e.g. cursor on an empty line). Return
+                    // empty highlights instead of highlighting the wrong line.
+                    let (actual_line, _) = self.offset_to_pos16(doc, offset);
+                    if actual_line != line {
+                        return Ok(Some(json!([])));
+                    }
+
                     // Create document highlight provider
                     let provider = DocumentHighlightProvider::new();
 
