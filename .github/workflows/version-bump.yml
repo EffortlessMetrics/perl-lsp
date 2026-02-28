@@ -50,9 +50,7 @@ jobs:
 
       - name: Install git-cliff
         run: |
-          wget -qO- https://github.com/orhun/git-cliff/releases/latest/download/git-cliff-ubuntu.tar.gz | \
-            tar -xz -C /tmp
-          sudo mv /tmp/git-cliff /usr/local/bin/
+          cargo install git-cliff --locked
 
       - name: Resolve release target
         id: resolved-version
