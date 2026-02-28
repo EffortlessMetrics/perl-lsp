@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-text-line Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-text-line`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+Text-line cursor and boundary helpers
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha

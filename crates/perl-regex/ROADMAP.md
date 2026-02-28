@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-regex Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-regex`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+Regex parsing and validation helpers for Perl syntax
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha

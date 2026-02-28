@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-lsp-feature-profile Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-feature-profile`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+Canonical feature profile contract and parsing for perl-lsp CLI/profile interoperability.
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha

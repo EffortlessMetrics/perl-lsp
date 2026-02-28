@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-module-import Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-module-import`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+Single-line Perl use/require import head parsing and classification
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha

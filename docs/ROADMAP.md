@@ -120,3 +120,45 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - **[LESSONS.md](LESSONS.md)** - Project learnings
 
 <!-- Last Updated: 2026-02-28 -->
+
+## Detailed Forward-Looking Roadmap
+
+### v0.11.0: Advanced Semantic Engine
+- **Goal:** Deepen semantic understanding of complex Perl constructs.
+- **Features:**
+  - Full Moo/Moose/Class::Accessor attribute resolution.
+  - Cross-file type inference across standard import mechanisms (`use parent`, `use base`).
+  - Improved bareword disambiguation based on export lists.
+  - Constant folding and compile-time evaluation approximations.
+
+### v0.12.0: Diagnostic Hardening
+- **Goal:** Parity with `perl -c` without the security risks of actual execution.
+- **Features:**
+  - Strict mode and warnings pragma emulation.
+  - Uninitialized variable detection across function boundaries.
+  - Dead code elimination recommendations.
+  - Syntax deprecation warnings (e.g., smartmatch, indirect object notation).
+
+### v0.13.0: Complete Refactoring Suite
+- **Goal:** Safe, reliable automated code modification.
+- **Features:**
+  - Safe rename across entire workspaces with boundary detection.
+  - Extract Method / Extract Variable refactorings.
+  - Inline Method / Inline Variable refactorings.
+  - Automated translation of older constructs to modern Perl 5.38+ syntax.
+
+### v0.14.0: Native Debugging Excellence
+- **Goal:** A first-class native debugging experience.
+- **Features:**
+  - Fully stabilized Native DAP replacing the bridge entirely.
+  - Conditional breakpoints and logpoints evaluated without blocking the debugger.
+  - Rich variable inspection with support for complex nested data structures (e.g., blessed references, tied variables).
+  - Multi-process / fork-aware debugging.
+
+### v0.15.0: The Stability Contract
+- **Goal:** Enterprise-ready stability guarantees.
+- **Deliverables:**
+  - 1.0.0 semantic versioning applied to public APIs.
+  - Contract-locked LSP features.
+  - Formal deprecation policy (N-2 release support minimum).
+  - Certified support for Linux, macOS, and Windows.

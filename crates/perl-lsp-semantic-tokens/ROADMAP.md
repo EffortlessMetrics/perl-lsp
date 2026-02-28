@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-lsp-semantic-tokens Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-semantic-tokens`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+LSP semantic tokens provider for Perl — token classification and delta encoding
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha
