@@ -132,7 +132,7 @@ jobs:
           echo "Publishing $TOTAL crates..."
 
           CRATES_LIST="$(mktemp)"
-          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print("{} {}".format(c["name"], c["version"])) for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
             echo ""
             echo "===> $CRATE@$VERSION"
@@ -208,7 +208,7 @@ jobs:
           OK=0
 
           CRATES_LIST="$(mktemp)"
-          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print(f"{c[\"name\"]} {c[\"version\"]}") for c in json.load(sys.stdin)]' > "$CRATES_LIST"
+          echo "$CRATES_JSON" | python3 -c 'import json,sys; [print("{} {}".format(c["name"], c["version"])) for c in json.load(sys.stdin)]' > "$CRATES_LIST"
           while read -r CRATE VERSION; do
             TOTAL=$((TOTAL + 1))
 
