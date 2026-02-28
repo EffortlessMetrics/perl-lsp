@@ -1,7 +1,10 @@
 //! LSP feature policy and capability profile helpers.
 //!
 //! This microcrate centralizes capability set selection, turning high-level profile
-//! decisions into runtime `BuildFlags` and catalog-oriented feature IDs.
+//! decisions (e.g. `ga-lock`, `production`, `all`) into runtime [`BuildFlags`] and
+//! catalog-oriented feature IDs. It bridges [`FeatureProfileKind`] to the
+//! [`AdvertisedFeatures`] projection consumed by server startup and the
+//! `initialize` response.
 
 use perl_lsp_feature_contracts::advertised_features;
 use perl_lsp_feature_flags::{AdvertisedFeatures, BuildFlags};
