@@ -56,10 +56,10 @@ jobs:
   mutation:
     name: Mutation Testing
     if: |
-      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.run_mutation != 'false') ||
       (github.event_name == 'pull_request' &&
-       contains(github.event.pull_request.labels.*.name, 'ci:mutation')) ||
-      (github.event_name == 'schedule' && github.event.inputs.run_mutation != 'false')
+       contains(github.event.pull_request.labels.*.name, 'ci:mutation'))
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:

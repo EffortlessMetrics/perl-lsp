@@ -29,6 +29,10 @@ permissions:
   contents: write
   pull-requests: write
 
+concurrency:
+  group: version-bump
+  cancel-in-progress: false
+
 jobs:
   version-bump:
     name: Bump Version & Generate Changelog
