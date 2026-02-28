@@ -322,23 +322,15 @@ log "Release target: $VERSION"
 log "Orchestration branch: $REPO_BRANCH"
 log "Controls: prerelease=$PRERELEASE skip_crates=$SKIP_CRATES skip_extension=$SKIP_EXTENSION skip_docker=$SKIP_DOCKER"
 
-if [[ "$(git rev-parse --abbrev-ref HEAD)" != "$REPO_BRANCH" ]]; then
-  warn "switching to $REPO_BRANCH for orchestrated release"
-  git checkout "$REPO_BRANCH"
-fi
-
-
 git fetch origin "$REPO_BRANCH" --prune
 require_clean_worktree
 
-REMOTE_SHA="origin/$REPO_BRANCH"
-LOCAL_SHA="$(git rev-parse "$REPO_BRANCH")"
-UPSTREAM_SHA="$(git rev-parse "$REMOTE_SHA")"
-if [[ "$LOCAL_SHA" != "$UPSTREAM_SHA" ]]; then
-  die "local $REPO_BRANCH is not aligned with $REMOTE_SHA. Pull or reset before releasing."
+BASE_SHA="$(git rev-parse "origin/$REPO_BRANCH")"
+if [[ -z "$BASE_SHA" ]]; then
+  die "could not resolve origin/$REPO_BRANCH"
 fi
 
-HEAD_SHA="$LOCAL_SHA"
+HEAD_SHA="$BASE_SHA"
 
 BUMP_BRANCH="release/v${VERSION}"
 
@@ -385,13 +377,13 @@ if [[ "$WAIT_PR_MERGE" == "true" ]]; then
 fi
 
 git fetch origin "$REPO_BRANCH" --prune
-if [[ "$(git rev-parse "$REPO_BRANCH")" == "$LOCAL_SHA" ]]; then
+if [[ "$(git rev-parse "origin/$REPO_BRANCH")" == "$HEAD_SHA" ]]; then
   if [[ "$AUTO_MERGE" == "true" ]]; then
-    warn "local release branch did not move after merge; please verify the PR merge outcome"
+    warn "release branch did not move after merge according to origin/$REPO_BRANCH; please verify the PR merge outcome"
   fi
 fi
 
-RELEASE_HEAD_SHA="$(git rev-parse "$REPO_BRANCH")"
+RELEASE_HEAD_SHA="$(git rev-parse "origin/$REPO_BRANCH")"
 
 log "Dispatching release orchestration for ${VERSION}"
 RELEASE_ORCH_DISPATCH_TS=""
