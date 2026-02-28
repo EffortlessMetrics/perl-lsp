@@ -50,7 +50,23 @@ jobs:
 
       - name: Install git-cliff
         run: |
-          cargo install git-cliff --locked
+          GIT_CLIFF_TAG="$(curl -s https://api.github.com/repos/orhun/git-cliff/releases/latest | jq -r '.tag_name // ""')"
+          if [ -z "$GIT_CLIFF_TAG" ] || [ "$GIT_CLIFF_TAG" = "null" ]; then
+            echo "::error::Failed to resolve latest git-cliff release tag"
+            exit 1
+          fi
+
+          ASSET_URL="$(curl -s "https://api.github.com/repos/orhun/git-cliff/releases/tags/${GIT_CLIFF_TAG}" | \
+            jq -r '.assets[].browser_download_url | select(test("x86_64-unknown-linux-gnu\\.tar\\.gz$"))' | head -n 1)"
+          if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
+            echo "::error::Failed to resolve linux x86_64 git-cliff asset from ${GIT_CLIFF_TAG}"
+            exit 1
+          fi
+
+          curl -fsSL "$ASSET_URL" -o /tmp/git-cliff.tar.gz
+          tar -xzf /tmp/git-cliff.tar.gz -C /tmp
+          mkdir -p /usr/local/bin
+          sudo mv /tmp/git-cliff-*/*/git-cliff /usr/local/bin/
 
       - name: Resolve release target
         id: resolved-version
