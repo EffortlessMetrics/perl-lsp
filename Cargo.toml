@@ -91,6 +91,13 @@ exclude = [
     "archive",                    # Archived legacy components
 ]
 
+[workspace.metadata.publish]
+allow = [
+    "perl-lexer",
+    "perl-parser",
+    "perl-corpus",
+]
+
 # Workspace-level package metadata
 [workspace.package]
 version = "0.10.0"

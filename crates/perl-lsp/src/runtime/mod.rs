@@ -137,6 +137,8 @@ pub(crate) struct DocumentScanView {
 pub struct LspServer {
     /// Document contents indexed by URI
     pub(crate) documents: Arc<Mutex<HashMap<String, DocumentState>>>,
+    /// Whether the `initialize` request has been received
+    initialize_requested: bool,
     /// Whether the server is initialized
     initialized: bool,
     /// Whether shutdown was received (for LSP-compliant exit handling)
@@ -204,6 +206,7 @@ impl LspServer {
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
+            initialize_requested: false,
             initialized: false,
             shutdown_received: false,
             #[cfg(feature = "workspace")]
@@ -288,6 +291,7 @@ impl LspServer {
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
+            initialize_requested: false,
             initialized: false,
             shutdown_received: false,
             #[cfg(feature = "workspace")]
@@ -335,6 +339,7 @@ impl LspServer {
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
+            initialize_requested: false,
             initialized: false,
             shutdown_received: false,
             #[cfg(feature = "workspace")]

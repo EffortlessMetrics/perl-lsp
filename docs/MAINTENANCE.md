@@ -958,7 +958,7 @@ cargo doc --open                # Open documentation in browser
 
 | Role | Contact |
 |------|---------|
-| Security Reports | security@example.com |
+| Security Reports | See SECURITY.md |
 | General Issues | GitHub Issues |
 | Questions | GitHub Discussions |
 | Maintainers | See GitHub repository |

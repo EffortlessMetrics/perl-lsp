@@ -27,9 +27,18 @@
 //! ```
 
 use anyhow::{Context, Result};
+use std::time::{Duration, Instant};
 use std::process::Stdio;
 use tokio::io::AsyncWriteExt;
 use tokio::process::{Child, Command};
+use tokio::time::sleep;
+#[cfg(unix)]
+use nix::sys::signal::{self, Signal};
+#[cfg(unix)]
+use nix::unistd::Pid;
+
+const PLS_SHUTDOWN_GRACE_MS: u64 = 250;
+const PLS_SHUTDOWN_POLL_MS: u64 = 25;
 
 /// Perl debugger flag to activate DAP protocol mode in Perl::LanguageServer
 const PLS_DAP_FLAG: &str = "-d:LanguageServer::DAP";
@@ -180,14 +189,58 @@ impl BridgeAdapter {
 
     /// Shutdown the bridge adapter and the Perl::LanguageServer process
     ///
-    /// This method explicitly kills the child process and waits for it to exit.
-    /// It should be used for graceful cleanup in async contexts.
+    /// This method tries a graceful termination first and falls back to kill.
+    /// It should be used for cleanup in async contexts.
     pub async fn shutdown(&mut self) -> Result<()> {
         if let Some(mut child) = self.child_process.take() {
-            // kill() sends SIGKILL and waits for the process to exit
-            child.kill().await.context("Failed to kill Perl::LanguageServer process")?;
+            if !Self::wait_for_child_exit(
+                &mut child,
+                Duration::from_millis(0),
+            ) {
+                #[cfg(unix)]
+                {
+                    if let Some(pid) = child.id() {
+                        if let Ok(()) = signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
+                            if Self::wait_for_child_exit(
+                                &mut child,
+                                Duration::from_millis(PLS_SHUTDOWN_GRACE_MS),
+                            ) {
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+
+                let _ = child.kill().await;
+                if !Self::wait_for_child_exit(
+                    &mut child,
+                    Duration::from_millis(PLS_SHUTDOWN_GRACE_MS),
+                ) {
+                    let _ = child.wait().await?;
+                }
+            }
         }
         Ok(())
+    }
+
+    async fn wait_for_child_exit(child: &mut Child, timeout: Duration) -> bool {
+        if let Ok(Some(_)) = child.try_wait() {
+            return true;
+        }
+
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            match child.try_wait() {
+                Ok(Some(_)) => return true,
+                Ok(None) => sleep(Duration::from_millis(PLS_SHUTDOWN_POLL_MS)).await,
+                Err(e) => {
+                    eprintln!("Failed to poll Perl::LanguageServer process: {}", e);
+                    return false;
+                }
+            }
+        }
+
+        false
     }
 }
 

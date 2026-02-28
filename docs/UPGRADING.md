@@ -536,7 +536,7 @@ cargo clippy --workspace
 code --uninstall-extension perl-language-server
 
 # Install new extension
-code --install-extension perl-language-server@0.9.x
+code --install-extension effortlesssteven.perl-lsp
 
 # Remove deprecated settings from settings.json
 # Delete: "perl-lsp.downloadBaseUrl"

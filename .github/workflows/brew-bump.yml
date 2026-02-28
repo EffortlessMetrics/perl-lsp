@@ -115,6 +115,11 @@ jobs:
             sed -i "/aarch64-unknown-linux-gnu/,/sha256/ s/sha256 \"[^\"]*\"/sha256 \"${SHA}\"/" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"
           fi
 
+          if grep -q "__RELEASE_VERSION__\|__SHA256_" "$GITHUB_WORKSPACE/Formula/perl-lsp.rb"; then
+            echo "::error::Formula still contains unreplaced placeholders after update."
+            exit 1
+          fi
+
       - name: Show updated formula
         run: cat Formula/perl-lsp.rb
 

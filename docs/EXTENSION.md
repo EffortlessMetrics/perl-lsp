@@ -10,7 +10,7 @@
 
 ### From Open VSX (for VSCodium, Gitpod, etc.)
 ```bash
-code --install-extension tree-sitter-perl.perl-lsp
+code --install-extension effortlesssteven.perl-lsp
 ```
 
 ### Manual Installation
@@ -99,7 +99,7 @@ The LSP handles CRLF correctly but some edge cases exist:
 ```bash
 # Clone repository
 git clone https://github.com/EffortlessMetrics/perl-lsp
-cd tree-sitter-perl/vscode-extension
+cd vscode-extension
 
 # Install dependencies
 npm install

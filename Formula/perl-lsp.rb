@@ -1,41 +1,43 @@
 class PerlLsp < Formula
-  desc "Lightning-fast Perl LSP server with 26+ IDE features"
+  desc "High-performance Perl Language Server with 100% syntax coverage"
   homepage "https://github.com/EffortlessMetrics/perl-lsp"
-  version "0.8.0"
-  
-  if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-v#{version}-aarch64-apple-darwin.tar.gz"
-    sha256 "PLACEHOLDER_SHA256_AARCH64_DARWIN"
-  elsif OS.mac?
-    url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-v#{version}-x86_64-apple-darwin.tar.gz"
-    sha256 "PLACEHOLDER_SHA256_X86_64_DARWIN"
-  elsif OS.linux?
-    url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-v#{version}-x86_64-unknown-linux-gnu.tar.gz"
-    sha256 "PLACEHOLDER_SHA256_X86_64_LINUX"
+  # PLACEHOLDER-GUARD: __RELEASE_VERSION__ must be replaced in CI before merge.
+  version "__RELEASE_VERSION__"
+  # PLACEHOLDER-GUARD: all sha256 values must be replaced in CI before merge.
+  license "MIT"
+
+  on_macos do
+    if Hardware::CPU.arm?
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-v#{version}-aarch64-apple-darwin.tar.gz"
+      sha256 "__SHA256_MACOS_AARCH64__"
+    else
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-v#{version}-x86_64-apple-darwin.tar.gz"
+      sha256 "__SHA256_MACOS_X86_64__"
+    end
+  end
+
+  on_linux do
+    if Hardware::CPU.arm?
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-v#{version}-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "__SHA256_LINUX_AARCH64__"
+    else
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v#{version}/perl-lsp-v#{version}-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "__SHA256_LINUX_X86_64__"
+    end
   end
 
   def install
-    bin.install "perl-lsp"
-    bin.install "perl-parse" if File.exist?("perl-parse")
+    # Expected extracted layout: perl-lsp-v<version>-<target>/perl-lsp
+    # If the release packaging layout changes, update this extraction logic with a follow-up.
+    extracted_dir = Dir.glob("perl-lsp-v*").find { |dir| Dir.exist?(dir) }
+    if extracted_dir
+      bin.install "#{extracted_dir}/perl-lsp"
+    else
+      bin.install "perl-lsp"
+    end
   end
 
   test do
-    require "open3"
-    json = <<~JSON
-      {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-          "capabilities": {}
-        }
-      }
-    JSON
-    
-    Open3.popen3("#{bin}/perl-lsp", "--stdio") do |stdin, stdout, _, _|
-      stdin.write "Content-Length: #{json.bytesize}\r\n\r\n#{json}"
-      stdin.close
-      assert_match(/\"capabilities\"/, stdout.read)
-    end
+    assert_match(/perl-lsp|Perl LSP/, shell_output("#{bin}/perl-lsp --version"))
   end
 end

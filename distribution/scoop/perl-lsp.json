@@ -1,12 +1,12 @@
 {
-  "version": "1.0.0",
+  "version": "__RELEASE_VERSION__",
   "description": "High-performance Perl Language Server with 100% syntax coverage",
   "homepage": "https://github.com/EffortlessMetrics/perl-lsp",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v1.0.0/perl-lsp-1.0.0-x86_64-pc-windows-msvc.zip",
-      "hash": "REPLACE_WITH_ACTUAL_SHA256"
+      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v__RELEASE_VERSION__/perl-lsp-__RELEASE_VERSION__-x86_64-pc-windows-msvc.zip",
+      "hash": "__RELEASE_HASH__"
     }
   },
   "bin": "perl-lsp.exe",
@@ -18,7 +18,8 @@
       }
     },
     "hash": {
-      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/perl-lsp-$version-x86_64-pc-windows-msvc.zip.sha256"
+      "url": "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v$version/SHA256SUMS",
+      "regex": "perl-lsp-$version-x86_64-pc-windows-msvc\\.zip\\s+([a-fA-F0-9]{64})"
     }
   },
   "notes": [

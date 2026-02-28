@@ -495,6 +495,9 @@ git reset --hard origin/master
 git status --short
 
 # One-command release orchestration (recommended).
+# Authoritative release command path:
+# `scripts/release-turnkey-pr.sh` is the canonical RC flow.
+# Legacy release scripts are listed in `scripts/DEPRECATED_RELEASE_SCRIPTS.md`.
 scripts/release-turnkey-pr.sh <0.x.y>
 
 # Manual equivalent flow:

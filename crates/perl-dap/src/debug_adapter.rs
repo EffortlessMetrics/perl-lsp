@@ -95,6 +95,7 @@ static FUNCTION_BREAKPOINT_NAME_RE: OnceLock<Result<Regex, regex::Error>> = Once
 static WARNING_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static INC_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 const RECENT_OUTPUT_MAX_LINES: usize = 2048;
+const DEBUG_SESSION_TERMINATE_WAIT_MS: u64 = 250;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 const DEBUGGER_FRAME_POLL_MS: u64 = 10;
 
@@ -1516,6 +1517,8 @@ impl DebugAdapter {
         let exception_break_on_die = self.exception_break_on_die.clone();
         let exception_break_on_warn = self.exception_break_on_warn.clone();
         let last_exception_message = self.last_exception_message.clone();
+        let tcp_session = self.tcp_session.clone();
+        let attached_pid = self.attached_pid.clone();
 
         thread::spawn(move || {
             // Perl's debugger prompt and evaluation output are emitted on stderr.
@@ -1549,6 +1552,11 @@ impl DebugAdapter {
                         Some(json!({"reason": "no_debugger_stream"})),
                     );
                 }
+                DebugAdapter::clear_active_session_state_with_state(
+                    &session,
+                    &tcp_session,
+                    &attached_pid,
+                );
                 return;
             };
 
@@ -1565,6 +1573,11 @@ impl DebugAdapter {
                 match reader.read_line(&mut line) {
                     Ok(0) => {
                         eprintln!("Perl debugger process terminated");
+                        DebugAdapter::clear_active_session_state_with_state(
+                            &session,
+                            &tcp_session,
+                            &attached_pid,
+                        );
                         break;
                     }
                     Ok(_) => {
@@ -1901,6 +1914,11 @@ impl DebugAdapter {
                                 Some(json!({"reason": "read_error", "error": e.to_string()})),
                             );
                         }
+                        DebugAdapter::clear_active_session_state_with_state(
+                            &session,
+                            &tcp_session,
+                            &attached_pid,
+                        );
                         break;
                     }
                 }
@@ -1944,19 +1962,7 @@ impl DebugAdapter {
                 }
 
                 // Reset existing process/tcp attachment state before switching to PID mode.
-                if let Ok(mut guard) = self.session.lock()
-                    && let Some(mut existing) = guard.take()
-                {
-                    let _ = existing.process.kill();
-                }
-                if let Ok(mut guard) = self.tcp_session.lock()
-                    && let Some(ref mut tcp_session) = *guard
-                {
-                    let _ = tcp_session.disconnect();
-                }
-                if let Ok(mut guard) = self.tcp_session.lock() {
-                    *guard = None;
-                }
+                self.clear_active_session_state();
 
                 if let Ok(mut guard) = self.attached_pid.lock() {
                     *guard = Some(pid);
@@ -2231,28 +2237,88 @@ impl DebugAdapter {
 
     /// Clear active process session, TCP session, and PID-attach mode state.
     fn clear_active_session_state(&self) {
+        Self::clear_active_session_state_with_state(
+            &self.session,
+            &self.tcp_session,
+            &self.attached_pid,
+        );
+    }
+
+    fn clear_active_session_state_with_state(
+        session: &Arc<Mutex<Option<DebugSession>>>,
+        tcp_session: &Arc<Mutex<Option<TcpAttachSession>>>,
+        attached_pid: &Arc<Mutex<Option<u32>>>,
+    ) {
         // Terminate the debug session
-        if let Ok(mut guard) = self.session.lock()
-            && let Some(mut session) = guard.take()
-        {
-            let _ = session.process.kill();
-            session.state = DebugState::Terminated;
+        if let Ok(mut guard) = session.lock() && let Some(mut active_session) = guard.take() {
+            if !Self::terminate_child_process(&mut active_session.process) {
+                eprintln!("Failed to ensure debug session process termination");
+            }
+            active_session.state = DebugState::Terminated;
         }
 
         // Disconnect TCP session if active
-        if let Ok(mut guard) = self.tcp_session.lock()
-            && let Some(ref mut tcp_session) = *guard
-        {
+        if let Ok(mut guard) = tcp_session.lock() && let Some(ref mut tcp_session) = *guard {
             let _ = tcp_session.disconnect();
         }
-        if let Ok(mut guard) = self.tcp_session.lock() {
+        if let Ok(mut guard) = tcp_session.lock() {
             *guard = None;
         }
 
         // Clear PID attach mode.
-        if let Ok(mut guard) = self.attached_pid.lock() {
+        if let Ok(mut guard) = attached_pid.lock() {
             *guard = None;
         }
+    }
+
+    fn wait_for_child_exit(process: &mut Child, timeout: Duration) -> bool {
+        if let Ok(Some(_)) = process.try_wait() {
+            return true;
+        }
+
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            match process.try_wait() {
+                Ok(Some(_)) => return true,
+                Ok(None) => thread::sleep(Duration::from_millis(25)),
+                Err(e) => {
+                    eprintln!("Failed to poll debug session process: {}", e);
+                    return false;
+                }
+            }
+        }
+
+        false
+    }
+
+    fn terminate_child_process(process: &mut Child) -> bool {
+        if Self::wait_for_child_exit(process, Duration::from_millis(0)) {
+            return true;
+        }
+
+        #[cfg(unix)]
+        {
+            if let Some(pid) = process.id() {
+                match signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
+                    Ok(()) => {
+                        if Self::wait_for_child_exit(
+                            process,
+                            Duration::from_millis(DEBUG_SESSION_TERMINATE_WAIT_MS),
+                        ) {
+                            return true;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to send SIGTERM to process {}: {}", pid, e);
+                    }
+                }
+            }
+        }
+
+        if let Err(e) = process.kill() {
+            eprintln!("Failed to terminate process: {}", e);
+        }
+        Self::wait_for_child_exit(process, Duration::from_millis(DEBUG_SESSION_TERMINATE_WAIT_MS))
     }
 
     /// Handle disconnect request
@@ -3715,15 +3781,13 @@ impl DebugAdapter {
                         Err(e) => {
                             eprintln!("Failed to send interrupt to process {}: {}", pid, e);
                             // Fallback: try to kill the process
-                            match session.process.kill() {
-                                Ok(()) => {
-                                    eprintln!("Terminated process {} as fallback", pid);
-                                    true
-                                }
-                                Err(kill_e) => {
-                                    eprintln!("Failed to terminate process {}: {}", pid, kill_e);
-                                    false
-                                }
+                            if Self::terminate_child_process(&mut session.process) {
+                                eprintln!("Terminated process {} as fallback", pid);
+                                session.state = DebugState::Terminated;
+                                true
+                            } else {
+                                eprintln!("Failed to terminate process {}", pid);
+                                false
                             }
                         }
                     }

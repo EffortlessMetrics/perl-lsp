@@ -4,9 +4,6 @@ name: Release
 # Cost: ~$0.50 per release (across all platforms)
 
 on:
-  push:
-    tags:
-      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       tag:
@@ -21,7 +18,7 @@ on:
 
 # Cancel in-flight runs on concurrent release dispatches
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
@@ -227,7 +224,9 @@ jobs:
       - name: Generate consolidated SHA256SUMS
         run: |
           cd artifacts
-          find . -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec sha256sum {} \; | \
+          find . -type f \( -name '*.tar.gz' -o -name '*.zip' \) -print0 | \
+            sort -z | \
+            xargs -0 sha256sum | \
             sed 's|  \./[^/]*/|  |' > ../SHA256SUMS
           cd ..
           cat SHA256SUMS
