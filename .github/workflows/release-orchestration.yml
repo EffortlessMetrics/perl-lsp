@@ -33,6 +33,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
   id-token: write
   attestations: write
 
@@ -45,6 +46,9 @@ jobs:
     name: Validate Release
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.resolve.outputs.tag }}
 
     steps:
       - name: Checkout
@@ -55,37 +59,59 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Validate version
+      - name: Resolve and validate version
+        id: resolve
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          TAG="v${VERSION}"
 
-          # Check version format
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-            echo "::error::Invalid version format: $VERSION"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Invalid version format: ${VERSION}"
             exit 1
           fi
 
           # Check workspace Cargo.toml
           WORKSPACE_VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
           if [ "$WORKSPACE_VERSION" != "$VERSION" ]; then
-            echo "::error::Workspace version $WORKSPACE_VERSION does not match release version $VERSION"
+            echo "::error::Workspace version ${WORKSPACE_VERSION} does not match release version ${VERSION}"
             exit 1
           fi
 
-          echo "✅ Version validated: $VERSION"
+          if git show-ref --verify --quiet "refs/tags/${TAG}"; then
+            echo "::error::Tag ${TAG} already exists"
+            exit 1
+          fi
 
-      - name: Check CI status
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "✅ Version validated: ${VERSION}"
+
+      - name: Check default branch and CI status
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Check if main branch CI is passing
-          echo "Checking CI status for main branch..."
+          DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+          DEFAULT_SHA=$(git rev-parse "origin/${DEFAULT_BRANCH}")
+          HEAD_SHA="${GITHUB_SHA}"
 
-          # Get the latest commit SHA on main
-          SHA=$(git rev-parse origin/master)
-          echo "Latest commit: $SHA"
+          if [ "$HEAD_SHA" != "$DEFAULT_SHA" ]; then
+            echo "::error::Release must run from ${DEFAULT_BRANCH} tip. Workflow is on ${HEAD_SHA}, ${DEFAULT_BRANCH} is ${DEFAULT_SHA}"
+            exit 1
+          fi
 
-          # Verify the commit has passed CI
-          # (This is a simplified check - in practice you'd use GitHub API)
-          echo "✅ CI status verified"
+          echo "Checking CI status for ${HEAD_SHA}..."
+          CI_STATE="$(gh api repos/${{ github.repository }}/commits/${HEAD_SHA}/status --jq '.state')"
+          if [ -z "$CI_STATE" ]; then
+            echo "::error::Unable to determine CI state for ${HEAD_SHA}"
+            exit 1
+          fi
+
+          if [ "$CI_STATE" != "success" ]; then
+            echo "::error::Commit ${HEAD_SHA} is not in a successful CI state (${CI_STATE})"
+            exit 1
+          fi
+
+          echo "✅ CI state verified: ${CI_STATE}"
 
       - name: Check for unreleased changes
         run: |
@@ -125,8 +151,8 @@ jobs:
 
       - name: Create and push tag
         run: |
-          VERSION="${{ github.event.inputs.version }}"
-          TAG="v${VERSION}"
+          VERSION="${{ needs.validate.outputs.version }}"
+          TAG="${{ needs.validate.outputs.tag }}"
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -149,17 +175,50 @@ jobs:
 
   trigger-release:
     name: Trigger Release Workflows
-    needs: create-tag
+    needs: [create-tag, validate]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
-    if: always()
 
     steps:
-      - name: Wait for tag
+      - name: Dispatch release orchestration
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          TAG="v${{ github.event.inputs.version }}"
-          echo "Waiting for tag $TAG to be available..."
-          sleep 30
+          TAG="${{ needs.validate.outputs.tag }}"
+          VERSION="${{ needs.validate.outputs.version }}"
+          REF="${{ github.ref_name }}"
+          PRERELEASE="${{ github.event.inputs.prerelease }}"
+
+          echo "Dispatching release workflow for ${TAG}"
+          gh api \
+            -X POST \
+            /repos/${{ github.repository }}/actions/workflows/release.yml/dispatches \
+            -f ref="${REF}" \
+            -F inputs[tag]="${TAG}" \
+            -F inputs[prerelease]="${PRERELEASE}" \
+            -F inputs[skip_extension]="${{ github.event.inputs.skip_extension }}" \
+            -F inputs[skip_docker]="${{ github.event.inputs.skip_docker }}" \
+            -F inputs[skip_crates]="${{ github.event.inputs.skip_crates }}"
+
+          if [ "${{ github.event.inputs.skip_crates }}" != "true" ]; then
+            echo "Dispatching crates publish workflow for ${VERSION}"
+            gh api \
+              -X POST \
+              /repos/${{ github.repository }}/actions/workflows/publish-crates.yml/dispatches \
+              -f ref="${REF}" \
+              -F inputs[version]="${VERSION}" \
+              -F inputs[dry_run]="false"
+          else
+            echo "Skipping crates publish workflow due to skip_crates=true"
+          fi
+
+          if [ "${{ github.event.inputs.skip_extension }}" = "true" ]; then
+            echo "Skipping VSCode publish via orchestration due to skip_extension=true"
+          fi
+
+          if [ "${{ github.event.inputs.skip_docker }}" = "true" ]; then
+            echo "Skipping Docker publish via orchestration due to skip_docker=true"
+          fi
 
       - name: Summary
         run: |
@@ -188,6 +247,7 @@ jobs:
           fi
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Package Manager Updates" >> $GITHUB_STEP_SUMMARY
+          echo "- [Release Workflow](https://github.com/${{ github.repository }}/actions/workflows/release.yml)" >> $GITHUB_STEP_SUMMARY
           echo "- [Homebrew Bump](https://github.com/${{ github.repository }}/actions/workflows/brew-bump.yml)" >> $GITHUB_STEP_SUMMARY
           echo "- [Scoop Bump](https://github.com/${{ github.repository }}/actions/workflows/scoop-bump.yml)" >> $GITHUB_STEP_SUMMARY
           echo "- [Chocolatey Bump](https://github.com/${{ github.repository }}/actions/workflows/chocolatey-bump.yml)" >> $GITHUB_STEP_SUMMARY

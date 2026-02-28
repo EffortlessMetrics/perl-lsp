@@ -57,12 +57,13 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            # Read current version from workspace Cargo.toml
-            VERSION=$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)
+          VERSION="${{ github.event.inputs.version }}"
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Invalid version format: $VERSION"
+            exit 1
           fi
+
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "Current version: ${VERSION}"
 
@@ -86,7 +87,6 @@ jobs:
         id: changelog
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          PRERELEASE="${{ github.event.inputs.prerelease }}"
 
           # Generate changelog for the new version
           git cliff --tag "v${VERSION}" --config cliff.toml > CHANGELOG.new.md
@@ -167,6 +167,7 @@ jobs:
           echo "## Version Bump Complete :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **Version**: v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Bump Type**: ${{ github.event.inputs.bump_type }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: ${{ steps.branch.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
           echo "- **PR**: Created" >> $GITHUB_STEP_SUMMARY
           echo "- **Changelog**: Generated" >> $GITHUB_STEP_SUMMARY
