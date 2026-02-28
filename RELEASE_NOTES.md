@@ -6,7 +6,7 @@ February 28, 2026
 
 ## Overview
 
-Perl LSP v0.10.0 is the largest release in the project's history, spanning **60+ merged PRs** (#845–#911). This release focuses on build reliability, security hardening, crates.io publishing readiness, comprehensive documentation, and code quality across the entire 80+ crate workspace. All crates are version-consistent, publish-ready, and backed by 1521 passing tests with a clean security audit.
+Perl LSP v0.10.0 is the largest release in the project's history, spanning **85 merged PRs** across the full 80+ crate workspace. This release delivers security hardening, build reliability, crates.io publishing readiness, comprehensive documentation, performance optimizations, and code quality improvements. All crates are version-consistent, publish-ready, and backed by 1521 passing tests with a clean security audit.
 
 ## 🚀 Key Highlights
 
@@ -14,99 +14,135 @@ Perl LSP v0.10.0 is the largest release in the project's history, spanning **60+
 - **Substantially Complete**: 100% LSP 3.18 coverage (53/53 user-visible, 97/97 protocol).
 - **High Performance**: Sub-millisecond incremental updates with 70–99% node reuse.
 - **1521 Tests Passing**: Comprehensive test suite with adaptive threading.
-- **Security Audited**: Zero known vulnerabilities (`cargo audit` clean) plus 3 proactive security fixes.
+- **Security Audited**: Zero known vulnerabilities (`cargo audit` clean) plus 7 proactive security fixes.
 - **crates.io Ready**: All 80+ crates verified for public publishing.
 - **Semver Compatible**: No breaking API changes from v0.9.1.
 
-## 🎯 What's New in v0.10.0
+---
 
-### Document Highlight for Modern Perl
-Enhanced highlighting for modern Perl syntax constructs (#882, #896):
-- **try/catch parameters**: Proper highlighting of catch block variables.
-- **Method and subroutine signatures**: Full support for signature parameter highlighting.
-- **String interpolation**: Correct highlighting of interpolated variables within strings.
+## 🎯 What's New in v0.10.0 — Complete PR Listing
 
-### Security Hardening (4 fixes)
-- **[HIGH]** Fixed path traversal vulnerability in debug adapter launch (#640).
-- **[HIGH]** Fixed argument injection in TestRunner (#633).
-- **[MEDIUM]** Fixed safe evaluation bypass for iterator/IO operations (#647).
-- **GitHub Actions**: SHA-pinned all workflow action references (#911).
-- **Installer scripts**: Hardened for security and reliability (#910).
-- **VS Code extension**: Pinned `minimatch` to 10.2.3 to remediate CVEs (#861).
+### 🔧 Build & Compilation Fixes
 
-### Performance Optimizations (3 improvements)
-- **Symbol extraction**: Optimized regex compilation for faster workspace indexing (#645).
-- **Semantic analyzer**: Eliminated deep cloning of AST nodes in subroutine analysis (#632).
-- **Scope analyzer**: Optimized unused parameter detection and fixed double reporting (#638).
+| PR | Description |
+|----|-------------|
+| #858 | Harden checksum verification and stabilize incremental parsing CI |
+| #882 | Document highlight for modern Perl syntax (try/catch, signatures, methods) |
+| #892 | Address unresolved review comments from PRs #881 and #882 |
+| #894 | Resolve cargo doc warnings across workspace |
+| #896 | Resolve document highlight test regressions |
+| #901 | Resolve clippy warnings across all targets |
+| #905 | Improve error logging in LSP providers |
+| #907 | Normalize workspace inheritance in publish-allowlist Cargo.toml files |
+| #920 | Repair tree-sitter-perl C binding crate so it builds standalone |
+| #922 | Use valid crates.io category slug for perl-corpus |
 
-### Build & Compilation Fixes
-- Resolved 4 compilation errors in the release candidate build (#881).
-- Resolved clippy warnings across all targets (#901).
-- Resolved cargo doc warnings across workspace (#894).
-- All workspace crates compile cleanly on stable Rust.
+### 📝 Documentation
 
-### Code Quality Campaign
-- Unused dependencies removed via cargo-machete sweep (#895).
-- Debt ledger updated after cleanup campaign (#898).
-- Stale tracked files removed, `.gitignore` hardened (#889).
-- Unresolved PR review comments addressed (#892).
-- LSP error logging improved in providers (#905).
+| PR | Description |
+|----|-------------|
+| #886 | Create copilot instructions for AI-assisted development |
+| #887 | Fix missing documentation warnings for FrameworkKind and FrameworkFlags |
+| #888 | Update README.md and ROADMAP.md dates and status |
+| #893 | Finalize RELEASE_NOTES.md and CHANGELOG.md for v0.10.0 |
+| #903 | Add public API documentation to leaf crates |
+| #904 | Add public API documentation to perl-parser |
+| #909 | Polish CONTRIBUTING.md for public release |
+| #913 | Add quality badges to README |
+| #914 | Add usage examples to crate documentation |
+| #916 | Expand crate-level documentation for mid-tier crates |
+| #917 | Comprehensive v0.10.0 changelog and release notes |
+| #918 | Add missing package manager install methods and VS Code Marketplace link |
+| #919 | Add doc comments to pub mod declarations in perl-dap |
+| #921 | Update security policy for v0.10.0 release |
 
-### Documentation Overhaul
-- Public API documentation for `perl-parser` (#904) and leaf crates (#903).
-- `CONTRIBUTING.md` polished for public release (#909).
-- `README.md` and `ROADMAP.md` dates and status updated (#888).
-- `FrameworkKind` and `FrameworkFlags` documentation warnings fixed (#887).
-- Cargo doc warnings resolved across workspace (#894).
-- Copilot instructions added for AI-assisted development (#886).
+### 🔒 Security
 
-### crates.io Publishing Readiness
-- All crate metadata verified, publish-ignore lists normalized (#871).
-- Publish allowlist expanded with verified leaf crates (#897).
-- Dry-run packaging unblocked for all workspace crates (#865).
-- Dev-dependency cycle workaround with `--no-verify` (#867).
-- Crate badges added to all published crates (#871).
+| PR | Description |
+|----|-------------|
+| #633 | 🛡️ **[HIGH]** Fix Argument Injection in TestRunner |
+| #640 | 🛡️ **[HIGH]** Fix path traversal in debug adapter launch |
+| #647 | 🛡️ **[MEDIUM]** Fix safe evaluation bypass for iterator/IO ops |
+| #861 | Remediate minimatch CVEs in vscode-extension lockfile |
+| #910 | Harden installer scripts for security and reliability |
+| #911 | Harden GitHub Actions workflow configurations (SHA-pinned actions) |
+| #923 | Harden workflow permissions, concurrency, and secret scoping |
 
-### VS Code Extension Polish
-- Marketplace readiness with metadata and packaging fixes (#906).
-- Runtime node dependencies included in VSIX packaging (#866).
-- npm lockfile added for CI smoke tests (#869).
-- Release packaging compatibility restored (#863).
+### 🧪 Testing
 
-### Test Suite Improvements
-- Tie-interface corpus test fixtures added (#900).
-- Previously-ignored benchmark test enabled with real assertions (#908).
-- InlineValues lifecycle coverage tests (#729).
-- Refactoring test isolation for `cleanup_no_backups` (#864).
-- LSP harness: replaced sleep-poll with condvar+drain-bytes for determinism (#846).
+| PR | Description |
+|----|-------------|
+| #729 | Add inlineValues lifecycle coverage tests |
+| #846 | Replace sleep-poll with condvar+drain-bytes in LSP harness |
+| #864 | Isolate cleanup_no_backups backup root in refactoring tests |
+| #899 | Add glob-expressions corpus test fixtures |
+| #900 | Add tie-interface corpus test fixtures |
+| #908 | Enable ignored benchmark test and fix placeholder assertions |
 
-### Version Consistency
-- Updated 77+ files across all workspace crates, documentation, VS Code extension, and feature catalogs to v0.10.0 (#879).
-- Resolved version drift between workspace root and satellite files still referencing v0.9.1 (#884).
-- `features.toml` updated with 100% LSP coverage maintained.
+### 🚀 Release Infrastructure
 
-### CI & Release Infrastructure
-- **Release orchestration**: Turnkey PR-driven 0.x.y release workflow (#872).
-- **Concurrency groups**: Prevent duplicate release workflow runs (#890).
-- **Asset naming**: Aligned across entire release workflow chain (#890, #902).
-- **Release tool installs**: Deterministic git-cliff (#873–#875) and cargo-release (#876, #877) installation.
-- **Merge-gate status**: CI now publishes merge-gate commit status checks (#880).
-- **Nightly CI stabilized**: Fuzz harness hardening, coverage resilience, clippy cleanup (#860).
-- **Docs deploy**: Graceful skip when GitHub Pages is disabled (#859).
-- **BDD gate**: Added `--locked` flag and timing receipts (#847).
-- **Receipt parsing**: Aligned across CI pipelines (#845).
-- **xtask gates**: Fail closed for required timeout/error statuses (#868).
+| PR | Description |
+|----|-------------|
+| #845 | Align receipt parsing and serialize BDD tests |
+| #847 | Add `--locked` to BDD gate and timing receipts |
+| #859 | Skip docs deploy when GitHub Pages is disabled |
+| #860 | Stabilize nightly CI: fuzz harness hardening, coverage resilience, clippy cleanup |
+| #865 | Unblock crates.io dry-run packaging for workspace crates |
+| #867 | Fix crates publish workflow for workspace dev-dependency verification cycles |
+| #868 | xtask gates: fail closed for required timeout/error statuses |
+| #870 | Correct publish-crates dry-run quoting error |
+| #871 | crates.io public release readiness and orchestration hardening |
+| #872 | Prepare PR-driven 0.x.y release flow |
+| #873 | Install git-cliff via cargo for deterministic workflow |
+| #874 | Install git-cliff from latest Linux asset |
+| #875 | Correct git-cliff extraction path |
+| #876 | Install cargo-release from released binary assets |
+| #877 | Use temp dirs for release-tool binary installs |
+| #878 | Release v0.10.0 |
+| #879 | Bump workspace versions to 0.10.0 |
+| #880 | Publish merge-gate commit status checks |
+| #881 | v0.10.0 release candidate — build fixes, version bump, code quality |
+| #890 | Correct release workflow asset names and concurrency groups |
+| #902 | Align asset naming across release workflow chain |
+| #915 | Add perl-dap to distribution templates and fix build-packages crate name |
 
-### Architecture Improvements
-- Feature governance extracted into 9 microcrates for modularity (#848).
-- Module infrastructure crates with Content-Length framing (#857).
-- Context-aware Perl LSP status menu (#646).
-- Semver-aware benchmark sorting for correct version comparison (#885).
+### 🎨 Code Quality
 
-### Dependency Updates
-- `rand` 0.9.2 → 0.10.0, `serial_test` 3.3.1 → 3.4.0, `uuid` 1.20.0 → 1.21.0.
-- `toml` 0.9.12 → 1.0.3, `aquasecurity/trivy-action` 0.34.0 → 0.34.1.
-- VS Code: `@types/node` 25.1.0 → 25.3.0, `@types/tar` 6.1.13 → 7.0.87.
+| PR | Description |
+|----|-------------|
+| #632 | ⚡ Avoid deep AST cloning in ScopeAnalyzer |
+| #638 | ⚡ Optimize scope analysis parameter check and fix double reporting |
+| #645 | ⚡ Optimize symbol extraction regex compilation |
+| #646 | Context-aware Perl LSP status menu |
+| #848 | Extract feature governance into 9 microcrates |
+| #857 | Module infrastructure crates, Content-Length framing, and LSP hardening |
+| #862 | Preserve rebased local history from pre-merge line |
+| #883 | Update test metrics and housekeeping |
+| #884 | Fix remaining v0.9.x version references |
+| #885 | v0.10.0 release polish — lockfile sync and changelog |
+| #889 | Remove stale tracked files and harden .gitignore |
+| #895 | Remove unused dependencies flagged by cargo-machete |
+| #898 | Update debt ledger after cleanup campaign |
+
+### 📦 Package Management
+
+| PR | Description |
+|----|-------------|
+| #849 | Bump `@types/node` 25.1.0 → 25.3.0 |
+| #850 | Bump `@types/tar` 6.1.13 → 7.0.87 |
+| #851 | Bump `aquasecurity/trivy-action` 0.34.0 → 0.34.1 |
+| #852 | Bump the dependencies group with 2 updates |
+| #853 | Bump `toml` 0.9.12 → 1.0.3 |
+| #854 | Bump `serial_test` 3.3.1 → 3.4.0 |
+| #855 | Bump `rand` 0.9.2 → 0.10.0 |
+| #856 | Bump `uuid` 1.20.0 → 1.21.0 |
+| #863 | VS Code extension: fix packaging/installability blockers |
+| #866 | Include runtime node deps in VSIX packaging |
+| #869 | Add vscode-extension package-lock for npm CI smoke |
+| #897 | Expand crates.io publish allowlist with verified crates |
+| #906 | Polish VS Code extension for marketplace readiness |
+
+---
 
 ## ⚠️ Breaking Changes
 
@@ -177,14 +213,17 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/i
 
 | Metric | Value |
 |--------|-------|
-| PRs Merged | 60+ |
-| PR Range | #845 – #911 |
+| **Total PRs Merged** | **85** |
+| PR Range | #632 – #923 |
 | Tests Passing | 1521 |
 | Crates Updated | 80+ |
-| Files Changed | 77+ |
-| Security Fixes | 4 |
-| Performance Fixes | 3 |
-| Dependency Updates | 8 |
+| 🔧 Build & Compilation Fixes | 10 |
+| 📝 Documentation | 14 |
+| 🔒 Security | 7 |
+| 🧪 Testing | 6 |
+| 🚀 Release Infrastructure | 22 |
+| 🎨 Code Quality | 13 |
+| 📦 Package Management | 13 |
 
 ## 🎯 Support & Community
 
