@@ -14,6 +14,7 @@ Documentation for Perl LSP v0.10.0 — a Language Server Protocol implementation
 
 - [Architecture Overview](ARCHITECTURE_OVERVIEW.md) — System design and components
 - [Crate Architecture Guide](CRATE_ARCHITECTURE_GUIDE.md) — Workspace structure and dependency tiers
+- [SRP Microcrates](SRP_MICROCRATES.md) — Generated inventory of single-responsibility microcrates
 - [LSP Implementation Guide](LSP_IMPLEMENTATION_GUIDE.md) — Language Server Protocol details
 - [DAP User Guide](DAP_USER_GUIDE.md) — Debug Adapter Protocol setup and usage
 
