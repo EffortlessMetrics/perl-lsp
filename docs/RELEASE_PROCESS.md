@@ -81,8 +81,9 @@ Trigger the version bump workflow to prepare for release:
 1. Go to Actions tab
 2. Select "Version Bump & Changelog Generation"
 3. Click "Run workflow"
-4. Enter version (for example `0.9.0` or `1.0.0`)
-5. Select bump type (major/minor/patch)
+4. Either enter a version (for example `0.9.0` or `1.0.0`) or rely on
+   bump type (major/minor/patch) to auto-increment the current workspace version.
+5. Select bump type only if you are not setting an explicit version.
 6. Click "Run workflow"
 ```
 
