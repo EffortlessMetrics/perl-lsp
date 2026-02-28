@@ -1433,6 +1433,10 @@ version-check:
     @echo "Checking version sync..."
     @bash scripts/check-version-sync.sh
 
+# Turnkey PR-driven release orchestrator for 0.x.y releases.
+release-turnkey VERSION:
+    @bash scripts/release-turnkey-pr.sh "{{VERSION}}"
+
 # Release gate: full validation for release candidates (~10 min)
 # Composes: ci-gate + release-specific checks
 release-gate: ci-gate release-build sbom-verify version-check

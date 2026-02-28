@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.9.1)'
+        description: 'Version to publish (e.g., 0.x.y)'
         required: true
         type: string
       dry_run:

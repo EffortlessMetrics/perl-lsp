@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to publish (e.g., 0.8.0)'
+        description: 'Version to publish (e.g., 0.x.y)'
         required: true
         type: string
 

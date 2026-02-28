@@ -1,83 +1,56 @@
 # Publishing Guide
 
-This guide explains how to publish the perl-lexer and perl-parser crates to crates.io.
+This guide describes how `perl-lsp` is published to crates.io as part of the PR-driven release flow.
 
-## Prerequisites
+## Automated Crates.io Path
 
-1. Create accounts on [crates.io](https://crates.io)
-2. Run `cargo login` and enter your API token
-3. Ensure all tests pass: `cargo test --all`
-4. Update version numbers in Cargo.toml files
+Publishing to crates.io is handled by the [`publish-crates`](../.github/workflows/publish-crates.yml) workflow, which is normally triggered by [Release Orchestration](./RELEASE_PROCESS.md):
 
-## Publishing Order
+1. Merge the version bump PR created by `Version Bump & Changelog Generation`.
+2. Dispatch `Release Orchestration` with the target `version`.
+3. Release orchestration creates the tag and dispatches publish workflows, including `Publish to crates.io`.
+4. Publish workflow resolves publish order from workspace metadata and runs crates in dependency order.
 
-Due to dependencies, crates must be published in this order:
+## Workspace Coverage
 
-### 1. Publish perl-lexer
+The publish workflow includes every crate with publishing enabled.
 
-```bash
-cd crates/perl-lexer
-cargo publish --dry-run  # Verify everything looks good
-cargo publish
-```
-
-Wait a few minutes for crates.io to index the package.
-
-### 2. Update perl-parser dependency
-
-Edit `crates/perl-parser/Cargo.toml`:
-```toml
-[dependencies]
-perl-lexer = "0.4.0"  # Remove the 'path' specification
-```
-
-### 3. Publish perl-parser
+To verify currently publishable crates, run:
 
 ```bash
-cd crates/perl-parser
-cargo publish --dry-run  # Verify everything looks good
-cargo publish
+cargo metadata --no-deps --format-version=1 |\
+  jq '.packages | map(select(.publish == null or (.publish | length > 0))) | map(.name) | length'
 ```
 
-## Post-Publishing
+## Reusable Manual Checks
 
-1. Create a GitHub release with tag `v0.4.0`
-2. Upload pre-built binaries for the CLI tool
-3. Update the main README with installation instructions
-4. Announce on:
-   - Rust subreddit
-   - Perl community forums
-   - Twitter/X with #rustlang #perl hashtags
-
-## Version Checklist
-
-Before publishing, ensure:
-
-- [ ] All version numbers are updated (0.4.0)
-- [ ] CHANGELOG.md is up to date
-- [ ] README files have correct version in examples
-- [ ] All tests pass
-- [ ] Documentation builds without warnings
-- [ ] Examples compile and run correctly
-
-## Binary Releases
-
-Build release binaries for perl-parse:
+For investigation or recovery during release:
 
 ```bash
-# Linux
-cargo build --release -p perl-parser --features cli --bin perl-parse
-strip target/release/perl-parse
-tar czf perl-parse-v0.4.0-x86_64-unknown-linux-gnu.tar.gz -C target/release perl-parse
+# Verify the target version for a single crate
+cargo search <crate-name> --limit 1
 
-# macOS (if available)
-cargo build --release -p perl-parser --features cli --bin perl-parse
-strip target/release/perl-parse
-tar czf perl-parse-v0.4.0-x86_64-apple-darwin.tar.gz -C target/release perl-parse
+# Dry-run publish for a single crate through repo tooling
+cargo publish --dry-run -p <crate-name>
 
-# Windows (if available)
-cargo build --release -p perl-parser --features cli --bin perl-parse
-# Create perl-parse-v0.4.0-x86_64-pc-windows-msvc.zip
+# Full publish (requires CARGO_REGISTRY_TOKEN in environment)
+cargo publish -p <crate-name>
 ```
 
-Upload these to the GitHub release.
+## Post-Publish Verification
+
+After publish completes:
+
+- Confirm `Release` and `Publish to crates.io` workflows completed successfully.
+- Spot-check package index visibility with `cargo search` for critical crates (`perl-lsp`, `perl-parser`, `perl-dap`).
+- Validate `cargo install perl-lsp` succeeds and executes `perl-lsp --version`.
+
+## Turnkey Workflow Integration
+
+To run the entire path from PR creation through publish dispatch:
+
+```bash
+scripts/release-turnkey-pr.sh <0.x.y>
+```
+
+Use `--skip-crates` to run validation and release without crates.io publishing when needed.
