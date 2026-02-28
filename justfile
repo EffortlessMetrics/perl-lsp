@@ -550,6 +550,10 @@ ci-lsp-microcrates:
                    -p perl-lsp-launcher
     @echo "✅ LSP microcrate compatibility tests passed"
 
+# Enumerate SRP-focused microcrates by responsibility family
+list-srp-microcrates:
+    @bash scripts/find-srp-microcrates.sh
+
 # Framework semantic depth receipts (Moo/Moose/Class::Accessor)
 ci-semantic-frameworks:
     @echo "🧠 Running framework semantic tests..."
