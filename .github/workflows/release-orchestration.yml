@@ -157,10 +157,28 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Create annotated tag with changelog
-          git tag -a "$TAG" -m "Release $TAG
+          # Extract changelog section for this version
+          CHANGELOG_SECTION="$(mktemp)"
+          awk -v ver="${VERSION}" '
+            $0 ~ "^## \\[" ver "\\]" { in_section=1; next }
+            in_section && /^## \\[/ { exit }
+            in_section { print }
+          ' CHANGELOG.md > "$CHANGELOG_SECTION"
 
-          $(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | head -n -1)"
+          TAG_MESSAGE="$(mktemp)"
+          {
+            echo "Release ${TAG}"
+            echo
+            if [ -s "$CHANGELOG_SECTION" ]; then
+              cat "$CHANGELOG_SECTION"
+            else
+              echo "Automated release from workspace changelog."
+            fi
+          } > "$TAG_MESSAGE"
+
+          # Create annotated tag with changelog
+          git tag -a "$TAG" -F "$TAG_MESSAGE"
+          rm -f "$CHANGELOG_SECTION" "$TAG_MESSAGE"
 
           git push origin "$TAG"
 

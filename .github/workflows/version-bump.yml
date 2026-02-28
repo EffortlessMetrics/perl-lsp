@@ -8,7 +8,7 @@ on:
     inputs:
       version:
         description: 'New version (e.g., 0.9.0)'
-        required: true
+        required: false
         type: string
       bump_type:
         description: 'Version bump type'
@@ -54,39 +54,54 @@ jobs:
             tar -xz -C /tmp
           sudo mv /tmp/git-cliff /usr/local/bin/
 
-      - name: Determine version
+      - name: Determine version input
         id: version
         run: |
           VERSION="${{ github.event.inputs.version }}"
+          BUMP_TYPE="${{ github.event.inputs.bump_type }}"
 
-          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
-            echo "::error::Invalid version format: $VERSION"
+          if [ -n "$VERSION" ]; then
+            if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+              echo "::error::Invalid version format: $VERSION"
+              exit 1
+            fi
+            echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+            echo "mode=explicit" >> "$GITHUB_OUTPUT"
+            echo "Current version: ${VERSION}"
+            exit 0
+          fi
+
+          if [ -z "$BUMP_TYPE" ]; then
+            echo "::error::Either version or bump_type must be provided"
             exit 1
           fi
 
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Current version: ${VERSION}"
+          CURRENT_VERSION="$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
+          echo "version=${CURRENT_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "mode=bump" >> "$GITHUB_OUTPUT"
+          echo "Current version: ${CURRENT_VERSION} (auto-bump enabled)"
 
       - name: Bump workspace version
+        id: resolved-version
         run: |
           VERSION="${{ steps.version.outputs.version }}"
+          MODE="${{ steps.version.outputs.mode }}"
           BUMP_TYPE="${{ github.event.inputs.bump_type }}"
 
-          # Update workspace Cargo.toml
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            # Use explicit version
-            sed -i 's/^version = ".*"/version = "'"${VERSION}"'"/' Cargo.toml
+          if [ "$MODE" = "explicit" ]; then
+            sed -i "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml
           else
-            # Use cargo-release for automatic bump
-            cargo release version $BUMP_TYPE --workspace
+            cargo release version "$BUMP_TYPE" --workspace
+            VERSION="$(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
           fi
 
-          echo "Version bumped to: $(grep '^version' Cargo.toml | head -1 | cut -d'"' -f2)"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version bumped to: ${VERSION}"
 
       - name: Generate changelog
         id: changelog
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.resolved-version.outputs.version }}"
 
           # Generate changelog for the new version
           git cliff --tag "v${VERSION}" --config cliff.toml > CHANGELOG.new.md
@@ -107,14 +122,14 @@ jobs:
       - name: Create version branch
         id: branch
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.resolved-version.outputs.version }}"
           BRANCH_NAME="release/v${VERSION}"
-          echo "branch=${BRANCH_NAME}" >> $GITHUB_OUTPUT
+          echo "branch=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
           git checkout -b ${BRANCH_NAME}
 
       - name: Commit changes
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ steps.resolved-version.outputs.version }}"
           BRANCH_NAME="${{ steps.branch.outputs.branch }}"
 
           git config user.name "github-actions[bot]"
@@ -123,10 +138,13 @@ jobs:
           git add Cargo.toml
           git add CHANGELOG.md
 
-          git commit -m "chore(release): bump version to v${VERSION}
-
-          - Update workspace version to ${VERSION}
-          - Generate changelog for release"
+          printf '%s\n' \
+            "chore(release): bump version to v${VERSION}" \
+            "" \
+            "- Update workspace version to ${VERSION}" \
+            "- Generate changelog for release" \
+            > /tmp/release-commit-message.txt
+          git commit -F /tmp/release-commit-message.txt
 
           git push origin ${BRANCH_NAME}
 
@@ -135,13 +153,13 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           branch: ${{ steps.branch.outputs.branch }}
-          base: main
-          title: "Release v${{ steps.version.outputs.version }}"
+          base: ${{ github.event.repository.default_branch }}
+          title: "Release v${{ steps.resolved-version.outputs.version }}"
           body: |
-            ## Release v${{ steps.version.outputs.version }}
+            ## Release v${{ steps.resolved-version.outputs.version }}
 
             This PR prepares the release with:
-            - Version bump to ${{ steps.version.outputs.version }}
+            - Version bump to ${{ steps.resolved-version.outputs.version }}
             - Updated changelog
 
             ### Checklist
@@ -166,7 +184,7 @@ jobs:
         run: |
           echo "## Version Bump Complete :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Version**: v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: v${{ steps.resolved-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Bump Type**: ${{ github.event.inputs.bump_type }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: ${{ steps.branch.outputs.branch }}" >> $GITHUB_STEP_SUMMARY
           echo "- **PR**: Created" >> $GITHUB_STEP_SUMMARY
