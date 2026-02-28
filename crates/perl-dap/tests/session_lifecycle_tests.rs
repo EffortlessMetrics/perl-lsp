@@ -474,7 +474,7 @@ fn test_session_lifecycle_inline_values_missing_arguments() {
             assert!(message.is_some());
             assert!(must_some(message).contains("Missing arguments"));
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -498,7 +498,7 @@ fn test_session_lifecycle_inline_values_missing_source_path() {
             assert!(message.is_some());
             assert!(must_some(message).contains("source.path"));
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -522,7 +522,7 @@ fn test_session_lifecycle_inline_values_invalid_line_range() {
             assert!(message.is_some());
             assert!(must_some(message).contains("startLine/endLine"));
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -546,7 +546,7 @@ fn test_session_lifecycle_inline_values_missing_file() {
             assert!(message.is_some());
             assert!(must_some(message).contains("Failed to read source file"));
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
@@ -575,7 +575,7 @@ fn test_session_lifecycle_inline_values_swapped_line_order() {
             let inline_values = must_some(body.get("inlineValues").and_then(|v| v.as_array()));
             assert!(!inline_values.is_empty(), "Expected inline values in response");
         }
-        _ => panic!("Expected Response message"),
+        _ => must(Err::<(), _>("Expected Response message".to_string())),
     }
 }
 
