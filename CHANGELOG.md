@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.10.0] - 2026-02-28
 
+### Added
+- **Document Highlight Improvements**: Support for modern Perl syntax (try/catch parameters, method/sub signatures, string interpolation).
+- **CI Workflow Hardening**: Concurrency groups to prevent duplicate release runs, fixed asset URLs, scoop/chocolatey packaging fixes.
+- **Semver-Aware Benchmark Sorting**: Correct version comparison for benchmark baseline selection.
+
 ### Changed
 - **Version Consistency**: All workspace crates, documentation, VS Code extension, and feature catalogs updated to v0.10.0.
 - **Documentation Refresh**: Updated editor setup guides, roadmap, milestones, and stability policy for v0.10.0.
