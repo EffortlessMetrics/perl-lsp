@@ -13,16 +13,18 @@ Thank you for your interest in contributing to Perl LSP! This guide will help yo
 2. **Install Dependencies**
    ```bash
    # Rust toolchain (if not already installed)
+   # The project pins its toolchain via rust-toolchain.toml (MSRV 1.92)
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-   # Install nextest for faster testing
-   cargo install cargo-nextest
+   # Recommended: use Nix for a reproducible dev environment
+   nix develop
    ```
 
 3. **Build the Project**
    ```bash
-   cargo build
-   cargo test
+   cargo build -p perl-lsp --release     # LSP server
+   cargo build -p perl-parser --release  # Parser library
+   cargo test --workspace --lib          # Run all tests
    ```
 
 ## Development Workflow
@@ -42,9 +44,10 @@ Thank you for your interest in contributing to Perl LSP! This guide will help yo
 
 3. Test your changes:
    ```bash
-   cargo nextest run          # Fast test execution
-   cargo test                 # Traditional test runner
-   cargo clippy --workspace   # Lint checks
+   cargo test --workspace --lib   # Run all tests
+   cargo test -p perl-parser      # Test specific crate
+   cargo fmt --all                # Format code
+   cargo clippy --workspace       # Lint checks
    ```
 
 4. Commit with clear messages:
@@ -81,15 +84,23 @@ See **[CI & Automation](./docs/CI.md)** for comprehensive details about our GitH
 
 ### Local CI Validation
 
-It is recommended to run `just ci-gate` before pushing your changes to ensure they pass the core checks.
+You **must** run the local CI gate before pushing. The canonical command uses Nix for a reproducible environment:
 
 ```bash
-# Fast merge gate (~2-5 min)
-just ci-gate
+# Canonical local gate (REQUIRED before push)
+nix develop -c just ci-gate
 
-# Comprehensive validation (~10-20 min, for large changes)
-just ci-full
+# Install pre-push hook (runs gate automatically)
+bash scripts/install-githooks.sh
 ```
+
+### CI Gate Tiers
+
+| Tier | Command | Time | When to Use |
+|------|---------|------|-------------|
+| **A (PR-fast)** | `just pr-fast` | ~1-2 min | Quick iteration during development |
+| **B (Merge gate)** | `nix develop -c just ci-gate` | ~3-5 min | Before pushing (required) |
+| **C (Nightly)** | `just ci-full` | ~15-30 min | Mutation testing, fuzzing, benchmarks |
 
 See: [Local CI Summary](docs/ci/LOCAL_CI_SUMMARY.md)
 
@@ -110,8 +121,6 @@ The semantic tests validate that LSP definition resolution works correctly for:
 - Subroutine calls → sub definitions
 - Lexical scope resolution
 - Package-qualified symbol lookups
-
-Once GitHub Actions is restored, this section will be archived and normal CI workflow will resume.
 
 ## SemVer Breaking Change Detection
 
@@ -237,10 +246,24 @@ SemVer checking is configured in `.cargo-semver-checks.toml`:
 ## Coding Standards
 
 - **Formatting:** Use `cargo fmt --all` before committing
-- **Linting:** Fix all `cargo clippy` warnings
+- **Linting:** Fix all `cargo clippy --workspace` warnings
 - **Testing:** Maintain or improve test coverage
 - **Documentation:** Update docs for public APIs and new features
 - **Commits:** Use conventional commit format (feat:, fix:, docs:, etc.)
+
+### No Fatal Constructs in Production Code
+
+The following are **banned** in non-test code:
+
+| Banned | Use Instead |
+|--------|-------------|
+| `unwrap()`, `expect()` | `?`, `.ok_or_else()`, or pattern matching |
+| `panic!()`, `todo!()`, `unimplemented!()` | Return `Result`/`Option` |
+| `std::process::abort()` | Never use, not even in binaries |
+| `std::process::exit()` | Allowed **only** in `bin/` directories and `lifecycle.rs` |
+| `dbg!()` | `tracing::debug!` |
+
+In tests: use `Result<()>` return types, or `perl_tdd_support::must`/`must_some` helpers.
 
 ### Code Style Guidelines
 
@@ -248,7 +271,7 @@ SemVer checking is configured in `.cargo-semver-checks.toml`:
 - Use `.push(char)` instead of `.push_str("x")` for single characters
 - Use `or_default()` instead of `or_insert_with(Vec::new)` for default values
 - Avoid unnecessary `.clone()` on types that implement Copy
-- Add `#[allow(clippy::only_used_in_recursion)]` for recursive tree traversal functions
+- Use `Option<Regex>` with `.ok()` for graceful regex init degradation
 
 ### Cross-Platform `ExitStatus` in Tests
 
@@ -418,6 +441,16 @@ See **[Dependency Management Guide](./docs/DEPENDENCY_MANAGEMENT.md)** for compl
 
 For quick reference, see **[Dependency Quick Reference](./docs/DEPENDENCY_QUICK_REFERENCE.md)**.
 
+## Adding New Crates
+
+The workspace uses a tiered dependency structure (see `Cargo.toml`). When adding a new crate:
+
+1. **Create the crate** under `crates/` following the naming convention of its family (e.g., `perl-lsp-*` for LSP providers, `perl-module-*` for module resolution).
+2. **Add it to the workspace** in the root `Cargo.toml` members list.
+3. **Place it in the correct tier** — leaf crates with no internal deps go in Tier 1, crates with dependencies go in later tiers.
+4. **Follow existing patterns** — look at a sibling crate in the same family for structure, `Cargo.toml` metadata, and test layout.
+5. **Run the full gate** to verify: `nix develop -c just ci-gate`
+
 ## Getting Help
 
 - **Issues:** Browse existing issues or create a new one
@@ -431,7 +464,7 @@ We follow the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). Please
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same license as the project (typically MIT or Apache-2.0).
+This project is dual-licensed under [MIT](LICENSE-MIT) and [Apache-2.0](LICENSE-APACHE). By contributing, you agree that your contributions will be licensed under both licenses.
 
 ## Release Process
 
