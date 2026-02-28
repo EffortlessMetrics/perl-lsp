@@ -13,8 +13,9 @@
 //! ```rust,ignore
 //! use perl_lsp_code_actions::CodeActionsProvider;
 //!
-//! let provider = CodeActionsProvider::new();
-//! let actions = provider.get_code_actions(&ast, source, range, Some(&workspace_index))?;
+//! let source = String::from("my $x = 1;");
+//! let provider = CodeActionsProvider::new(source);
+//! let actions = provider.get_code_actions(&ast, (0, 10), &diagnostics);
 //! ```
 
 #![deny(unsafe_code)]
