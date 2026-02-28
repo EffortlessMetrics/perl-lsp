@@ -100,7 +100,7 @@ impl DocumentHighlightProvider {
     /// Find the node at the given byte offset
     fn find_node_at_offset(&self, node: &Node, offset: usize) -> Option<Node> {
         // Check if offset is within this node
-        if offset < node.location.start || offset > node.location.end {
+        if offset < node.location.start || offset >= node.location.end {
             return None;
         }
 
@@ -129,7 +129,7 @@ impl DocumentHighlightProvider {
         source: &str,
         offset: usize,
     ) -> Option<SymbolInfo> {
-        if offset < node.location.start || offset > node.location.end {
+        if offset < node.location.start || offset >= node.location.end {
             return None;
         }
 
