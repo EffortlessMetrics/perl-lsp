@@ -25,9 +25,6 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
-perl-workspace-index = { workspace = true }
-perl-refactoring = { workspace = true }
-perl-incremental-parsing = { workspace = true }
 perl-lexer = { workspace = true }
 perl-lsp-tooling = { workspace = true }
 perl-lsp-formatting = { workspace = true }
@@ -38,15 +35,9 @@ perl-lsp-rename = { workspace = true }
 perl-lsp-navigation = { workspace = true }
 perl-lsp-completion = { workspace = true }
 perl-lsp-code-actions = { workspace = true }
-perl-position-tracking = { workspace = true }
 rustc-hash = "2.1.1"
-serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-regex = "1.12.2"
 lsp-types = { version = "0.97.0", optional = true }
-url = "2.5.8"
-md5 = "0.8.0"
-walkdir = "2.5.0"
 
 # Unix-only dependency for signal handling in debug adapter
 [target.'cfg(unix)'.dependencies]

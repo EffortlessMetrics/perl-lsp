@@ -24,7 +24,6 @@ doctest = false
 
 [dependencies]
 perl-lexer = { workspace = true }
-perl-token = { workspace = true }
 perl-position-tracking = { workspace = true }
 perl-ast = { workspace = true }
 perl-quote = { workspace = true }

@@ -16,7 +16,6 @@ categories = ["parsing", "development-tools", "text-processing"]
 [dependencies]
 regex = "1.12.2"
 encoding_rs = "0.8.35"
-serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.17"
 
 [dev-dependencies]

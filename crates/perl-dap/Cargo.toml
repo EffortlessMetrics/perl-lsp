@@ -30,9 +30,6 @@ name = "perl_dap"
 path = "src/lib.rs"
 
 [dependencies]
-# LSP types reuse (Position, Range, Location, etc.)
-lsp-types = "0.97.0"
-
 # JSON serialization
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
@@ -55,11 +52,6 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 # Command-line argument parsing
 clap = { version = "4.5.60", features = ["derive"] }
 
-# Rope for position mapping (reuse from perl-parser)
-ropey = "1.6.1"
-
-# Perl parser for AST breakpoint validation
-perl-parser = { path = "../perl-parser", version = "0.10.0" }
 perl-dap-breakpoint = { workspace = true }
 perl-dap-eval = { workspace = true }
 perl-dap-variables = { workspace = true }

@@ -1558,7 +1558,6 @@ dependencies = [
  "anyhow",
  "clap",
  "criterion",
- "lsp-types",
  "nix",
  "once_cell",
  "perl-content-length-framing",
@@ -1569,12 +1568,10 @@ dependencies = [
  "perl-feature-catalog",
  "perl-keywords",
  "perl-module-path",
- "perl-parser",
  "perl-path-security",
  "perl-tdd-support",
  "proptest",
  "regex",
- "ropey",
  "serde",
  "serde_json",
  "tempfile",
@@ -1614,7 +1611,6 @@ dependencies = [
  "perl-tdd-support",
  "regex",
  "serde",
- "serde_json",
  "thiserror",
 ]
 
@@ -1626,7 +1622,6 @@ dependencies = [
  "perl-tdd-support",
  "regex",
  "serde",
- "serde_json",
  "thiserror",
 ]
 
@@ -1720,7 +1715,6 @@ dependencies = [
  "perl-content-length-framing",
  "perl-dap",
  "perl-keywords",
- "perl-lexer",
  "perl-lsp-cancellation",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
@@ -1777,13 +1771,7 @@ dependencies = [
  "perl-lsp-diagnostics",
  "perl-lsp-rename",
  "perl-parser-core",
- "perl-position-tracking",
- "perl-refactoring",
- "perl-semantic-analyzer",
  "perl-tdd-support",
- "perl-workspace-index",
- "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -1796,8 +1784,6 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
- "serde",
- "thiserror",
  "url",
  "walkdir",
 ]
@@ -1806,16 +1792,11 @@ dependencies = [
 name = "perl-lsp-diagnostics"
 version = "0.10.0"
 dependencies = [
- "lsp-types",
- "perl-diagnostics-codes",
  "perl-parser-core",
- "perl-position-tracking",
  "perl-pragma",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
- "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -1881,9 +1862,7 @@ dependencies = [
 name = "perl-lsp-formatting"
 version = "0.10.0"
 dependencies = [
- "lsp-types",
  "perl-lsp-tooling",
- "perl-parser-core",
  "perl-tdd-support",
  "serde",
  "thiserror",
@@ -1893,12 +1872,10 @@ dependencies = [
 name = "perl-lsp-inlay-hints"
 version = "0.10.0"
 dependencies = [
- "lsp-types",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-semantic-analyzer",
  "perl-tdd-support",
- "serde",
  "serde_json",
 ]
 
@@ -1921,10 +1898,8 @@ dependencies = [
  "perl-position-tracking",
  "perl-semantic-analyzer",
  "perl-tdd-support",
- "perl-workspace-index",
  "serde",
  "serde_json",
- "thiserror",
  "url",
 ]
 
@@ -1944,9 +1919,7 @@ name = "perl-lsp-providers"
 version = "0.10.0"
 dependencies = [
  "lsp-types",
- "md5",
  "nix",
- "perl-incremental-parsing",
  "perl-lexer",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
@@ -1958,17 +1931,10 @@ dependencies = [
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-parser-core",
- "perl-position-tracking",
- "perl-refactoring",
  "perl-semantic-analyzer",
  "perl-tdd-support",
- "perl-workspace-index",
- "regex",
  "rustc-hash",
- "serde",
  "serde_json",
- "url",
- "walkdir",
 ]
 
 [[package]]
@@ -1985,14 +1951,11 @@ dependencies = [
 name = "perl-lsp-semantic-tokens"
 version = "0.10.0"
 dependencies = [
- "lsp-types",
  "perl-lexer",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "rustc-hash",
- "serde",
- "thiserror",
 ]
 
 [[package]]
@@ -2200,7 +2163,6 @@ dependencies = [
  "perl-quote",
  "perl-regex",
  "perl-tdd-support",
- "perl-token",
  "perl-tokenizer",
  "tracing-subscriber",
 ]
@@ -2238,7 +2200,6 @@ dependencies = [
  "ropey",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]
@@ -2373,7 +2334,6 @@ dependencies = [
  "encoding_rs",
  "perl-tdd-support",
  "regex",
- "serde",
  "thiserror",
 ]
 
@@ -2453,7 +2413,6 @@ dependencies = [
  "perl-tdd-support",
  "perl-uri",
  "perl-workspace-index-slo",
- "regex",
  "serde",
  "tempfile",
  "url",
