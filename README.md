@@ -37,17 +37,39 @@ cargo install --path crates/perl-lsp
 
 ### Pre-built binaries
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), or use the installer script (best-effort / non-canonical) to install `perl-lsp`:
+Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), or use the installer scripts (best-effort / non-canonical):
 
 ```bash
+# Linux / macOS
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
+```
+
+### Homebrew (macOS / Linux)
+
+```bash
+brew install perl-lsp
+```
+
+### Scoop (Windows)
+
+```powershell
+scoop install perl-lsp
+```
+
+### Chocolatey (Windows)
+
+```powershell
+choco install perl-lsp
 ```
 
 ## Editor Setup
 
 ### VS Code
 
-Install the [perl-lsp extension](vscode-extension/) from the included VS Code extension source, or point any LSP-compatible extension at the `perl-lsp` binary.
+Install the **Perl Language Server** extension (`effortlesssteven.perl-lsp`) from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp), or build from [source](vscode-extension/).
 
 ### Neovim (nvim-lspconfig)
 
