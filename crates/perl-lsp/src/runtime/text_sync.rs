@@ -70,7 +70,7 @@ impl LspServer {
             // Store document state with normalized URI
             let normalized_uri = self.normalize_uri_key(uri);
             self.documents.lock().insert(
-                normalized_uri,
+                normalized_uri.clone(),
                 DocumentState {
                     rope: rope.clone(),
                     text: text.to_string(),
@@ -332,8 +332,8 @@ impl LspServer {
                 }
 
                 // Send diagnostics
-            self.publish_diagnostics(&normalized_uri);
-        }
+                self.publish_diagnostics(&normalized_uri);
+            }
         }
 
         Ok(())

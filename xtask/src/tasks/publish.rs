@@ -1,6 +1,6 @@
 //! Publishing functionality for crates and VSCode extension
 
-use color_eyre::eyre::{Result, bail};
+use color_eyre::eyre::{Result, bail, eyre};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -39,20 +39,17 @@ pub fn publish_crates(yes: bool, dry_run: bool) -> Result<()> {
 
     for (index, target) in publish_targets.iter().enumerate() {
         println!("Publishing {}...", target.name);
-        let crate_dir = target
-            .manifest_path
-            .parent()
-            .ok_or_else(|| {
-                bail!("Invalid manifest path for publish target '{}': {:?}", target.name, target.manifest_path)
-            })?;
+        let crate_dir = target.manifest_path.parent().ok_or_else(|| {
+            eyre!(
+                "Invalid manifest path for publish target '{}': {:?}",
+                target.name,
+                target.manifest_path
+            )
+        })?;
 
         let output = Command::new("cargo").current_dir(crate_dir).args(&args).output()?;
         if !output.status.success() {
-            bail!(
-                "Failed to publish {}: {}",
-                target.name,
-                String::from_utf8_lossy(&output.stderr)
-            );
+            bail!("Failed to publish {}: {}", target.name, String::from_utf8_lossy(&output.stderr));
         }
         println!("✅ {} published", target.name);
 
@@ -96,7 +93,8 @@ struct PublishTarget {
 }
 
 fn load_publish_targets() -> Result<Vec<PublishTarget>> {
-    let output = Command::new("cargo").args(["metadata", "--format-version", "1", "--no-deps"]).output()?;
+    let output =
+        Command::new("cargo").args(["metadata", "--format-version", "1", "--no-deps"]).output()?;
     if !output.status.success() {
         bail!(
             "Failed to load workspace metadata for publish allowlist: {}",
@@ -111,7 +109,7 @@ fn load_publish_targets() -> Result<Vec<PublishTarget>> {
         .and_then(|workspace| workspace.publish)
         .and_then(|publish| publish.allow)
         .ok_or_else(|| {
-            bail!(
+            eyre!(
                 "Publish allowlist missing. Add [workspace.metadata.publish.allow] in the workspace Cargo.toml."
             )
         })?;
@@ -134,16 +132,13 @@ fn load_publish_targets() -> Result<Vec<PublishTarget>> {
         }
 
         let manifest_path = package_map.get(&crate_name).ok_or_else(|| {
-            bail!(
+            eyre!(
                 "Crate '{}' listed in [workspace.metadata.publish.allow] is not a workspace member.",
                 crate_name
             )
         })?;
 
-        targets.push(PublishTarget {
-            name: crate_name,
-            manifest_path: manifest_path.clone(),
-        });
+        targets.push(PublishTarget { name: crate_name, manifest_path: manifest_path.clone() });
     }
 
     Ok(targets)

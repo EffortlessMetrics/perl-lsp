@@ -14,7 +14,7 @@
 
 ---
 
-## Now (v0.9.1 Close-Out) - TODOs
+## Now (v0.10.0 Close-Out) - TODOs
 
 ### Workspace Index State Machine
 
@@ -35,7 +35,7 @@
 
 ### Release Notes + Doc Alignment
 
-- [x] v0.9.1 release notes draft (CHANGELOG + release summary)
+- [x] v0.10.0 release notes draft (CHANGELOG + release summary)
 - [x] Ensure `features.toml` and capability snapshots remain consistent
 - [x] Verify `docs/CURRENT_STATUS.md` narrative matches receipts
 
@@ -69,7 +69,7 @@
 
 ---
 
-## Next (v0.9.1 Readiness) - TODOs
+## Next (v0.10.0 Readiness) - TODOs
 
 - [ ] Stability statement (versioning rules)
 - [ ] Packaging stance (what ships; supported platforms)

@@ -1,6 +1,6 @@
 # Release Runbook for perl-lsp v0.8.3 (Historical)
 
-> **Note**: This is a historical document from the v0.8.3 release cycle. The project is currently at v0.9.1 (Initial Public Alpha). A formal Stability Contract and release process will be established for v0.15.0.
+> **Note**: This is a historical document from the v0.8.3 release cycle. The project is currently at v0.10.0 (Initial Public Alpha). A formal Stability Contract and release process will be established for v0.15.0.
 
 This document provided the exact steps used to release perl-lsp v0.8.3.
 

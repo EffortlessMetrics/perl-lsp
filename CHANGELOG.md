@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-02-28
+
+### Changed
+- **Version Consistency**: All workspace crates, documentation, VS Code extension, and feature catalogs updated to v0.10.0.
+- **Documentation Refresh**: Updated editor setup guides, roadmap, milestones, and stability policy for v0.10.0.
+- **features.toml**: Version bumped to 0.10.0 with 100% LSP coverage maintained (53/53 user-visible, 97/97 protocol).
+- **VS Code Extension**: Version synchronized to 0.10.0.
+
+### Fixed
+- **Version Drift**: Resolved version inconsistencies between workspace root (0.10.0) and satellite files still referencing 0.9.1.
+
 ## [0.9.1] - 2026-02-20
 
 ### Added

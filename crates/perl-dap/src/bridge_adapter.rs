@@ -27,15 +27,15 @@
 //! ```
 
 use anyhow::{Context, Result};
-use std::time::{Duration, Instant};
-use std::process::Stdio;
-use tokio::io::AsyncWriteExt;
-use tokio::process::{Child, Command};
-use tokio::time::sleep;
 #[cfg(unix)]
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
+use std::process::Stdio;
+use std::time::{Duration, Instant};
+use tokio::io::AsyncWriteExt;
+use tokio::process::{Child, Command};
+use tokio::time::sleep;
 
 const PLS_SHUTDOWN_GRACE_MS: u64 = 250;
 const PLS_SHUTDOWN_POLL_MS: u64 = 25;
@@ -193,10 +193,7 @@ impl BridgeAdapter {
     /// It should be used for cleanup in async contexts.
     pub async fn shutdown(&mut self) -> Result<()> {
         if let Some(mut child) = self.child_process.take() {
-            if !Self::wait_for_child_exit(
-                &mut child,
-                Duration::from_millis(0),
-            ) {
+            if !Self::wait_for_child_exit(&mut child, Duration::from_millis(0)).await {
                 #[cfg(unix)]
                 {
                     if let Some(pid) = child.id() {
@@ -204,7 +201,9 @@ impl BridgeAdapter {
                             if Self::wait_for_child_exit(
                                 &mut child,
                                 Duration::from_millis(PLS_SHUTDOWN_GRACE_MS),
-                            ) {
+                            )
+                            .await
+                            {
                                 return Ok(());
                             }
                         }
@@ -215,7 +214,9 @@ impl BridgeAdapter {
                 if !Self::wait_for_child_exit(
                     &mut child,
                     Duration::from_millis(PLS_SHUTDOWN_GRACE_MS),
-                ) {
+                )
+                .await
+                {
                     let _ = child.wait().await?;
                 }
             }

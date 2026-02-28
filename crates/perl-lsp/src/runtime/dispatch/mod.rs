@@ -62,13 +62,7 @@ use std::time::Instant;
 impl LspServer {
     /// Handle a JSON-RPC request
     pub fn handle_request(&mut self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
-        let id = request.id.and_then(|id| {
-            if id.is_null() {
-                None
-            } else {
-                Some(id)
-            }
-        });
+        let id = request.id.and_then(|id| if id.is_null() { None } else { Some(id) });
         let should_respond = id.is_some();
 
         // Handle $/cancelRequest notification with enhanced context processing
@@ -349,10 +343,7 @@ impl LspServer {
                 })
             }
             Ok(Some(_)) => {
-                eprintln!(
-                    "Request {} is a notification (id missing), no response",
-                    request.method
-                );
+                eprintln!("Request {} is a notification (id missing), no response", request.method);
                 None
             }
             Ok(None) => {

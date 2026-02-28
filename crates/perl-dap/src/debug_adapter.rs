@@ -2250,7 +2250,9 @@ impl DebugAdapter {
         attached_pid: &Arc<Mutex<Option<u32>>>,
     ) {
         // Terminate the debug session
-        if let Ok(mut guard) = session.lock() && let Some(mut active_session) = guard.take() {
+        if let Ok(mut guard) = session.lock()
+            && let Some(mut active_session) = guard.take()
+        {
             if !Self::terminate_child_process(&mut active_session.process) {
                 eprintln!("Failed to ensure debug session process termination");
             }
@@ -2258,7 +2260,9 @@ impl DebugAdapter {
         }
 
         // Disconnect TCP session if active
-        if let Ok(mut guard) = tcp_session.lock() && let Some(ref mut tcp_session) = *guard {
+        if let Ok(mut guard) = tcp_session.lock()
+            && let Some(ref mut tcp_session) = *guard
+        {
             let _ = tcp_session.disconnect();
         }
         if let Ok(mut guard) = tcp_session.lock() {
@@ -2298,19 +2302,18 @@ impl DebugAdapter {
 
         #[cfg(unix)]
         {
-            if let Some(pid) = process.id() {
-                match signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
-                    Ok(()) => {
-                        if Self::wait_for_child_exit(
-                            process,
-                            Duration::from_millis(DEBUG_SESSION_TERMINATE_WAIT_MS),
-                        ) {
-                            return true;
-                        }
+            let pid = process.id();
+            match signal::kill(Pid::from_raw(pid as i32), Signal::SIGTERM) {
+                Ok(()) => {
+                    if Self::wait_for_child_exit(
+                        process,
+                        Duration::from_millis(DEBUG_SESSION_TERMINATE_WAIT_MS),
+                    ) {
+                        return true;
                     }
-                    Err(e) => {
-                        eprintln!("Failed to send SIGTERM to process {}: {}", pid, e);
-                    }
+                }
+                Err(e) => {
+                    eprintln!("Failed to send SIGTERM to process {}: {}", pid, e);
                 }
             }
         }
