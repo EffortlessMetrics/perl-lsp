@@ -1,4 +1,9 @@
 //! Semantic analysis, symbol extraction, and type inference for Perl.
+//!
+//! Walks a parsed AST to build scoped symbol tables, resolve declarations and
+//! references, and perform lightweight type inference. The resulting semantic
+//! model powers go-to-definition, find-references, and diagnostic providers
+//! in the LSP server.
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]

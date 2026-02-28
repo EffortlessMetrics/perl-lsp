@@ -1,4 +1,9 @@
 //! Workspace indexing and refactoring orchestration for Perl.
+//!
+//! Maintains an in-memory index of all symbols, references, and module
+//! declarations across a Perl workspace. Provides incremental update, a
+//! document store for open files, and coordinates cross-file operations
+//! such as workspace-wide rename and symbol search.
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]

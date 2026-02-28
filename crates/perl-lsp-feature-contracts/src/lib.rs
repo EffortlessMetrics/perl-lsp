@@ -1,4 +1,9 @@
 //! Shared feature contracts for profile parsing, BDD-grid rows, and capability mapping.
+//!
+//! This crate defines the canonical [`FeatureProfileKind`] enum and associated
+//! [`FeatureProfileSpec`] metadata used for feature-coverage reporting. It sits
+//! between `perl-lsp-feature-ids` (raw identifiers) and
+//! `perl-lsp-feature-policy` (runtime capability selection).
 
 use perl_lsp_feature_ids::*;
 use serde::Serialize;

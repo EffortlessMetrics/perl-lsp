@@ -1,4 +1,9 @@
 //! Token stream and trivia utilities for the parser.
+//!
+//! Wraps the raw token output of `perl-lexer` into a position-aware
+//! [`TokenStream`] and preserves whitespace/comment trivia via the
+//! [`TriviaPreservingParser`]. Used by the parser and formatting provider
+//! to maintain lossless round-trip fidelity.
 
 #![deny(unsafe_code)]
 #![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
