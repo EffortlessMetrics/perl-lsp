@@ -26,6 +26,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Compute and output the topological publish order of workspace crates
+    PublishOrder,
     /// Run lean CI suite (format, clippy, tests) for constrained environments
     Ci,
 
@@ -421,6 +423,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
+        Commands::PublishOrder => publish::compute_publish_order(),
         Commands::Ci => ci::run(),
         Commands::CheckOnly => ci::check_only(),
         Commands::Build { release, features, c_scanner, rust_scanner } => {

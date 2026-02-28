@@ -49,91 +49,7 @@ jobs:
       - name: Compute topological order
         id: topo
         run: |
-          cargo metadata --format-version=1 --no-deps | python3 -c '
-          import json, sys
-
-          meta = json.load(sys.stdin)
-          workspace_members = set(meta["workspace_members"])
-
-          # Build name -> package info map (only workspace members)
-          packages = {}
-          for pkg in meta["packages"]:
-              if pkg["id"] in workspace_members:
-                  packages[pkg["name"]] = pkg
-
-          # Build dependency graph (only internal deps)
-          deps = {}
-          for name, pkg in packages.items():
-              deps[name] = set()
-              for dep in pkg["dependencies"]:
-                  if dep["name"] in packages and dep.get("kind") != "dev":
-                      deps[name].add(dep["name"])
-
-          # Topological sort (Kahn algorithm)
-          in_degree = {name: len(d) for name, d in deps.items()}
-          queue = sorted([n for n, d in in_degree.items() if d == 0])
-          order = []
-
-          while queue:
-              node = queue.pop(0)
-              order.append(node)
-              for name, d in deps.items():
-                  if node in d:
-                      in_degree[name] -= 1
-                      if in_degree[name] == 0:
-                          queue.append(name)
-                          queue.sort()
-
-          if len(order) != len(packages):
-              print("ERROR: cycle detected in dependency graph", file=sys.stderr)
-              sys.exit(1)
-
-          # Filter to only crates listed in the workspace publish allowlist
-          allowlist = meta.get("metadata", {}).get("publish", {}).get("allow", [])
-          if not isinstance(allowlist, list):
-              print(
-                  "ERROR: Workspace publish allowlist must be a list at [workspace.metadata.publish.allow].",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-
-          allowed = []
-          for crate_name in allowlist:
-              if not isinstance(crate_name, str):
-                  print(
-                      f"ERROR: Invalid publish allowlist entry (not a string): {crate_name}",
-                      file=sys.stderr,
-                  )
-                  sys.exit(1)
-
-              if crate_name in allowed:
-                  continue
-
-              if crate_name not in packages:
-                  print(
-                      f"ERROR: Crate in publish allowlist is not a workspace member: {crate_name}",
-                      file=sys.stderr,
-                  )
-                  sys.exit(1)
-
-              allowed.append(crate_name)
-
-          if len(allowed) == 0:
-              print(
-                  "ERROR: Publish allowlist is empty. Set [workspace.metadata.publish.allow] in workspace Cargo.toml.",
-                  file=sys.stderr,
-              )
-              sys.exit(1)
-
-          result = []
-          for name in order:
-              if name not in allowed:
-                  continue
-              pkg = packages[name]
-              result.append({"name": name, "version": pkg["version"]})
-
-          print(json.dumps(result))
-          ' > /tmp/crates.json
+          cargo run --bin xtask publish-order > /tmp/crates.json
 
           echo "crates=$(cat /tmp/crates.json)" >> $GITHUB_OUTPUT
           echo "Publish order ($(cat /tmp/crates.json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))') crates):"
@@ -142,6 +58,7 @@ jobs:
           for i, c in enumerate(json.load(sys.stdin), 1):
               print("  {}. {}@{}".format(i, c["name"], c["version"]))
           '
+
 
       - name: Resolve and validate target version
         id: release-version

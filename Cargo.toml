@@ -96,6 +96,8 @@ allow = [
     "perl-lexer",
     "perl-parser",
     "perl-corpus",
+    "perl-lsp",
+    "perl-dap",
 ]
 
 # Workspace-level package metadata

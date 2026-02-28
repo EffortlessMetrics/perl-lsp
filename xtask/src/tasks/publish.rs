@@ -201,3 +201,121 @@ pub fn publish_vscode(yes: bool, token: Option<String>) -> Result<()> {
 
     Ok(())
 }
+
+pub fn compute_publish_order() -> Result<()> {
+    let output =
+        Command::new("cargo").args(["metadata", "--format-version=1", "--no-deps"]).output()?;
+
+    if !output.status.success() {
+        bail!("Failed to run cargo metadata: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    let meta: serde_json::Value = serde_json::from_slice(&output.stdout)?;
+
+    let workspace_members: HashSet<&str> =
+        meta["workspace_members"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+
+    let mut packages = HashMap::new();
+    if let Some(pkgs) = meta["packages"].as_array() {
+        for pkg in pkgs {
+            if let (Some(id), Some(name), Some(version)) =
+                (pkg["id"].as_str(), pkg["name"].as_str(), pkg["version"].as_str())
+                && workspace_members.contains(id) {
+                    packages.insert(name.to_string(), (pkg, version.to_string()));
+                }
+        }
+    }
+
+    let mut deps: HashMap<String, HashSet<String>> = HashMap::new();
+    for (name, (pkg, _)) in &packages {
+        let mut package_deps = HashSet::new();
+        if let Some(dependencies) = pkg["dependencies"].as_array() {
+            for dep in dependencies {
+                if let Some(dep_name) = dep["name"].as_str() {
+                    let kind = dep.get("kind").and_then(|k| k.as_str());
+                    if packages.contains_key(dep_name) && kind != Some("dev") {
+                        package_deps.insert(dep_name.to_string());
+                    }
+                }
+            }
+        }
+        deps.insert(name.clone(), package_deps);
+    }
+
+    let mut in_degree: HashMap<String, usize> =
+        deps.keys().map(|k| (k.clone(), deps[k].len())).collect();
+    let mut queue: Vec<String> =
+        in_degree.iter().filter(|&(_, &deg)| deg == 0).map(|(name, _)| name.clone()).collect();
+    queue.sort_by(|a, b| b.cmp(a));
+
+    let mut order = Vec::new();
+    while let Some(node) = queue.pop() {
+        order.push(node.clone());
+        for (name, dep_set) in deps.iter() {
+            if dep_set.contains(&node)
+                && let Some(deg) = in_degree.get_mut(name) {
+                    *deg -= 1;
+                    if *deg == 0 {
+                        queue.push(name.clone());
+                        queue.sort_by(|a, b| b.cmp(a)); // Reverse sort because we pop from end
+                    }
+                }
+        }
+    }
+
+    if order.len() != packages.len() {
+        eprintln!("ERROR: cycle detected in dependency graph");
+        std::process::exit(1);
+    }
+
+    let allowlist_val = meta
+        .pointer("/workspace_metadata/publish/allow")
+        .or_else(|| meta.pointer("/metadata/publish/allow"));
+
+    let mut allowed = Vec::new();
+    if let Some(allowlist) = allowlist_val.and_then(|v| v.as_array()) {
+        for val in allowlist {
+            if let Some(crate_name) = val.as_str() {
+                if !allowed.contains(&crate_name.to_string()) {
+                    if !packages.contains_key(crate_name) {
+                        eprintln!(
+                            "ERROR: Crate in publish allowlist is not a workspace member: {}",
+                            crate_name
+                        );
+                        std::process::exit(1);
+                    }
+                    allowed.push(crate_name.to_string());
+                }
+            } else {
+                eprintln!("ERROR: Invalid publish allowlist entry (not a string): {:?}", val);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        eprintln!(
+            "ERROR: Workspace publish allowlist must be a list at [workspace.metadata.publish.allow]."
+        );
+        std::process::exit(1);
+    }
+
+    if allowed.is_empty() {
+        eprintln!(
+            "ERROR: Publish allowlist is empty. Set [workspace.metadata.publish.allow] in workspace Cargo.toml."
+        );
+        std::process::exit(1);
+    }
+
+    let mut result = Vec::new();
+    for name in &order {
+        if allowed.contains(name) {
+            let (_, version) = packages.get(name).unwrap();
+            let mut item = serde_json::Map::new();
+            item.insert("name".to_string(), serde_json::Value::String(name.clone()));
+            item.insert("version".to_string(), serde_json::Value::String(version.clone()));
+            result.push(serde_json::Value::Object(item));
+        }
+    }
+
+    println!("{}", serde_json::to_string(&result)?);
+    Ok(())
+}
