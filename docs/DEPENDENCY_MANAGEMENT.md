@@ -385,7 +385,7 @@ cargo deny check licenses
 
 For issues with dependency updates:
 
-1. Check [Issue #279](https://github.com/your-org/perl-lsp/issues/279) - Original dependency automation issue
+1. Check [Issue #279](https://github.com/EffortlessMetrics/perl-lsp/issues/279) - Original dependency automation issue
 2. Review [CLAUDE.md](../CLAUDE.md) - Project development guidelines
 3. Consult [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution workflow
 

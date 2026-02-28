@@ -429,7 +429,7 @@ mod tests {
                     println!("Iterative parser returned None (acceptable)");
                 }
                 Err(e) => {
-                    panic!("Iterative parser failed with error: {}", e);
+                    unreachable!("Iterative parser failed with error: {}", e);
                 }
             }
         }

@@ -4,22 +4,22 @@ This guide describes how `perl-lsp` is published to crates.io as part of the PR-
 
 ## Automated Crates.io Path
 
-Publishing to crates.io is handled by the [`publish-crates`](../.github/workflows/publish-crates.yml) workflow, which is normally triggered by [Release Orchestration](./RELEASE_PROCESS.md):
+Publishing to crates.io is handled by the [`publish-crates`](../.github/workflows/publish-crates.yml) workflow, which is normally triggered by [Release Orchestration](./RELEASE_PROCESS.md) on the resolved release tag:
 
 1. Merge the version bump PR created by `Version Bump & Changelog Generation`.
 2. Dispatch `Release Orchestration` with the target `version`.
 3. Release orchestration creates the tag and dispatches publish workflows, including `Publish to crates.io`.
-4. Publish workflow resolves publish order from workspace metadata and runs crates in dependency order.
+4. Publish workflow resolves publish order from `[workspace.metadata.publish.allow]` in the root `Cargo.toml` and runs listed crates in dependency order.
 
 ## Workspace Coverage
 
-The publish workflow includes every crate with publishing enabled.
+The publish workflow includes only crates explicitly listed in the allowlist.
 
-To verify currently publishable crates, run:
+To inspect the configured publish allowlist, run:
 
 ```bash
 cargo metadata --no-deps --format-version=1 |\
-  jq '.packages | map(select(.publish == null or (.publish | length > 0))) | map(.name) | length'
+  jq '.metadata.publish.allow'
 ```
 
 ## Reusable Manual Checks

@@ -95,18 +95,18 @@ Key terms:
 
 ## What's Next
 
-**Now (post v0.9.1 close-out)**
+**Now (v0.10.0 Release Candidate)**
 - Keep verification receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
-- Publish benchmark outputs under `benchmarks/results/` for v0.9.x evidence trail
+- Version consistency across all crates, docs, and extension
+- Publish benchmark outputs under `benchmarks/results/`
 
-**Next (v0.9.1 readiness)**
-- Stability statement (versioning rules)
+**Next (v0.10.x hardening)**
+- Stability statement refinement (versioning rules toward v0.15.0 contract)
 - Packaging stance (what ships; supported platforms)
-- Benchmark publication with receipts under `benchmarks/results/`
-- Upgrade notes from v0.8.x → v0.9.x
+- Upgrade notes from v0.9.x → v0.10.x
 - Merge gates (#210) after CI pipeline cleanup (#211)
 
-**Later (post v0.9.x)**
+**Later (post v0.10.x)**
 - DAP preview hardening (deeper live variables/evaluate, shim packaging, cross-editor native receipts)
 - Full LSP 3.18 compliance
 - Package manager distribution (Homebrew/apt/etc.)

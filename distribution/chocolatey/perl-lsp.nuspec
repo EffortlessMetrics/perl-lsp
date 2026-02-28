@@ -2,7 +2,8 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>perl-lsp</id>
-    <version>1.0.0</version>
+    <!-- PLACEHOLDER-GUARD: release automation replaces this token. -->
+    <version>__RELEASE_VERSION__</version>
     <title>Perl Language Server</title>
     <authors>EffortlessMetrics</authors>
     <owners>EffortlessMetrics</owners>

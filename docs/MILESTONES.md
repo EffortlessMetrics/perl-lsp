@@ -8,26 +8,26 @@
 
 ## Active Milestones
 
-### v0.9.1: Post-Release Optimization
+### v0.10.0: Post-Release Optimization
 
 **Status**: Active (local; see GitHub milestones for live counts)
-**Goal**: Close out v0.9.1 hardening and documentation cleanup.
+**Goal**: Close out v0.10.0 hardening and documentation cleanup.
 
 **Exit Criteria**:
-- See `ROADMAP.md` v0.9.1 section (index state machine, documentation cleanup, test debt)
+- See `ROADMAP.md` v0.10.0 section (index state machine, documentation cleanup, test debt)
 
 **Constraints**:
 - CI pipeline cleanup (#211) blocks merge gates (#210)
 
 ---
 
-### v0.9.1: Boring Promises
+### v0.10.0: Boring Promises
 
-**Status**: Queued (after v0.9.1)
+**Status**: Queued (after v0.10.0)
 **Goal**: Freeze the surfaces you're willing to support.
 
 **Exit Criteria**:
-- v0.9.1 released and stable
+- v0.10.0 released and stable
 - Capability snapshot + docs aligned
 - Benchmarks published under benchmarks/results/
 - Upgrade notes exist from v0.8.x → v0.9.x
@@ -37,9 +37,9 @@
 2. Packaging stance (binaries, crates, platforms)
 3. Benchmark publication
 
-**Effort Estimate**: ~40-80 hours after v0.9.1
+**Effort Estimate**: ~40-80 hours after v0.10.0
 
-[View all v0.9.1 issues](https://github.com/EffortlessMetrics/perl-lsp/milestone/2)
+[View all v0.10.0 issues](https://github.com/EffortlessMetrics/perl-lsp/milestone/2)
 
 ---
 
@@ -91,8 +91,8 @@ gh issue list --label "phase:stability"
 # All v0.9.0 issues
 gh issue list --milestone "v0.9.0: Semantic-Ready"
 
-# All v0.9.1 issues
-gh issue list --milestone "v0.9.1: Boring Promises"
+# All v0.10.0 issues
+gh issue list --milestone "v0.10.0: Boring Promises"
 ```
 
 ---

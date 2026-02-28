@@ -245,5 +245,5 @@ We thank the following security researchers and contributors:
 
 ---
 
-**Last Updated**: 2026-02-20 (v0.9.1 Release)
+**Last Updated**: 2026-02-20 (v0.10.0 Release)
 **Next Review**: 2026-05-20 (quarterly review)

@@ -53,7 +53,8 @@ impl LspServer {
     /// double-flow for modern LSP 3.17+ clients.
     pub(crate) fn publish_diagnostics(&self, uri: &str) {
         let documents = self.documents.lock();
-        if let Some(doc) = documents.get(uri) {
+        let normalized_uri = self.normalize_uri_key(uri);
+        if let Some(doc) = documents.get(&normalized_uri).or_else(|| documents.get(uri)) {
             let lsp_diagnostics: Vec<Value> = if let Some(ast) = &doc.ast {
                 // Get diagnostics (already includes unused variable detection)
                 let provider = DiagnosticsProvider::new(ast, doc.text.clone());
@@ -155,7 +156,7 @@ impl LspServer {
             eprintln!(
                 "Publishing {} diagnostics for {} (version {})",
                 lsp_diagnostics.len(),
-                uri,
+                normalized_uri,
                 doc.version
             );
 
@@ -167,7 +168,7 @@ impl LspServer {
                 let _ = self.notify(
                     "textDocument/publishDiagnostics",
                     json!({
-                        "uri": uri,
+                        "uri": normalized_uri,
                         "version": doc.version,
                         "diagnostics": lsp_diagnostics
                     }),

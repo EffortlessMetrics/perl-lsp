@@ -1,22 +1,36 @@
 $ErrorActionPreference = 'Stop'
 
+# PLACEHOLDER-GUARD: checksum token must be replaced by CI before publishing.
+$packageVersion = $env:ChocolateyPackageVersion
+if (-not $packageVersion) {
+  Write-Error "ChocolateyPackageVersion is not available"
+  exit 1
+}
+$archivePath = "perl-lsp-${packageVersion}-x86_64-pc-windows-msvc.zip"
+
 $packageArgs = @{
   packageName   = 'perl-lsp'
   fileType      = 'EXE'
-  url           = 'https://github.com/EffortlessMetrics/perl-lsp/releases/download/v1.0.0/perl-lsp-1.0.0-x86_64-pc-windows-msvc.zip'
-  checksum      = 'REPLACE_WITH_ACTUAL_SHA256'
+  url           = "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v${packageVersion}/${archivePath}"
+  checksum      = '__RELEASE_SHA256__'
   checksumType  = 'sha256'
   unzipLocation = $env:ChocolateyPackageFolder
 }
 
 Install-ChocolateyZipPackage @packageArgs
 
-# Add to PATH
-$installPath = Join-Path $env:ChocolateyPackageFolder "perl-lsp-1.0.0-x86_64-pc-windows-msvc"
-$binaryPath = Join-Path $installPath "perl-lsp.exe"
+# Locate extracted binary in either legacy versioned folder or current root layout.
+$installPaths = @(
+  Join-Path $env:ChocolateyPackageFolder "perl-lsp-${packageVersion}-x86_64-pc-windows-msvc",
+  $env:ChocolateyPackageFolder
+)
+$binaryPath = $installPaths |
+  ForEach-Object { Join-Path $_ "perl-lsp.exe" } |
+  Where-Object { Test-Path $_ } |
+  Select-Object -First 1
 
 if (-not (Test-Path $binaryPath)) {
-  Write-Error "Binary not found at $binaryPath"
+  Write-Error "Binary not found after extracting ${archivePath}"
   exit 1
 }
 

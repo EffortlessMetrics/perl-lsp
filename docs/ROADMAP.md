@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-02-20)**: **Initial Public Alpha (v0.9.1)**. Hardening underway with native DAP preview validated.
+> **Status (2026-02-20)**: **Initial Public Alpha (v0.10.0)**. Hardening underway with native DAP preview validated.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -12,11 +12,11 @@
 
 ## Alpha Disclaimer
 
-Perl LSP is currently in **Initial Public Alpha**. Version 0.9.1 represents a substantially complete feature set, but APIs and protocols are still evolving. We value early adopter feedback to refine the project toward the v0.15.0 Stability Contract milestone.
+Perl LSP is currently in **Initial Public Alpha**. Version 0.10.0 represents a substantially complete feature set, but APIs and protocols are still evolving. We value early adopter feedback to refine the project toward the v0.15.0 Stability Contract milestone.
 
 ---
 
-## Current State (v0.9.1 → v0.10.0)
+## Current State (v0.10.0)
 
 | Component | Release Stance | Evidence | Notes |
 |-----------|----------------|----------|-------|
@@ -32,7 +32,7 @@ Perl LSP is currently in **Initial Public Alpha**. Version 0.9.1 represents a su
 
 ## Now / Next / Later (Summary)
 
-**Now (v0.9.1 Initial Public Alpha)**
+**Now (v0.10.0 Initial Public Alpha)**
 - Keep close-out receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
 - Public Alpha hardening: focus on correctness and performance for early adopters
 - Publish benchmark outputs under `benchmarks/results/`
@@ -56,12 +56,12 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 | Crate | Version | Status | Purpose |
 |-------|---------|--------|----------|
-| **perl-parser** | v0.9.1 | Public Alpha | Main parser library |
-| **perl-lsp** | v0.9.1 | Public Alpha | LSP server |
-| **perl-lexer** | v0.9.1 | Public Alpha | Context-aware tokenizer |
-| **perl-corpus** | v0.9.1 | Public Alpha | Test corpus |
+| **perl-parser** | v0.10.0 | Public Alpha | Main parser library |
+| **perl-lsp** | v0.10.0 | Public Alpha | LSP server |
+| **perl-lexer** | v0.10.0 | Public Alpha | Context-aware tokenizer |
+| **perl-corpus** | v0.10.0 | Public Alpha | Test corpus |
 | **perl-dap** | v0.2.0 | Preview (Native + Bridge) | Debug Adapter Protocol |
-| **perl-parser-pest** | v0.9.1 | Legacy | Pest-based parser (maintained) |
+| **perl-parser-pest** | v0.10.0 | Legacy | Pest-based parser (maintained) |
 
 ---
 
@@ -107,7 +107,7 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - Semantic Analyzer Phase 2-6 Complete (2026-01-21)
 - Refactoring Engine: inline + move_code (2026-01-21)
 - Security Hardening: path traversal + command injection (2026-01-21)
-- v0.9.1 Initial Public Alpha Preparation (2026-02-20)
+- v0.10.0 Initial Public Alpha Preparation (2026-02-20)
 
 ---
 

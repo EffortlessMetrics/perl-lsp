@@ -181,6 +181,7 @@ The changelog is automatically generated during releases via the release orchest
 
 ```bash
 # Recommended: run both workflow steps through gh automation.
+# Canonical command for RC orchestration:
 ./scripts/release-turnkey-pr.sh <0.x.y>
 ```
 
@@ -188,6 +189,7 @@ The changelog is automatically generated during releases via the release orchest
 
 ```bash
 # 1. Generate changelog content
+# Use the same canonical flow entrypoint:
 ./scripts/release-turnkey-pr.sh <0.x.y> --no-auto-merge --no-wait-release
 
 # 2. Manually review and merge the generated version bump PR.

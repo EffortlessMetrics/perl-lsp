@@ -403,7 +403,7 @@ DONE
                 assert!(reason.contains("BEGIN"));
                 assert_eq!(severity, Severity::Warning);
             }
-            _ => panic!("Expected Defer action"),
+            _ => unreachable!("Expected Defer action"),
         }
     }
 
@@ -420,7 +420,7 @@ DONE
                 assert!(warning.contains("END block"));
                 assert!(warning.contains("program termination"));
             }
-            _ => panic!("Expected PartialParse action for END phase"),
+            _ => unreachable!("Expected PartialParse action for END phase"),
         }
     }
 
@@ -437,7 +437,7 @@ DONE
                 assert!(reason.contains("eval"));
                 assert_eq!(severity, Severity::Warning);
             }
-            _ => panic!("Expected Defer action for eval phase"),
+            _ => unreachable!("Expected Defer action for eval phase"),
         }
 
         // Verify eval heredoc was added to deferred list

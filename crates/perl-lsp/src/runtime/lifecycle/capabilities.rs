@@ -11,14 +11,15 @@ impl LspServer {
         &mut self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        // Check if already initialized
-        if self.initialized {
+        // Check if initialize was already requested
+        if self.initialize_requested {
             return Err(JsonRpcError {
                 code: -32600, // InvalidRequest per LSP spec 3.17
                 message: "initialize may only be sent once".to_string(),
                 data: None,
             });
         }
+        self.initialize_requested = true;
 
         // Parse client capabilities
         if let Some(params) = &params {

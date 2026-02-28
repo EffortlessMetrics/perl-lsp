@@ -444,7 +444,7 @@ perl-parser-pest = "0.8"
 
 # After (v0.9.x) - Native parser (recommended)
 [dependencies]
-perl-parser = "0.9.1"
+perl-parser = "0.10.0"
 ```
 
 **Rationale:**
@@ -484,9 +484,9 @@ pub mod internal_utils;  // Internal parser utilities
 ```toml
 # Cargo.toml - Update all perl-lsp crates
 [dependencies]
-perl-parser = "0.9.1"
-perl-lexer = "0.9.1"
-perl-lsp = "0.9.1"
+perl-parser = "0.10.0"
+perl-lexer = "0.10.0"
+perl-lsp = "0.10.0"
 
 # Update Rust edition
 [package]
@@ -536,7 +536,7 @@ cargo clippy --workspace
 code --uninstall-extension perl-language-server
 
 # Install new extension
-code --install-extension perl-language-server@0.9.x
+code --install-extension effortlesssteven.perl-lsp
 
 # Remove deprecated settings from settings.json
 # Delete: "perl-lsp.downloadBaseUrl"

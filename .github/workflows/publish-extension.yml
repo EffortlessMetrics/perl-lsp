@@ -4,9 +4,6 @@ name: Publish VSCode Extension
 # Cost: ~$0.05 per publish
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       version:
@@ -16,7 +13,7 @@ on:
 
 # Cancel in-flight runs
 concurrency:
-  group: publish-extension-${{ github.ref }}
+  group: publish-extension-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.version || github.ref_name }}
   cancel-in-progress: false  # Don't cancel publishing
 
 jobs:
@@ -43,14 +40,21 @@ jobs:
 
       - name: Set version
         working-directory: vscode-extension
+        id: version
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/v}"
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            if [ "${{ github.ref_type }}" = "tag" ]; then
+              VERSION="${GITHUB_REF#refs/tags/v}"
+            else
+              echo "::error::Version input is required for workflow_dispatch"
+              exit 1
+            fi
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           npm version $VERSION --no-git-tag-version
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "release_tag=v${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Compile extension
         working-directory: vscode-extension
@@ -86,20 +90,16 @@ jobs:
           retention-days: 30
 
       - name: Create GitHub Release asset
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: vscode-extension/${{ env.VSIX_FILE }}
-          fail_on_unmatched_files: true
-          body: |
-            ## VS Code Extension Release
-
-            Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp) or download the VSIX file below.
-
-            ### Features
-            - Auto-downloads the latest perl-lsp binary
-            - Supports all 30+ LSP features
-            - Platform detection for Linux/macOS/Windows
-            - Automatic checksum verification
+        if: github.event_name == 'workflow_dispatch'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
+        run: |
+          if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "::warning::Release ${RELEASE_TAG} does not exist yet. Skipping VSIX attachment."
+            exit 0
+          fi
+
+          gh release upload "${RELEASE_TAG}" \
+            "vscode-extension/${{ env.VSIX_FILE }}" \
+            --clobber
