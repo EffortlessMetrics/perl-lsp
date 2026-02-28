@@ -20,7 +20,7 @@ The perl-lsp release process is fully automated and supports:
 - **Package managers**: Homebrew, Scoop, Chocolatey
 - **Docker images**: Multi-arch (linux/amd64, linux/arm64)
 - **VSCode extension**: VSCode Marketplace and Open VSX
-- **crates.io**: All 43 workspace crates
+- **crates.io**: All publishable workspace crates
 
 ### Release Architecture
 
@@ -81,7 +81,7 @@ Trigger the version bump workflow to prepare for release:
 1. Go to Actions tab
 2. Select "Version Bump & Changelog Generation"
 3. Click "Run workflow"
-4. Enter version (e.g., 0.9.0)
+4. Enter version (for example `0.9.0` or `1.0.0`)
 5. Select bump type (major/minor/patch)
 6. Click "Run workflow"
 ```
@@ -109,7 +109,7 @@ After merging the version bump PR, trigger the release orchestration:
 1. Go to Actions tab
 2. Select "Release Orchestration"
 3. Click "Run workflow"
-4. Enter version (e.g., 0.9.0)
+4. Enter version (for example `0.9.0` or `1.0.0`)
 5. Configure options:
    - prerelease: Mark as prerelease (default: false)
    - skip_crates: Skip crates.io publishing (default: false)
@@ -128,7 +128,7 @@ This will:
 Monitor the following workflows:
 
 1. **Release** - Builds binaries and creates GitHub release
-2. **Publish to crates.io** - Publishes all 43 crates
+2. **Publish to crates.io** - Publishes all publishable crates
 3. **Publish VSCode Extension** - Publishes to VSCode Marketplace and Open VSX
 4. **Publish Docker Images** - Builds and pushes multi-arch images
 5. **Homebrew Auto-Bump** - Creates PR to Homebrew
@@ -168,22 +168,8 @@ After all workflows complete, verify:
 
 ### crates.io
 
-All 43 workspace crates are published to crates.io in dependency order:
-
-```
-perl-lexer → perl-parser-core → perl-position-tracking →
-perl-symbol-types → perl-symbol-table → perl-uri →
-perl-diagnostics-codes → perl-semantic-analyzer →
-perl-workspace-index → perl-refactoring →
-perl-incremental-parsing → perl-tdd-support →
-perl-lsp-protocol → perl-lsp-transport → perl-lsp-tooling →
-perl-lsp-formatting → perl-lsp-diagnostics →
-perl-lsp-semantic-tokens → perl-lsp-inlay-hints →
-perl-lsp-navigation → perl-lsp-completion →
-perl-lsp-code-actions → perl-lsp-rename →
-perl-lsp-providers → perl-parser → perl-lsp →
-perl-dap → tree-sitter-perl-rs
-```
+The publish workflow computes dependency order from workspace metadata and publishes all crates with publish metadata enabled.
+The exact crate list and count are printed in the `Compute publish order` step of the `publish-crates` workflow.
 
 **Installation:**
 ```bash
@@ -207,9 +193,9 @@ Binaries are published for all platforms:
 **Installation:**
 ```bash
 # Download and extract
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-0.9.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v{VERSION}/perl-lsp-{VERSION}-x86_64-unknown-linux-gnu.tar.gz
+tar xzf perl-lsp-{VERSION}-x86_64-unknown-linux-gnu.tar.gz
+sudo cp perl-lsp-{VERSION}-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 ```
 
 ### Homebrew
@@ -283,13 +269,13 @@ If the GitHub release has issues:
 
 1. **Delete the release**
    ```bash
-   gh release delete v0.9.0 --yes
+   gh release delete v{VERSION} --yes
    ```
 
 2. **Delete the tag**
    ```bash
-   git push origin :refs/tags/v0.9.0
-   git tag -d v0.9.0
+   git push origin :refs/tags/v{VERSION}
+   git tag -d v{VERSION}
    ```
 
 3. **Fix the issue** (e.g., update release.yml)
@@ -407,7 +393,7 @@ For a complete rollback:
 
 ### Pre-Release
 
-- [ ] All CI tests passing on main branch
+- [ ] All CI tests passing on master branch
 - [ ] Version bump PR created and reviewed
 - [ ] Changelog generated and reviewed
 - [ ] Breaking changes documented
@@ -497,7 +483,7 @@ All binaries include SHA256 checksums in their packages.
 
 ## Additional Resources
 
-- [Production Readiness Roadmap](../plans/production_readiness_roadmap.md)
+- [Roadmap](ROADMAP.md)
 - [Commands Reference](COMMANDS_REFERENCE.md)
 - [API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)

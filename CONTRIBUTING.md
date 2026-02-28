@@ -451,7 +451,7 @@ We follow [Semantic Versioning 2.0.0](https://semver.org/):
 |--------------|-----------|----------|--------------|
 | **Major** | As needed | 0.x → 1.0.0 | Breaking changes, migration guide, extensive testing |
 | **Minor** | Quarterly | 0.9.x → 0.10.0 | New features, API additions, performance improvements |
-| **Patch** | As needed | 0.9.1 → 0.9.2 | Bug fixes, security updates, documentation updates |
+| **Patch** | As needed | 1.2.3 → 1.2.4 | Bug fixes, security updates, documentation updates |
 
 ### Release Process Workflow
 
@@ -483,33 +483,31 @@ Before any release, ensure:
 - [ ] Performance benchmarks run: `cargo bench`
 - [ ] Release notes drafted: `RELEASE_NOTES.md`
 - [ ] Version numbers updated in all crates
-- [ ] Git tag prepared: `git tag -a v0.9.1 -m "Release v0.9.1"`
+- [ ] Git tag prepared: `git tag -a v{VERSION} -m "Release v{VERSION}"`
 
 #### 3. Release Execution
 
 ```bash
 # Create release branch
-git checkout -b release/v0.9.1
+git checkout -b release/v{VERSION}
 
 # Final validation
 just ci-full
 
-# Merge to main
-git checkout main
-git merge release/v0.9.1
+# Merge to master
+git checkout master
+git merge release/v{VERSION}
 
 # Tag and push
-git tag v0.9.1
-git push origin main --tags
+git tag v{VERSION}
+git push origin master --tags
 
 # Publish to crates.io
-cargo publish -p perl-parser
-cargo publish -p perl-lexer
-cargo publish -p perl-lsp
-# ... other crates in dependency order
+# Release orchestration triggers `publish-crates` workflow, which handles dependency order.
+# You can also run this workflow manually from GitHub Actions for recovery if needed.
 
 # Create GitHub Release
-gh release create v0.9.1 --title "v0.9.1 - Initial Public Alpha" --notes-file RELEASE_NOTES.md
+gh release create v{VERSION} --title "v{VERSION}" --notes-file RELEASE_NOTES.md
 ```
 
 #### 4. Post-Release Tasks
@@ -626,7 +624,7 @@ For critical security issues:
 #### Release Notes Template
 
 ```markdown
-# Release v0.9.1
+# Release v{VERSION}
 
 ## Highlights
 - Key features and improvements
