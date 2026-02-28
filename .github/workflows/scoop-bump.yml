@@ -66,9 +66,9 @@ jobs:
           mkdir -p /tmp/scoop-assets
           cd /tmp/scoop-assets
 
-          echo "Downloading perl-lsp-v${VERSION}-x86_64-pc-windows-msvc.zip..."
+          echo "Downloading perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip..."
           gh release download "${TAG}" \
-            --pattern "perl-lsp-v${VERSION}-x86_64-pc-windows-msvc.zip" \
+            --pattern "perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip" \
             --dir /tmp/scoop-assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,7 +80,7 @@ jobs:
           cd /tmp/scoop-assets
 
           # Compute SHA256
-          SHA=$(sha256sum "perl-lsp-v${VERSION}-x86_64-pc-windows-msvc.zip" | cut -d' ' -f1)
+          SHA=$(sha256sum "perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip" | cut -d' ' -f1)
           echo "sha256=${SHA}" >> $GITHUB_OUTPUT
           echo "SHA256: ${SHA}"
 
@@ -91,7 +91,7 @@ jobs:
 
           # Update version and hash
           sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"${VERSION}\"/" distribution/scoop/perl-lsp.json
-          sed -i "s/\"url\": \"[^\"]*x86_64-pc-windows-msvc.zip\"/\"url\": \"https:\/\/github.com\/EffortlessMetrics\/perl-lsp\/releases\/download\/v${VERSION}\/perl-lsp-v${VERSION}-x86_64-pc-windows-msvc.zip\"/" distribution/scoop/perl-lsp.json
+          sed -i "s/\"url\": \"[^\"]*x86_64-pc-windows-msvc.zip\"/\"url\": \"https:\/\/github.com\/EffortlessMetrics\/perl-lsp\/releases\/download\/v${VERSION}\/perl-lsp-${VERSION}-x86_64-pc-windows-msvc.zip\"/" distribution/scoop/perl-lsp.json
           sed -i "s/\"hash\": \"[^\"]*\"/\"hash\": \"${SHA}\"/" distribution/scoop/perl-lsp.json
 
           if grep -q "__RELEASE_VERSION__\|__RELEASE_HASH__" distribution/scoop/perl-lsp.json; then

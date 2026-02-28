@@ -91,21 +91,6 @@ jobs:
 
       - name: Create GitHub Release asset
         if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          files: vscode-extension/${{ env.VSIX_FILE }}
-          fail_on_unmatched_files: true
-          tag_name: v${{ env.VERSION }}
-          body: |
-            ## VS Code Extension Release
-
-            Install from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp) or download the VSIX file below.
-
-            ### Features
-            - Auto-downloads the latest perl-lsp binary
-            - Supports all 30+ LSP features
-            - Platform detection for Linux/macOS/Windows
-            - Automatic checksum verification
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
