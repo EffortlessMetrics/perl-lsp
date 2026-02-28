@@ -34,8 +34,17 @@ if (-not (Test-Path $binaryPath)) {
   exit 1
 }
 
-# Create shim
+# Create shims
 Install-BinFile -Name "perl-lsp" -Path $binaryPath
+
+$dapPath = $installPaths |
+  ForEach-Object { Join-Path $_ "perl-dap.exe" } |
+  Where-Object { Test-Path $_ } |
+  Select-Object -First 1
+
+if ($dapPath -and (Test-Path $dapPath)) {
+  Install-BinFile -Name "perl-dap" -Path $dapPath
+}
 
 Write-Host "perl-lsp has been installed successfully."
 Write-Host "To use with your editor, configure it to use 'perl-lsp --stdio'"

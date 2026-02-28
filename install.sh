@@ -180,6 +180,19 @@ install_binary() {
     chmod +x "$DEST_PATH"
     
     write_success "Installed $NAME to $DEST_PATH"
+    
+    # Install perl-dap if present in the archive
+    DAP_BINARY_PATH="$EXTRACTED_DIR/perl-dap"
+    if [ -f "$DAP_BINARY_PATH" ]; then
+        DAP_DEST_PATH="$INSTALL_DIR/perl-dap"
+        write_info "Installing perl-dap to $DAP_DEST_PATH"
+        if [ -f "$DAP_DEST_PATH" ]; then
+            rm -f "$DAP_DEST_PATH"
+        fi
+        cp "$DAP_BINARY_PATH" "$DAP_DEST_PATH"
+        chmod +x "$DAP_DEST_PATH"
+        write_success "Installed perl-dap to $DAP_DEST_PATH"
+    fi
 }
 
 # Verify installation

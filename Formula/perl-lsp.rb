@@ -27,13 +27,15 @@ class PerlLsp < Formula
   end
 
   def install
-    # Expected extracted layout: perl-lsp-<version>-<target>/perl-lsp
+    # Expected extracted layout: perl-lsp-<version>-<target>/{perl-lsp,perl-dap}
     # If the release packaging layout changes, update this extraction logic with a follow-up.
     extracted_dir = Dir.glob("perl-lsp-*").find { |dir| Dir.exist?(dir) }
     if extracted_dir
       bin.install "#{extracted_dir}/perl-lsp"
+      bin.install "#{extracted_dir}/perl-dap" if File.exist?("#{extracted_dir}/perl-dap")
     else
       bin.install "perl-lsp"
+      bin.install "perl-dap" if File.exist?("perl-dap")
     end
   end
 
