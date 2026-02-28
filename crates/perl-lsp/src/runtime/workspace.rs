@@ -61,7 +61,9 @@ fn send_index_ready_notification(output: &Arc<Mutex<Box<dyn Write + Send>>>, rea
         let mut out = output.lock();
         let framed = frame(&payload);
         if out.write_all(&framed).is_ok() {
-            let _ = out.flush();
+            if let Err(e) = out.flush() {
+                eprintln!("Failed to flush index-ready notification: {}", e);
+            }
         }
     }
 }
@@ -437,7 +439,9 @@ impl LspServer {
                     }
 
                     // Trigger client refresh for configuration-dependent features
-                    let _ = self.refresh_controller.refresh_all(self);
+                    if let Err(e) = self.refresh_controller.refresh_all(self) {
+                        eprintln!("Failed to refresh client after config change: {}", e);
+                    }
                 }
             }
         }
@@ -497,8 +501,12 @@ impl LspServer {
                             if let Some(path) = uri_to_fs_path(&uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if let Ok(url) = url::Url::parse(&uri) {
-                                        let _ = workspace_index.index_file(url, content);
-                                        eprintln!("Indexed new file: {}", uri);
+                                        match workspace_index.index_file(url, content) {
+                                            Ok(()) => eprintln!("Indexed new file: {}", uri),
+                                            Err(e) => {
+                                                eprintln!("Failed to index new file {}: {}", uri, e)
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -518,7 +526,10 @@ impl LspServer {
                                     // Clear old index data
                                     workspace_index.clear_file(&uri);
                                     // Re-index with new content
-                                    let _ = workspace_index.index_file(url, content.clone());
+                                    if let Err(e) = workspace_index.index_file(url, content.clone())
+                                    {
+                                        eprintln!("Failed to re-index changed file {}: {}", uri, e);
+                                    }
                                 }
                             }
                         }
@@ -678,7 +689,13 @@ impl LspServer {
                         if let Some(path) = uri_to_fs_path(new_uri) {
                             if let Ok(content) = std::fs::read_to_string(&path) {
                                 if let Ok(url) = url::Url::parse(new_uri) {
-                                    let _ = workspace_index.index_file(url, content.clone());
+                                    if let Err(e) = workspace_index.index_file(url, content.clone())
+                                    {
+                                        eprintln!(
+                                            "Failed to index renamed file {}: {}",
+                                            new_uri, e
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -726,7 +743,9 @@ impl LspServer {
                 }
 
                 // Trigger client refresh after file deletions
-                let _ = self.refresh_controller.refresh_all(self);
+                if let Err(e) = self.refresh_controller.refresh_all(self) {
+                    eprintln!("Failed to refresh client after file deletions: {}", e);
+                }
             }
         }
 
@@ -799,8 +818,12 @@ impl LspServer {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     coordinator.notify_change(uri);
                                     if let Ok(url) = url::Url::parse(uri) {
-                                        let _ = coordinator.index().index_file(url, content);
-                                        eprintln!("Indexed new file: {}", uri);
+                                        match coordinator.index().index_file(url, content) {
+                                            Ok(()) => eprintln!("Indexed new file: {}", uri),
+                                            Err(e) => {
+                                                eprintln!("Failed to index new file {}: {}", uri, e)
+                                            }
+                                        }
                                     }
                                     coordinator.notify_parse_complete(uri);
                                 }
@@ -810,7 +833,9 @@ impl LspServer {
                 }
 
                 // Trigger client refresh after file creations
-                let _ = self.refresh_controller.refresh_all(self);
+                if let Err(e) = self.refresh_controller.refresh_all(self) {
+                    eprintln!("Failed to refresh client after file creations: {}", e);
+                }
             }
         }
 
@@ -850,8 +875,15 @@ impl LspServer {
                             if let Some(path) = uri_to_fs_path(new_uri) {
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if let Ok(url) = url::Url::parse(new_uri) {
-                                        let _ = coordinator.index().index_file(url, content);
-                                        eprintln!("Indexed renamed file: {}", new_uri);
+                                        match coordinator.index().index_file(url, content) {
+                                            Ok(()) => {
+                                                eprintln!("Indexed renamed file: {}", new_uri)
+                                            }
+                                            Err(e) => eprintln!(
+                                                "Failed to index renamed file {}: {}",
+                                                new_uri, e
+                                            ),
+                                        }
                                     }
                                 }
                             }
@@ -871,7 +903,9 @@ impl LspServer {
                 }
 
                 // Trigger client refresh after file renames
-                let _ = self.refresh_controller.refresh_all(self);
+                if let Err(e) = self.refresh_controller.refresh_all(self) {
+                    eprintln!("Failed to refresh client after file renames: {}", e);
+                }
             }
         }
 
@@ -922,7 +956,9 @@ impl LspServer {
                 }
 
                 // Trigger client refresh after workspace folder changes
-                let _ = self.refresh_controller.refresh_all(self);
+                if let Err(e) = self.refresh_controller.refresh_all(self) {
+                    eprintln!("Failed to refresh client after workspace folder changes: {}", e);
+                }
 
                 // Rebuild workspace index after folder changes
                 #[cfg(feature = "workspace")]
@@ -1128,7 +1164,11 @@ impl LspServer {
                             if let Some(coordinator) = self.coordinator() {
                                 coordinator.notify_change(uri);
                                 if let Ok(url) = url::Url::parse(uri) {
-                                    let _ = coordinator.index().index_file(url, doc.text.clone());
+                                    if let Err(e) =
+                                        coordinator.index().index_file(url, doc.text.clone())
+                                    {
+                                        eprintln!("Failed to re-index file {}: {}", uri, e);
+                                    }
                                 }
                                 coordinator.notify_parse_complete(uri);
                             }

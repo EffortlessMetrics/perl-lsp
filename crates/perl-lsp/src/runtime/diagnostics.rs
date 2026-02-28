@@ -165,14 +165,16 @@ impl LspServer {
             if !self.client_supports_pull_diags.load(Ordering::Relaxed) {
                 // Send diagnostics notification with version
                 // This ensures diagnostics are cleared when all errors are fixed
-                let _ = self.notify(
+                if let Err(e) = self.notify(
                     "textDocument/publishDiagnostics",
                     json!({
                         "uri": uri,
                         "version": doc.version,
                         "diagnostics": lsp_diagnostics
                     }),
-                );
+                ) {
+                    eprintln!("Failed to publish diagnostics for {}: {}", uri, e);
+                }
             }
         }
     }
