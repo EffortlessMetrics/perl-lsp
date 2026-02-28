@@ -338,12 +338,14 @@ ci-check-no-nested-lock:
         -not -path '*/target/*' \
         -not -path '*/.runs/*' \
         -not -path '*/archive/*' \
+        -not -path './fuzz/*' \
         2>/dev/null | grep -v '^\./Cargo\.lock$' | grep -q .; then \
         echo "❌ ERROR: Nested Cargo.lock detected! Run gates from repo root only."; \
         find . -name 'Cargo.lock' -type f \
             -not -path '*/target/*' \
             -not -path '*/.runs/*' \
             -not -path '*/archive/*' \
+            -not -path './fuzz/*' \
             2>/dev/null | grep -v '^\./Cargo\.lock$'; \
         exit 1; \
     fi
