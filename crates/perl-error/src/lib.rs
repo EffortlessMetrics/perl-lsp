@@ -429,7 +429,9 @@ pub enum ParseError {
     },
 }
 
+/// Error classification and diagnostic generation for parsed Perl code.
 pub mod classifier;
+/// Error recovery strategies and traits for the Perl parser.
 pub mod recovery;
 
 use perl_ast::Node;
