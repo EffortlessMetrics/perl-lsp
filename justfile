@@ -339,6 +339,7 @@ ci-check-no-nested-lock:
         -not -path '*/.runs/*' \
         -not -path '*/archive/*' \
         -not -path './fuzz/*' \
+        -not -path './tree-sitter-perl/*' \
         2>/dev/null | grep -v '^\./Cargo\.lock$' | grep -q .; then \
         echo "❌ ERROR: Nested Cargo.lock detected! Run gates from repo root only."; \
         find . -name 'Cargo.lock' -type f \
@@ -346,6 +347,7 @@ ci-check-no-nested-lock:
             -not -path '*/.runs/*' \
             -not -path '*/archive/*' \
             -not -path './fuzz/*' \
+            -not -path './tree-sitter-perl/*' \
             2>/dev/null | grep -v '^\./Cargo\.lock$'; \
         exit 1; \
     fi
