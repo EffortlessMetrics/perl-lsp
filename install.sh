@@ -2,7 +2,7 @@
 # Perl LSP installer for Linux and macOS
 # Usage: curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -82,8 +82,7 @@ get_version() {
             write_error "curl is required but not installed"
         fi
         
-        RELEASE_INFO=$(curl -s "$RELEASE_API")
-        if [ $? -ne 0 ]; then
+        if ! RELEASE_INFO=$(curl -s "$RELEASE_API"); then
             write_error "Failed to fetch release information"
         fi
         
@@ -111,7 +110,7 @@ install_binary() {
     
     # Create temporary directory
     TEMP_DIR=$(mktemp -d)
-    trap "rm -rf $TEMP_DIR" EXIT
+    trap 'rm -rf "$TEMP_DIR"' EXIT
     
     # Download archive
     ARCHIVE_PATH="$TEMP_DIR/$ASSET"
@@ -141,7 +140,7 @@ install_binary() {
             if [ -n "$ACTUAL_HASH" ] && [ "$EXPECTED_HASH" = "$ACTUAL_HASH" ]; then
                 write_success "Checksum verified"
             elif [ -n "$ACTUAL_HASH" ]; then
-                write_warn "Checksum mismatch - expected: $EXPECTED_HASH, got: $ACTUAL_HASH"
+                write_error "Checksum mismatch - expected: $EXPECTED_HASH, got: $ACTUAL_HASH"
             fi
         fi
     else
@@ -206,10 +205,10 @@ check_path() {
         echo
         echo "To add it to your PATH permanently, run:"
         echo
-        if [ -n "$BASH_VERSION" ]; then
+        if [ -n "${BASH_VERSION:-}" ]; then
             echo "  echo 'export PATH=\"\$PATH:$INSTALL_DIR\"' >> ~/.bashrc"
             echo "  source ~/.bashrc"
-        elif [ -n "$ZSH_VERSION" ]; then
+        elif [ -n "${ZSH_VERSION:-}" ]; then
             echo "  echo 'export PATH=\"\$PATH:$INSTALL_DIR\"' >> ~/.zshrc"
             echo "  source ~/.zshrc"
         else

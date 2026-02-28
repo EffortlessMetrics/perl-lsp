@@ -98,7 +98,7 @@ try {
         if ($ExpectedHash -eq $ActualHash) {
             Write-Success "Checksum verified"
         } else {
-            Write-Warn "Checksum mismatch - expected: $ExpectedHash, got: $ActualHash"
+            Write-Error "Checksum mismatch - expected: $ExpectedHash, got: $ActualHash"
         }
     } catch {
         Write-Warn "Could not download or verify checksums"
