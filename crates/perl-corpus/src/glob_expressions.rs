@@ -338,6 +338,71 @@ if (GLOB_ERROR) {
 }
 "#,
     },
+    GlobExpressionCase {
+        id: "glob.function.bare",
+        description: "Bare glob function without parentheses.",
+        tags: &["glob", "file", "builtin"],
+        source: r#"my @files = glob "*.pl";
+my @modules = glob "*.pm";
+"#,
+    },
+    GlobExpressionCase {
+        id: "glob.function.multi.pattern",
+        description: "Glob with space-separated multiple patterns.",
+        tags: &["glob", "file", "builtin"],
+        source: r#"my @files = glob "*.pl *.pm";
+my @all = glob("*.pl *.pm *.t");
+"#,
+    },
+    GlobExpressionCase {
+        id: "glob.diamond.dir.variable",
+        description: "Diamond operator with directory variable and path.",
+        tags: &["glob", "diamond", "file", "variable", "interpolation"],
+        source: r#"my $dir = "/usr/lib";
+my @files = <$dir/*.pl>;
+"#,
+    },
+    GlobExpressionCase {
+        id: "glob.readline.stdin",
+        description: "Readline from STDIN (not glob).",
+        tags: &["readline", "io", "disambiguation"],
+        source: r#"while (<STDIN>) {
+    chomp;
+    print "Got: $_\n";
+}
+"#,
+    },
+    GlobExpressionCase {
+        id: "glob.readline.filehandle",
+        description: "Readline from lexical filehandle (not glob).",
+        tags: &["readline", "io", "disambiguation", "filehandle"],
+        source: r#"open my $fh, "<", "file.txt" or die $!;
+while (<$fh>) {
+    print;
+}
+"#,
+    },
+    GlobExpressionCase {
+        id: "glob.readline.named.handle",
+        description: "Readline from named filehandle (not glob).",
+        tags: &["readline", "io", "disambiguation", "filehandle"],
+        source: r#"open FH, "<", "file.txt" or die $!;
+while (<FH>) {
+    print;
+}
+close FH;
+"#,
+    },
+    GlobExpressionCase {
+        id: "glob.disambiguation.mixed",
+        description: "Glob vs readline disambiguation in same scope.",
+        tags: &["glob", "readline", "disambiguation"],
+        source: r#"while (<STDIN>) { chomp; }
+my @f = <*.txt>;
+open my $fh, "<", "data.txt" or die $!;
+while (<$fh>) { print; }
+"#,
+    },
 ];
 
 /// Return the static glob expression fixtures.
@@ -521,6 +586,23 @@ mod tests {
         assert!(find_glob_case("glob.variable.interpolation").is_some());
         assert!(find_glob_case("glob.list.context").is_some());
         assert!(find_glob_case("glob.scalar.context").is_some());
+    }
+
+    #[test]
+    fn glob_cases_cover_disambiguation() {
+        assert!(find_glob_case("glob.function.bare").is_some());
+        assert!(find_glob_case("glob.function.multi.pattern").is_some());
+        assert!(find_glob_case("glob.diamond.dir.variable").is_some());
+        assert!(find_glob_case("glob.readline.stdin").is_some());
+        assert!(find_glob_case("glob.readline.filehandle").is_some());
+        assert!(find_glob_case("glob.readline.named.handle").is_some());
+        assert!(find_glob_case("glob.disambiguation.mixed").is_some());
+    }
+
+    #[test]
+    fn glob_cases_have_disambiguation_tag() {
+        let cases = GlobExpressionGenerator::by_tag("disambiguation");
+        assert!(cases.len() >= 4, "Expected at least 4 disambiguation cases, got {}", cases.len());
     }
 
     #[test]
