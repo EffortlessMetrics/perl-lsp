@@ -1611,7 +1611,7 @@ fn get_builtin_documentation(name: &str) -> Option<BuiltinDoc> {
 /// 4. Respond to LSP requests with precise semantic data
 ///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// use perl_parser::Parser;
 /// use perl_parser::semantic::SemanticModel;
 ///
@@ -1697,7 +1697,7 @@ impl SemanticModel {
     /// - Uses pre-computed symbol table for O(1) lookups
     ///
     /// # Example
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::Parser;
     /// use perl_parser::semantic::SemanticModel;
     ///

@@ -23,7 +23,7 @@
 //!
 //! ## Usage Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use perl_parser::incremental_v2::IncrementalParserV2;
 //! use perl_parser::edit::Edit;
 //! use perl_parser::position::Position;

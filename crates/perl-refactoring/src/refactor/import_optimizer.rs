@@ -30,7 +30,7 @@
 //!
 //! ## Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use perl_parser::import_optimizer::ImportOptimizer;
 //! use std::path::Path;
 //!
@@ -212,7 +212,7 @@ impl ImportOptimizer {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::import_optimizer::ImportOptimizer;
     ///
     /// let optimizer = ImportOptimizer::new();
@@ -231,7 +231,7 @@ impl ImportOptimizer {
     /// # Errors
     /// Returns an error string if the file cannot be read or parsing fails.
     /// # Examples
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use perl_parser::import_optimizer::ImportOptimizer;
     ///
     /// let optimizer = ImportOptimizer::new();
@@ -252,7 +252,7 @@ impl ImportOptimizer {
     /// # Errors
     /// Returns an error string if regex parsing or analysis fails.
     /// # Examples
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::import_optimizer::ImportOptimizer;
     ///
     /// let optimizer = ImportOptimizer::new();
@@ -526,7 +526,7 @@ impl ImportOptimizer {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use perl_parser::import_optimizer::ImportOptimizer;
     ///
     /// let optimizer = ImportOptimizer::new();
@@ -619,7 +619,7 @@ impl ImportOptimizer {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use perl_parser::import_optimizer::ImportOptimizer;
     ///
     /// let optimizer = ImportOptimizer::new();

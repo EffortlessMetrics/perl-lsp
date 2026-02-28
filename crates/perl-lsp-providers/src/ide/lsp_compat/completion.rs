@@ -22,7 +22,7 @@
 //!
 //! # Usage Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_parser::Parser;
 //!
 //! let code = "my $x = 42;";

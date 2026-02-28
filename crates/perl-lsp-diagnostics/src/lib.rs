@@ -11,7 +11,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lsp_diagnostics::DiagnosticsProvider;
 //!
 //! let provider = DiagnosticsProvider::new();

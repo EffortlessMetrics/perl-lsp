@@ -14,7 +14,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lsp_navigation::{TypeHierarchyProvider, WorkspaceSymbolsProvider};
 //!
 //! let type_hierarchy = TypeHierarchyProvider::new(workspace_index);

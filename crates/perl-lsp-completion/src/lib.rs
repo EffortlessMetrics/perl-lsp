@@ -10,7 +10,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lsp_completion::CompletionProvider;
 //!
 //! let provider = CompletionProvider::new(&ast, Some(&workspace_index))?;

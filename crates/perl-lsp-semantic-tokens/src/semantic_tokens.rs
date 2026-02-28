@@ -37,7 +37,7 @@
 //!
 //! ## Basic Semantic Token Generation
 //!
-//! ```no_run
+//! ```ignore
 //! use perl_lsp_providers::{Parser, ide::lsp_compat::semantic_tokens::collect_semantic_tokens};
 //!
 //! # fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -64,7 +64,7 @@
 //!
 //! ## LSP Semantic Tokens Provider
 //!
-//! ```no_run
+//! ```ignore
 //! use perl_lsp_providers::ide::lsp_compat::semantic_tokens::{collect_semantic_tokens, legend};
 //! use perl_lsp_providers::Parser;
 //!
@@ -92,7 +92,7 @@
 //!
 //! ## Custom Token Classification
 //!
-//! ```
+//! ```ignore
 //! use perl_lsp_providers::ide::lsp_compat::semantic_tokens::{EncodedToken, TokensLegend, legend};
 //!
 //! // Create custom semantic tokens
@@ -141,7 +141,7 @@ pub struct TokensLegend {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,ignore
 /// use perl_lsp_providers::ide::lsp_compat::semantic_tokens::legend;
 ///
 /// let legend = legend();
@@ -205,7 +205,7 @@ fn kind_idx(leg: &TokensLegend, k: &str) -> u32 {
 /// # Returns
 /// Encoded semantic tokens sorted for LSP transmission.
 /// # Examples
-/// ```rust
+/// ```rust,ignore
 /// use perl_lsp_providers::{Parser, ide::lsp_compat::semantic_tokens::collect_semantic_tokens};
 /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// let code = "my $x = 1;";

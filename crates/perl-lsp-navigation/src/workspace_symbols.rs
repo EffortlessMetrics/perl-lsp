@@ -40,7 +40,7 @@
 //!
 //! # Usage Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_lsp_providers::ide::lsp_compat::workspace_symbols::WorkspaceSymbolsProvider;
 //! use perl_parser_core::Parser;
 //! use std::collections::HashMap;

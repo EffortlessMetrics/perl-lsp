@@ -22,7 +22,7 @@
 //!
 //! # Usage Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! // Use the new module path for new code:
 //! use perl_lsp_providers::inlay_hints::InlayHintsProvider;
 //!

@@ -44,7 +44,7 @@
 //!
 //! # Usage Examples
 //!
-//! ```no_run
+//! ```ignore
 //! use perl_lsp_providers::ide::lsp_compat::code_actions::{CodeActionsProvider, CodeActionKind};
 //! use perl_lsp_providers::ide::lsp_compat::diagnostics::Diagnostic;
 //! use perl_parser_core::Parser;

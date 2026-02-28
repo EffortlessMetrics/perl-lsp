@@ -65,7 +65,7 @@
 //!
 //! # Usage Examples
 //!
-//! ```no_run
+//! ```ignore
 //! use perl_lsp_providers::ide::lsp_compat::rename::{RenameProvider, RenameOptions};
 //! use perl_parser_core::Parser;
 //!

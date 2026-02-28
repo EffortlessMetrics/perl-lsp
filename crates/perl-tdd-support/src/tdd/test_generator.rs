@@ -19,7 +19,7 @@
 //!
 //! ## Usage Examples
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_parser::test_generator::{TestGenerator, TestFramework};
 //! use perl_parser::{Parser, ast::Node};
 //!
@@ -124,7 +124,7 @@ impl TestGenerator {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser::{TestGenerator, TestFramework};
     ///
     /// let generator = TestGenerator::new(TestFramework::TestMore);

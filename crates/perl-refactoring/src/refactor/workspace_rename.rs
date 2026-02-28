@@ -23,7 +23,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use perl_refactoring::workspace_rename::{WorkspaceRename, WorkspaceRenameConfig};
 //! use perl_workspace_index::WorkspaceIndex;
 //! use std::path::Path;

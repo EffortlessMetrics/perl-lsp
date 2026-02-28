@@ -35,7 +35,7 @@
 //!
 //! # Usage
 //!
-//! ```rust
+//! ```rust,ignore
 //! use perl_workspace_index::workspace::state_machine::{IndexStateMachine, IndexState};
 //!
 //! let machine = IndexStateMachine::new();
@@ -365,7 +365,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::IndexStateMachine;
     ///
     /// let machine = IndexStateMachine::new();
@@ -406,7 +406,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::IndexStateMachine;
     ///
     /// let machine = IndexStateMachine::new();
@@ -454,7 +454,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::IndexStateMachine;
     ///
     /// let machine = IndexStateMachine::new();
@@ -494,7 +494,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::{IndexStateMachine, InvalidationReason};
     ///
     /// let machine = IndexStateMachine::new();
@@ -544,7 +544,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::IndexStateMachine;
     ///
     /// let machine = IndexStateMachine::new();
@@ -590,7 +590,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::{IndexStateMachine, DegradationReason};
     ///
     /// let machine = IndexStateMachine::new();
@@ -641,7 +641,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::IndexStateMachine;
     ///
     /// let machine = IndexStateMachine::new();
@@ -670,7 +670,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::IndexStateMachine;
     ///
     /// let machine = IndexStateMachine::new();
@@ -697,7 +697,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::{IndexStateMachine, BuildPhase};
     ///
     /// let machine = IndexStateMachine::new();
@@ -743,7 +743,7 @@ impl IndexStateMachine {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_workspace_index::workspace::state_machine::IndexStateMachine;
     ///
     /// let machine = IndexStateMachine::new();

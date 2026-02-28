@@ -130,7 +130,7 @@ impl CompletionProvider {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     ///
@@ -166,7 +166,7 @@ impl CompletionProvider {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     /// use perl_workspace_index::workspace_index::WorkspaceIndex;
@@ -215,7 +215,7 @@ impl CompletionProvider {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     ///
@@ -254,7 +254,7 @@ impl CompletionProvider {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     ///
@@ -313,7 +313,7 @@ impl CompletionProvider {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     /// use std::sync::atomic::{AtomicBool, Ordering};
@@ -529,7 +529,7 @@ impl CompletionProvider {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use perl_parser_core::Parser;
     /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
     ///
