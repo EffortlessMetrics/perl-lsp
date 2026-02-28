@@ -505,7 +505,7 @@ pub fn render_lsp_fallback_module() -> String {
     code.push_str("    pub counts_in_coverage: bool,\n");
     code.push_str("    pub tests: &'static [&'static str],\n");
     code.push_str("}\n");
-    code.push_str("pub const VERSION: &str = \"0.9.1\";\n");
+    code.push_str("pub const VERSION: &str = \"0.10.0\";\n");
     code.push_str("pub const LSP_VERSION: &str = \"3.18\";\n");
     code.push_str("pub const COMPLIANCE_PERCENT: f32 = 0.0;\n");
     code.push_str("pub const ALL_FEATURES: &[Feature] = &[];\n");
