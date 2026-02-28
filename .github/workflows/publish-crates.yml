@@ -145,8 +145,10 @@ jobs:
             fi
 
             if [ "$DRY_RUN" = "true" ]; then
-              echo "Dry run: scripts/cargo-package-workspace-dry-run.sh $CRATE"
-              bash scripts/cargo-package-workspace-dry-run.sh "$CRATE"
+              TARGET_DIR="${RUNNER_TEMP}/cargo-package-${CRATE//\//-}"
+              rm -rf "$TARGET_DIR"
+              echo "Dry run: scripts/cargo-package-workspace-dry-run.sh $CRATE (CARGO_TARGET_DIR=$TARGET_DIR)"
+              CARGO_TARGET_DIR="$TARGET_DIR" bash scripts/cargo-package-workspace-dry-run.sh "$CRATE"
               continue
             fi
 
