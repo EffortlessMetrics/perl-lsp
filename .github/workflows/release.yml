@@ -114,10 +114,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
         with:
           targets: ${{ matrix.target }}
 
@@ -126,7 +126,7 @@ jobs:
         run: cargo install cross --locked --git https://github.com/cross-rs/cross
 
       - name: Cache cargo dependencies
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           key: ${{ matrix.target }}
           cache-on-failure: true
@@ -209,13 +209,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install cargo-release
-        run: cargo install cargo-release --locked
+        uses: dtolnay/rust-toolchain@631a55b12751854ce901bb631d5902ceb48146f7 # stable
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -239,10 +236,16 @@ jobs:
         id: release_notes
         run: |
           VERSION="${{ needs.release-metadata.outputs.version }}"
-          cat > release_notes.md << EOF
-          ## Release ${VERSION}
 
-          ### Installation
+          # Extract changelog section for this version
+          CHANGELOG_SECTION=$(awk -v ver="${VERSION}" '
+            $0 ~ "^## \\[" ver "\\]" { in_section=1; next }
+            in_section && /^## \[/ { exit }
+            in_section { print }
+          ' CHANGELOG.md)
+
+          cat > release_notes.md << 'HEADER'
+          ## Installation
 
           ```bash
           # Using cargo
@@ -252,18 +255,26 @@ jobs:
           # See assets below
           ```
 
-          ### Changes
+          HEADER
 
-          See the [CHANGELOG](CHANGELOG.md) for detailed changes.
+          if [ -n "$CHANGELOG_SECTION" ]; then
+            echo "## Changes" >> release_notes.md
+            echo "" >> release_notes.md
+            echo "$CHANGELOG_SECTION" >> release_notes.md
+          else
+            echo "See the [CHANGELOG](CHANGELOG.md) for detailed changes." >> release_notes.md
+          fi
 
-          ### Checksums
+          cat >> release_notes.md << 'FOOTER'
+
+          ## Checksums
 
           Verify downloads with the consolidated `SHA256SUMS` file attached to this release.
-          EOF
+          FOOTER
           cat release_notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           files: |
             artifacts/*/*
@@ -282,7 +293,7 @@ jobs:
           cargo sbom --output-format spdx_json_2_3 > sbom-spdx.json
 
       - name: Upload SBOM as release asset
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           files: sbom-spdx.json
           tag_name: ${{ needs.release-metadata.outputs.tag }}

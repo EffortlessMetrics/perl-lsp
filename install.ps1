@@ -139,7 +139,19 @@ try {
     Copy-Item -Path $BinaryPath -Destination $DestPath -Force
     
     Write-Success "Installed $Name to $DestPath"
-    
+
+    # Install perl-dap if present in the archive
+    $DapBinaryPath = Join-Path $ExtractedDir "perl-dap.exe"
+    if (Test-Path $DapBinaryPath) {
+        $DapDestPath = Join-Path $InstallDir "perl-dap.exe"
+        Write-Info "Installing perl-dap to $DapDestPath"
+        if (Test-Path $DapDestPath) {
+            Remove-Item $DapDestPath -Force
+        }
+        Copy-Item -Path $DapBinaryPath -Destination $DapDestPath -Force
+        Write-Success "Installed perl-dap to $DapDestPath"
+    }
+
     # Verify installation
     try {
         $VersionOutput = & $DestPath --version 2>&1
