@@ -17,6 +17,10 @@ concurrency:
   group: brew-bump-${{ github.ref }}
   cancel-in-progress: false  # Don't cancel brew bumps
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   bump:
     runs-on: ubuntu-24.04
