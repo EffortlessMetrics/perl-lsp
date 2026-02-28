@@ -9,7 +9,7 @@
       "hash": "__RELEASE_HASH__"
     }
   },
-  "bin": "perl-lsp.exe",
+  "bin": ["perl-lsp.exe", "perl-dap.exe"],
   "checkver": "github",
   "autoupdate": {
     "architecture": {

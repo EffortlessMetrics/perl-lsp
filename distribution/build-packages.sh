@@ -25,7 +25,7 @@ fi
 
 # Build the release binary
 echo -e "${YELLOW}Building release binary...${NC}"
-cargo build --release --bin perl-lsp -p perl-parser
+cargo build --release --bin perl-lsp -p perl-lsp
 
 # Create temporary directory for packaging
 TEMP_DIR=$(mktemp -d)
