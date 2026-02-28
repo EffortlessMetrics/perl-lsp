@@ -6,7 +6,7 @@
 # gates to be useful while acknowledging imperfection.
 #
 # Schema Version: 1
-# Last Updated: 2026-01-24
+# Last Updated: 2026-02-28
 #
 # Usage:
 #   - `just debt-report` - Show current debt status
@@ -164,7 +164,15 @@ technical_debt:
     target: "v1.0"
     issue: "#197"
     added: "2026-01-24"
-    notes: "Ratcheting baseline in place, working toward 100% coverage"
+    notes: "8 doc warnings fixed in #894; ratcheting baseline in place, working toward 100%"
+
+  - area: "dependencies"
+    description: "Unused dependencies in legacy/excluded crates"
+    priority: "low"
+    target: "v1.1"
+    issue: null
+    added: "2026-02-28"
+    notes: "cargo-machete reports deps in tree-sitter-perl-c, perl-parser-pest, tree-sitter-perl (excluded from workspace) and perl-lsp-feature-contracts (perl-feature-catalog)"
 
 # =============================================================================
 # Historical Records
@@ -173,7 +181,14 @@ technical_debt:
 
 history:
   # Week-by-week summary of debt changes
-  weekly_summaries: []
+  weekly_summaries:
+    - week: "2026-W09"
+      quarantined_tests: 0
+      known_issues: 0
+      technical_debt: 4
+      added: 1
+      resolved: 5
+      notes: "Major cleanup campaign: 37 unused deps removed, 8 doc warnings fixed, 2 stale files cleaned, .gitignore hardened, 3 highlight test regressions fixed"
     # Example:
     # - week: "2026-W04"
     #   quarantined_tests: 2
@@ -184,7 +199,41 @@ history:
     #   notes: "Resolved DAP race condition issues"
 
   # Resolved items (last 90 days, older archived)
-  resolved: []
+  resolved:
+    - type: "technical_debt"
+      name: "37 unused dependencies across workspace"
+      resolved: "2026-02-28"
+      resolution: "Removed via cargo-machete audit"
+      pr: "#895"
+      days_open: 35
+
+    - type: "technical_debt"
+      name: "8 cargo doc warnings across workspace"
+      resolved: "2026-02-28"
+      resolution: "Fixed missing docs and broken doc links"
+      pr: "#894"
+      days_open: 35
+
+    - type: "technical_debt"
+      name: "2 stale tracked files in repository"
+      resolved: "2026-02-28"
+      resolution: "Removed stale files and hardened .gitignore"
+      pr: "#889"
+      days_open: 35
+
+    - type: "technical_debt"
+      name: "3 highlight test regressions"
+      resolved: "2026-02-28"
+      resolution: "Fixed document highlight tests for modern Perl syntax"
+      pr: "#896"
+      days_open: 1
+
+    - type: "technical_debt"
+      name: ".gitignore gaps allowing generated files"
+      resolved: "2026-02-28"
+      resolution: "Hardened .gitignore with comprehensive patterns"
+      pr: "#889"
+      days_open: 35
     # Example:
     # - type: "flaky_test"
     #   name: "lsp::test_init_race"
@@ -265,6 +314,14 @@ alerts:
 # =============================================================================
 
 version_history:
+  - version: "1.1.0"
+    date: "2026-02-28"
+    changes:
+      - "Recorded cleanup campaign results (37 deps, 8 doc warnings, 2 stale files, 3 highlight regressions)"
+      - "Added unused legacy deps as tracked debt item"
+      - "Updated documentation debt notes to reflect progress"
+      - "Populated first weekly summary and resolved items"
+
   - version: "1.0.0"
     date: "2026-01-24"
     changes:
