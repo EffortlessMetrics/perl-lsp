@@ -542,7 +542,7 @@ static const struct TSPRange tsp_id_start[] = {
 };
 
 static bool is_tsp_id_start (int32_t codepoint) {
-  return bsearch(&codepoint, tsp_id_start, sizeof(tsp_id_start) / sizeof(tsp_id_start[0]), sizeof(tsp_id_start[0]), tsprange_contains);
+  return tsp_bsearch(&codepoint, tsp_id_start, sizeof(tsp_id_start) / sizeof(tsp_id_start[0]), sizeof(tsp_id_start[0]), tsprange_contains);
 }
 
 static const struct TSPRange tsp_id_continue[] = {
@@ -1206,7 +1206,7 @@ static const struct TSPRange tsp_id_continue[] = {
 };
 
 static bool is_tsp_id_continue (int32_t codepoint) {
-  return bsearch(&codepoint, tsp_id_continue, sizeof(tsp_id_continue) / sizeof(tsp_id_continue[0]), sizeof(tsp_id_continue[0]), tsprange_contains);
+  return tsp_bsearch(&codepoint, tsp_id_continue, sizeof(tsp_id_continue) / sizeof(tsp_id_continue[0]), sizeof(tsp_id_continue[0]), tsprange_contains);
 }
 
 static const struct TSPRange tsp_whitespace[] = {
@@ -1222,5 +1222,5 @@ static const struct TSPRange tsp_whitespace[] = {
   { 12288, 12289 }
 };
 static bool is_tsp_whitespace (int32_t codepoint) {
-  return bsearch(&codepoint, tsp_whitespace, sizeof(tsp_whitespace) / sizeof(tsp_whitespace[0]), sizeof(tsp_whitespace[0]), tsprange_contains);
+  return tsp_bsearch(&codepoint, tsp_whitespace, sizeof(tsp_whitespace) / sizeof(tsp_whitespace[0]), sizeof(tsp_whitespace[0]), tsprange_contains);
 }
