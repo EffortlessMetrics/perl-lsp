@@ -145,8 +145,8 @@ impl LspServer {
                 coordinator.notify_parse_complete(uri);
             }
 
-            // Send diagnostics
-            self.publish_diagnostics(&normalized_uri);
+            // Send diagnostics (use original URI for client notification)
+            self.publish_diagnostics(uri);
         }
 
         Ok(())
@@ -331,8 +331,8 @@ impl LspServer {
                     coordinator.notify_parse_complete(uri);
                 }
 
-                // Send diagnostics
-                self.publish_diagnostics(&normalized_uri);
+                // Send diagnostics (use original URI for client notification)
+                self.publish_diagnostics(uri);
             }
         }
 

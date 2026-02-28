@@ -168,7 +168,7 @@ impl LspServer {
                 let _ = self.notify(
                     "textDocument/publishDiagnostics",
                     json!({
-                        "uri": normalized_uri,
+                        "uri": uri,
                         "version": doc.version,
                         "diagnostics": lsp_diagnostics
                     }),
