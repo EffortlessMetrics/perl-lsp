@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-lsp-feature-grid Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-feature-grid`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+BDD-aware feature-grid payload and profile-aware advertized feature APIs for Perl LSP.
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha

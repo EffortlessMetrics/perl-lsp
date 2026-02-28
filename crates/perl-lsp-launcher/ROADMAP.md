@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-lsp-launcher Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-launcher`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+Typed CLI launch configuration for the Perl LSP runtime.
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha

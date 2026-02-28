@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-heredoc Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-heredoc`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+Heredoc collector and processor for Perl — handles multi-line heredoc syntax including indentation stripping and CRLF normalization
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha

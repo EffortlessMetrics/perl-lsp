@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-lsp-inlay-hints Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-inlay-hints`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+LSP inlay hints provider for Perl
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha

@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# perl-content-length-framing Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-content-length-framing`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+Shared Content-Length frame parsing and encoding for LSP and DAP transports
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha

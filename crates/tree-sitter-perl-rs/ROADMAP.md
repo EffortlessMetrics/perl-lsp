@@ -1,9 +1,9 @@
-# perl-parser Roadmap
+# tree-sitter-perl-rs Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `tree-sitter-perl-rs`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
 
 ## Purpose
-Native Perl parser (v3) — recursive descent with Tree-sitter-compatible AST, semantic analysis, and LSP provider engine
+Pure-Rust Pest-based Perl parser with tree-sitter-compatible S-expression output (internal harness)
 
 ## Current Status (v0.10.0)
 - **Status:** Initial Public Alpha
