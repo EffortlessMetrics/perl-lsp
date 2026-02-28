@@ -196,3 +196,8 @@ corpus_audit_report.json
 
 # Rust ICE crash reports
 rustc-ice-*
+
+# Editor/merge conflict leftovers
+*.orig
+*.bak
+patch.diff
