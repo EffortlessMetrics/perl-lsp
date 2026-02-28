@@ -46,7 +46,26 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-release
-        run: cargo install cargo-release --locked
+        run: |
+          CARGO_RELEASE_TAG="$(curl -s https://api.github.com/repos/crate-ci/cargo-release/releases/latest | jq -r '.tag_name // ""')"
+          if [ -z "$CARGO_RELEASE_TAG" ] || [ "$CARGO_RELEASE_TAG" = "null" ]; then
+            echo "::error::Failed to resolve latest cargo-release tag"
+            exit 1
+          fi
+
+          CARGO_RELEASE_ASSET_URL="$(curl -s "https://api.github.com/repos/crate-ci/cargo-release/releases/tags/${CARGO_RELEASE_TAG}" | \
+            jq -r '.assets[].browser_download_url | select(test("x86_64-unknown-linux-musl\\.tar\\.gz$"))' | head -n 1)"
+          if [ -z "$CARGO_RELEASE_ASSET_URL" ] || [ "$CARGO_RELEASE_ASSET_URL" = "null" ]; then
+            echo "::error::Failed to resolve linux x86_64 cargo-release asset from ${CARGO_RELEASE_TAG}"
+            exit 1
+          fi
+
+          curl -fsSL "$CARGO_RELEASE_ASSET_URL" -o /tmp/cargo-release.tar.gz
+          tar -xzf /tmp/cargo-release.tar.gz -C /tmp
+          cargo_release_dir="$(tar -tzf /tmp/cargo-release.tar.gz | head -n 1 | cut -d'/' -f1)"
+          mkdir -p /usr/local/bin
+          sudo mv "/tmp/${cargo_release_dir}/cargo-release" /usr/local/bin/
+          sudo chmod +x /usr/local/bin/cargo-release
 
       - name: Install git-cliff
         run: |
