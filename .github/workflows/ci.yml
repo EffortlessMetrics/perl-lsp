@@ -144,3 +144,13 @@ jobs:
 
             console.log(`Setting PR status to: ${status}`);
             console.log(`Description: ${description}`);
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: status,
+              context: 'ci/merge-gate',
+              description,
+              target_url: `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            });
