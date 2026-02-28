@@ -20,7 +20,7 @@ The perl-lsp release process is fully automated and supports:
 - **Package managers**: Homebrew, Scoop, Chocolatey
 - **Docker images**: Multi-arch (linux/amd64, linux/arm64)
 - **VSCode extension**: VSCode Marketplace and Open VSX
-- **crates.io**: All 43 workspace crates
+- **crates.io**: All publishable workspace crates
 
 ### Release Architecture
 
@@ -72,16 +72,50 @@ The following GitHub permissions must be granted to workflows:
 
 ## Release Workflow
 
+### Recommended Turnkey PR Flow
+
+The preferred flow is fully PR-driven and starts from the repository default branch (`master`), using `gh` to dispatch workflows and merge the version bump PR:
+
+```bash
+# from a clean working tree aligned with origin/master
+git fetch origin master
+git checkout master
+git reset --hard origin/master
+
+# optional but recommended: use the turnkey orchestrator
+scripts/release-turnkey-pr.sh <0.x.y>
+```
+
+Or run the two workflow dispatches manually with `gh`:
+
+```bash
+# 1) Generate bump PR and changelog
+gh workflow run "Version Bump & Changelog Generation" \
+  --ref master \
+  --field version=<0.x.y>
+
+# 2) Merge the release/v<0.x.y> PR from release-bot UI or API
+
+# 3) Dispatch release orchestration
+gh workflow run "Release Orchestration" \
+  --ref master \
+  --field version=<0.x.y> \
+  --field prerelease=false \
+  --field skip_crates=false \
+  --field skip_extension=false \
+  --field skip_docker=false
+```
+
 ### Step 1: Version Bump and Changelog Generation
 
-Trigger the version bump workflow to prepare for release:
+For manual control, trigger the version bump workflow to prepare for release:
 
 ```bash
 # Via GitHub UI
 1. Go to Actions tab
 2. Select "Version Bump & Changelog Generation"
 3. Click "Run workflow"
-4. Enter version (e.g., 0.9.0)
+4. Enter version (e.g., <0.x.y>)
 5. Select bump type (major/minor/patch)
 6. Click "Run workflow"
 ```
@@ -109,7 +143,7 @@ After merging the version bump PR, trigger the release orchestration:
 1. Go to Actions tab
 2. Select "Release Orchestration"
 3. Click "Run workflow"
-4. Enter version (e.g., 0.9.0)
+4. Enter version (e.g., <0.x.y>)
 5. Configure options:
    - prerelease: Mark as prerelease (default: false)
    - skip_crates: Skip crates.io publishing (default: false)
@@ -128,7 +162,7 @@ This will:
 Monitor the following workflows:
 
 1. **Release** - Builds binaries and creates GitHub release
-2. **Publish to crates.io** - Publishes all 43 crates
+2. **Publish to crates.io** - Publishes all publishable workspace crates
 3. **Publish VSCode Extension** - Publishes to VSCode Marketplace and Open VSX
 4. **Publish Docker Images** - Builds and pushes multi-arch images
 5. **Homebrew Auto-Bump** - Creates PR to Homebrew
@@ -168,7 +202,7 @@ After all workflows complete, verify:
 
 ### crates.io
 
-All 43 workspace crates are published to crates.io in dependency order:
+All publishable workspace crates are published to crates.io in dependency order:
 
 ```
 perl-lexer → perl-parser-core → perl-position-tracking →
@@ -207,9 +241,9 @@ Binaries are published for all platforms:
 **Installation:**
 ```bash
 # Download and extract
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.9.0/perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-0.9.0-x86_64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-0.9.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
+wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v<0.x.y>/perl-lsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
+tar xzf perl-lsp-<0.x.y>-x86_64-unknown-linux-gnu.tar.gz
+sudo cp perl-lsp-<0.x.y>-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
 ```
 
 ### Homebrew
@@ -283,13 +317,13 @@ If the GitHub release has issues:
 
 1. **Delete the release**
    ```bash
-   gh release delete v0.9.0 --yes
+   gh release delete v<0.x.y> --yes
    ```
 
 2. **Delete the tag**
    ```bash
-   git push origin :refs/tags/v0.9.0
-   git tag -d v0.9.0
+   git push origin :refs/tags/v<0.x.y>
+   git tag -d v<0.x.y>
    ```
 
 3. **Fix the issue** (e.g., update release.yml)
@@ -407,7 +441,7 @@ For a complete rollback:
 
 ### Pre-Release
 
-- [ ] All CI tests passing on main branch
+- [ ] All CI tests passing on master branch
 - [ ] Version bump PR created and reviewed
 - [ ] Changelog generated and reviewed
 - [ ] Breaking changes documented

@@ -164,36 +164,46 @@ just changelog-latest
 Generate changelog for a specific range:
 
 ```bash
-just changelog-range v0.8.0 v0.9.0
+just changelog-range <previous-release> <next-release>
 ```
 
 ## Release Workflow Integration
 
-The changelog is automatically generated during releases via `.github/workflows/release.yml`:
+The changelog is automatically generated during releases via the release orchestration flow:
 
-1. **Trigger**: Push a version tag (e.g., `v0.9.1`) or use workflow_dispatch
-2. **Generate**: git-cliff generates release notes from commits since last tag
-3. **Attach**: Release notes are included in the GitHub release
-4. **Publish**: Binaries and changelog are published together
+1. **Trigger**: Dispatch `Version Bump & Changelog Generation` with `version=<0.x.y>`.
+2. **Generate**: The workflow bumps `Cargo.toml`, runs `git-cliff`, and creates a PR to merge changelog updates.
+3. **Release Orchestration**: After PR merge, dispatch `Release Orchestration` with `version=<0.x.y>`.
+4. **Release Workflow**: `release.yml` creates a GitHub release and includes generated release notes.
+5. **Publish**: `publish-crates.yml`, `publish-extension`, and `publish-docker` are triggered as configured.
 
-### Manual Release Process
+### Turnkey Release Flow
 
 ```bash
-# 1. Update version in Cargo.toml files
-vim crates/perl-lsp/Cargo.toml
+# Recommended: run both workflow steps through gh automation.
+./scripts/release-turnkey-pr.sh <0.x.y>
+```
 
-# 2. Update CHANGELOG.md with unreleased changes
-just changelog-append
+### Alternative Manual Release Process
 
-# 3. Commit the changelog
-git add CHANGELOG.md
-git commit -m "chore: prepare release v0.9.1"
+```bash
+# 1. Generate changelog content
+./scripts/release-turnkey-pr.sh <0.x.y> --no-auto-merge --no-wait-release
 
-# 4. Create and push tag
-git tag v0.9.1
-git push origin v0.9.1
+# 2. Manually review and merge the generated version bump PR.
 
-# 5. GitHub Actions will build and create the release automatically
+# 3. Dispatch Release Orchestration manually
+gh workflow run "Release Orchestration" \
+  --ref master \
+  --field version=<0.x.y> \
+  --field prerelease=false \
+  --field skip_crates=false \
+  --field skip_extension=false \
+  --field skip_docker=false
+
+# 4. Optionally monitor release/publish workflows in GitHub Actions.
+
+# 5. GitHub Actions creates release notes and publishes artifacts.
 ```
 
 ## Configuration
@@ -340,7 +350,7 @@ commit_parsers = [
 
 ## Examples
 
-### Generate Changelog for v0.9.0 Release
+### Generate Changelog for v<0.x.y> Release
 
 ```bash
 # 1. Check what will be included
@@ -354,15 +364,15 @@ git diff CHANGELOG.md
 
 # 4. Commit and tag
 git add CHANGELOG.md
-git commit -m "chore: prepare v0.9.0 release"
-git tag v0.9.0
+git commit -m "chore: prepare v<0.x.y> release"
+git tag v<0.x.y>
 git push origin master --tags
 ```
 
 ### View Changes Between Two Versions
 
 ```bash
-just changelog-range v0.8.0 v0.9.0
+just changelog-range <previous-release> <next-release>
 ```
 
 ### Regenerate Full Changelog

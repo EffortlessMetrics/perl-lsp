@@ -10,22 +10,75 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g., v0.8.3)'
+        description: 'Release tag (e.g., v<0.x.y>)'
         required: true
         type: string
+      prerelease:
+        description: 'Mark this as a prerelease'
+        required: false
+        type: boolean
+        default: false
 
-# Cancel in-flight runs on new pushes
+# Cancel in-flight runs on concurrent release dispatches
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false  # Don't cancel release builds
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
+  release-metadata:
+    name: Resolve release metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+
+    steps:
+      - name: Resolve and validate tag
+        id: meta
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ] && [ "${{ github.ref_type }}" = "tag" ]; then
+            TAG="${{ github.ref_name }}"
+          fi
+          PRERELEASE_INPUT="${{ github.event.inputs.prerelease }}"
+
+          if [ -z "$TAG" ]; then
+            echo "::error::Release tag is missing"
+            exit 1
+          fi
+
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::Invalid release tag: $TAG"
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          PRERELEASE="${PRERELEASE_INPUT}"
+          if [ -z "$PRERELEASE" ]; then
+            if [[ "$VERSION" == *-* ]]; then
+              PRERELEASE="true"
+            else
+              PRERELEASE="false"
+            fi
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+          echo "Resolved release tag: $TAG"
+          echo "Resolved version: $VERSION"
+          echo "Resolved prerelease: $PRERELEASE"
+
   build:
     name: Build ${{ matrix.target }}
+    needs: release-metadata
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -36,6 +89,7 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-22.04
             use_cross: false
+          # Linux aarch64 GNU
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04
             use_cross: true
@@ -93,9 +147,8 @@ jobs:
         run: |
           NAME="perl-lsp"
           TARGET="${{ matrix.target }}"
-          VERSION="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${{ needs.release-metadata.outputs.tag }}"
 
-          # Binary names with .exe for Windows
           if [[ "$TARGET" == *"windows"* ]]; then
             BIN="${NAME}.exe"
             DAP_BIN="perl-dap.exe"
@@ -106,24 +159,19 @@ jobs:
             EXT=".tar.gz"
           fi
 
-          # Create package directory
           PKG_NAME="${NAME}-${VERSION}-${TARGET}"
           mkdir -p "${PKG_NAME}"
 
-          # Copy binaries
           cp "target/${TARGET}/release/${BIN}" "${PKG_NAME}/"
           cp "target/${TARGET}/release/${DAP_BIN}" "${PKG_NAME}/"
 
-          # Strip binaries on Unix
           if [[ "$TARGET" != *"windows"* ]] && [[ "${{ matrix.use_cross }}" != "true" ]]; then
             strip "${PKG_NAME}/${BIN}" 2>/dev/null || true
             strip "${PKG_NAME}/${DAP_BIN}" 2>/dev/null || true
           fi
 
-          # Copy additional files
           cp README.md LICENSE "${PKG_NAME}/" 2>/dev/null || true
 
-          # Generate checksums
           cd "${PKG_NAME}"
           if command -v sha256sum >/dev/null; then
             sha256sum "${BIN}" "${DAP_BIN}" > SHA256SUMS.txt
@@ -132,7 +180,6 @@ jobs:
           fi
           cd ..
 
-          # Create archive
           if [[ "$EXT" == ".zip" ]]; then
             7z a "${PKG_NAME}${EXT}" "${PKG_NAME}"/*
           else
@@ -151,13 +198,13 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
+    needs: [build, release-metadata]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: write
-      id-token: write  # Required for SLSA provenance
-      attestations: write  # Required for build attestations
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout
@@ -188,19 +235,19 @@ jobs:
       - name: Generate release notes
         id: release_notes
         run: |
-          VERSION="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${{ needs.release-metadata.outputs.version }}"
           cat > release_notes.md << EOF
           ## Release ${VERSION}
 
           ### Installation
 
-          \`\`\`bash
+          ```bash
           # Using cargo
           cargo install perl-lsp
 
           # Or download binary for your platform
           # See assets below
-          \`\`\`
+          ```
 
           ### Changes
 
@@ -208,7 +255,7 @@ jobs:
 
           ### Checksums
 
-          Verify downloads with the consolidated \`SHA256SUMS\` file attached to this release.
+          Verify downloads with the consolidated `SHA256SUMS` file attached to this release.
           EOF
           cat release_notes.md
 
@@ -220,7 +267,8 @@ jobs:
             SHA256SUMS
           body_path: release_notes.md
           draft: false
-          prerelease: false
+          prerelease: ${{ needs.release-metadata.outputs.prerelease == 'true' }}
+          tag_name: ${{ needs.release-metadata.outputs.tag }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -234,5 +282,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: sbom-spdx.json
+          tag_name: ${{ needs.release-metadata.outputs.tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

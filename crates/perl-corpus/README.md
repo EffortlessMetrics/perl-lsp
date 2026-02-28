@@ -1,4 +1,6 @@
 # perl-corpus
+[![Crates.io](https://img.shields.io/crates/v/perl-corpus.svg)](https://crates.io/crates/perl-corpus)
+[![Documentation](https://docs.rs/perl-corpus/badge.svg)](https://docs.rs/perl-corpus)
 
 Test corpus management, property-based generators, and edge case fixtures for Perl parsers.
 
