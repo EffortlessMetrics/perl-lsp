@@ -1,12 +1,12 @@
 [package]
 name = "perl-feature-catalog"
 version = "0.10.0"
-edition = { workspace = true }
-rust-version = { workspace = true }
-authors = { workspace = true }
-license = "MIT OR Apache-2.0"
-repository = { workspace = true }
-homepage = { workspace = true }
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Shared feature catalog model and code-generation helpers for capability-driven features."
 documentation = "https://docs.rs/perl-feature-catalog"
 readme = "README.md"

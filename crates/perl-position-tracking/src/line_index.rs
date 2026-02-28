@@ -190,11 +190,7 @@ impl LineIndex {
         }
 
         // Check if we're at the end of the line
-        if current_utf16 == utf16_offset {
-            Some(line_text.len())
-        } else {
-            None
-        }
+        if current_utf16 == utf16_offset { Some(line_text.len()) } else { None }
     }
 
     /// Create a range from byte offsets
