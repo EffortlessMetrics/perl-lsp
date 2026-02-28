@@ -80,7 +80,7 @@ cargo run -p perl-parser -- path/to/file.pl
 | Crate | Purpose |
 |-------|---------|
 | [`perl-lsp`](https://crates.io/crates/perl-lsp) | Language Server Protocol binary |
-| [`perl-dap`](crates/perl-dap/) | Debug Adapter Protocol binary |
+| [`perl-dap`](https://crates.io/crates/perl-dap) | Debug Adapter Protocol binary |
 | [`perl-parser`](https://crates.io/crates/perl-parser) | Recursive-descent Perl parser library |
 | [`perl-lexer`](https://crates.io/crates/perl-lexer) | Context-aware Perl tokenizer |
 | [`perl-corpus`](https://crates.io/crates/perl-corpus) | Parser/LSP test corpus |

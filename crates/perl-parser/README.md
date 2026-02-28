@@ -1,4 +1,6 @@
 # perl-parser
+[![Crates.io](https://img.shields.io/crates/v/perl-parser.svg)](https://crates.io/crates/perl-parser)
+[![Documentation](https://docs.rs/perl-parser/badge.svg)](https://docs.rs/perl-parser)
 
 Central hub crate for the Perl parser ecosystem. Provides a native recursive-descent
 parser (v3) with Tree-sitter-compatible AST output, semantic analysis, workspace
