@@ -103,7 +103,8 @@ get_version() {
 
 # Download and install binary
 install_binary() {
-    ASSET="$NAME-$TAG-$TARGET.tar.gz"
+    VERSION_NUM="${TAG#v}"
+    ASSET="$NAME-$VERSION_NUM-$TARGET.tar.gz"
     URL="https://github.com/$REPO/releases/download/$TAG/$ASSET"
     
     write_info "Downloading $NAME $TAG for $TARGET"
@@ -153,7 +154,7 @@ install_binary() {
     tar xzf "$ARCHIVE_PATH"
     
     # Find the binary
-    EXTRACTED_DIR="$NAME-$TAG-$TARGET"
+    EXTRACTED_DIR="$NAME-$VERSION_NUM-$TARGET"
     if [ ! -d "$EXTRACTED_DIR" ]; then
         write_error "Extracted directory not found: $EXTRACTED_DIR"
     fi

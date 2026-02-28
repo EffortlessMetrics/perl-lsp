@@ -62,8 +62,10 @@ if ($Version -eq "latest") {
     $Tag = if ($Version.StartsWith("v")) { $Version } else { "v$Version" }
 }
 
+$VersionNum = $Tag.TrimStart("v")
+
 # Construct download URL
-$Asset = "$Name-$Tag-$Target.zip"
+$Asset = "$Name-$VersionNum-$Target.zip"
 $Url = "https://github.com/$Repo/releases/download/$Tag/$Asset"
 
 Write-Info "Downloading $Name $Tag for $Target"
@@ -108,7 +110,7 @@ try {
     Expand-Archive -Path $ZipPath -DestinationPath $ExtractDir -Force
     
     # Find the binary
-    $ExtractedDir = Join-Path $ExtractDir "$Name-$Tag-$Target"
+    $ExtractedDir = Join-Path $ExtractDir "$Name-$VersionNum-$Target"
     if (-not (Test-Path $ExtractedDir)) {
         # Try without nested directory
         $ExtractedDir = $ExtractDir
