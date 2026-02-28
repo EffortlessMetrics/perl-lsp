@@ -159,8 +159,7 @@ impl DocumentHighlightProvider {
         }
 
         // Check for subroutine/method name at cursor position
-        if let NodeKind::Subroutine { name: Some(sub_name), name_span: Some(span), .. } =
-            &node.kind
+        if let NodeKind::Subroutine { name: Some(sub_name), name_span: Some(span), .. } = &node.kind
         {
             if offset >= span.start && offset <= span.end {
                 return Some(SymbolInfo {
@@ -424,12 +423,10 @@ impl DocumentHighlightProvider {
                 if let Some(target_sigil) = &target.sigil {
                     if let Some(parent_node) = parent {
                         if let NodeKind::Binary { op, .. } = &parent_node.kind {
-                            let cross_match =
-                                (target_sigil == "%" && sigil == "$" && op == "{}")
-                                    || (target_sigil == "@" && sigil == "$" && op == "[]");
+                            let cross_match = (target_sigil == "%" && sigil == "$" && op == "{}")
+                                || (target_sigil == "@" && sigil == "$" && op == "[]");
                             if cross_match {
-                                let kind =
-                                    self.determine_highlight_kind_with_parent(node, parent);
+                                let kind = self.determine_highlight_kind_with_parent(node, parent);
                                 highlights
                                     .push(DocumentHighlight { location: node.location, kind });
                             }
@@ -440,8 +437,7 @@ impl DocumentHighlightProvider {
         }
 
         // Emit highlight for subroutine definition name_span
-        if let NodeKind::Subroutine { name: Some(sub_name), name_span: Some(span), .. } =
-            &node.kind
+        if let NodeKind::Subroutine { name: Some(sub_name), name_span: Some(span), .. } = &node.kind
         {
             if target.is_function && sub_name == &target.name {
                 highlights.push(DocumentHighlight {
