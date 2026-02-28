@@ -1,13 +1,14 @@
 [package]
 name = "perl-position-tracking"
-version = "0.10.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 description = "UTF-8/UTF-16 position tracking and conversion for Perl LSP"
 readme = "README.md"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/EffortlessMetrics/perl-lsp"
-homepage = "https://github.com/EffortlessMetrics/perl-lsp"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/perl-position-tracking"
 keywords = ["perl", "position", "utf16", "lsp", "utf8"]
 categories = ["development-tools", "text-editors"]
