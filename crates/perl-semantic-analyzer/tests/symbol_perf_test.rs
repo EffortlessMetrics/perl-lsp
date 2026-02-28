@@ -147,7 +147,8 @@ fn benchmark_symbol_extraction_with_interpolation() {
     code.push_str("}\n");
 
     let mut parser = Parser::new(&code);
-    let ast = parser.parse().expect("Failed to parse");
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
 
     let start = Instant::now();
     let extractor = SymbolExtractor::new();

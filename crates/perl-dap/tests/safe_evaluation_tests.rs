@@ -67,7 +67,7 @@ fn test_evaluate_safe_mode_blocks_iterator_and_io() -> Result<(), Box<dyn std::e
                     msg
                 );
             } else {
-                panic!("Operation '{}' failed without message", op);
+                return Err(format!("Operation '{}' failed without message", op).into());
             }
         }
     }
@@ -91,15 +91,13 @@ fn test_evaluate_safe_mode_allows_comparisons_and_lookups() -> Result<(), Box<dy
 
         // It should NOT fail with "Safe evaluation mode"
         // It likely fails with "No debugger session" or succeeds if mocked
-        if let DapMessage::Response { message, .. } = response {
-            if let Some(msg) = message {
-                assert!(
-                    !msg.contains("Safe evaluation mode"),
-                    "Safe operation '{}' was blocked: {}",
-                    op,
-                    msg
-                );
-            }
+        if let DapMessage::Response { message: Some(msg), .. } = response {
+            assert!(
+                !msg.contains("Safe evaluation mode"),
+                "Safe operation '{}' was blocked: {}",
+                op,
+                msg
+            );
         }
     }
     Ok(())
