@@ -1,4 +1,6 @@
 # perl-dap
+[![Crates.io](https://img.shields.io/crates/v/perl-dap.svg)](https://crates.io/crates/perl-dap)
+[![Documentation](https://docs.rs/perl-dap/badge.svg)](https://docs.rs/perl-dap)
 
 Debug Adapter Protocol (DAP) server for Perl, enabling debugging in VS Code, Neovim, Emacs, and other DAP-compatible editors.
 
