@@ -2,10 +2,8 @@
 //!
 //! Provides completion for symbols from other files in the workspace using the workspace index.
 
-use super::{
-    context::CompletionContext,
-    items::{CompletionItem, CompletionItemKind},
-};
+use super::{CompletionItem, context::CompletionContext};
+use perl_lsp_completion_items::CompletionItemKind;
 use perl_workspace_index::workspace_index::{SymbolKind as WsSymbolKind, VarKind, WorkspaceIndex};
 use std::sync::Arc;
 

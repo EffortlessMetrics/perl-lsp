@@ -1,0 +1,20 @@
+[package]
+name = "perl-lsp-completion-items"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-completion-items"
+description = "Completion item data model and deterministic sorting utilities for perl-lsp"
+readme = "README.md"
+keywords = ["perl", "lsp", "completion", "ide"]
+categories = ["development-tools", "text-editors"]
+
+[dependencies]
+perl-parser-core = { workspace = true }
+
+[lints]
+workspace = true

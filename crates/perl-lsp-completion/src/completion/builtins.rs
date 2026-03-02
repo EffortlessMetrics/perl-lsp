@@ -2,7 +2,8 @@
 //!
 //! Provides completion for Perl built-in functions with signatures.
 
-use super::{context::CompletionContext, items::CompletionItem};
+use super::context::CompletionContext;
+use perl_lsp_completion_items::CompletionItem;
 use std::collections::HashSet;
 
 /// Create the builtins HashSet
@@ -157,7 +158,7 @@ pub fn add_builtin_completions(
 
             completions.push(CompletionItem {
                 label: builtin.to_string(),
-                kind: crate::completion::items::CompletionItemKind::Function,
+                kind: perl_lsp_completion_items::CompletionItemKind::Function,
                 detail: Some(detail.to_string()),
                 documentation: None,
                 insert_text: Some(insert_text.to_string()),

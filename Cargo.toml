@@ -39,6 +39,7 @@ members = [
     "crates/perl-lsp-launcher",
     "crates/perl-lsp-navigation",
     "crates/perl-lsp-completion",
+    "crates/perl-lsp-completion-items",
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-cancellation",
     "crates/perl-lsp-limits",
@@ -128,6 +129,7 @@ allow = [
     "perl-lsp-rename",
     "perl-lsp-code-actions",
     "perl-lsp-completion",
+    "perl-lsp-completion-items",
     "perl-lsp-inlay-hints",
 
     # Tier 3 — Module resolution chain
@@ -251,6 +253,7 @@ perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.10.0" }
 perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.10.0" }
 perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.10.0" }
 perl-lsp-feature-ids = { path = "crates/perl-lsp-feature-ids", version = "0.10.0" }
+perl-lsp-completion-items = { path = "crates/perl-lsp-completion-items", version = "0.10.0" }
 
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.10.0" }
