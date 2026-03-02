@@ -1881,10 +1881,17 @@ dependencies = [
 name = "perl-lsp-formatting"
 version = "0.10.0"
 dependencies = [
+ "perl-lsp-formatting-types",
  "perl-lsp-tooling",
  "perl-tdd-support",
- "serde",
  "thiserror",
+]
+
+[[package]]
+name = "perl-lsp-formatting-types"
+version = "0.10.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
