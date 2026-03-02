@@ -218,7 +218,7 @@ jobs:
         run: cargo install cargo-release --locked
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
