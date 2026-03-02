@@ -34,6 +34,7 @@ members = [
     "crates/perl-lsp-feature-flags",
     "crates/perl-lsp-feature-grid",
     "crates/perl-lsp-feature-ids",
+    "crates/perl-lsp-capability-map",
     "crates/perl-lsp-feature-profile",
     "crates/perl-lsp-feature-governance",
     "crates/perl-lsp-launcher",
@@ -163,6 +164,7 @@ allow = [
     # Tier 5 — LSP governance and infrastructure
     "perl-lsp-cancellation",
     "perl-lsp-feature-ids",
+    "perl-lsp-capability-map",
     "perl-lsp-feature-contracts",
     "perl-lsp-feature-flags",
     "perl-lsp-feature-profile",
@@ -251,6 +253,7 @@ perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.10.0" }
 perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.10.0" }
 perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.10.0" }
 perl-lsp-feature-ids = { path = "crates/perl-lsp-feature-ids", version = "0.10.0" }
+perl-lsp-capability-map = { path = "crates/perl-lsp-capability-map", version = "0.10.0" }
 
 # Tier 2: Single-level dependencies
 perl-parser-core = { path = "crates/perl-parser-core", version = "0.10.0" }
