@@ -1,5 +1,5 @@
 [package]
-name = "perl-module-token"
+name = "perl-module-token-rewrite"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,21 +7,18 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Boundary-safe Perl module token replacement and variant helpers"
+description = "Boundary-safe Perl module token rewrite helper"
 readme = "README.md"
-documentation = "https://docs.rs/perl-module-token"
-keywords = ["perl", "module", "rename", "token", "lsp"]
+documentation = "https://docs.rs/perl-module-token-rewrite"
+keywords = ["perl", "module", "rename", "token", "rewrite"]
 categories = ["development-tools", "text-editors"]
 include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 perl-module-boundary = { workspace = true }
-perl-module-name = { workspace = true }
-perl-module-token-rewrite = { workspace = true }
 
 [dev-dependencies]
 proptest = "1.9.0"
-perl-module-path = { workspace = true }
 
 [lints]
 workspace = true

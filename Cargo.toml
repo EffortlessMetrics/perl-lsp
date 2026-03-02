@@ -49,6 +49,7 @@ members = [
     "crates/perl-symbol-table",
     "crates/perl-module-boundary",
     "crates/perl-module-token-core",
+    "crates/perl-module-token-rewrite",
     "crates/perl-module-token",
     "crates/perl-module-token-parser",
     "crates/perl-module-name",
@@ -135,6 +136,7 @@ allow = [
     "perl-module-path",
     "perl-module-token-core",
     "perl-module-boundary",
+    "perl-module-token-rewrite",
     "perl-module-token",
     "perl-module-import",
 
@@ -221,6 +223,7 @@ perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.10.0" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.10.0" }
 perl-module-boundary = { path = "crates/perl-module-boundary", version = "0.10.0" }
 perl-module-token-core = { path = "crates/perl-module-token-core", version = "0.10.0" }
+perl-module-token-rewrite = { path = "crates/perl-module-token-rewrite", version = "0.10.0" }
 perl-module-token = { path = "crates/perl-module-token", version = "0.10.0" }
 perl-module-token-parser = { path = "crates/perl-module-token-parser", version = "0.10.0" }
 perl-module-name = { path = "crates/perl-module-name", version = "0.10.0" }

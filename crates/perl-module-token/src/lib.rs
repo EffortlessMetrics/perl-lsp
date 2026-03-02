@@ -9,7 +9,7 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-use perl_module_boundary::{contains_standalone_module_token, find_standalone_module_token_ranges};
+use perl_module_boundary::contains_standalone_module_token;
 
 /// Build canonical + legacy module rename pairs.
 ///
@@ -42,29 +42,7 @@ pub fn contains_module_token(line: &str, module_name: &str) -> bool {
 /// Replace standalone `from` module token occurrences in `line` with `to`.
 ///
 /// Returns `(rewritten_line, changed)`.
-#[must_use]
-pub fn replace_module_token(line: &str, from: &str, to: &str) -> (String, bool) {
-    if from.is_empty() || line.is_empty() {
-        return (line.to_string(), false);
-    }
-
-    let mut ranges = find_standalone_module_token_ranges(line, from).peekable();
-    if ranges.peek().is_none() {
-        return (line.to_string(), false);
-    }
-
-    let mut out = String::with_capacity(line.len());
-    let mut cursor = 0usize;
-
-    for range in ranges {
-        out.push_str(&line[cursor..range.start]);
-        out.push_str(to);
-        cursor = range.end;
-    }
-
-    out.push_str(&line[cursor..]);
-    (out, true)
-}
+pub use perl_module_token_rewrite::replace_module_token;
 
 #[cfg(test)]
 mod tests {
