@@ -2,7 +2,7 @@
 //!
 //! Provides completion for Perl keywords with snippet expansion.
 
-use super::{context::CompletionContext, items::CompletionItem};
+use super::{CompletionItem, context::CompletionContext};
 use perl_keywords::LSP_COMPLETION_KEYWORDS;
 
 /// Canonical Perl keywords for completion.
@@ -36,9 +36,9 @@ pub fn add_keyword_completions(
             completions.push(CompletionItem {
                 label: keyword.to_string(),
                 kind: if snippet {
-                    crate::completion::items::CompletionItemKind::Snippet
+                    crate::completion::CompletionItemKind::Snippet
                 } else {
-                    crate::completion::items::CompletionItemKind::Keyword
+                    crate::completion::CompletionItemKind::Keyword
                 },
                 detail: Some("keyword".to_string()),
                 documentation: None,

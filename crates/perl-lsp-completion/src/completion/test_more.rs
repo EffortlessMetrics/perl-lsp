@@ -2,7 +2,7 @@
 //!
 //! Provides completion for Test::More functions in test contexts.
 
-use super::{context::CompletionContext, items::CompletionItem};
+use super::{CompletionItem, context::CompletionContext};
 
 /// Test::More function completions
 pub const TEST_MORE_EXPORTS: &[(&str, &str, &str)] = &[
@@ -44,7 +44,7 @@ pub fn add_test_more_completions(
         if context.prefix.is_empty() || name.starts_with(&context.prefix) {
             completions.push(CompletionItem {
                 label: name.to_string(),
-                kind: crate::completion::items::CompletionItemKind::Function,
+                kind: crate::completion::CompletionItemKind::Function,
                 detail: Some("Test::More".to_string()),
                 documentation: Some(doc.to_string()),
                 insert_text: Some(snippet.to_string()),

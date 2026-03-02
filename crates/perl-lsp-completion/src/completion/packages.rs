@@ -2,7 +2,7 @@
 //!
 //! Provides completion for package members using workspace index integration.
 
-use super::{context::CompletionContext, items::CompletionItem};
+use super::{CompletionItem, context::CompletionContext};
 use perl_workspace_index::workspace_index::{SymbolKind as WsSymbolKind, WorkspaceIndex};
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ pub fn add_package_completions(
                 if symbol.name.starts_with(member_prefix) {
                     completions.push(CompletionItem {
                         label: symbol.name.clone(),
-                        kind: crate::completion::items::CompletionItemKind::Function,
+                        kind: crate::completion::CompletionItemKind::Function,
                         detail: Some(package_name.clone()),
                         documentation: symbol.documentation.clone(),
                         insert_text: Some(symbol.name.clone()),
@@ -48,7 +48,7 @@ pub fn add_package_completions(
                 if symbol.name.starts_with(member_prefix) {
                     completions.push(CompletionItem {
                         label: symbol.name.clone(),
-                        kind: crate::completion::items::CompletionItemKind::Variable,
+                        kind: crate::completion::CompletionItemKind::Variable,
                         detail: Some(package_name.clone()),
                         documentation: symbol.documentation.clone(),
                         insert_text: Some(symbol.name.clone()),
@@ -63,7 +63,7 @@ pub fn add_package_completions(
                 if symbol.name.starts_with(member_prefix) {
                     completions.push(CompletionItem {
                         label: symbol.name.clone(),
-                        kind: crate::completion::items::CompletionItemKind::Constant,
+                        kind: crate::completion::CompletionItemKind::Constant,
                         detail: Some(package_name.clone()),
                         documentation: symbol.documentation.clone(),
                         insert_text: Some(symbol.name.clone()),

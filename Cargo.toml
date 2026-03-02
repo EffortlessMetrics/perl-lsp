@@ -39,6 +39,7 @@ members = [
     "crates/perl-lsp-launcher",
     "crates/perl-lsp-navigation",
     "crates/perl-lsp-completion",
+    "crates/perl-lsp-completion-model",
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-cancellation",
     "crates/perl-lsp-limits",
@@ -128,6 +129,7 @@ allow = [
     "perl-lsp-rename",
     "perl-lsp-code-actions",
     "perl-lsp-completion",
+    "perl-lsp-completion-model",
     "perl-lsp-inlay-hints",
 
     # Tier 3 — Module resolution chain
@@ -272,6 +274,7 @@ perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.10.0" }
 perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.10.0" }
 perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.10.0" }
 perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.10.0" }
+perl-lsp-completion-model = { path = "crates/perl-lsp-completion-model", version = "0.10.0" }
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.10.0" }
 perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.10.0" }
 

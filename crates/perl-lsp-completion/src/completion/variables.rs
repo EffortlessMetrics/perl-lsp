@@ -2,7 +2,7 @@
 //!
 //! Provides completion for scalar, array, and hash variables with scope analysis.
 
-use super::{context::CompletionContext, items::CompletionItem};
+use super::{CompletionItem, context::CompletionContext};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 
 /// Add variable completions with thread-safe symbol table access
@@ -22,7 +22,7 @@ pub fn add_variable_completions(
 
                 completions.push(CompletionItem {
                     label: insert_text.clone(),
-                    kind: crate::completion::items::CompletionItemKind::Variable,
+                    kind: crate::completion::CompletionItemKind::Variable,
                     detail: Some(
                         format!(
                             "{} {}{}",
@@ -89,7 +89,7 @@ pub fn add_special_variables(
         if var.starts_with(&context.prefix) {
             completions.push(CompletionItem {
                 label: var.to_string(),
-                kind: crate::completion::items::CompletionItemKind::Variable,
+                kind: crate::completion::CompletionItemKind::Variable,
                 detail: Some("special variable".to_string()),
                 documentation: Some(description.to_string()),
                 insert_text: Some(var.to_string()),
@@ -116,7 +116,7 @@ pub fn add_all_variables(
                     let sigil = symbol.kind.sigil().unwrap_or("");
                     completions.push(CompletionItem {
                         label: format!("{}{}", sigil, name),
-                        kind: crate::completion::items::CompletionItemKind::Variable,
+                        kind: crate::completion::CompletionItemKind::Variable,
                         detail: Some(format!(
                             "{} variable",
                             symbol.declaration.as_deref().unwrap_or("")

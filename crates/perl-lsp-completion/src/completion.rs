@@ -92,18 +92,16 @@ mod builtins;
 mod context;
 mod file_path;
 mod functions;
-mod items;
 mod keywords;
 mod methods;
 mod packages;
-mod sort;
 mod test_more;
 mod variables;
 mod workspace;
 
 // Re-export public types
 pub use self::context::CompletionContext;
-pub use self::items::{CompletionItem, CompletionItemKind};
+pub use perl_lsp_completion_model::{CompletionItem, CompletionItemKind};
 
 use perl_parser_core::ast::Node;
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
@@ -502,7 +500,7 @@ impl CompletionProvider {
 
         // Remove duplicates and sort completions by relevance
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            sort::deduplicate_and_sort(completions.clone())
+            perl_lsp_completion_model::deduplicate_and_sort(completions.clone())
         })) {
             Ok(sorted_completions) => sorted_completions,
             Err(_) => {

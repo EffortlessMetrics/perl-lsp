@@ -38,7 +38,7 @@
 //! - **Symlink following**: Disabled for security
 
 use super::context::CompletionContext;
-use super::items::{CompletionItem, CompletionItemKind};
+use super::{CompletionItem, CompletionItemKind};
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::{Component, Path, PathBuf};
 
