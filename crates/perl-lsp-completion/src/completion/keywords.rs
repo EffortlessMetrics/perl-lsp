@@ -4,6 +4,7 @@
 
 use super::{context::CompletionContext, items::CompletionItem};
 use perl_keywords::LSP_COMPLETION_KEYWORDS;
+use perl_lsp_keyword_snippets::template_for_keyword;
 
 /// Canonical Perl keywords for completion.
 #[must_use]
@@ -19,19 +20,9 @@ pub fn add_keyword_completions(
 ) {
     for &keyword in keywords {
         if keyword.starts_with(&context.prefix) {
-            let (insert_text, snippet) = match keyword {
-                "sub" => ("sub ${1:name} {\n    $0\n}", true),
-                "if" => ("if ($1) {\n    $0\n}", true),
-                "elsif" => ("elsif ($1) {\n    $0\n}", true),
-                "else" => ("else {\n    $0\n}", true),
-                "unless" => ("unless ($1) {\n    $0\n}", true),
-                "while" => ("while ($1) {\n    $0\n}", true),
-                "for" => ("for (my $i = 0; $i < $1; $i++) {\n    $0\n}", true),
-                "foreach" => ("foreach my $${1:item} (@${2:array}) {\n    $0\n}", true),
-                "package" => ("package ${1:Name};\n\n$0", true),
-                "use" => ("use ${1:Module};\n$0", true),
-                _ => (keyword, false),
-            };
+            let template = template_for_keyword(keyword);
+            let (insert_text, snippet) =
+                if template.is_snippet { (template.insert_text, true) } else { (keyword, false) };
 
             completions.push(CompletionItem {
                 label: keyword.to_string(),

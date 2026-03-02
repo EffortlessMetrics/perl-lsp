@@ -1,0 +1,16 @@
+[package]
+name = "perl-lsp-keyword-snippets"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "SRP microcrate for Perl keyword completion templates and snippet metadata"
+readme = "README.md"
+
+[dependencies]
+
+[lints]
+workspace = true

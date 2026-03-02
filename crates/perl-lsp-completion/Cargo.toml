@@ -21,6 +21,7 @@ perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-keywords = { workspace = true }
+perl-lsp-keyword-snippets = { workspace = true }
 lsp-types = { version = "0.97.0", optional = true }
 url = "2.5.8"
 walkdir = "2.5.0"

@@ -1782,6 +1782,7 @@ version = "0.10.0"
 dependencies = [
  "lsp-types",
  "perl-keywords",
+ "perl-lsp-keyword-snippets",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -1880,6 +1881,10 @@ dependencies = [
  "perl-tdd-support",
  "serde_json",
 ]
+
+[[package]]
+name = "perl-lsp-keyword-snippets"
+version = "0.10.0"
 
 [[package]]
 name = "perl-lsp-launcher"
