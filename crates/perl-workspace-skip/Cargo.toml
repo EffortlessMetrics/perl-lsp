@@ -1,0 +1,20 @@
+[package]
+name = "perl-workspace-skip"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-workspace-skip"
+description = "Shared workspace skip-directory policy helpers"
+readme = "README.md"
+keywords = ["perl", "workspace", "lsp", "filesystem"]
+categories = ["development-tools", "filesystem"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+
+[lints]
+workspace = true

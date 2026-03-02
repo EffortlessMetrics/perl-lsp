@@ -64,6 +64,7 @@ members = [
     "crates/perl-text-line",
     "crates/perl-keywords",
     "crates/perl-source-file",
+    "crates/perl-workspace-skip",
     "crates/perl-content-length-framing",
     "crates/perl-uri",
     "crates/perl-path-security",
@@ -185,6 +186,7 @@ allow = [
     "perl-module-resolution-uri",
     "perl-module-resolution",
     "perl-source-file",
+    "perl-workspace-skip",
     "perl-workspace-discovery",
     "perl-diagnostics-codes",
 
@@ -236,6 +238,7 @@ perl-module-resolution-uri = { path = "crates/perl-module-resolution-uri", versi
 perl-workspace-folder = { path = "crates/perl-workspace-folder", version = "0.10.0" }
 perl-keywords = { path = "crates/perl-keywords", version = "0.10.0" }
 perl-source-file = { path = "crates/perl-source-file", version = "0.10.0" }
+perl-workspace-skip = { path = "crates/perl-workspace-skip", version = "0.10.0" }
 perl-text-line = { path = "crates/perl-text-line", version = "0.10.0" }
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.10.0" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
