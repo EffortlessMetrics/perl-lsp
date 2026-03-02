@@ -1563,6 +1563,7 @@ dependencies = [
  "perl-content-length-framing",
  "perl-dap-breakpoint",
  "perl-dap-eval",
+ "perl-dap-platform",
  "perl-dap-stack",
  "perl-dap-variables",
  "perl-feature-catalog",
@@ -1602,6 +1603,13 @@ dependencies = [
  "perl-tdd-support",
  "regex",
  "thiserror",
+]
+
+[[package]]
+name = "perl-dap-platform"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]
