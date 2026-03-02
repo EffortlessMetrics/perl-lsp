@@ -1,7 +1,13 @@
 //! Subprocess execution abstraction for provider purity
 //!
-//! This module provides a trait-based abstraction for subprocess execution,
+//! This crate provides a trait-based abstraction for subprocess execution,
 //! enabling testing with mock implementations and WASM compatibility.
+
+#![deny(unsafe_code)]
+#![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
+#![warn(rust_2018_idioms)]
+#![warn(missing_docs)]
+#![warn(clippy::all)]
 
 use std::fmt;
 
@@ -55,24 +61,9 @@ impl fmt::Display for SubprocessError {
 
 impl std::error::Error for SubprocessError {}
 
-/// Abstraction trait for subprocess execution
-///
-/// This trait allows providers to execute external commands without
-/// directly depending on `std::process::Command`, enabling:
-/// - Unit testing with mock implementations
-/// - WASM compatibility with alternative implementations
-/// - Sandboxing and security controls
+/// Abstraction trait for subprocess execution.
 pub trait SubprocessRuntime: Send + Sync {
-    /// Execute a command with the given arguments and optional stdin
-    ///
-    /// # Arguments
-    /// * `program` - The program to execute (e.g., "perltidy", "perlcritic")
-    /// * `args` - Command line arguments
-    /// * `stdin` - Optional data to write to the process's stdin
-    ///
-    /// # Returns
-    /// * `Ok(SubprocessOutput)` - The command completed (check status_code for success)
-    /// * `Err(SubprocessError)` - The command failed to start or other I/O error
+    /// Execute a command with the given arguments and optional stdin.
     fn run_command(
         &self,
         program: &str,
@@ -81,15 +72,13 @@ pub trait SubprocessRuntime: Send + Sync {
     ) -> Result<SubprocessOutput, SubprocessError>;
 }
 
-/// Default implementation using `std::process::Command`
-///
-/// This implementation is only available on non-WASM targets.
+/// Default implementation using `std::process::Command`.
 #[cfg(not(target_arch = "wasm32"))]
 pub struct OsSubprocessRuntime;
 
 #[cfg(not(target_arch = "wasm32"))]
 impl OsSubprocessRuntime {
-    /// Create a new OS subprocess runtime
+    /// Create a new OS subprocess runtime.
     pub fn new() -> Self {
         Self
     }
@@ -116,7 +105,6 @@ impl SubprocessRuntime for OsSubprocessRuntime {
         let mut cmd = Command::new(program);
         cmd.args(args);
 
-        // Configure stdin based on whether we need to write to it
         if stdin.is_some() {
             cmd.stdin(Stdio::piped());
         }
@@ -124,12 +112,10 @@ impl SubprocessRuntime for OsSubprocessRuntime {
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
 
-        // Spawn the process
         let mut child = cmd
             .spawn()
             .map_err(|e| SubprocessError::new(format!("Failed to start {}: {}", program, e)))?;
 
-        // Write to stdin if provided
         if let Some(input) = stdin
             && let Some(mut child_stdin) = child.stdin.take()
         {
@@ -138,7 +124,6 @@ impl SubprocessRuntime for OsSubprocessRuntime {
             })?;
         }
 
-        // Wait for completion
         let output = child
             .wait_with_output()
             .map_err(|e| SubprocessError::new(format!("Failed to wait for {}: {}", program, e)))?;
@@ -151,62 +136,61 @@ impl SubprocessRuntime for OsSubprocessRuntime {
     }
 }
 
-/// Mock subprocess runtime for testing
-///
-/// This implementation allows tests to define expected command invocations
-/// and their responses without actually executing subprocesses.
-#[cfg(test)]
+/// Mock subprocess runtime for testing.
 pub mod mock {
     use super::*;
-    use perl_tdd_support::must;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, MutexGuard};
 
-    /// A recorded command invocation
+    fn lock<'a, T>(mutex: &'a Mutex<T>) -> MutexGuard<'a, T> {
+        match mutex.lock() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        }
+    }
+
+    /// A recorded command invocation.
     #[derive(Debug, Clone)]
     pub struct CommandInvocation {
-        /// The program that was called
+        /// The program that was called.
         pub program: String,
-        /// The arguments passed
+        /// The arguments passed.
         pub args: Vec<String>,
-        /// The stdin data provided
+        /// The stdin data provided.
         pub stdin: Option<Vec<u8>>,
     }
 
-    /// Builder for mock responses
+    /// Builder for mock responses.
     #[derive(Debug, Clone)]
     pub struct MockResponse {
-        /// Stdout to return
+        /// Stdout to return.
         pub stdout: Vec<u8>,
-        /// Stderr to return
+        /// Stderr to return.
         pub stderr: Vec<u8>,
-        /// Status code to return
+        /// Status code to return.
         pub status_code: i32,
     }
 
     impl MockResponse {
-        /// Create a successful mock response with the given stdout
+        /// Create a successful mock response with the given stdout.
         pub fn success(stdout: impl Into<Vec<u8>>) -> Self {
             Self { stdout: stdout.into(), stderr: Vec::new(), status_code: 0 }
         }
 
-        /// Create a failed mock response with the given stderr
+        /// Create a failed mock response with the given stderr.
         pub fn failure(stderr: impl Into<Vec<u8>>, status_code: i32) -> Self {
             Self { stdout: Vec::new(), stderr: stderr.into(), status_code }
         }
     }
 
-    /// Mock subprocess runtime for testing
+    /// Mock subprocess runtime for testing.
     pub struct MockSubprocessRuntime {
-        /// Recorded invocations
         invocations: Arc<Mutex<Vec<CommandInvocation>>>,
-        /// Responses to return (in order)
         responses: Arc<Mutex<Vec<MockResponse>>>,
-        /// Default response if responses are exhausted
         default_response: MockResponse,
     }
 
     impl MockSubprocessRuntime {
-        /// Create a new mock runtime with a default successful response
+        /// Create a new mock runtime with a default successful response.
         pub fn new() -> Self {
             Self {
                 invocations: Arc::new(Mutex::new(Vec::new())),
@@ -215,24 +199,24 @@ pub mod mock {
             }
         }
 
-        /// Add a response to be returned for the next command
+        /// Add a response to be returned for the next command.
         pub fn add_response(&self, response: MockResponse) {
-            must(self.responses.lock()).push(response);
+            lock(&self.responses).push(response);
         }
 
-        /// Set the default response when no queued responses remain
+        /// Set the default response when no queued responses remain.
         pub fn set_default_response(&mut self, response: MockResponse) {
             self.default_response = response;
         }
 
-        /// Get all recorded invocations
+        /// Get all recorded invocations.
         pub fn invocations(&self) -> Vec<CommandInvocation> {
-            must(self.invocations.lock()).clone()
+            lock(&self.invocations).clone()
         }
 
-        /// Clear recorded invocations
+        /// Clear recorded invocations.
         pub fn clear_invocations(&self) {
-            must(self.invocations.lock()).clear();
+            lock(&self.invocations).clear();
         }
     }
 
@@ -249,16 +233,14 @@ pub mod mock {
             args: &[&str],
             stdin: Option<&[u8]>,
         ) -> Result<SubprocessOutput, SubprocessError> {
-            // Record the invocation
-            must(self.invocations.lock()).push(CommandInvocation {
+            lock(&self.invocations).push(CommandInvocation {
                 program: program.to_string(),
                 args: args.iter().map(|s| s.to_string()).collect(),
                 stdin: stdin.map(|s| s.to_vec()),
             });
 
-            // Get the next response or use default
             let response = {
-                let mut responses = must(self.responses.lock());
+                let mut responses = lock(&self.responses);
                 if responses.is_empty() {
                     self.default_response.clone()
                 } else {
@@ -278,7 +260,6 @@ pub mod mock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_tdd_support::must;
 
     #[test]
     fn test_subprocess_output_success() {
@@ -309,7 +290,10 @@ mod tests {
         let result = runtime.run_command("perltidy", &["-st"], Some(b"my $x = 1;"));
 
         assert!(result.is_ok());
-        let output = must(result);
+        let output = match result {
+            Ok(output) => output,
+            Err(_) => panic!("expected ok subprocess output"),
+        };
         assert!(output.success());
         assert_eq!(output.stdout_lossy(), "formatted code");
 
@@ -324,12 +308,13 @@ mod tests {
     #[test]
     fn test_os_runtime_echo() {
         let runtime = OsSubprocessRuntime::new();
-
-        // Test with echo which should be available on most systems
         let result = runtime.run_command("echo", &["hello"], None);
 
         assert!(result.is_ok());
-        let output = must(result);
+        let output = match result {
+            Ok(output) => output,
+            Err(_) => panic!("expected ok subprocess output"),
+        };
         assert!(output.success());
         assert!(output.stdout_lossy().trim() == "hello");
     }
