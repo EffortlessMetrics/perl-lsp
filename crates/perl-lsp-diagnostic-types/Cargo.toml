@@ -1,0 +1,18 @@
+[package]
+name = "perl-lsp-diagnostic-types"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Shared diagnostic types and deduplication for Perl LSP"
+readme = "README.md"
+documentation = "https://docs.rs/perl-lsp-diagnostic-types"
+keywords = ["perl", "lsp", "diagnostics", "types"]
+categories = ["development-tools", "text-editors"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[lints]
+workspace = true
