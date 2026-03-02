@@ -1,0 +1,20 @@
+[package]
+name = "perl-subprocess-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Subprocess runtime abstraction for Perl ecosystem crates"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = []
+mock = ["dep:perl-tdd-support"]
+
+[dependencies]
+perl-tdd-support = { workspace = true, optional = true }
+
+[lints]
+workspace = true

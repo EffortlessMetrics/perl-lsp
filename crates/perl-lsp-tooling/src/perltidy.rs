@@ -3,7 +3,7 @@
 //! This module provides integration with perltidy for automatic code formatting
 //! and beautification of Perl code.
 
-use super::subprocess_runtime::SubprocessRuntime;
+use crate::SubprocessRuntime;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -185,7 +185,7 @@ impl PerlTidyFormatter {
     /// Creates a new formatter with the OS subprocess runtime (non-WASM only).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn with_os_runtime(config: PerlTidyConfig) -> Self {
-        use super::subprocess_runtime::OsSubprocessRuntime;
+        use crate::OsSubprocessRuntime;
         Self::new(config, Arc::new(OsSubprocessRuntime::new()))
     }
 
@@ -417,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_formatter_with_mock_runtime() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+        use crate::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         runtime.add_response(MockResponse::success(b"my $x = 1;\n".to_vec()));
@@ -437,7 +437,7 @@ mod tests {
 
     #[test]
     fn test_formatter_caching() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+        use crate::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         runtime.add_response(MockResponse::success(b"formatted\n".to_vec()));
@@ -460,7 +460,7 @@ mod tests {
 
     #[test]
     fn test_formatter_error_handling() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+        use crate::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         runtime.add_response(MockResponse::failure(b"syntax error".to_vec(), 1));
@@ -479,7 +479,7 @@ mod tests {
 
     #[test]
     fn test_format_file_with_mock_runtime() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+        use crate::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         runtime.add_response(MockResponse::success(b"".to_vec()));
