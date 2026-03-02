@@ -169,7 +169,7 @@ jobs:
           }
 
     - name: Upload benchmark artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: benchmark-results-${{ github.sha }}
         path: |
@@ -321,7 +321,7 @@ jobs:
 
       - name: Upload breaking changes report
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: semver-breaking-changes-report
           path: target/semver-reports/breaking-changes.json
@@ -398,7 +398,7 @@ jobs:
 
     - name: Upload crash artifacts
       if: failure()
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: fuzz-artifacts-${{ matrix.target }}-${{ github.sha }}
         path: |
