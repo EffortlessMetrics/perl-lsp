@@ -1,0 +1,20 @@
+[package]
+name = "perl-workspace-ignore"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-workspace-ignore"
+description = "Shared workspace ignore rules for discovery/indexing crates"
+readme = "README.md"
+keywords = ["perl", "workspace", "ignore", "lsp"]
+categories = ["development-tools", "filesystem"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -8,7 +8,10 @@
 //! are skipped in both modes (`.git`, `.hg`, `.svn`, `target`, `node_modules`, `.cache`).
 
 use perl_source_file::is_perl_source_path;
-use std::path::{Component, Path, PathBuf};
+use perl_workspace_ignore::{
+    is_ignored_workspace_dir_name, path_contains_ignored_workspace_component,
+};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};
 
@@ -87,7 +90,7 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
         }
 
         let relative_path = Path::new(entry);
-        if path_contains_skipped_component(relative_path) {
+        if path_contains_ignored_workspace_component(relative_path) {
             excluded_count += 1;
             continue;
         }
@@ -145,20 +148,7 @@ fn should_skip_dir(entry: &DirEntry) -> bool {
     }
 
     let name = entry.file_name().to_string_lossy();
-    matches!(name.as_ref(), ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache")
-}
-
-fn path_contains_skipped_component(path: &Path) -> bool {
-    for component in path.components() {
-        if let Component::Normal(name) = component
-            && let Some(value) = name.to_str()
-            && matches!(value, ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache")
-        {
-            return true;
-        }
-    }
-
-    false
+    is_ignored_workspace_dir_name(name.as_ref())
 }
 
 fn log_discovery(result: &DiscoveryResult) {
@@ -173,10 +163,7 @@ fn log_discovery(result: &DiscoveryResult) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DiscoveryMethod, parse_git_ls_files_output, path_contains_skipped_component,
-        should_skip_dir, walk_discovery,
-    };
+    use super::{DiscoveryMethod, parse_git_ls_files_output, should_skip_dir, walk_discovery};
     use std::fs;
     use std::path::Path;
     use std::time::Instant;
@@ -203,13 +190,6 @@ mod tests {
         assert!(files.iter().any(|path| path.ends_with("lib/Foo.pm")));
         assert!(files.iter().any(|path| path.ends_with("script.pl")));
         assert_eq!(excluded_count, 2);
-    }
-
-    #[test]
-    fn skipped_component_detection_is_consistent() {
-        assert!(path_contains_skipped_component(Path::new("/repo/node_modules/pkg.pm")));
-        assert!(path_contains_skipped_component(Path::new("/repo/target/build/generated.pm")));
-        assert!(!path_contains_skipped_component(Path::new("/repo/lib/My/Module.pm")));
     }
 
     #[test]

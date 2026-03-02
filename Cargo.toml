@@ -64,6 +64,7 @@ members = [
     "crates/perl-text-line",
     "crates/perl-keywords",
     "crates/perl-source-file",
+    "crates/perl-workspace-ignore",
     "crates/perl-content-length-framing",
     "crates/perl-uri",
     "crates/perl-path-security",
@@ -118,6 +119,7 @@ allow = [
     "perl-edit",
     "perl-incremental-parsing",
     "perl-symbol-types",
+    "perl-workspace-ignore",
     "perl-uri",
     "perl-workspace-index-slo",
 
@@ -218,6 +220,7 @@ perl-error = { path = "crates/perl-error", version = "0.10.0" }
 perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.10.0" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.10.0" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.10.0" }
+perl-workspace-ignore = { path = "crates/perl-workspace-ignore", version = "0.10.0" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.10.0" }
 perl-module-boundary = { path = "crates/perl-module-boundary", version = "0.10.0" }
 perl-module-token-core = { path = "crates/perl-module-token-core", version = "0.10.0" }
