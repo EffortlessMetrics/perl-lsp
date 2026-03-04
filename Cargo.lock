@@ -2271,6 +2271,9 @@ dependencies = [
 [[package]]
 name = "perl-quote"
 version = "0.10.0"
+dependencies = [
+ "perl-tdd-support",
+]
 
 [[package]]
 name = "perl-refactoring"
