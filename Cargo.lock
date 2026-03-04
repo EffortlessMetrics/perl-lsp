@@ -1673,7 +1673,9 @@ dependencies = [
 name = "perl-feature-catalog"
 version = "0.10.0"
 dependencies = [
+ "perl-tdd-support",
  "serde",
+ "tempfile",
  "thiserror",
  "toml",
 ]

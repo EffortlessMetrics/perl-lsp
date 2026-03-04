@@ -19,6 +19,10 @@ serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
 toml = "1.0.3"
 
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+tempfile = "3"
+
 [lints]
 workspace = true
 
