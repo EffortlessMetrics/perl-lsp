@@ -57,7 +57,7 @@
 
 - **`dap.breakpoints.hit_condition`** (preview, not advertised)
   - [x] Validate hit-count parsing and runtime counter behavior
-  - [ ] Add dedicated E2E fixture coverage for multi-hit workflows
+  - [x] Add dedicated E2E fixture coverage for multi-hit workflows
 
 - **`dap.breakpoints.logpoints`** (preview, not advertised)
   - [x] Implement logMessage parsing and output emission path

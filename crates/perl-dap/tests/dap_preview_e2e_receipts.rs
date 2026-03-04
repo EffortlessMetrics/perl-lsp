@@ -77,6 +77,60 @@ $x++;
 }
 
 #[test]
+fn preview_hit_condition_multi_hit_receipt() -> TestResult {
+    let workspace = tempdir()?;
+    let script = workspace.path().join("hit_condition_multi_receipt.pl");
+    write(
+        &script,
+        r#"use strict;
+use warnings;
+my $x = 0;
+$x++;
+$x++;
+$x++;
+"#,
+    )?;
+    let script_path = script.to_string_lossy().to_string();
+
+    let store = BreakpointStore::new();
+    let response = store.set_breakpoints(&SetBreakpointsArguments {
+        source: Source {
+            path: Some(script_path.clone()),
+            name: Some("hit_condition_multi_receipt.pl".to_string()),
+        },
+        breakpoints: Some(vec![SourceBreakpoint {
+            line: 4,
+            column: None,
+            condition: None,
+            hit_condition: Some("%3".to_string()),
+            log_message: None,
+        }]),
+        source_modified: None,
+    });
+
+    assert_eq!(response.len(), 1);
+    assert!(response[0].verified, "multi-hit breakpoint should verify on executable line");
+
+    let first = store.register_breakpoint_hit(&script_path, 4);
+    assert!(first.matched, "first hit should match breakpoint");
+    assert!(!first.should_stop, "first hit should not stop for hitCondition `%3`");
+
+    let second = store.register_breakpoint_hit(&script_path, 4);
+    assert!(second.matched, "second hit should match breakpoint");
+    assert!(!second.should_stop, "second hit should not stop for hitCondition `%3`");
+
+    let third = store.register_breakpoint_hit(&script_path, 4);
+    assert!(third.matched, "third hit should match breakpoint");
+    assert!(third.should_stop, "third hit should stop for hitCondition `%3`");
+
+    let fourth = store.register_breakpoint_hit(&script_path, 4);
+    assert!(fourth.matched, "fourth hit should still match breakpoint");
+    assert!(!fourth.should_stop, "fourth hit should not stop for hitCondition `%3`");
+
+    Ok(())
+}
+
+#[test]
 fn preview_log_message_receipt() -> TestResult {
     let workspace = tempdir()?;
     let script = workspace.path().join("log_message_receipt.pl");
