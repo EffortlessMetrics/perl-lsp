@@ -836,6 +836,627 @@ fn color_alias_and_canonical_produce_equivalent_caps() -> Result<(), Box<dyn std
 // feature_ids_from_caps — all capabilities at once
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Unmapped feature IDs are silently ignored
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unmapped_type_hierarchy_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_TYPE_HIERARCHY]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "type_hierarchy has no mapping in caps_from_feature_ids");
+    Ok(())
+}
+
+#[test]
+fn unmapped_inline_completion_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_INLINE_COMPLETION]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "inline_completion has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_ranges_formatting_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_RANGES_FORMATTING]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "ranges_formatting has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_inline_values_alias_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_INLINE_VALUES]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "inline_values alias has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_notebook_cell_execution_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_NOTEBOOK_CELL_EXECUTION]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "notebook_cell_execution has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_progress_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_PROGRESS]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "progress has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_show_message_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_SHOW_MESSAGE]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "show_message has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_log_message_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_LOG_MESSAGE]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "log_message has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_text_document_sync_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_TEXT_DOCUMENT_SYNC]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "text_document_sync has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_did_save_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_DID_SAVE]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "did_save has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_will_save_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_WILL_SAVE]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "will_save has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_will_save_wait_until_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_WILL_SAVE_WAIT_UNTIL]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "will_save_wait_until has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_prepare_rename_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_PREPARE_RENAME]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "prepare_rename has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_color_presentation_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_COLOR_PRESENTATION]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "color_presentation has no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_resolve_ids_are_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let resolve_ids = [
+        LSP_COMPLETION_ITEM_RESOLVE,
+        LSP_CODE_ACTION_RESOLVE,
+        LSP_CODE_LENS_RESOLVE,
+        LSP_DOCUMENT_LINK_RESOLVE,
+        LSP_INLAY_HINT_RESOLVE,
+        LSP_WORKSPACE_SYMBOL_RESOLVE,
+    ];
+    let caps = caps_from_feature_ids(&resolve_ids);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "resolve IDs have no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_refresh_ids_are_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let refresh_ids = [
+        LSP_CODE_LENS_REFRESH,
+        LSP_SEMANTIC_TOKENS_REFRESH,
+        LSP_INLAY_HINT_REFRESH,
+        LSP_INLINE_VALUE_REFRESH,
+        LSP_DIAGNOSTIC_REFRESH,
+        LSP_FOLDING_RANGE_REFRESH,
+    ];
+    let caps = caps_from_feature_ids(&refresh_ids);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "refresh IDs have no mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_dap_ids_are_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let dap_ids = [DAP_CORE, DAP_INLINE_VALUES, DAP_BREAKPOINTS_BASIC];
+    let caps = caps_from_feature_ids(&dap_ids);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "DAP IDs have no LSP capability mapping");
+    Ok(())
+}
+
+#[test]
+fn unmapped_work_done_progress_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_WORK_DONE_PROGRESS]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "work_done_progress has no mapping");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Edge: empty string feature ID
+// ---------------------------------------------------------------------------
+
+#[test]
+fn empty_string_feature_id_is_ignored() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[""]);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.is_empty(), "empty string should be silently ignored");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Trigger character validation
+// ---------------------------------------------------------------------------
+
+#[test]
+fn completion_trigger_characters_include_sigils() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_COMPLETION]);
+    let provider = caps.completion_provider.as_ref().ok_or("missing completion_provider")?;
+    if let Some(triggers) = &provider.trigger_characters {
+        assert!(triggers.contains(&"$".to_string()), "should include $ sigil");
+        assert!(triggers.contains(&"@".to_string()), "should include @ sigil");
+        assert!(triggers.contains(&"%".to_string()), "should include % sigil");
+        assert!(triggers.contains(&">".to_string()), "should include > for ->");
+        assert!(triggers.contains(&":".to_string()), "should include : for ::");
+        assert_eq!(triggers.len(), 5, "expected exactly 5 trigger characters");
+    } else {
+        return Err("completion trigger_characters should be Some".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn signature_help_trigger_characters() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_SIGNATURE_HELP]);
+    let provider =
+        caps.signature_help_provider.as_ref().ok_or("missing signature_help_provider")?;
+    if let Some(triggers) = &provider.trigger_characters {
+        assert!(triggers.contains(&"(".to_string()), "should include (");
+        assert!(triggers.contains(&",".to_string()), "should include ,");
+        assert_eq!(triggers.len(), 2, "expected exactly 2 trigger characters");
+    } else {
+        return Err("signature_help trigger_characters should be Some".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn on_type_formatting_trigger_characters() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_ON_TYPE_FORMATTING]);
+    let provider = caps
+        .document_on_type_formatting_provider
+        .as_ref()
+        .ok_or("missing on_type_formatting_provider")?;
+    assert_eq!(provider.first_trigger_character, ";");
+    if let Some(more) = &provider.more_trigger_character {
+        assert!(more.contains(&"}".to_string()));
+        assert_eq!(more.len(), 1, "expected exactly 1 additional trigger character");
+    } else {
+        return Err("more_trigger_character should be Some".into());
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Notebook sync details
+// ---------------------------------------------------------------------------
+
+#[test]
+fn notebook_sync_has_perl_cell_selector() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_NOTEBOOK_DOCUMENT_SYNC]);
+    if let Some(OneOf::Left(opts)) = &caps.notebook_document_sync {
+        assert_eq!(opts.save, Some(true), "notebook sync save should be true");
+        assert_eq!(opts.notebook_selector.len(), 1, "expected one notebook selector");
+    } else {
+        return Err("expected NotebookDocumentSyncOptions".into());
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Code lens resolve option
+// ---------------------------------------------------------------------------
+
+#[test]
+fn code_lens_has_resolve_provider() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_CODE_LENS]);
+    let provider = caps.code_lens_provider.as_ref().ok_or("missing code_lens_provider")?;
+    assert_eq!(provider.resolve_provider, Some(true));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Document link resolve option
+// ---------------------------------------------------------------------------
+
+#[test]
+fn document_link_has_resolve_provider() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_DOCUMENT_LINK]);
+    let provider = caps.document_link_provider.as_ref().ok_or("missing document_link_provider")?;
+    assert_eq!(provider.resolve_provider, Some(true));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Inlay hint resolve option
+// ---------------------------------------------------------------------------
+
+#[test]
+fn inlay_hint_has_resolve_provider() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_INLAY_HINT]);
+    if let Some(OneOf::Right(InlayHintServerCapabilities::Options(opts))) =
+        &caps.inlay_hint_provider
+    {
+        assert_eq!(opts.resolve_provider, Some(true));
+    } else {
+        return Err("expected InlayHintOptions variant".into());
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Semantic tokens full and range support
+// ---------------------------------------------------------------------------
+
+#[test]
+fn semantic_tokens_supports_full_and_range() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_SEMANTIC_TOKENS]);
+    if let Some(SemanticTokensServerCapabilities::SemanticTokensOptions(opts)) =
+        &caps.semantic_tokens_provider
+    {
+        assert_eq!(opts.full, Some(SemanticTokensFullOptions::Bool(true)));
+        assert_eq!(opts.range, Some(true));
+    } else {
+        return Err("expected SemanticTokensOptions variant".into());
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostics identifier
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pull_diagnostics_identifier_is_perl_lsp() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_PULL_DIAGNOSTICS]);
+    if let Some(DiagnosticServerCapabilities::Options(opts)) = &caps.diagnostic_provider {
+        assert_eq!(opts.identifier.as_deref(), Some("perl-lsp"));
+    } else {
+        return Err("expected DiagnosticOptions variant".into());
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Execute command includes perl.runCritic
+// ---------------------------------------------------------------------------
+
+#[test]
+fn execute_command_includes_run_critic() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_EXECUTE_COMMAND]);
+    let provider =
+        caps.execute_command_provider.as_ref().ok_or("missing execute_command_provider")?;
+    assert_eq!(provider.commands.len(), 1);
+    assert_eq!(provider.commands[0], "perl.runCritic");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Individual round-trip tests for selected features
+// ---------------------------------------------------------------------------
+
+#[test]
+fn round_trip_hover() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_HOVER]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_HOVER]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_definition() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_DEFINITION]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_DEFINITION]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_references() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_REFERENCES]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_REFERENCES]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_rename() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_RENAME]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_RENAME]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_folding_range() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_FOLDING_RANGE]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_FOLDING_RANGE]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_code_action() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_CODE_ACTION]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_CODE_ACTION]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_document_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_DOCUMENT_SYMBOL]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_DOCUMENT_SYMBOL]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_workspace_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_WORKSPACE_SYMBOL]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_WORKSPACE_SYMBOL]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_semantic_tokens() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_SEMANTIC_TOKENS]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_SEMANTIC_TOKENS]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_inlay_hint() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_INLAY_HINT]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_INLAY_HINT]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_call_hierarchy() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_CALL_HIERARCHY]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_CALL_HIERARCHY]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_document_color() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_DOCUMENT_COLOR]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_DOCUMENT_COLOR]);
+    Ok(())
+}
+
+#[test]
+fn round_trip_color_alias_yields_canonical_id() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_COLOR]);
+    let ids = feature_ids_from_caps(&caps);
+    assert_eq!(ids, vec![LSP_DOCUMENT_COLOR], "alias should round-trip to canonical ID");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Subset round-trips
+// ---------------------------------------------------------------------------
+
+#[test]
+fn round_trip_text_document_subset() -> Result<(), Box<dyn std::error::Error>> {
+    let features = [LSP_COMPLETION, LSP_HOVER, LSP_DEFINITION, LSP_REFERENCES];
+    let caps = caps_from_feature_ids(&features);
+    let mut ids = feature_ids_from_caps(&caps);
+    ids.sort();
+    let mut expected = features.to_vec();
+    expected.sort();
+    assert_eq!(ids, expected);
+    Ok(())
+}
+
+#[test]
+fn round_trip_formatting_subset() -> Result<(), Box<dyn std::error::Error>> {
+    let features = [LSP_FORMATTING, LSP_RANGE_FORMATTING, LSP_ON_TYPE_FORMATTING];
+    let caps = caps_from_feature_ids(&features);
+    let mut ids = feature_ids_from_caps(&caps);
+    ids.sort();
+    let mut expected = features.to_vec();
+    expected.sort();
+    assert_eq!(ids, expected);
+    Ok(())
+}
+
+#[test]
+fn round_trip_workspace_subset() -> Result<(), Box<dyn std::error::Error>> {
+    let features = [LSP_WORKSPACE_SYMBOL, LSP_EXECUTE_COMMAND];
+    let caps = caps_from_feature_ids(&features);
+    let mut ids = feature_ids_from_caps(&caps);
+    ids.sort();
+    let mut expected = features.to_vec();
+    expected.sort();
+    assert_eq!(ids, expected);
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Stability: calling with same input twice yields same output
+// ---------------------------------------------------------------------------
+
+#[test]
+fn caps_from_feature_ids_is_deterministic() -> Result<(), Box<dyn std::error::Error>> {
+    let features = [LSP_HOVER, LSP_COMPLETION, LSP_RENAME, LSP_DEFINITION];
+    let ids_a = feature_ids_from_caps(&caps_from_feature_ids(&features));
+    let ids_b = feature_ids_from_caps(&caps_from_feature_ids(&features));
+    assert_eq!(ids_a, ids_b, "same input should always produce same output");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Mixed mapped + unmapped features preserve only mapped
+// ---------------------------------------------------------------------------
+
+#[test]
+fn mixed_mapped_and_unmapped_preserves_only_mapped() -> Result<(), Box<dyn std::error::Error>> {
+    let features = [
+        LSP_HOVER,
+        LSP_TYPE_HIERARCHY,
+        LSP_DEFINITION,
+        LSP_INLINE_COMPLETION,
+        LSP_RANGES_FORMATTING,
+        "totally.bogus",
+    ];
+    let caps = caps_from_feature_ids(&features);
+    let ids = feature_ids_from_caps(&caps);
+    assert!(ids.contains(&LSP_HOVER));
+    assert!(ids.contains(&LSP_DEFINITION));
+    assert_eq!(ids.len(), 2, "only mapped features should survive round-trip");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Capabilities not set by caps_from_feature_ids remain None
+// ---------------------------------------------------------------------------
+
+#[test]
+fn unset_capabilities_remain_none() -> Result<(), Box<dyn std::error::Error>> {
+    let caps = caps_from_feature_ids(&[LSP_HOVER]);
+    assert!(caps.completion_provider.is_none(), "completion should be None when not requested");
+    assert!(caps.definition_provider.is_none(), "definition should be None when not requested");
+    assert!(caps.rename_provider.is_none(), "rename should be None when not requested");
+    assert!(
+        caps.semantic_tokens_provider.is_none(),
+        "semantic_tokens should be None when not requested"
+    );
+    assert!(
+        caps.workspace_symbol_provider.is_none(),
+        "workspace_symbol should be None when not requested"
+    );
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Large batch: all feature ID constants from perl_lsp_feature_ids
+// ---------------------------------------------------------------------------
+
+#[test]
+fn all_feature_id_constants_can_be_passed_without_panic() -> Result<(), Box<dyn std::error::Error>>
+{
+    let all_ids: &[&str] = &[
+        LSP_COMPLETION,
+        LSP_HOVER,
+        LSP_SIGNATURE_HELP,
+        LSP_DEFINITION,
+        LSP_DECLARATION,
+        LSP_EXECUTE_COMMAND,
+        LSP_TYPE_DEFINITION,
+        LSP_IMPLEMENTATION,
+        LSP_REFERENCES,
+        LSP_DOCUMENT_SYMBOL,
+        LSP_WORKSPACE_SYMBOL,
+        LSP_CODE_ACTION,
+        LSP_CODE_LENS,
+        LSP_FORMATTING,
+        LSP_RANGE_FORMATTING,
+        LSP_RANGES_FORMATTING,
+        LSP_ON_TYPE_FORMATTING,
+        LSP_RENAME,
+        LSP_DOCUMENT_LINK,
+        LSP_FOLDING_RANGE,
+        LSP_SELECTION_RANGE,
+        LSP_INLAY_HINT,
+        LSP_SEMANTIC_TOKENS,
+        LSP_TYPE_HIERARCHY,
+        LSP_CALL_HIERARCHY,
+        LSP_PULL_DIAGNOSTICS,
+        LSP_INLINE_COMPLETION,
+        LSP_INLINE_VALUE,
+        LSP_DOCUMENT_COLOR,
+        LSP_COLOR,
+        LSP_LINKED_EDITING_RANGE,
+        LSP_MONIKER,
+        LSP_INLINE_VALUES,
+        LSP_NOTEBOOK_DOCUMENT_SYNC,
+        LSP_NOTEBOOK_CELL_EXECUTION,
+        LSP_PROGRESS,
+        LSP_SHOW_MESSAGE,
+        LSP_LOG_MESSAGE,
+        LSP_WORK_DONE_PROGRESS,
+        LSP_TEXT_DOCUMENT_SYNC,
+        LSP_DID_SAVE,
+        LSP_WILL_SAVE,
+        LSP_WILL_SAVE_WAIT_UNTIL,
+        LSP_DOCUMENT_HIGHLIGHT,
+        LSP_PREPARE_RENAME,
+        LSP_COLOR_PRESENTATION,
+        LSP_COMPLETION_ITEM_RESOLVE,
+        LSP_CODE_ACTION_RESOLVE,
+        LSP_CODE_LENS_RESOLVE,
+        LSP_DOCUMENT_LINK_RESOLVE,
+        LSP_INLAY_HINT_RESOLVE,
+        LSP_WORKSPACE_SYMBOL_RESOLVE,
+        LSP_CODE_LENS_REFRESH,
+        LSP_SEMANTIC_TOKENS_REFRESH,
+        LSP_INLAY_HINT_REFRESH,
+        LSP_INLINE_VALUE_REFRESH,
+        LSP_DIAGNOSTIC_REFRESH,
+        LSP_FOLDING_RANGE_REFRESH,
+        DAP_CORE,
+        DAP_INLINE_VALUES,
+        DAP_BREAKPOINTS_BASIC,
+    ];
+    // Should not panic for any input
+    let caps = caps_from_feature_ids(all_ids);
+    let ids = feature_ids_from_caps(&caps);
+    // Only mapped features should appear
+    assert!(ids.len() <= 30, "at most 30 features should be mapped");
+    assert!(!ids.is_empty(), "at least some features should be mapped");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// feature_ids_from_caps — all capabilities at once
+// ---------------------------------------------------------------------------
+
 #[test]
 fn all_capabilities_set_yields_all_features() -> Result<(), Box<dyn std::error::Error>> {
     let caps = ServerCapabilities {
