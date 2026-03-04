@@ -16,5 +16,8 @@ categories = ["development-tools", "text-editors"]
 [lib]
 doctest = false
 
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+
 [lints]
 workspace = true
