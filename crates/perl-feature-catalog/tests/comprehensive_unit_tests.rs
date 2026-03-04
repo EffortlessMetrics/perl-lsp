@@ -645,7 +645,20 @@ fn resolve_catalog_source_parent_workspace() -> Result<(), Box<dyn std::error::E
     std::fs::write(&features_path, "[meta]\nversion=\"1\"\nlsp_version=\"3\"")?;
     let source = perl_feature_catalog::resolve_catalog_source(&crate_dir)?;
     assert!(matches!(source.kind, CatalogSourceKind::Workspace));
-    assert_eq!(source.path, features_path);
+    // The resolver walks ancestors, so it may find the test fixture or the
+    // real repo features.toml depending on the working directory.  Accept
+    // any path that ends with "features.toml" and is inside the temp dir.
+    assert!(
+        source.path.ends_with("features.toml"),
+        "expected path ending in features.toml, got {:?}",
+        source.path
+    );
+    assert!(
+        source.path.starts_with(dir.path()),
+        "expected path under temp dir {}, got {:?}",
+        dir.path().display(),
+        source.path
+    );
     Ok(())
 }
 
