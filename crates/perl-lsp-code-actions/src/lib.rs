@@ -28,8 +28,7 @@ mod code_actions;
 mod enhanced;
 mod quick_fixes;
 mod refactors;
-mod types;
-
-pub use code_actions::{CodeAction, CodeActionKind, CodeActionsProvider};
+pub use code_actions::CodeActionsProvider;
 pub use enhanced::EnhancedCodeActionsProvider;
-pub use types::CodeActionEdit;
+pub use perl_lsp_code_actions_types::CodeActionEdit;
+pub use perl_lsp_code_actions_types::{CodeAction, CodeActionKind};

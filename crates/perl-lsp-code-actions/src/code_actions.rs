@@ -67,9 +67,9 @@
 
 use crate::quick_fixes;
 use crate::refactors;
-use crate::types::QuickFixDiagnostic;
+use perl_lsp_code_actions_types::QuickFixDiagnostic;
 
-pub use crate::types::{CodeAction, CodeActionKind};
+use perl_lsp_code_actions_types::CodeAction;
 
 use perl_lsp_diagnostics::Diagnostic;
 use perl_parser_core::Node;

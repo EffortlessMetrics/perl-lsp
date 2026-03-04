@@ -1,6 +1,6 @@
 //! Loop conversion code actions
 
-use crate::types::{CodeAction, CodeActionEdit, CodeActionKind};
+use perl_lsp_code_actions_types::{CodeAction, CodeActionEdit, CodeActionKind};
 use perl_lsp_rename::TextEdit;
 use perl_parser_core::ast::{Node, NodeKind};
 
