@@ -1,5 +1,6 @@
 //! Code formatting support using Perl::Tidy for Perl parsing workflow pipeline.
 
+use perl_lsp_formatting_cli::build_perltidy_args;
 pub use perl_lsp_formatting_types::{
     FormatPosition, FormatRange, FormatTextEdit, FormattedDocument, FormattingOptions,
 };
@@ -107,15 +108,7 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
         content: &str,
         options: &FormattingOptions,
     ) -> Result<String, FormattingError> {
-        let mut args = vec!["-st".to_string(), "-se".to_string()];
-
-        if options.insert_spaces {
-            args.push(format!("-et={}", options.tab_size));
-            args.push(format!("-i={}", options.tab_size));
-        } else {
-            args.push("-dt".to_string());
-            args.push(format!("-i={}", options.tab_size));
-        }
+        let args = build_perltidy_args(options);
 
         let perltidy_cmd = self.perltidy_path.as_deref().unwrap_or("perltidy");
 

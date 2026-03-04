@@ -1,0 +1,16 @@
+[package]
+name = "perl-lsp-formatting-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Perltidy CLI argument construction for perl-lsp formatting"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+perl-lsp-formatting-types = { workspace = true }
+
+[lints]
+workspace = true
