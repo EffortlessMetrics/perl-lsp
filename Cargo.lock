@@ -1750,6 +1750,7 @@ dependencies = [
  "perl-lsp-protocol",
  "perl-lsp-providers",
  "perl-lsp-rename",
+ "perl-lsp-request-params",
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
@@ -1999,6 +2000,14 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-symbol-cursor",
  "perl-tdd-support",
+]
+
+[[package]]
+name = "perl-lsp-request-params"
+version = "0.10.0"
+dependencies = [
+ "perl-lsp-protocol",
+ "serde_json",
 ]
 
 [[package]]

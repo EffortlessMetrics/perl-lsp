@@ -1,0 +1,26 @@
+[package]
+name = "perl-lsp-request-params"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "LSP request parameter extraction helpers for perl-lsp"
+documentation = "https://docs.rs/perl-lsp-request-params"
+keywords = ["perl", "lsp", "jsonrpc"]
+categories = ["development-tools"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[dependencies]
+perl-lsp-protocol = { workspace = true }
+serde_json = "1.0.149"
+
+[lints]
+workspace = true
