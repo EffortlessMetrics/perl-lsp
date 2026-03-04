@@ -1631,6 +1631,7 @@ dependencies = [
  "perl-tdd-support",
  "regex",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 
@@ -1682,6 +1683,7 @@ name = "perl-heredoc"
 version = "0.10.0"
 dependencies = [
  "perl-position-tracking",
+ "perl-tdd-support",
 ]
 
 [[package]]
