@@ -1,15 +1,15 @@
 [package]
-name = "perl-lsp-code-actions"
+name = "perl-lsp-code-action-types"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "LSP code actions provider for Perl"
+description = "Shared DTOs for perl-lsp code actions"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
-documentation = "https://docs.rs/perl-lsp-code-actions"
+documentation = "https://docs.rs/perl-lsp-code-action-types"
 keywords = ["perl", "lsp", "code-actions", "quick-fixes", "refactoring"]
 categories = ["development-tools", "text-editors"]
 
@@ -17,13 +17,7 @@ categories = ["development-tools", "text-editors"]
 doctest = false
 
 [dependencies]
-perl-parser-core = { workspace = true }
 perl-lsp-rename = { workspace = true }
-perl-lsp-code-action-types = { workspace = true }
-perl-lsp-diagnostics = { workspace = true }
-
-[dev-dependencies]
-perl-tdd-support = { workspace = true }
 
 [lints]
 workspace = true

@@ -29,7 +29,7 @@
 //! - **Edit computation**: <100ms for complex multi-location edits
 //! - **Incremental analysis**: Leverages parsed AST for efficient analysis
 
-use crate::types::CodeAction;
+use perl_lsp_code_action_types::CodeAction;
 use perl_parser_core::ast::{Node, NodeKind};
 
 mod error_checking;
@@ -239,7 +239,7 @@ impl EnhancedCodeActionsProvider {
 
     /// Add recommended pragmas
     fn add_recommended_pragmas(&self, helpers: &Helpers<'_>) -> Vec<CodeAction> {
-        use crate::types::{CodeAction, CodeActionEdit, CodeActionKind};
+        use perl_lsp_code_action_types::{CodeAction, CodeActionEdit, CodeActionKind};
         use perl_lsp_rename::TextEdit;
         use perl_parser_core::ast::SourceLocation;
 

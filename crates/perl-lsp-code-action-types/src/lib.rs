@@ -1,0 +1,62 @@
+//! Shared code action types for Perl LSP integrations.
+
+#![deny(unsafe_code)]
+#![warn(rust_2018_idioms)]
+#![warn(missing_docs)]
+#![warn(clippy::all)]
+
+use perl_lsp_rename::TextEdit;
+
+/// A diagnostic with byte offset range for quick fix processing.
+#[derive(Debug, Clone)]
+pub struct QuickFixDiagnostic {
+    /// The byte offset range (start, end) in the source.
+    pub range: (usize, usize),
+    /// The diagnostic message.
+    pub message: String,
+    /// The diagnostic code (e.g., "undefined-variable").
+    pub code: Option<String>,
+}
+
+/// A code action that can be applied to fix an issue.
+#[derive(Debug, Clone)]
+pub struct CodeAction {
+    /// Human-readable title describing the action.
+    pub title: String,
+    /// The kind/category of code action.
+    pub kind: CodeActionKind,
+    /// Diagnostic codes this action fixes.
+    pub diagnostics: Vec<String>,
+    /// The edit operations to apply.
+    pub edit: CodeActionEdit,
+    /// Whether this action is the preferred choice.
+    pub is_preferred: bool,
+}
+
+/// Kind of code action.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CodeActionKind {
+    /// Quick fix for a diagnostic issue.
+    QuickFix,
+    /// General refactoring operation.
+    Refactor,
+    /// Extract code into a new construct.
+    RefactorExtract,
+    /// Inline a construct into its usage sites.
+    RefactorInline,
+    /// Rewrite code using a different pattern.
+    RefactorRewrite,
+    /// Source code organization action.
+    Source,
+    /// Organize imports action.
+    SourceOrganizeImports,
+    /// Fix all issues action.
+    SourceFixAll,
+}
+
+/// Edit to apply for a code action.
+#[derive(Debug, Clone)]
+pub struct CodeActionEdit {
+    /// List of text edits to apply.
+    pub changes: Vec<TextEdit>,
+}

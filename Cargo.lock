@@ -1792,9 +1792,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-code-action-types"
+version = "0.10.0"
+dependencies = [
+ "perl-lsp-rename",
+]
+
+[[package]]
 name = "perl-lsp-code-actions"
 version = "0.10.0"
 dependencies = [
+ "perl-lsp-code-action-types",
  "perl-lsp-diagnostics",
  "perl-lsp-rename",
  "perl-parser-core",
