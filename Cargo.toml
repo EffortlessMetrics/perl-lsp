@@ -44,6 +44,7 @@ members = [
     "crates/perl-lsp-navigation",
     "crates/perl-lsp-completion",
     "crates/perl-lsp-code-actions",
+    "crates/perl-lsp-ast-utils",
     "crates/perl-lsp-cancellation",
     "crates/perl-lsp-limits",
     "crates/perl-lsp-feature-policy",
@@ -159,6 +160,7 @@ allow = [
     "perl-lsp-formatting",
     "perl-lsp-semantic-tokens",
     "perl-lsp-providers",
+    "perl-lsp-ast-utils",
     "perl-qualified-name",
     "perl-refactoring",
 
@@ -259,6 +261,7 @@ perl-text-line = { path = "crates/perl-text-line", version = "0.10.0" }
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.10.0" }
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.10.0" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
+perl-lsp-ast-utils = { path = "crates/perl-lsp-ast-utils", version = "0.10.0" }
 perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
 perl-path-security = { path = "crates/perl-path-security", version = "0.10.0" }
 perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.10.0" }

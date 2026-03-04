@@ -23,7 +23,6 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-mod ast_utils;
 mod code_actions;
 mod enhanced;
 mod quick_fixes;
