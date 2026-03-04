@@ -1816,9 +1816,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-diagnostic-types"
+version = "0.10.0"
+
+[[package]]
 name = "perl-lsp-diagnostics"
 version = "0.10.0"
 dependencies = [
+ "perl-lsp-diagnostic-types",
  "perl-parser-core",
  "perl-pragma",
  "perl-semantic-analyzer",

@@ -4,7 +4,7 @@
 
 use perl_parser_core::error::ParseError;
 
-use super::types::{Diagnostic, DiagnosticSeverity};
+use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 
 /// Convert a parse error to a diagnostic
 #[allow(dead_code)]

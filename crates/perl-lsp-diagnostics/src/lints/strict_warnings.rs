@@ -5,8 +5,8 @@
 
 use perl_parser_core::ast::{Node, NodeKind};
 
-use super::super::types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
 use super::super::walker::walk_node;
+use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
 
 /// Check for common strict/warnings issues
 ///
