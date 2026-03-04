@@ -149,6 +149,25 @@ mod tests {
     }
 
     #[test]
+    fn test_octal_escape_sequence_validation() {
+        let valid = parse(r#"my $x = qq(\\o{127});"#);
+        assert!(valid.is_ok(), "Valid octal escape should parse");
+        let valid_tree = must(valid);
+        assert!(
+            !valid_tree.root_node().has_error(),
+            "Valid octal escape should not produce parse errors"
+        );
+
+        let invalid = parse(r#"my $x = qq(\\o{128});"#);
+        assert!(invalid.is_ok(), "Invalid octal escape should still produce a tree");
+        let invalid_tree = must(invalid);
+        assert!(
+            invalid_tree.root_node().has_error(),
+            "Invalid octal escape should produce parse errors"
+        );
+    }
+
+    #[test]
     fn test_parser_reuse() {
         let mut parser = Parser::new();
         must(parser.set_language(&language()));
