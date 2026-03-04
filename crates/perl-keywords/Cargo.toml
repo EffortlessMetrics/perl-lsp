@@ -12,7 +12,7 @@ readme = "README.md"
 documentation = "https://docs.rs/perl-keywords"
 keywords = ["perl", "keywords", "lexer", "lsp", "dap"]
 categories = ["development-tools", "text-editors"]
-include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 
