@@ -56,7 +56,6 @@ pub use perl_workspace_index::workspace_index;
 pub mod analysis;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use analysis::dead_code_detector;
 pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
 pub use analysis::index;

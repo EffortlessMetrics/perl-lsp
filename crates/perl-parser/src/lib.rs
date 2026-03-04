@@ -413,9 +413,6 @@ pub mod tooling;
 /// Workspace indexing, document store, and cross-file operations.
 pub mod workspace;
 
-/// Dead code detection for Perl workspaces.
-#[cfg(not(target_arch = "wasm32"))]
-pub use analysis::dead_code_detector;
 /// Variable and subroutine declaration analysis.
 pub use analysis::declaration;
 #[cfg(not(target_arch = "wasm32"))]
@@ -433,6 +430,9 @@ pub use analysis::type_inference;
 pub use builtins::builtin_signatures;
 /// Perfect hash function (PHF) based builtin signature lookup.
 pub use builtins::builtin_signatures_phf;
+/// Dead code detection for Perl workspaces.
+#[cfg(not(target_arch = "wasm32"))]
+pub use perl_dead_code as dead_code_detector;
 
 // Re-exports from extracted microcrates
 /// LSP code actions for automated refactoring and fixes.

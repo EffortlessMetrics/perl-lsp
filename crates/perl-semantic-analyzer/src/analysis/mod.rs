@@ -2,7 +2,6 @@
 
 /// Dead code detection for Perl workspaces.
 #[cfg(not(target_arch = "wasm32"))]
-pub mod dead_code_detector;
 /// Go-to-declaration support and parent map construction.
 pub mod declaration;
 #[cfg(not(target_arch = "wasm32"))]
