@@ -8,6 +8,7 @@ caps:
   - lsp.code_action
   - lsp.code_lens
   - lsp.completion
+  - lsp.declaration
   - lsp.definition
   - lsp.document_color
   - lsp.document_highlight
