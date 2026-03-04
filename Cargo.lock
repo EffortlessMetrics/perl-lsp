@@ -2023,6 +2023,7 @@ dependencies = [
  "perl-subprocess-runtime",
  "perl-tdd-support",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
