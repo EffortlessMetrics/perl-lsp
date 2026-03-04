@@ -1,0 +1,21 @@
+[package]
+name = "perl-lsp-diagnostic-dedup"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Diagnostic deduplication utilities for Perl LSP diagnostics"
+documentation = "https://docs.rs/perl-lsp-diagnostic-dedup"
+readme = "README.md"
+keywords = ["perl", "lsp", "diagnostics", "deduplication"]
+categories = ["development-tools", "text-editors"]
+include = ["src/**", "Cargo.toml", "README.md"]
+
+[lints]
+workspace = true
+
+[dependencies]
+perl-lsp-diagnostic-types = { workspace = true }

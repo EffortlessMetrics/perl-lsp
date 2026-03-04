@@ -5,7 +5,9 @@
 
 use perl_semantic_analyzer::scope_analyzer::{IssueKind, ScopeIssue};
 
-use super::types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
+use perl_lsp_diagnostic_types::{
+    Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation,
+};
 
 /// Convert scope analyzer issues to diagnostics
 ///
