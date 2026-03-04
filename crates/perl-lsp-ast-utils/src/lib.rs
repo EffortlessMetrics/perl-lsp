@@ -1,50 +1,50 @@
-//! AST utilities for code actions
+//! AST utilities for Perl LSP microcrates.
 //!
-//! Provides helper functions for walking and analyzing the AST to find
-//! nodes and positions for code actions.
+//! This crate has a narrow responsibility: provide AST and source-text helpers
+//! used by higher-level LSP features (for example, code actions).
+
+#![deny(unsafe_code)]
+#![warn(missing_docs)]
 
 use perl_parser_core::{Node, NodeKind};
 
-/// Find the best position to insert a declaration
+/// Find the best position to insert a declaration.
+#[must_use]
 pub fn find_declaration_position(source: &str, error_pos: usize) -> usize {
-    // Find the start of the current statement
     find_statement_start(source, error_pos)
 }
 
-/// Find the start of the current statement
+/// Find the start of the current statement.
+#[must_use]
 pub fn find_statement_start(source: &str, pos: usize) -> usize {
-    // Look backwards for statement boundary
     let mut i = pos.saturating_sub(1);
+    let bytes = source.as_bytes();
+
     while i > 0 {
-        if source.chars().nth(i) == Some(';') || source.chars().nth(i) == Some('\n') {
+        if bytes.get(i).is_some_and(|b| *b == b';' || *b == b'\n') {
             return i + 1;
         }
         i = i.saturating_sub(1);
     }
+
     0
 }
 
-/// Find a good position to insert a function
+/// Find a good position to insert a function.
+///
+/// Current policy inserts at end-of-file.
+#[must_use]
 pub fn find_function_insert_position(source: &str) -> usize {
-    // For now, insert at the end of the file
     source.len()
 }
 
-/// Find node at the given range
+/// Find the most specific node covering the provided byte range.
 #[allow(clippy::only_used_in_recursion)]
+#[must_use]
 pub fn find_node_at_range(node: &Node, range: (usize, usize)) -> Option<&Node> {
-    // Check if this node contains the range
     if node.location.start <= range.0 && node.location.end >= range.1 {
-        // Check children for more specific match based on node kind
         match &node.kind {
-            NodeKind::Program { statements } => {
-                for stmt in statements {
-                    if let Some(result) = find_node_at_range(stmt, range) {
-                        return Some(result);
-                    }
-                }
-            }
-            NodeKind::Block { statements } => {
+            NodeKind::Program { statements } | NodeKind::Block { statements } => {
                 for stmt in statements {
                     if let Some(result) = find_node_at_range(stmt, range) {
                         return Some(result);
@@ -84,14 +84,16 @@ pub fn find_node_at_range(node: &Node, range: (usize, usize)) -> Option<&Node> {
         }
         return Some(node);
     }
+
     None
 }
 
-/// Get indentation at a position
+/// Get indentation at a position.
+#[must_use]
 pub fn get_indent_at(source: &str, pos: usize) -> String {
-    let line_start = source[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-
+    let line_start = source[..pos].rfind('\n').map_or(0, |p| p + 1);
     let line = &source[line_start..];
+
     let mut indent = String::new();
     for ch in line.chars() {
         if ch == ' ' || ch == '\t' {
@@ -101,4 +103,30 @@ pub fn get_indent_at(source: &str, pos: usize) -> String {
         }
     }
     indent
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{find_declaration_position, find_statement_start, get_indent_at};
+
+    #[test]
+    fn finds_statement_start_after_semicolon() {
+        let src = "my $x = 1;\nmy $y = 2;";
+        let pos = src.find("$y").unwrap_or(0);
+        assert_eq!(find_statement_start(src, pos), src.find('\n').unwrap_or(0) + 1);
+    }
+
+    #[test]
+    fn declaration_position_delegates_to_statement_start() {
+        let src = "print 'a';\nprint 'b';";
+        let pos = src.find("'b'").unwrap_or(0);
+        assert_eq!(find_declaration_position(src, pos), find_statement_start(src, pos));
+    }
+
+    #[test]
+    fn captures_whitespace_indent() {
+        let src = "if (1) {\n    say 'x';\n}\n";
+        let pos = src.find("say").unwrap_or(0);
+        assert_eq!(get_indent_at(src, pos), "    ");
+    }
 }
