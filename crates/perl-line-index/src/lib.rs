@@ -1,9 +1,12 @@
 //! Line index for efficient UTF-16 position calculations.
+
 use ropey::Rope;
+
 #[derive(Debug, Clone)]
 pub struct LineStartsCache {
     line_starts: Vec<usize>,
 }
+
 impl LineStartsCache {
     pub fn new(text: &str) -> Self {
         let mut ls = vec![0];
@@ -24,6 +27,7 @@ impl LineStartsCache {
         }
         Self { line_starts: ls }
     }
+
     pub fn new_rope(rope: &Rope) -> Self {
         let mut ls = vec![0];
         for li in 0..rope.len_lines() {
@@ -33,12 +37,14 @@ impl LineStartsCache {
         }
         Self { line_starts: ls }
     }
+
     pub fn offset_to_position(&self, text: &str, offset: usize) -> (u32, u32) {
         let offset = offset.min(text.len());
         let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
         let ls = self.line_starts[line];
         (line as u32, text[ls..offset].chars().map(|c| c.len_utf16()).sum::<usize>() as u32)
     }
+
     pub fn position_to_offset(&self, text: &str, line: u32, character: u32) -> usize {
         let line = line as usize;
         if line >= self.line_starts.len() {
@@ -68,15 +74,19 @@ impl LineStartsCache {
         }
         ls + bo.min(lt.len())
     }
+
     pub fn offset_to_position_rope(&self, rope: &Rope, offset: usize) -> (u32, u32) {
         let offset = offset.min(rope.len_bytes());
         let line = self.line_starts.binary_search(&offset).unwrap_or_else(|i| i.saturating_sub(1));
-        let ls = self.line_starts[line];
         (
             line as u32,
-            rope.byte_slice(ls..offset).chars().map(|c| c.len_utf16()).sum::<usize>() as u32,
+            rope.byte_slice(self.line_starts[line]..offset)
+                .chars()
+                .map(|c| c.len_utf16())
+                .sum::<usize>() as u32,
         )
     }
+
     pub fn position_to_offset_rope(&self, rope: &Rope, line: u32, character: u32) -> usize {
         let line = line as usize;
         if line >= self.line_starts.len() {
@@ -143,38 +153,27 @@ impl LineIndex {
 
         let line_start = self.line_starts[line];
         let line_end = if line + 1 < self.line_starts.len() {
-            // Don't subtract 1 - include the newline in the line
             self.line_starts[line + 1]
         } else {
             self.text.len()
         };
 
-        // Get the full line including newline
         let line_text = &self.text[line_start..line_end];
-
-        // Find the byte offset for the UTF-16 character position
         let byte_offset = self.utf16_to_byte_offset(line_text, character as usize)?;
 
         Some(line_start + byte_offset)
     }
 
-    /// Get UTF-16 column from byte offset within a line
     fn utf16_column(&self, line: usize, byte_offset: usize) -> usize {
         let line_start = self.line_starts[line];
-
-        // Get the text from line start to the target byte offset
         let target_byte = line_start + byte_offset;
         if target_byte > self.text.len() {
             return 0;
         }
 
-        let line_text = &self.text[line_start..target_byte];
-
-        // Count UTF-16 code units in the substring
-        line_text.chars().map(|ch| ch.len_utf16()).sum()
+        self.text[line_start..target_byte].chars().map(|ch| ch.len_utf16()).sum()
     }
 
-    /// Convert UTF-16 offset to byte offset within a line
     fn utf16_to_byte_offset(&self, line_text: &str, utf16_offset: usize) -> Option<usize> {
         let mut current_utf16 = 0;
 
@@ -184,12 +183,10 @@ impl LineIndex {
             }
             current_utf16 += ch.len_utf16();
             if current_utf16 > utf16_offset {
-                // UTF-16 offset is in the middle of a character
                 return None;
             }
         }
 
-        // Check if we're at the end of the line
         if current_utf16 == utf16_offset { Some(line_text.len()) } else { None }
     }
 
@@ -198,5 +195,26 @@ impl LineIndex {
         let start_pos = self.offset_to_position(start);
         let end_pos = self.offset_to_position(end);
         (start_pos, end_pos)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LineIndex, LineStartsCache};
+
+    #[test]
+    fn line_index_handles_utf16_boundaries() {
+        let index = LineIndex::new("a\n😀x\n".to_string());
+        assert_eq!(index.offset_to_position(2), (1, 0));
+        assert_eq!(index.position_to_offset(1, 2), Some(6));
+    }
+
+    #[test]
+    fn line_starts_cache_round_trips_positions() {
+        let text = "one\r\ntwo\nthree";
+        let cache = LineStartsCache::new(text);
+        let (line, col) = cache.offset_to_position(text, 6);
+        assert_eq!((line, col), (1, 1));
+        assert_eq!(cache.position_to_offset(text, line, col), 6);
     }
 }

@@ -1710,6 +1710,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-line-index"
+version = "0.10.0"
+dependencies = [
+ "ropey",
+]
+
+[[package]]
 name = "perl-lsp"
 version = "0.10.0"
 dependencies = [
@@ -2234,6 +2241,7 @@ name = "perl-position-tracking"
 version = "0.10.0"
 dependencies = [
  "lsp-types",
+ "perl-line-index",
  "ropey",
  "serde",
  "serde_json",

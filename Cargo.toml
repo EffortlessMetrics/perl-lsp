@@ -48,6 +48,7 @@ members = [
     "crates/perl-lsp-feature-policy",
     "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
+    "crates/perl-line-index",
     "crates/perl-symbol-types",
     "crates/perl-symbol-cursor",
     "crates/perl-symbol-table",
@@ -104,6 +105,7 @@ allow = [
 
     # Tier 1 — Leaf crates (no workspace deps)
     "perl-position-tracking",
+    "perl-line-index",
     "perl-token",
     "perl-ast",
     "perl-builtins",
@@ -227,6 +229,7 @@ perl-heredoc = { path = "crates/perl-heredoc", version = "0.10.0" }
 perl-error = { path = "crates/perl-error", version = "0.10.0" }
 perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.10.0" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.10.0" }
+perl-line-index = { path = "crates/perl-line-index", version = "0.10.0" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.10.0" }
 perl-symbol-cursor = { path = "crates/perl-symbol-cursor", version = "0.10.0" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.10.0" }

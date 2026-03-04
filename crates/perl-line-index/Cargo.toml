@@ -1,0 +1,26 @@
+[package]
+name = "perl-line-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Line index and line-start cache for UTF-16/UTF-8 position conversion"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-line-index"
+keywords = ["perl", "line", "index", "utf16", "position"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[dependencies]
+ropey = "1.6.1"
+
+[lints]
+workspace = true
