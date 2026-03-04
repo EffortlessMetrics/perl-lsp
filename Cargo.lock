@@ -1526,6 +1526,7 @@ dependencies = [
 name = "perl-builtins"
 version = "0.10.0"
 dependencies = [
+ "perl-tdd-support",
  "phf",
 ]
 

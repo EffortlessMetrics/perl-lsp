@@ -16,5 +16,8 @@ categories = ["development-tools", "text-processing"]
 [dependencies]
 phf = { version = "0.13.1", features = ["macros"] }
 
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+
 [lints]
 workspace = true
