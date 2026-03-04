@@ -1338,9 +1338,9 @@ dependencies = [
 
 [[package]]
 name = "moka"
-version = "0.12.14"
+version = "0.12.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85f8024e1c8e71c778968af91d43700ce1d11b219d127d79fb2934153b82b42b"
+checksum = "b4ac832c50ced444ef6be0767a008b02c106a909ba79d1d830501e94b96f6b7e"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-epoch",
@@ -1627,14 +1627,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-dead-code"
-version = "0.10.0"
-dependencies = [
- "perl-workspace-index",
- "serde",
-]
-
-[[package]]
 name = "perl-diagnostics-codes"
 version = "0.10.0"
 dependencies = [
@@ -1775,14 +1767,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-capability-map"
-version = "0.10.0"
-dependencies = [
- "lsp-types",
- "perl-lsp-feature-ids",
-]
-
-[[package]]
 name = "perl-lsp-code-actions"
 version = "0.10.0"
 dependencies = [
@@ -1823,7 +1807,6 @@ version = "0.10.0"
 dependencies = [
  "lsp-types",
  "perl-feature-catalog",
- "perl-lsp-capability-map",
  "perl-lsp-feature-ids",
  "serde",
 ]
@@ -1971,6 +1954,7 @@ dependencies = [
  "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
+ "perl-symbol-cursor",
  "perl-tdd-support",
 ]
 
@@ -1993,7 +1977,6 @@ dependencies = [
  "lsp-types",
  "moka",
  "perl-parser-core",
- "perl-subprocess-runtime",
  "perl-tdd-support",
  "serde",
 ]
@@ -2144,7 +2127,6 @@ dependencies = [
  "nix",
  "parking_lot",
  "perl-corpus",
- "perl-dead-code",
  "perl-incremental-parsing",
  "perl-keywords",
  "perl-lexer",
@@ -2290,7 +2272,7 @@ name = "perl-source-file"
 version = "0.10.0"
 
 [[package]]
-name = "perl-subprocess-runtime"
+name = "perl-symbol-cursor"
 version = "0.10.0"
 
 [[package]]
