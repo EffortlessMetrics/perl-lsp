@@ -14,6 +14,7 @@ keywords = ["perl", "position", "utf16", "lsp", "utf8"]
 categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
+  "tests/**",
   "Cargo.toml",
   "README.md",
   "LICENSE*"

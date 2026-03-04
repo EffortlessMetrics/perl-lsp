@@ -107,17 +107,21 @@ allow = [
     # Tier 1 — Leaf crates (no workspace deps)
     "perl-position-tracking",
     "perl-token",
-    "perl-ast",
     "perl-builtins",
     "perl-content-length-framing",
     "perl-subprocess-runtime",
     "perl-keywords",
-    "perl-lexer",
     "perl-regex",
-    "perl-error",
-    "perl-heredoc",
-    "perl-pragma",
     "perl-quote",
+
+    # Tier 1b — Depend only on Tier 1 crates
+    "perl-ast",
+    "perl-lexer",
+    "perl-heredoc",
+
+    # Tier 1c — Depend on Tier 1b crates
+    "perl-error",
+    "perl-pragma",
     "perl-tokenizer",
 
     # Tier 2 — Core infrastructure
@@ -126,8 +130,8 @@ allow = [
     "perl-edit",
     "perl-incremental-parsing",
     "perl-symbol-types",
-"perl-symbol-cursor",
-"perl-symbol-table",
+    "perl-symbol-cursor",
+    "perl-symbol-table",
     "perl-uri",
     "perl-workspace-index-slo",
 
