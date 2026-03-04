@@ -1,0 +1,18 @@
+[package]
+name = "perl-workspace-skip"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-workspace-skip"
+description = "Canonical skip-directory rules for Perl workspace traversal"
+readme = "README.md"
+keywords = ["perl", "workspace", "discovery", "filesystem"]
+categories = ["development-tools", "filesystem"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[lints]
+workspace = true

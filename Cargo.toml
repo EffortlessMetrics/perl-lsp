@@ -72,6 +72,7 @@ members = [
     "crates/perl-uri",
     "crates/perl-path-security",
     "crates/perl-workspace-discovery",
+    "crates/perl-workspace-skip",
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
@@ -196,6 +197,7 @@ allow = [
     "perl-module-resolution",
     "perl-source-file",
     "perl-workspace-discovery",
+    "perl-workspace-skip",
     "perl-diagnostics-codes",
 
     # Tier 7 — Top-level application
@@ -254,6 +256,7 @@ perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
 perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
 perl-path-security = { path = "crates/perl-path-security", version = "0.10.0" }
 perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.10.0" }
+perl-workspace-skip = { path = "crates/perl-workspace-skip", version = "0.10.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.10.0" }
 perl-dap = { path = "crates/perl-dap", version = "0.10.0" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.10.0" }

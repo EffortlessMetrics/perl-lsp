@@ -8,7 +8,8 @@
 //! are skipped in both modes (`.git`, `.hg`, `.svn`, `target`, `node_modules`, `.cache`).
 
 use perl_source_file::is_perl_source_path;
-use std::path::{Component, Path, PathBuf};
+use perl_workspace_skip::{is_skipped_dir_name, path_contains_skipped_component};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};
 
@@ -144,21 +145,7 @@ fn should_skip_dir(entry: &DirEntry) -> bool {
         return false;
     }
 
-    let name = entry.file_name().to_string_lossy();
-    matches!(name.as_ref(), ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache")
-}
-
-fn path_contains_skipped_component(path: &Path) -> bool {
-    for component in path.components() {
-        if let Component::Normal(name) = component
-            && let Some(value) = name.to_str()
-            && matches!(value, ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache")
-        {
-            return true;
-        }
-    }
-
-    false
+    is_skipped_dir_name(&entry.file_name().to_string_lossy())
 }
 
 fn log_discovery(result: &DiscoveryResult) {
@@ -173,10 +160,8 @@ fn log_discovery(result: &DiscoveryResult) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DiscoveryMethod, parse_git_ls_files_output, path_contains_skipped_component,
-        should_skip_dir, walk_discovery,
-    };
+    use super::{DiscoveryMethod, parse_git_ls_files_output, should_skip_dir, walk_discovery};
+    use perl_workspace_skip::path_contains_skipped_component;
     use std::fs;
     use std::path::Path;
     use std::time::Instant;
