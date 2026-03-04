@@ -1,7 +1,12 @@
-//! Document links provider for LSP protocol compatibility.
+//! Document links provider utilities for Perl LSP support.
 //!
-//! This module provides document link detection for Perl source files,
+//! This crate provides document link detection for Perl source files,
 //! identifying `use`, `require` module statements, and file includes.
+
+#![deny(unsafe_code)]
+#![warn(rust_2018_idioms)]
+#![warn(missing_docs)]
+#![warn(clippy::all)]
 
 use perl_module_import::{ModuleImportKind, parse_module_import_head};
 use perl_module_path::module_name_to_path;
