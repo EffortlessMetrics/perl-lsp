@@ -4,6 +4,13 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
+### Added
+- Marketplace readiness workflow via `npm run verify:marketplace` for compile + bundle + package validation.
+- VS Marketplace badges and installation link in extension README.
+
+### Changed
+- Publishing guide refreshed with a launch checklist and pre-release recommendation for initial rollout.
+
 ## [0.10.0] - 2026-02-28
 
 ### Changed

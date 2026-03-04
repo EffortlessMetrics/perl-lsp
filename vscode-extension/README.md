@@ -1,6 +1,9 @@
 # Perl Language Server
 
-Lightning-fast Perl language support with 26+ IDE features powered by tree-sitter-perl.
+[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/effortlesssteven.perl-lsp?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp)
+[![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/effortlesssteven.perl-lsp)](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp)
+
+Lightning-fast Perl language support with 26+ IDE features powered by perl-lsp.
 
 ## ✨ Features
 
@@ -44,6 +47,8 @@ Lightning-fast Perl language support with 26+ IDE features powered by tree-sitte
 - **Sub-millisecond** position conversions (v0.8.0)
 
 ## 📦 Installation
+
+Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp).
 
 The extension automatically downloads the correct language server for your platform:
 - Windows (x64, ARM64)

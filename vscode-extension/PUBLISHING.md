@@ -19,31 +19,18 @@ First, ensure the perl-lsp binary is built:
 ```bash
 # From the project root
 cd ..
-cargo build -p perl-parser --bin perl-lsp --release
+cargo build -p perl-lsp --release
 ```
 
-### 2. Build the Extension
+### 2. Build and Validate the Extension
 
 ```bash
-# From project root
-cargo xtask release <version>
-```
-
-Or manually:
-
-```bash
-# Install dependencies
+# From vscode-extension/
 npm install
-
-# Compile TypeScript
-npm run compile
-
-# Bundle LSP binary
-npm run bundle-lsp
-
-# Package extension
-npm run package
+npm run verify:marketplace
 ```
+
+`verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates a `.vsix` package suitable for pre-release validation.
 
 ### 3. Test Locally
 
@@ -107,7 +94,7 @@ vsce login <publisher-id>
 ### 7. Publish
 
 ```bash
-# Publish to marketplace
+# Publish to marketplace (already logged in via vsce)
 npm run publish
 
 # Or with version bump
@@ -161,3 +148,14 @@ Ensure `bundle-lsp.js` correctly detects platform and copies binaries.
 
 ### Large package size
 Check `.vscodeignore` is excluding unnecessary files.
+## Marketplace Launch Checklist
+
+Before first public launch:
+
+- [ ] Confirm `package.json` metadata is complete (`publisher`, `icon`, repository links, categories, keywords).
+- [ ] Ensure `README.md` has clear install + configuration guidance.
+- [ ] Ensure `CHANGELOG.md` includes release notes for the exact published version.
+- [ ] Run `npm run verify:marketplace` and install the generated `.vsix` locally.
+- [ ] Validate extension activation in a clean profile (`code --user-data-dir <tmpdir>`).
+- [ ] Verify binary download fallback works when no bundled binary exists for the host platform.
+- [ ] Publish as pre-release first (recommended for initial alpha), then promote to stable after validation feedback.

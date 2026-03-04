@@ -4,6 +4,8 @@
   "description": "Comprehensive Perl language support powered by perl-lsp",
   "version": "0.10.0",
   "publisher": "effortlesssteven",
+  "preview": true,
+  "markdown": "github",
   "engines": {
     "vscode": "^1.88.0"
   },
@@ -443,7 +445,11 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "bundle-lsp": "node ./scripts/bundle-lsp.js",
+    "package": "npx @vscode/vsce package",
+    "publish": "npx @vscode/vsce publish",
+    "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
