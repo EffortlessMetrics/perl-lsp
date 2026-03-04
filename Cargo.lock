@@ -1598,10 +1598,18 @@ dependencies = [
 name = "perl-dap-eval"
 version = "0.10.0"
 dependencies = [
+ "perl-dap-security-patterns",
+ "perl-tdd-support",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-dap-security-patterns"
+version = "0.10.0"
+dependencies = [
  "once_cell",
  "perl-tdd-support",
  "regex",
- "thiserror",
 ]
 
 [[package]]
@@ -1624,6 +1632,14 @@ dependencies = [
  "regex",
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "perl-dead-code"
+version = "0.10.0"
+dependencies = [
+ "perl-workspace-index",
+ "serde",
 ]
 
 [[package]]
@@ -1767,6 +1783,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-capability-map"
+version = "0.10.0"
+dependencies = [
+ "lsp-types",
+ "perl-lsp-feature-ids",
+]
+
+[[package]]
 name = "perl-lsp-code-actions"
 version = "0.10.0"
 dependencies = [
@@ -1807,6 +1831,7 @@ version = "0.10.0"
 dependencies = [
  "lsp-types",
  "perl-feature-catalog",
+ "perl-lsp-capability-map",
  "perl-lsp-feature-ids",
  "serde",
 ]
@@ -1984,6 +2009,7 @@ dependencies = [
  "lsp-types",
  "moka",
  "perl-parser-core",
+ "perl-subprocess-runtime",
  "perl-tdd-support",
  "serde",
 ]
@@ -2134,6 +2160,7 @@ dependencies = [
  "nix",
  "parking_lot",
  "perl-corpus",
+ "perl-dead-code",
  "perl-incremental-parsing",
  "perl-keywords",
  "perl-lexer",
@@ -2276,6 +2303,10 @@ dependencies = [
 
 [[package]]
 name = "perl-source-file"
+version = "0.10.0"
+
+[[package]]
+name = "perl-subprocess-runtime"
 version = "0.10.0"
 
 [[package]]

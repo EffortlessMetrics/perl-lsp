@@ -38,10 +38,9 @@
 //! - **Tie Mechanism**: tie/untie (can execute arbitrary code)
 //! - **Mutation**: Assignment operators, ++/--, regex mutation (s///)
 
-mod patterns;
 mod validator;
 
 pub use validator::{SafeEvaluator, ValidationError, ValidationResult};
 
 // Re-export pattern constants for testing/extension
-pub use patterns::DANGEROUS_OPERATIONS;
+pub use perl_dap_security_patterns::DANGEROUS_OPERATIONS;

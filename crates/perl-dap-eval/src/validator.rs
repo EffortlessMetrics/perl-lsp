@@ -3,7 +3,7 @@
 //! This module provides the core validation logic for detecting dangerous
 //! operations in Perl expressions during debug evaluation.
 
-use crate::patterns::{ASSIGNMENT_OPERATORS, DANGEROUS_OPS_RE, REGEX_MUTATION_RE};
+use perl_dap_security_patterns::{ASSIGNMENT_OPERATORS, DANGEROUS_OPS_RE, REGEX_MUTATION_RE};
 
 /// Error type for unsafe expression detection
 #[derive(Debug, Clone, thiserror::Error)]

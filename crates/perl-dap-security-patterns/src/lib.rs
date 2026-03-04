@@ -1,7 +1,7 @@
-//! Dangerous operation patterns
+//! Dangerous operation patterns for Perl DAP safe evaluation.
 //!
-//! This module defines the patterns used to detect dangerous Perl operations
-//! that should be blocked during safe expression evaluation.
+//! This crate defines the shared blocked operation catalog and compiled regex
+//! patterns used to detect unsafe eval expressions.
 
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -137,10 +137,8 @@ pub static DANGEROUS_OPS_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
 /// Compiled regex for regex mutation operators (s///, tr///, y///)
 ///
 /// Matches s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace).
-pub static REGEX_MUTATION_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
-    // Match s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace)
-    Regex::new(r"\b(?:s|tr|y)[^\w\s]")
-});
+pub static REGEX_MUTATION_RE: Lazy<Result<Regex, regex::Error>> =
+    Lazy::new(|| Regex::new(r"\b(?:s|tr|y)[^\w\s]"));
 
 #[cfg(test)]
 mod tests {
@@ -149,23 +147,20 @@ mod tests {
     #[test]
     fn test_dangerous_ops_regex() {
         use perl_tdd_support::must;
+
         let re = must(DANGEROUS_OPS_RE.as_ref());
 
-        // Should match dangerous ops
         assert!(re.is_match("system('ls')"));
         assert!(re.is_match("eval($code)"));
         assert!(re.is_match("print 'hello'"));
-
-        // Should NOT match as standalone (would need full validator for context)
-        // The regex just does raw matching - context is handled by validator
     }
 
     #[test]
     fn test_regex_mutation_regex() {
         use perl_tdd_support::must;
+
         let re = must(REGEX_MUTATION_RE.as_ref());
 
-        // Should match s///, tr///, y///
         assert!(re.is_match("s/foo/bar/"));
         assert!(re.is_match("tr/a-z/A-Z/"));
         assert!(re.is_match("y/abc/xyz/"));
