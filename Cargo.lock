@@ -1737,6 +1737,7 @@ dependencies = [
  "perl-lsp-code-actions",
  "perl-lsp-completion",
  "perl-lsp-diagnostics",
+ "perl-lsp-diagnostics-catalog",
  "perl-lsp-feature-governance",
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
@@ -1824,6 +1825,14 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
+]
+
+[[package]]
+name = "perl-lsp-diagnostics-catalog"
+version = "0.10.0"
+dependencies = [
+ "perl-diagnostics-codes",
+ "serde_json",
 ]
 
 [[package]]

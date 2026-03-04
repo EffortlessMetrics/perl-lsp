@@ -1,0 +1,17 @@
+[package]
+name = "perl-lsp-diagnostics-catalog"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Stable diagnostic catalog metadata for Perl LSP"
+
+[dependencies]
+serde_json = "1.0.149"
+perl-diagnostics-codes = { workspace = true }
+
+[lints]
+workspace = true
