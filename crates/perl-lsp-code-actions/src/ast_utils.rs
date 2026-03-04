@@ -4,6 +4,7 @@
 //! nodes and positions for code actions.
 
 use perl_parser_core::{Node, NodeKind};
+use perl_text_line::{leading_indent_at, statement_start_before};
 
 /// Find the best position to insert a declaration
 pub fn find_declaration_position(source: &str, error_pos: usize) -> usize {
@@ -13,15 +14,7 @@ pub fn find_declaration_position(source: &str, error_pos: usize) -> usize {
 
 /// Find the start of the current statement
 pub fn find_statement_start(source: &str, pos: usize) -> usize {
-    // Look backwards for statement boundary
-    let mut i = pos.saturating_sub(1);
-    while i > 0 {
-        if source.chars().nth(i) == Some(';') || source.chars().nth(i) == Some('\n') {
-            return i + 1;
-        }
-        i = i.saturating_sub(1);
-    }
-    0
+    statement_start_before(source, pos)
 }
 
 /// Find a good position to insert a function
@@ -89,16 +82,5 @@ pub fn find_node_at_range(node: &Node, range: (usize, usize)) -> Option<&Node> {
 
 /// Get indentation at a position
 pub fn get_indent_at(source: &str, pos: usize) -> String {
-    let line_start = source[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-
-    let line = &source[line_start..];
-    let mut indent = String::new();
-    for ch in line.chars() {
-        if ch == ' ' || ch == '\t' {
-            indent.push(ch);
-        } else {
-            break;
-        }
-    }
-    indent
+    leading_indent_at(source, pos)
 }

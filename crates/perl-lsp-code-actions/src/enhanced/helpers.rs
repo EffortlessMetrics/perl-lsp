@@ -1,5 +1,7 @@
 //! Helper methods for enhanced code actions
 
+use perl_text_line::{leading_indent_at, statement_start_before};
+
 /// Helper methods for enhanced code actions
 pub struct Helpers<'a> {
     pub source: &'a str,
@@ -14,14 +16,7 @@ impl<'a> Helpers<'a> {
 
     /// Find statement start
     pub fn find_statement_start(&self, pos: usize) -> usize {
-        let mut i = pos.saturating_sub(1);
-        while i > 0 {
-            if self.source.chars().nth(i) == Some(';') || self.source.chars().nth(i) == Some('\n') {
-                return i + 1;
-            }
-            i = i.saturating_sub(1);
-        }
-        0
+        statement_start_before(self.source, pos)
     }
 
     /// Find subroutine insertion position
@@ -69,18 +64,7 @@ impl<'a> Helpers<'a> {
 
     /// Get indentation at position
     pub fn get_indent_at(&self, pos: usize) -> String {
-        let line_start = self.source[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-
-        let line = &self.source[line_start..];
-        let mut indent = String::new();
-        for ch in line.chars() {
-            if ch == ' ' || ch == '\t' {
-                indent.push(ch);
-            } else {
-                break;
-            }
-        }
-        indent
+        leading_indent_at(self.source, pos)
     }
 
     /// Truncate expression for display

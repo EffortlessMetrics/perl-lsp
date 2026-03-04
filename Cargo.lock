@@ -1799,6 +1799,7 @@ dependencies = [
  "perl-lsp-rename",
  "perl-parser-core",
  "perl-tdd-support",
+ "perl-text-line",
 ]
 
 [[package]]
