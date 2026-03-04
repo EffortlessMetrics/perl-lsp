@@ -24,7 +24,7 @@ use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
 use perl_dap_eval::SafeEvaluator;
-use perl_dap_stack::PerlStackParser;
+use perl_dap_stack::{PerlStackParser, is_internal_frame_name_and_path};
 use perl_dap_variables::{
     PerlVariableRenderer, RenderedVariable, VariableParser, VariableRenderer,
 };
@@ -1054,10 +1054,8 @@ impl DebugAdapter {
     fn filter_user_visible_frames(frames: Vec<StackFrame>) -> Vec<StackFrame> {
         frames
             .into_iter()
-            .filter(|f| {
-                !f.name.starts_with("Devel::TSPerlDAP::")
-                    && !f.name.starts_with("DB::")
-                    && !f.source.path.contains("perl5db.pl")
+            .filter(|frame| {
+                !is_internal_frame_name_and_path(&frame.name, Some(frame.source.path.as_str()))
             })
             .collect()
     }
@@ -6042,14 +6040,7 @@ mod tests {
 
     /// Test helper: Filter frames using the same logic as handle_stack_trace (AC8.2.1)
     fn filter_internal_frames(frames: Vec<StackFrame>) -> Vec<StackFrame> {
-        frames
-            .into_iter()
-            .filter(|f| {
-                !f.name.starts_with("Devel::TSPerlDAP::")
-                    && !f.name.starts_with("DB::")
-                    && !f.source.path.contains("perl5db.pl")
-            })
-            .collect()
+        DebugAdapter::filter_user_visible_frames(frames)
     }
 
     #[test]
