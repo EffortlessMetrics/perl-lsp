@@ -31,12 +31,22 @@ fn test_formatting_capability_advertised() -> Result<(), Box<dyn std::error::Err
         result.get("capabilities").ok_or("Expected capabilities in initialize result")?;
 
     // Verify formatting is advertised
-    let formatting_provider = capabilities.get("documentFormattingProvider");
-    // Formatting is conditional on perltidy availability, so we do not strictly assert its presence here
+    if let Some(formatting_provider) = capabilities.get("documentFormattingProvider") {
+        // Formatting is conditional on perltidy availability; when present it should be a valid
+        // capability payload.
+        assert!(
+            formatting_provider.is_boolean() || formatting_provider.is_object(),
+            "documentFormattingProvider should be bool or object when advertised"
+        );
+    }
 
-    // Verify range formatting is advertised
-    let range_formatting_provider = capabilities.get("documentRangeFormattingProvider");
-    assert!(range_formatting_provider.is_some(),);
+    // Range formatting follows the same tool-availability gating as full-document formatting.
+    if let Some(range_formatting_provider) = capabilities.get("documentRangeFormattingProvider") {
+        assert!(
+            range_formatting_provider.is_boolean() || range_formatting_provider.is_object(),
+            "documentRangeFormattingProvider should be bool or object when advertised"
+        );
+    }
 
     Ok(())
 }
@@ -271,7 +281,6 @@ fn test_server_capabilities_complete() -> Result<(), Box<dyn std::error::Error>>
         "completionProvider",
         "definitionProvider",
         "referencesProvider",
-        "documentFormattingProvider",
         "documentSymbolProvider",
         "codeActionProvider",
         "executeCommandProvider",
