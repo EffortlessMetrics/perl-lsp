@@ -335,7 +335,7 @@ area = "window"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = []
+tests = ["tests/lsp_comprehensive_3_17_test.rs"]
 description = "Show messages to user"
 
 [[feature]]
@@ -345,7 +345,7 @@ area = "window"
 maturity = "ga"
 advertised = true
 counts_in_coverage = false
-tests = []
+tests = ["tests/lsp_comprehensive_3_17_test.rs", "tests/lsp_window_progress_test.rs"]
 description = "Log messages"
 
 [[feature]]
