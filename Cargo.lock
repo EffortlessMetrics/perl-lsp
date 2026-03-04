@@ -1631,6 +1631,7 @@ dependencies = [
  "perl-tdd-support",
  "regex",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 
@@ -1833,7 +1834,9 @@ dependencies = [
  "perl-feature-catalog",
  "perl-lsp-capability-map",
  "perl-lsp-feature-ids",
+ "perl-tdd-support",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
