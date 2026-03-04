@@ -37,31 +37,20 @@ fn block(stmts: Vec<Node>) -> Node {
 
 fn use_node(module: &str, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Use {
-            module: module.to_string(),
-            args: vec![],
-            has_filter_risk: false,
-        },
+        NodeKind::Use { module: module.to_string(), args: vec![], has_filter_risk: false },
         loc(start, end),
     )
 }
 
 fn binary_node(op: &str, left: Node, right: Node, start: usize, end: usize) -> Node {
     Node::new(
-        NodeKind::Binary {
-            op: op.to_string(),
-            left: Box::new(left),
-            right: Box::new(right),
-        },
+        NodeKind::Binary { op: op.to_string(), left: Box::new(left), right: Box::new(right) },
         loc(start, end),
     )
 }
 
 fn func_call(name: &str, args: Vec<Node>, start: usize, end: usize) -> Node {
-    Node::new(
-        NodeKind::FunctionCall { name: name.to_string(), args },
-        loc(start, end),
-    )
+    Node::new(NodeKind::FunctionCall { name: name.to_string(), args }, loc(start, end))
 }
 
 fn expr_stmt(expr: Node, start: usize, end: usize) -> Node {
@@ -69,10 +58,7 @@ fn expr_stmt(expr: Node, start: usize, end: usize) -> Node {
 }
 
 fn number_node(value: &str, start: usize, end: usize) -> Node {
-    Node::new(
-        NodeKind::Number { value: value.to_string() },
-        loc(start, end),
-    )
+    Node::new(NodeKind::Number { value: value.to_string() }, loc(start, end))
 }
 
 // =========================================================================
@@ -119,10 +105,7 @@ fn diagnostic_struct_construction() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn diagnostic_with_related_info() -> Result<(), Box<dyn std::error::Error>> {
-    let ri = RelatedInformation {
-        location: (5, 15),
-        message: "hint here".to_string(),
-    };
+    let ri = RelatedInformation { location: (5, 15), message: "hint here".to_string() };
     let d = Diagnostic {
         range: (0, 50),
         severity: DiagnosticSeverity::Hint,
@@ -188,17 +171,15 @@ fn related_information_debug() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn provider_no_errors_no_scope_issues() -> Result<(), Box<dyn std::error::Error>> {
-    let ast = Arc::new(program(vec![
-        use_node("strict", 0, 12),
-        use_node("warnings", 13, 27),
-    ]));
+    let ast = Arc::new(program(vec![use_node("strict", 0, 12), use_node("warnings", 13, 27)]));
     let source = "use strict;\nuse warnings;\n";
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = provider.get_diagnostics(&ast, &[], source);
     // No parse errors and no undeclared vars → may still have scope issues
     // depending on analyzer, but at minimum we get a Vec back
-    assert!(diagnostics.iter().all(|d| d.severity != DiagnosticSeverity::Error
-        || d.code.as_deref() != Some("parse-error")));
+    assert!(diagnostics.iter().all(
+        |d| d.severity != DiagnosticSeverity::Error || d.code.as_deref() != Some("parse-error")
+    ));
     Ok(())
 }
 
@@ -230,10 +211,7 @@ fn provider_unexpected_token_error() -> Result<(), Box<dyn std::error::Error>> {
 fn provider_syntax_error() -> Result<(), Box<dyn std::error::Error>> {
     let ast = Arc::new(program(vec![]));
     let source = "invalid perl";
-    let errors = vec![ParseError::SyntaxError {
-        location: 3,
-        message: "bad syntax".to_string(),
-    }];
+    let errors = vec![ParseError::SyntaxError { location: 3, message: "bad syntax".to_string() }];
     let provider = DiagnosticsProvider::new(&ast, source.to_string());
     let diagnostics = provider.get_diagnostics(&ast, &errors, source);
 
@@ -504,7 +482,10 @@ fn strict_warnings_related_info() -> Result<(), Box<dyn std::error::Error>> {
     perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
 
     for d in &diagnostics {
-        assert!(d.related_information.len() >= 2, "Each missing pragma should have suggestion + explanation");
+        assert!(
+            d.related_information.len() >= 2,
+            "Each missing pragma should have suggestion + explanation"
+        );
         assert!(d.related_information.iter().any(|ri| ri.message.contains('💡')));
         assert!(d.related_information.iter().any(|ri| ri.message.contains('ℹ')));
     }
@@ -518,13 +499,7 @@ fn strict_warnings_related_info() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn common_mistakes_assignment_in_if_condition() -> Result<(), Box<dyn std::error::Error>> {
     // if ($x = 1) { ... }
-    let condition = binary_node(
-        "=",
-        var_node("$", "x", 4, 6),
-        number_node("1", 9, 10),
-        4,
-        10,
-    );
+    let condition = binary_node("=", var_node("$", "x", 4, 6), number_node("1", 9, 10), 4, 10);
     let body = block(vec![]);
     let if_node = Node::new(
         NodeKind::If {
@@ -539,7 +514,11 @@ fn common_mistakes_assignment_in_if_condition() -> Result<(), Box<dyn std::error
 
     let sym_table = perl_semantic_analyzer::symbol::SymbolTable::new();
     let mut diagnostics = Vec::new();
-    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(&root, &sym_table, &mut diagnostics);
+    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(
+        &root,
+        &sym_table,
+        &mut diagnostics,
+    );
 
     assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("assignment-in-condition")));
     assert!(diagnostics.iter().any(|d| d.message.contains("did you mean")));
@@ -548,13 +527,7 @@ fn common_mistakes_assignment_in_if_condition() -> Result<(), Box<dyn std::error
 
 #[test]
 fn common_mistakes_assignment_in_while_condition() -> Result<(), Box<dyn std::error::Error>> {
-    let condition = binary_node(
-        "=",
-        var_node("$", "line", 7, 12),
-        number_node("0", 15, 16),
-        7,
-        16,
-    );
+    let condition = binary_node("=", var_node("$", "line", 7, 12), number_node("0", 15, 16), 7, 16);
     let body = block(vec![]);
     let while_node = Node::new(
         NodeKind::While {
@@ -568,7 +541,11 @@ fn common_mistakes_assignment_in_while_condition() -> Result<(), Box<dyn std::er
 
     let sym_table = perl_semantic_analyzer::symbol::SymbolTable::new();
     let mut diagnostics = Vec::new();
-    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(&root, &sym_table, &mut diagnostics);
+    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(
+        &root,
+        &sym_table,
+        &mut diagnostics,
+    );
 
     assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("assignment-in-condition")));
     Ok(())
@@ -577,13 +554,7 @@ fn common_mistakes_assignment_in_while_condition() -> Result<(), Box<dyn std::er
 #[test]
 fn common_mistakes_comparison_in_condition_ok() -> Result<(), Box<dyn std::error::Error>> {
     // if ($x == 1) { ... } — should NOT warn
-    let condition = binary_node(
-        "==",
-        var_node("$", "x", 4, 6),
-        number_node("1", 10, 11),
-        4,
-        11,
-    );
+    let condition = binary_node("==", var_node("$", "x", 4, 6), number_node("1", 10, 11), 4, 11);
     let body = block(vec![]);
     let if_node = Node::new(
         NodeKind::If {
@@ -598,7 +569,11 @@ fn common_mistakes_comparison_in_condition_ok() -> Result<(), Box<dyn std::error
 
     let sym_table = perl_semantic_analyzer::symbol::SymbolTable::new();
     let mut diagnostics = Vec::new();
-    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(&root, &sym_table, &mut diagnostics);
+    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(
+        &root,
+        &sym_table,
+        &mut diagnostics,
+    );
 
     assert!(
         diagnostics.iter().all(|d| d.code.as_deref() != Some("assignment-in-condition")),
@@ -616,7 +591,11 @@ fn common_mistakes_undef_comparison() -> Result<(), Box<dyn std::error::Error>> 
 
     let sym_table = perl_semantic_analyzer::symbol::SymbolTable::new();
     let mut diagnostics = Vec::new();
-    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(&root, &sym_table, &mut diagnostics);
+    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(
+        &root,
+        &sym_table,
+        &mut diagnostics,
+    );
 
     assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("numeric-undef")));
     assert!(diagnostics.iter().any(|d| d.message.contains("==")));
@@ -632,7 +611,11 @@ fn common_mistakes_ne_undef_comparison() -> Result<(), Box<dyn std::error::Error
 
     let sym_table = perl_semantic_analyzer::symbol::SymbolTable::new();
     let mut diagnostics = Vec::new();
-    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(&root, &sym_table, &mut diagnostics);
+    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(
+        &root,
+        &sym_table,
+        &mut diagnostics,
+    );
 
     assert!(diagnostics.iter().any(|d| d.code.as_deref() == Some("numeric-undef")));
     assert!(diagnostics.iter().any(|d| d.message.contains("!=")));
@@ -641,13 +624,7 @@ fn common_mistakes_ne_undef_comparison() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn common_mistakes_related_info_for_assignment() -> Result<(), Box<dyn std::error::Error>> {
-    let condition = binary_node(
-        "=",
-        var_node("$", "z", 4, 6),
-        number_node("5", 9, 10),
-        4,
-        10,
-    );
+    let condition = binary_node("=", var_node("$", "z", 4, 6), number_node("5", 9, 10), 4, 10);
     let body = block(vec![]);
     let if_node = Node::new(
         NodeKind::If {
@@ -662,10 +639,16 @@ fn common_mistakes_related_info_for_assignment() -> Result<(), Box<dyn std::erro
 
     let sym_table = perl_semantic_analyzer::symbol::SymbolTable::new();
     let mut diagnostics = Vec::new();
-    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(&root, &sym_table, &mut diagnostics);
+    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(
+        &root,
+        &sym_table,
+        &mut diagnostics,
+    );
 
-    let assign_diag: Vec<_> =
-        diagnostics.iter().filter(|d| d.code.as_deref() == Some("assignment-in-condition")).collect();
+    let assign_diag: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("assignment-in-condition"))
+        .collect();
     assert!(!assign_diag.is_empty());
     // Should have suggestion + explanation
     assert!(assign_diag[0].related_information.len() >= 2);
@@ -676,18 +659,16 @@ fn common_mistakes_related_info_for_assignment() -> Result<(), Box<dyn std::erro
 #[test]
 fn common_mistakes_no_warning_for_string_comparison() -> Result<(), Box<dyn std::error::Error>> {
     // $x eq "hello" — should NOT trigger numeric-undef
-    let cmp = binary_node(
-        "eq",
-        var_node("$", "x", 0, 2),
-        number_node("1", 6, 7),
-        0,
-        7,
-    );
+    let cmp = binary_node("eq", var_node("$", "x", 0, 2), number_node("1", 6, 7), 0, 7);
     let root = program(vec![expr_stmt(cmp, 0, 8)]);
 
     let sym_table = perl_semantic_analyzer::symbol::SymbolTable::new();
     let mut diagnostics = Vec::new();
-    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(&root, &sym_table, &mut diagnostics);
+    perl_lsp_diagnostics::common_mistakes::check_common_mistakes(
+        &root,
+        &sym_table,
+        &mut diagnostics,
+    );
 
     assert!(
         diagnostics.iter().all(|d| d.code.as_deref() != Some("numeric-undef")),
