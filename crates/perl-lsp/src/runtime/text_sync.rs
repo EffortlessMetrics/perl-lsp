@@ -539,7 +539,7 @@ impl LspServer {
 
     /// Get the end position of a document
     pub(crate) fn get_document_end_position(&self, content: &str) -> Value {
-        let lines: Vec<&str> = content.lines().collect();
+        let lines: Vec<&str> = content.split('\n').collect();
         let last_line = lines.len().saturating_sub(1);
         let last_char = lines.last().map(|l| l.len()).unwrap_or(0);
 
