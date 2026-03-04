@@ -1631,6 +1631,7 @@ dependencies = [
  "perl-tdd-support",
  "regex",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 
@@ -2285,6 +2286,7 @@ dependencies = [
 name = "perl-regex"
 version = "0.10.0"
 dependencies = [
+ "perl-tdd-support",
  "thiserror",
 ]
 
