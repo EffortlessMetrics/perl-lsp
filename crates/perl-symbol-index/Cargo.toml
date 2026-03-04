@@ -1,0 +1,20 @@
+[package]
+name = "perl-symbol-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Symbol indexing utilities for prefix and fuzzy lookup"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-symbol-index"
+keywords = ["perl", "lsp", "symbol", "index"]
+categories = ["text-editors", "development-tools"]
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

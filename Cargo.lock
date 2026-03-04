@@ -2011,6 +2011,7 @@ dependencies = [
  "moka",
  "perl-parser-core",
  "perl-subprocess-runtime",
+ "perl-symbol-index",
  "perl-tdd-support",
  "serde",
 ]
@@ -2312,6 +2313,10 @@ version = "0.10.0"
 
 [[package]]
 name = "perl-symbol-cursor"
+version = "0.10.0"
+
+[[package]]
+name = "perl-symbol-index"
 version = "0.10.0"
 
 [[package]]
