@@ -1,0 +1,20 @@
+[package]
+name = "perl-pragma-catalog"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Canonical pragma inventories and lookup helpers"
+readme = "README.md"
+documentation = "https://docs.rs/perl-pragma-catalog"
+keywords = ["perl", "pragma", "catalog", "lsp", "refactoring"]
+categories = ["development-tools", "text-editors"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+
+[lints]
+workspace = true

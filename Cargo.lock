@@ -1949,6 +1949,7 @@ dependencies = [
  "perl-module-path",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-pragma-catalog",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "serde",
@@ -2269,6 +2270,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-pragma-catalog"
+version = "0.10.0"
+
+[[package]]
 name = "perl-qualified-name"
 version = "0.10.0"
 dependencies = [
@@ -2288,6 +2293,7 @@ version = "0.10.0"
 dependencies = [
  "perl-module-path",
  "perl-parser-core",
+ "perl-pragma-catalog",
  "perl-qualified-name",
  "perl-tdd-support",
  "perl-workspace-index",

@@ -5,6 +5,7 @@
 
 use perl_module_import::{ModuleImportKind, parse_module_import_head};
 use perl_module_path::module_name_to_path;
+use perl_pragma_catalog::is_pragma_module;
 use serde_json::{Value, json};
 use url::Url;
 
@@ -30,7 +31,7 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
         if let Some(import) = parse_module_import_head(line) {
             match import.kind {
                 ModuleImportKind::Use => {
-                    if !is_pragma(import.token)
+                    if !is_pragma_module(import.token)
                         && let Some(link) = make_deferred_module_link(
                             uri,
                             i as u32,
@@ -47,7 +48,7 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
                     if !import.token.starts_with('"')
                         && !import.token.starts_with('\'')
                         && import.token.contains("::")
-                        && !is_pragma(import.token)
+                        && !is_pragma_module(import.token)
                         && let Some(link) = make_deferred_module_link(
                             uri,
                             i as u32,
@@ -124,46 +125,6 @@ fn make_deferred_module_link(
             "baseUri": uri
         }
     }))
-}
-
-fn is_pragma(pkg: &str) -> bool {
-    matches!(
-        pkg,
-        "strict"
-            | "warnings"
-            | "utf8"
-            | "bytes"
-            | "integer"
-            | "feature"
-            | "constant"
-            | "lib"
-            | "vars"
-            | "subs"
-            | "overload"
-            | "parent"
-            | "base"
-            | "fields"
-            | "if"
-            | "attributes"
-            | "autouse"
-            | "autodie"
-            | "bigint"
-            | "bignum"
-            | "bigrat"
-            | "blib"
-            | "charnames"
-            | "diagnostics"
-            | "encoding"
-            | "filetest"
-            | "locale"
-            | "open"
-            | "ops"
-            | "re"
-            | "sigtrap"
-            | "sort"
-            | "threads"
-            | "vmsish"
-    )
 }
 
 #[allow(dead_code)] // Reserved for future document link resolution

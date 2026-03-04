@@ -5,6 +5,7 @@ members = [
     "crates/perl-token",
     "crates/perl-quote",
     "crates/perl-pragma",
+    "crates/perl-pragma-catalog",
     "crates/perl-edit",
     "crates/perl-builtins",
     "crates/perl-regex",
@@ -117,6 +118,7 @@ allow = [
     "perl-error",
     "perl-heredoc",
     "perl-pragma",
+    "perl-pragma-catalog",
     "perl-quote",
     "perl-tokenizer",
 
@@ -225,6 +227,7 @@ perl-edit = { path = "crates/perl-edit", version = "0.10.0" }
 perl-builtins = { path = "crates/perl-builtins", version = "0.10.0" }
 perl-regex = { path = "crates/perl-regex", version = "0.10.0" }
 perl-pragma = { path = "crates/perl-pragma", version = "0.10.0" }
+perl-pragma-catalog = { path = "crates/perl-pragma-catalog", version = "0.10.0" }
 perl-lexer = { path = "crates/perl-lexer", version = "0.10.0" }
 perl-ast = { path = "crates/perl-ast", version = "0.10.0" }
 perl-heredoc = { path = "crates/perl-heredoc", version = "0.10.0" }

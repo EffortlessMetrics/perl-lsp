@@ -41,6 +41,7 @@
 //! # Ok::<(), String>(())
 //! ```
 
+use perl_pragma_catalog::is_pragma_module;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -149,32 +150,6 @@ pub enum SuggestionPriority {
 /// - Finding duplicate imports that can be merged
 /// - Generating consolidated import statements
 pub struct ImportOptimizer;
-
-/// Check if a module is a pragma (affects compilation, no exports)
-fn is_pragma_module(module: &str) -> bool {
-    matches!(
-        module,
-        "strict"
-            | "warnings"
-            | "utf8"
-            | "bytes"
-            | "locale"
-            | "integer"
-            | "less"
-            | "sigtrap"
-            | "subs"
-            | "vars"
-            | "feature"
-            | "autodie"
-            | "autouse"
-            | "base"
-            | "parent"
-            | "lib"
-            | "bigint"
-            | "bignum"
-            | "bigrat"
-    )
-}
 
 /// Get known exports for popular Perl modules
 fn get_known_module_exports(module: &str) -> Option<Vec<&'static str>> {
@@ -334,21 +309,7 @@ impl ImportOptimizer {
                 }
             } else {
                 // Skip pragma modules like strict, warnings, etc.
-                let is_pragma = matches!(
-                    imp.module.as_str(),
-                    "strict"
-                        | "warnings"
-                        | "utf8"
-                        | "bytes"
-                        | "integer"
-                        | "locale"
-                        | "overload"
-                        | "sigtrap"
-                        | "subs"
-                        | "vars"
-                );
-
-                if !is_pragma {
+                if !is_pragma_module(&imp.module) {
                     // For bare imports (without qw()), check if the module or any of its known exports are used
                     let (is_known_module, known_exports) =
                         match get_known_module_exports(&imp.module) {
