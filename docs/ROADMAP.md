@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-02-28)**: **Initial Public Alpha (v0.10.0)**. Hardening underway with native DAP preview validated.
+> **Status (2026-03-04)**: **Initial Public Alpha (v0.10.0)**. Post-release hardening and SRP microcrate extractions underway.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -32,15 +32,16 @@ Perl LSP is currently in **Initial Public Alpha**. Version 0.10.0 represents a s
 
 ## Now / Next / Later (Summary)
 
-**Now (v0.10.0 Initial Public Alpha)**
-- Keep close-out receipts green (`just ci-gate`, targeted state-machine tests, benchmark checks)
-- Public Alpha hardening: focus on correctness and performance for early adopters
-- Publish benchmark outputs under `benchmarks/results/`
+**Now (Post-v0.10.0 Hardening)**
+- SRP microcrate extractions (ongoing — PRs #934, #945, #950, #953)
+- Moo/Moose semantic depth: `requires` tracking and multi-attribute `has` landed (PR #946)
+- Keep close-out receipts green (`just ci-gate`)
 
-**Next (v0.10.0)**
-- Stability goal refinement: define requirements for v0.15.0 contract
-- Moo/Moose semantic depth improvements
+**Next (v0.11.0)**
+- Complete Moo/Moose/Class::Accessor attribute resolution (partial: PR #946)
+- Cross-file type inference via `use parent`/`use base`
 - Native DAP enhancements (variables/evaluate)
+- Stability goal refinement: define requirements for v0.15.0 contract
 
 **Later (Targeting v0.15.0 for Stability Contract)**
 - **Stability Contract**: Formal API stability and contract-locked wire protocol
@@ -92,6 +93,9 @@ The LSP compliance table is auto-generated from `features.toml`.
 | **Overall** | **97** | **97** | **100%** |
 <!-- END: COMPLIANCE_TABLE -->
 
+> **Note:** All 97 features are implemented (maturity: GA). Of these, 96/97 are advertised to clients;
+> `lsp.notebook_cell_execution` is implemented but not advertised. See `features.toml` for details.
+
 For live metrics, run `just status-check` or see [CURRENT_STATUS.md](CURRENT_STATUS.md).
 
 ---
@@ -108,6 +112,9 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - Refactoring Engine: inline + move_code (2026-01-21)
 - Security Hardening: path traversal + command injection (2026-01-21)
 - v0.10.0 Initial Public Alpha Preparation (2026-02-28)
+- Moo/Moose `requires` tracking and multi-attribute `has` (PR #946, 2026-03)
+- SRP microcrate extractions: dead-code (#945), lsp-limits (#934), capability-mapping (#950), subprocess-runtime (#953)
+- Feature governance extracted into 9 microcrates (PR #848)
 
 ---
 
@@ -119,14 +126,14 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - Project learnings
 
-<!-- Last Updated: 2026-02-28 -->
+<!-- Last Updated: 2026-03-04 -->
 
 ## Detailed Forward-Looking Roadmap
 
 ### v0.11.0: Advanced Semantic Engine
 - **Goal:** Deepen semantic understanding of complex Perl constructs.
 - **Features:**
-  - Full Moo/Moose/Class::Accessor attribute resolution.
+  - Full Moo/Moose/Class::Accessor attribute resolution. *(In progress: `requires` tracking and multi-attribute `has` landed in PR #946; `Class::Accessor` not yet started.)*
   - Cross-file type inference across standard import mechanisms (`use parent`, `use base`).
   - Improved bareword disambiguation based on export lists.
   - Constant folding and compile-time evaluation approximations.
@@ -136,7 +143,7 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - **Features:**
   - Strict mode and warnings pragma emulation.
   - Uninitialized variable detection across function boundaries.
-  - Dead code elimination recommendations.
+  - Dead code elimination recommendations. *(Foundation: `perl-dead-code` microcrate extracted in PR #945.)*
   - Syntax deprecation warnings (e.g., smartmatch, indirect object notation).
 
 ### v0.13.0: Complete Refactoring Suite
