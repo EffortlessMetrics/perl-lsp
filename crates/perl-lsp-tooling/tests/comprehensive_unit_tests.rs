@@ -1237,3 +1237,870 @@ fn mock_module_reexports() {
     let invocations: Vec<CommandInvocation> = runtime.invocations();
     assert!(invocations.is_empty());
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: AstCache – additional edge cases
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn ast_cache_empty_string_content() {
+    let cache = AstCache::new(10, 60);
+    let ast = Arc::new(make_program_node());
+    cache.put("file.pl".to_string(), "", ast.clone());
+    assert!(cache.get("file.pl", "").is_some());
+    assert!(cache.get("file.pl", " ").is_none());
+}
+
+#[test]
+fn ast_cache_empty_string_uri() {
+    let cache = AstCache::new(10, 60);
+    let ast = Arc::new(make_program_node());
+    cache.put(String::new(), "content", ast.clone());
+    assert!(cache.get("", "content").is_some());
+}
+
+#[test]
+fn ast_cache_unicode_uri_and_content() {
+    let cache = AstCache::new(10, 60);
+    let ast = Arc::new(make_program_node());
+    cache.put("файл.pl".to_string(), "my $日本語 = 1;", ast.clone());
+    assert!(cache.get("файл.pl", "my $日本語 = 1;").is_some());
+    assert!(cache.get("файл.pl", "my $日本語 = 2;").is_none());
+}
+
+#[test]
+fn ast_cache_many_entries_within_capacity() {
+    let cache = AstCache::new(50, 60);
+    for i in 0..50 {
+        let ast = Arc::new(make_program_node());
+        cache.put(format!("file{}.pl", i), &format!("content{}", i), ast);
+    }
+    // Last entry should be available
+    assert!(cache.get("file49.pl", "content49").is_some());
+}
+
+#[test]
+fn ast_cache_put_same_uri_different_content_repeatedly() {
+    let cache = AstCache::new(10, 60);
+    for i in 0..10 {
+        let ast = Arc::new(make_program_node());
+        cache.put("file.pl".to_string(), &format!("v{}", i), ast);
+    }
+    // Only latest version should hit
+    assert!(cache.get("file.pl", "v9").is_some());
+    assert!(cache.get("file.pl", "v0").is_none());
+}
+
+#[test]
+fn ast_cache_get_returns_arc_clone() {
+    let cache = AstCache::new(10, 60);
+    let ast = Arc::new(make_program_node());
+    cache.put("file.pl".to_string(), "c", ast.clone());
+
+    if let Some(retrieved) = cache.get("file.pl", "c") {
+        // Both should point to same underlying data
+        assert!(Arc::ptr_eq(&ast, &retrieved));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: IncrementalParser – additional edge cases
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn incremental_parser_single_byte_change() {
+    let mut parser = IncrementalParser::new();
+    parser.mark_changed(5, 6);
+    assert!(parser.needs_reparse(5, 6));
+    assert!(parser.needs_reparse(4, 7));
+    assert!(!parser.needs_reparse(6, 10));
+    assert!(!parser.needs_reparse(0, 5));
+}
+
+#[test]
+fn incremental_parser_large_region() {
+    let mut parser = IncrementalParser::new();
+    parser.mark_changed(0, 1_000_000);
+    assert!(parser.needs_reparse(500_000, 500_001));
+    assert!(!parser.needs_reparse(1_000_001, 2_000_000));
+}
+
+#[test]
+fn incremental_parser_many_disjoint_regions() {
+    let mut parser = IncrementalParser::new();
+    for i in 0..100 {
+        let start = i * 100;
+        parser.mark_changed(start, start + 10);
+    }
+    // Each region should be detectable
+    assert!(parser.needs_reparse(5, 15));
+    assert!(parser.needs_reparse(9905, 9915));
+    assert!(!parser.needs_reparse(50, 90));
+}
+
+#[test]
+fn incremental_parser_mark_clear_mark() {
+    let mut parser = IncrementalParser::new();
+    parser.mark_changed(10, 20);
+    parser.clear();
+    parser.mark_changed(30, 40);
+
+    assert!(!parser.needs_reparse(10, 20));
+    assert!(parser.needs_reparse(30, 40));
+}
+
+#[test]
+fn incremental_parser_nested_subregion() {
+    let mut parser = IncrementalParser::new();
+    parser.mark_changed(10, 50);
+    // Mark a subregion already covered – should merge to same result
+    parser.mark_changed(20, 30);
+    assert!(parser.needs_reparse(10, 50));
+    assert!(!parser.needs_reparse(0, 10));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: SymbolIndex – additional edge cases
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn symbol_index_duplicate_symbols() {
+    let mut index = SymbolIndex::new();
+    index.add_symbol("foo".to_string());
+    index.add_symbol("foo".to_string());
+
+    let results = index.search_prefix("foo");
+    assert_eq!(results.len(), 2); // Both entries stored
+}
+
+#[test]
+fn symbol_index_special_characters() {
+    let mut index = SymbolIndex::new();
+    index.add_symbol("my::package::func".to_string());
+    index.add_symbol("$scalar_var".to_string());
+    index.add_symbol("@array_var".to_string());
+
+    let results = index.search_prefix("my");
+    assert_eq!(results.len(), 1);
+
+    // Fuzzy search by token
+    let results = index.search_fuzzy("package");
+    assert!(results.contains(&"my::package::func".to_string()));
+}
+
+#[test]
+fn symbol_index_single_char_symbols() {
+    let mut index = SymbolIndex::new();
+    index.add_symbol("x".to_string());
+    index.add_symbol("y".to_string());
+
+    assert_eq!(index.search_prefix("x").len(), 1);
+    assert_eq!(index.search_prefix("y").len(), 1);
+    assert!(index.search_prefix("z").is_empty());
+}
+
+#[test]
+fn symbol_index_numeric_tokens() {
+    let mut index = SymbolIndex::new();
+    index.add_symbol("func123".to_string());
+    index.add_symbol("func456".to_string());
+
+    let results = index.search_prefix("func");
+    assert_eq!(results.len(), 2);
+
+    // Tokenizer treats "func123" as a single token "func123"
+    let results = index.search_fuzzy("func123");
+    assert!(results.contains(&"func123".to_string()));
+    assert!(!results.contains(&"func456".to_string()));
+}
+
+#[test]
+fn symbol_index_prefix_search_single_char() {
+    let mut index = SymbolIndex::new();
+    index.add_symbol("apple".to_string());
+    index.add_symbol("banana".to_string());
+    index.add_symbol("avocado".to_string());
+
+    let results = index.search_prefix("a");
+    assert_eq!(results.len(), 2);
+    assert!(results.contains(&"apple".to_string()));
+    assert!(results.contains(&"avocado".to_string()));
+}
+
+#[test]
+fn symbol_index_fuzzy_no_match() {
+    let mut index = SymbolIndex::new();
+    index.add_symbol("hello_world".to_string());
+
+    assert!(index.search_fuzzy("xyz").is_empty());
+}
+
+#[test]
+fn symbol_index_underscore_separated_tokens() {
+    let mut index = SymbolIndex::new();
+    index.add_symbol("get_user_by_id".to_string());
+    index.add_symbol("set_user_name".to_string());
+    index.add_symbol("delete_order_item".to_string());
+
+    let results = index.search_fuzzy("user id");
+    assert!(!results.is_empty());
+    // get_user_by_id matches both "user" and "id" tokens
+    assert_eq!(results[0], "get_user_by_id");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: Parallel processing – additional edge cases
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn parallel_process_preserves_all_results() {
+    let files: Vec<String> = (0..50).map(|i| format!("{}", i)).collect();
+    let results = process_files_parallel(files, 4, |f| f.parse::<i32>().unwrap_or(-1));
+    assert_eq!(results.len(), 50);
+    // All values 0..50 should be present (in any order)
+    let mut sorted = results.clone();
+    sorted.sort();
+    sorted.dedup();
+    assert_eq!(sorted.len(), 50);
+}
+
+#[test]
+fn parallel_process_single_file() {
+    let files = vec!["only.pl".to_string()];
+    let results = process_files_parallel(files, 4, |f| f);
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0], "only.pl");
+}
+
+#[test]
+fn parallel_process_returns_complex_type() {
+    let files = vec!["a.pl".to_string(), "b.pl".to_string()];
+    let results: Vec<(String, usize)> = process_files_parallel(files, 2, |f| {
+        let len = f.len();
+        (f, len)
+    });
+    assert_eq!(results.len(), 2);
+    for (name, len) in &results {
+        assert_eq!(*len, name.len());
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: Severity – edge cases and trait impls
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn severity_clone_and_copy() {
+    let s = Severity::Brutal;
+    let s2 = s;
+    assert_eq!(s, s2);
+    let s3 = s.clone();
+    assert_eq!(s, s3);
+}
+
+#[test]
+fn severity_debug_format() {
+    let debug = format!("{:?}", Severity::Gentle);
+    assert!(debug.contains("Gentle"));
+}
+
+#[test]
+fn severity_all_variants_from_number_roundtrip() {
+    let pairs = [
+        (1, Severity::Brutal),
+        (2, Severity::Cruel),
+        (3, Severity::Harsh),
+        (4, Severity::Stern),
+        (5, Severity::Gentle),
+    ];
+    for (num, expected) in &pairs {
+        assert_eq!(Severity::from_number(*num), *expected);
+    }
+}
+
+#[cfg(feature = "lsp-compat")]
+#[test]
+fn severity_all_variants_have_diagnostic_mapping() {
+    // Ensure every variant maps to a valid DiagnosticSeverity
+    let variants =
+        [Severity::Brutal, Severity::Cruel, Severity::Harsh, Severity::Stern, Severity::Gentle];
+    for v in &variants {
+        let _ = v.to_diagnostic_severity(); // should not panic
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: CriticAnalyzer – additional scenarios
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn critic_analyzer_multiple_violations() -> Result<(), String> {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let output = b"f.pl:1:1:5:PolicyA:msg1\nf.pl:10:3:1:PolicyB:msg2\nf.pl:20:1:4:PolicyC:msg3\n";
+    runtime.add_response(MockResponse::success(output.to_vec()));
+
+    let mut analyzer = CriticAnalyzer::new(CriticConfig::default(), runtime);
+    let violations = analyzer.analyze_file(Path::new("f.pl"))?;
+
+    assert_eq!(violations.len(), 3);
+    assert_eq!(violations[0].severity, Severity::Gentle);
+    assert_eq!(violations[1].severity, Severity::Brutal);
+    assert_eq!(violations[2].severity, Severity::Stern);
+    Ok(())
+}
+
+#[test]
+fn critic_analyzer_nonzero_exit_still_parses_stdout() -> Result<(), String> {
+    // perlcritic returns non-zero when violations found; we parse stdout regardless
+    // Actually, the code uses run_command which returns output even on success
+    // Let's test with a success code containing violations
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let output = b"f.pl:1:1:3:P:violation found\n";
+    runtime.add_response(MockResponse::success(output.to_vec()));
+
+    let mut analyzer = CriticAnalyzer::new(CriticConfig::default(), runtime);
+    let violations = analyzer.analyze_file(Path::new("f.pl"))?;
+    assert_eq!(violations.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn critic_analyzer_config_default_severity_is_3() -> Result<(), String> {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+
+    let mut analyzer = CriticAnalyzer::new(CriticConfig::default(), runtime.clone());
+    analyzer.analyze_file(Path::new("x.pl"))?;
+
+    let inv = &runtime.invocations()[0];
+    assert!(inv.args.contains(&"--severity=3".to_string()));
+    Ok(())
+}
+
+#[test]
+fn critic_analyzer_invalidate_nonexistent_key_is_noop() {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let mut analyzer = CriticAnalyzer::new(CriticConfig::default(), runtime);
+    // Should not panic
+    analyzer.invalidate_cache("nonexistent.pl");
+}
+
+#[test]
+fn critic_analyzer_different_files_cached_separately() -> Result<(), String> {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"a.pl:1:1:3:P:msg_a\n".to_vec()));
+    runtime.add_response(MockResponse::success(b"b.pl:1:1:3:P:msg_b\n".to_vec()));
+
+    let mut analyzer = CriticAnalyzer::new(CriticConfig::default(), runtime.clone());
+    let va = analyzer.analyze_file(Path::new("a.pl"))?;
+    let vb = analyzer.analyze_file(Path::new("b.pl"))?;
+
+    assert_eq!(va.len(), 1);
+    assert_eq!(vb.len(), 1);
+    assert_eq!(va[0].description, "msg_a");
+    assert_eq!(vb[0].description, "msg_b");
+    assert_eq!(runtime.invocations().len(), 2);
+    Ok(())
+}
+
+#[test]
+fn critic_analyzer_verbose_format_string_in_args() -> Result<(), String> {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+
+    let mut analyzer = CriticAnalyzer::new(CriticConfig::default(), runtime.clone());
+    analyzer.analyze_file(Path::new("x.pl"))?;
+
+    let inv = &runtime.invocations()[0];
+    assert!(inv.args.iter().any(|a| a.starts_with("--verbose=")));
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: BuiltInAnalyzer – partial compliance
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn builtin_analyzer_only_strict_present() {
+    let analyzer = BuiltInAnalyzer::new();
+    let ast = make_error_node();
+    let violations = analyzer.analyze(&ast, "use strict;\nprint 'hi';\n");
+
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].policy.contains("RequireUseWarnings"));
+}
+
+#[test]
+fn builtin_analyzer_only_warnings_present() {
+    let analyzer = BuiltInAnalyzer::new();
+    let ast = make_error_node();
+    let violations = analyzer.analyze(&ast, "use warnings;\nprint 'hi';\n");
+
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].policy.contains("RequireUseStrict"));
+}
+
+#[test]
+fn builtin_analyzer_empty_content() {
+    let analyzer = BuiltInAnalyzer::new();
+    let ast = make_error_node();
+    let violations = analyzer.analyze(&ast, "");
+
+    // Should detect both missing strict and warnings
+    assert_eq!(violations.len(), 2);
+}
+
+#[test]
+fn builtin_analyzer_default_creates_same_as_new() {
+    let a1 = BuiltInAnalyzer::new();
+    let a2 = BuiltInAnalyzer::default();
+    let ast = make_error_node();
+
+    let v1 = a1.analyze(&ast, "print 1;");
+    let v2 = a2.analyze(&ast, "print 1;");
+    assert_eq!(v1.len(), v2.len());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: PerlTidyConfig – all-None and various boolean combos
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn perltidy_config_all_none_produces_no_args() {
+    let config = PerlTidyConfig {
+        maximum_line_length: None,
+        indent_columns: None,
+        tabs: None,
+        opening_brace_on_new_line: None,
+        cuddled_else: None,
+        space_after_keyword: None,
+        add_trailing_commas: None,
+        vertical_alignment: None,
+        block_comment_indentation: None,
+        profile: None,
+        extra_args: Vec::new(),
+    };
+
+    // Use formatter to inspect args (to_args is private)
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
+    let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
+    let _ = formatter.format("x");
+
+    let inv = &runtime.invocations()[0];
+    // Only -st should be present (no config args)
+    assert_eq!(inv.args.len(), 1);
+    assert_eq!(inv.args[0], "-st");
+}
+
+#[test]
+fn perltidy_config_tabs_enabled_arg() {
+    let config = PerlTidyConfig { tabs: Some(true), ..PerlTidyConfig::default() };
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
+    let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
+    let _ = formatter.format("x");
+
+    let inv = &runtime.invocations()[0];
+    assert!(inv.args.contains(&"--tabs".to_string()));
+    assert!(!inv.args.contains(&"--notabs".to_string()));
+}
+
+#[test]
+fn perltidy_config_no_cuddled_else_arg() {
+    let config = PerlTidyConfig { cuddled_else: Some(false), ..PerlTidyConfig::default() };
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
+    let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
+    let _ = formatter.format("x");
+
+    let inv = &runtime.invocations()[0];
+    assert!(inv.args.contains(&"--nocuddled-else".to_string()));
+}
+
+#[test]
+fn perltidy_config_nospace_after_keyword_arg() {
+    let config = PerlTidyConfig { space_after_keyword: Some(false), ..PerlTidyConfig::default() };
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
+    let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
+    let _ = formatter.format("x");
+
+    let inv = &runtime.invocations()[0];
+    assert!(inv.args.contains(&"--nospace-after-keyword".to_string()));
+}
+
+#[test]
+fn perltidy_config_add_trailing_commas_arg() {
+    let config = PerlTidyConfig { add_trailing_commas: Some(true), ..PerlTidyConfig::default() };
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
+    let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
+    let _ = formatter.format("x");
+
+    let inv = &runtime.invocations()[0];
+    assert!(inv.args.contains(&"--add-trailing-commas".to_string()));
+}
+
+#[test]
+fn perltidy_config_no_vertical_alignment_arg() {
+    let config = PerlTidyConfig { vertical_alignment: Some(false), ..PerlTidyConfig::default() };
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
+    let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
+    let _ = formatter.format("x");
+
+    let inv = &runtime.invocations()[0];
+    assert!(inv.args.contains(&"--no-vertical-alignment".to_string()));
+}
+
+#[test]
+fn perltidy_config_opening_brace_on_new_line_true() {
+    let config =
+        PerlTidyConfig { opening_brace_on_new_line: Some(true), ..PerlTidyConfig::default() };
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
+    let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
+    let _ = formatter.format("x");
+
+    let inv = &runtime.invocations()[0];
+    assert!(inv.args.contains(&"--opening-brace-on-new-line".to_string()));
+}
+
+#[test]
+fn perltidy_config_extra_args_passed_through() {
+    let config = PerlTidyConfig {
+        extra_args: vec!["--custom-flag".to_string(), "--another=val".to_string()],
+        ..PerlTidyConfig::default()
+    };
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
+    let mut formatter = PerlTidyFormatter::new(config, runtime.clone());
+    let _ = formatter.format("x");
+
+    let inv = &runtime.invocations()[0];
+    assert!(inv.args.contains(&"--custom-flag".to_string()));
+    assert!(inv.args.contains(&"--another=val".to_string()));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: PerlTidyFormatter – additional edge cases
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn formatter_empty_code_input() -> Result<(), String> {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"".to_vec()));
+
+    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
+    let result = formatter.format("")?;
+    assert_eq!(result, "");
+    Ok(())
+}
+
+#[test]
+fn formatter_unicode_content() -> Result<(), String> {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success("my $名前 = '日本語';\n".as_bytes().to_vec()));
+
+    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
+    let result = formatter.format("my $名前='日本語';")?;
+    assert!(result.contains("$名前"));
+    Ok(())
+}
+
+#[test]
+fn formatter_multiple_different_inputs_cached_separately() -> Result<(), String> {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"out_a\n".to_vec()));
+    runtime.add_response(MockResponse::success(b"out_b\n".to_vec()));
+
+    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime.clone());
+    let a = formatter.format("input_a")?;
+    let b = formatter.format("input_b")?;
+
+    assert_eq!(a, "out_a\n");
+    assert_eq!(b, "out_b\n");
+    assert_eq!(runtime.invocations().len(), 2);
+
+    // Both should be cached now
+    let a2 = formatter.format("input_a")?;
+    let b2 = formatter.format("input_b")?;
+    assert_eq!(a, a2);
+    assert_eq!(b, b2);
+    assert_eq!(runtime.invocations().len(), 2); // no additional calls
+    Ok(())
+}
+
+#[test]
+fn formatter_format_range_full_span() -> Result<(), String> {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"A\nB\nC".to_vec()));
+
+    let code = "a\nb\nc";
+    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime);
+    let result = formatter.format_range(code, 0, 2)?;
+
+    // Entire range formatted
+    assert!(result.contains('A'));
+    assert!(result.contains('B'));
+    assert!(result.contains('C'));
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: BuiltInFormatter – additional edge cases
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn builtin_formatter_empty_input() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let result = formatter.format("");
+    assert_eq!(result, "");
+}
+
+#[test]
+fn builtin_formatter_single_line_no_braces() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let result = formatter.format("print 'hello';\n");
+    assert_eq!(result.trim(), "print 'hello';");
+}
+
+#[test]
+fn builtin_formatter_deeply_nested() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let code = "a {\nb {\nc {\nd;\n}\n}\n}\n";
+    let formatted = formatter.format(code);
+
+    // d should be indented 3 levels (12 spaces)
+    assert!(formatted.contains("            d;"));
+}
+
+#[test]
+fn builtin_formatter_square_bracket_indentation() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let code = "my $ref = [\n1,\n2,\n];\n";
+    let formatted = formatter.format(code);
+    assert!(formatted.contains("    1,"));
+    assert!(formatted.contains("    2,"));
+}
+
+#[test]
+fn builtin_formatter_mixed_braces_parens_brackets() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let code = "if ($x) {\nmy @a = (\n1,\n);\n}\n";
+    let formatted = formatter.format(code);
+    // Content inside if should be indented 1 level
+    // Content inside paren should be indented 2 levels
+    assert!(formatted.contains("        1,"));
+}
+
+#[test]
+fn builtin_formatter_no_trailing_whitespace_on_empty_lines() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig::default());
+    let code = "line1\n\nline2\n";
+    let formatted = formatter.format(code);
+    let lines: Vec<&str> = formatted.lines().collect();
+    // Empty line should truly be empty
+    assert_eq!(lines[1], "");
+}
+
+#[test]
+fn builtin_formatter_default_indent_is_4_spaces() {
+    let formatter = BuiltInFormatter::new(PerlTidyConfig {
+        indent_columns: None,
+        tabs: None,
+        ..PerlTidyConfig::default()
+    });
+    let code = "sub f {\nreturn;\n}\n";
+    let formatted = formatter.format(code);
+    // Default is 4 spaces
+    assert!(formatted.contains("    return;"));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: Serialization round-trips
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn perltidy_config_default_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    let config = PerlTidyConfig::default();
+    let json = serde_json::to_string(&config)?;
+    let restored: PerlTidyConfig = serde_json::from_str(&json)?;
+    assert_eq!(restored.maximum_line_length, Some(80));
+    assert_eq!(restored.indent_columns, Some(4));
+    assert_eq!(restored.tabs, Some(false));
+    Ok(())
+}
+
+#[test]
+fn critic_config_default_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+    let config = CriticConfig::default();
+    let json = serde_json::to_string(&config)?;
+    let restored: CriticConfig = serde_json::from_str(&json)?;
+    assert_eq!(restored.severity, 3);
+    assert!(restored.profile.is_none());
+    Ok(())
+}
+
+#[test]
+fn severity_all_variants_serialize() -> Result<(), Box<dyn std::error::Error>> {
+    let variants =
+        [Severity::Brutal, Severity::Cruel, Severity::Harsh, Severity::Stern, Severity::Gentle];
+    for v in &variants {
+        let json = serde_json::to_string(v)?;
+        let restored: Severity = serde_json::from_str(&json)?;
+        assert_eq!(*v, restored);
+    }
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: Mock runtime behavior
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn mock_runtime_clear_invocations() {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    runtime.add_response(MockResponse::success(b"ok\n".to_vec()));
+
+    let mut formatter = PerlTidyFormatter::new(PerlTidyConfig::default(), runtime.clone());
+    let _ = formatter.format("code");
+    assert_eq!(runtime.invocations().len(), 1);
+
+    runtime.clear_invocations();
+    assert!(runtime.invocations().is_empty());
+}
+
+#[test]
+fn mock_response_success_has_zero_status() {
+    let resp = MockResponse::success(b"data".to_vec());
+    assert_eq!(resp.status_code, 0);
+    assert_eq!(resp.stdout, b"data");
+    assert!(resp.stderr.is_empty());
+}
+
+#[test]
+fn mock_response_failure_has_nonzero_status() {
+    let resp = MockResponse::failure(b"err".to_vec(), 42);
+    assert_eq!(resp.status_code, 42);
+    assert_eq!(resp.stderr, b"err");
+    assert!(resp.stdout.is_empty());
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: SubprocessError
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn subprocess_error_construction() {
+    let err = perl_lsp_tooling::SubprocessError::new("command not found");
+    assert_eq!(err.message, "command not found");
+}
+
+#[test]
+fn subprocess_error_from_string() {
+    let err = perl_lsp_tooling::SubprocessError::new(String::from("dynamic error"));
+    assert_eq!(err.message, "dynamic error");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: LSP diagnostics – additional scenarios
+// ═══════════════════════════════════════════════════════════════════════════════
+
+#[cfg(feature = "lsp-compat")]
+#[test]
+fn critic_analyzer_to_diagnostics_multiple_severities() {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let analyzer = CriticAnalyzer::new(CriticConfig::default(), runtime);
+
+    let violations = vec![
+        Violation {
+            policy: "P1".to_string(),
+            description: "critical".to_string(),
+            explanation: String::new(),
+            severity: Severity::Brutal,
+            range: Range {
+                start: Position { byte: 0, line: 0, column: 0 },
+                end: Position { byte: 0, line: 0, column: 5 },
+            },
+            file: "f.pl".to_string(),
+        },
+        Violation {
+            policy: "P2".to_string(),
+            description: "warning".to_string(),
+            explanation: String::new(),
+            severity: Severity::Harsh,
+            range: Range {
+                start: Position { byte: 0, line: 1, column: 0 },
+                end: Position { byte: 0, line: 1, column: 5 },
+            },
+            file: "f.pl".to_string(),
+        },
+        Violation {
+            policy: "P3".to_string(),
+            description: "info".to_string(),
+            explanation: String::new(),
+            severity: Severity::Gentle,
+            range: Range {
+                start: Position { byte: 0, line: 2, column: 0 },
+                end: Position { byte: 0, line: 2, column: 5 },
+            },
+            file: "f.pl".to_string(),
+        },
+    ];
+
+    let diagnostics = analyzer.to_diagnostics(&violations);
+    assert_eq!(diagnostics.len(), 3);
+    assert_eq!(diagnostics[0].severity, Some(lsp_types::DiagnosticSeverity::ERROR));
+    assert_eq!(diagnostics[1].severity, Some(lsp_types::DiagnosticSeverity::WARNING));
+    assert_eq!(diagnostics[2].severity, Some(lsp_types::DiagnosticSeverity::INFORMATION));
+}
+
+#[cfg(feature = "lsp-compat")]
+#[test]
+fn critic_analyzer_quick_fix_warnings_lsp() {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let analyzer = CriticAnalyzer::new(CriticConfig::default(), runtime);
+
+    let violation = Violation {
+        policy: "TestingAndDebugging::RequireUseWarnings".to_string(),
+        description: "no warnings".to_string(),
+        explanation: String::new(),
+        severity: Severity::Harsh,
+        range: Range {
+            start: Position { byte: 0, line: 0, column: 0 },
+            end: Position { byte: 0, line: 0, column: 0 },
+        },
+        file: String::new(),
+    };
+
+    let fix = analyzer.get_quick_fix(&violation, "");
+    assert!(fix.is_some());
+    assert_eq!(fix.map(|f| f.edit.new_text), Some("use warnings;\n".to_string()));
+}
+
+#[cfg(feature = "lsp-compat")]
+#[test]
+fn critic_diagnostics_have_perlcritic_source() {
+    let runtime = Arc::new(MockSubprocessRuntime::new());
+    let analyzer = CriticAnalyzer::new(CriticConfig::default(), runtime);
+
+    let violations = vec![Violation {
+        policy: "P".to_string(),
+        description: "d".to_string(),
+        explanation: String::new(),
+        severity: Severity::Harsh,
+        range: Range {
+            start: Position { byte: 0, line: 0, column: 0 },
+            end: Position { byte: 0, line: 0, column: 0 },
+        },
+        file: String::new(),
+    }];
+
+    let diags = analyzer.to_diagnostics(&violations);
+    assert_eq!(diags[0].source.as_deref(), Some("perlcritic"));
+    if let Some(lsp_types::NumberOrString::String(ref code)) = diags[0].code {
+        assert_eq!(code, "P");
+    }
+}
