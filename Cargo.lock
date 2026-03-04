@@ -1668,6 +1668,7 @@ dependencies = [
  "perl-lexer",
  "perl-position-tracking",
  "perl-regex",
+ "perl-tdd-support",
  "thiserror",
 ]
 
