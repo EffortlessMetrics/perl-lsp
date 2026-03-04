@@ -32,11 +32,17 @@ fn test_formatting_capability_advertised() -> Result<(), Box<dyn std::error::Err
 
     // Verify formatting is advertised
     let formatting_provider = capabilities.get("documentFormattingProvider");
-    // Formatting is conditional on perltidy availability, so we do not strictly assert its presence here
+    // Formatting is conditional on perltidy availability, so we do not strictly assert its presence here.
+    // When present, ensure the capability value has a valid LSP shape.
+    if let Some(provider) = formatting_provider {
+        assert!(provider.is_boolean() || provider.is_object());
+    }
 
-    // Verify range formatting is advertised
+    // Range formatting follows the same perltidy availability gate.
     let range_formatting_provider = capabilities.get("documentRangeFormattingProvider");
-    assert!(range_formatting_provider.is_some(),);
+    if let Some(provider) = range_formatting_provider {
+        assert!(provider.is_boolean() || provider.is_object());
+    }
 
     Ok(())
 }
@@ -271,7 +277,6 @@ fn test_server_capabilities_complete() -> Result<(), Box<dyn std::error::Error>>
         "completionProvider",
         "definitionProvider",
         "referencesProvider",
-        "documentFormattingProvider",
         "documentSymbolProvider",
         "codeActionProvider",
         "executeCommandProvider",
@@ -279,6 +284,14 @@ fn test_server_capabilities_complete() -> Result<(), Box<dyn std::error::Error>>
 
     for capability in &expected_capabilities {
         assert!(capabilities.get(capability).is_some(), "Missing capability: {}", capability);
+    }
+
+    // Formatting-related capabilities are conditional on perltidy availability.
+    if let Some(provider) = capabilities.get("documentFormattingProvider") {
+        assert!(provider.is_boolean() || provider.is_object());
+    }
+    if let Some(provider) = capabilities.get("documentRangeFormattingProvider") {
+        assert!(provider.is_boolean() || provider.is_object());
     }
 
     Ok(())
