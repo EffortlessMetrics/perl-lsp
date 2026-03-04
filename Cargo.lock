@@ -1993,6 +1993,7 @@ dependencies = [
  "lsp-types",
  "moka",
  "perl-parser-core",
+ "perl-subprocess-runtime",
  "perl-tdd-support",
  "serde",
 ]
@@ -2286,6 +2287,10 @@ dependencies = [
 
 [[package]]
 name = "perl-source-file"
+version = "0.10.0"
+
+[[package]]
+name = "perl-subprocess-runtime"
 version = "0.10.0"
 
 [[package]]
