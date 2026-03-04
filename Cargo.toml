@@ -30,6 +30,7 @@ members = [
     "crates/perl-lsp-formatting-types",
     "crates/perl-lsp-formatting",
     "crates/perl-lsp-diagnostic-types",
+    "crates/perl-lsp-diagnostic-dedup",
     "crates/perl-lsp-diagnostics",
     "crates/perl-lsp-semantic-tokens",
     "crates/perl-lsp-inlay-hints",
@@ -135,6 +136,7 @@ allow = [
     "perl-workspace-index",
     "perl-semantic-analyzer",
     "perl-lsp-diagnostic-types",
+    "perl-lsp-diagnostic-dedup",
     "perl-lsp-diagnostics",
     "perl-lsp-code-actions",
     "perl-lsp-completion",
@@ -279,6 +281,7 @@ perl-lsp-formatting-types = { path = "crates/perl-lsp-formatting-types", version
 perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.10.0" }
 perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.10.0" }
 perl-lsp-diagnostic-types = { path = "crates/perl-lsp-diagnostic-types", version = "0.10.0" }
+perl-lsp-diagnostic-dedup = { path = "crates/perl-lsp-diagnostic-dedup", version = "0.10.0" }
 perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.10.0" }
 perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.10.0" }
 perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.10.0" }

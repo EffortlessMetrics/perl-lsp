@@ -21,6 +21,8 @@ perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-pragma = { workspace = true }
+perl-lsp-diagnostic-types = { workspace = true }
+perl-lsp-diagnostic-dedup = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }

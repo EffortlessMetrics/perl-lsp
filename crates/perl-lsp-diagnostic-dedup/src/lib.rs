@@ -1,17 +1,17 @@
-//! Diagnostic deduplication
-//!
-//! This module provides functionality for removing duplicate diagnostics
-//! to avoid reporting the same issue multiple times.
+//! Diagnostic de-duplication utilities for Perl LSP crates.
 
-use super::types::Diagnostic;
+#![deny(unsafe_code)]
+#![warn(rust_2018_idioms)]
+#![warn(missing_docs)]
+#![warn(clippy::all)]
 
-/// De-duplicate diagnostics to avoid reporting the same issue twice
+use perl_lsp_diagnostic_types::Diagnostic;
+
+/// De-duplicate diagnostics to avoid reporting the same issue twice.
 ///
 /// This function sorts diagnostics by range, severity, code, and message,
 /// then removes exact duplicates (same range, severity, code, and message).
-#[allow(dead_code)]
 pub fn deduplicate_diagnostics(diagnostics: &mut Vec<Diagnostic>) {
-    // Sort by range, severity, code, and message
     diagnostics.sort_by(|a, b| {
         a.range
             .0
@@ -22,7 +22,6 @@ pub fn deduplicate_diagnostics(diagnostics: &mut Vec<Diagnostic>) {
             .then(a.message.cmp(&b.message))
     });
 
-    // Remove only exact duplicates (same range, severity, code, and message)
     diagnostics.dedup_by(|a, b| {
         a.range == b.range && a.severity == b.severity && a.code == b.code && a.message == b.message
     });

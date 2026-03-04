@@ -9,8 +9,8 @@ use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
 
 use crate::scope::scope_issues_to_diagnostics;
 
-// Re-export types from types module
-pub use crate::types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
+use perl_lsp_diagnostic_dedup::deduplicate_diagnostics;
+use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 
 /// Diagnostics provider
 ///
@@ -67,6 +67,7 @@ impl DiagnosticsProvider {
         let scope_issues = scope_analyzer.analyze(ast, source, &pragma_map);
         diagnostics.extend(scope_issues_to_diagnostics(scope_issues));
 
+        deduplicate_diagnostics(&mut diagnostics);
         diagnostics
     }
 }
