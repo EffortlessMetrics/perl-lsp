@@ -3,7 +3,7 @@
 //! This module provides integration with Perl::Critic for static code analysis
 //! and policy enforcement in Perl code.
 
-use super::subprocess_runtime::SubprocessRuntime;
+use super::SubprocessRuntime;
 use perl_parser_core::{
     Node,
     position::{Position, Range},
@@ -132,7 +132,7 @@ impl CriticAnalyzer {
     /// Creates a new analyzer with the OS subprocess runtime (non-WASM only).
     #[cfg(not(target_arch = "wasm32"))]
     pub fn with_os_runtime(config: CriticConfig) -> Self {
-        use super::subprocess_runtime::OsSubprocessRuntime;
+        use super::OsSubprocessRuntime;
         Self::new(config, Arc::new(OsSubprocessRuntime::new()))
     }
 
@@ -527,7 +527,7 @@ mod tests {
 
     #[test]
     fn test_analyzer_with_mock_runtime() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+        use super::super::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         // Mock perlcritic output format: file:line:column:severity:policy:message
@@ -559,7 +559,7 @@ mod tests {
 
     #[test]
     fn test_analyzer_caching() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+        use super::super::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         runtime.add_response(MockResponse::success(b"".to_vec()));
@@ -581,7 +581,7 @@ mod tests {
 
     #[test]
     fn test_analyzer_config_args() {
-        use super::super::subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
+        use super::super::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         runtime.add_response(MockResponse::success(b"".to_vec()));

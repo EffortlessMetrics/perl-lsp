@@ -31,15 +31,13 @@ pub mod performance;
 pub mod perl_critic;
 /// Perltidy integration for code formatting.
 pub mod perltidy;
-mod subprocess_runtime;
-
-pub use subprocess_runtime::{SubprocessError, SubprocessOutput, SubprocessRuntime};
+pub use perl_subprocess_runtime::{SubprocessError, SubprocessOutput, SubprocessRuntime};
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use subprocess_runtime::OsSubprocessRuntime;
+pub use perl_subprocess_runtime::OsSubprocessRuntime;
 
 /// Test mock implementations for subprocess runtimes.
 #[cfg(test)]
 pub mod mock {
-    pub use crate::subprocess_runtime::mock::*;
+    pub use perl_subprocess_runtime::mock::*;
 }
