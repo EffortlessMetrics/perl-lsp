@@ -5,7 +5,7 @@
 //! braced variables, CORE:: qualification, package-qualified names, single-quoted strings,
 //! escape sequences, error variant messages, and edge cases.
 
-use perl_dap_eval::{SafeEvaluator, ValidationError, ValidationResult, DANGEROUS_OPERATIONS};
+use perl_dap_eval::{DANGEROUS_OPERATIONS, SafeEvaluator, ValidationError, ValidationResult};
 use perl_tdd_support::must_err;
 
 // ---------------------------------------------------------------------------
@@ -131,57 +131,85 @@ fn safe_complex_expressions() -> Result<(), ValidationError> {
 
 #[test]
 fn dangerous_state_mutation_ops() {
-    for op in &["push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand", "bless", "reset"] {
+    for op in
+        &["push", "pop", "shift", "unshift", "splice", "delete", "undef", "srand", "bless", "reset"]
+    {
         let expr = format!("{op}($x)");
-        assert!(
-            eval().validate(&expr).is_err(),
-            "expected {op} to be blocked"
-        );
+        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
     }
 }
 
 #[test]
 fn dangerous_process_control_ops() {
     for op in &[
-        "system", "exec", "fork", "exit", "dump", "kill", "alarm", "sleep",
-        "wait", "waitpid", "setpgrp", "setpriority", "umask", "lock",
+        "system",
+        "exec",
+        "fork",
+        "exit",
+        "dump",
+        "kill",
+        "alarm",
+        "sleep",
+        "wait",
+        "waitpid",
+        "setpgrp",
+        "setpriority",
+        "umask",
+        "lock",
     ] {
         let expr = format!("{op}()");
-        assert!(
-            eval().validate(&expr).is_err(),
-            "expected {op} to be blocked"
-        );
+        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
     }
 }
 
 #[test]
 fn dangerous_io_ops() {
     for op in &[
-        "qx", "readpipe", "syscall", "open", "close", "print", "say", "printf",
-        "sysread", "syswrite", "glob", "readline", "ioctl", "fcntl", "flock",
-        "select", "dbmopen", "dbmclose", "binmode", "opendir", "closedir",
-        "readdir", "rewinddir", "seekdir", "telldir", "seek", "sysseek",
-        "formline", "write", "pipe", "socketpair",
+        "qx",
+        "readpipe",
+        "syscall",
+        "open",
+        "close",
+        "print",
+        "say",
+        "printf",
+        "sysread",
+        "syswrite",
+        "glob",
+        "readline",
+        "ioctl",
+        "fcntl",
+        "flock",
+        "select",
+        "dbmopen",
+        "dbmclose",
+        "binmode",
+        "opendir",
+        "closedir",
+        "readdir",
+        "rewinddir",
+        "seekdir",
+        "telldir",
+        "seek",
+        "sysseek",
+        "formline",
+        "write",
+        "pipe",
+        "socketpair",
     ] {
         let expr = format!("{op}()");
-        assert!(
-            eval().validate(&expr).is_err(),
-            "expected {op} to be blocked"
-        );
+        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
     }
 }
 
 #[test]
 fn dangerous_filesystem_ops() {
     for op in &[
-        "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown",
-        "chroot", "truncate", "utime", "symlink", "link",
+        "mkdir", "rmdir", "unlink", "rename", "chdir", "chmod", "chown", "chroot", "truncate",
+        "utime", "symlink", "link",
     ] {
         let expr = format!("{op}('path')");
-        assert!(
-            eval().validate(&expr).is_err(),
-            "expected {op} to be blocked"
-        );
+        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
     }
 }
 
@@ -189,10 +217,7 @@ fn dangerous_filesystem_ops() {
 fn dangerous_code_loading_ops() {
     for op in &["eval", "require", "do"] {
         let expr = format!("{op}('code')");
-        assert!(
-            eval().validate(&expr).is_err(),
-            "expected {op} to be blocked"
-        );
+        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
     }
 }
 
@@ -204,27 +229,22 @@ fn dangerous_tie_ops() {
 
 #[test]
 fn dangerous_network_ops() {
-    for op in &["socket", "connect", "bind", "listen", "accept", "send", "recv", "shutdown", "setsockopt"] {
+    for op in
+        &["socket", "connect", "bind", "listen", "accept", "send", "recv", "shutdown", "setsockopt"]
+    {
         let expr = format!("{op}()");
-        assert!(
-            eval().validate(&expr).is_err(),
-            "expected {op} to be blocked"
-        );
+        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
     }
 }
 
 #[test]
 fn dangerous_ipc_ops() {
     for op in &[
-        "msgget", "msgsnd", "msgrcv", "msgctl",
-        "semget", "semop", "semctl",
-        "shmget", "shmat", "shmdt", "shmctl",
+        "msgget", "msgsnd", "msgrcv", "msgctl", "semget", "semop", "semctl", "shmget", "shmat",
+        "shmdt", "shmctl",
     ] {
         let expr = format!("{op}()");
-        assert!(
-            eval().validate(&expr).is_err(),
-            "expected {op} to be blocked"
-        );
+        assert!(eval().validate(&expr).is_err(), "expected {op} to be blocked");
     }
 }
 
@@ -355,8 +375,8 @@ fn braced_scalar_variables_are_safe() -> Result<(), ValidationError> {
 #[test]
 fn all_assignment_operators_blocked() {
     let ops = [
-        "=", "+=", "-=", "*=", "/=", "%=", "**=", ".=",
-        "&=", "|=", "^=", "<<=", ">>=", "&&=", "||=", "//=",
+        "=", "+=", "-=", "*=", "/=", "%=", "**=", ".=", "&=", "|=", "^=", "<<=", ">>=", "&&=",
+        "||=", "//=",
     ];
     for op in &ops {
         let expr = format!("$x {op} 1");
