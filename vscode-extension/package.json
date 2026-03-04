@@ -82,7 +82,9 @@
         "runtime": "node",
         "configurationAttributes": {
           "launch": {
-            "required": ["program"],
+            "required": [
+              "program"
+            ],
             "properties": {
               "program": {
                 "type": "string",
@@ -175,7 +177,11 @@
       "properties": {
         "perl-lsp.channel": {
           "type": "string",
-          "enum": ["latest", "stable", "tag"],
+          "enum": [
+            "latest",
+            "stable",
+            "tag"
+          ],
           "default": "latest",
           "markdownDescription": "Release channel: `latest` for newest release, `stable` for latest stable, `tag` for specific version"
         },
@@ -443,7 +449,10 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "package:list": "npx @vscode/vsce ls --no-yarn",
+    "package": "mkdir -p dist && npx @vscode/vsce package --no-yarn --out dist/perl-lsp-${npm_package_version}.vsix",
+    "marketplace:preflight": "npm run compile && npm run package:list && npm run package"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1",
