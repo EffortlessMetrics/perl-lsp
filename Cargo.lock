@@ -1775,6 +1775,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-capability-map"
+version = "0.10.0"
+dependencies = [
+ "lsp-types",
+ "perl-lsp-feature-ids",
+]
+
+[[package]]
 name = "perl-lsp-code-actions"
 version = "0.10.0"
 dependencies = [
@@ -1815,6 +1823,7 @@ version = "0.10.0"
 dependencies = [
  "lsp-types",
  "perl-feature-catalog",
+ "perl-lsp-capability-map",
  "perl-lsp-feature-ids",
  "serde",
 ]
