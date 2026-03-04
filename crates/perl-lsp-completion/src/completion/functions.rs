@@ -2,7 +2,8 @@
 //!
 //! Provides completion for user-defined subroutines.
 
-use super::{context::CompletionContext, items::CompletionItem};
+use super::CompletionContext;
+use perl_lsp_completion_types::CompletionItem;
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 
 /// Add function completions
@@ -18,7 +19,7 @@ pub fn add_function_completions(
             if symbol.kind == SymbolKind::Subroutine && name.starts_with(prefix_without_amp) {
                 completions.push(CompletionItem {
                     label: name.clone(),
-                    kind: crate::completion::items::CompletionItemKind::Function,
+                    kind: perl_lsp_completion_types::CompletionItemKind::Function,
                     detail: Some("sub".to_string()),
                     documentation: symbol.documentation.clone(),
                     insert_text: Some(format!("{}()", name)),

@@ -18,6 +18,7 @@ doctest = false
 
 [dependencies]
 perl-parser-core = { workspace = true }
+perl-lsp-completion-types = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-keywords = { workspace = true }

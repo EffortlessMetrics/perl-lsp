@@ -2,7 +2,8 @@
 //!
 //! Provides context-aware method completion including DBI methods.
 
-use super::{context::CompletionContext, items::CompletionItem};
+use super::CompletionContext;
+use perl_lsp_completion_types::CompletionItem;
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 use std::collections::HashSet;
 
@@ -103,7 +104,7 @@ pub fn add_method_completions(
         if seen.insert(name.clone()) {
             completions.push(CompletionItem {
                 label: name.clone(),
-                kind: crate::completion::items::CompletionItemKind::Function,
+                kind: perl_lsp_completion_types::CompletionItemKind::Function,
                 detail: Some("method".to_string()),
                 documentation,
                 insert_text: Some(format!("{}()", name)),
@@ -139,7 +140,7 @@ pub fn add_method_completions(
         if seen.insert(method_name.clone()) {
             completions.push(CompletionItem {
                 label: method_name.clone(),
-                kind: crate::completion::items::CompletionItemKind::Function,
+                kind: perl_lsp_completion_types::CompletionItemKind::Function,
                 detail: Some("method".to_string()),
                 documentation: Some(desc.to_string()),
                 insert_text: Some(format!("{}()", method)),
@@ -161,7 +162,7 @@ pub fn add_method_completions(
             if seen.insert(method_name.clone()) {
                 completions.push(CompletionItem {
                     label: method_name.clone(),
-                    kind: crate::completion::items::CompletionItemKind::Function,
+                    kind: perl_lsp_completion_types::CompletionItemKind::Function,
                     detail: Some("method".to_string()),
                     documentation: Some(desc.to_string()),
                     insert_text: Some(format!("{}()", method)),
