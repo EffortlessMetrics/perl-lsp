@@ -18,6 +18,7 @@
 //! Follows the inlay hint protocol for range-scoped responses and stable hint
 //! ordering per the LSP specification.
 
+use perl_lsp_hint_metadata::parameter_names;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition as Position, WireRange as Range};
 use perl_semantic_analyzer::declaration::get_node_children;
@@ -172,25 +173,8 @@ pub fn parameter_hints(
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
         if let NodeKind::FunctionCall { name, args } = &node.kind {
-            let labels: Option<&[&str]> = match name.as_str() {
-                "substr" => Some(&["str", "offset", "len"]),
-                "index" => Some(&["str", "substr", "pos"]),
-                "rindex" => Some(&["str", "substr", "pos"]),
-                "sprintf" => Some(&["format", "args..."]),
-                "printf" => Some(&["format", "args..."]),
-                "join" => Some(&["sep", "list"]),
-                "split" => Some(&["pattern", "str", "limit"]),
-                "splice" => Some(&["array", "offset", "length", "list"]),
-                "unpack" => Some(&["template", "expr"]),
-                "pack" => Some(&["template", "list"]),
-                "grep" => Some(&["block", "list"]),
-                "map" => Some(&["block", "list"]),
-                "sort" => Some(&["block", "list"]),
-                "push" => Some(&["ARRAY", "LIST"]),
-                "open" => Some(&["FILEHANDLE", "MODE", "EXPR"]),
-                _ => None,
-            };
-            if let Some(sig) = labels {
+            let sig = parameter_names(name);
+            if !sig.is_empty() {
                 for (i, arg) in args.iter().enumerate() {
                     if i >= sig.len() {
                         break;

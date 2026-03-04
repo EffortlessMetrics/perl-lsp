@@ -32,6 +32,7 @@ members = [
     "crates/perl-lsp-diagnostics",
     "crates/perl-lsp-semantic-tokens",
     "crates/perl-lsp-inlay-hints",
+    "crates/perl-lsp-hint-metadata",
     "crates/perl-lsp-feature-contracts",
     "crates/perl-lsp-feature-flags",
     "crates/perl-lsp-feature-grid",
@@ -137,6 +138,7 @@ allow = [
     "perl-lsp-code-actions",
     "perl-lsp-completion",
     "perl-lsp-inlay-hints",
+    "perl-lsp-hint-metadata",
 
     # Tier 3 — Module resolution chain
     "perl-module-name",
@@ -276,6 +278,7 @@ perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.10.0" }
 perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.10.0" }
 perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.10.0" }
 perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.10.0" }
+perl-lsp-hint-metadata = { path = "crates/perl-lsp-hint-metadata", version = "0.10.0" }
 perl-lsp-feature-contracts = { path = "crates/perl-lsp-feature-contracts", version = "0.10.0" }
 perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.10.0" }
 perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.10.0" }

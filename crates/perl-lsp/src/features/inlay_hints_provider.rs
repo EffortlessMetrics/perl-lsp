@@ -1,5 +1,5 @@
+use perl_lsp_hint_metadata::{parameter_names, return_type_hint};
 use perl_parser::ast::{Node, NodeKind};
-use perl_parser::builtin_signatures_phf::get_param_names;
 use perl_parser::position::{Position as LspPosition, Range};
 use perl_position_tracking::WirePosition;
 use serde_json::{Value, json};
@@ -270,7 +270,7 @@ impl InlayHintsProvider {
     /// Get parameter names for known functions
     fn get_parameter_names(&self, function_name: &str) -> Vec<String> {
         // Use consolidated builtin signatures
-        let params = get_param_names(function_name);
+        let params = parameter_names(function_name);
         if !params.is_empty() {
             return params.iter().map(|s| s.to_string()).collect();
         }
@@ -351,17 +351,7 @@ impl InlayHintsProvider {
 
     /// Get return type for known functions
     fn get_return_type(&self, function_name: &str) -> Option<String> {
-        match function_name {
-            "new" => Some("object".to_string()),
-            "split" => Some("ARRAY".to_string()),
-            "keys" | "values" => Some("ARRAY".to_string()),
-            "reverse" => Some("ARRAY".to_string()),
-            "sort" => Some("ARRAY".to_string()),
-            "grep" | "map" => Some("ARRAY".to_string()),
-            "localtime" | "gmtime" => Some("ARRAY".to_string()),
-            "stat" | "lstat" => Some("ARRAY".to_string()),
-            _ => None,
-        }
+        return_type_hint(function_name).map(ToString::to_string)
     }
 
     /// Visit children nodes

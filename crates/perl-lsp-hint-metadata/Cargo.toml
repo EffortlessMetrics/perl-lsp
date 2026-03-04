@@ -1,0 +1,20 @@
+[package]
+name = "perl-lsp-hint-metadata"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Shared builtin metadata used by LSP hint providers"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-hint-metadata"
+keywords = ["perl", "lsp", "inlay-hints", "metadata"]
+categories = ["development-tools", "text-editors"]
+
+[dependencies]
+perl-builtins = { workspace = true }
+
+[lints]
+workspace = true
