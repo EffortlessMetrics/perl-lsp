@@ -107,6 +107,7 @@ pub use self::items::{CompletionItem, CompletionItemKind};
 
 use perl_parser_core::ast::Node;
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
+use perl_source_context::{is_in_comment, is_in_string};
 use perl_workspace_index::workspace_index::WorkspaceIndex;
 use std::sync::Arc;
 
@@ -593,9 +594,9 @@ impl CompletionProvider {
         let trigger_character = if position > 0 { source.chars().nth(position - 1) } else { None };
 
         // Simple heuristics for context detection
-        let in_string = self.is_in_string(source, position);
+        let in_string = is_in_string(source, position);
         let in_regex = self.is_in_regex(source, position);
-        let in_comment = self.is_in_comment(source, position);
+        let in_comment = is_in_comment(source, position);
 
         CompletionContext::new(
             &self.symbol_table,
@@ -816,16 +817,6 @@ impl CompletionProvider {
         false
     }
 
-    /// Simple heuristic to check if position is in a string
-    fn is_in_string(&self, source: &str, position: usize) -> bool {
-        let before = &source[..position];
-        let single_quotes = before.matches('\'').count();
-        let double_quotes = before.matches('"').count();
-
-        // Very simple: odd number of quotes means we're inside
-        single_quotes % 2 == 1 || double_quotes % 2 == 1
-    }
-
     /// Simple heuristic to check if position is in a regex
     fn is_in_regex(&self, source: &str, position: usize) -> bool {
         // Look for regex patterns before position
@@ -840,13 +831,6 @@ impl CompletionProvider {
         } else {
             false
         }
-    }
-
-    /// Simple heuristic to check if position is in a comment
-    fn is_in_comment(&self, source: &str, position: usize) -> bool {
-        let line_start = source[..position].rfind('\n').map(|p| p + 1).unwrap_or(0);
-        let line = &source[line_start..position];
-        line.contains('#')
     }
 
     /// Check if we're in a test context

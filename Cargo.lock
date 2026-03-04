@@ -1627,6 +1627,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-dead-code"
+version = "0.10.0"
+dependencies = [
+ "perl-workspace-index",
+ "serde",
+]
+
+[[package]]
 name = "perl-diagnostics-codes"
 version = "0.10.0"
 dependencies = [
@@ -1767,6 +1775,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-capability-map"
+version = "0.10.0"
+dependencies = [
+ "lsp-types",
+ "perl-lsp-feature-ids",
+]
+
+[[package]]
 name = "perl-lsp-code-actions"
 version = "0.10.0"
 dependencies = [
@@ -1784,6 +1800,7 @@ dependencies = [
  "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
+ "perl-source-context",
  "perl-tdd-support",
  "perl-workspace-index",
  "url",
@@ -1807,6 +1824,7 @@ version = "0.10.0"
 dependencies = [
  "lsp-types",
  "perl-feature-catalog",
+ "perl-lsp-capability-map",
  "perl-lsp-feature-ids",
  "serde",
 ]
@@ -1961,6 +1979,7 @@ dependencies = [
  "perl-keywords",
  "perl-parser-core",
  "perl-semantic-analyzer",
+ "perl-source-context",
  "perl-symbol-cursor",
  "perl-tdd-support",
 ]
@@ -1984,6 +2003,7 @@ dependencies = [
  "lsp-types",
  "moka",
  "perl-parser-core",
+ "perl-subprocess-runtime",
  "perl-tdd-support",
  "serde",
 ]
@@ -2134,6 +2154,7 @@ dependencies = [
  "nix",
  "parking_lot",
  "perl-corpus",
+ "perl-dead-code",
  "perl-incremental-parsing",
  "perl-keywords",
  "perl-lexer",
@@ -2275,7 +2296,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-source-context"
+version = "0.10.0"
+
+[[package]]
 name = "perl-source-file"
+version = "0.10.0"
+
+[[package]]
+name = "perl-subprocess-runtime"
 version = "0.10.0"
 
 [[package]]

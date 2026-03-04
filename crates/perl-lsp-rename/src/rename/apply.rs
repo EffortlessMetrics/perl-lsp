@@ -4,6 +4,7 @@
 
 use perl_parser_core::SourceLocation;
 use perl_semantic_analyzer::symbol::SymbolKind;
+use perl_source_context::{is_in_comment, is_in_string};
 
 use super::types::{RenameOptions, TextEdit};
 
@@ -38,8 +39,8 @@ pub fn find_occurrences_in_text(
         let absolute_pos = search_pos + pos;
 
         // Check if this is in a comment or string
-        let in_comment = is_in_comment(absolute_pos, source);
-        let in_string = is_in_string(absolute_pos, source);
+        let in_comment = is_in_comment(source, absolute_pos);
+        let in_string = is_in_string(source, absolute_pos);
 
         if (in_comment && options.rename_in_comments) || (in_string && options.rename_in_strings) {
             // Make sure it's a whole word
@@ -67,30 +68,6 @@ pub fn find_occurrences_in_text(
     }
 
     edits
-}
-
-/// Check if position is in a comment
-pub fn is_in_comment(position: usize, source: &str) -> bool {
-    let line_start =
-        if position == 0 { 0 } else { source[..position].rfind('\n').map_or(0, |p| p + 1) };
-    let line = &source[line_start..];
-
-    if let Some(comment_pos) = line.find('#') {
-        let comment_absolute = line_start + comment_pos;
-        position >= comment_absolute
-    } else {
-        false
-    }
-}
-
-/// Check if position is in a string
-pub fn is_in_string(position: usize, source: &str) -> bool {
-    // Simple heuristic - count quotes before position
-    let before = &source[..position];
-    let single_quotes = before.matches('\'').count();
-    let double_quotes = before.matches('"').count();
-
-    single_quotes % 2 == 1 || double_quotes % 2 == 1
 }
 
 /// Apply rename edits to source text
