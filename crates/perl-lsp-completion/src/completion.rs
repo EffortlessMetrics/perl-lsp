@@ -132,7 +132,7 @@ impl CompletionProvider {
     ///
     /// ```rust,ignore
     /// use perl_parser_core::Parser;
-    /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
+    /// use perl_lsp_completion::CompletionProvider;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let mut parser = Parser::new("my $var = 42; sub hello { print $var; }");
@@ -168,7 +168,7 @@ impl CompletionProvider {
     ///
     /// ```rust,ignore
     /// use perl_parser_core::Parser;
-    /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
+    /// use perl_lsp_completion::CompletionProvider;
     /// use perl_workspace_index::workspace_index::WorkspaceIndex;
     /// use std::sync::Arc;
     ///
@@ -217,7 +217,7 @@ impl CompletionProvider {
     ///
     /// ```rust,ignore
     /// use perl_parser_core::Parser;
-    /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
+    /// use perl_lsp_completion::CompletionProvider;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let script = "my $email_count = 0; my $";
@@ -256,7 +256,7 @@ impl CompletionProvider {
     ///
     /// ```rust,ignore
     /// use perl_parser_core::Parser;
-    /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
+    /// use perl_lsp_completion::CompletionProvider;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let script = "my $var = 42; sub hello { print $var; }";
@@ -315,7 +315,7 @@ impl CompletionProvider {
     ///
     /// ```rust,ignore
     /// use perl_parser_core::Parser;
-    /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
+    /// use perl_lsp_completion::CompletionProvider;
     /// use std::sync::atomic::{AtomicBool, Ordering};
     /// use std::sync::Arc;
     ///
@@ -531,7 +531,7 @@ impl CompletionProvider {
     ///
     /// ```rust,ignore
     /// use perl_parser_core::Parser;
-    /// use perl_lsp_providers::ide::lsp_compat::completion::CompletionProvider;
+    /// use perl_lsp_completion::CompletionProvider;
     ///
     /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// let script = "my $email_count = scalar(@emails); $email_c";

@@ -9,6 +9,7 @@ use std::process::Command;
 struct Metadata {
     packages: Vec<Package>,
     workspace_members: Vec<String>,
+    workspace_root: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -35,10 +36,10 @@ struct CrateMetrics {
 }
 
 pub fn run(output: Option<PathBuf>) -> Result<()> {
-    let output = output.unwrap_or_else(|| PathBuf::from("docs/SRP_MICROCRATES.md"));
     let metadata = cargo_metadata()?;
     let members: std::collections::HashSet<_> = metadata.workspace_members.into_iter().collect();
-    let workspace_root = std::env::current_dir().wrap_err("failed to resolve workspace root")?;
+    let workspace_root = PathBuf::from(&metadata.workspace_root);
+    let output = output.unwrap_or_else(|| workspace_root.join("docs/SRP_MICROCRATES.md"));
 
     let mut metrics = Vec::new();
     for pkg in metadata.packages {
