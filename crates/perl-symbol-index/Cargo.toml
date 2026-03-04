@@ -1,0 +1,20 @@
+[package]
+name = "perl-symbol-index"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "SRP microcrate for prefix and fuzzy symbol indexing"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-symbol-index"
+keywords = ["perl", "lsp", "symbol", "index", "search"]
+categories = ["development-tools", "text-editors"]
+include = ["src/**", "Cargo.toml", "README.md"]
+
+[dependencies]
+
+[lints]
+workspace = true
