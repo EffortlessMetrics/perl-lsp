@@ -25,20 +25,18 @@
 //! assert_eq!(col, 0);
 //! ```
 
-pub use convert::{offset_to_utf16_line_col, utf16_line_col_to_offset};
 pub use line_index::{LineIndex, LineStartsCache};
 pub use mapper::{
     LineEnding, PositionMapper, apply_edit_utf8, json_to_position, last_line_column_utf8,
     newline_count, position_to_json,
 };
+pub use perl_lsp_wire::{
+    WireLocation, WirePosition, WireRange, offset_to_utf16_line_col, utf16_line_col_to_offset,
+};
 pub use position::{Position, Range};
 pub use span::{ByteSpan, SourceLocation};
 
-mod convert;
 mod line_index;
 pub mod mapper;
 mod position;
 mod span;
-
-mod wire;
-pub use wire::{WireLocation, WirePosition, WireRange};

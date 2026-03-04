@@ -1,16 +1,16 @@
 [package]
-name = "perl-position-tracking"
+name = "perl-lsp-wire"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "UTF-8/UTF-16 position tracking and conversion for Perl LSP"
+description = "LSP wire position/range/location types and UTF-8/UTF-16 conversion"
 readme = "README.md"
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-documentation = "https://docs.rs/perl-position-tracking"
-keywords = ["perl", "position", "utf16", "lsp", "utf8"]
+documentation = "https://docs.rs/perl-lsp-wire"
+keywords = ["perl", "lsp", "wire", "position", "utf16"]
 categories = ["development-tools", "text-editors"]
 include = [
   "src/**",
@@ -20,15 +20,15 @@ include = [
 ]
 
 [dependencies]
-serde_json = "1.0"
-ropey = "1.6.1"
 serde = { version = "1.0.228", features = ["derive"] }
-perl-lsp-wire = { workspace = true }
 
 [features]
 default = []
-lsp-compat = ["perl-lsp-wire/lsp-compat"]
+lsp-compat = ["lsp-types"]
 
+[dependencies.lsp-types]
+version = "0.97.0"
+optional = true
 
 [lints]
 workspace = true
