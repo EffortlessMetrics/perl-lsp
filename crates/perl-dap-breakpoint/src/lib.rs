@@ -26,7 +26,7 @@
 mod suggestion;
 mod validator;
 
-pub use suggestion::find_nearest_valid_line;
+pub use suggestion::{SearchDirection, find_nearest_valid_line};
 pub use validator::{
     AstBreakpointValidator, BreakpointValidation, BreakpointValidator, ValidationReason,
 };
