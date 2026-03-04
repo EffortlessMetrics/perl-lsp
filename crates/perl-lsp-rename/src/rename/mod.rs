@@ -100,6 +100,7 @@ mod validate;
 pub use apply::adjust_location_for_sigil;
 #[allow(unused_imports)]
 pub use apply::apply_rename_edits;
+pub use apply::{is_in_comment, is_in_string};
 pub use resolve::{find_symbol_at_position, get_symbol_range_at_position};
 pub use types::{RenameOptions, RenameResult, TextEdit};
 pub use validate::{can_rename_symbol, validate_name};
