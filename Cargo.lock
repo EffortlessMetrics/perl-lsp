@@ -1565,13 +1565,13 @@ dependencies = [
  "perl-dap-breakpoint",
  "perl-dap-eval",
  "perl-dap-platform",
+ "perl-dap-security",
  "perl-dap-stack",
  "perl-dap-variables",
  "perl-feature-catalog",
  "perl-keywords",
  "perl-lsp-launcher",
  "perl-module-path",
- "perl-path-security",
  "perl-tdd-support",
  "proptest",
  "regex",
@@ -1611,6 +1611,17 @@ name = "perl-dap-platform"
 version = "0.10.0"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "perl-dap-security"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "perl-path-security",
+ "perl-tdd-support",
+ "tempfile",
+ "thiserror",
 ]
 
 [[package]]
