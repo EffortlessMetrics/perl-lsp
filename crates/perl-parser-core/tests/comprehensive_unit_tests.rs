@@ -20,8 +20,12 @@ use perl_parser_core::{
     PositionMapper,
     SourceLocation,
     // AST (v2) types used by RecoveryParser
+    ast_v2::MissingKind,
     ast_v2::NodeKind as V2NodeKind,
+    builtin_signatures,
+    builtin_signatures_phf,
     error::recovery_parser::RecoveryParser,
+    error_classifier,
     error_recovery::{ParseError as RecoveryParseError, RecoveryResult, SyncPoint},
     line_index::LineIndex,
     // ParserContext
@@ -1602,6 +1606,1427 @@ mod integration_tests {
         // First char of second line
         let pos = mapper.byte_to_lsp_pos(12);
         assert_eq!(pos.line, 1);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// SourceLocation / ByteSpan tests
+// ───────────────────────────────────────────────────────────────────
+
+mod source_location_tests {
+    use super::*;
+
+    #[test]
+    fn empty_span_at_position() -> Result<(), Box<dyn std::error::Error>> {
+        let loc = SourceLocation::empty(5);
+        assert_eq!(loc.start, 5);
+        assert_eq!(loc.end, 5);
+        assert_eq!(loc.len(), 0);
+        assert!(loc.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn whole_span_covers_source() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "hello world";
+        let loc = SourceLocation::whole(source);
+        assert_eq!(loc.start, 0);
+        assert_eq!(loc.end, 11);
+        assert_eq!(loc.len(), 11);
+        assert!(!loc.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn whole_span_empty_source() -> Result<(), Box<dyn std::error::Error>> {
+        let loc = SourceLocation::whole("");
+        assert_eq!(loc.start, 0);
+        assert_eq!(loc.end, 0);
+        assert!(loc.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn contains_offset() -> Result<(), Box<dyn std::error::Error>> {
+        let loc = SourceLocation::new(5, 10);
+        assert!(!loc.contains(4));
+        assert!(loc.contains(5));
+        assert!(loc.contains(7));
+        assert!(loc.contains(9));
+        // end is exclusive
+        assert!(!loc.contains(10));
+        Ok(())
+    }
+
+    #[test]
+    fn contains_span_inner_outer() -> Result<(), Box<dyn std::error::Error>> {
+        let outer = SourceLocation::new(0, 20);
+        let inner = SourceLocation::new(5, 15);
+        let partial = SourceLocation::new(15, 25);
+
+        assert!(outer.contains_span(inner));
+        assert!(!inner.contains_span(outer));
+        assert!(!outer.contains_span(partial));
+        // A span contains itself
+        assert!(outer.contains_span(outer));
+        Ok(())
+    }
+
+    #[test]
+    fn overlaps_various() -> Result<(), Box<dyn std::error::Error>> {
+        let a = SourceLocation::new(0, 10);
+        let b = SourceLocation::new(5, 15);
+        let c = SourceLocation::new(10, 20);
+
+        assert!(a.overlaps(b));
+        assert!(b.overlaps(a));
+        // Adjacent spans do NOT overlap (half-open)
+        assert!(!a.overlaps(c));
+        // Empty spans at same position don't overlap
+        let e1 = SourceLocation::empty(5);
+        let e2 = SourceLocation::empty(5);
+        assert!(!e1.overlaps(e2));
+        Ok(())
+    }
+
+    #[test]
+    fn intersection_overlapping() -> Result<(), Box<dyn std::error::Error>> {
+        let a = SourceLocation::new(0, 10);
+        let b = SourceLocation::new(5, 15);
+        if let Some(inter) = a.intersection(b) {
+            assert_eq!(inter.start, 5);
+            assert_eq!(inter.end, 10);
+        } else {
+            return Err("expected intersection".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn intersection_disjoint() -> Result<(), Box<dyn std::error::Error>> {
+        let a = SourceLocation::new(0, 5);
+        let b = SourceLocation::new(10, 15);
+        assert!(a.intersection(b).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn intersection_adjacent() -> Result<(), Box<dyn std::error::Error>> {
+        let a = SourceLocation::new(0, 5);
+        let b = SourceLocation::new(5, 10);
+        assert!(a.intersection(b).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn union_covers_both() -> Result<(), Box<dyn std::error::Error>> {
+        let a = SourceLocation::new(3, 7);
+        let b = SourceLocation::new(10, 20);
+        let u = a.union(b);
+        assert_eq!(u.start, 3);
+        assert_eq!(u.end, 20);
+        Ok(())
+    }
+
+    #[test]
+    fn try_slice_in_bounds() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "hello world";
+        let loc = SourceLocation::new(6, 11);
+        if let Some(s) = loc.try_slice(source) {
+            assert_eq!(s, "world");
+        } else {
+            return Err("expected Some slice".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn try_slice_out_of_bounds() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "short";
+        let loc = SourceLocation::new(0, 100);
+        assert!(loc.try_slice(source).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn to_range_conversion() -> Result<(), Box<dyn std::error::Error>> {
+        let loc = SourceLocation::new(3, 9);
+        let range = loc.to_range();
+        assert_eq!(range, 3..9);
+        Ok(())
+    }
+
+    #[test]
+    fn display_format() -> Result<(), Box<dyn std::error::Error>> {
+        let loc = SourceLocation::new(42, 100);
+        assert_eq!(format!("{}", loc), "42..100");
+        Ok(())
+    }
+
+    #[test]
+    fn from_range_conversion() -> Result<(), Box<dyn std::error::Error>> {
+        let loc: SourceLocation = (5..10).into();
+        assert_eq!(loc.start, 5);
+        assert_eq!(loc.end, 10);
+        Ok(())
+    }
+
+    #[test]
+    fn from_tuple_conversion() -> Result<(), Box<dyn std::error::Error>> {
+        let loc: SourceLocation = (3, 7).into();
+        assert_eq!(loc.start, 3);
+        assert_eq!(loc.end, 7);
+        Ok(())
+    }
+
+    #[test]
+    fn into_tuple_conversion() -> Result<(), Box<dyn std::error::Error>> {
+        let loc = SourceLocation::new(3, 7);
+        let (s, e): (usize, usize) = loc.into();
+        assert_eq!(s, 3);
+        assert_eq!(e, 7);
+        Ok(())
+    }
+
+    #[test]
+    fn into_range_conversion() -> Result<(), Box<dyn std::error::Error>> {
+        let loc = SourceLocation::new(1, 5);
+        let range: std::ops::Range<usize> = loc.into();
+        assert_eq!(range, 1..5);
+        Ok(())
+    }
+
+    #[test]
+    fn default_is_zero_span() -> Result<(), Box<dyn std::error::Error>> {
+        let loc = SourceLocation::default();
+        assert_eq!(loc.start, 0);
+        assert_eq!(loc.end, 0);
+        assert!(loc.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn slice_extracts_text() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "hello world";
+        let loc = SourceLocation::new(0, 5);
+        assert_eq!(loc.slice(source), "hello");
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// ParseError (catastrophic) variant and method tests
+// ───────────────────────────────────────────────────────────────────
+
+mod catastrophic_parse_error_tests {
+    use super::*;
+
+    #[test]
+    fn unexpected_eof_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::UnexpectedEof;
+        let msg = format!("{}", err);
+        assert!(msg.contains("Unexpected end of input"));
+        Ok(())
+    }
+
+    #[test]
+    fn unexpected_token_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::unexpected("semicolon", "comma", 42);
+        let msg = format!("{}", err);
+        assert!(msg.contains("semicolon"));
+        assert!(msg.contains("comma"));
+        assert!(msg.contains("42"));
+        Ok(())
+    }
+
+    #[test]
+    fn syntax_error_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::syntax("bad thing", 99);
+        let msg = format!("{}", err);
+        assert!(msg.contains("bad thing"));
+        assert!(msg.contains("99"));
+        Ok(())
+    }
+
+    #[test]
+    fn lexer_error_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::LexerError { message: "bad char".to_string() };
+        let msg = format!("{}", err);
+        assert!(msg.contains("bad char"));
+        Ok(())
+    }
+
+    #[test]
+    fn recursion_limit_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::RecursionLimit;
+        let msg = format!("{}", err);
+        assert!(msg.contains("recursion") || msg.contains("Recursion"));
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_number_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::InvalidNumber { literal: "0xZZ".to_string() };
+        let msg = format!("{}", err);
+        assert!(msg.contains("0xZZ"));
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_string_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::InvalidString;
+        let msg = format!("{}", err);
+        assert!(msg.contains("string") || msg.contains("String"));
+        Ok(())
+    }
+
+    #[test]
+    fn unclosed_delimiter_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::UnclosedDelimiter { delimiter: '(' };
+        let msg = format!("{}", err);
+        assert!(msg.contains('('));
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_regex_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err =
+            CatastrophicParseError::InvalidRegex { message: "unterminated group".to_string() };
+        let msg = format!("{}", err);
+        assert!(msg.contains("unterminated group"));
+        Ok(())
+    }
+
+    #[test]
+    fn nesting_too_deep_display() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::NestingTooDeep { depth: 300, max_depth: 256 };
+        let msg = format!("{}", err);
+        assert!(msg.contains("300"));
+        assert!(msg.contains("256"));
+        Ok(())
+    }
+
+    #[test]
+    fn location_for_positioned_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let err1 = CatastrophicParseError::unexpected("a", "b", 10);
+        assert_eq!(err1.location(), Some(10));
+
+        let err2 = CatastrophicParseError::syntax("msg", 20);
+        assert_eq!(err2.location(), Some(20));
+        Ok(())
+    }
+
+    #[test]
+    fn location_none_for_unpositioned_errors() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(CatastrophicParseError::UnexpectedEof.location(), None);
+        assert_eq!(CatastrophicParseError::RecursionLimit.location(), None);
+        assert_eq!(CatastrophicParseError::InvalidString.location(), None);
+        assert_eq!(
+            CatastrophicParseError::LexerError { message: "x".to_string() }.location(),
+            None
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn suggestion_for_semicolon() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::unexpected("Semicolon", "newline", 5);
+        let suggestion = err.suggestion().unwrap_or_default();
+        assert!(suggestion.contains("semicolon"));
+        Ok(())
+    }
+
+    #[test]
+    fn suggestion_for_unclosed_delimiter() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::UnclosedDelimiter { delimiter: ')' };
+        let suggestion = err.suggestion().unwrap_or_default();
+        assert!(suggestion.contains(')'));
+        Ok(())
+    }
+
+    #[test]
+    fn suggestion_none_for_generic_errors() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(CatastrophicParseError::UnexpectedEof.suggestion().is_none());
+        assert!(CatastrophicParseError::RecursionLimit.suggestion().is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn parse_error_equality() -> Result<(), Box<dyn std::error::Error>> {
+        let e1 = CatastrophicParseError::UnexpectedEof;
+        let e2 = CatastrophicParseError::UnexpectedEof;
+        assert_eq!(e1, e2);
+
+        let e3 = CatastrophicParseError::syntax("a", 1);
+        let e4 = CatastrophicParseError::syntax("a", 1);
+        assert_eq!(e3, e4);
+
+        assert_ne!(e1, e3);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_error_clone() -> Result<(), Box<dyn std::error::Error>> {
+        let err = CatastrophicParseError::unexpected("x", "y", 42);
+        let cloned = err.clone();
+        assert_eq!(err, cloned);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// ErrorContext and get_error_contexts tests
+// ───────────────────────────────────────────────────────────────────
+
+mod error_context_tests {
+    use super::*;
+    use perl_parser_core::error::get_error_contexts;
+
+    #[test]
+    fn error_context_single_line() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "my $x = 42";
+        let errors = vec![CatastrophicParseError::syntax("missing semicolon", 10)];
+        let contexts = get_error_contexts(&errors, source);
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].line, 0);
+        assert_eq!(contexts[0].source_line, "my $x = 42");
+        Ok(())
+    }
+
+    #[test]
+    fn error_context_multiline() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "line1;\nline2;\nline3;";
+        // byte offset 7 is start of "line2;"
+        let errors = vec![CatastrophicParseError::syntax("bad", 7)];
+        let contexts = get_error_contexts(&errors, source);
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].line, 1);
+        assert_eq!(contexts[0].source_line, "line2;");
+        Ok(())
+    }
+
+    #[test]
+    fn error_context_at_eof() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "short";
+        let errors = vec![CatastrophicParseError::UnexpectedEof];
+        let contexts = get_error_contexts(&errors, source);
+        assert_eq!(contexts.len(), 1);
+        // UnexpectedEof has no location, defaults to source.len()
+        Ok(())
+    }
+
+    #[test]
+    fn error_context_with_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "my $x = 1";
+        let errors = vec![CatastrophicParseError::unexpected("Semicolon", "EOF", 9)];
+        let contexts = get_error_contexts(&errors, source);
+        assert_eq!(contexts.len(), 1);
+        // The suggestion should be present since expected contains "Semicolon"
+        let suggestion = contexts[0].suggestion.as_deref().unwrap_or("");
+        assert!(suggestion.contains("semicolon"));
+        Ok(())
+    }
+
+    #[test]
+    fn error_context_empty_source() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "";
+        let errors = vec![CatastrophicParseError::UnexpectedEof];
+        let contexts = get_error_contexts(&errors, source);
+        assert_eq!(contexts.len(), 1);
+        assert_eq!(contexts[0].line, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn error_context_multiple_errors() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "a;\nb;\nc;";
+        let errors = vec![
+            CatastrophicParseError::syntax("err1", 0),
+            CatastrophicParseError::syntax("err2", 3),
+            CatastrophicParseError::syntax("err3", 6),
+        ];
+        let contexts = get_error_contexts(&errors, source);
+        assert_eq!(contexts.len(), 3);
+        assert_eq!(contexts[0].line, 0);
+        assert_eq!(contexts[1].line, 1);
+        assert_eq!(contexts[2].line, 2);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// ErrorClassifier tests
+// ───────────────────────────────────────────────────────────────────
+
+mod error_classifier_tests {
+    use super::*;
+    use perl_parser_core::error_classifier::{ErrorClassifier, ParseErrorKind};
+
+    #[test]
+    fn classifier_default_and_new() -> Result<(), Box<dyn std::error::Error>> {
+        let _c1 = ErrorClassifier::new();
+        let _c2 = ErrorClassifier::default();
+        Ok(())
+    }
+
+    #[test]
+    fn classify_unclosed_double_quote() -> Result<(), Box<dyn std::error::Error>> {
+        let classifier = ErrorClassifier::new();
+        let source = r#"my $x = "hello"#;
+        let node = V1Node::new(
+            V1NodeKind::Error {
+                message: "err".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            SourceLocation::new(9, 15),
+        );
+        let kind = classifier.classify(&node, source);
+        assert_eq!(kind, ParseErrorKind::UnclosedString);
+        Ok(())
+    }
+
+    #[test]
+    fn classify_missing_semicolon() -> Result<(), Box<dyn std::error::Error>> {
+        let classifier = ErrorClassifier::new();
+        let source = "my $x = 42\nmy $y = 10;";
+        let node = V1Node::new(
+            V1NodeKind::Error {
+                message: "err".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            SourceLocation::new(10, 11),
+        );
+        let kind = classifier.classify(&node, source);
+        assert_eq!(kind, ParseErrorKind::MissingSemicolon);
+        Ok(())
+    }
+
+    #[test]
+    fn classify_unclosed_paren() -> Result<(), Box<dyn std::error::Error>> {
+        let classifier = ErrorClassifier::new();
+        let source = "my $x = (1 + 2;";
+        let node = V1Node::new(
+            V1NodeKind::Error {
+                message: "err".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            SourceLocation::new(8, 9),
+        );
+        let kind = classifier.classify(&node, source);
+        assert_eq!(kind, ParseErrorKind::UnclosedParenthesis);
+        Ok(())
+    }
+
+    #[test]
+    fn diagnostic_message_all_kinds() -> Result<(), Box<dyn std::error::Error>> {
+        let c = ErrorClassifier::new();
+        // Just verify messages are non-empty for each kind
+        let kinds = vec![
+            ParseErrorKind::UnclosedString,
+            ParseErrorKind::UnclosedRegex,
+            ParseErrorKind::UnclosedBlock,
+            ParseErrorKind::MissingSemicolon,
+            ParseErrorKind::InvalidSyntax,
+            ParseErrorKind::UnclosedParenthesis,
+            ParseErrorKind::UnclosedBracket,
+            ParseErrorKind::UnclosedBrace,
+            ParseErrorKind::UnterminatedHeredoc,
+            ParseErrorKind::InvalidVariableName,
+            ParseErrorKind::InvalidSubroutineName,
+            ParseErrorKind::MissingOperator,
+            ParseErrorKind::MissingOperand,
+            ParseErrorKind::UnexpectedEof,
+            ParseErrorKind::UnexpectedToken {
+                expected: "ident".to_string(),
+                found: "number".to_string(),
+            },
+        ];
+        for kind in &kinds {
+            let msg = c.get_diagnostic_message(kind);
+            assert!(!msg.is_empty(), "empty message for {:?}", kind);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn suggestion_some_for_most_kinds() -> Result<(), Box<dyn std::error::Error>> {
+        let c = ErrorClassifier::new();
+        // These should all have suggestions
+        let kinds_with_suggestions = vec![
+            ParseErrorKind::MissingSemicolon,
+            ParseErrorKind::UnclosedString,
+            ParseErrorKind::UnclosedParenthesis,
+            ParseErrorKind::UnclosedBracket,
+            ParseErrorKind::UnclosedBrace,
+            ParseErrorKind::UnclosedBlock,
+            ParseErrorKind::UnclosedRegex,
+            ParseErrorKind::UnterminatedHeredoc,
+            ParseErrorKind::UnexpectedEof,
+        ];
+        for kind in &kinds_with_suggestions {
+            assert!(c.get_suggestion(kind).is_some(), "no suggestion for {:?}", kind);
+        }
+        // InvalidSyntax should have no suggestion
+        assert!(c.get_suggestion(&ParseErrorKind::InvalidSyntax).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn explanation_some_for_common_kinds() -> Result<(), Box<dyn std::error::Error>> {
+        let c = ErrorClassifier::new();
+        assert!(c.get_explanation(&ParseErrorKind::MissingSemicolon).is_some());
+        assert!(c.get_explanation(&ParseErrorKind::UnclosedString).is_some());
+        assert!(c.get_explanation(&ParseErrorKind::UnclosedRegex).is_some());
+        assert!(c.get_explanation(&ParseErrorKind::UnterminatedHeredoc).is_some());
+        assert!(c.get_explanation(&ParseErrorKind::UnclosedBlock).is_some());
+        // InvalidSyntax has no explanation
+        assert!(c.get_explanation(&ParseErrorKind::InvalidSyntax).is_none());
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// MissingKind tests
+// ───────────────────────────────────────────────────────────────────
+
+mod missing_kind_tests {
+    use super::*;
+
+    #[test]
+    fn all_variants_exist() -> Result<(), Box<dyn std::error::Error>> {
+        let variants = vec![
+            MissingKind::Expression,
+            MissingKind::Statement,
+            MissingKind::Identifier,
+            MissingKind::Block,
+            MissingKind::ClosingDelimiter(')'),
+            MissingKind::ClosingDelimiter('}'),
+            MissingKind::ClosingDelimiter(']'),
+            MissingKind::Semicolon,
+            MissingKind::Condition,
+            MissingKind::Argument,
+            MissingKind::Operator,
+        ];
+        // Each is distinct
+        for (i, a) in variants.iter().enumerate() {
+            for (j, b) in variants.iter().enumerate() {
+                if i != j {
+                    assert_ne!(a, b);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn debug_format() -> Result<(), Box<dyn std::error::Error>> {
+        let kind = MissingKind::Expression;
+        let dbg = format!("{:?}", kind);
+        assert!(dbg.contains("Expression"));
+        Ok(())
+    }
+
+    #[test]
+    fn clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
+        let kind = MissingKind::Semicolon;
+        let cloned = kind;
+        assert_eq!(kind, cloned);
+        Ok(())
+    }
+
+    #[test]
+    fn closing_delimiter_variants() -> Result<(), Box<dyn std::error::Error>> {
+        let paren = MissingKind::ClosingDelimiter(')');
+        let brace = MissingKind::ClosingDelimiter('}');
+        let bracket = MissingKind::ClosingDelimiter(']');
+        assert_ne!(paren, brace);
+        assert_ne!(brace, bracket);
+        assert_ne!(paren, bracket);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// ParseOutput extended tests
+// ───────────────────────────────────────────────────────────────────
+
+mod parse_output_extended_tests {
+    use super::*;
+
+    fn make_empty_program() -> V1Node {
+        V1Node::new(V1NodeKind::Program { statements: vec![] }, SourceLocation::new(0, 0))
+    }
+
+    #[test]
+    fn finish_preserves_all_fields() -> Result<(), Box<dyn std::error::Error>> {
+        let ast = make_empty_program();
+        let errors =
+            vec![CatastrophicParseError::syntax("e1", 0), CatastrophicParseError::syntax("e2", 5)];
+        let mut tracker = BudgetTracker::new();
+        tracker.errors_emitted = 7;
+        tracker.tokens_skipped = 33;
+        tracker.recoveries_attempted = 4;
+        tracker.max_depth_reached = 12;
+        tracker.current_depth = 2;
+
+        let output = ParseOutput::finish(ast, errors, tracker, true);
+        assert_eq!(output.error_count(), 2);
+        assert!(output.has_errors());
+        assert!(!output.is_ok());
+        assert!(output.terminated_early);
+        assert_eq!(output.budget_usage.errors_emitted, 7);
+        assert_eq!(output.budget_usage.tokens_skipped, 33);
+        assert_eq!(output.budget_usage.recoveries_attempted, 4);
+        assert_eq!(output.budget_usage.max_depth_reached, 12);
+        assert_eq!(output.budget_usage.current_depth, 2);
+        Ok(())
+    }
+
+    #[test]
+    fn success_output_is_clean() -> Result<(), Box<dyn std::error::Error>> {
+        let output = ParseOutput::success(make_empty_program());
+        assert!(output.is_ok());
+        assert!(!output.has_errors());
+        assert_eq!(output.error_count(), 0);
+        assert!(!output.terminated_early);
+        assert_eq!(output.budget_usage.errors_emitted, 0);
+        assert_eq!(output.budget_usage.tokens_skipped, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn with_errors_sets_error_count_in_tracker() -> Result<(), Box<dyn std::error::Error>> {
+        let errors = vec![
+            CatastrophicParseError::UnexpectedEof,
+            CatastrophicParseError::RecursionLimit,
+            CatastrophicParseError::InvalidString,
+        ];
+        let output = ParseOutput::with_errors(make_empty_program(), errors);
+        assert_eq!(output.budget_usage.errors_emitted, 3);
+        assert!(!output.terminated_early);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// LineEnding extended tests
+// ───────────────────────────────────────────────────────────────────
+
+mod line_ending_extended_tests {
+    use super::*;
+
+    #[test]
+    fn cr_only_detection() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "line1\rline2\rline3";
+        let mapper = PositionMapper::new(source);
+        let ending = mapper.line_ending();
+        // CR-only should be detected
+        assert!(
+            ending == LineEnding::Cr || ending == LineEnding::Mixed,
+            "expected Cr or Mixed, got {:?}",
+            ending
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn lf_detection() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "line1\nline2\nline3";
+        let mapper = PositionMapper::new(source);
+        assert_eq!(mapper.line_ending(), LineEnding::Lf);
+        Ok(())
+    }
+
+    #[test]
+    fn crlf_detection() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "line1\r\nline2\r\nline3";
+        let mapper = PositionMapper::new(source);
+        assert_eq!(mapper.line_ending(), LineEnding::CrLf);
+        Ok(())
+    }
+
+    #[test]
+    fn mixed_line_ending_detection() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "line1\nline2\r\nline3\rline4";
+        let mapper = PositionMapper::new(source);
+        assert_eq!(mapper.line_ending(), LineEnding::Mixed);
+        Ok(())
+    }
+
+    #[test]
+    fn no_newline_defaults_to_lf() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "single line no newline";
+        let mapper = PositionMapper::new(source);
+        // When there are no newlines, default should be Lf
+        assert_eq!(mapper.line_ending(), LineEnding::Lf);
+        Ok(())
+    }
+
+    #[test]
+    fn line_ending_equality() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(LineEnding::Lf, LineEnding::Lf);
+        assert_eq!(LineEnding::CrLf, LineEnding::CrLf);
+        assert_eq!(LineEnding::Cr, LineEnding::Cr);
+        assert_eq!(LineEnding::Mixed, LineEnding::Mixed);
+        assert_ne!(LineEnding::Lf, LineEnding::CrLf);
+        assert_ne!(LineEnding::Cr, LineEnding::Mixed);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// PositionMapper extended tests
+// ───────────────────────────────────────────────────────────────────
+
+mod position_mapper_extended_tests {
+    use super::*;
+
+    #[test]
+    fn is_empty_true() -> Result<(), Box<dyn std::error::Error>> {
+        let mapper = PositionMapper::new("");
+        assert!(mapper.is_empty());
+        assert_eq!(mapper.len_bytes(), 0);
+        Ok(())
+    }
+
+    #[test]
+    fn is_empty_false() -> Result<(), Box<dyn std::error::Error>> {
+        let mapper = PositionMapper::new("a");
+        assert!(!mapper.is_empty());
+        assert_eq!(mapper.len_bytes(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn char_to_lsp_pos_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "hello\nworld";
+        let mapper = PositionMapper::new(source);
+        // char 0 = 'h' on line 0, col 0
+        let pos = mapper.char_to_lsp_pos(0);
+        assert_eq!(pos.line, 0);
+        assert_eq!(pos.character, 0);
+        // char 6 = 'w' on line 1, col 0
+        let pos2 = mapper.char_to_lsp_pos(6);
+        assert_eq!(pos2.line, 1);
+        assert_eq!(pos2.character, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn lsp_pos_to_char_and_back() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "abc\ndefgh";
+        let mapper = PositionMapper::new(source);
+        // byte 4 = 'd' => line 1, col 0
+        let pos = mapper.byte_to_lsp_pos(4);
+        if let Some(char_idx) = mapper.lsp_pos_to_char(pos) {
+            let roundtrip = mapper.char_to_lsp_pos(char_idx);
+            assert_eq!(roundtrip.line, pos.line);
+            assert_eq!(roundtrip.character, pos.character);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn out_of_bounds_byte_position() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "short";
+        let mapper = PositionMapper::new(source);
+        // byte offset beyond source length should clamp
+        let pos = mapper.byte_to_lsp_pos(1000);
+        // Should not crash, returns clamped position
+        assert!(pos.line <= 1);
+        Ok(())
+    }
+
+    #[test]
+    fn apply_edit_insert() -> Result<(), Box<dyn std::error::Error>> {
+        let mut mapper = PositionMapper::new("hello world");
+        mapper.apply_edit(5, 5, " beautiful");
+        assert_eq!(mapper.text(), "hello beautiful world");
+        Ok(())
+    }
+
+    #[test]
+    fn apply_edit_delete() -> Result<(), Box<dyn std::error::Error>> {
+        let mut mapper = PositionMapper::new("hello beautiful world");
+        mapper.apply_edit(5, 15, "");
+        assert_eq!(mapper.text(), "hello world");
+        Ok(())
+    }
+
+    #[test]
+    fn apply_edit_replace() -> Result<(), Box<dyn std::error::Error>> {
+        let mut mapper = PositionMapper::new("hello world");
+        mapper.apply_edit(6, 11, "earth");
+        assert_eq!(mapper.text(), "hello earth");
+        Ok(())
+    }
+
+    #[test]
+    fn slice_boundaries() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "abcdefghij";
+        let mapper = PositionMapper::new(source);
+        assert_eq!(mapper.slice(0, 3), "abc");
+        assert_eq!(mapper.slice(7, 10), "hij");
+        // Entire string
+        assert_eq!(mapper.slice(0, 10), "abcdefghij");
+        // Empty slice
+        assert_eq!(mapper.slice(5, 5), "");
+        Ok(())
+    }
+
+    #[test]
+    fn update_replaces_entirely() -> Result<(), Box<dyn std::error::Error>> {
+        let mut mapper = PositionMapper::new("old content");
+        mapper.update("new content\nwith lines");
+        assert_eq!(mapper.text(), "new content\nwith lines");
+        assert_eq!(mapper.len_lines(), 2);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// TokenStream extended tests
+// ───────────────────────────────────────────────────────────────────
+
+mod token_stream_extended_tests {
+    use super::*;
+
+    #[test]
+    fn on_stmt_boundary_resets_peek() -> Result<(), Box<dyn std::error::Error>> {
+        let mut stream = TokenStream::new("my $x; my $y;");
+        // Prime the peek
+        let _ = stream.peek();
+        // on_stmt_boundary should invalidate cached peeks
+        stream.on_stmt_boundary();
+        // After reset, peek should still work
+        if let Ok(token) = stream.peek() {
+            // We should get a valid token (the reparsed first token)
+            let _ = format!("{:?}", token.kind);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn invalidate_peek_clears_cache() -> Result<(), Box<dyn std::error::Error>> {
+        let mut stream = TokenStream::new("1 + 2");
+        let _ = stream.peek();
+        let _ = stream.peek_second();
+        // Invalidate all cached peeks
+        stream.invalidate_peek();
+        // Should still work after invalidation
+        if let Ok(token) = stream.peek() {
+            let _ = format!("{:?}", token.kind);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn peek_fresh_kind_on_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let mut stream = TokenStream::new("");
+        let kind = stream.peek_fresh_kind();
+        // Should return Some(Eof) or similar
+        assert!(kind.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn peek_fresh_kind_on_valid_input() -> Result<(), Box<dyn std::error::Error>> {
+        let mut stream = TokenStream::new("my $x;");
+        let kind = stream.peek_fresh_kind();
+        assert!(kind.is_some());
+        Ok(())
+    }
+
+    #[test]
+    fn enter_format_mode_does_not_crash() -> Result<(), Box<dyn std::error::Error>> {
+        let mut stream = TokenStream::new("format STDOUT =\nsome text\n.\n");
+        stream.enter_format_mode();
+        // Should still be able to get tokens
+        if let Ok(token) = stream.peek() {
+            let _ = format!("{:?}", token.kind);
+        }
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// Trivia extended tests
+// ───────────────────────────────────────────────────────────────────
+
+mod trivia_extended_tests {
+    use super::*;
+
+    #[test]
+    fn pod_comment_variant() -> Result<(), Box<dyn std::error::Error>> {
+        let trivia = Trivia::PodComment("=head1 NAME\n\nMy Module\n\n=cut".to_string());
+        assert_eq!(trivia.as_str(), "=head1 NAME\n\nMy Module\n\n=cut");
+        assert_eq!(trivia.kind_name(), "pod");
+        Ok(())
+    }
+
+    #[test]
+    fn kind_name_for_all_variants() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(Trivia::Whitespace("  ".to_string()).kind_name(), "whitespace");
+        assert_eq!(Trivia::LineComment("# comment".to_string()).kind_name(), "comment");
+        assert_eq!(Trivia::PodComment("=pod".to_string()).kind_name(), "pod");
+        assert_eq!(Trivia::Newline.kind_name(), "newline");
+        Ok(())
+    }
+
+    #[test]
+    fn trivia_as_str_newline() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(Trivia::Newline.as_str(), "\n");
+        Ok(())
+    }
+
+    #[test]
+    fn trivia_clone_equality() -> Result<(), Box<dyn std::error::Error>> {
+        let t = Trivia::Whitespace("\t".to_string());
+        let cloned = t.clone();
+        assert_eq!(t, cloned);
+        Ok(())
+    }
+
+    #[test]
+    fn trivia_different_variants_not_equal() -> Result<(), Box<dyn std::error::Error>> {
+        let ws = Trivia::Whitespace(" ".to_string());
+        let nl = Trivia::Newline;
+        assert_ne!(ws, nl);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// BudgetTracker extended edge cases
+// ───────────────────────────────────────────────────────────────────
+
+mod budget_tracker_extended_tests {
+    use super::*;
+
+    #[test]
+    fn depth_tracking_max_depth_reached() -> Result<(), Box<dyn std::error::Error>> {
+        let mut tracker = BudgetTracker::new();
+        tracker.enter_depth();
+        tracker.enter_depth();
+        tracker.enter_depth();
+        assert_eq!(tracker.max_depth_reached, 3);
+        assert_eq!(tracker.current_depth, 3);
+        tracker.exit_depth();
+        assert_eq!(tracker.current_depth, 2);
+        // max_depth_reached stays at 3
+        assert_eq!(tracker.max_depth_reached, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn exit_depth_at_zero_saturates() -> Result<(), Box<dyn std::error::Error>> {
+        let mut tracker = BudgetTracker::new();
+        assert_eq!(tracker.current_depth, 0);
+        tracker.exit_depth();
+        // Should not underflow
+        assert_eq!(tracker.current_depth, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn record_skip_saturating_add() -> Result<(), Box<dyn std::error::Error>> {
+        let mut tracker = BudgetTracker::new();
+        tracker.tokens_skipped = usize::MAX - 1;
+        tracker.record_skip(5);
+        // Should saturate at usize::MAX
+        assert_eq!(tracker.tokens_skipped, usize::MAX);
+        Ok(())
+    }
+
+    #[test]
+    fn record_error_saturating() -> Result<(), Box<dyn std::error::Error>> {
+        let mut tracker = BudgetTracker::new();
+        tracker.errors_emitted = usize::MAX - 1;
+        tracker.record_error();
+        assert_eq!(tracker.errors_emitted, usize::MAX);
+        tracker.record_error();
+        // Should stay at MAX
+        assert_eq!(tracker.errors_emitted, usize::MAX);
+        Ok(())
+    }
+
+    #[test]
+    fn begin_recovery_increments_and_returns_true() -> Result<(), Box<dyn std::error::Error>> {
+        let budget = ParseBudget { max_recoveries: 3, ..ParseBudget::default() };
+        let mut tracker = BudgetTracker::new();
+        assert!(tracker.begin_recovery(&budget));
+        assert_eq!(tracker.recoveries_attempted, 1);
+        assert!(tracker.begin_recovery(&budget));
+        assert_eq!(tracker.recoveries_attempted, 2);
+        assert!(tracker.begin_recovery(&budget));
+        assert_eq!(tracker.recoveries_attempted, 3);
+        // 4th attempt should fail
+        assert!(!tracker.begin_recovery(&budget));
+        assert_eq!(tracker.recoveries_attempted, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_budget_for_ide_equals_default() -> Result<(), Box<dyn std::error::Error>> {
+        assert_eq!(ParseBudget::for_ide(), ParseBudget::default());
+        Ok(())
+    }
+
+    #[test]
+    fn parse_budget_unlimited_values() -> Result<(), Box<dyn std::error::Error>> {
+        let unlimited = ParseBudget::unlimited();
+        assert_eq!(unlimited.max_errors, usize::MAX);
+        assert_eq!(unlimited.max_depth, usize::MAX);
+        assert_eq!(unlimited.max_tokens_skipped, usize::MAX);
+        assert_eq!(unlimited.max_recoveries, usize::MAX);
+        Ok(())
+    }
+
+    #[test]
+    fn parse_budget_strict_values() -> Result<(), Box<dyn std::error::Error>> {
+        let strict = ParseBudget::strict();
+        assert_eq!(strict.max_errors, 10);
+        assert_eq!(strict.max_depth, 64);
+        assert_eq!(strict.max_tokens_skipped, 100);
+        assert_eq!(strict.max_recoveries, 50);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// RecoveryParseError builder chain tests
+// ───────────────────────────────────────────────────────────────────
+
+mod recovery_parse_error_extended_tests {
+    use super::*;
+    use perl_parser_core::position::Range;
+
+    #[test]
+    fn builder_chain_all_methods() -> Result<(), Box<dyn std::error::Error>> {
+        let range = Range::new(
+            perl_parser_core::position::Position::new(0, 1, 1),
+            perl_parser_core::position::Position::new(5, 1, 6),
+        );
+        let err = RecoveryParseError::new("test error".to_string(), range)
+            .with_expected(vec!["semicolon".to_string(), "brace".to_string()])
+            .with_found("comma".to_string())
+            .with_hint("try adding a semicolon".to_string());
+
+        assert_eq!(err.message, "test error");
+        assert_eq!(err.expected.len(), 2);
+        assert_eq!(err.found, "comma");
+        assert_eq!(err.recovery_hint.as_deref().unwrap_or(""), "try adding a semicolon");
+        Ok(())
+    }
+
+    #[test]
+    fn new_sets_defaults() -> Result<(), Box<dyn std::error::Error>> {
+        let range = Range::new(
+            perl_parser_core::position::Position::new(0, 1, 1),
+            perl_parser_core::position::Position::new(0, 1, 1),
+        );
+        let err = RecoveryParseError::new("msg".to_string(), range);
+        assert!(err.expected.is_empty());
+        assert!(err.found.is_empty());
+        assert!(err.recovery_hint.is_none());
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// RecoveryResult extended tests
+// ───────────────────────────────────────────────────────────────────
+
+mod recovery_result_extended_tests {
+    use super::*;
+
+    #[test]
+    fn recovered_with_count() -> Result<(), Box<dyn std::error::Error>> {
+        let r = RecoveryResult::Recovered(5);
+        if let RecoveryResult::Recovered(n) = r {
+            assert_eq!(n, 5);
+        } else {
+            return Err("expected Recovered".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn all_variants_debug() -> Result<(), Box<dyn std::error::Error>> {
+        let variants = vec![
+            RecoveryResult::Recovered(0),
+            RecoveryResult::AtSyncPoint,
+            RecoveryResult::BudgetExhausted,
+            RecoveryResult::ReachedEof,
+        ];
+        for v in &variants {
+            let dbg = format!("{:?}", v);
+            assert!(!dbg.is_empty());
+        }
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// SyncPoint extended tests
+// ───────────────────────────────────────────────────────────────────
+
+mod sync_point_extended_tests {
+    use super::*;
+
+    #[test]
+    fn all_variants_exist() -> Result<(), Box<dyn std::error::Error>> {
+        let variants =
+            vec![SyncPoint::Semicolon, SyncPoint::CloseBrace, SyncPoint::Keyword, SyncPoint::Eof];
+        // All are distinct
+        for i in 0..variants.len() {
+            for j in (i + 1)..variants.len() {
+                assert_ne!(variants[i], variants[j]);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn debug_format() -> Result<(), Box<dyn std::error::Error>> {
+        assert!(format!("{:?}", SyncPoint::Semicolon).contains("Semicolon"));
+        assert!(format!("{:?}", SyncPoint::CloseBrace).contains("CloseBrace"));
+        assert!(format!("{:?}", SyncPoint::Keyword).contains("Keyword"));
+        assert!(format!("{:?}", SyncPoint::Eof).contains("Eof"));
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// Builtin signatures tests
+// ───────────────────────────────────────────────────────────────────
+
+mod builtin_signatures_tests {
+    use super::*;
+
+    #[test]
+    fn builtin_signatures_contains_common_functions() -> Result<(), Box<dyn std::error::Error>> {
+        let sigs = builtin_signatures::create_builtin_signatures();
+        // Some well-known Perl builtins should be present
+        assert!(sigs.contains_key("print"), "missing 'print'");
+        assert!(sigs.contains_key("push"), "missing 'push'");
+        assert!(sigs.contains_key("pop"), "missing 'pop'");
+        assert!(sigs.contains_key("chomp"), "missing 'chomp'");
+        assert!(sigs.contains_key("open"), "missing 'open'");
+        assert!(sigs.contains_key("close"), "missing 'close'");
+        Ok(())
+    }
+
+    #[test]
+    fn builtin_signatures_phf_contains_common_functions() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let phf = &builtin_signatures_phf::BUILTIN_SIGS;
+        assert!(phf.contains_key("print"), "missing 'print' in phf");
+        assert!(phf.contains_key("push"), "missing 'push' in phf");
+        assert!(phf.contains_key("chomp"), "missing 'chomp' in phf");
+        Ok(())
+    }
+
+    #[test]
+    fn builtin_signatures_not_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let sigs = builtin_signatures::create_builtin_signatures();
+        assert!(sigs.len() > 50, "expected >50 builtins, got {}", sigs.len());
+        Ok(())
+    }
+
+    #[test]
+    fn phf_map_not_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let phf = &builtin_signatures_phf::BUILTIN_SIGS;
+        assert!(!phf.is_empty());
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// V1 Node extended tests
+// ───────────────────────────────────────────────────────────────────
+
+mod v1_node_extended_tests {
+    use super::*;
+
+    #[test]
+    fn node_with_children() -> Result<(), Box<dyn std::error::Error>> {
+        let child =
+            V1Node::new(V1NodeKind::Number { value: "42".to_string() }, SourceLocation::new(0, 2));
+        let program = V1Node::new(
+            V1NodeKind::Program { statements: vec![child.clone()] },
+            SourceLocation::new(0, 2),
+        );
+        if let V1NodeKind::Program { statements } = &program.kind {
+            assert_eq!(statements.len(), 1);
+        } else {
+            return Err("expected Program".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn variable_declaration_node() -> Result<(), Box<dyn std::error::Error>> {
+        let var = V1Node::new(
+            V1NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+            SourceLocation::new(3, 5),
+        );
+        let decl = V1Node::new(
+            V1NodeKind::VariableDeclaration {
+                declarator: "my".to_string(),
+                variable: Box::new(var),
+                attributes: vec![],
+                initializer: None,
+            },
+            SourceLocation::new(0, 5),
+        );
+        if let V1NodeKind::VariableDeclaration { declarator, attributes, initializer, .. } =
+            &decl.kind
+        {
+            assert_eq!(declarator, "my");
+            assert!(attributes.is_empty());
+            assert!(initializer.is_none());
+        } else {
+            return Err("expected VariableDeclaration".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn error_node_fields() -> Result<(), Box<dyn std::error::Error>> {
+        let node = V1Node::new(
+            V1NodeKind::Error {
+                message: "bad stuff".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            SourceLocation::new(10, 15),
+        );
+        if let V1NodeKind::Error { message, expected, found, partial } = &node.kind {
+            assert_eq!(message, "bad stuff");
+            assert!(expected.is_empty());
+            assert!(found.is_none());
+            assert!(partial.is_none());
+        } else {
+            return Err("expected Error".into());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn to_sexp_empty_program() -> Result<(), Box<dyn std::error::Error>> {
+        let node =
+            V1Node::new(V1NodeKind::Program { statements: vec![] }, SourceLocation::new(0, 0));
+        let sexp = node.to_sexp();
+        assert!(sexp.contains("source_file"), "sexp should contain source_file: {}", sexp);
+        Ok(())
+    }
+
+    #[test]
+    fn to_sexp_with_number() -> Result<(), Box<dyn std::error::Error>> {
+        let num =
+            V1Node::new(V1NodeKind::Number { value: "99".to_string() }, SourceLocation::new(0, 2));
+        let prog =
+            V1Node::new(V1NodeKind::Program { statements: vec![num] }, SourceLocation::new(0, 2));
+        let sexp = prog.to_sexp();
+        assert!(sexp.contains("number"), "sexp should contain number: {}", sexp);
+        Ok(())
+    }
+
+    #[test]
+    fn node_debug_format() -> Result<(), Box<dyn std::error::Error>> {
+        let node = V1Node::new(V1NodeKind::MissingExpression, SourceLocation::new(0, 0));
+        let dbg = format!("{:?}", node);
+        assert!(dbg.contains("MissingExpression"));
+        Ok(())
+    }
+
+    #[test]
+    fn node_clone_equals() -> Result<(), Box<dyn std::error::Error>> {
+        let node =
+            V1Node::new(V1NodeKind::Number { value: "1".to_string() }, SourceLocation::new(0, 1));
+        let cloned = node.clone();
+        assert_eq!(node, cloned);
+        Ok(())
+    }
+
+    #[test]
+    fn block_node() -> Result<(), Box<dyn std::error::Error>> {
+        let stmt =
+            V1Node::new(V1NodeKind::Number { value: "1".to_string() }, SourceLocation::new(1, 2));
+        let block =
+            V1Node::new(V1NodeKind::Block { statements: vec![stmt] }, SourceLocation::new(0, 3));
+        if let V1NodeKind::Block { statements } = &block.kind {
+            assert_eq!(statements.len(), 1);
+        } else {
+            return Err("expected Block".into());
+        }
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// DiagnosticId type alias test
+// ───────────────────────────────────────────────────────────────────
+
+mod diagnostic_id_tests {
+    use perl_parser_core::DiagnosticId;
+
+    #[test]
+    fn diagnostic_id_is_u32() -> Result<(), Box<dyn std::error::Error>> {
+        let id: DiagnosticId = 42;
+        assert_eq!(id, 42u32);
+        let id2: DiagnosticId = 0;
+        assert_eq!(id2, 0u32);
+        let id3: DiagnosticId = u32::MAX;
+        assert_eq!(id3, u32::MAX);
+        Ok(())
+    }
+}
+
+// ───────────────────────────────────────────────────────────────────
+// LineIndex extended tests
+// ───────────────────────────────────────────────────────────────────
+
+mod line_index_extended_tests {
+    use super::*;
+
+    #[test]
+    fn line_index_crlf_input() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "line1\r\nline2\r\nline3".to_string();
+        let index = LineIndex::new(source);
+        let (line, _col) = index.offset_to_position(7); // start of "line2"
+        assert_eq!(line, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn line_index_unicode() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "héllo\nwörld".to_string();
+        let index = LineIndex::new(source);
+        let (line, _col) = index.offset_to_position(0);
+        assert_eq!(line, 0);
+        // 'h' + 'é'(2 bytes) + 'l' + 'l' + 'o' + '\n' = 7 bytes for first line
+        let (line2, _col2) = index.offset_to_position(7);
+        assert_eq!(line2, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn line_index_trailing_newline() -> Result<(), Box<dyn std::error::Error>> {
+        let source = "line1\nline2\n".to_string();
+        let index = LineIndex::new(source);
+        // Past the last newline
+        let (line, _col) = index.offset_to_position(12);
+        assert_eq!(line, 2);
         Ok(())
     }
 }
