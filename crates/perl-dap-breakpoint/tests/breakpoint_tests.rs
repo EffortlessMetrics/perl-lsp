@@ -6,8 +6,8 @@
 //! and the public re-exports from lib.rs.
 
 use perl_dap_breakpoint::{
-    find_nearest_valid_line, AstBreakpointValidator, BreakpointError, BreakpointValidation,
-    BreakpointValidator, SearchDirection, ValidationReason,
+    AstBreakpointValidator, BreakpointError, BreakpointValidation, BreakpointValidator,
+    SearchDirection, ValidationReason, find_nearest_valid_line,
 };
 use perl_tdd_support::must;
 
@@ -72,14 +72,8 @@ fn validation_reason_display() -> Result<(), Box<dyn std::error::Error>> {
         ValidationReason::HeredocInterior.to_string(),
         "Breakpoint set inside heredoc content"
     );
-    assert_eq!(
-        ValidationReason::LineOutOfRange.to_string(),
-        "Line number exceeds file length"
-    );
-    assert_eq!(
-        ValidationReason::ParseError.to_string(),
-        "Unable to parse source file"
-    );
+    assert_eq!(ValidationReason::LineOutOfRange.to_string(), "Line number exceeds file length");
+    assert_eq!(ValidationReason::ParseError.to_string(), "Unable to parse source file");
     Ok(())
 }
 
@@ -264,12 +258,7 @@ fn heredoc_body_is_not_executable() -> Result<(), Box<dyn std::error::Error>> {
 fn suggestion_forward_from_blank() -> Result<(), Box<dyn std::error::Error>> {
     let source = "my $x = 1;\n\nmy $y = 2;\n";
     let v = must(AstBreakpointValidator::new(source));
-    let result = find_nearest_valid_line(
-        &v,
-        2,
-        SearchDirection::Forward,
-        None,
-    );
+    let result = find_nearest_valid_line(&v, 2, SearchDirection::Forward, None);
     assert_eq!(result, Some(3));
     Ok(())
 }
@@ -278,12 +267,7 @@ fn suggestion_forward_from_blank() -> Result<(), Box<dyn std::error::Error>> {
 fn suggestion_backward_from_blank() -> Result<(), Box<dyn std::error::Error>> {
     let source = "my $x = 1;\n\nmy $y = 2;\n";
     let v = must(AstBreakpointValidator::new(source));
-    let result = find_nearest_valid_line(
-        &v,
-        2,
-        SearchDirection::Backward,
-        None,
-    );
+    let result = find_nearest_valid_line(&v, 2, SearchDirection::Backward, None);
     assert_eq!(result, Some(1));
     Ok(())
 }
@@ -293,12 +277,7 @@ fn suggestion_both_equidistant_prefers_forward() -> Result<(), Box<dyn std::erro
     // Lines: 1=code, 2=blank, 3=code → equidistant, forward should win (f_dist <= b_dist)
     let source = "my $x = 1;\n\nmy $y = 2;\n";
     let v = must(AstBreakpointValidator::new(source));
-    let result = find_nearest_valid_line(
-        &v,
-        2,
-        SearchDirection::Both,
-        None,
-    );
+    let result = find_nearest_valid_line(&v, 2, SearchDirection::Both, None);
     // Both are distance 1, forward wins (f_dist <= b_dist)
     assert_eq!(result, Some(3));
     Ok(())
@@ -308,12 +287,7 @@ fn suggestion_both_equidistant_prefers_forward() -> Result<(), Box<dyn std::erro
 fn suggestion_forward_past_eof_returns_none() -> Result<(), Box<dyn std::error::Error>> {
     let source = "my $x = 1;\n# comment\n";
     let v = must(AstBreakpointValidator::new(source));
-    let result = find_nearest_valid_line(
-        &v,
-        2,
-        SearchDirection::Forward,
-        None,
-    );
+    let result = find_nearest_valid_line(&v, 2, SearchDirection::Forward, None);
     assert_eq!(result, None);
     Ok(())
 }
@@ -322,12 +296,7 @@ fn suggestion_forward_past_eof_returns_none() -> Result<(), Box<dyn std::error::
 fn suggestion_backward_from_line1_returns_none() -> Result<(), Box<dyn std::error::Error>> {
     let source = "# comment\nmy $x = 1;\n";
     let v = must(AstBreakpointValidator::new(source));
-    let result = find_nearest_valid_line(
-        &v,
-        1,
-        SearchDirection::Backward,
-        None,
-    );
+    let result = find_nearest_valid_line(&v, 1, SearchDirection::Backward, None);
     assert_eq!(result, None);
     Ok(())
 }
@@ -337,12 +306,7 @@ fn suggestion_max_distance_zero() -> Result<(), Box<dyn std::error::Error>> {
     let source = "# comment\nmy $x = 1;\n";
     let v = must(AstBreakpointValidator::new(source));
     // max_distance=0 means the loop range is 1..=0 which is empty
-    let result = find_nearest_valid_line(
-        &v,
-        1,
-        SearchDirection::Forward,
-        Some(0),
-    );
+    let result = find_nearest_valid_line(&v, 1, SearchDirection::Forward, Some(0));
     assert_eq!(result, None);
     Ok(())
 }
@@ -351,12 +315,7 @@ fn suggestion_max_distance_zero() -> Result<(), Box<dyn std::error::Error>> {
 fn suggestion_forward_skips_multiple_blanks() -> Result<(), Box<dyn std::error::Error>> {
     let source = "# c\n\n\n\nmy $x = 1;\n";
     let v = must(AstBreakpointValidator::new(source));
-    let result = find_nearest_valid_line(
-        &v,
-        1,
-        SearchDirection::Forward,
-        None,
-    );
+    let result = find_nearest_valid_line(&v, 1, SearchDirection::Forward, None);
     assert_eq!(result, Some(5));
     Ok(())
 }
@@ -365,12 +324,7 @@ fn suggestion_forward_skips_multiple_blanks() -> Result<(), Box<dyn std::error::
 fn suggestion_all_blank_returns_none() -> Result<(), Box<dyn std::error::Error>> {
     let source = "\n\n\n";
     let v = must(AstBreakpointValidator::new(source));
-    let result = find_nearest_valid_line(
-        &v,
-        2,
-        SearchDirection::Both,
-        None,
-    );
+    let result = find_nearest_valid_line(&v, 2, SearchDirection::Both, None);
     assert_eq!(result, None);
     Ok(())
 }
@@ -414,8 +368,7 @@ fn use_strict_is_executable() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn breakpoint_error_implements_error_trait() -> Result<(), Box<dyn std::error::Error>> {
-    let err: Box<dyn std::error::Error> =
-        Box::new(BreakpointError::ParseError("test".to_string()));
+    let err: Box<dyn std::error::Error> = Box::new(BreakpointError::ParseError("test".to_string()));
     assert!(err.to_string().contains("test"));
     Ok(())
 }
