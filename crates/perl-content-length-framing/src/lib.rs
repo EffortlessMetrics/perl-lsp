@@ -9,8 +9,11 @@
 
 use std::fmt;
 
+use perl_content_length_header::{
+    ContentLengthHeaderError, HEADER_END, encode_content_length_header, parse_content_length,
+};
+
 const HEADER_SENTINEL: &[u8] = b"Content-Length:";
-const HEADER_END: &[u8] = b"\r\n\r\n";
 const RESYNC_TAIL_BYTES: usize = 8 * 1024;
 const MAX_DESYNC_BUFFER_BYTES: usize = 64 * 1024;
 
@@ -113,16 +116,16 @@ impl ContentLengthFramer {
         };
 
         let length = match parse_content_length(header_str) {
-            ContentLengthParse::Found(len) => len,
-            ContentLengthParse::Missing => {
+            Ok(len) => len,
+            Err(ContentLengthHeaderError::MissingContentLength) => {
                 self.consume_header_block(header_end);
                 return Err(FramingError::MissingContentLength);
             }
-            ContentLengthParse::Invalid => {
+            Err(ContentLengthHeaderError::InvalidContentLength) => {
                 self.consume_header_block(header_end);
                 return Err(FramingError::InvalidContentLength);
             }
-            ContentLengthParse::MalformedHeader => {
+            Err(ContentLengthHeaderError::MalformedHeader) => {
                 self.consume_header_block(header_end);
                 return Err(FramingError::InvalidHeader);
             }
@@ -174,41 +177,10 @@ impl ContentLengthFramer {
 /// Build a full `Content-Length` framed message from a payload body.
 #[must_use]
 pub fn frame(body: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(HEADER_SENTINEL.len() + 32 + HEADER_END.len() + body.len());
-    out.extend_from_slice(b"Content-Length: ");
-    out.extend_from_slice(body.len().to_string().as_bytes());
-    out.extend_from_slice(HEADER_END);
+    let mut out = encode_content_length_header(body.len());
+    out.reserve(body.len());
     out.extend_from_slice(body);
     out
-}
-
-enum ContentLengthParse {
-    Found(usize),
-    Missing,
-    Invalid,
-    MalformedHeader,
-}
-
-fn parse_content_length(header: &str) -> ContentLengthParse {
-    let mut found = None;
-    for line in header.split("\r\n") {
-        if line.is_empty() {
-            continue;
-        }
-
-        let Some((name, value)) = line.split_once(':') else {
-            return ContentLengthParse::MalformedHeader;
-        };
-
-        if name.trim().eq_ignore_ascii_case("Content-Length") {
-            match value.trim().parse::<usize>() {
-                Ok(length) => found = Some(length),
-                Err(_) => return ContentLengthParse::Invalid,
-            }
-        }
-    }
-
-    found.map_or(ContentLengthParse::Missing, ContentLengthParse::Found)
 }
 
 fn find_header_start(hay: &[u8]) -> Option<usize> {

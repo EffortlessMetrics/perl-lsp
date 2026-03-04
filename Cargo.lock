@@ -1533,6 +1533,13 @@ dependencies = [
 [[package]]
 name = "perl-content-length-framing"
 version = "0.10.0"
+dependencies = [
+ "perl-content-length-header",
+]
+
+[[package]]
+name = "perl-content-length-header"
+version = "0.10.0"
 
 [[package]]
 name = "perl-corpus"

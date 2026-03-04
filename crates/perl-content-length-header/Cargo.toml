@@ -1,5 +1,5 @@
 [package]
-name = "perl-content-length-framing"
+name = "perl-content-length-header"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,15 +7,14 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Shared Content-Length frame parsing and encoding for LSP and DAP transports"
+description = "Content-Length header parsing and encoding primitives for JSON-RPC transports"
 readme = "README.md"
-documentation = "https://docs.rs/perl-content-length-framing"
-keywords = ["perl", "lsp", "dap", "jsonrpc", "framing"]
+documentation = "https://docs.rs/perl-content-length-header"
+keywords = ["perl", "lsp", "dap", "jsonrpc", "header"]
 categories = ["development-tools", "network-programming"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-perl-content-length-header = { workspace = true }
 
 [lints]
 workspace = true

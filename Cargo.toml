@@ -69,6 +69,7 @@ members = [
     "crates/perl-text-line",
     "crates/perl-keywords",
     "crates/perl-source-file",
+    "crates/perl-content-length-header",
     "crates/perl-content-length-framing",
     "crates/perl-uri",
     "crates/perl-path-security",
@@ -109,6 +110,7 @@ allow = [
     "perl-token",
     "perl-ast",
     "perl-builtins",
+    "perl-content-length-header",
     "perl-content-length-framing",
     "perl-subprocess-runtime",
     "perl-keywords",
@@ -252,6 +254,7 @@ perl-workspace-folder = { path = "crates/perl-workspace-folder", version = "0.10
 perl-keywords = { path = "crates/perl-keywords", version = "0.10.0" }
 perl-source-file = { path = "crates/perl-source-file", version = "0.10.0" }
 perl-text-line = { path = "crates/perl-text-line", version = "0.10.0" }
+perl-content-length-header = { path = "crates/perl-content-length-header", version = "0.10.0" }
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.10.0" }
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.10.0" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
