@@ -19,6 +19,7 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
+perl-ast-navigation = { workspace = true }
 lsp-types = { version = "0.97.0" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

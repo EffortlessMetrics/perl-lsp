@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/perl-ast",
+    "crates/perl-ast-navigation",
     "crates/perl-token",
     "crates/perl-quote",
     "crates/perl-pragma",
@@ -227,6 +228,7 @@ perl-regex = { path = "crates/perl-regex", version = "0.10.0" }
 perl-pragma = { path = "crates/perl-pragma", version = "0.10.0" }
 perl-lexer = { path = "crates/perl-lexer", version = "0.10.0" }
 perl-ast = { path = "crates/perl-ast", version = "0.10.0" }
+perl-ast-navigation = { path = "crates/perl-ast-navigation", version = "0.10.0" }
 perl-heredoc = { path = "crates/perl-heredoc", version = "0.10.0" }
 perl-error = { path = "crates/perl-error", version = "0.10.0" }
 perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.10.0" }

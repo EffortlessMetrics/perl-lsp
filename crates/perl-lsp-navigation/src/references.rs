@@ -34,6 +34,7 @@
 //! # }
 //! ```
 
+use perl_ast_navigation::{find_node_at_offset, get_node_children};
 use perl_parser_core::ast::{Node, NodeKind};
 
 /// Return (start_offset, end_offset) for same-file references
@@ -109,42 +110,4 @@ pub fn find_references_single_file(ast: &Node, offset: usize) -> Option<Vec<(usi
 
     walk(ast, &mut out, want_kind, &want_pkg, &want_name, want_sigil);
     Some(out)
-}
-
-fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
-    if offset < node.location.start || offset > node.location.end {
-        return None;
-    }
-
-    // Check children first for more specific match
-    let children = get_node_children(node);
-    for child in children {
-        if let Some(found) = find_node_at_offset(child, offset) {
-            return Some(found);
-        }
-    }
-
-    // If no child contains the offset, return this node
-    Some(node)
-}
-
-fn get_node_children(node: &Node) -> Vec<&Node> {
-    match &node.kind {
-        NodeKind::Program { statements } => statements.iter().collect(),
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
-            let mut children = vec![variable.as_ref()];
-            if let Some(init) = initializer {
-                children.push(init.as_ref());
-            }
-            children
-        }
-        NodeKind::Assignment { lhs, rhs, .. } => vec![lhs.as_ref(), rhs.as_ref()],
-        NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
-        NodeKind::FunctionCall { args, .. } => args.iter().collect(),
-        NodeKind::Subroutine { body, .. } => {
-            vec![body.as_ref()]
-        }
-        NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
-        _ => vec![],
-    }
 }

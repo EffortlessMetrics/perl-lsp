@@ -1523,6 +1523,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-ast-navigation"
+version = "0.10.0"
+dependencies = [
+ "perl-parser-core",
+ "perl-tdd-support",
+]
+
+[[package]]
 name = "perl-builtins"
 version = "0.10.0"
 dependencies = [
@@ -1945,6 +1953,7 @@ name = "perl-lsp-navigation"
 version = "0.10.0"
 dependencies = [
  "lsp-types",
+ "perl-ast-navigation",
  "perl-module-import",
  "perl-module-path",
  "perl-parser-core",
@@ -2310,6 +2319,7 @@ dependencies = [
 name = "perl-semantic-analyzer"
 version = "0.10.0"
 dependencies = [
+ "perl-ast-navigation",
  "perl-parser-core",
  "perl-symbol-types",
  "perl-tdd-support",
