@@ -384,9 +384,7 @@ mod tests {
 
     #[test]
     fn skipped_component_deeply_nested() {
-        assert!(path_contains_skipped_component(Path::new(
-            "a/b/c/node_modules/d/e/f.pm"
-        )));
+        assert!(path_contains_skipped_component(Path::new("a/b/c/node_modules/d/e/f.pm")));
     }
 
     // --- Additional coverage: walk_discovery edge cases ---
@@ -620,7 +618,8 @@ mod tests {
     #[test]
     fn parse_git_output_mixed_content_accurate_counts() {
         let root = Path::new("/tmp/workspace");
-        let payload = b"lib/A.pm\0bin/b.pl\0t/c.t\0app/d.psgi\0README.md\0Makefile\0node_modules/e.pm\0";
+        let payload =
+            b"lib/A.pm\0bin/b.pl\0t/c.t\0app/d.psgi\0README.md\0Makefile\0node_modules/e.pm\0";
 
         let (files, excluded_count) = parse_git_ls_files_output(root, payload);
         assert_eq!(files.len(), 4);
