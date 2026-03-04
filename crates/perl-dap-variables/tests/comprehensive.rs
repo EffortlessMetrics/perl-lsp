@@ -3,7 +3,7 @@
 //! Tests cover PerlValue, VariableParser, RenderedVariable, and PerlVariableRenderer.
 
 use perl_dap_variables::{
-    PerlValue, PerlVariableRenderer, RenderedVariable, VariableParser, VariableParseError,
+    PerlValue, PerlVariableRenderer, RenderedVariable, VariableParseError, VariableParser,
     VariableRenderer,
 };
 use perl_tdd_support::{must, must_err};
@@ -40,10 +40,8 @@ fn perl_value_array_constructor() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn perl_value_hash_constructor() -> Result<(), Box<dyn std::error::Error>> {
-    let pairs = vec![
-        ("a".to_string(), PerlValue::Integer(1)),
-        ("b".to_string(), PerlValue::Integer(2)),
-    ];
+    let pairs =
+        vec![("a".to_string(), PerlValue::Integer(1)), ("b".to_string(), PerlValue::Integer(2))];
     let val = PerlValue::hash(pairs);
     assert_eq!(val.child_count(), Some(2));
     Ok(())
@@ -91,9 +89,7 @@ fn is_expandable_for_all_variants() -> Result<(), Box<dyn std::error::Error>> {
         PerlValue::Object { class: "X".to_string(), value: Box::new(PerlValue::Undef) }
             .is_expandable()
     );
-    assert!(
-        PerlValue::Tied { class: "Y".to_string(), value: None }.is_expandable()
-    );
+    assert!(PerlValue::Tied { class: "Y".to_string(), value: None }.is_expandable());
     Ok(())
 }
 
@@ -109,8 +105,7 @@ fn type_name_for_all_variants() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(PerlValue::Hash(vec![]).type_name(), "HASH");
     assert_eq!(PerlValue::Reference(Box::new(PerlValue::Undef)).type_name(), "REF");
     assert_eq!(
-        PerlValue::Object { class: "C".to_string(), value: Box::new(PerlValue::Undef) }
-            .type_name(),
+        PerlValue::Object { class: "C".to_string(), value: Box::new(PerlValue::Undef) }.type_name(),
         "OBJECT"
     );
     assert_eq!(PerlValue::Code { name: None }.type_name(), "CODE");
@@ -207,9 +202,10 @@ fn perl_value_serde_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn perl_value_clone_equality() -> Result<(), Box<dyn std::error::Error>> {
-    let original = PerlValue::object("My::Class", PerlValue::Hash(vec![
-        ("attr".to_string(), PerlValue::Scalar("val".to_string())),
-    ]));
+    let original = PerlValue::object(
+        "My::Class",
+        PerlValue::Hash(vec![("attr".to_string(), PerlValue::Scalar("val".to_string()))]),
+    );
     let cloned = original.clone();
     assert_eq!(original, cloned);
     Ok(())
@@ -856,9 +852,7 @@ fn rendered_variable_is_expandable() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn rendered_variable_serde_roundtrip() -> Result<(), Box<dyn std::error::Error>> {
-    let rv = RenderedVariable::new("$x", "42")
-        .with_type("SCALAR")
-        .with_reference(0);
+    let rv = RenderedVariable::new("$x", "42").with_type("SCALAR").with_reference(0);
     let json = serde_json::to_string(&rv)?;
     let deserialized: RenderedVariable = serde_json::from_str(&json)?;
     assert_eq!(rv, deserialized);
@@ -1053,9 +1047,10 @@ fn render_object_with_hash() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
     let val = PerlValue::Object {
         class: "My::Class".to_string(),
-        value: Box::new(PerlValue::Hash(vec![
-            ("attr".to_string(), PerlValue::Scalar("val".to_string())),
-        ])),
+        value: Box::new(PerlValue::Hash(vec![(
+            "attr".to_string(),
+            PerlValue::Scalar("val".to_string()),
+        )])),
     };
     let rendered = renderer.render("$obj", &val);
     assert!(rendered.value.contains("My::Class"));
@@ -1375,9 +1370,7 @@ fn render_children_tied_with_value() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new();
     let val = PerlValue::Tied {
         class: "Tie::Hash".to_string(),
-        value: Some(Box::new(PerlValue::Hash(vec![
-            ("k".to_string(), PerlValue::Integer(1)),
-        ]))),
+        value: Some(Box::new(PerlValue::Hash(vec![("k".to_string(), PerlValue::Integer(1))]))),
     };
     let children = renderer.render_children(&val, 0, 10);
     assert_eq!(children.len(), 1);
@@ -1403,15 +1396,9 @@ fn render_children_non_expandable_returns_empty() -> Result<(), Box<dyn std::err
     assert!(renderer.render_children(&PerlValue::Scalar("x".to_string()), 0, 10).is_empty());
     assert!(renderer.render_children(&PerlValue::Number(1.0), 0, 10).is_empty());
     assert!(renderer.render_children(&PerlValue::Code { name: None }, 0, 10).is_empty());
-    assert!(
-        renderer.render_children(&PerlValue::Glob("g".to_string()), 0, 10).is_empty()
-    );
-    assert!(
-        renderer.render_children(&PerlValue::Regex("r".to_string()), 0, 10).is_empty()
-    );
-    assert!(
-        renderer.render_children(&PerlValue::Error("e".to_string()), 0, 10).is_empty()
-    );
+    assert!(renderer.render_children(&PerlValue::Glob("g".to_string()), 0, 10).is_empty());
+    assert!(renderer.render_children(&PerlValue::Regex("r".to_string()), 0, 10).is_empty());
+    assert!(renderer.render_children(&PerlValue::Error("e".to_string()), 0, 10).is_empty());
     Ok(())
 }
 
@@ -1429,11 +1416,8 @@ fn renderer_with_max_string_length() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn renderer_with_max_array_preview() -> Result<(), Box<dyn std::error::Error>> {
     let renderer = PerlVariableRenderer::new().with_max_array_preview(1);
-    let val = PerlValue::Array(vec![
-        PerlValue::Integer(1),
-        PerlValue::Integer(2),
-        PerlValue::Integer(3),
-    ]);
+    let val =
+        PerlValue::Array(vec![PerlValue::Integer(1), PerlValue::Integer(2), PerlValue::Integer(3)]);
     let rendered = renderer.render("@a", &val);
     assert!(rendered.value.contains("3 total"));
     Ok(())
