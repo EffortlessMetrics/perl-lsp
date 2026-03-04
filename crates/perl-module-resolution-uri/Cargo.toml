@@ -21,6 +21,7 @@ perl-workspace-folder = { workspace = true }
 url = "2.5.8"
 
 [dev-dependencies]
+perl-tdd-support = { workspace = true }
 proptest = "1.9.0"
 tempfile = "3.24.0"
 
