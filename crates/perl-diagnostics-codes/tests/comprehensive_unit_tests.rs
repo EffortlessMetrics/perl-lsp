@@ -1,0 +1,749 @@
+//! Comprehensive unit tests for perl-diagnostics-codes crate.
+//!
+//! Covers every variant and method of:
+//! - DiagnosticSeverity
+//! - DiagnosticTag
+//! - DiagnosticCode
+//! - DiagnosticCategory
+
+use perl_diagnostics_codes::{
+    DiagnosticCategory, DiagnosticCode, DiagnosticSeverity, DiagnosticTag,
+};
+
+// ---------------------------------------------------------------------------
+// Helper: all DiagnosticCode variants for exhaustive iteration
+// ---------------------------------------------------------------------------
+
+const ALL_CODES: &[DiagnosticCode] = &[
+    DiagnosticCode::ParseError,
+    DiagnosticCode::SyntaxError,
+    DiagnosticCode::UnexpectedEof,
+    DiagnosticCode::MissingStrict,
+    DiagnosticCode::MissingWarnings,
+    DiagnosticCode::UnusedVariable,
+    DiagnosticCode::UndefinedVariable,
+    DiagnosticCode::MissingPackageDeclaration,
+    DiagnosticCode::DuplicatePackage,
+    DiagnosticCode::DuplicateSubroutine,
+    DiagnosticCode::MissingReturn,
+    DiagnosticCode::BarewordFilehandle,
+    DiagnosticCode::TwoArgOpen,
+    DiagnosticCode::ImplicitReturn,
+    DiagnosticCode::CriticSeverity1,
+    DiagnosticCode::CriticSeverity2,
+    DiagnosticCode::CriticSeverity3,
+    DiagnosticCode::CriticSeverity4,
+    DiagnosticCode::CriticSeverity5,
+];
+
+// ===========================================================================
+// DiagnosticSeverity tests
+// ===========================================================================
+
+#[test]
+fn severity_to_lsp_value_error() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticSeverity::Error.to_lsp_value(), 1);
+    Ok(())
+}
+
+#[test]
+fn severity_to_lsp_value_warning() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticSeverity::Warning.to_lsp_value(), 2);
+    Ok(())
+}
+
+#[test]
+fn severity_to_lsp_value_information() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticSeverity::Information.to_lsp_value(), 3);
+    Ok(())
+}
+
+#[test]
+fn severity_to_lsp_value_hint() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticSeverity::Hint.to_lsp_value(), 4);
+    Ok(())
+}
+
+#[test]
+fn severity_display() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(format!("{}", DiagnosticSeverity::Error), "error");
+    assert_eq!(format!("{}", DiagnosticSeverity::Warning), "warning");
+    assert_eq!(format!("{}", DiagnosticSeverity::Information), "info");
+    assert_eq!(format!("{}", DiagnosticSeverity::Hint), "hint");
+    Ok(())
+}
+
+#[test]
+fn severity_clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
+    let s = DiagnosticSeverity::Error;
+    let cloned = s.clone();
+    let copied = s;
+    assert_eq!(s, cloned);
+    assert_eq!(s, copied);
+    Ok(())
+}
+
+#[test]
+fn severity_ordering() -> Result<(), Box<dyn std::error::Error>> {
+    // Error(1) < Warning(2) < Information(3) < Hint(4) per repr(u8)
+    assert!(DiagnosticSeverity::Error < DiagnosticSeverity::Warning);
+    assert!(DiagnosticSeverity::Warning < DiagnosticSeverity::Information);
+    assert!(DiagnosticSeverity::Information < DiagnosticSeverity::Hint);
+    Ok(())
+}
+
+#[test]
+fn severity_debug() -> Result<(), Box<dyn std::error::Error>> {
+    let dbg = format!("{:?}", DiagnosticSeverity::Error);
+    assert!(dbg.contains("Error"));
+    Ok(())
+}
+
+#[test]
+fn severity_hash_consistency() -> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::HashSet;
+    let mut set = HashSet::new();
+    set.insert(DiagnosticSeverity::Error);
+    set.insert(DiagnosticSeverity::Error);
+    assert_eq!(set.len(), 1);
+    set.insert(DiagnosticSeverity::Warning);
+    assert_eq!(set.len(), 2);
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticTag tests
+// ===========================================================================
+
+#[test]
+fn tag_to_lsp_value_unnecessary() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticTag::Unnecessary.to_lsp_value(), 1);
+    Ok(())
+}
+
+#[test]
+fn tag_to_lsp_value_deprecated() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticTag::Deprecated.to_lsp_value(), 2);
+    Ok(())
+}
+
+#[test]
+fn tag_clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
+    let t = DiagnosticTag::Unnecessary;
+    let cloned = t.clone();
+    let copied = t;
+    assert_eq!(t, cloned);
+    assert_eq!(t, copied);
+    Ok(())
+}
+
+#[test]
+fn tag_debug() -> Result<(), Box<dyn std::error::Error>> {
+    assert!(format!("{:?}", DiagnosticTag::Unnecessary).contains("Unnecessary"));
+    assert!(format!("{:?}", DiagnosticTag::Deprecated).contains("Deprecated"));
+    Ok(())
+}
+
+#[test]
+fn tag_hash_consistency() -> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::HashSet;
+    let mut set = HashSet::new();
+    set.insert(DiagnosticTag::Unnecessary);
+    set.insert(DiagnosticTag::Unnecessary);
+    assert_eq!(set.len(), 1);
+    set.insert(DiagnosticTag::Deprecated);
+    assert_eq!(set.len(), 2);
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCode::as_str — exhaustive
+// ===========================================================================
+
+#[test]
+fn code_as_str_parser_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::ParseError.as_str(), "PL001");
+    assert_eq!(DiagnosticCode::SyntaxError.as_str(), "PL002");
+    assert_eq!(DiagnosticCode::UnexpectedEof.as_str(), "PL003");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_strict_warnings_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::MissingStrict.as_str(), "PL100");
+    assert_eq!(DiagnosticCode::MissingWarnings.as_str(), "PL101");
+    assert_eq!(DiagnosticCode::UnusedVariable.as_str(), "PL102");
+    assert_eq!(DiagnosticCode::UndefinedVariable.as_str(), "PL103");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_package_module_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::MissingPackageDeclaration.as_str(), "PL200");
+    assert_eq!(DiagnosticCode::DuplicatePackage.as_str(), "PL201");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_subroutine_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::DuplicateSubroutine.as_str(), "PL300");
+    assert_eq!(DiagnosticCode::MissingReturn.as_str(), "PL301");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_best_practices_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::BarewordFilehandle.as_str(), "PL400");
+    assert_eq!(DiagnosticCode::TwoArgOpen.as_str(), "PL401");
+    assert_eq!(DiagnosticCode::ImplicitReturn.as_str(), "PL402");
+    Ok(())
+}
+
+#[test]
+fn code_as_str_critic_range() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::CriticSeverity1.as_str(), "PC001");
+    assert_eq!(DiagnosticCode::CriticSeverity2.as_str(), "PC002");
+    assert_eq!(DiagnosticCode::CriticSeverity3.as_str(), "PC003");
+    assert_eq!(DiagnosticCode::CriticSeverity4.as_str(), "PC004");
+    assert_eq!(DiagnosticCode::CriticSeverity5.as_str(), "PC005");
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCode::Display
+// ===========================================================================
+
+#[test]
+fn code_display_matches_as_str() -> Result<(), Box<dyn std::error::Error>> {
+    for code in ALL_CODES {
+        assert_eq!(format!("{code}"), code.as_str());
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCode::parse_code — exhaustive round-trip
+// ===========================================================================
+
+#[test]
+fn parse_code_round_trip_all_variants() -> Result<(), Box<dyn std::error::Error>> {
+    for code in ALL_CODES {
+        let parsed = DiagnosticCode::parse_code(code.as_str());
+        assert_eq!(parsed, Some(*code), "round-trip failed for {}", code.as_str());
+    }
+    Ok(())
+}
+
+#[test]
+fn parse_code_invalid_returns_none() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::parse_code("INVALID"), None);
+    assert_eq!(DiagnosticCode::parse_code(""), None);
+    assert_eq!(DiagnosticCode::parse_code("PL999"), None);
+    assert_eq!(DiagnosticCode::parse_code("PC999"), None);
+    assert_eq!(DiagnosticCode::parse_code("pl001"), None); // case sensitive
+    assert_eq!(DiagnosticCode::parse_code("PL 001"), None); // spaces
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCode::severity — exhaustive
+// ===========================================================================
+
+#[test]
+fn severity_error_codes() -> Result<(), Box<dyn std::error::Error>> {
+    let error_codes = [
+        DiagnosticCode::ParseError,
+        DiagnosticCode::SyntaxError,
+        DiagnosticCode::UnexpectedEof,
+        DiagnosticCode::UndefinedVariable,
+    ];
+    for code in &error_codes {
+        assert_eq!(
+            code.severity(),
+            DiagnosticSeverity::Error,
+            "{} should be Error severity",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn severity_warning_codes() -> Result<(), Box<dyn std::error::Error>> {
+    let warning_codes = [
+        DiagnosticCode::MissingStrict,
+        DiagnosticCode::MissingWarnings,
+        DiagnosticCode::UnusedVariable,
+        DiagnosticCode::MissingPackageDeclaration,
+        DiagnosticCode::DuplicatePackage,
+        DiagnosticCode::DuplicateSubroutine,
+        DiagnosticCode::MissingReturn,
+        DiagnosticCode::BarewordFilehandle,
+        DiagnosticCode::TwoArgOpen,
+        DiagnosticCode::ImplicitReturn,
+        DiagnosticCode::CriticSeverity1,
+        DiagnosticCode::CriticSeverity2,
+    ];
+    for code in &warning_codes {
+        assert_eq!(
+            code.severity(),
+            DiagnosticSeverity::Warning,
+            "{} should be Warning severity",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn severity_hint_codes() -> Result<(), Box<dyn std::error::Error>> {
+    let hint_codes = [
+        DiagnosticCode::CriticSeverity3,
+        DiagnosticCode::CriticSeverity4,
+        DiagnosticCode::CriticSeverity5,
+    ];
+    for code in &hint_codes {
+        assert_eq!(
+            code.severity(),
+            DiagnosticSeverity::Hint,
+            "{} should be Hint severity",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCode::documentation_url — exhaustive
+// ===========================================================================
+
+#[test]
+fn documentation_url_pl_codes_have_urls() -> Result<(), Box<dyn std::error::Error>> {
+    let pl_codes = [
+        (DiagnosticCode::ParseError, "PL001"),
+        (DiagnosticCode::SyntaxError, "PL002"),
+        (DiagnosticCode::UnexpectedEof, "PL003"),
+        (DiagnosticCode::MissingStrict, "PL100"),
+        (DiagnosticCode::MissingWarnings, "PL101"),
+        (DiagnosticCode::UnusedVariable, "PL102"),
+        (DiagnosticCode::UndefinedVariable, "PL103"),
+        (DiagnosticCode::MissingPackageDeclaration, "PL200"),
+        (DiagnosticCode::DuplicatePackage, "PL201"),
+        (DiagnosticCode::DuplicateSubroutine, "PL300"),
+        (DiagnosticCode::MissingReturn, "PL301"),
+        (DiagnosticCode::BarewordFilehandle, "PL400"),
+        (DiagnosticCode::TwoArgOpen, "PL401"),
+        (DiagnosticCode::ImplicitReturn, "PL402"),
+    ];
+    for (code, expected_suffix) in &pl_codes {
+        let url = code.documentation_url();
+        assert!(url.is_some(), "{} should have a documentation URL", code.as_str());
+        let url_str = url.ok_or("missing url")?;
+        assert!(
+            url_str.ends_with(expected_suffix),
+            "URL for {} should end with {}, got {}",
+            code.as_str(),
+            expected_suffix,
+            url_str,
+        );
+        assert!(
+            url_str.starts_with("https://docs.perl-lsp.org/errors/"),
+            "URL for {} should start with base URL, got {}",
+            code.as_str(),
+            url_str,
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn documentation_url_critic_codes_return_none() -> Result<(), Box<dyn std::error::Error>> {
+    let critic_codes = [
+        DiagnosticCode::CriticSeverity1,
+        DiagnosticCode::CriticSeverity2,
+        DiagnosticCode::CriticSeverity3,
+        DiagnosticCode::CriticSeverity4,
+        DiagnosticCode::CriticSeverity5,
+    ];
+    for code in &critic_codes {
+        assert_eq!(
+            code.documentation_url(),
+            None,
+            "{} should not have a documentation URL",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCode::tags — exhaustive
+// ===========================================================================
+
+#[test]
+fn tags_unused_variable_has_unnecessary() -> Result<(), Box<dyn std::error::Error>> {
+    let tags = DiagnosticCode::UnusedVariable.tags();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0], DiagnosticTag::Unnecessary);
+    Ok(())
+}
+
+#[test]
+fn tags_all_other_codes_empty() -> Result<(), Box<dyn std::error::Error>> {
+    for code in ALL_CODES {
+        if *code == DiagnosticCode::UnusedVariable {
+            continue;
+        }
+        assert!(
+            code.tags().is_empty(),
+            "{} should have empty tags but has {:?}",
+            code.as_str(),
+            code.tags()
+        );
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCode::category — exhaustive
+// ===========================================================================
+
+#[test]
+fn category_parser() -> Result<(), Box<dyn std::error::Error>> {
+    let parser_codes =
+        [DiagnosticCode::ParseError, DiagnosticCode::SyntaxError, DiagnosticCode::UnexpectedEof];
+    for code in &parser_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::Parser,
+            "{} should be Parser category",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn category_strict_warnings() -> Result<(), Box<dyn std::error::Error>> {
+    let sw_codes = [
+        DiagnosticCode::MissingStrict,
+        DiagnosticCode::MissingWarnings,
+        DiagnosticCode::UnusedVariable,
+        DiagnosticCode::UndefinedVariable,
+    ];
+    for code in &sw_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::StrictWarnings,
+            "{} should be StrictWarnings category",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn category_package_module() -> Result<(), Box<dyn std::error::Error>> {
+    let pm_codes = [DiagnosticCode::MissingPackageDeclaration, DiagnosticCode::DuplicatePackage];
+    for code in &pm_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::PackageModule,
+            "{} should be PackageModule category",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn category_subroutine() -> Result<(), Box<dyn std::error::Error>> {
+    let sub_codes = [DiagnosticCode::DuplicateSubroutine, DiagnosticCode::MissingReturn];
+    for code in &sub_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::Subroutine,
+            "{} should be Subroutine category",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn category_best_practices() -> Result<(), Box<dyn std::error::Error>> {
+    let bp_codes = [
+        DiagnosticCode::BarewordFilehandle,
+        DiagnosticCode::TwoArgOpen,
+        DiagnosticCode::ImplicitReturn,
+    ];
+    for code in &bp_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::BestPractices,
+            "{} should be BestPractices category",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn category_perl_critic() -> Result<(), Box<dyn std::error::Error>> {
+    let critic_codes = [
+        DiagnosticCode::CriticSeverity1,
+        DiagnosticCode::CriticSeverity2,
+        DiagnosticCode::CriticSeverity3,
+        DiagnosticCode::CriticSeverity4,
+        DiagnosticCode::CriticSeverity5,
+    ];
+    for code in &critic_codes {
+        assert_eq!(
+            code.category(),
+            DiagnosticCategory::PerlCritic,
+            "{} should be PerlCritic category",
+            code.as_str()
+        );
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCode::from_message — positive and negative cases
+// ===========================================================================
+
+#[test]
+fn from_message_use_strict() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        DiagnosticCode::from_message("Missing 'use strict' pragma"),
+        Some(DiagnosticCode::MissingStrict)
+    );
+    // Case-insensitive
+    assert_eq!(
+        DiagnosticCode::from_message("USE STRICT is missing"),
+        Some(DiagnosticCode::MissingStrict)
+    );
+    Ok(())
+}
+
+#[test]
+fn from_message_use_warnings() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        DiagnosticCode::from_message("Missing 'use warnings' pragma"),
+        Some(DiagnosticCode::MissingWarnings)
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("File lacks USE WARNINGS"),
+        Some(DiagnosticCode::MissingWarnings)
+    );
+    Ok(())
+}
+
+#[test]
+fn from_message_unused_variable() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        DiagnosticCode::from_message("Unused variable $foo"),
+        Some(DiagnosticCode::UnusedVariable)
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("$bar is never used"),
+        Some(DiagnosticCode::UnusedVariable)
+    );
+    Ok(())
+}
+
+#[test]
+fn from_message_undefined_variable() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        DiagnosticCode::from_message("Global symbol $x is undefined"),
+        Some(DiagnosticCode::UndefinedVariable)
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("Variable $y not declared"),
+        Some(DiagnosticCode::UndefinedVariable)
+    );
+    Ok(())
+}
+
+#[test]
+fn from_message_bareword_filehandle() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        DiagnosticCode::from_message("Bareword filehandle detected"),
+        Some(DiagnosticCode::BarewordFilehandle)
+    );
+    Ok(())
+}
+
+#[test]
+fn from_message_two_arg_open() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        DiagnosticCode::from_message("Two-argument open() used"),
+        Some(DiagnosticCode::TwoArgOpen)
+    );
+    assert_eq!(DiagnosticCode::from_message("Found 2-arg open"), Some(DiagnosticCode::TwoArgOpen));
+    Ok(())
+}
+
+#[test]
+fn from_message_parse_error() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(
+        DiagnosticCode::from_message("parse error near line 5"),
+        Some(DiagnosticCode::ParseError)
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("Syntax error at line 10"),
+        Some(DiagnosticCode::ParseError)
+    );
+    Ok(())
+}
+
+#[test]
+fn from_message_returns_none_for_unrecognized() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::from_message(""), None);
+    assert_eq!(DiagnosticCode::from_message("something else entirely"), None);
+    assert_eq!(DiagnosticCode::from_message("implicit return detected"), None);
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCode trait derivations
+// ===========================================================================
+
+#[test]
+fn code_clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
+    let c = DiagnosticCode::ParseError;
+    let cloned = c.clone();
+    let copied = c;
+    assert_eq!(c, cloned);
+    assert_eq!(c, copied);
+    Ok(())
+}
+
+#[test]
+fn code_debug_contains_variant_name() -> Result<(), Box<dyn std::error::Error>> {
+    assert!(format!("{:?}", DiagnosticCode::ParseError).contains("ParseError"));
+    assert!(format!("{:?}", DiagnosticCode::CriticSeverity5).contains("CriticSeverity5"));
+    Ok(())
+}
+
+#[test]
+fn code_hash_consistency() -> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::HashSet;
+    let mut set = HashSet::new();
+    for code in ALL_CODES {
+        set.insert(*code);
+    }
+    assert_eq!(set.len(), ALL_CODES.len());
+    // Re-inserting shouldn't change length
+    for code in ALL_CODES {
+        set.insert(*code);
+    }
+    assert_eq!(set.len(), ALL_CODES.len());
+    Ok(())
+}
+
+#[test]
+fn code_equality() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticCode::ParseError, DiagnosticCode::ParseError);
+    assert_ne!(DiagnosticCode::ParseError, DiagnosticCode::SyntaxError);
+    Ok(())
+}
+
+// ===========================================================================
+// DiagnosticCategory trait derivations
+// ===========================================================================
+
+#[test]
+fn category_clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
+    let c = DiagnosticCategory::Parser;
+    let cloned = c.clone();
+    let copied = c;
+    assert_eq!(c, cloned);
+    assert_eq!(c, copied);
+    Ok(())
+}
+
+#[test]
+fn category_debug_contains_variant_name() -> Result<(), Box<dyn std::error::Error>> {
+    assert!(format!("{:?}", DiagnosticCategory::Parser).contains("Parser"));
+    assert!(format!("{:?}", DiagnosticCategory::PerlCritic).contains("PerlCritic"));
+    Ok(())
+}
+
+#[test]
+fn category_hash_consistency() -> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::HashSet;
+    let mut set = HashSet::new();
+    set.insert(DiagnosticCategory::Parser);
+    set.insert(DiagnosticCategory::Parser);
+    assert_eq!(set.len(), 1);
+    set.insert(DiagnosticCategory::StrictWarnings);
+    set.insert(DiagnosticCategory::PackageModule);
+    set.insert(DiagnosticCategory::Subroutine);
+    set.insert(DiagnosticCategory::BestPractices);
+    set.insert(DiagnosticCategory::PerlCritic);
+    assert_eq!(set.len(), 6);
+    Ok(())
+}
+
+// ===========================================================================
+// Cross-cutting: code string uniqueness
+// ===========================================================================
+
+#[test]
+fn all_code_strings_are_unique() -> Result<(), Box<dyn std::error::Error>> {
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    for code in ALL_CODES {
+        let s = code.as_str();
+        assert!(seen.insert(s), "Duplicate code string: {} (variant {:?})", s, code,);
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// Cross-cutting: every code maps to exactly one category
+// ===========================================================================
+
+#[test]
+fn every_code_has_a_category() -> Result<(), Box<dyn std::error::Error>> {
+    for code in ALL_CODES {
+        // Just verify it doesn't panic and returns a valid category
+        let _cat = code.category();
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// Cross-cutting: every code maps to exactly one severity
+// ===========================================================================
+
+#[test]
+fn every_code_has_a_severity() -> Result<(), Box<dyn std::error::Error>> {
+    for code in ALL_CODES {
+        let sev = code.severity();
+        let lsp_val = sev.to_lsp_value();
+        assert!(
+            (1..=4).contains(&lsp_val),
+            "{} has out-of-range LSP severity {}",
+            code.as_str(),
+            lsp_val,
+        );
+    }
+    Ok(())
+}
+
+// ===========================================================================
+// Cross-cutting: parse_code → as_str consistency for all codes
+// ===========================================================================
+
+#[test]
+fn parse_code_as_str_bijection() -> Result<(), Box<dyn std::error::Error>> {
+    let code_strings: Vec<&str> = ALL_CODES.iter().map(|c| c.as_str()).collect();
+    for s in &code_strings {
+        let parsed = DiagnosticCode::parse_code(s);
+        assert!(parsed.is_some(), "parse_code should accept {}", s);
+        assert_eq!(parsed.ok_or("missing")?.as_str(), *s, "round-trip mismatch for {}", s,);
+    }
+    Ok(())
+}
