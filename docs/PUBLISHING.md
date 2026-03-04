@@ -40,6 +40,23 @@ cargo metadata --no-deps --format-version=1 |\
 
 To inspect the exact publish order used by the workflow, read the "Compute topological order" output in the workflow run.
 
+## Local Preflight (Recommended Before Dispatch)
+
+For a workspace launch, use packaging preflight before any `cargo publish` step. This validates crate contents
+and manifest metadata while patching workspace dependencies to local paths (so checks do not depend on crates
+already being available in the registry).
+
+```bash
+# Core launch crates
+scripts/cargo-package-workspace-dry-run.sh perl-parser perl-lsp perl-dap
+
+# Optional: run full allowlist from workspace metadata
+cargo metadata --no-deps --format-version=1 | jq -r '.metadata.publish.allow[]' |
+  xargs scripts/cargo-package-workspace-dry-run.sh
+```
+
+If any crate fails packaging, resolve the error before triggering the `publish-crates` workflow.
+
 ## Manual Fallback (Use with caution)
 
 If automated publish fails and needs recovery, publish remaining crates one-by-one using the workflow summary order:
