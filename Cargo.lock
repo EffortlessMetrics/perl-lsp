@@ -2311,6 +2311,7 @@ name = "perl-semantic-analyzer"
 version = "0.10.0"
 dependencies = [
  "perl-parser-core",
+ "perl-symbol-scope",
  "perl-symbol-types",
  "perl-tdd-support",
  "perl-workspace-index",
@@ -2335,10 +2336,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-symbol-scope"
+version = "0.10.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "perl-symbol-table"
 version = "0.10.0"
 dependencies = [
  "perl-position-tracking",
+ "perl-symbol-scope",
  "perl-symbol-types",
  "serde",
 ]

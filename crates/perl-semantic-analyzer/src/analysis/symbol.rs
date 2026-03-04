@@ -30,7 +30,8 @@ use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
-// Re-export the unified symbol types from perl-symbol-types
+// Re-export shared symbol scope and unified symbol types
+pub use perl_symbol_scope::{ScopeId, ScopeKind};
 /// Symbol kind enums used during Index/Analyze workflows.
 pub use perl_symbol_types::{SymbolKind, VarKind};
 
@@ -101,9 +102,6 @@ pub struct SymbolReference {
     pub is_write: bool,
 }
 
-/// Unique identifier for a scope used during Index/Analyze workflows.
-pub type ScopeId = usize;
-
 #[derive(Debug, Clone)]
 /// A lexical scope in Perl code with hierarchical symbol visibility for Parse/Analyze stages.
 ///
@@ -134,33 +132,6 @@ pub struct Scope {
     pub location: SourceLocation,
     /// Set of symbol names defined in this scope
     pub symbols: HashSet<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-/// Classification of lexical scope types in Perl for Parse/Analyze workflows.
-///
-/// Defines different scope boundaries with specific symbol visibility
-/// and resolution rules according to Perl language semantics.
-///
-/// # Scope Hierarchy
-/// - Global: File-level symbols and imports
-/// - Package: Package-qualified namespace
-/// - Subroutine: Function parameters and local variables
-/// - Block: Control structure lexical variables
-/// - Eval: Dynamic evaluation context
-///
-/// Workflow: Parse/Analyze scope classification.
-pub enum ScopeKind {
-    /// Global/file scope
-    Global,
-    /// Package scope
-    Package,
-    /// Subroutine scope
-    Subroutine,
-    /// Block scope (if, while, for, etc.)
-    Block,
-    /// Eval scope
-    Eval,
 }
 
 #[derive(Debug, Default)]

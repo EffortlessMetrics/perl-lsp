@@ -40,11 +40,9 @@
 use perl_position_tracking::SourceLocation;
 use std::collections::{HashMap, HashSet};
 
-// Re-export symbol types for convenience
+// Re-export symbol scope and symbol types for convenience
+pub use perl_symbol_scope::{ScopeId, ScopeKind};
 pub use perl_symbol_types::{SymbolKind, VarKind};
-
-/// Unique identifier for a scope.
-pub type ScopeId = usize;
 
 /// A symbol definition in Perl code with comprehensive metadata.
 ///
@@ -144,32 +142,6 @@ pub struct Scope {
     pub location: SourceLocation,
     /// Set of symbol names defined in this scope
     pub symbols: HashSet<String>,
-}
-
-/// Classification of lexical scope types in Perl.
-///
-/// Defines different scope boundaries with specific symbol visibility
-/// and resolution rules according to Perl language semantics.
-///
-/// # Scope Hierarchy
-/// - Global: File-level symbols and imports
-/// - Package: Package-qualified namespace
-/// - Subroutine: Function parameters and local variables
-/// - Block: Control structure lexical variables
-/// - Eval: Dynamic evaluation context
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ScopeKind {
-    /// Global/file scope
-    Global,
-    /// Package scope
-    Package,
-    /// Subroutine scope
-    Subroutine,
-    /// Block scope (if, while, for, etc.)
-    Block,
-    /// Eval scope
-    Eval,
 }
 
 /// Comprehensive symbol table for Perl code analysis and LSP features.
