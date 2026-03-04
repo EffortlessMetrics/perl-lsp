@@ -1,12 +1,6 @@
 use crate::StackFrame;
 
-/// Returns true when a frame belongs to debugger/shim internals.
-#[must_use]
-pub fn is_internal_frame_name_and_path(name: &str, path: Option<&str>) -> bool {
-    name.starts_with("Devel::TSPerlDAP::")
-        || name.starts_with("DB::")
-        || path.is_some_and(|value| value.contains("perl5db.pl"))
-}
+pub use perl_dap_frame_visibility::is_internal_frame_name_and_path;
 
 /// Returns true when a frame belongs to debugger/shim internals.
 #[must_use]

@@ -1,0 +1,18 @@
+[package]
+name = "perl-dap-frame-visibility"
+version = "0.10.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Frame visibility classification for Perl DAP stack traces"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-dap-frame-visibility"
+keywords = ["perl", "dap", "debug", "stack-trace"]
+categories = ["development-tools::debugging"]
+
+[dependencies]
+
+[lints]
+workspace = true

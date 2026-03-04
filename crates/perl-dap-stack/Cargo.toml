@@ -14,6 +14,8 @@ keywords = ["perl", "dap", "debug", "stack-trace", "debugger"]
 categories = ["development-tools::debugging"]
 
 [dependencies]
+perl-dap-frame-visibility = { workspace = true }
+
 # Serialization for DAP protocol
 serde = { version = "1.0", features = ["derive"] }
 

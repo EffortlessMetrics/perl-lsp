@@ -1606,6 +1606,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-dap-frame-visibility"
+version = "0.10.0"
+
+[[package]]
 name = "perl-dap-platform"
 version = "0.10.0"
 dependencies = [
@@ -1617,6 +1621,7 @@ name = "perl-dap-stack"
 version = "0.10.0"
 dependencies = [
  "once_cell",
+ "perl-dap-frame-visibility",
  "perl-tdd-support",
  "regex",
  "serde",
