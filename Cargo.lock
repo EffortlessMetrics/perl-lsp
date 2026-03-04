@@ -1563,6 +1563,7 @@ dependencies = [
  "once_cell",
  "perl-content-length-framing",
  "perl-dap-breakpoint",
+ "perl-dap-configuration",
  "perl-dap-eval",
  "perl-dap-platform",
  "perl-dap-stack",
@@ -1594,6 +1595,15 @@ dependencies = [
  "ropey",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "perl-dap-configuration"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

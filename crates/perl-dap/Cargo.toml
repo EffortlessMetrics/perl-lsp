@@ -53,6 +53,7 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 clap = { version = "4.5.60", features = ["derive"] }
 
 perl-dap-breakpoint = { workspace = true }
+perl-dap-configuration = { workspace = true }
 perl-dap-eval = { workspace = true }
 perl-dap-platform = { workspace = true }
 perl-dap-variables = { workspace = true }
