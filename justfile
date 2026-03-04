@@ -1125,6 +1125,12 @@ guardrail-run-ignored:
     @echo "Note: Some tests expected to fail pending feature implementation"
     @cargo test -p xtask --test ci_guardrail_ignored_test_monitoring_tests -- --ignored || true
 
+
+# crates.io launch dry-run checks
+prep-crates-io-launch mode='core':
+    @echo "🚀 Running crates.io launch prep (mode={{mode}})..."
+    @bash scripts/prep-crates-io-launch.sh --{{mode}}
+
 # ============================================================================
 # SemVer Breaking Change Detection (Issue #277)
 # ============================================================================

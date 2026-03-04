@@ -18,7 +18,8 @@ This is the same path used by the `release-orchestration` workflow.
 1. Create or confirm an account on [crates.io](https://crates.io)
 2. Authenticate locally with `cargo login`
 3. Ensure release checks pass (`just ci-full`, `just security-scan`, `just semver-check`)
-4. Confirm release version and changelog are finalized
+4. Run crates.io dry-run validation (`just prep-crates-io-launch` for launch crates, or `just prep-crates-io-launch all` for full allowlist)
+5. Confirm release version and changelog are finalized
 
 ## Recommended Path (Automated)
 
