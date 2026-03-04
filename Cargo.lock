@@ -2351,6 +2351,7 @@ name = "perl-text-line"
 version = "0.10.0"
 dependencies = [
  "perl-module-token-parser",
+ "perl-tdd-support",
  "proptest",
 ]
 
