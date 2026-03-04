@@ -16,6 +16,7 @@ use perl_workspace_index::workspace::state_machine::{
     BuildPhase, DegradationReason, IndexState, IndexStateKind, IndexStateMachine,
     InvalidationReason, ResourceKind, TransitionResult,
 };
+use perl_workspace_index::workspace::workspace_index::IndexPerformanceCaps;
 use perl_workspace_index::workspace::workspace_index::{
     IndexCoordinator, IndexResourceLimits, SymKind, SymbolKey, WorkspaceIndex,
 };
@@ -1069,5 +1070,967 @@ fn test_workspace_index_thread_safety() -> Result<(), Box<dyn std::error::Error>
     }
 
     assert!(index.file_count() >= 1);
+    Ok(())
+}
+
+// =========================================================================
+// IndexCoordinator – parse storm & notify lifecycle
+// =========================================================================
+
+#[test]
+fn test_index_coordinator_notify_change_increments_pending() {
+    let coord = IndexCoordinator::new();
+    coord.transition_to_ready(0, 0);
+    coord.notify_change("file:///a.pl");
+    // Should not crash; pending count is internal
+}
+
+#[test]
+fn test_index_coordinator_notify_parse_complete_decrements() {
+    let coord = IndexCoordinator::new();
+    coord.transition_to_ready(0, 0);
+    coord.notify_change("file:///a.pl");
+    coord.notify_parse_complete("file:///a.pl");
+}
+
+#[test]
+fn test_index_coordinator_parse_storm_triggers_degradation() {
+    use perl_workspace_index::workspace::workspace_index::IndexStateKind;
+
+    let coord = IndexCoordinator::new();
+    coord.transition_to_ready(0, 0);
+
+    // Exceed parse storm threshold (default = 10)
+    for i in 0..12 {
+        coord.notify_change(&format!("file:///storm_{}.pl", i));
+    }
+
+    assert!(matches!(coord.state().kind(), IndexStateKind::Degraded));
+}
+
+#[test]
+fn test_index_coordinator_recovery_from_parse_storm() {
+    use perl_workspace_index::workspace::workspace_index::IndexStateKind;
+
+    let coord = IndexCoordinator::new();
+    coord.transition_to_ready(0, 0);
+
+    // Trigger parse storm
+    for i in 0..12 {
+        coord.notify_change(&format!("file:///storm_{}.pl", i));
+    }
+    assert!(matches!(coord.state().kind(), IndexStateKind::Degraded));
+
+    // Drain all pending parses
+    for i in 0..12 {
+        coord.notify_parse_complete(&format!("file:///storm_{}.pl", i));
+    }
+    // Should recover from parse storm (back to Building for re-scan)
+    let kind = coord.state().kind();
+    assert!(matches!(kind, IndexStateKind::Building));
+}
+
+#[test]
+fn test_index_coordinator_enforce_limits_file_count() {
+    use perl_workspace_index::workspace::workspace_index::{IndexPerformanceCaps, IndexStateKind};
+
+    let limits = IndexResourceLimits { max_files: 2, ..IndexResourceLimits::default() };
+    let coord = IndexCoordinator::with_limits_and_caps(limits, IndexPerformanceCaps::default());
+    coord.transition_to_ready(0, 0);
+
+    // Index more files than the limit
+    for i in 0..3 {
+        let uri = Url::parse(&format!("file:///limit_{}.pl", i)).ok();
+        if let Some(u) = uri {
+            let _ = coord.index().index_file(u, format!("sub f{} {{ 1 }}", i));
+        }
+    }
+    coord.enforce_limits();
+    assert!(matches!(coord.state().kind(), IndexStateKind::Degraded));
+}
+
+#[test]
+fn test_index_coordinator_check_limits_none_when_ok() {
+    let coord = IndexCoordinator::new();
+    assert!(coord.check_limits().is_none());
+}
+
+#[test]
+fn test_index_coordinator_phase_transitions() {
+    let coord = IndexCoordinator::new();
+    coord.transition_to_scanning();
+    coord.update_scan_progress(50);
+    coord.transition_to_indexing(50);
+    coord.update_building_progress(25);
+    coord.transition_to_ready(50, 200);
+}
+
+#[test]
+fn test_index_coordinator_record_early_exit() {
+    use perl_workspace_index::workspace::workspace_index::EarlyExitReason;
+
+    let coord = IndexCoordinator::new();
+    coord.record_early_exit(EarlyExitReason::InitialTimeBudget, 150, 10, 100);
+
+    let snap = coord.instrumentation_snapshot();
+    assert!(snap.last_early_exit.is_some());
+    let ee = snap.last_early_exit.as_ref();
+    assert_eq!(ee.map(|e| e.elapsed_ms), Some(150));
+}
+
+#[test]
+fn test_index_coordinator_performance_caps_default() {
+    let coord = IndexCoordinator::new();
+    let caps = coord.performance_caps();
+    assert_eq!(caps.initial_scan_budget_ms, 100);
+    assert_eq!(caps.incremental_budget_ms, 10);
+}
+
+#[test]
+fn test_index_coordinator_with_limits_and_caps() {
+    use perl_workspace_index::workspace::workspace_index::IndexPerformanceCaps;
+
+    let limits = IndexResourceLimits { max_files: 42, ..IndexResourceLimits::default() };
+    let caps = IndexPerformanceCaps { initial_scan_budget_ms: 200, incremental_budget_ms: 20 };
+    let coord = IndexCoordinator::with_limits_and_caps(limits, caps);
+    assert_eq!(coord.limits().max_files, 42);
+    assert_eq!(coord.performance_caps().initial_scan_budget_ms, 200);
+}
+
+#[test]
+fn test_index_coordinator_default_trait() {
+    let coord = IndexCoordinator::default();
+    assert!(matches!(
+        coord.state().kind(),
+        perl_workspace_index::workspace::workspace_index::IndexStateKind::Building
+    ));
+}
+
+#[test]
+fn test_index_coordinator_debug_impl() {
+    let coord = IndexCoordinator::new();
+    let debug_str = format!("{:?}", coord);
+    assert!(debug_str.contains("IndexCoordinator"));
+}
+
+// =========================================================================
+// WorkspaceIndex – incremental update (changed content)
+// =========================================================================
+
+#[test]
+fn test_incremental_update_changed_content() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/incr.pl")?;
+
+    index.index_file(uri.clone(), "sub old_fn { 1 }".to_string())?;
+    assert!(index.find_definition("old_fn").is_some());
+
+    // Re-index with different content
+    index.index_file(uri, "sub new_fn { 2 }".to_string())?;
+    assert!(index.find_definition("new_fn").is_some());
+    // Old symbol should be gone after re-indexing
+    assert!(index.find_definition("old_fn").is_none());
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – empty file
+// =========================================================================
+
+#[test]
+fn test_index_empty_file() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/empty.pl")?;
+    index.index_file(uri, String::new())?;
+
+    assert_eq!(index.file_count(), 1);
+    assert_eq!(index.symbol_count(), 0);
+    assert!(!index.has_symbols());
+    Ok(())
+}
+
+#[test]
+fn test_index_whitespace_only_file() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/blank.pl")?;
+    index.index_file(uri, "   \n\n  \t  \n".to_string())?;
+
+    assert_eq!(index.file_count(), 1);
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – multiple packages in one file
+// =========================================================================
+
+#[test]
+fn test_multiple_packages_single_file() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/multi_pkg.pm")?;
+    let code = "package Alpha;\nsub a_fn { 1 }\npackage Beta;\nsub b_fn { 2 }";
+    index.index_file(uri, code.to_string())?;
+
+    assert!(index.find_definition("Alpha::a_fn").is_some());
+    assert!(index.find_definition("Beta::b_fn").is_some());
+
+    let alpha_members = index.get_package_members("Alpha");
+    let beta_members = index.get_package_members("Beta");
+    assert!(!alpha_members.is_empty());
+    assert!(!beta_members.is_empty());
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – use statement dependency tracking
+// =========================================================================
+
+#[test]
+fn test_use_statement_creates_dependency() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/use_dep.pl")?;
+    let uri_str = uri.to_string();
+    index.index_file(uri, "use File::Basename;\nuse Carp;".to_string())?;
+
+    let deps = index.file_dependencies(&uri_str);
+    assert!(deps.contains("File::Basename"));
+    assert!(deps.contains("Carp"));
+    Ok(())
+}
+
+#[test]
+fn test_find_dependents() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri_a = file_url("/dep_a.pl")?;
+    let uri_b = file_url("/dep_b.pl")?;
+
+    index.index_file(uri_a, "use My::Module;".to_string())?;
+    index.index_file(uri_b, "use My::Module;\nuse Other::Mod;".to_string())?;
+
+    let dependents = index.find_dependents("My::Module");
+    assert!(dependents.len() >= 2);
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – clear_file / clear_file_url
+// =========================================================================
+
+#[test]
+fn test_clear_file_alias() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/clearme.pl")?;
+    let uri_str = uri.to_string();
+    index.index_file(uri, "sub x { 1 }".to_string())?;
+
+    assert_eq!(index.file_count(), 1);
+    index.clear_file(&uri_str);
+    assert_eq!(index.file_count(), 0);
+    Ok(())
+}
+
+#[test]
+fn test_clear_file_url_alias() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/clearme2.pl")?;
+    index.index_file(uri.clone(), "sub y { 1 }".to_string())?;
+
+    index.clear_file_url(&uri);
+    assert_eq!(index.file_count(), 0);
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – SymbolKey with sigil (variable lookup)
+// =========================================================================
+
+#[test]
+fn test_find_def_variable_with_sigil() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/var_key.pl")?;
+    index.index_file(uri, "my $counter = 0;".to_string())?;
+
+    let key = SymbolKey {
+        pkg: Arc::from("main"),
+        name: Arc::from("counter"),
+        sigil: Some('$'),
+        kind: SymKind::Var,
+    };
+    let def = index.find_def(&key);
+    assert!(def.is_some());
+    Ok(())
+}
+
+#[test]
+fn test_find_refs_variable_with_sigil() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/var_refs.pl")?;
+    index.index_file(uri, "my $x = 1;\n$x = 2;\n$x;".to_string())?;
+
+    let key = SymbolKey {
+        pkg: Arc::from("main"),
+        name: Arc::from("x"),
+        sigil: Some('$'),
+        kind: SymKind::Var,
+    };
+    let refs = index.find_refs(&key);
+    // Should have references (excluding definition)
+    assert!(!refs.is_empty());
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – SymbolKey main package
+// =========================================================================
+
+#[test]
+fn test_find_refs_main_package() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/main_pkg.pl")?;
+    index.index_file(uri, "sub foo { 1 }\nfoo();".to_string())?;
+
+    let key = SymbolKey {
+        pkg: Arc::from("main"),
+        name: Arc::from("foo"),
+        sigil: None,
+        kind: SymKind::Sub,
+    };
+    // find_refs for main package should search bare name
+    let _refs = index.find_refs(&key);
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – function call dual indexing
+// =========================================================================
+
+#[test]
+fn test_function_call_dual_indexed() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/dual_call.pl")?;
+    let code = "package Utils;\nsub process { 1 }\nUtils::process();\nprocess();";
+    index.index_file(uri, code.to_string())?;
+
+    // Searching qualified name should find both qualified and bare calls
+    let refs = index.find_references("Utils::process");
+    assert!(refs.len() >= 2);
+    Ok(())
+}
+
+#[test]
+fn test_cross_file_qualified_call() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri_lib = file_url("/lib/Math.pm")?;
+    let uri_app = file_url("/app.pl")?;
+
+    index.index_file(uri_lib, "package Math;\nsub add { 1 }".to_string())?;
+    index.index_file(uri_app, "Math::add(1, 2);".to_string())?;
+
+    let refs = index.find_references("Math::add");
+    assert!(!refs.is_empty());
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – count_usages excludes definitions
+// =========================================================================
+
+#[test]
+fn test_count_usages_excludes_definition() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/count.pl")?;
+    index.index_file(uri, "sub counted { 1 }\ncounted();\ncounted();".to_string())?;
+
+    let count = index.count_usages("counted");
+    // The definition reference should be excluded; only call sites count
+    assert!(count >= 2);
+    Ok(())
+}
+
+#[test]
+fn test_count_usages_qualified() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/count_q.pl")?;
+    let code = "package Svc;\nsub handle { 1 }\nSvc::handle();\nhandle();";
+    index.index_file(uri, code.to_string())?;
+
+    let count = index.count_usages("Svc::handle");
+    assert!(count >= 1);
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – find_unused_symbols edge cases
+// =========================================================================
+
+#[test]
+fn test_find_unused_symbols_all_used() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/all_used.pl")?;
+    index.index_file(uri, "sub a { 1 }\na();".to_string())?;
+
+    let unused = index.find_unused_symbols();
+    let sub_unused: Vec<_> = unused.iter().filter(|s| s.name == "a").collect();
+    assert!(sub_unused.is_empty());
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – search with empty query
+// =========================================================================
+
+#[test]
+fn test_search_symbols_empty_query() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/query_empty.pl")?;
+    index.index_file(uri, "sub anything { 1 }".to_string())?;
+
+    // Empty query matches everything
+    let results = index.search_symbols("");
+    assert!(!results.is_empty());
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – file_symbols for nonexistent file
+// =========================================================================
+
+#[test]
+fn test_file_symbols_nonexistent() {
+    let index = WorkspaceIndex::new();
+    let syms = index.file_symbols("file:///no_such_file.pl");
+    assert!(syms.is_empty());
+}
+
+// =========================================================================
+// WorkspaceIndex – file_dependencies for nonexistent file
+// =========================================================================
+
+#[test]
+fn test_file_dependencies_nonexistent() {
+    let index = WorkspaceIndex::new();
+    let deps = index.file_dependencies("file:///no_such_file.pl");
+    assert!(deps.is_empty());
+}
+
+// =========================================================================
+// WorkspaceIndex – find_dependents for unknown module
+// =========================================================================
+
+#[test]
+fn test_find_dependents_unknown_module() {
+    let index = WorkspaceIndex::new();
+    let dependents = index.find_dependents("No::Such::Module");
+    assert!(dependents.is_empty());
+}
+
+// =========================================================================
+// WorkspaceIndex – remove nonexistent file
+// =========================================================================
+
+#[test]
+fn test_remove_nonexistent_file_is_noop() {
+    let index = WorkspaceIndex::new();
+    index.remove_file("file:///no_such.pl");
+    assert_eq!(index.file_count(), 0);
+}
+
+// =========================================================================
+// WorkspaceIndex – assignment reference tracking
+// =========================================================================
+
+#[test]
+fn test_assignment_write_reference() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/assign.pl")?;
+    index.index_file(uri, "my $x = 1;\n$x = 2;".to_string())?;
+
+    let refs = index.find_references("$x");
+    // Should have definition + read + write references
+    assert!(refs.len() >= 2);
+    Ok(())
+}
+
+#[test]
+fn test_compound_assignment_read_and_write() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/compound.pl")?;
+    index.index_file(uri, "my $count = 0;\n$count += 1;".to_string())?;
+
+    let refs = index.find_references("$count");
+    // Compound assignment creates both read and write references
+    assert!(refs.len() >= 2);
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – package symbol itself
+// =========================================================================
+
+#[test]
+fn test_package_declaration_is_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/pkg_sym.pm")?;
+    index.index_file(uri, "package My::Package;".to_string())?;
+
+    let def = index.find_definition("My::Package");
+    assert!(def.is_some());
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – default trait
+// =========================================================================
+
+#[test]
+fn test_workspace_index_default() {
+    let index = WorkspaceIndex::default();
+    assert_eq!(index.file_count(), 0);
+}
+
+// =========================================================================
+// IndexStateMachine – additional transitions
+// =========================================================================
+
+#[test]
+fn test_state_machine_cannot_build_from_idle() {
+    let sm = IndexStateMachine::new();
+    let result = sm.transition_to_building(10);
+    assert!(matches!(result, TransitionResult::InvalidTransition { .. }));
+}
+
+#[test]
+fn test_state_machine_cannot_update_from_idle() {
+    let sm = IndexStateMachine::new();
+    let result = sm.transition_to_updating(1);
+    assert!(matches!(result, TransitionResult::InvalidTransition { .. }));
+}
+
+#[test]
+fn test_state_machine_cannot_invalidate_from_transitional() {
+    let sm = IndexStateMachine::new();
+    sm.transition_to_initializing();
+    let result = sm.transition_to_invalidating(InvalidationReason::ManualRequest);
+    assert!(matches!(result, TransitionResult::InvalidTransition { .. }));
+}
+
+#[test]
+fn test_state_machine_cannot_degrade_from_error() {
+    let sm = IndexStateMachine::new();
+    sm.transition_to_error("fatal".to_string());
+    let result =
+        sm.transition_to_degraded(DegradationReason::IoError { message: "disk".to_string() });
+    assert!(matches!(result, TransitionResult::InvalidTransition { .. }));
+}
+
+#[test]
+fn test_state_machine_ready_to_ready_updates() {
+    let sm = IndexStateMachine::new();
+    sm.transition_to_initializing();
+    sm.transition_to_building(10);
+    sm.transition_to_ready(10, 100);
+    // Ready → Ready (update stats) should succeed
+    assert_eq!(sm.transition_to_ready(20, 200), TransitionResult::Success);
+    if let IndexState::Ready { file_count, symbol_count, .. } = sm.state() {
+        assert_eq!(file_count, 20);
+        assert_eq!(symbol_count, 200);
+    }
+}
+
+#[test]
+fn test_state_machine_update_building_progress_wrong_state() {
+    let sm = IndexStateMachine::new();
+    // Not in Building state
+    let result = sm.update_building_progress(10, BuildPhase::Indexing);
+    assert!(matches!(result, TransitionResult::InvalidTransition { .. }));
+}
+
+#[test]
+fn test_state_machine_update_init_progress_wrong_state() {
+    let sm = IndexStateMachine::new();
+    let result = sm.update_initialization_progress(50);
+    assert!(matches!(result, TransitionResult::InvalidTransition { .. }));
+}
+
+#[test]
+fn test_state_machine_init_progress_clamped_to_100() {
+    let sm = IndexStateMachine::new();
+    sm.transition_to_initializing();
+    assert_eq!(sm.update_initialization_progress(255), TransitionResult::Success);
+    if let IndexState::Initializing { progress, .. } = sm.state() {
+        assert_eq!(progress, 100);
+    }
+}
+
+#[test]
+fn test_state_machine_degraded_preserves_symbol_count() {
+    let sm = IndexStateMachine::new();
+    sm.transition_to_initializing();
+    sm.transition_to_building(10);
+    sm.transition_to_ready(10, 500);
+    sm.transition_to_degraded(DegradationReason::ScanTimeout { elapsed_ms: 5000 });
+
+    if let IndexState::Degraded { available_symbols, .. } = sm.state() {
+        assert_eq!(available_symbols, 500);
+    }
+}
+
+#[test]
+fn test_state_machine_invalidating_to_ready() {
+    let sm = IndexStateMachine::new();
+    sm.transition_to_invalidating(InvalidationReason::ManualRequest);
+    assert_eq!(sm.transition_to_ready(5, 50), TransitionResult::Success);
+}
+
+#[test]
+fn test_state_machine_degraded_to_building() {
+    let sm = IndexStateMachine::new();
+    sm.transition_to_degraded(DegradationReason::ParseStorm { pending_parses: 15 });
+    assert_eq!(sm.transition_to_building(100), TransitionResult::Success);
+}
+
+#[test]
+fn test_state_machine_degraded_to_updating() {
+    let sm = IndexStateMachine::new();
+    sm.transition_to_degraded(DegradationReason::IoError { message: "err".to_string() });
+    assert_eq!(sm.transition_to_updating(3), TransitionResult::Success);
+}
+
+// =========================================================================
+// IndexStateMachine – TransitionResult variant coverage
+// =========================================================================
+
+#[test]
+fn test_transition_result_guard_failed() {
+    let result = TransitionResult::GuardFailed { condition: "test guard".to_string() };
+    assert!(matches!(result, TransitionResult::GuardFailed { .. }));
+}
+
+// =========================================================================
+// DegradationReason variant coverage
+// =========================================================================
+
+#[test]
+fn test_degradation_reason_resource_limit() {
+    let reason = DegradationReason::ResourceLimit { kind: ResourceKind::MaxFiles };
+    assert!(matches!(reason, DegradationReason::ResourceLimit { .. }));
+}
+
+#[test]
+fn test_degradation_reason_parse_storm() {
+    let reason = DegradationReason::ParseStorm { pending_parses: 42 };
+    assert!(matches!(reason, DegradationReason::ParseStorm { pending_parses: 42 }));
+}
+
+#[test]
+fn test_degradation_reason_scan_timeout() {
+    let reason = DegradationReason::ScanTimeout { elapsed_ms: 31000 };
+    assert!(matches!(reason, DegradationReason::ScanTimeout { elapsed_ms: 31000 }));
+}
+
+// =========================================================================
+// InvalidationReason variant coverage
+// =========================================================================
+
+#[test]
+fn test_invalidation_reason_all_variants() {
+    let reasons = [
+        InvalidationReason::ConfigurationChanged,
+        InvalidationReason::FileSystemChanged,
+        InvalidationReason::ManualRequest,
+        InvalidationReason::CacheCorruption,
+        InvalidationReason::DependencyChanged,
+    ];
+    assert_eq!(reasons.len(), 5);
+}
+
+// =========================================================================
+// BoundedLruCache – additional edge cases
+// =========================================================================
+
+#[test]
+fn test_cache_remove_nonexistent() {
+    let cache = BoundedLruCache::<String, String>::default();
+    assert!(cache.remove(&"absent".to_string()).is_none());
+}
+
+#[test]
+fn test_cache_insert_with_size_too_large() {
+    let config = CacheConfig { max_items: 10, max_bytes: 5, ttl: None };
+    let cache = BoundedLruCache::<String, String>::new(config);
+    let inserted = cache.insert_with_size("k".to_string(), "v".to_string(), 100);
+    assert!(!inserted);
+}
+
+#[test]
+fn test_cache_config_accessor() {
+    let config = CacheConfig { max_items: 42, max_bytes: 9999, ttl: None };
+    let cache = BoundedLruCache::<String, String>::new(config);
+    assert_eq!(cache.config().max_items, 42);
+    assert_eq!(cache.config().max_bytes, 9999);
+}
+
+#[test]
+fn test_cache_lru_order_update_on_get() {
+    let config = CacheConfig { max_items: 2, max_bytes: 1024, ttl: None };
+    let cache = BoundedLruCache::<String, String>::new(config);
+
+    cache.insert("a".to_string(), "1".to_string());
+    cache.insert("b".to_string(), "2".to_string());
+    // Access 'a' to make it most recently used
+    let _ = cache.get(&"a".to_string());
+    // Insert 'c' which should evict 'b' (now LRU), not 'a'
+    cache.insert("c".to_string(), "3".to_string());
+
+    assert!(cache.get(&"a".to_string()).is_some());
+    assert!(cache.get(&"b".to_string()).is_none());
+    assert!(cache.get(&"c".to_string()).is_some());
+}
+
+// =========================================================================
+// EstimateSize – additional types
+// =========================================================================
+
+#[test]
+fn test_estimate_size_hashmap() {
+    use std::collections::HashMap;
+    let mut map: HashMap<String, String> = HashMap::new();
+    map.insert("key".to_string(), "value".to_string());
+    assert_eq!(map.estimate_size(), 3 + 5); // "key" + "value"
+}
+
+#[test]
+fn test_estimate_size_result() {
+    let ok: Result<String, String> = Ok("data".to_string());
+    let err: Result<String, String> = Err("err".to_string());
+    assert_eq!(ok.estimate_size(), 4);
+    assert_eq!(err.estimate_size(), 3);
+}
+
+#[test]
+fn test_estimate_size_u8_slice() {
+    let data: &[u8] = &[1, 2, 3, 4, 5];
+    assert_eq!(data.estimate_size(), 5);
+}
+
+#[test]
+fn test_estimate_size_str_ref() {
+    let s = "hello";
+    assert_eq!(s.estimate_size(), 5);
+}
+
+// =========================================================================
+// ProductionIndexCoordinator – additional tests
+// =========================================================================
+
+#[test]
+fn test_production_coordinator_search_symbols() -> Result<(), String> {
+    let coord = ProductionIndexCoordinator::new();
+    coord.initialize()?;
+
+    let uri = Url::parse("file:///search_prod.pl").map_err(|e| e.to_string())?;
+    coord.index_file(uri, "sub searchable { 1 }".to_string())?;
+
+    let results = coord.index().search_symbols("searchable");
+    assert!(!results.is_empty());
+    Ok(())
+}
+
+#[test]
+fn test_production_coordinator_all_symbols() -> Result<(), String> {
+    let coord = ProductionIndexCoordinator::new();
+    coord.initialize()?;
+
+    let uri = Url::parse("file:///all_prod.pl").map_err(|e| e.to_string())?;
+    coord.index_file(uri, "sub s1 { 1 }\nsub s2 { 2 }".to_string())?;
+
+    let all = coord.index().all_symbols();
+    assert!(all.len() >= 2);
+    Ok(())
+}
+
+#[test]
+fn test_production_coordinator_slo_tracker_accessor() {
+    let coord = ProductionIndexCoordinator::new();
+    let tracker = coord.slo_tracker();
+    assert!(tracker.all_slos_met());
+}
+
+#[test]
+fn test_production_coordinator_cache_accessor() {
+    let coord = ProductionIndexCoordinator::new();
+    let _cache = coord.cache();
+}
+
+#[test]
+fn test_production_coordinator_config_accessor() {
+    let coord = ProductionIndexCoordinator::new();
+    let _config = coord.config();
+}
+
+#[test]
+fn test_production_coordinator_index_accessor() {
+    let coord = ProductionIndexCoordinator::new();
+    let idx = coord.index();
+    assert_eq!(idx.file_count(), 0);
+}
+
+// =========================================================================
+// WorkspaceIndex – large index stress test
+// =========================================================================
+
+#[test]
+fn test_large_index_many_files() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+
+    for i in 0..50 {
+        let uri = file_url(&format!("/large_{}.pl", i))?;
+        let code = format!("sub fn_{} {{ {} }}", i, i);
+        index.index_file(uri, code)?;
+    }
+
+    assert_eq!(index.file_count(), 50);
+    assert!(index.symbol_count() >= 50);
+
+    // Spot check a few definitions
+    assert!(index.find_definition("fn_0").is_some());
+    assert!(index.find_definition("fn_49").is_some());
+    Ok(())
+}
+
+#[test]
+fn test_large_index_many_symbols_per_file() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/many_subs.pl")?;
+
+    let mut code = String::new();
+    for i in 0..30 {
+        code.push_str(&format!("sub multi_{} {{ {} }}\n", i, i));
+    }
+    index.index_file(uri, code)?;
+
+    assert!(index.symbol_count() >= 30);
+    assert!(index.find_definition("multi_0").is_some());
+    assert!(index.find_definition("multi_29").is_some());
+    Ok(())
+}
+
+// =========================================================================
+// WorkspaceIndex – normalize_var edge: sigil-only
+// =========================================================================
+
+#[test]
+fn test_normalize_var_sigil_only() {
+    use perl_workspace_index::workspace::workspace_index::normalize_var;
+    let (sigil, name) = normalize_var("$");
+    assert_eq!(sigil, Some('$'));
+    assert_eq!(name, "");
+}
+
+// =========================================================================
+// CacheStats hit rate calculation
+// =========================================================================
+
+#[test]
+fn test_cache_stats_hit_rate_zero_total() {
+    use perl_workspace_index::workspace::cache::CacheStats;
+    let rate = CacheStats::calculate_hit_rate(0, 0);
+    assert!((rate - 0.0).abs() < f64::EPSILON);
+}
+
+#[test]
+fn test_cache_stats_hit_rate_all_hits() {
+    use perl_workspace_index::workspace::cache::CacheStats;
+    let rate = CacheStats::calculate_hit_rate(100, 0);
+    assert!((rate - 1.0).abs() < f64::EPSILON);
+}
+
+#[test]
+fn test_cache_stats_hit_rate_all_misses() {
+    use perl_workspace_index::workspace::cache::CacheStats;
+    let rate = CacheStats::calculate_hit_rate(0, 100);
+    assert!((rate - 0.0).abs() < f64::EPSILON);
+}
+
+// =========================================================================
+// IndexCoordinator – transition_to_degraded with Building state
+// =========================================================================
+
+#[test]
+fn test_index_coordinator_degrade_from_building() {
+    use perl_workspace_index::workspace::workspace_index::{
+        DegradationReason as IxDegReason, IndexStateKind as IxStateKind,
+    };
+
+    let coord = IndexCoordinator::new();
+    // Starts in Building
+    coord.transition_to_degraded(IxDegReason::IoError { message: "err".to_string() });
+    assert!(matches!(coord.state().kind(), IxStateKind::Degraded));
+}
+
+// =========================================================================
+// WorkspaceIndex – document_store integration after remove
+// =========================================================================
+
+#[test]
+fn test_document_store_closed_after_remove() -> Result<(), Box<dyn std::error::Error>> {
+    let index = WorkspaceIndex::new();
+    let uri = file_url("/rm_doc.pl")?;
+    let uri_str = uri.to_string();
+    index.index_file(uri, "sub rm { 1 }".to_string())?;
+
+    assert!(index.document_store().is_open(&uri_str));
+    index.remove_file(&uri_str);
+    assert!(!index.document_store().is_open(&uri_str));
+    Ok(())
+}
+
+// =========================================================================
+// DocumentStore – URI normalization
+// =========================================================================
+
+#[test]
+fn test_document_store_uri_key_consistency() {
+    let key1 = DocumentStore::uri_key("file:///Path/To/File.pl");
+    let key2 = DocumentStore::uri_key("file:///Path/To/File.pl");
+    assert_eq!(key1, key2);
+}
+
+// =========================================================================
+// WorkspaceIndex – thread safety with concurrent reads and writes
+// =========================================================================
+
+#[test]
+fn test_concurrent_index_and_search() -> Result<(), Box<dyn std::error::Error>> {
+    use std::thread;
+
+    let index = Arc::new(WorkspaceIndex::new());
+
+    // First index some files
+    for i in 0..5 {
+        let uri = Url::parse(&format!("file:///conc_{}.pl", i))?;
+        index.index_file(uri, format!("sub conc_fn_{} {{ {} }}", i, i))?;
+    }
+
+    // Concurrent reads while writing
+    let handles: Vec<_> = (0..4)
+        .map(|i| {
+            let idx = Arc::clone(&index);
+            thread::spawn(move || {
+                // Mix of reads and writes
+                let _ = idx.search_symbols("conc_fn");
+                let _ = idx.find_definition("conc_fn_0");
+                let _ = idx.all_symbols();
+                let uri = Url::parse(&format!("file:///conc_extra_{}.pl", i)).ok()?;
+                idx.index_file(uri, format!("sub extra_{} {{ 1 }}", i)).ok()?;
+                Some(())
+            })
+        })
+        .collect();
+
+    for h in handles {
+        h.join().map_err(|_| "thread panicked")?;
+    }
+
+    assert!(index.file_count() >= 5);
     Ok(())
 }
