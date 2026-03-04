@@ -710,6 +710,7 @@ my $result = Foo::process_data();
     harness.open(&module_uri, module)?;
     harness.open(&main_uri, main)?;
     harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(2)).ok();
+    harness.barrier();
 
     let (line, character) = find_position(main, "process_data()");
 
