@@ -18,6 +18,7 @@ members = [
     "crates/perl-semantic-analyzer",
     "crates/perl-workspace-index",
     "crates/perl-workspace-index-slo",
+    "crates/perl-slo-metrics",
     "crates/perl-refactoring",
     "crates/perl-incremental-parsing",
     "crates/perl-tdd-support",
@@ -129,6 +130,7 @@ allow = [
 "perl-symbol-cursor",
 "perl-symbol-table",
     "perl-uri",
+    "perl-slo-metrics",
     "perl-workspace-index-slo",
 
     # Tier 3 — Analysis and indexing
@@ -231,6 +233,7 @@ perl-heredoc = { path = "crates/perl-heredoc", version = "0.10.0" }
 perl-error = { path = "crates/perl-error", version = "0.10.0" }
 perl-tokenizer = { path = "crates/perl-tokenizer", version = "0.10.0" }
 perl-position-tracking = { path = "crates/perl-position-tracking", version = "0.10.0" }
+perl-slo-metrics = { path = "crates/perl-slo-metrics", version = "0.10.0" }
 perl-symbol-types = { path = "crates/perl-symbol-types", version = "0.10.0" }
 perl-symbol-cursor = { path = "crates/perl-symbol-cursor", version = "0.10.0" }
 perl-symbol-table = { path = "crates/perl-symbol-table", version = "0.10.0" }

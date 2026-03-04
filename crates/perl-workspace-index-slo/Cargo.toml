@@ -16,6 +16,7 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
 parking_lot = "0.12.5"
+perl-slo-metrics.workspace = true
 
 [dev-dependencies]
 proptest = "1.9.0"

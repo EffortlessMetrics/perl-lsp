@@ -1,0 +1,20 @@
+[package]
+name = "perl-slo-metrics"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Shared latency percentile and summary metrics primitives"
+readme = "README.md"
+documentation = "https://docs.rs/perl-slo-metrics"
+keywords = ["perl", "slo", "metrics", "latency", "percentile"]
+categories = ["algorithms", "development-tools"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+
+[lints]
+workspace = true
