@@ -16,5 +16,8 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 perl-position-tracking = { workspace = true }
 
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
 [lints]
 workspace = true
