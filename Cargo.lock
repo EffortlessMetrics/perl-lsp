@@ -1564,6 +1564,7 @@ dependencies = [
  "perl-dap-breakpoint",
  "perl-dap-eval",
  "perl-dap-platform",
+ "perl-dap-protocol",
  "perl-dap-stack",
  "perl-dap-variables",
  "perl-feature-catalog",
@@ -1610,6 +1611,14 @@ name = "perl-dap-platform"
 version = "0.10.0"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "perl-dap-protocol"
+version = "0.10.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

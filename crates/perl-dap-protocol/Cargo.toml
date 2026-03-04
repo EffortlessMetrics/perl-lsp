@@ -1,0 +1,27 @@
+[package]
+name = "perl-dap-protocol"
+version = "0.10.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Debug Adapter Protocol request/response/event types for perl-dap"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-dap-protocol"
+readme = "README.md"
+keywords = ["perl", "dap", "protocol", "debug", "json"]
+categories = ["development-tools::debugging", "development-tools"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+
+[lints]
+workspace = true
