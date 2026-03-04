@@ -34,6 +34,7 @@
 //! ```
 
 use parking_lot::Mutex;
+use perl_slo_metrics::summarize_latencies;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -253,44 +254,26 @@ impl OperationSloTracker {
         let error_rate =
             if total_count > 0 { failure_count as f64 / total_count as f64 } else { 0.0 };
 
-        // Calculate percentiles
-        let mut durations_ms: Vec<u64> =
+        let durations_ms: Vec<u64> =
             self.samples.iter().map(|s| s.duration.as_millis() as u64).collect();
-        durations_ms.sort_unstable();
-
-        let p50_ms = percentile(&durations_ms, 50);
-        let p95_ms = percentile(&durations_ms, 95);
-        let p99_ms = percentile(&durations_ms, 99);
-
-        let avg_ms =
-            durations_ms.iter().map(|&d| d as f64).sum::<f64>() / durations_ms.len() as f64;
+        let latency_summary = summarize_latencies(&durations_ms);
 
         // Check if SLO is met
-        let slo_met = p95_ms <= self.slo_target_ms && error_rate <= self.max_error_rate;
+        let slo_met =
+            latency_summary.p95_ms <= self.slo_target_ms && error_rate <= self.max_error_rate;
 
         SloStatistics {
             total_count,
             success_count,
             failure_count,
             error_rate,
-            p50_ms,
-            p95_ms,
-            p99_ms,
-            avg_ms,
+            p50_ms: latency_summary.p50_ms,
+            p95_ms: latency_summary.p95_ms,
+            p99_ms: latency_summary.p99_ms,
+            avg_ms: latency_summary.avg_ms,
             slo_met,
         }
     }
-}
-
-/// Calculate a percentile from a sorted slice of values.
-fn percentile(sorted_values: &[u64], pct: u64) -> u64 {
-    if sorted_values.is_empty() {
-        return 0;
-    }
-
-    // Nearest-rank method: ceil(pct/100 * n) gives 1-based rank
-    let rank = ((pct as f64 / 100.0) * sorted_values.len() as f64).ceil() as usize;
-    sorted_values[rank.min(sorted_values.len()).saturating_sub(1)]
 }
 
 /// SLO tracker for workspace index operations.
@@ -597,12 +580,5 @@ mod tests {
     fn test_operation_result() {
         assert!(OperationResult::Success.is_success());
         assert!(!OperationResult::Failure("error".to_string()).is_success());
-    }
-
-    #[test]
-    fn test_percentile() {
-        let values = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        assert_eq!(percentile(&values, 50), 5); // Median
-        assert_eq!(percentile(&values, 95), 10); // P95
     }
 }
