@@ -22,6 +22,6 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-mod rename;
+pub mod rename;
 
 pub use rename::{RenameOptions, RenameProvider, RenameResult, TextEdit};
