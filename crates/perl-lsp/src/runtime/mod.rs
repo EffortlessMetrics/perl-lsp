@@ -1554,6 +1554,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn end_position_handles_trailing_final_newline() {
+        let server = LspServer::new();
+        let content = "package Foo;\n";
+        let pos = server.get_document_end_position(content);
+        assert_eq!(pos, json!({"line": 1, "character": 0}));
+    }
+
+    #[test]
     fn end_position_handles_missing_final_newline() {
         let server = LspServer::new();
         let content = "package Foo;";
