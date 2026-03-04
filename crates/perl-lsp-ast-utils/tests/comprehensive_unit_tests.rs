@@ -420,11 +420,7 @@ fn find_node_at_range_binary_expression() {
     let right = create_test_node(NodeKind::Number { value: "2".to_string() }, 3, 4);
 
     let binary = create_test_node(
-        NodeKind::Binary {
-            op: "+".to_string(),
-            left: Box::new(left),
-            right: Box::new(right),
-        },
+        NodeKind::Binary { op: "+".to_string(), left: Box::new(left), right: Box::new(right) },
         0,
         4,
     );
@@ -439,11 +435,7 @@ fn find_node_at_range_binary_left_child() {
     let right = create_test_node(NodeKind::Number { value: "2".to_string() }, 3, 4);
 
     let binary = create_test_node(
-        NodeKind::Binary {
-            op: "+".to_string(),
-            left: Box::new(left),
-            right: Box::new(right),
-        },
+        NodeKind::Binary { op: "+".to_string(), left: Box::new(left), right: Box::new(right) },
         0,
         4,
     );
@@ -535,22 +527,14 @@ fn find_node_at_range_deeply_nested() {
         NodeKind::Binary {
             op: "+".to_string(),
             left: Box::new(num),
-            right: Box::new(create_test_node(
-                NodeKind::Number { value: "2".to_string() },
-                12,
-                13,
-            )),
+            right: Box::new(create_test_node(NodeKind::Number { value: "2".to_string() }, 12, 13)),
         },
         10,
         13,
     );
     let right = create_test_node(NodeKind::Number { value: "3".to_string() }, 14, 15);
     let top_binary = create_test_node(
-        NodeKind::Binary {
-            op: "*".to_string(),
-            left: Box::new(left),
-            right: Box::new(right),
-        },
+        NodeKind::Binary { op: "*".to_string(), left: Box::new(left), right: Box::new(right) },
         10,
         15,
     );
