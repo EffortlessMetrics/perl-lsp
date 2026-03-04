@@ -100,7 +100,7 @@ exclude = [
 [workspace.metadata.publish]
 allow = [
     # Complete publish allowlist in topological dependency order.
-    # All 73 workspace crates needed for perl-lsp, perl-parser, and perl-dap.
+    # All 75 workspace crates needed for perl-lsp, perl-parser, and perl-dap.
 
     # Tier 1 — Leaf crates (no workspace deps)
     "perl-position-tracking",
@@ -124,7 +124,8 @@ allow = [
     "perl-edit",
     "perl-incremental-parsing",
     "perl-symbol-types",
-    "perl-symbol-cursor",
+"perl-symbol-cursor",
+"perl-symbol-table",
     "perl-uri",
     "perl-workspace-index-slo",
 
