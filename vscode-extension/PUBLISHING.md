@@ -1,163 +1,135 @@
-# Publishing the Perl Language Server Extension
+# VS Code Marketplace Launch Playbook
 
-## Prerequisites
+This guide is the **release runbook** for shipping `vscode-extension/` to the Visual Studio Marketplace.
 
-1. **Node.js and npm** installed
-2. **Visual Studio Code** installed
-3. **vsce** (Visual Studio Code Extension manager) installed:
-   ```bash
-   npm install -g @vscode/vsce
-   ```
-4. **Publisher account** on Visual Studio Marketplace
+It focuses on launch readiness and accurate commands for the current extension (`perl-lsp`, publisher `effortlesssteven`).
 
-## Build Process
+## 1) One-time setup
 
-### 1. Build the LSP Binary
+### Required accounts and credentials
 
-First, ensure the perl-lsp binary is built:
+1. Visual Studio Marketplace publisher account (`effortlesssteven`)
+2. Azure DevOps Personal Access Token (PAT) with Marketplace publish permissions
+3. Optional: Open VSX token if publishing to Open VSX as well
+
+### Tooling
 
 ```bash
-# From the project root
-cd ..
-cargo build -p perl-parser --bin perl-lsp --release
+# From vscode-extension/
+npm ci
+npx @vscode/vsce --version
 ```
 
-### 2. Build the Extension
+Login once per machine:
 
 ```bash
-# From project root
-cargo xtask release <version>
+npx @vscode/vsce login effortlesssteven
 ```
 
-Or manually:
+## 2) Pre-launch checklist
+
+Complete this checklist before packaging/publishing:
+
+- [ ] `package.json` version bumped (semantic version)
+- [ ] `CHANGELOG.md` updated with release notes
+- [ ] `README.md` accurate for currently shipped capabilities
+- [ ] Extension metadata validated (`displayName`, `description`, `categories`, `keywords`, `icon`, `repository`, `bugs`, `homepage`, `license`)
+- [ ] Any new settings/commands reflected in README docs
+- [ ] No accidental local/dev files included in the VSIX (`.vscodeignore`)
+- [ ] Extension compiles and packages successfully
+- [ ] Manual smoke test done in VS Code with a Perl workspace
+
+## 3) Build and validate
+
+From `vscode-extension/`:
 
 ```bash
-# Install dependencies
-npm install
-
 # Compile TypeScript
 npm run compile
 
-# Bundle LSP binary
-npm run bundle-lsp
-
-# Package extension
-npm run package
+# Package extension (also runs vscode:prepublish)
+npx @vscode/vsce package --no-dependencies
 ```
 
-### 3. Test Locally
-
-Install and test the extension locally:
+Quick validation of produced artifact:
 
 ```bash
-# Install the VSIX file
-code --install-extension perl-language-server-*.vsix
+# Install locally for smoke testing
+code --install-extension perl-lsp-<version>.vsix
 
-# Open test file
-code test/sample.pl
+# Example
+code --install-extension perl-lsp-0.10.0.vsix
 ```
 
-Test these features:
-- [ ] Syntax highlighting works
+Smoke test minimum bar:
+
+- [ ] Extension activates on `.pl`/`.pm` files
+- [ ] Language server starts and responds
+- [ ] Hover/completion/definition work
 - [ ] Diagnostics appear for syntax errors
-- [ ] Format document (Shift+Alt+F) works (if perltidy installed)
-- [ ] Go to definition (F12) works
-- [ ] Hover shows information
-- [ ] Auto-completion triggers
+- [ ] Restart command (`Perl: Restart Perl Language Server`) works
 
-### 4. Cross-Platform Binaries
+## 4) Publish to Visual Studio Marketplace
 
-For marketplace release, build for all platforms:
+From `vscode-extension/`:
 
 ```bash
-# Linux x64
-cargo build --target x86_64-unknown-linux-gnu --release
-
-# macOS x64
-cargo build --target x86_64-apple-darwin --release
-
-# macOS ARM64
-cargo build --target aarch64-apple-darwin --release
-
-# Windows x64
-cargo build --target x86_64-pc-windows-msvc --release
+# Publish current package.json version
+npx @vscode/vsce publish --no-dependencies
 ```
 
-Place binaries in appropriate directories:
-- `bin/linux-x64/perl-lsp`
-- `bin/darwin-x64/perl-lsp`
-- `bin/darwin-arm64/perl-lsp`
-- `bin/win32-x64/perl-lsp.exe`
-
-### 5. Create Publisher
-
-If you haven't already:
-
-1. Go to https://marketplace.visualstudio.com/manage
-2. Create a publisher ID (e.g., "tree-sitter-perl")
-3. Get a Personal Access Token from Azure DevOps
-
-### 6. Login to vsce
+Or bump + publish in one command:
 
 ```bash
-vsce login <publisher-id>
-# Enter your Personal Access Token when prompted
+npx @vscode/vsce publish patch --no-dependencies
+# or minor / major
 ```
 
-### 7. Publish
+## 5) Optional: publish to Open VSX
+
+If maintaining Open VSX parity:
 
 ```bash
-# Publish to marketplace
-npm run publish
-
-# Or with version bump
-vsce publish minor  # 0.5.0 -> 0.6.0
-vsce publish major  # 0.5.0 -> 0.9.x
-vsce publish 0.5.1  # Specific version
+# Requires ovsx CLI and token setup
+npx ovsx publish perl-lsp-<version>.vsix -p "$OVSX_PAT"
 ```
 
-## Post-Publishing
+## 6) Post-publish verification
 
-1. **Verify on Marketplace**
-   - Go to https://marketplace.visualstudio.com/
-   - Search for "Perl Language Server"
-   - Verify description, screenshots, etc.
+- [ ] Marketplace listing renders correctly (icon, README, links)
+- [ ] Install from marketplace succeeds:
+  ```bash
+  code --install-extension effortlesssteven.perl-lsp
+  ```
+- [ ] Basic language features work after clean install
+- [ ] Release notes/changelog links are correct
+- [ ] Any release announcement links to marketplace page
 
-2. **Update Documentation**
-   - Update main README.md with marketplace link
-   - Add installation instructions
-   - Update CHANGELOG.md
+## 7) Rollback / hotfix guidance
 
-3. **Create GitHub Release**
-   - Tag the release: `git tag vscode-extension-v0.5.0`
-   - Create release on GitHub
-   - Attach the .vsix file
+If a bad release ships:
 
-## Maintenance
+1. Ship a fast patch version (`x.y.z+1`) with fix.
+2. Update changelog with explicit regression note.
+3. Post issue/update in repository to guide impacted users.
 
-### Updating the Extension
+## 8) Common failure modes
 
-1. Update version in `package.json`
-2. Update `CHANGELOG.md`
-3. Rebuild and test
-4. Publish update: `vsce publish`
+### Authentication or publisher issues
 
-### Monitoring
+- Re-run `npx @vscode/vsce login effortlesssteven`
+- Regenerate PAT if expired/revoked
 
-- Check reviews and ratings on marketplace
-- Monitor GitHub issues
-- Respond to user feedback
+### Missing files in package
 
-## Troubleshooting
+- Check `.vscodeignore`
+- Re-run packaging and inspect VSIX file list output
 
-### "Missing publisher name"
-Update `package.json` with your publisher ID.
+### Compile failures
 
-### "Personal Access Token expired"
-Create a new token and login again with `vsce login`.
+- Run `npm ci`
+- Ensure local Node version is compatible with dependencies
 
-### Binary not found
-Ensure `bundle-lsp.js` correctly detects platform and copies binaries.
+### Command not found for `code`
 
-### Large package size
-Check `.vscodeignore` is excluding unnecessary files.
+- Install VS Code shell command (`Shell Command: Install 'code' command in PATH`)
