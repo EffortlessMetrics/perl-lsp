@@ -2249,6 +2249,7 @@ name = "perl-position-tracking"
 version = "0.10.0"
 dependencies = [
  "lsp-types",
+ "perl-tdd-support",
  "ropey",
  "serde",
  "serde_json",
