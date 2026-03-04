@@ -15,5 +15,8 @@ categories = ["parsing", "text-processing"]
 
 [dependencies]
 
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+
 [lints]
 workspace = true
