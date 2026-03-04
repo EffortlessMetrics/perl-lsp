@@ -80,6 +80,10 @@ impl<R: perl_lsp_tooling::SubprocessRuntime> FormattingProvider<R> {
             return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
         }
 
+        if end_line < start_line {
+            return Ok(FormattedDocument { text: content.to_string(), edits: vec![] });
+        }
+
         let text_to_format = lines[start_line..=end_line].join("\n");
         let formatted = self.run_perltidy(&text_to_format, options)?;
 

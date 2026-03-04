@@ -364,6 +364,22 @@ fn test_format_range_single_line() -> Result<(), Box<dyn std::error::Error>> {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn test_format_range_reversed_lines_returns_no_edits() -> Result<(), Box<dyn std::error::Error>> {
+    let source = "line1
+line2
+line3";
+    let runtime = MockSubprocessRuntime::new();
+    let provider = make_provider(runtime);
+
+    let range = FormatRange::new(FormatPosition::new(2, 0), FormatPosition::new(1, 0));
+    let doc = must(provider.format_range(source, &range, &default_options()));
+
+    assert!(doc.edits.is_empty());
+    assert_eq!(doc.text, source);
+    Ok(())
+}
+
+#[test]
 fn test_format_range_start_beyond_document() -> Result<(), Box<dyn std::error::Error>> {
     let source = "only one line";
     let runtime = MockSubprocessRuntime::new();
