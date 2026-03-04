@@ -40,6 +40,16 @@ cargo metadata --no-deps --format-version=1 |\
 
 To inspect the exact publish order used by the workflow, read the "Compute topological order" output in the workflow run.
 
+For local packaging dry-runs with workspace path patching, use:
+
+```bash
+# package every crate in [workspace.metadata.publish.allow]
+scripts/cargo-package-workspace-dry-run.sh
+
+# package specific crates
+scripts/cargo-package-workspace-dry-run.sh perl-parser perl-lsp perl-dap
+```
+
 ## Manual Fallback (Use with caution)
 
 If automated publish fails and needs recovery, publish remaining crates one-by-one using the workflow summary order:
