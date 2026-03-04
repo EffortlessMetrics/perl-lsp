@@ -304,6 +304,23 @@ static void skip_braced(TSLexer *lexer) {
   ADVANCE_C;
 }
 
+static void skip_braced_octdigits(TSLexer *lexer) {
+  int32_t c = lexer->lookahead;
+
+  if (c != '{') return;
+
+  ADVANCE_C;
+  while (c && c != '}') {
+    if (c >= '0' && c <= '7') {
+      ADVANCE_C;
+    } else {
+      return;
+    }
+  }
+
+  if (c == '}') ADVANCE_C;
+}
+
 static bool isidfirst(int32_t c) { return c == '_' || is_tsp_id_start(c); }
 
 static bool isidcont(int32_t c) { return c == '_' || is_tsp_id_continue(c); }
@@ -782,8 +799,7 @@ bool tree_sitter_perl_external_scanner_scan(void *payload, TSLexer *lexer,
           break;
 
         case 'o':
-          /* TODO: contents should just be octal */
-          skip_braced(lexer);
+          skip_braced_octdigits(lexer);
           break;
 
         case '0':
