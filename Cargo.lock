@@ -2259,6 +2259,7 @@ name = "perl-pragma"
 version = "0.10.0"
 dependencies = [
  "perl-ast",
+ "perl-tdd-support",
 ]
 
 [[package]]
