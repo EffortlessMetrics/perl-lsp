@@ -63,6 +63,17 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/i
 cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp
 ```
 
+
+## 🛍️ Marketplace Readiness
+
+Before publishing a new extension build, run:
+
+```bash
+npm run marketplace:launch-check
+```
+
+This validates required Marketplace metadata/assets and creates a local `.vsix` package for smoke testing.
+
 ## ⚙️ Configuration
 
 ```json
