@@ -1,0 +1,30 @@
+[package]
+name = "perl-lsp-uri"
+version = "0.10.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Panic-free LSP Uri parsing with stable fallback behavior"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-uri"
+readme = "README.md"
+keywords = ["perl", "lsp", "uri", "language-server", "jsonrpc"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[lib]
+name = "perl_lsp_uri"
+path = "src/lib.rs"
+
+[dependencies]
+lsp-types = "0.97.0"
+
+[lints]
+workspace = true

@@ -1753,6 +1753,7 @@ dependencies = [
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
+ "perl-lsp-uri",
  "perl-module-path",
  "perl-module-reference",
  "perl-module-rename",
@@ -2035,6 +2036,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-uri"
+version = "0.10.0"
+dependencies = [
+ "lsp-types",
+]
+
+[[package]]
 name = "perl-module-boundary"
 version = "0.10.0"
 dependencies = [
@@ -2254,6 +2262,7 @@ name = "perl-position-tracking"
 version = "0.10.0"
 dependencies = [
  "lsp-types",
+ "perl-lsp-uri",
  "perl-tdd-support",
  "ropey",
  "serde",

@@ -26,10 +26,14 @@ serde = { version = "1.0.228", features = ["derive"] }
 
 [features]
 default = []
-lsp-compat = ["lsp-types"]
+lsp-compat = ["lsp-types", "dep:perl-lsp-uri"]
 
 [dependencies.lsp-types]
 version = "0.97.0"
+optional = true
+
+[dependencies.perl-lsp-uri]
+workspace = true
 optional = true
 
 [dev-dependencies]
