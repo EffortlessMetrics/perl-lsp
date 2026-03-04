@@ -12,6 +12,15 @@ homepage.workspace = true
 documentation = "https://docs.rs/perl-lsp-ast-utils"
 keywords = ["perl", "lsp", "ast", "utilities"]
 categories = ["development-tools", "text-editors"]
+include = [
+    "src/**/*",
+    "Cargo.toml",
+    "LICENSE-APACHE",
+    "LICENSE-MIT",
+    "README.md",
+    "CLAUDE.md",
+    "ROADMAP.md",
+]
 
 [lib]
 doctest = false
