@@ -1606,10 +1606,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-dap-launch-config"
+version = "0.10.0"
+
+[[package]]
 name = "perl-dap-platform"
 version = "0.10.0"
 dependencies = [
  "anyhow",
+ "perl-dap-launch-config",
 ]
 
 [[package]]

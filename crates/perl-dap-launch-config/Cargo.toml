@@ -1,0 +1,27 @@
+[package]
+name = "perl-dap-launch-config"
+version = "0.10.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Launch argument and environment preparation for perl-dap"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-dap-launch-config"
+readme = "README.md"
+keywords = ["perl", "dap", "launch", "debugger", "environment"]
+categories = ["development-tools::debugging", "config"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "README.md",
+  "LICENSE*"
+]
+
+[lib]
+name = "perl_dap_launch_config"
+path = "src/lib.rs"
+
+[lints]
+workspace = true

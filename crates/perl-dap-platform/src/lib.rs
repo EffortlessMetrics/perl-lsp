@@ -1,7 +1,6 @@
 //! Cross-platform utilities for Perl path resolution and environment setup.
 
 use anyhow::{Context, Result};
-use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
@@ -76,46 +75,7 @@ pub fn normalize_path(path: &std::path::Path) -> PathBuf {
     path.to_path_buf()
 }
 
-/// Setup environment variables for Perl execution.
-pub fn setup_environment(include_paths: &[PathBuf]) -> HashMap<String, String> {
-    let mut env = HashMap::new();
-
-    if !include_paths.is_empty() {
-        let perl5lib = include_paths
-            .iter()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect::<Vec<_>>()
-            .join(&PATH_SEPARATOR.to_string());
-
-        env.insert("PERL5LIB".to_string(), perl5lib);
-    }
-
-    env
-}
-
-/// Format command-line arguments for platform-specific shells.
-pub fn format_command_args(args: &[String]) -> Vec<String> {
-    args.iter()
-        .map(|arg| {
-            if arg.contains(' ') {
-                #[cfg(windows)]
-                {
-                    format!("\"{}\"", arg.replace('"', "\\\""))
-                }
-                #[cfg(not(windows))]
-                {
-                    if arg.contains('\'') {
-                        format!("\"{}\"", arg.replace('"', "\\\""))
-                    } else {
-                        format!("'{}'", arg)
-                    }
-                }
-            } else {
-                arg.clone()
-            }
-        })
-        .collect()
-}
+pub use perl_dap_launch_config::{format_command_args, setup_environment};
 
 #[cfg(test)]
 mod tests {

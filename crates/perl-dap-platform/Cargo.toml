@@ -25,6 +25,7 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1.0.102"
+perl-dap-launch-config = { workspace = true }
 
 [lints]
 workspace = true
