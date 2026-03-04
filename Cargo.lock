@@ -2319,6 +2319,9 @@ version = "0.10.0"
 [[package]]
 name = "perl-symbol-cursor"
 version = "0.10.0"
+dependencies = [
+ "perl-tdd-support",
+]
 
 [[package]]
 name = "perl-symbol-table"
