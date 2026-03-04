@@ -2120,6 +2120,7 @@ version = "0.10.0"
 dependencies = [
  "perl-module-path",
  "perl-path-security",
+ "perl-tdd-support",
  "perl-workspace-folder",
  "proptest",
  "tempfile",
