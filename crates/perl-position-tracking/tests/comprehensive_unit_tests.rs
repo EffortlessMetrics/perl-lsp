@@ -1092,3 +1092,773 @@ fn line_starts_cache_rope_past_last_line() {
     let off = cache.position_to_offset_rope(&rope, 99, 0);
     assert_eq!(off, rope.len_bytes());
 }
+
+// ─── Additional ByteSpan edge cases ─────────────────────────────────────────
+
+#[test]
+fn byte_span_empty_does_not_contain_any_offset() {
+    let span = ByteSpan::empty(5);
+    assert!(!span.contains(5));
+    assert!(!span.contains(4));
+    assert!(!span.contains(6));
+}
+
+#[test]
+fn byte_span_empty_inside_nonempty_overlaps() {
+    // overlaps uses strict less-than on half-open intervals:
+    // empty(5) = [5,5), nonempty = [3,8)
+    // 5 < 8 && 3 < 5 → true (the point lies within the interval)
+    let empty = ByteSpan::empty(5);
+    let non_empty = ByteSpan::new(3, 8);
+    assert!(empty.overlaps(non_empty));
+    assert!(non_empty.overlaps(empty));
+}
+
+#[test]
+fn byte_span_empty_at_boundary_does_not_overlap() {
+    // empty(5) = [5,5), span = [5,10)
+    // 5 < 10 && 5 < 5 → false (second condition fails)
+    let empty = ByteSpan::empty(5);
+    let span = ByteSpan::new(5, 10);
+    assert!(!empty.overlaps(span));
+    assert!(!span.overlaps(empty));
+}
+
+#[test]
+fn byte_span_two_empty_spans_do_not_overlap() {
+    let a = ByteSpan::empty(5);
+    let b = ByteSpan::empty(5);
+    assert!(!a.overlaps(b));
+}
+
+#[test]
+fn byte_span_intersection_identical_spans() {
+    let span = ByteSpan::new(3, 10);
+    assert_eq!(span.intersection(span), Some(ByteSpan::new(3, 10)));
+}
+
+#[test]
+fn byte_span_intersection_one_contains_other() {
+    let outer = ByteSpan::new(0, 20);
+    let inner = ByteSpan::new(5, 10);
+    assert_eq!(outer.intersection(inner), Some(inner));
+    assert_eq!(inner.intersection(outer), Some(inner));
+}
+
+#[test]
+fn byte_span_union_identical() {
+    let span = ByteSpan::new(3, 7);
+    assert_eq!(span.union(span), span);
+}
+
+#[test]
+fn byte_span_union_nested() {
+    let outer = ByteSpan::new(0, 20);
+    let inner = ByteSpan::new(5, 10);
+    assert_eq!(outer.union(inner), outer);
+    assert_eq!(inner.union(outer), outer);
+}
+
+#[test]
+fn byte_span_whole_empty_string() {
+    let span = ByteSpan::whole("");
+    assert_eq!(span.start, 0);
+    assert_eq!(span.end, 0);
+    assert!(span.is_empty());
+}
+
+#[test]
+fn byte_span_try_slice_empty_source() {
+    let span = ByteSpan::new(0, 0);
+    assert_eq!(span.try_slice(""), Some(""));
+}
+
+#[test]
+fn byte_span_try_slice_out_of_bounds_start() {
+    let span = ByteSpan::new(5, 10);
+    assert_eq!(span.try_slice("hi"), None);
+}
+
+#[test]
+fn byte_span_copy_semantics() {
+    let a = ByteSpan::new(1, 5);
+    let b = a; // Copy
+    assert_eq!(a, b);
+    assert_eq!(a.start, b.start);
+}
+
+#[test]
+fn byte_span_hash_equality() {
+    use std::collections::HashSet;
+    let mut set = HashSet::new();
+    set.insert(ByteSpan::new(1, 5));
+    set.insert(ByteSpan::new(1, 5));
+    assert_eq!(set.len(), 1);
+}
+
+#[test]
+fn byte_span_hash_different() {
+    use std::collections::HashSet;
+    let mut set = HashSet::new();
+    set.insert(ByteSpan::new(1, 5));
+    set.insert(ByteSpan::new(1, 6));
+    assert_eq!(set.len(), 2);
+}
+
+#[test]
+fn byte_span_contains_span_empty_contained_in_nonempty() {
+    let outer = ByteSpan::new(0, 10);
+    let inner_empty = ByteSpan::empty(5);
+    assert!(outer.contains_span(inner_empty));
+}
+
+#[test]
+fn byte_span_contains_span_disjoint() {
+    let a = ByteSpan::new(0, 5);
+    let b = ByteSpan::new(6, 10);
+    assert!(!a.contains_span(b));
+    assert!(!b.contains_span(a));
+}
+
+#[test]
+fn byte_span_overlaps_self() {
+    let span = ByteSpan::new(3, 7);
+    assert!(span.overlaps(span));
+}
+
+#[test]
+fn byte_span_slice_full_source() {
+    let src = "complete text";
+    let span = ByteSpan::whole(src);
+    assert_eq!(span.slice(src), src);
+}
+
+#[test]
+fn byte_span_slice_single_char() {
+    let src = "abcdef";
+    let span = ByteSpan::new(2, 3);
+    assert_eq!(span.slice(src), "c");
+}
+
+#[test]
+fn byte_span_display_empty() {
+    assert_eq!(format!("{}", ByteSpan::empty(0)), "0..0");
+}
+
+#[test]
+fn byte_span_from_range_empty() {
+    let span: ByteSpan = (5..5).into();
+    assert!(span.is_empty());
+    assert_eq!(span.start, 5);
+}
+
+// ─── Additional Position edge cases ─────────────────────────────────────────
+
+#[test]
+fn position_advance_empty_string() {
+    let mut pos = perl_position_tracking::Position::start();
+    pos.advance("");
+    assert_eq!(pos.byte, 0);
+    assert_eq!(pos.line, 1);
+    assert_eq!(pos.column, 1);
+}
+
+#[test]
+fn position_advance_only_newlines() {
+    let mut pos = perl_position_tracking::Position::start();
+    pos.advance("\n\n\n");
+    assert_eq!(pos.byte, 3);
+    assert_eq!(pos.line, 4);
+    assert_eq!(pos.column, 1);
+}
+
+#[test]
+fn position_advance_char_multibyte() {
+    let mut pos = perl_position_tracking::Position::start();
+    pos.advance_char('😀');
+    assert_eq!(pos.byte, 4);
+    assert_eq!(pos.column, 2);
+    assert_eq!(pos.line, 1);
+}
+
+#[test]
+fn position_advance_char_cjk() {
+    let mut pos = perl_position_tracking::Position::start();
+    pos.advance_char('日');
+    assert_eq!(pos.byte, 3);
+    assert_eq!(pos.column, 2);
+}
+
+#[test]
+fn position_default_is_all_zeros() {
+    let pos = perl_position_tracking::Position::default();
+    assert_eq!(pos.byte, 0);
+    assert_eq!(pos.line, 0);
+    assert_eq!(pos.column, 0);
+}
+
+#[test]
+fn position_new_arbitrary_values() {
+    let pos = perl_position_tracking::Position::new(42, 7, 13);
+    assert_eq!(pos.byte, 42);
+    assert_eq!(pos.line, 7);
+    assert_eq!(pos.column, 13);
+}
+
+#[test]
+fn position_advance_cr_lf_sequence() {
+    let mut pos = perl_position_tracking::Position::start();
+    pos.advance("a\r\nb");
+    // \r is treated as non-newline, \n advances line
+    assert_eq!(pos.byte, 4);
+    assert_eq!(pos.line, 2);
+}
+
+#[test]
+fn position_advance_tab_character() {
+    let mut pos = perl_position_tracking::Position::start();
+    pos.advance("\t");
+    assert_eq!(pos.byte, 1);
+    assert_eq!(pos.column, 2); // tab is a non-newline char
+}
+
+// ─── Additional Range edge cases ────────────────────────────────────────────
+
+#[test]
+fn range_len_nonempty() {
+    let r = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(10, 2, 1),
+        perl_position_tracking::Position::new(25, 3, 6),
+    );
+    assert_eq!(r.len(), 15);
+    assert!(!r.is_empty());
+}
+
+#[test]
+fn range_extend_subset_no_change() {
+    let mut r = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(0, 1, 1),
+        perl_position_tracking::Position::new(20, 3, 1),
+    );
+    let subset = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(5, 1, 6),
+        perl_position_tracking::Position::new(15, 2, 5),
+    );
+    r.extend(&subset);
+    assert_eq!(r.start.byte, 0);
+    assert_eq!(r.end.byte, 20);
+}
+
+#[test]
+fn range_extend_only_start_earlier() {
+    let mut r = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(5, 1, 6),
+        perl_position_tracking::Position::new(20, 3, 1),
+    );
+    let other = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(0, 1, 1),
+        perl_position_tracking::Position::new(10, 2, 1),
+    );
+    r.extend(&other);
+    assert_eq!(r.start.byte, 0);
+    assert_eq!(r.end.byte, 20);
+}
+
+#[test]
+fn range_extend_only_end_later() {
+    let mut r = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(0, 1, 1),
+        perl_position_tracking::Position::new(10, 2, 1),
+    );
+    let other = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(5, 1, 6),
+        perl_position_tracking::Position::new(30, 4, 1),
+    );
+    r.extend(&other);
+    assert_eq!(r.start.byte, 0);
+    assert_eq!(r.end.byte, 30);
+}
+
+#[test]
+fn range_span_to_identical() {
+    let r = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(5, 1, 6),
+        perl_position_tracking::Position::new(10, 1, 11),
+    );
+    let s = r.span_to(&r);
+    assert_eq!(s.start.byte, 5);
+    assert_eq!(s.end.byte, 10);
+}
+
+#[test]
+fn range_contains_byte_at_start_boundary() {
+    let r = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(10, 2, 1),
+        perl_position_tracking::Position::new(20, 3, 1),
+    );
+    assert!(r.contains_byte(10)); // inclusive
+    assert!(!r.contains_byte(20)); // exclusive
+}
+
+#[test]
+fn range_overlaps_identical() {
+    let r = perl_position_tracking::Range::new(
+        perl_position_tracking::Position::new(0, 1, 1),
+        perl_position_tracking::Position::new(10, 1, 11),
+    );
+    assert!(r.overlaps(&r));
+}
+
+// ─── Additional LineStartsCache edge cases ──────────────────────────────────
+
+#[test]
+fn line_starts_cache_empty_string() {
+    let src = "";
+    let cache = LineStartsCache::new(src);
+    let (line, col) = cache.offset_to_position(src, 0);
+    assert_eq!(line, 0);
+    assert_eq!(col, 0);
+}
+
+#[test]
+fn line_starts_cache_only_newlines() {
+    let src = "\n\n";
+    let cache = LineStartsCache::new(src);
+    assert_eq!(cache.offset_to_position(src, 0), (0, 0));
+    assert_eq!(cache.offset_to_position(src, 1), (1, 0));
+    assert_eq!(cache.offset_to_position(src, 2), (2, 0));
+}
+
+#[test]
+fn line_starts_cache_trailing_newline() {
+    let src = "abc\n";
+    let cache = LineStartsCache::new(src);
+    assert_eq!(cache.offset_to_position(src, 3), (0, 3));
+    assert_eq!(cache.offset_to_position(src, 4), (1, 0));
+}
+
+#[test]
+fn line_starts_cache_position_to_offset_large_column() {
+    let src = "abc\ndef";
+    let cache = LineStartsCache::new(src);
+    // Column past end of line should clamp to end of line
+    let off = cache.position_to_offset(src, 0, 999);
+    assert!(off <= src.len());
+}
+
+#[test]
+fn line_starts_cache_mixed_crlf_and_lf() {
+    let src = "a\r\nb\nc";
+    let cache = LineStartsCache::new(src);
+    assert_eq!(cache.offset_to_position(src, 0), (0, 0)); // 'a'
+    assert_eq!(cache.offset_to_position(src, 3), (1, 0)); // 'b' (after \r\n)
+    assert_eq!(cache.offset_to_position(src, 5), (2, 0)); // 'c' (after \n)
+}
+
+#[test]
+fn line_starts_cache_consecutive_crlf() {
+    let src = "\r\n\r\n";
+    let cache = LineStartsCache::new(src);
+    assert_eq!(cache.offset_to_position(src, 0), (0, 0));
+    assert_eq!(cache.offset_to_position(src, 2), (1, 0));
+    assert_eq!(cache.offset_to_position(src, 4), (2, 0));
+}
+
+// ─── Additional LineIndex edge cases ────────────────────────────────────────
+
+#[test]
+fn line_index_empty_string() {
+    let idx = LineIndex::new(String::new());
+    assert_eq!(idx.offset_to_position(0), (0, 0));
+}
+
+#[test]
+fn line_index_single_newline() {
+    let idx = LineIndex::new("\n".to_string());
+    assert_eq!(idx.offset_to_position(0), (0, 0));
+    assert_eq!(idx.offset_to_position(1), (1, 0));
+}
+
+#[test]
+fn line_index_position_to_offset_end_of_line() {
+    let idx = LineIndex::new("abc\ndef".to_string());
+    // Position (0, 3) is at the \n char itself
+    assert_eq!(idx.position_to_offset(0, 3), Some(3));
+}
+
+#[test]
+fn line_index_range_single_line() {
+    let idx = LineIndex::new("hello".to_string());
+    let (start, end) = idx.range(0, 5);
+    assert_eq!(start, (0, 0));
+    assert_eq!(end, (0, 5));
+}
+
+#[test]
+fn line_index_position_to_offset_at_utf16_boundary() {
+    // CJK: 3 UTF-8 bytes, 1 UTF-16 code unit
+    let idx = LineIndex::new("日本".to_string());
+    assert_eq!(idx.position_to_offset(0, 0), Some(0));
+    assert_eq!(idx.position_to_offset(0, 1), Some(3));
+    assert_eq!(idx.position_to_offset(0, 2), Some(6));
+}
+
+// ─── Additional convert function edge cases ─────────────────────────────────
+
+#[test]
+fn offset_to_utf16_line_col_empty_text() {
+    let (line, col) = perl_position_tracking::offset_to_utf16_line_col("", 0);
+    assert_eq!(line, 0);
+    assert_eq!(col, 0);
+}
+
+#[test]
+fn utf16_line_col_to_offset_empty_text() {
+    assert_eq!(perl_position_tracking::utf16_line_col_to_offset("", 0, 0), 0);
+}
+
+#[test]
+fn offset_to_utf16_line_col_at_newline_char() {
+    let text = "abc\ndef";
+    // Offset 3 is at the '\n' character itself
+    let (line, col) = perl_position_tracking::offset_to_utf16_line_col(text, 3);
+    assert_eq!(line, 0);
+    assert_eq!(col, 3);
+}
+
+#[test]
+fn offset_to_utf16_line_col_crlf() {
+    let text = "ab\r\ncd";
+    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 0), (0, 0));
+    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 4), (1, 0));
+    assert_eq!(perl_position_tracking::offset_to_utf16_line_col(text, 5), (1, 1));
+}
+
+#[test]
+fn utf16_line_col_to_offset_crlf() {
+    let text = "ab\r\ncd";
+    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 0, 0), 0);
+    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 1, 0), 4);
+    assert_eq!(perl_position_tracking::utf16_line_col_to_offset(text, 1, 1), 5);
+}
+
+#[test]
+fn convert_roundtrip_cjk_text() {
+    let text = "日本語\n中文\n한국어";
+    for byte in 0..text.len() {
+        if !text.is_char_boundary(byte) {
+            continue;
+        }
+        let (line, col) = perl_position_tracking::offset_to_utf16_line_col(text, byte);
+        let back = perl_position_tracking::utf16_line_col_to_offset(text, line, col);
+        assert_eq!(back, byte, "CJK roundtrip failed at byte {byte}");
+    }
+}
+
+#[test]
+fn convert_roundtrip_multiple_emoji() {
+    let text = "😀😂🎉";
+    for byte in 0..text.len() {
+        if !text.is_char_boundary(byte) {
+            continue;
+        }
+        let (line, col) = perl_position_tracking::offset_to_utf16_line_col(text, byte);
+        let back = perl_position_tracking::utf16_line_col_to_offset(text, line, col);
+        assert_eq!(back, byte, "emoji roundtrip failed at byte {byte}");
+    }
+}
+
+// ─── Additional WireType edge cases ─────────────────────────────────────────
+
+#[test]
+fn wire_position_from_byte_offset_empty_string() {
+    let wp = WirePosition::from_byte_offset("", 0);
+    assert_eq!(wp.line, 0);
+    assert_eq!(wp.character, 0);
+}
+
+#[test]
+fn wire_position_to_byte_offset_at_newline() {
+    let src = "abc\ndef";
+    let wp = WirePosition::new(0, 3); // right before newline
+    assert_eq!(wp.to_byte_offset(src), 3);
+}
+
+#[test]
+fn wire_range_from_byte_offsets_emoji() {
+    let src = "a😀b";
+    let wr = WireRange::from_byte_offsets(src, 0, 6); // 'a' + emoji + 'b'
+    assert_eq!(wr.start, WirePosition::new(0, 0));
+    assert_eq!(wr.end, WirePosition::new(0, 4)); // 1 + 2 + 1 UTF-16
+}
+
+#[test]
+fn wire_range_whole_document_empty() {
+    let wr = WireRange::whole_document("");
+    assert_eq!(wr.start, WirePosition::new(0, 0));
+    assert_eq!(wr.end, WirePosition::new(0, 0));
+}
+
+#[test]
+fn wire_range_whole_document_multiline() {
+    let src = "abc\ndef\nghi";
+    let wr = WireRange::whole_document(src);
+    assert_eq!(wr.start, WirePosition::new(0, 0));
+    assert_eq!(wr.end, WirePosition::new(2, 3));
+}
+
+#[test]
+fn wire_location_different_uris() {
+    let loc1 =
+        WireLocation::new("file:///a.pl".to_string(), WireRange::empty(WirePosition::new(0, 0)));
+    let loc2 =
+        WireLocation::new("file:///b.pl".to_string(), WireRange::empty(WirePosition::new(0, 0)));
+    assert_ne!(loc1, loc2);
+}
+
+// ─── Additional PositionMapper edge cases ───────────────────────────────────
+
+#[test]
+fn mapper_roundtrip_every_char_boundary() {
+    let text = "hello\n世界\n😀!";
+    let m = PositionMapper::new(text);
+    for byte in 0..text.len() {
+        if !text.is_char_boundary(byte) {
+            continue;
+        }
+        let pos = m.byte_to_lsp_pos(byte);
+        let back = m.lsp_pos_to_byte(pos);
+        assert_eq!(back, Some(byte), "mapper roundtrip failed at byte {byte}: pos={pos:?}");
+    }
+}
+
+#[test]
+fn mapper_multiple_sequential_edits() {
+    let mut m = PositionMapper::new("aaabbbccc");
+    m.apply_edit(3, 6, "BBB");
+    assert_eq!(m.text(), "aaaBBBccc");
+    m.apply_edit(0, 3, "AAA");
+    assert_eq!(m.text(), "AAABBBccc");
+    m.apply_edit(6, 9, "CCC");
+    assert_eq!(m.text(), "AAABBBCCC");
+}
+
+#[test]
+fn mapper_edit_insert_at_start() {
+    let mut m = PositionMapper::new("world");
+    m.apply_edit(0, 0, "hello ");
+    assert_eq!(m.text(), "hello world");
+}
+
+#[test]
+fn mapper_edit_insert_at_end() {
+    let mut m = PositionMapper::new("hello");
+    m.apply_edit(5, 5, " world");
+    assert_eq!(m.text(), "hello world");
+}
+
+#[test]
+fn mapper_edit_delete_all() {
+    let mut m = PositionMapper::new("hello world");
+    m.apply_edit(0, 11, "");
+    assert_eq!(m.text(), "");
+    assert!(m.is_empty());
+}
+
+#[test]
+fn mapper_update_to_empty_and_back() {
+    let mut m = PositionMapper::new("hello");
+    m.update("");
+    assert!(m.is_empty());
+    assert_eq!(m.len_bytes(), 0);
+    m.update("new content");
+    assert!(!m.is_empty());
+    assert_eq!(m.text(), "new content");
+}
+
+#[test]
+fn mapper_len_lines_trailing_newline() {
+    let m = PositionMapper::new("abc\n");
+    // ropey considers trailing newline as creating a new (empty) line
+    assert_eq!(m.len_lines(), 2);
+}
+
+#[test]
+fn mapper_slice_with_multibyte() {
+    let m = PositionMapper::new("a😀b");
+    assert_eq!(m.slice(0, 1), "a");
+    assert_eq!(m.slice(1, 5), "😀");
+    assert_eq!(m.slice(5, 6), "b");
+}
+
+#[test]
+fn mapper_slice_clamps_beyond_end() {
+    let m = PositionMapper::new("abc");
+    assert_eq!(m.slice(0, 999), "abc");
+}
+
+#[test]
+fn mapper_lsp_pos_to_byte_past_line_end() {
+    let m = PositionMapper::new("abc\ndef");
+    // Character past end of line
+    let byte = m.lsp_pos_to_byte(WirePosition::new(0, 100));
+    // Should return some value (clamped to line boundary)
+    assert!(byte.is_some());
+}
+
+#[test]
+fn mapper_byte_to_lsp_pos_at_newline() {
+    let m = PositionMapper::new("abc\ndef");
+    let pos = m.byte_to_lsp_pos(3); // at the '\n'
+    assert_eq!(pos.line, 0);
+    assert_eq!(pos.character, 3);
+}
+
+// ─── Additional mapper utility edge cases ───────────────────────────────────
+
+#[test]
+fn json_to_position_string_values_returns_none() {
+    let json = serde_json::json!({"line": "five", "character": "ten"});
+    assert!(perl_position_tracking::json_to_position(&json).is_none());
+}
+
+#[test]
+fn json_to_position_empty_object_returns_none() {
+    let json = serde_json::json!({});
+    assert!(perl_position_tracking::json_to_position(&json).is_none());
+}
+
+#[test]
+fn json_to_position_null_returns_none() {
+    let json = serde_json::Value::Null;
+    assert!(perl_position_tracking::json_to_position(&json).is_none());
+}
+
+#[test]
+fn position_to_json_zero_position() {
+    let pos = WirePosition::new(0, 0);
+    let json = perl_position_tracking::position_to_json(pos);
+    assert_eq!(json["line"], 0);
+    assert_eq!(json["character"], 0);
+}
+
+#[test]
+fn apply_edit_utf8_at_start() {
+    let mut text = "hello".to_string();
+    perl_position_tracking::apply_edit_utf8(&mut text, 0, 0, "oh ");
+    assert_eq!(text, "oh hello");
+}
+
+#[test]
+fn apply_edit_utf8_at_end() {
+    let mut text = "hello".to_string();
+    perl_position_tracking::apply_edit_utf8(&mut text, 5, 5, " world");
+    assert_eq!(text, "hello world");
+}
+
+#[test]
+fn apply_edit_utf8_replace_entire_content() {
+    let mut text = "old".to_string();
+    perl_position_tracking::apply_edit_utf8(&mut text, 0, 3, "new");
+    assert_eq!(text, "new");
+}
+
+#[test]
+fn newline_count_only_newlines() {
+    assert_eq!(perl_position_tracking::newline_count("\n\n\n"), 3);
+}
+
+#[test]
+fn newline_count_cr_not_counted() {
+    // \r is not a \n, so should not be counted
+    assert_eq!(perl_position_tracking::newline_count("a\rb\rc"), 0);
+}
+
+#[test]
+fn newline_count_crlf_counts_lf() {
+    assert_eq!(perl_position_tracking::newline_count("a\r\nb\r\n"), 2);
+}
+
+#[test]
+fn last_line_column_utf8_single_newline() {
+    assert_eq!(perl_position_tracking::last_line_column_utf8("\n"), 0);
+}
+
+#[test]
+fn last_line_column_utf8_multibyte_last_line() {
+    // 日 is 3 UTF-8 bytes
+    assert_eq!(perl_position_tracking::last_line_column_utf8("abc\n日本"), 6);
+}
+
+// ─── Additional Rope-backed edge cases ──────────────────────────────────────
+
+#[test]
+fn line_starts_cache_rope_empty_string() {
+    let rope = ropey::Rope::from_str("");
+    let cache = LineStartsCache::new_rope(&rope);
+    assert_eq!(cache.offset_to_position_rope(&rope, 0), (0, 0));
+}
+
+#[test]
+fn line_starts_cache_rope_single_char() {
+    let rope = ropey::Rope::from_str("x");
+    let cache = LineStartsCache::new_rope(&rope);
+    assert_eq!(cache.offset_to_position_rope(&rope, 0), (0, 0));
+    assert_eq!(cache.offset_to_position_rope(&rope, 1), (0, 1));
+}
+
+#[test]
+fn line_starts_cache_rope_cjk_roundtrip() {
+    let text = "日本語\n中文";
+    let rope = ropey::Rope::from_str(text);
+    let cache = LineStartsCache::new_rope(&rope);
+
+    for byte in 0..text.len() {
+        if !text.is_char_boundary(byte) {
+            continue;
+        }
+        let (line, col) = cache.offset_to_position_rope(&rope, byte);
+        let back = cache.position_to_offset_rope(&rope, line, col);
+        assert_eq!(back, byte, "rope CJK roundtrip failed at byte {byte}");
+    }
+}
+
+#[test]
+fn line_starts_cache_rope_position_to_offset_past_last_line() {
+    let text = "abc";
+    let rope = ropey::Rope::from_str(text);
+    let cache = LineStartsCache::new_rope(&rope);
+    let off = cache.position_to_offset_rope(&rope, 99, 0);
+    assert_eq!(off, rope.len_bytes());
+}
+
+// ─── Serde edge cases ───────────────────────────────────────────────────────
+
+#[test]
+fn byte_span_serde_empty() -> Result<(), serde_json::Error> {
+    let span = ByteSpan::empty(0);
+    let json = serde_json::to_string(&span)?;
+    let back: ByteSpan = serde_json::from_str(&json)?;
+    assert_eq!(span, back);
+    assert!(back.is_empty());
+    Ok(())
+}
+
+#[test]
+fn wire_position_serde_large_values() -> Result<(), serde_json::Error> {
+    let wp = WirePosition::new(u32::MAX, u32::MAX);
+    let json = serde_json::to_string(&wp)?;
+    let back: WirePosition = serde_json::from_str(&json)?;
+    assert_eq!(wp, back);
+    Ok(())
+}
+
+#[test]
+fn wire_range_serde_empty_range() -> Result<(), serde_json::Error> {
+    let wr = WireRange::empty(WirePosition::new(5, 10));
+    let json = serde_json::to_string(&wr)?;
+    let back: WireRange = serde_json::from_str(&json)?;
+    assert_eq!(wr, back);
+    assert_eq!(back.start, back.end);
+    Ok(())
+}
