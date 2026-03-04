@@ -158,6 +158,7 @@ allow = [
     "perl-refactoring",
 
     # Tier 5 — Application crates
+    "perl-dead-code",
     "perl-parser",
     "perl-corpus",
 
