@@ -1644,6 +1644,7 @@ version = "0.10.0"
 dependencies = [
  "perl-workspace-index",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
