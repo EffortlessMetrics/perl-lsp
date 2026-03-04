@@ -2353,6 +2353,7 @@ name = "perl-symbol-types"
 version = "0.10.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]
