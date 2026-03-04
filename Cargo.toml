@@ -42,6 +42,7 @@ members = [
     "crates/perl-lsp-feature-governance",
     "crates/perl-lsp-launcher",
     "crates/perl-lsp-navigation",
+    "crates/perl-lsp-document-links",
     "crates/perl-lsp-completion",
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-cancellation",
@@ -150,6 +151,7 @@ allow = [
 
     # Tier 4 — LSP providers
     "perl-lsp-navigation",
+    "perl-lsp-document-links",
     "perl-lsp-tooling",
     "perl-lsp-formatting-types",
     "perl-lsp-formatting",
@@ -291,6 +293,7 @@ perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "
 perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.10.0" }
 perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.10.0" }
 perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.10.0" }
+perl-lsp-document-links = { path = "crates/perl-lsp-document-links", version = "0.10.0" }
 perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.10.0" }
 perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.10.0" }
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.10.0" }

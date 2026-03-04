@@ -1,0 +1,22 @@
+[package]
+name = "perl-lsp-document-links"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Document link extraction for Perl LSP providers"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-document-links"
+keywords = ["perl", "lsp", "document-links"]
+categories = ["development-tools", "text-editors"]
+
+[dependencies]
+perl-module-import = { workspace = true }
+serde_json = { workspace = true }
+url = "2.5.8"
+
+[lints]
+workspace = true
