@@ -8,7 +8,10 @@
 //! are skipped in both modes (`.git`, `.hg`, `.svn`, `target`, `node_modules`, `.cache`).
 
 use perl_source_file::is_perl_source_path;
-use std::path::{Component, Path, PathBuf};
+use perl_workspace_ignore::{
+    is_skipped_workspace_dir_name, path_contains_skipped_workspace_component,
+};
+use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};
 
@@ -87,7 +90,7 @@ fn parse_git_ls_files_output(root: &Path, stdout: &[u8]) -> (Vec<PathBuf>, usize
         }
 
         let relative_path = Path::new(entry);
-        if path_contains_skipped_component(relative_path) {
+        if path_contains_skipped_workspace_component(relative_path) {
             excluded_count += 1;
             continue;
         }
@@ -145,20 +148,7 @@ fn should_skip_dir(entry: &DirEntry) -> bool {
     }
 
     let name = entry.file_name().to_string_lossy();
-    matches!(name.as_ref(), ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache")
-}
-
-fn path_contains_skipped_component(path: &Path) -> bool {
-    for component in path.components() {
-        if let Component::Normal(name) = component
-            && let Some(value) = name.to_str()
-            && matches!(value, ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache")
-        {
-            return true;
-        }
-    }
-
-    false
+    is_skipped_workspace_dir_name(name.as_ref())
 }
 
 fn log_discovery(result: &DiscoveryResult) {
@@ -173,10 +163,8 @@ fn log_discovery(result: &DiscoveryResult) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        DiscoveryMethod, parse_git_ls_files_output, path_contains_skipped_component,
-        should_skip_dir, walk_discovery,
-    };
+    use super::{DiscoveryMethod, parse_git_ls_files_output, should_skip_dir, walk_discovery};
+    use perl_workspace_ignore::path_contains_skipped_workspace_component;
     use std::fs;
     use std::path::Path;
     use std::time::Instant;
@@ -207,9 +195,11 @@ mod tests {
 
     #[test]
     fn skipped_component_detection_is_consistent() {
-        assert!(path_contains_skipped_component(Path::new("/repo/node_modules/pkg.pm")));
-        assert!(path_contains_skipped_component(Path::new("/repo/target/build/generated.pm")));
-        assert!(!path_contains_skipped_component(Path::new("/repo/lib/My/Module.pm")));
+        assert!(path_contains_skipped_workspace_component(Path::new("/repo/node_modules/pkg.pm")));
+        assert!(path_contains_skipped_workspace_component(Path::new(
+            "/repo/target/build/generated.pm"
+        )));
+        assert!(!path_contains_skipped_workspace_component(Path::new("/repo/lib/My/Module.pm")));
     }
 
     #[test]
@@ -346,7 +336,7 @@ mod tests {
         assert_eq!(files[0], Path::new("/home/user/project/lib/Module.pm"));
     }
 
-    // --- Additional coverage: path_contains_skipped_component ---
+    // --- Additional coverage: path_contains_skipped_workspace_component ---
 
     #[test]
     fn skipped_component_detects_each_directory_individually() {
@@ -354,7 +344,7 @@ mod tests {
         for dir in skipped {
             let path_str = format!("lib/{dir}/nested.pm");
             assert!(
-                path_contains_skipped_component(Path::new(&path_str)),
+                path_contains_skipped_workspace_component(Path::new(&path_str)),
                 "expected {dir} to be skipped"
             );
         }
@@ -366,7 +356,7 @@ mod tests {
         for dir in safe {
             let path_str = format!("{dir}/Module.pm");
             assert!(
-                !path_contains_skipped_component(Path::new(&path_str)),
+                !path_contains_skipped_workspace_component(Path::new(&path_str)),
                 "expected {dir} to be allowed"
             );
         }
@@ -374,17 +364,19 @@ mod tests {
 
     #[test]
     fn skipped_component_empty_path_returns_false() {
-        assert!(!path_contains_skipped_component(Path::new("")));
+        assert!(!path_contains_skipped_workspace_component(Path::new("")));
     }
 
     #[test]
     fn skipped_component_single_filename_returns_false() {
-        assert!(!path_contains_skipped_component(Path::new("Module.pm")));
+        assert!(!path_contains_skipped_workspace_component(Path::new("Module.pm")));
     }
 
     #[test]
     fn skipped_component_deeply_nested() {
-        assert!(path_contains_skipped_component(Path::new("a/b/c/node_modules/d/e/f.pm")));
+        assert!(path_contains_skipped_workspace_component(Path::new(
+            "a/b/c/node_modules/d/e/f.pm"
+        )));
     }
 
     // --- Additional coverage: walk_discovery edge cases ---
