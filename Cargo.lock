@@ -1866,6 +1866,7 @@ dependencies = [
  "perl-lsp-feature-policy",
  "perl-lsp-feature-profile",
  "perl-tdd-support",
+ "serde_json",
 ]
 
 [[package]]
