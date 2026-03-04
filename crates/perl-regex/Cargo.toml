@@ -16,5 +16,8 @@ categories = ["parsing", "text-processing"]
 [dependencies]
 thiserror = "2.0.18"
 
+[dev-dependencies]
+perl-tdd-support = { path = "../perl-tdd-support" }
+
 [lints]
 workspace = true
