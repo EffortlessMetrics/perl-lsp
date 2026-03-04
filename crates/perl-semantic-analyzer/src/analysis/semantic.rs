@@ -182,6 +182,20 @@ pub struct HoverInfo {
 /// - Lexical scoping with `my`, `our`, `local`, `state`
 /// - Object-oriented method dispatch
 /// - Regular expression and heredoc analysis
+///
+/// # Examples
+///
+/// ```ignore
+/// use perl_parser::{Parser, SemanticAnalyzer};
+///
+/// let code = "my $greeting = 'hello'; sub say_hi { print $greeting; }";
+/// let mut parser = Parser::new(code);
+/// let ast = parser.parse()?;
+///
+/// let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+/// let symbols = analyzer.symbol_table();
+/// let tokens = analyzer.semantic_tokens();
+/// ```
 pub struct SemanticAnalyzer {
     /// Symbol table with scope hierarchy and definitions
     symbol_table: SymbolTable,
@@ -194,12 +208,44 @@ pub struct SemanticAnalyzer {
 }
 
 impl SemanticAnalyzer {
-    /// Create a new semantic analyzer from an AST
+    /// Create a new semantic analyzer from an AST.
+    ///
+    /// Equivalent to [`analyze_with_source`](Self::analyze_with_source) with an empty
+    /// source string. Use this when you only need symbol-table and token analysis
+    /// without source-text-dependent features like hover documentation.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use perl_parser::{Parser, SemanticAnalyzer};
+    ///
+    /// let mut parser = Parser::new("my $x = 42;");
+    /// let ast = parser.parse()?;
+    /// let analyzer = SemanticAnalyzer::analyze(&ast);
+    /// assert!(!analyzer.symbol_table().symbols.is_empty());
+    /// ```
     pub fn analyze(ast: &Node) -> Self {
         Self::analyze_with_source(ast, "")
     }
 
-    /// Create a new semantic analyzer from an AST and source text
+    /// Create a new semantic analyzer from an AST and source text.
+    ///
+    /// The source text enables richer analysis including hover documentation
+    /// extraction and precise text-range lookups.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use perl_parser::{Parser, SemanticAnalyzer};
+    ///
+    /// let code = "sub greet { print \"Hello\\n\"; }";
+    /// let mut parser = Parser::new(code);
+    /// let ast = parser.parse()?;
+    ///
+    /// let analyzer = SemanticAnalyzer::analyze_with_source(&ast, code);
+    /// let tokens = analyzer.semantic_tokens();
+    /// // tokens contains semantic highlighting data for the parsed code
+    /// ```
     pub fn analyze_with_source(ast: &Node, source: &str) -> Self {
         let symbol_table = SymbolExtractor::new_with_source(source).extract(ast);
 

@@ -130,6 +130,40 @@ pub use perl_token::{Token, TokenKind};
 /// - `SourceLocation` uses compact position encoding for large files
 /// - `NodeKind` enum variants minimize memory overhead for common constructs
 /// - Clone operations are optimized for shared analysis workflows
+///
+/// # Examples
+///
+/// Construct a variable declaration node manually:
+///
+/// ```
+/// use perl_ast::{Node, NodeKind, SourceLocation};
+///
+/// let loc = SourceLocation { start: 0, end: 11 };
+/// let var = Node::new(
+///     NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+///     loc,
+/// );
+/// let decl = Node::new(
+///     NodeKind::VariableDeclaration {
+///         declarator: "my".to_string(),
+///         variable: Box::new(var),
+///         attributes: vec![],
+///         initializer: None,
+///     },
+///     loc,
+/// );
+/// assert_eq!(decl.kind.kind_name(), "VariableDeclaration");
+/// ```
+///
+/// Typically you obtain nodes from the parser rather than constructing them by hand:
+///
+/// ```ignore
+/// use perl_parser::Parser;
+///
+/// let mut parser = Parser::new("my $x = 42;");
+/// let ast = parser.parse()?;
+/// println!("AST: {}", ast.to_sexp());
+/// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Node {
     /// The specific type and semantic content of this AST node
@@ -139,12 +173,43 @@ pub struct Node {
 }
 
 impl Node {
-    /// Create a new AST node
+    /// Create a new AST node with the given kind and source location.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let node = Node::new(
+    ///     NodeKind::Number { value: "42".to_string() },
+    ///     SourceLocation { start: 0, end: 2 },
+    /// );
+    /// assert_eq!(node.kind.kind_name(), "Number");
+    /// assert_eq!(node.location.start, 0);
+    /// ```
     pub fn new(kind: NodeKind, location: SourceLocation) -> Self {
         Node { kind, location }
     }
 
-    /// Convert the AST to a tree-sitter compatible S-expression
+    /// Convert the AST to a tree-sitter compatible S-expression.
+    ///
+    /// Produces a parenthesized representation compatible with tree-sitter's
+    /// S-expression format, useful for debugging and snapshot testing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let loc = SourceLocation { start: 0, end: 2 };
+    /// let num = Node::new(NodeKind::Number { value: "42".to_string() }, loc);
+    /// let program = Node::new(
+    ///     NodeKind::Program { statements: vec![num] },
+    ///     loc,
+    /// );
+    /// let sexp = program.to_sexp();
+    /// assert!(sexp.starts_with("(source_file"));
+    /// ```
     pub fn to_sexp(&self) -> String {
         match &self.kind {
             NodeKind::Program { statements } => {
@@ -1234,6 +1299,22 @@ impl Node {
     }
 
     /// Count the total number of nodes in this subtree (inclusive).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let loc = SourceLocation { start: 0, end: 1 };
+    /// let leaf = Node::new(NodeKind::Number { value: "1".to_string() }, loc);
+    /// assert_eq!(leaf.count_nodes(), 1);
+    ///
+    /// let program = Node::new(
+    ///     NodeKind::Program { statements: vec![leaf] },
+    ///     loc,
+    /// );
+    /// assert_eq!(program.count_nodes(), 2);
+    /// ```
     pub fn count_nodes(&self) -> usize {
         let mut count = 1;
         self.for_each_child(|child| {
@@ -1243,6 +1324,20 @@ impl Node {
     }
 
     /// Collect direct child nodes into a vector for convenience APIs.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::{Node, NodeKind, SourceLocation};
+    ///
+    /// let loc = SourceLocation { start: 0, end: 1 };
+    /// let stmt = Node::new(NodeKind::Number { value: "1".to_string() }, loc);
+    /// let program = Node::new(
+    ///     NodeKind::Program { statements: vec![stmt] },
+    ///     loc,
+    /// );
+    /// assert_eq!(program.children().len(), 1);
+    /// ```
     #[inline]
     pub fn children(&self) -> Vec<&Node> {
         let mut children = Vec::new();
@@ -1280,6 +1375,40 @@ impl Node {
 /// - **Navigate**: Call and reference variants support navigation features
 /// - **Complete**: Expression variants provide completion context
 /// - **Analyze**: Semantic variants drive diagnostics and refactoring
+///
+/// # Examples
+///
+/// Pattern-match on node kinds to extract semantic information:
+///
+/// ```
+/// use perl_ast::{Node, NodeKind, SourceLocation};
+///
+/// let loc = SourceLocation { start: 0, end: 5 };
+/// let node = Node::new(
+///     NodeKind::Variable { sigil: "$".to_string(), name: "foo".to_string() },
+///     loc,
+/// );
+///
+/// match &node.kind {
+///     NodeKind::Variable { sigil, name } => {
+///         assert_eq!(sigil, "$");
+///         assert_eq!(name, "foo");
+///     }
+///     _ => panic!("expected Variable"),
+/// }
+/// ```
+///
+/// Use [`kind_name()`](NodeKind::kind_name) for debugging and diagnostics:
+///
+/// ```
+/// use perl_ast::NodeKind;
+///
+/// let kind = NodeKind::Number { value: "99".to_string() };
+/// assert_eq!(kind.kind_name(), "Number");
+///
+/// let kind = NodeKind::Variable { sigil: "@".to_string(), name: "list".to_string() };
+/// assert_eq!(kind.kind_name(), "Variable");
+/// ```
 ///
 /// # Performance Considerations
 ///
@@ -1897,7 +2026,21 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
-    /// Get the name of this NodeKind as a static string
+    /// Get the name of this `NodeKind` as a static string.
+    ///
+    /// Useful for diagnostics, logging, and human-readable AST dumps.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_ast::NodeKind;
+    ///
+    /// let kind = NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() };
+    /// assert_eq!(kind.kind_name(), "Variable");
+    ///
+    /// let kind = NodeKind::Program { statements: vec![] };
+    /// assert_eq!(kind.kind_name(), "Program");
+    /// ```
     pub fn kind_name(&self) -> &'static str {
         match self {
             NodeKind::Program { .. } => "Program",

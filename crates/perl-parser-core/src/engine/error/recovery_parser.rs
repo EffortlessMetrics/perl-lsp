@@ -13,7 +13,21 @@ use crate::{
 };
 use perl_lexer::TokenType;
 
-/// A parser with error recovery capabilities
+/// A parser with error recovery capabilities.
+///
+/// Builds partial ASTs from malformed input by inserting error nodes
+/// at points where syntax errors are encountered, allowing downstream
+/// analysis to proceed on the valid portions of the code.
+///
+/// # Examples
+///
+/// ```ignore
+/// use perl_parser::RecoveryParser;
+///
+/// let parser = RecoveryParser::new("sub foo { if (".to_string());
+/// let (ast, errors) = parser.parse();
+/// // ast contains a partial tree; errors lists the recovery points
+/// ```
 pub struct RecoveryParser {
     context: ParserContext,
 }

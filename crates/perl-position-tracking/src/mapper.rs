@@ -10,7 +10,29 @@ use crate::WirePosition as Position;
 use ropey::Rope;
 use serde_json::Value;
 
-/// Centralized position mapper using rope for efficiency
+/// Centralized position mapper using rope for efficiency.
+///
+/// Converts between byte offsets (used by the parser) and LSP positions
+/// (line/character in UTF-16 code units) while handling mixed line endings.
+///
+/// # Examples
+///
+/// ```
+/// use perl_position_tracking::PositionMapper;
+///
+/// let text = "my $x = 1;\nmy $y = 2;\n";
+/// let mapper = PositionMapper::new(text);
+///
+/// // Convert byte offset 0 → LSP position (line 0, char 0)
+/// let pos = mapper.byte_to_lsp_pos(0);
+/// assert_eq!(pos.line, 0);
+/// assert_eq!(pos.character, 0);
+///
+/// // Second line starts at byte 11
+/// let pos = mapper.byte_to_lsp_pos(11);
+/// assert_eq!(pos.line, 1);
+/// assert_eq!(pos.character, 0);
+/// ```
 pub struct PositionMapper {
     /// The rope containing the document text
     rope: Rope,
@@ -32,7 +54,21 @@ pub enum LineEnding {
 }
 
 impl PositionMapper {
-    /// Create a new position mapper from text
+    /// Create a new position mapper from text.
+    ///
+    /// Detects line endings and builds an internal rope for efficient
+    /// position conversions.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_position_tracking::PositionMapper;
+    ///
+    /// let mapper = PositionMapper::new("print 'hello';\n");
+    /// let pos = mapper.byte_to_lsp_pos(6);
+    /// assert_eq!(pos.line, 0);
+    /// assert_eq!(pos.character, 6);
+    /// ```
     pub fn new(text: &str) -> Self {
         let rope = Rope::from_str(text);
         let line_ending = detect_line_ending(text);
@@ -69,7 +105,21 @@ impl PositionMapper {
         self.line_ending = detect_line_ending(&self.rope.to_string());
     }
 
-    /// Convert LSP position to byte offset
+    /// Convert LSP position to byte offset.
+    ///
+    /// Takes a line/character position (UTF-16 code units, as specified by the
+    /// LSP protocol) and returns the corresponding byte offset in the source.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_position_tracking::{PositionMapper, WirePosition};
+    ///
+    /// let mapper = PositionMapper::new("my $x = 1;\nmy $y = 2;\n");
+    /// // Line 1, character 3 → "$y"
+    /// let byte = mapper.lsp_pos_to_byte(WirePosition { line: 1, character: 3 });
+    /// assert_eq!(byte, Some(14));
+    /// ```
     pub fn lsp_pos_to_byte(&self, pos: Position) -> Option<usize> {
         let line_idx = pos.line as usize;
         if line_idx >= self.rope.len_lines() {
@@ -95,7 +145,20 @@ impl PositionMapper {
         Some(line_start_byte + byte_offset)
     }
 
-    /// Convert byte offset to LSP position
+    /// Convert byte offset to LSP position.
+    ///
+    /// Returns line/character (UTF-16 code units) suitable for LSP responses.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use perl_position_tracking::PositionMapper;
+    ///
+    /// let mapper = PositionMapper::new("sub foo {\n    return 1;\n}\n");
+    /// let pos = mapper.byte_to_lsp_pos(14);  // points into "return"
+    /// assert_eq!(pos.line, 1);
+    /// assert_eq!(pos.character, 4);
+    /// ```
     pub fn byte_to_lsp_pos(&self, byte_offset: usize) -> Position {
         let byte_offset = byte_offset.min(self.rope.len_bytes());
 
