@@ -747,3 +747,482 @@ fn parse_code_as_str_bijection() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Additional comprehensive tests
+// ---------------------------------------------------------------------------
+
+// --- DiagnosticSeverity additional coverage ---
+
+#[test]
+fn severity_equality_same_variant() {
+    assert_eq!(DiagnosticSeverity::Error, DiagnosticSeverity::Error);
+    assert_eq!(DiagnosticSeverity::Warning, DiagnosticSeverity::Warning);
+    assert_eq!(DiagnosticSeverity::Information, DiagnosticSeverity::Information);
+    assert_eq!(DiagnosticSeverity::Hint, DiagnosticSeverity::Hint);
+}
+
+#[test]
+fn severity_inequality_different_variants() {
+    assert_ne!(DiagnosticSeverity::Error, DiagnosticSeverity::Warning);
+    assert_ne!(DiagnosticSeverity::Warning, DiagnosticSeverity::Information);
+    assert_ne!(DiagnosticSeverity::Information, DiagnosticSeverity::Hint);
+    assert_ne!(DiagnosticSeverity::Error, DiagnosticSeverity::Hint);
+}
+
+#[test]
+fn severity_ordering_is_ascending_by_lsp_value() {
+    // Error(1) < Warning(2) < Information(3) < Hint(4)
+    assert!(DiagnosticSeverity::Error < DiagnosticSeverity::Warning);
+    assert!(DiagnosticSeverity::Warning < DiagnosticSeverity::Information);
+    assert!(DiagnosticSeverity::Information < DiagnosticSeverity::Hint);
+}
+
+#[test]
+fn severity_lsp_values_cover_1_through_4() {
+    let values = [
+        DiagnosticSeverity::Error.to_lsp_value(),
+        DiagnosticSeverity::Warning.to_lsp_value(),
+        DiagnosticSeverity::Information.to_lsp_value(),
+        DiagnosticSeverity::Hint.to_lsp_value(),
+    ];
+    assert_eq!(values, [1, 2, 3, 4]);
+}
+
+#[test]
+fn severity_display_all_variants() {
+    assert_eq!(format!("{}", DiagnosticSeverity::Error), "error");
+    assert_eq!(format!("{}", DiagnosticSeverity::Warning), "warning");
+    assert_eq!(format!("{}", DiagnosticSeverity::Information), "info");
+    assert_eq!(format!("{}", DiagnosticSeverity::Hint), "hint");
+}
+
+#[test]
+fn severity_information_lsp_value_is_3() -> Result<(), Box<dyn std::error::Error>> {
+    assert_eq!(DiagnosticSeverity::Information.to_lsp_value(), 3);
+    Ok(())
+}
+
+// --- DiagnosticTag additional coverage ---
+
+#[test]
+fn tag_equality_and_inequality() {
+    assert_eq!(DiagnosticTag::Unnecessary, DiagnosticTag::Unnecessary);
+    assert_eq!(DiagnosticTag::Deprecated, DiagnosticTag::Deprecated);
+    assert_ne!(DiagnosticTag::Unnecessary, DiagnosticTag::Deprecated);
+}
+
+#[test]
+fn tag_lsp_values_are_distinct() {
+    assert_ne!(DiagnosticTag::Unnecessary.to_lsp_value(), DiagnosticTag::Deprecated.to_lsp_value());
+}
+
+// --- DiagnosticCode: code string prefix validation ---
+
+#[test]
+fn parser_codes_start_with_pl_and_are_below_100() -> Result<(), Box<dyn std::error::Error>> {
+    let parser_codes =
+        [DiagnosticCode::ParseError, DiagnosticCode::SyntaxError, DiagnosticCode::UnexpectedEof];
+    for code in &parser_codes {
+        let s = code.as_str();
+        assert!(s.starts_with("PL"), "parser code should start with PL: {}", s);
+        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!(num >= 1 && num <= 99, "parser code out of range: {}", s);
+    }
+    Ok(())
+}
+
+#[test]
+fn strict_warnings_codes_are_in_100_199_range() -> Result<(), Box<dyn std::error::Error>> {
+    let codes = [
+        DiagnosticCode::MissingStrict,
+        DiagnosticCode::MissingWarnings,
+        DiagnosticCode::UnusedVariable,
+        DiagnosticCode::UndefinedVariable,
+    ];
+    for code in &codes {
+        let s = code.as_str();
+        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!((100..200).contains(&num), "strict/warnings code out of range: {}", s);
+    }
+    Ok(())
+}
+
+#[test]
+fn package_module_codes_are_in_200_299_range() -> Result<(), Box<dyn std::error::Error>> {
+    let codes = [DiagnosticCode::MissingPackageDeclaration, DiagnosticCode::DuplicatePackage];
+    for code in &codes {
+        let s = code.as_str();
+        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!((200..300).contains(&num), "package/module code out of range: {}", s);
+    }
+    Ok(())
+}
+
+#[test]
+fn subroutine_codes_are_in_300_399_range() -> Result<(), Box<dyn std::error::Error>> {
+    let codes = [DiagnosticCode::DuplicateSubroutine, DiagnosticCode::MissingReturn];
+    for code in &codes {
+        let s = code.as_str();
+        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!((300..400).contains(&num), "subroutine code out of range: {}", s);
+    }
+    Ok(())
+}
+
+#[test]
+fn best_practices_codes_are_in_400_499_range() -> Result<(), Box<dyn std::error::Error>> {
+    let codes = [
+        DiagnosticCode::BarewordFilehandle,
+        DiagnosticCode::TwoArgOpen,
+        DiagnosticCode::ImplicitReturn,
+    ];
+    for code in &codes {
+        let s = code.as_str();
+        let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+        assert!((400..500).contains(&num), "best practices code out of range: {}", s);
+    }
+    Ok(())
+}
+
+#[test]
+fn critic_codes_start_with_pc_prefix() {
+    let critic_codes = [
+        DiagnosticCode::CriticSeverity1,
+        DiagnosticCode::CriticSeverity2,
+        DiagnosticCode::CriticSeverity3,
+        DiagnosticCode::CriticSeverity4,
+        DiagnosticCode::CriticSeverity5,
+    ];
+    for code in &critic_codes {
+        assert!(
+            code.as_str().starts_with("PC"),
+            "critic code should start with PC: {}",
+            code.as_str()
+        );
+    }
+}
+
+// --- DiagnosticCode: parse_code edge cases ---
+
+#[test]
+fn parse_code_empty_string_returns_none() {
+    assert!(DiagnosticCode::parse_code("").is_none());
+}
+
+#[test]
+fn parse_code_lowercase_returns_none() {
+    assert!(DiagnosticCode::parse_code("pl001").is_none());
+    assert!(DiagnosticCode::parse_code("pc001").is_none());
+}
+
+#[test]
+fn parse_code_with_whitespace_returns_none() {
+    assert!(DiagnosticCode::parse_code(" PL001").is_none());
+    assert!(DiagnosticCode::parse_code("PL001 ").is_none());
+    assert!(DiagnosticCode::parse_code("PL 001").is_none());
+}
+
+#[test]
+fn parse_code_partial_prefix_returns_none() {
+    assert!(DiagnosticCode::parse_code("PL").is_none());
+    assert!(DiagnosticCode::parse_code("PC").is_none());
+    assert!(DiagnosticCode::parse_code("PL0").is_none());
+}
+
+#[test]
+fn parse_code_out_of_range_returns_none() {
+    assert!(DiagnosticCode::parse_code("PL000").is_none());
+    assert!(DiagnosticCode::parse_code("PL999").is_none());
+    assert!(DiagnosticCode::parse_code("PC000").is_none());
+    assert!(DiagnosticCode::parse_code("PC999").is_none());
+}
+
+#[test]
+fn parse_code_wrong_prefix_returns_none() {
+    assert!(DiagnosticCode::parse_code("XX001").is_none());
+    assert!(DiagnosticCode::parse_code("AB100").is_none());
+}
+
+// --- DiagnosticCode: from_message edge cases ---
+
+#[test]
+fn from_message_case_insensitive() {
+    assert_eq!(
+        DiagnosticCode::from_message("USE STRICT is missing"),
+        Some(DiagnosticCode::MissingStrict)
+    );
+    assert_eq!(
+        DiagnosticCode::from_message("Use Warnings required"),
+        Some(DiagnosticCode::MissingWarnings)
+    );
+}
+
+#[test]
+fn from_message_empty_string_returns_none() {
+    assert!(DiagnosticCode::from_message("").is_none());
+}
+
+#[test]
+fn from_message_never_used_variant() {
+    assert_eq!(
+        DiagnosticCode::from_message("variable $x is never used"),
+        Some(DiagnosticCode::UnusedVariable)
+    );
+}
+
+#[test]
+fn from_message_not_declared_variant() {
+    assert_eq!(
+        DiagnosticCode::from_message("symbol not declared in scope"),
+        Some(DiagnosticCode::UndefinedVariable)
+    );
+}
+
+#[test]
+fn from_message_2_arg_variant() {
+    assert_eq!(
+        DiagnosticCode::from_message("found a 2-arg open call"),
+        Some(DiagnosticCode::TwoArgOpen)
+    );
+}
+
+#[test]
+fn from_message_syntax_error_matches_parse_error() {
+    // "syntax error" in message triggers ParseError code
+    assert_eq!(
+        DiagnosticCode::from_message("syntax error near token"),
+        Some(DiagnosticCode::ParseError)
+    );
+}
+
+#[test]
+fn from_message_unrelated_text_returns_none() {
+    assert!(DiagnosticCode::from_message("everything looks fine").is_none());
+    assert!(DiagnosticCode::from_message("refactor this method").is_none());
+}
+
+// --- DiagnosticCode: documentation_url coverage ---
+
+#[test]
+fn documentation_url_format_consistency() {
+    for code in ALL_CODES {
+        if let Some(url) = code.documentation_url() {
+            assert!(
+                url.starts_with("https://docs.perl-lsp.org/errors/"),
+                "unexpected url prefix for {}: {}",
+                code.as_str(),
+                url
+            );
+            assert!(
+                url.ends_with(code.as_str()),
+                "url should end with code string for {}: {}",
+                code.as_str(),
+                url
+            );
+        }
+    }
+}
+
+#[test]
+fn documentation_url_all_pl_codes_have_urls() {
+    for code in ALL_CODES {
+        if code.as_str().starts_with("PL") {
+            assert!(
+                code.documentation_url().is_some(),
+                "PL code {} should have a documentation URL",
+                code.as_str()
+            );
+        }
+    }
+}
+
+#[test]
+fn documentation_url_all_pc_codes_have_no_urls() {
+    for code in ALL_CODES {
+        if code.as_str().starts_with("PC") {
+            assert!(
+                code.documentation_url().is_none(),
+                "PC code {} should not have a documentation URL",
+                code.as_str()
+            );
+        }
+    }
+}
+
+// --- DiagnosticCode: category-severity cross-checks ---
+
+#[test]
+fn parser_category_codes_are_all_errors() {
+    for code in ALL_CODES {
+        if code.category() == DiagnosticCategory::Parser {
+            assert_eq!(
+                code.severity(),
+                DiagnosticSeverity::Error,
+                "parser code {} should be Error severity",
+                code.as_str()
+            );
+        }
+    }
+}
+
+#[test]
+fn no_information_severity_codes_exist() {
+    // Current API has no Information-level codes
+    for code in ALL_CODES {
+        assert_ne!(
+            code.severity(),
+            DiagnosticSeverity::Information,
+            "no codes should be Information severity currently: {}",
+            code.as_str()
+        );
+    }
+}
+
+#[test]
+fn hint_codes_are_only_critic_3_4_5() {
+    let hint_codes: Vec<&DiagnosticCode> =
+        ALL_CODES.iter().filter(|c| c.severity() == DiagnosticSeverity::Hint).collect();
+    assert_eq!(hint_codes.len(), 3);
+    for code in &hint_codes {
+        assert_eq!(code.category(), DiagnosticCategory::PerlCritic);
+    }
+}
+
+// --- DiagnosticCode: Display trait ---
+
+#[test]
+fn display_all_codes_matches_as_str() {
+    for code in ALL_CODES {
+        assert_eq!(format!("{}", code), code.as_str());
+    }
+}
+
+#[test]
+fn display_used_in_format_string() {
+    let code = DiagnosticCode::ParseError;
+    let msg = format!("[{}] something went wrong", code);
+    assert_eq!(msg, "[PL001] something went wrong");
+}
+
+// --- DiagnosticCategory: equality and inequality ---
+
+#[test]
+fn category_equality() {
+    assert_eq!(DiagnosticCategory::Parser, DiagnosticCategory::Parser);
+    assert_eq!(DiagnosticCategory::StrictWarnings, DiagnosticCategory::StrictWarnings);
+    assert_eq!(DiagnosticCategory::PackageModule, DiagnosticCategory::PackageModule);
+    assert_eq!(DiagnosticCategory::Subroutine, DiagnosticCategory::Subroutine);
+    assert_eq!(DiagnosticCategory::BestPractices, DiagnosticCategory::BestPractices);
+    assert_eq!(DiagnosticCategory::PerlCritic, DiagnosticCategory::PerlCritic);
+}
+
+#[test]
+fn category_inequality_across_variants() {
+    assert_ne!(DiagnosticCategory::Parser, DiagnosticCategory::StrictWarnings);
+    assert_ne!(DiagnosticCategory::PackageModule, DiagnosticCategory::Subroutine);
+    assert_ne!(DiagnosticCategory::BestPractices, DiagnosticCategory::PerlCritic);
+}
+
+// --- DiagnosticCategory: coverage of all codes ---
+
+#[test]
+fn all_six_categories_are_represented() {
+    use std::collections::HashSet;
+    let categories: HashSet<DiagnosticCategory> = ALL_CODES.iter().map(|c| c.category()).collect();
+    assert!(categories.contains(&DiagnosticCategory::Parser));
+    assert!(categories.contains(&DiagnosticCategory::StrictWarnings));
+    assert!(categories.contains(&DiagnosticCategory::PackageModule));
+    assert!(categories.contains(&DiagnosticCategory::Subroutine));
+    assert!(categories.contains(&DiagnosticCategory::BestPractices));
+    assert!(categories.contains(&DiagnosticCategory::PerlCritic));
+    assert_eq!(categories.len(), 6);
+}
+
+// --- DiagnosticCode: tags exhaustive check ---
+
+#[test]
+fn only_unused_variable_has_non_empty_tags() {
+    let codes_with_tags: Vec<&DiagnosticCode> =
+        ALL_CODES.iter().filter(|c| !c.tags().is_empty()).collect();
+    assert_eq!(codes_with_tags.len(), 1);
+    assert_eq!(*codes_with_tags[0], DiagnosticCode::UnusedVariable);
+}
+
+#[test]
+fn unused_variable_tag_is_exactly_unnecessary() {
+    let tags = DiagnosticCode::UnusedVariable.tags();
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0], DiagnosticTag::Unnecessary);
+}
+
+// --- Cross-cutting: ALL_CODES count ---
+
+#[test]
+fn all_codes_count_is_19() {
+    assert_eq!(ALL_CODES.len(), 19, "expected 19 diagnostic codes total");
+}
+
+// --- DiagnosticCode: parse_code boundary values ---
+
+#[test]
+fn parse_code_all_valid_pl_codes() {
+    let valid_pl = [
+        "PL001", "PL002", "PL003", "PL100", "PL101", "PL102", "PL103", "PL200", "PL201", "PL300",
+        "PL301", "PL400", "PL401", "PL402",
+    ];
+    for s in &valid_pl {
+        assert!(DiagnosticCode::parse_code(s).is_some(), "expected valid parse for {}", s);
+    }
+}
+
+#[test]
+fn parse_code_all_valid_pc_codes() {
+    let valid_pc = ["PC001", "PC002", "PC003", "PC004", "PC005"];
+    for s in &valid_pc {
+        assert!(DiagnosticCode::parse_code(s).is_some(), "expected valid parse for {}", s);
+    }
+}
+
+#[test]
+fn parse_code_gaps_return_none() {
+    // Codes that fall in valid ranges but aren't assigned
+    let gaps = [
+        "PL004", "PL050", "PL099", "PL104", "PL150", "PL199", "PL202", "PL250", "PL302", "PL399",
+        "PL403", "PL499", "PC006", "PC010",
+    ];
+    for s in &gaps {
+        assert!(DiagnosticCode::parse_code(s).is_none(), "expected None for unassigned code {}", s);
+    }
+}
+
+// --- from_message: priority / first-match behavior ---
+
+#[test]
+fn from_message_prefers_use_strict_over_generic() {
+    // "use strict" should match MissingStrict even if other keywords present
+    let result = DiagnosticCode::from_message("use strict is required, parse error possible");
+    assert_eq!(result, Some(DiagnosticCode::MissingStrict));
+}
+
+#[test]
+fn from_message_embedded_in_longer_text() {
+    let result =
+        DiagnosticCode::from_message("Warning: the file does not contain use warnings at line 42");
+    assert_eq!(result, Some(DiagnosticCode::MissingWarnings));
+}
+
+// --- Severity: no codes map to unexpected values ---
+
+#[test]
+fn all_lsp_severity_values_are_valid() {
+    for code in ALL_CODES {
+        let val = code.severity().to_lsp_value();
+        assert!(
+            val >= 1 && val <= 4,
+            "severity LSP value out of range for {}: {}",
+            code.as_str(),
+            val
+        );
+    }
+}
