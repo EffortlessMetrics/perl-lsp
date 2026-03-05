@@ -1,0 +1,22 @@
+[package]
+name = "perl-lsp-critic"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Shared Perl::Critic domain models and output parsing for perl-lsp crates"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+
+[features]
+default = ["lsp-compat"]
+lsp-compat = ["dep:lsp-types"]
+
+[dependencies]
+perl-parser-core = { workspace = true }
+serde = { version = "1.0.228", features = ["derive"] }
+lsp-types = { version = "0.97.0", optional = true }
+
+[lints]
+workspace = true

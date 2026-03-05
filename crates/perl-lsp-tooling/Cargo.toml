@@ -22,6 +22,7 @@ lsp-compat = ["dep:lsp-types"]
 
 [dependencies]
 perl-subprocess-runtime = { workspace = true }
+perl-lsp-critic = { workspace = true }
 perl-tdd-support = { workspace = true }
 perl-parser-core = { workspace = true }
 moka = { version = "0.12", features = ["sync"] }

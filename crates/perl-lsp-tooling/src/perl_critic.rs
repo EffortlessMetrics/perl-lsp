@@ -3,11 +3,14 @@
 //! This module provides integration with Perl::Critic for static code analysis
 //! and policy enforcement in Perl code.
 
+pub use perl_lsp_critic::{CriticConfig, Severity, Violation};
+use perl_lsp_critic::{build_perlcritic_args, parse_perlcritic_output};
 use perl_parser_core::{
     Node,
     position::{Position, Range},
 };
 use perl_subprocess_runtime::SubprocessRuntime;
+#[cfg(not(feature = "lsp-compat"))]
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -15,103 +18,6 @@ use std::sync::Arc;
 
 #[cfg(feature = "lsp-compat")]
 use lsp_types;
-
-/// Severity levels for Perl::Critic violations
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Severity {
-    /// Cosmetic issues (severity 5)
-    Gentle = 5,
-    /// Minor issues (severity 4)
-    Stern = 4,
-    /// Important issues (severity 3)
-    Harsh = 3,
-    /// Serious issues (severity 2)
-    Cruel = 2,
-    /// Critical issues (severity 1)
-    Brutal = 1,
-}
-
-impl Severity {
-    /// Converts a numeric severity (1-5) to a `Severity` variant.
-    ///
-    /// Values outside 1-5 default to `Harsh`.
-    pub fn from_number(n: u8) -> Self {
-        match n {
-            1 => Self::Brutal,
-            2 => Self::Cruel,
-            3 => Self::Harsh,
-            4 => Self::Stern,
-            5 => Self::Gentle,
-            _ => Self::Harsh,
-        }
-    }
-
-    /// Converts this severity to a `DiagnosticSeverity` for LSP reporting.
-    #[cfg(feature = "lsp-compat")]
-    pub fn to_diagnostic_severity(&self) -> lsp_types::DiagnosticSeverity {
-        match self {
-            Self::Brutal | Self::Cruel => lsp_types::DiagnosticSeverity::ERROR,
-            Self::Harsh => lsp_types::DiagnosticSeverity::WARNING,
-            Self::Stern | Self::Gentle => lsp_types::DiagnosticSeverity::INFORMATION,
-        }
-    }
-
-    /// Converts this severity to a numeric severity level (for non-LSP contexts).
-    #[cfg(not(feature = "lsp-compat"))]
-    pub fn to_severity_level(&self) -> u8 {
-        *self as u8
-    }
-}
-
-/// A Perl::Critic violation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Violation {
-    /// The policy name that was violated (e.g., "TestingAndDebugging::RequireUseStrict")
-    pub policy: String,
-    /// A brief description of the violation
-    pub description: String,
-    /// A detailed explanation of why this policy exists
-    pub explanation: String,
-    /// The severity level of this violation
-    pub severity: Severity,
-    /// The source location where the violation occurred
-    pub range: Range,
-    /// The file path where the violation was found
-    pub file: String,
-}
-
-/// Configuration for Perl::Critic
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CriticConfig {
-    /// Minimum severity level to report (1-5)
-    pub severity: u8,
-    /// Path to perlcriticrc file
-    pub profile: Option<String>,
-    /// Policies to explicitly include in analysis
-    pub include: Vec<String>,
-    /// Policies to explicitly exclude from analysis
-    pub exclude: Vec<String>,
-    /// Theme to use
-    pub theme: Option<String>,
-    /// Enable verbose output
-    pub verbose: bool,
-    /// Color output
-    pub color: bool,
-}
-
-impl Default for CriticConfig {
-    fn default() -> Self {
-        Self {
-            severity: 3, // Harsh and above
-            profile: None,
-            include: Vec::new(),
-            exclude: Vec::new(),
-            theme: None,
-            verbose: false,
-            color: false,
-        }
-    }
-}
 
 /// Perl::Critic analyzer
 pub struct CriticAnalyzer {
@@ -146,40 +52,7 @@ impl CriticAnalyzer {
         }
 
         // Build argument list
-        let mut args: Vec<String> = Vec::new();
-
-        // Add severity
-        args.push(format!("--severity={}", self.config.severity));
-
-        // Add profile if specified
-        if let Some(ref profile) = self.config.profile {
-            args.push(format!("--profile={}", profile));
-        }
-
-        // Add theme if specified
-        if let Some(ref theme) = self.config.theme {
-            args.push(format!("--theme={}", theme));
-        }
-
-        // Add includes
-        for policy in &self.config.include {
-            args.push(format!("--include={}", policy));
-        }
-
-        // Add excludes
-        for policy in &self.config.exclude {
-            args.push(format!("--exclude={}", policy));
-        }
-
-        // Use verbose format for parsing
-        args.push("--verbose=%f:%l:%c:%s:%p:%m\\n".to_string());
-
-        // SECURITY: Add `--` to prevent argument injection via filenames starting with `-`
-        // (e.g., a file named `-rf` would otherwise be interpreted as a flag)
-        args.push("--".to_string());
-
-        // Add file path
-        args.push(path_str.clone());
+        let args = build_perlcritic_args(&self.config, &path_str);
 
         // Convert to &str slice for the runtime
         let args_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
@@ -189,59 +62,13 @@ impl CriticAnalyzer {
             self.runtime.run_command("perlcritic", &args_refs, None).map_err(|e| e.message)?;
 
         // Parse output
-        let violations = self.parse_output(&output.stdout, &path_str)?;
+        let violations = parse_perlcritic_output(&output.stdout, &path_str);
 
         // Cache results
         self.cache.insert(path_str, violations.clone());
 
         Ok(violations)
     }
-
-    /// Parse perlcritic output
-    fn parse_output(&self, output: &[u8], file_path: &str) -> Result<Vec<Violation>, String> {
-        let output_str = String::from_utf8_lossy(output);
-        let mut violations = Vec::new();
-
-        for line in output_str.lines() {
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            // Parse format: file:line:column:severity:policy:message
-            let parts: Vec<&str> = line.splitn(6, ':').collect();
-            if parts.len() != 6 {
-                continue;
-            }
-
-            let line_num: u32 = parts[1].parse().unwrap_or(1);
-            let column: u32 = parts[2].parse().unwrap_or(1);
-            let severity: u8 = parts[3].parse().unwrap_or(3);
-            let policy = parts[4].to_string();
-            let message = parts[5].to_string();
-
-            violations.push(Violation {
-                policy: policy.clone(),
-                description: message,
-                explanation: self.get_policy_explanation(&policy),
-                severity: Severity::from_number(severity),
-                range: Range {
-                    start: Position { byte: 0, line: line_num - 1, column: column - 1 },
-                    end: Position { byte: 0, line: line_num - 1, column },
-                },
-                file: file_path.to_string(),
-            });
-        }
-
-        Ok(violations)
-    }
-
-    /// Get explanation for a policy
-    fn get_policy_explanation(&self, policy: &str) -> String {
-        // In a real implementation, this would look up detailed explanations
-        // For now, return a generic message
-        format!("See perldoc Perl::Critic::Policy::{}", policy)
-    }
-
     /// Clear cache for a file
     pub fn invalidate_cache(&mut self, file_path: &str) {
         self.cache.remove(file_path);
@@ -530,10 +357,8 @@ mod tests {
         use perl_subprocess_runtime::mock::{MockResponse, MockSubprocessRuntime};
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
-        // Mock perlcritic output format: file:line:column:severity:policy:message
-        // Note: The current parser uses splitn(6, ':') which doesn't handle policy names
-        // with '::' well - using a simple policy name for this test
-        let mock_output = b"test.pl:5:1:3:RequireStrict:Code does not use strict\n";
+        let mock_output =
+            b"test.pl:5:1:3:TestingAndDebugging::RequireUseStrict\tCode does not use strict\n";
         runtime.add_response(MockResponse::success(mock_output.to_vec()));
 
         let config = CriticConfig::default();
@@ -542,7 +367,7 @@ mod tests {
         let result = analyzer.analyze_file(Path::new("test.pl"));
         let violations = must(result);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].policy, "RequireStrict");
+        assert_eq!(violations[0].policy, "TestingAndDebugging::RequireUseStrict");
         assert_eq!(violations[0].range.start.line, 4); // 0-indexed
 
         let invocations = runtime.invocations();

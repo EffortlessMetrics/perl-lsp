@@ -1820,6 +1820,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-critic"
+version = "0.10.0"
+dependencies = [
+ "lsp-types",
+ "perl-parser-core",
+ "serde",
+]
+
+[[package]]
 name = "perl-lsp-diagnostic-types"
 version = "0.10.0"
 
@@ -2019,6 +2028,7 @@ dependencies = [
  "criterion",
  "lsp-types",
  "moka",
+ "perl-lsp-critic",
  "perl-parser-core",
  "perl-subprocess-runtime",
  "perl-tdd-support",
