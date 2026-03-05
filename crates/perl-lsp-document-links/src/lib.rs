@@ -1,7 +1,12 @@
 //! Document links provider for LSP protocol compatibility.
 //!
-//! This module provides document link detection for Perl source files,
+//! This crate provides document link detection for Perl source files,
 //! identifying `use`, `require` module statements, and file includes.
+
+#![deny(unsafe_code)]
+#![warn(rust_2018_idioms)]
+#![warn(missing_docs)]
+#![warn(clippy::all)]
 
 use perl_module_import::{ModuleImportKind, parse_module_import_head};
 use perl_module_path::module_name_to_path;
@@ -97,10 +102,6 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
     out
 }
 
-/// Create a document link with deferred target resolution
-///
-/// Returns a link structure with a `data` field that will be used
-/// by `documentLink/resolve` to compute the actual target URI.
 fn make_deferred_module_link(
     uri: &str,
     line: u32,
@@ -166,31 +167,26 @@ fn is_pragma(pkg: &str) -> bool {
     )
 }
 
-#[allow(dead_code)] // Reserved for future document link resolution
+#[allow(dead_code)]
 fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
     let rel = module_name_to_path(pkg);
-    // Try each workspace root
     if let Some(base) = roots.first() {
         let mut u = base.clone();
         let mut p = u.path().to_string();
         if !p.ends_with('/') {
             p.push('/');
         }
-        // Check common Perl lib paths - return first match
         if let Some(lib_dir) = ["lib/", "blib/lib/", ""].first() {
             let full_path = format!("{}{}{}", p, lib_dir, rel);
             u.set_path(&full_path);
-            // In real implementation, check if file exists
-            // For now, just return first possibility
             return Some(u.to_string());
         }
     }
     None
 }
 
-#[allow(dead_code)] // Reserved for future document link resolution
+#[allow(dead_code)]
 fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
-    // Try to resolve relative to workspace roots - return first match
     if let Some(base) = roots.first() {
         let mut u = base.clone();
         let mut p = u.path().to_string();
@@ -204,9 +200,8 @@ fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
     None
 }
 
-#[allow(dead_code)] // Reserved for future document link resolution
+#[allow(dead_code)]
 fn make_link(_src: &str, line: u32, line_text: &str, pkg: &str, target: String) -> Option<Value> {
-    // Find the package name in the line to get exact column positions
     if let Some(idx) = line_text.find(pkg) {
         let start = idx as u32;
         let end = (idx + pkg.len()) as u32;
@@ -230,7 +225,12 @@ mod tests {
 
     #[test]
     fn emits_module_link_for_use_statement() {
-        let links = compute_links("file:///workspace/test.pl", "use Foo::Bar;\n", &[]);
+        let links = compute_links(
+            "file:///workspace/test.pl",
+            "use Foo::Bar;
+",
+            &[],
+        );
         assert_eq!(links.len(), 1);
         if let Some(link) = links.first() {
             assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
@@ -240,7 +240,12 @@ mod tests {
 
     #[test]
     fn emits_module_link_for_module_form_require_statement() {
-        let links = compute_links("file:///workspace/test.pl", "require Foo::Bar;\n", &[]);
+        let links = compute_links(
+            "file:///workspace/test.pl",
+            "require Foo::Bar;
+",
+            &[],
+        );
         assert_eq!(links.len(), 1);
         if let Some(link) = links.first() {
             assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
@@ -250,7 +255,12 @@ mod tests {
 
     #[test]
     fn does_not_emit_module_link_for_use_parent_statement() {
-        let links = compute_links("file:///workspace/test.pl", "use parent 'Foo::Bar';\n", &[]);
+        let links = compute_links(
+            "file:///workspace/test.pl",
+            "use parent 'Foo::Bar';
+",
+            &[],
+        );
         assert!(links.is_empty());
     }
 }

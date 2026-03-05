@@ -1,0 +1,24 @@
+[package]
+name = "perl-lsp-document-links"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Document link extraction for Perl LSP use/require statements"
+documentation = "https://docs.rs/perl-lsp-document-links"
+readme = "README.md"
+keywords = ["perl", "lsp", "document-link", "navigation"]
+categories = ["development-tools", "text-editors"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+perl-module-import = { workspace = true }
+perl-module-path = { workspace = true }
+serde_json = { workspace = true }
+url = "2.5.8"
+
+[lints]
+workspace = true
