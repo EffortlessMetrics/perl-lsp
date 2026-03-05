@@ -1,0 +1,19 @@
+[package]
+name = "perl-workspace-parallel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Threaded worker-pool helpers for workspace file processing"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-workspace-parallel"
+keywords = ["perl", "workspace", "parallel", "threading"]
+categories = ["concurrency", "development-tools"]
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

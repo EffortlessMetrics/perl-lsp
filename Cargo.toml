@@ -73,6 +73,7 @@ members = [
     "crates/perl-uri",
     "crates/perl-path-security",
     "crates/perl-workspace-discovery",
+    "crates/perl-workspace-parallel",
     "crates/perl-corpus",
     "crates/perl-lsp",
     "crates/perl-dap",
@@ -130,6 +131,7 @@ allow = [
 "perl-symbol-table",
     "perl-uri",
     "perl-workspace-index-slo",
+    "perl-workspace-parallel",
 
     # Tier 3 — Analysis and indexing
     "perl-workspace-index",
@@ -258,6 +260,7 @@ perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
 perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
 perl-path-security = { path = "crates/perl-path-security", version = "0.10.0" }
 perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.10.0" }
+perl-workspace-parallel = { path = "crates/perl-workspace-parallel", version = "0.10.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.10.0" }
 perl-dap = { path = "crates/perl-dap", version = "0.10.0" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.10.0" }

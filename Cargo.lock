@@ -2022,6 +2022,7 @@ dependencies = [
  "perl-parser-core",
  "perl-subprocess-runtime",
  "perl-tdd-support",
+ "perl-workspace-parallel",
  "serde",
 ]
 
@@ -2500,6 +2501,10 @@ dependencies = [
  "parking_lot",
  "proptest",
 ]
+
+[[package]]
+name = "perl-workspace-parallel"
+version = "0.10.0"
 
 [[package]]
 name = "pest"
