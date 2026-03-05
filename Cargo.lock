@@ -2459,6 +2459,7 @@ name = "perl-workspace-discovery"
 version = "0.10.0"
 dependencies = [
  "perl-source-file",
+ "perl-workspace-skip",
  "proptest",
  "tempfile",
  "walkdir",
@@ -2500,6 +2501,10 @@ dependencies = [
  "parking_lot",
  "proptest",
 ]
+
+[[package]]
+name = "perl-workspace-skip"
+version = "0.10.0"
 
 [[package]]
 name = "pest"
