@@ -1937,6 +1937,13 @@ dependencies = [
 name = "perl-lsp-limits"
 version = "0.10.0"
 dependencies = [
+ "perl-lsp-limits-types",
+]
+
+[[package]]
+name = "perl-lsp-limits-types"
+version = "0.10.0"
+dependencies = [
  "serde_json",
 ]
 
