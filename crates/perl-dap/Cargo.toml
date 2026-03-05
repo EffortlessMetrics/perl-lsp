@@ -36,7 +36,6 @@ serde_json = "1.0.149"
 
 # Error handling
 anyhow = "1.0.102"
-thiserror = "2.0.18"
 
 # Regex for parsing debugger output
 regex = "1.12.2"
@@ -58,7 +57,7 @@ perl-dap-platform = { workspace = true }
 perl-dap-variables = { workspace = true }
 perl-dap-stack = { workspace = true }
 perl-module-path = { workspace = true }
-perl-path-security = { workspace = true }
+perl-dap-security = { workspace = true }
 perl-content-length-framing = { workspace = true }
 perl-keywords = { workspace = true }
 perl-lsp-launcher = { workspace = true }
