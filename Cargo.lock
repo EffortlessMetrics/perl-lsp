@@ -1797,6 +1797,7 @@ dependencies = [
  "perl-tdd-support",
  "perl-workspace-discovery",
  "perl-workspace-folder",
+ "perl-workspace-ignore",
  "predicates",
  "pretty_assertions",
  "proptest",
@@ -2638,6 +2639,7 @@ name = "perl-workspace-discovery"
 version = "0.10.0"
 dependencies = [
  "perl-source-file",
+ "perl-workspace-ignore",
  "proptest",
  "tempfile",
  "walkdir",
@@ -2653,6 +2655,10 @@ dependencies = [
  "tempfile",
  "url",
 ]
+
+[[package]]
+name = "perl-workspace-ignore"
+version = "0.10.0"
 
 [[package]]
 name = "perl-workspace-index"
