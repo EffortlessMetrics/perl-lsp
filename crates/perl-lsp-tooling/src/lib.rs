@@ -33,6 +33,7 @@ pub mod perl_critic;
 pub mod perltidy;
 
 pub use perl_subprocess_runtime::{SubprocessError, SubprocessOutput, SubprocessRuntime};
+pub use perl_symbol_index::SymbolIndex;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use perl_subprocess_runtime::OsSubprocessRuntime;

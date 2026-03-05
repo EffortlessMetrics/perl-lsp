@@ -2,7 +2,8 @@
 
 /// Performance utilities for LSP feature optimization.
 pub mod performance {
-    pub use perl_lsp_tooling::performance::{AstCache, IncrementalParser, SymbolIndex, parallel};
+    pub use perl_lsp_tooling::SymbolIndex;
+    pub use perl_lsp_tooling::performance::{AstCache, IncrementalParser, parallel};
 }
 
 /// Perl critic integration for linting.
