@@ -29,7 +29,7 @@ members = [
     "crates/perl-lsp-on-type-formatting",
     "crates/perl-lsp-tooling",
     "crates/perl-lsp-symbol-query",
-    "crates/perl-subprocess-runtime",
+    "crates/perl-lsp-performance",
     "crates/perl-lsp-formatting-types",
     "crates/perl-lsp-formatting",
     "crates/perl-lsp-diagnostic-types",
@@ -176,6 +176,7 @@ allow = [
     "perl-lsp-navigation",
     "perl-lsp-document-links",
     "perl-lsp-tooling",
+    "perl-lsp-performance",
     "perl-lsp-formatting-types",
     "perl-lsp-formatting",
     "perl-lsp-semantic-tokens",
@@ -291,7 +292,7 @@ perl-source-editing = { path = "crates/perl-source-editing", version = "0.10.0" 
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.10.0" }
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.10.0" }
 perl-lsp-document-links = { path = "crates/perl-lsp-document-links", version = "0.10.0" }
-perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
+perl-lsp-performance = { path = "crates/perl-lsp-performance", version = "0.10.0" }
 perl-lsp-ast-utils = { path = "crates/perl-lsp-ast-utils", version = "0.10.0" }
 perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.10.0" }
 perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.10.0" }
