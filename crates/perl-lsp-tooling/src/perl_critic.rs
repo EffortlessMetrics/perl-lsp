@@ -3,6 +3,7 @@
 //! This module provides integration with Perl::Critic for static code analysis
 //! and policy enforcement in Perl code.
 
+use perl_lsp_critic_parser::parse_perlcritic_output;
 use perl_parser_core::{
     Node,
     position::{Position, Range},
@@ -200,39 +201,20 @@ impl CriticAnalyzer {
     /// Parse perlcritic output
     fn parse_output(&self, output: &[u8], file_path: &str) -> Result<Vec<Violation>, String> {
         let output_str = String::from_utf8_lossy(output);
-        let mut violations = Vec::new();
-
-        for line in output_str.lines() {
-            if line.trim().is_empty() {
-                continue;
-            }
-
-            // Parse format: file:line:column:severity:policy:message
-            let parts: Vec<&str> = line.splitn(6, ':').collect();
-            if parts.len() != 6 {
-                continue;
-            }
-
-            let line_num: u32 = parts[1].parse().unwrap_or(1);
-            let column: u32 = parts[2].parse().unwrap_or(1);
-            let severity: u8 = parts[3].parse().unwrap_or(3);
-            let policy = parts[4].to_string();
-            let message = parts[5].to_string();
-
-            violations.push(Violation {
-                policy: policy.clone(),
-                description: message,
-                explanation: self.get_policy_explanation(&policy),
-                severity: Severity::from_number(severity),
+        Ok(parse_perlcritic_output(&output_str)
+            .into_iter()
+            .map(|parsed| Violation {
+                policy: parsed.policy.clone(),
+                description: parsed.message,
+                explanation: self.get_policy_explanation(&parsed.policy),
+                severity: Severity::from_number(parsed.severity),
                 range: Range {
-                    start: Position { byte: 0, line: line_num - 1, column: column - 1 },
-                    end: Position { byte: 0, line: line_num - 1, column },
+                    start: Position { byte: 0, line: parsed.line - 1, column: parsed.column - 1 },
+                    end: Position { byte: 0, line: parsed.line - 1, column: parsed.column },
                 },
                 file: file_path.to_string(),
-            });
-        }
-
-        Ok(violations)
+            })
+            .collect())
     }
 
     /// Get explanation for a policy
@@ -531,9 +513,8 @@ mod tests {
 
         let runtime = Arc::new(MockSubprocessRuntime::new());
         // Mock perlcritic output format: file:line:column:severity:policy:message
-        // Note: The current parser uses splitn(6, ':') which doesn't handle policy names
-        // with '::' well - using a simple policy name for this test
-        let mock_output = b"test.pl:5:1:3:RequireStrict:Code does not use strict\n";
+        let mock_output =
+            b"test.pl:5:1:3:TestingAndDebugging::RequireUseStrict:Code does not use strict\n";
         runtime.add_response(MockResponse::success(mock_output.to_vec()));
 
         let config = CriticConfig::default();
@@ -542,7 +523,7 @@ mod tests {
         let result = analyzer.analyze_file(Path::new("test.pl"));
         let violations = must(result);
         assert_eq!(violations.len(), 1);
-        assert_eq!(violations[0].policy, "RequireStrict");
+        assert_eq!(violations[0].policy, "TestingAndDebugging::RequireUseStrict");
         assert_eq!(violations[0].range.start.line, 4); // 0-indexed
 
         let invocations = runtime.invocations();
