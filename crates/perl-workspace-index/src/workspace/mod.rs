@@ -13,6 +13,7 @@ pub use cache::{
     AstCacheConfig, BoundedLruCache, CacheConfig, CombinedWorkspaceCacheConfig, EstimateSize,
     SymbolCacheConfig, WorkspaceCacheConfig,
 };
+pub use perl_workspace_index_limits::{IndexPerformanceCaps, IndexResourceLimits, ResourceKind};
 pub use production_coordinator::{
     CoordinatorStatistics, ProductionCoordinatorConfig, ProductionIndexCoordinator,
     WorkspaceCacheManager,
@@ -20,6 +21,6 @@ pub use production_coordinator::{
 pub use slo::{OperationResult, OperationType, SloConfig, SloStatistics, SloTracker};
 pub use state_machine::{
     BuildPhase, DegradationReason, IndexState, IndexStateKind, IndexStateMachine,
-    InvalidationReason, ResourceKind, TransitionResult,
+    InvalidationReason, TransitionResult,
 };
-pub use workspace_index::{IndexResourceLimits, Location, WorkspaceIndex};
+pub use workspace_index::{Location, WorkspaceIndex};

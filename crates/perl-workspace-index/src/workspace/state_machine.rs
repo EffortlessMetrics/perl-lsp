@@ -46,6 +46,7 @@
 //! ```
 
 use parking_lot::RwLock;
+use perl_workspace_index_limits::ResourceKind;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -250,17 +251,6 @@ pub enum DegradationReason {
         /// Which resource limit was exceeded
         kind: ResourceKind,
     },
-}
-
-/// Type of resource limit that was exceeded.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ResourceKind {
-    /// Maximum number of files in index exceeded
-    MaxFiles,
-    /// Maximum total symbols exceeded
-    MaxSymbols,
-    /// Maximum AST cache bytes exceeded
-    MaxCacheBytes,
 }
 
 /// State transition for index lifecycle instrumentation.

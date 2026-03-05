@@ -1,0 +1,26 @@
+[package]
+name = "perl-workspace-index-limits"
+version = "0.10.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Resource and performance limits for perl-workspace-index"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-workspace-index-limits"
+keywords = ["perl", "workspace", "index", "limits"]
+categories = ["development-tools"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

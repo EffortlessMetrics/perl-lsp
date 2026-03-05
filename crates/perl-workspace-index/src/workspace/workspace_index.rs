@@ -75,6 +75,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use url::Url;
 
+/// Resource and performance limit types for index coordination.
+pub use perl_workspace_index_limits::{IndexPerformanceCaps, IndexResourceLimits, ResourceKind};
+
 // Re-export URI utilities for backward compatibility
 #[cfg(not(target_arch = "wasm32"))]
 /// URI ↔ filesystem helpers used during Index/Analyze workflows.
@@ -307,103 +310,6 @@ pub enum DegradationReason {
         /// Which resource limit was exceeded
         kind: ResourceKind,
     },
-}
-
-#[derive(Clone, Debug, PartialEq)]
-/// Type of resource limit that was exceeded
-///
-/// Identifies which bounded resource triggered index degradation,
-/// enabling targeted eviction strategies and capacity planning.
-pub enum ResourceKind {
-    /// Maximum number of files in index exceeded
-    MaxFiles,
-
-    /// Maximum total symbols exceeded
-    MaxSymbols,
-
-    /// Maximum AST cache bytes exceeded
-    MaxCacheBytes,
-}
-
-#[derive(Clone, Debug)]
-/// Configurable resource limits for workspace index
-///
-/// Defines hard caps on various index resources to prevent unbounded
-/// memory growth in large Perl workspaces. These limits trigger
-/// graceful degradation with LRU eviction when exceeded.
-///
-/// # Performance Characteristics
-///
-/// - Default limits support ~10K files with ~500K total symbols
-/// - AST cache defaults to 256MB with 100 items (LRU eviction)
-/// - Eviction is deterministic for reproducible behavior
-/// - Limits are configurable per workspace via LSP initialization
-///
-/// # Usage
-///
-/// ```rust,ignore
-/// use perl_parser::workspace_index::IndexResourceLimits;
-///
-/// // Use default limits
-/// let limits = IndexResourceLimits::default();
-/// assert_eq!(limits.max_files, 10_000);
-///
-/// // Custom limits for large workspace
-/// let custom = IndexResourceLimits {
-///     max_files: 50_000,
-///     max_total_symbols: 2_000_000,
-///     ..Default::default()
-/// };
-/// ```
-pub struct IndexResourceLimits {
-    /// Maximum files to index (default: 10,000)
-    pub max_files: usize,
-
-    /// Maximum symbols per file (default: 5,000)
-    pub max_symbols_per_file: usize,
-
-    /// Maximum total symbols (default: 500,000)
-    pub max_total_symbols: usize,
-
-    /// Maximum AST cache size in bytes (default: 256MB)
-    pub max_ast_cache_bytes: usize,
-
-    /// Maximum AST cache items (default: 100)
-    pub max_ast_cache_items: usize,
-
-    /// Maximum workspace scan duration in milliseconds (default: 30,000ms = 30s)
-    pub max_scan_duration_ms: u64,
-}
-
-impl Default for IndexResourceLimits {
-    fn default() -> Self {
-        Self {
-            max_files: 10_000,
-            max_symbols_per_file: 5_000,
-            max_total_symbols: 500_000,
-            max_ast_cache_bytes: 256 * 1024 * 1024, // 256MB
-            max_ast_cache_items: 100,
-            max_scan_duration_ms: 30_000, // 30 seconds
-        }
-    }
-}
-
-/// Performance caps for workspace indexing operations
-///
-/// These caps are soft budgets that enable early-exit heuristics to keep
-/// indexing responsive on constrained machines.
-#[derive(Clone, Debug)]
-pub struct IndexPerformanceCaps {
-    /// Initial workspace scan budget in milliseconds (default: 100ms)
-    pub initial_scan_budget_ms: u64,
-    /// Incremental update budget in milliseconds (default: 10ms)
-    pub incremental_budget_ms: u64,
-}
-
-impl Default for IndexPerformanceCaps {
-    fn default() -> Self {
-        Self { initial_scan_budget_ms: 100, incremental_budget_ms: 10 }
-    }
 }
 
 /// Metrics for index lifecycle management and degradation detection

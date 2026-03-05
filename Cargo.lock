@@ -2487,11 +2487,16 @@ dependencies = [
  "perl-symbol-types",
  "perl-tdd-support",
  "perl-uri",
+ "perl-workspace-index-limits",
  "perl-workspace-index-slo",
  "serde",
  "tempfile",
  "url",
 ]
+
+[[package]]
+name = "perl-workspace-index-limits"
+version = "0.10.0"
 
 [[package]]
 name = "perl-workspace-index-slo"
