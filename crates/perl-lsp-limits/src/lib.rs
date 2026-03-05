@@ -20,6 +20,7 @@
 //! let results = my_query().take(limits.references_result_cap);
 //! ```
 
+use perl_lsp_limits_settings::LspLimitOverrides;
 use std::time::Duration;
 
 /// Central configuration for all LSP operation limits
@@ -183,38 +184,34 @@ impl LspLimits {
     ///
     /// Reads from the `perl.limits` section of settings.
     pub fn update_from_value(&mut self, settings: &serde_json::Value) {
-        if let Some(limits) = settings.get("limits") {
-            // Result caps
-            if let Some(v) = limits.get("workspaceSymbolCap").and_then(|v| v.as_u64()) {
-                self.workspace_symbol_cap = v as usize;
-            }
-            if let Some(v) = limits.get("referencesCap").and_then(|v| v.as_u64()) {
-                self.references_cap = v as usize;
-            }
-            if let Some(v) = limits.get("completionCap").and_then(|v| v.as_u64()) {
-                self.completion_cap = v as usize;
-            }
+        let overrides = LspLimitOverrides::from_settings(settings);
 
-            // Cache limits
-            if let Some(v) = limits.get("astCacheMaxEntries").and_then(|v| v.as_u64()) {
-                self.ast_cache_max_entries = v as usize;
-            }
+        if let Some(value) = overrides.workspace_symbol_cap {
+            self.workspace_symbol_cap = value;
+        }
+        if let Some(value) = overrides.references_cap {
+            self.references_cap = value;
+        }
+        if let Some(value) = overrides.completion_cap {
+            self.completion_cap = value;
+        }
 
-            // Index limits
-            if let Some(v) = limits.get("maxIndexedFiles").and_then(|v| v.as_u64()) {
-                self.max_indexed_files = v as usize;
-            }
-            if let Some(v) = limits.get("maxTotalSymbols").and_then(|v| v.as_u64()) {
-                self.max_total_symbols = v as usize;
-            }
+        if let Some(value) = overrides.ast_cache_max_entries {
+            self.ast_cache_max_entries = value;
+        }
 
-            // Deadlines (in milliseconds)
-            if let Some(v) = limits.get("workspaceScanDeadlineMs").and_then(|v| v.as_u64()) {
-                self.workspace_scan_deadline = Duration::from_millis(v);
-            }
-            if let Some(v) = limits.get("referenceSearchDeadlineMs").and_then(|v| v.as_u64()) {
-                self.reference_search_deadline = Duration::from_millis(v);
-            }
+        if let Some(value) = overrides.max_indexed_files {
+            self.max_indexed_files = value;
+        }
+        if let Some(value) = overrides.max_total_symbols {
+            self.max_total_symbols = value;
+        }
+
+        if let Some(value) = overrides.workspace_scan_deadline {
+            self.workspace_scan_deadline = value;
+        }
+        if let Some(value) = overrides.reference_search_deadline {
+            self.reference_search_deadline = value;
         }
     }
 }
