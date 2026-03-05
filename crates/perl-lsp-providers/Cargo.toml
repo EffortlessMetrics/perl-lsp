@@ -27,6 +27,7 @@ perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-lexer = { workspace = true }
 perl-lsp-tooling = { workspace = true }
+perl-lsp-on-type-formatting = { workspace = true }
 perl-lsp-formatting = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
 perl-lsp-semantic-tokens = { workspace = true }
