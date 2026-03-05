@@ -17,6 +17,7 @@ categories = ["development-tools", "text-editors"]
 doctest = false
 
 [dependencies]
+perl-lsp-document-links = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 lsp-types = { version = "0.97.0" }
