@@ -6,4 +6,4 @@
 //! providers to surface accurate information without an external Perl runtime.
 
 pub mod builtin_signatures;
-pub mod builtin_signatures_phf;
+pub use perl_builtins_phf as builtin_signatures_phf;

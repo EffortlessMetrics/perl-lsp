@@ -9,7 +9,7 @@ Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
 Provides two complementary lookup mechanisms for 200+ Perl built-in functions (including file test operators):
 
 - **`builtin_signatures`** -- `HashMap`-based store with `OnceLock` lazy init. Each entry carries multiple signature variants and a documentation string (`BuiltinSignature`). Used for signature help and hover.
-- **`builtin_signatures_phf`** -- Compile-time `phf::Map` tables (`BUILTIN_SIGS`, `BUILTIN_FULL_SIGS`) for O(1) lookups with zero runtime allocation. Exposes `get_param_names`, `is_builtin`, and `builtin_count` helpers. Used for inlay hints and completion.
+- **`builtin_signatures_phf`** -- Re-export of the `perl-builtins-phf` microcrate, which provides compile-time `phf::Map` tables (`BUILTIN_SIGS`, `BUILTIN_FULL_SIGS`) for O(1) lookups with zero runtime allocation. Exposes `get_param_names`, `is_builtin`, and `builtin_count` helpers. Used for inlay hints and completion.
 
 ## Categories covered
 

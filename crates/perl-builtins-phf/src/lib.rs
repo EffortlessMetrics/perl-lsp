@@ -306,3 +306,20 @@ pub fn is_builtin(function_name: &str) -> bool {
 pub fn builtin_count() -> usize {
     BUILTIN_SIGS.len()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{builtin_count, get_param_names, is_builtin};
+
+    #[test]
+    fn exposes_common_builtins() {
+        assert!(is_builtin("print"));
+        assert!(!is_builtin("not_a_builtin"));
+    }
+
+    #[test]
+    fn returns_open_param_names() {
+        assert_eq!(get_param_names("open"), ["FILEHANDLE", "MODE", "FILENAME"]);
+        assert!(builtin_count() > 150);
+    }
+}
