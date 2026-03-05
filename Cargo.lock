@@ -1851,7 +1851,6 @@ name = "perl-lsp-document-links"
 version = "0.10.0"
 dependencies = [
  "perl-module-import",
- "perl-module-path",
  "serde_json",
  "url",
 ]

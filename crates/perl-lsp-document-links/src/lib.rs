@@ -9,7 +9,6 @@
 #![warn(clippy::all)]
 
 use perl_module_import::{ModuleImportKind, parse_module_import_head};
-use perl_module_path::module_name_to_path;
 use serde_json::{Value, json};
 use url::Url;
 
@@ -23,7 +22,7 @@ use url::Url;
 ///
 /// * `uri` - The URI of the document being processed.
 /// * `text` - The content of the document.
-/// * `roots` - A slice of workspace root URLs to resolve modules against.
+/// * `roots` - A slice of workspace root URLs kept for API compatibility (reserved for deferred resolution).
 ///
 /// # Returns
 ///
@@ -167,57 +166,6 @@ fn is_pragma(pkg: &str) -> bool {
     )
 }
 
-#[allow(dead_code)]
-fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
-    let rel = module_name_to_path(pkg);
-    if let Some(base) = roots.first() {
-        let mut u = base.clone();
-        let mut p = u.path().to_string();
-        if !p.ends_with('/') {
-            p.push('/');
-        }
-        if let Some(lib_dir) = ["lib/", "blib/lib/", ""].first() {
-            let full_path = format!("{}{}{}", p, lib_dir, rel);
-            u.set_path(&full_path);
-            return Some(u.to_string());
-        }
-    }
-    None
-}
-
-#[allow(dead_code)]
-fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
-    if let Some(base) = roots.first() {
-        let mut u = base.clone();
-        let mut p = u.path().to_string();
-        if !p.ends_with('/') {
-            p.push('/');
-        }
-        p.push_str(path);
-        u.set_path(&p);
-        return Some(u.to_string());
-    }
-    None
-}
-
-#[allow(dead_code)]
-fn make_link(_src: &str, line: u32, line_text: &str, pkg: &str, target: String) -> Option<Value> {
-    if let Some(idx) = line_text.find(pkg) {
-        let start = idx as u32;
-        let end = (idx + pkg.len()) as u32;
-        Some(json!({
-            "range": {
-                "start": {"line": line, "character": start},
-                "end":   {"line": line, "character": end}
-            },
-            "target": target,
-            "tooltip": format!("Open {}", pkg)
-        }))
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::compute_links;
@@ -225,12 +173,7 @@ mod tests {
 
     #[test]
     fn emits_module_link_for_use_statement() {
-        let links = compute_links(
-            "file:///workspace/test.pl",
-            "use Foo::Bar;
-",
-            &[],
-        );
+        let links = compute_links("file:///workspace/test.pl", "use Foo::Bar;\n", &[]);
         assert_eq!(links.len(), 1);
         if let Some(link) = links.first() {
             assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
@@ -240,12 +183,7 @@ mod tests {
 
     #[test]
     fn emits_module_link_for_module_form_require_statement() {
-        let links = compute_links(
-            "file:///workspace/test.pl",
-            "require Foo::Bar;
-",
-            &[],
-        );
+        let links = compute_links("file:///workspace/test.pl", "require Foo::Bar;\n", &[]);
         assert_eq!(links.len(), 1);
         if let Some(link) = links.first() {
             assert_eq!(link.pointer("/data/type").and_then(Value::as_str), Some("module"));
@@ -255,12 +193,7 @@ mod tests {
 
     #[test]
     fn does_not_emit_module_link_for_use_parent_statement() {
-        let links = compute_links(
-            "file:///workspace/test.pl",
-            "use parent 'Foo::Bar';
-",
-            &[],
-        );
+        let links = compute_links("file:///workspace/test.pl", "use parent 'Foo::Bar';\n", &[]);
         assert!(links.is_empty());
     }
 }
