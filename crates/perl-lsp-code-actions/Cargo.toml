@@ -19,6 +19,7 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-lsp-ast-utils = { workspace = true }
+perl-lsp-text-utils = { workspace = true }
 perl-lsp-rename = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
 perl-source-editing = { workspace = true }

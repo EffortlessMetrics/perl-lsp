@@ -45,7 +45,7 @@ pub fn add_missing_imports(ast: &Node, _source: &str, helpers: &Helpers<'_>) -> 
 
 /// Organize import statements
 pub fn organize_imports(_ast: &Node, source: &str, helpers: &Helpers<'_>) -> Option<CodeAction> {
-    let imports = collect_imports(helpers.lines);
+    let imports = collect_imports(helpers.lines());
     if imports.len() <= 1 {
         return None;
     }
@@ -54,7 +54,7 @@ pub fn organize_imports(_ast: &Node, source: &str, helpers: &Helpers<'_>) -> Opt
     let organized = sort_imports(imports);
 
     // Find the range of existing imports
-    if let Some((start, end)) = find_imports_range(source, helpers.lines) {
+    if let Some((start, end)) = find_imports_range(source, helpers.lines()) {
         return Some(CodeAction {
             title: "Organize imports".to_string(),
             kind: CodeActionKind::SourceOrganizeImports,

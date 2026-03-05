@@ -54,6 +54,7 @@ members = [
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-ast-utils",
     "crates/perl-lsp-import-management",
+    "crates/perl-lsp-text-utils",
     "crates/perl-lsp-cancellation",
     "crates/perl-lsp-input-validation",
     "crates/perl-lsp-limits",
@@ -300,6 +301,7 @@ perl-lsp-performance = { path = "crates/perl-lsp-performance", version = "0.10.0
 perl-lsp-ast-utils = { path = "crates/perl-lsp-ast-utils", version = "0.10.0" }
 perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.10.0" }
 perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.10.0" }
+perl-lsp-text-utils = { path = "crates/perl-lsp-text-utils", version = "0.10.0" }
 perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
 perl-uri-classify = { path = "crates/perl-uri-classify", version = "0.10.0" }
 perl-percentile = { path = "crates/perl-percentile", version = "0.10.0" }
