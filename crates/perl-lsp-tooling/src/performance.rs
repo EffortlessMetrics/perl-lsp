@@ -8,7 +8,7 @@
 use moka::sync::Cache;
 use perl_parser_core::Node;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Cache for parsed ASTs with TTL.
@@ -154,66 +154,7 @@ impl IncrementalParser {
 
 /// Parallel processing utilities for large workspaces
 pub mod parallel {
-    use std::sync::mpsc;
-    use std::thread;
-
-    /// Process files in parallel with a worker pool.
-    ///
-    /// Distributes file processing across multiple threads for faster indexing.
-    pub fn process_files_parallel<T, F>(
-        files: Vec<String>,
-        num_workers: usize,
-        processor: F,
-    ) -> Vec<T>
-    where
-        T: Send + 'static,
-        F: Fn(String) -> T + Send + Sync + 'static,
-    {
-        let (tx, rx) = mpsc::channel();
-        let work_queue = Arc::new(Mutex::new(files));
-        let processor = Arc::new(processor);
-
-        let mut handles = vec![];
-
-        for _ in 0..num_workers {
-            let tx = tx.clone();
-            let work_queue = Arc::clone(&work_queue);
-            let processor = Arc::clone(&processor);
-
-            let handle = thread::spawn(move || {
-                loop {
-                    let file = {
-                        let Ok(mut queue) = work_queue.lock() else {
-                            break; // Exit if lock is poisoned
-                        };
-                        queue.pop()
-                    };
-
-                    match file {
-                        Some(f) => {
-                            let result = processor(f);
-                            if tx.send(result).is_err() {
-                                break; // Exit if receiver is dropped
-                            }
-                        }
-                        None => break,
-                    }
-                }
-            });
-
-            handles.push(handle);
-        }
-
-        drop(tx);
-
-        for handle in handles {
-            let _ = handle.join(); // Ignore join errors - worker threads handle errors internally
-        }
-
-        rx.into_iter().collect()
-    }
-
-    use super::*;
+    pub use perl_lsp_parallel::process_files_parallel;
 }
 
 /// Symbol index for fast lookups.

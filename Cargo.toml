@@ -26,6 +26,7 @@ members = [
     "crates/perl-lsp-protocol",
     "crates/perl-lsp-transport",
     "crates/perl-lsp-tooling",
+    "crates/perl-lsp-parallel",
     "crates/perl-subprocess-runtime",
     "crates/perl-lsp-formatting-types",
     "crates/perl-lsp-formatting",
@@ -151,6 +152,7 @@ allow = [
     # Tier 4 — LSP providers
     "perl-lsp-navigation",
     "perl-lsp-tooling",
+    "perl-lsp-parallel",
     "perl-lsp-formatting-types",
     "perl-lsp-formatting",
     "perl-lsp-semantic-tokens",
@@ -254,6 +256,7 @@ perl-source-file = { path = "crates/perl-source-file", version = "0.10.0" }
 perl-text-line = { path = "crates/perl-text-line", version = "0.10.0" }
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.10.0" }
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.10.0" }
+perl-lsp-parallel = { path = "crates/perl-lsp-parallel", version = "0.10.0" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
 perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
 perl-path-security = { path = "crates/perl-path-security", version = "0.10.0" }

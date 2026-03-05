@@ -1,0 +1,18 @@
+[package]
+name = "perl-lsp-parallel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "SRP microcrate for parallel worker-pool processing in LSP workloads"
+readme = "README.md"
+documentation = "https://docs.rs/perl-lsp-parallel"
+keywords = ["perl", "lsp", "parallel", "worker-pool"]
+categories = ["concurrency", "development-tools", "text-editors"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[lints]
+workspace = true
