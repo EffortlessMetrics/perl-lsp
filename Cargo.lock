@@ -1753,6 +1753,7 @@ dependencies = [
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
+ "perl-lsp-uri",
  "perl-module-path",
  "perl-module-reference",
  "perl-module-rename",
@@ -1983,6 +1984,7 @@ dependencies = [
  "perl-lsp-rename",
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
+ "perl-lsp-uri",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -2032,6 +2034,13 @@ dependencies = [
  "perl-content-length-framing",
  "perl-lsp-protocol",
  "serde_json",
+]
+
+[[package]]
+name = "perl-lsp-uri"
+version = "0.10.0"
+dependencies = [
+ "lsp-types",
 ]
 
 [[package]]
