@@ -1835,6 +1835,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-document-links"
+version = "0.10.0"
+dependencies = [
+ "perl-module-import",
+ "perl-module-path",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "perl-lsp-feature-contracts"
 version = "0.10.0"
 dependencies = [
@@ -1945,7 +1955,7 @@ name = "perl-lsp-navigation"
 version = "0.10.0"
 dependencies = [
  "lsp-types",
- "perl-module-import",
+ "perl-lsp-document-links",
  "perl-module-path",
  "perl-parser-core",
  "perl-position-tracking",
@@ -1953,7 +1963,6 @@ dependencies = [
  "perl-tdd-support",
  "serde",
  "serde_json",
- "url",
 ]
 
 [[package]]
