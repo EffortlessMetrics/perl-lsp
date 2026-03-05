@@ -1976,6 +1976,7 @@ name = "perl-lsp-navigation"
 version = "0.10.0"
 dependencies = [
  "lsp-types",
+ "perl-lsp-symbol-query",
  "perl-module-import",
  "perl-module-path",
  "perl-parser-core",
@@ -2051,6 +2052,10 @@ dependencies = [
  "perl-tdd-support",
  "rustc-hash",
 ]
+
+[[package]]
+name = "perl-lsp-symbol-query"
+version = "0.10.0"
 
 [[package]]
 name = "perl-lsp-tooling"
