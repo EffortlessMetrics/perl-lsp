@@ -26,6 +26,7 @@ url = "2.5.8"
 perl-position-tracking = { workspace = true }
 perl-module-path = { workspace = true }
 perl-module-import = { workspace = true }
+perl-symbol-query = { workspace = true }
 
 [features]
 default = []

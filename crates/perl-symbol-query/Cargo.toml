@@ -1,0 +1,16 @@
+[package]
+name = "perl-symbol-query"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Symbol query matching and relevance ordering"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+
+[lib]
+doctest = false
+
+[lints]
+workspace = true

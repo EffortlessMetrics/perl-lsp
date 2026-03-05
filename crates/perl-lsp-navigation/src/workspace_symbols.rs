@@ -68,6 +68,7 @@ use perl_module_path::normalize_package_separator;
 use perl_parser_core::{SourceLocation, ast::Node};
 use perl_position_tracking::{WireLocation, WireRange};
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind};
+use perl_symbol_query::{compare_names_by_query, matches_query_lowercase};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -235,7 +236,7 @@ impl WorkspaceSymbolsProvider {
             for symbol in symbols {
                 // Check if this symbol is in our candidate set
                 if candidate_set.contains(&symbol.name.to_lowercase())
-                    && self.matches_query(&symbol.name, &query_lower)
+                    && matches_query_lowercase(&symbol.name, &query_lower)
                 {
                     results.push(self.symbol_to_workspace_symbol(uri, symbol, source));
                 }
@@ -243,25 +244,7 @@ impl WorkspaceSymbolsProvider {
         }
 
         // Sort by relevance
-        results.sort_by(|a, b| {
-            let a_exact = a.name.to_lowercase() == query_lower;
-            let b_exact = b.name.to_lowercase() == query_lower;
-
-            match (a_exact, b_exact) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => {
-                    let a_starts = a.name.to_lowercase().starts_with(&query_lower);
-                    let b_starts = b.name.to_lowercase().starts_with(&query_lower);
-
-                    match (a_starts, b_starts) {
-                        (true, false) => std::cmp::Ordering::Less,
-                        (false, true) => std::cmp::Ordering::Greater,
-                        _ => a.name.cmp(&b.name),
-                    }
-                }
-            }
-        });
+        results.sort_by(|a, b| compare_names_by_query(&a.name, &b.name, &query_lower));
 
         results
     }
@@ -293,74 +276,16 @@ impl WorkspaceSymbolsProvider {
             };
 
             for symbol in symbols {
-                if self.matches_query(&symbol.name, &query_lower) {
+                if matches_query_lowercase(&symbol.name, &query_lower) {
                     results.push(self.symbol_to_workspace_symbol(uri, symbol, source));
                 }
             }
         }
 
         // Sort by relevance
-        results.sort_by(|a, b| {
-            let a_exact = a.name.to_lowercase() == query_lower;
-            let b_exact = b.name.to_lowercase() == query_lower;
-            let a_prefix = a.name.to_lowercase().starts_with(&query_lower);
-            let b_prefix = b.name.to_lowercase().starts_with(&query_lower);
-
-            match (a_exact, b_exact) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => match (a_prefix, b_prefix) {
-                    (true, false) => std::cmp::Ordering::Less,
-                    (false, true) => std::cmp::Ordering::Greater,
-                    _ => a.name.cmp(&b.name),
-                },
-            }
-        });
+        results.sort_by(|a, b| compare_names_by_query(&a.name, &b.name, &query_lower));
 
         results
-    }
-
-    /// Checks if a symbol name matches the query using multiple strategies.
-    ///
-    /// Returns true if query is empty, or if name matches via exact, prefix,
-    /// contains, or fuzzy (subsequence) matching.
-    fn matches_query(&self, name: &str, query: &str) -> bool {
-        if query.is_empty() {
-            return true;
-        }
-
-        let name_lower = name.to_lowercase();
-
-        // Exact match
-        if name_lower == query {
-            return true;
-        }
-
-        // Prefix match
-        if name_lower.starts_with(query) {
-            return true;
-        }
-
-        // Contains match
-        if name_lower.contains(query) {
-            return true;
-        }
-
-        // Simple fuzzy match
-        let mut query_chars = query.chars();
-        let mut current_char = query_chars.next();
-
-        for ch in name_lower.chars() {
-            if let Some(qch) = current_char {
-                if ch == qch {
-                    current_char = query_chars.next();
-                }
-            } else {
-                return true;
-            }
-        }
-
-        current_char.is_none()
     }
 
     /// Converts an internal `SymbolInfo` to an LSP `WorkspaceSymbol`.

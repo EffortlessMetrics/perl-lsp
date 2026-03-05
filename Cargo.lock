@@ -1950,6 +1950,7 @@ dependencies = [
  "perl-parser-core",
  "perl-position-tracking",
  "perl-semantic-analyzer",
+ "perl-symbol-query",
  "perl-tdd-support",
  "serde",
  "serde_json",
@@ -2333,6 +2334,10 @@ version = "0.10.0"
 dependencies = [
  "perl-tdd-support",
 ]
+
+[[package]]
+name = "perl-symbol-query"
+version = "0.10.0"
 
 [[package]]
 name = "perl-symbol-table"
