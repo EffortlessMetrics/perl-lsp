@@ -1,5 +1,10 @@
 //! Helper methods for enhanced code actions
 
+use perl_source_editing::{
+    find_import_insert_position, find_pragma_insert_position, find_statement_start, get_indent_at,
+    has_non_ascii_content, truncate_expr,
+};
+
 /// Helper methods for enhanced code actions
 pub struct Helpers<'a> {
     pub source: &'a str,
@@ -14,14 +19,7 @@ impl<'a> Helpers<'a> {
 
     /// Find statement start
     pub fn find_statement_start(&self, pos: usize) -> usize {
-        let mut i = pos.saturating_sub(1);
-        while i > 0 {
-            if self.source.chars().nth(i) == Some(';') || self.source.chars().nth(i) == Some('\n') {
-                return i + 1;
-            }
-            i = i.saturating_sub(1);
-        }
-        0
+        find_statement_start(self.source, pos)
     }
 
     /// Find subroutine insertion position
@@ -42,58 +40,26 @@ impl<'a> Helpers<'a> {
 
     /// Find pragma insertion position
     pub fn find_pragma_insert_position(&self) -> usize {
-        // After shebang if present
-        if self.source.starts_with("#!")
-            && let Some(pos) = self.source.find('\n')
-        {
-            return pos + 1;
-        }
-        0
+        find_pragma_insert_position(self.source)
     }
 
     /// Find import insertion position
     pub fn find_import_insert_position(&self) -> usize {
-        // After existing pragmas
-        let mut pos = self.find_pragma_insert_position();
-
-        for line in self.lines.iter() {
-            if line.starts_with("use ") || line.starts_with("require ") {
-                pos = self.source.find(line).unwrap_or(0) + line.len() + 1;
-            } else if !line.is_empty() && !line.starts_with('#') {
-                break;
-            }
-        }
-
-        pos
+        find_import_insert_position(self.source, self.lines)
     }
 
     /// Get indentation at position
     pub fn get_indent_at(&self, pos: usize) -> String {
-        let line_start = self.source[..pos].rfind('\n').map(|p| p + 1).unwrap_or(0);
-
-        let line = &self.source[line_start..];
-        let mut indent = String::new();
-        for ch in line.chars() {
-            if ch == ' ' || ch == '\t' {
-                indent.push(ch);
-            } else {
-                break;
-            }
-        }
-        indent
+        get_indent_at(self.source, pos)
     }
 
     /// Truncate expression for display
     pub fn truncate_expr(&self, expr: &str, max_len: usize) -> String {
-        if expr.len() <= max_len {
-            expr.to_string()
-        } else {
-            format!("{}...", &expr[..max_len - 3])
-        }
+        truncate_expr(expr, max_len)
     }
 
     /// Check if content has non-ASCII characters
     pub fn has_non_ascii_content(&self) -> bool {
-        self.source.chars().any(|c| c as u32 > 127)
+        has_non_ascii_content(self.source)
     }
 }
