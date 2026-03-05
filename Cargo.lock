@@ -1790,6 +1790,7 @@ dependencies = [
  "perl-symbol-cursor",
  "perl-tdd-support",
  "perl-workspace-discovery",
+ "perl-workspace-folder",
  "predicates",
  "pretty_assertions",
  "proptest",
@@ -2574,6 +2575,7 @@ version = "0.10.0"
 dependencies = [
  "perl-uri",
  "proptest",
+ "serde_json",
  "tempfile",
  "url",
 ]

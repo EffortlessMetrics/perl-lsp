@@ -20,6 +20,7 @@ use perl_module_rename::plan_module_rename_edits;
 use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceKind};
 #[cfg(feature = "workspace")]
 use perl_source_file::{is_perl_source_path, is_perl_source_uri};
+use perl_workspace_folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use std::io::Write;
 #[cfg(feature = "workspace")]
@@ -920,37 +921,33 @@ impl LspServer {
     ) -> Result<(), JsonRpcError> {
         if let Some(params) = params {
             if let Some(event) = params.get("event") {
-                // Handle added folders
-                if let Some(added) = event["added"].as_array() {
+                let change = extract_workspace_folder_change(event);
+
+                if !change.added.is_empty() {
                     let mut workspace_folders = self.workspace_folders.lock();
-                    for folder in added {
-                        if let Some(uri) = folder["uri"].as_str() {
-                            eprintln!("Added workspace folder: {}", uri);
-                            workspace_folders.push(uri.to_string());
-                        }
+                    for uri in &change.added {
+                        eprintln!("Added workspace folder: {}", uri);
+                        workspace_folders.push(uri.to_string());
                     }
                 }
 
-                // Handle removed folders
-                if let Some(removed) = event["removed"].as_array() {
+                if !change.removed.is_empty() {
                     let mut workspace_folders = self.workspace_folders.lock();
-                    for folder in removed {
-                        if let Some(uri) = folder["uri"].as_str() {
-                            eprintln!("Removed workspace folder: {}", uri);
-                            workspace_folders.retain(|f| f.as_str() != uri);
+                    for uri in &change.removed {
+                        eprintln!("Removed workspace folder: {}", uri);
+                        workspace_folders.retain(|f| f.as_str() != uri);
 
-                            // Also remove documents from the removed workspace
-                            let mut documents = self.documents.lock();
-                            let docs_to_remove: Vec<String> = documents
-                                .keys()
-                                .filter(|doc_uri| doc_uri.starts_with(uri))
-                                .cloned()
-                                .collect();
+                        // Also remove documents from the removed workspace
+                        let mut documents = self.documents.lock();
+                        let docs_to_remove: Vec<String> = documents
+                            .keys()
+                            .filter(|doc_uri| doc_uri.starts_with(uri))
+                            .cloned()
+                            .collect();
 
-                            for doc_uri in docs_to_remove {
-                                eprintln!("Removing document from removed workspace: {}", doc_uri);
-                                documents.remove(&doc_uri);
-                            }
+                        for doc_uri in docs_to_remove {
+                            eprintln!("Removing document from removed workspace: {}", doc_uri);
+                            documents.remove(&doc_uri);
                         }
                     }
                 }
