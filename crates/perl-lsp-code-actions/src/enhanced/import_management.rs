@@ -94,13 +94,13 @@ pub fn guess_module_for_function(func: &str) -> Option<String> {
 }
 
 /// Collect all import statements
-pub fn collect_imports(lines: &Vec<String>) -> Vec<String> {
+pub fn collect_imports(lines: &[String]) -> Vec<String> {
     let mut imports = Vec::new();
 
     for line in lines {
         let trimmed = line.trim();
         if trimmed.starts_with("use ") || trimmed.starts_with("require ") {
-            imports.push(line.clone());
+            imports.push(line.to_owned());
         }
     }
 
@@ -145,7 +145,7 @@ pub fn sort_imports(imports: Vec<String>) -> Vec<String> {
 }
 
 /// Find the range of import statements
-pub fn find_imports_range(source: &str, lines: &Vec<String>) -> Option<(usize, usize)> {
+pub fn find_imports_range(source: &str, lines: &[String]) -> Option<(usize, usize)> {
     let imports = collect_imports(lines);
     if imports.is_empty() {
         return None;

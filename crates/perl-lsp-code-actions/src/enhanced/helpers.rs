@@ -8,12 +8,12 @@ use perl_source_editing::{
 /// Helper methods for enhanced code actions
 pub struct Helpers<'a> {
     pub source: &'a str,
-    pub lines: &'a Vec<String>,
+    pub lines: &'a [String],
 }
 
 impl<'a> Helpers<'a> {
     /// Create a new helper
-    pub fn new(source: &'a str, lines: &'a Vec<String>) -> Self {
+    pub fn new(source: &'a str, lines: &'a [String]) -> Self {
         Self { source, lines }
     }
 

@@ -53,9 +53,12 @@ pub fn find_import_insert_position(source: &str, lines: &[String]) -> usize {
 }
 
 /// Truncate an expression for display with `...` suffix when required.
+///
+/// `max_len` is interpreted as a character limit (not bytes) to remain UTF-8 safe.
 #[must_use]
 pub fn truncate_expr(expr: &str, max_len: usize) -> String {
-    if expr.len() <= max_len {
+    let expr_len = expr.chars().count();
+    if expr_len <= max_len {
         return expr.to_string();
     }
 
@@ -63,7 +66,8 @@ pub fn truncate_expr(expr: &str, max_len: usize) -> String {
         return "...".chars().take(max_len).collect();
     }
 
-    format!("{}...", &expr[..max_len - 3])
+    let prefix: String = expr.chars().take(max_len - 3).collect();
+    format!("{prefix}...")
 }
 
 /// Return true when `source` contains non-ASCII content.

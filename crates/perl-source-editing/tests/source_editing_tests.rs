@@ -42,3 +42,9 @@ fn detects_non_ascii_content() {
     assert!(has_non_ascii_content("my $x = 'é';"));
     assert!(!has_non_ascii_content("my $x = 'e';"));
 }
+
+#[test]
+fn truncates_unicode_without_panicking() {
+    assert_eq!(truncate_expr("éclair", 5), "éc...");
+    assert_eq!(truncate_expr("naïve", 4), "n...");
+}
