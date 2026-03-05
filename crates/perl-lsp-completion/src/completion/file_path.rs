@@ -40,7 +40,13 @@
 use super::context::CompletionContext;
 use super::items::{CompletionItem, CompletionItemKind};
 #[cfg(not(target_arch = "wasm32"))]
-use std::path::{Component, Path, PathBuf};
+use perl_path_security::{
+    build_completion_path as shared_build_completion_path, is_hidden_or_forbidden_entry_name,
+    is_safe_completion_filename, resolve_completion_base_directory, sanitize_completion_path_input,
+    split_completion_path_components,
+};
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::PathBuf;
 
 /// Bundled callbacks for file path completion operations
 ///
@@ -323,146 +329,38 @@ pub(crate) fn add_file_completions_with_cancellation(
 /// Sanitize and validate a file path for security
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn sanitize_path(path: &str) -> Option<String> {
-    // Handle empty path (current directory completion)
-    if path.is_empty() {
-        return Some(String::new());
-    }
-
-    // Security checks
-    if path.contains('\0') {
-        return None; // Null bytes not allowed
-    }
-
-    // Check for path traversal attempts
-    let path_obj = Path::new(path);
-    for component in path_obj.components() {
-        match component {
-            Component::ParentDir => return None, // No .. allowed
-            Component::RootDir if path != "/" => return None, // Absolute paths generally not allowed
-            Component::Prefix(_) => return None,              // Windows drive letters not allowed
-            _ => {}
-        }
-    }
-
-    // Additional dangerous pattern checks
-    if path.contains("../") || path.contains("..\\") || path.starts_with('/') && path != "/" {
-        return None;
-    }
-
-    // Normalize path separators for cross-platform compatibility
-    Some(path.replace('\\', "/"))
+    sanitize_completion_path_input(path)
 }
 
 /// Split path into directory and filename components safely
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn split_path_components(path: &str) -> (String, String) {
-    match path.rsplit_once('/') {
-        Some((dir, file)) if !dir.is_empty() => (dir.to_string(), file.to_string()),
-        _ => (".".to_string(), path.to_string()),
-    }
+    split_completion_path_components(path)
 }
 
 /// Resolve and validate a directory path for safe traversal
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn resolve_safe_directory(dir_part: &str) -> Option<PathBuf> {
-    let path = Path::new(dir_part);
-
-    // Security: Only allow relative paths and current directory
-    if path.is_absolute() && dir_part != "/" {
-        return None;
-    }
-
-    // For current directory, just return it directly
-    if dir_part == "." {
-        return Some(Path::new(".").to_path_buf());
-    }
-
-    // Convert to canonical path to resolve any remaining issues
-    match path.canonicalize() {
-        Ok(canonical) => {
-            // For tests and scenarios where cwd has changed, be more permissive
-            Some(canonical)
-        }
-        Err(_) => {
-            // If canonicalization fails, try the original path if it exists and is safe
-            if path.exists() && path.is_dir() { Some(path.to_path_buf()) } else { None }
-        }
-    }
+    resolve_completion_base_directory(dir_part)
 }
 
 /// Check if a directory entry should be filtered out for security
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn is_hidden_or_forbidden(entry: &walkdir::DirEntry) -> bool {
     let file_name = entry.file_name().to_string_lossy();
-
-    // Skip hidden files (Unix convention)
-    if file_name.starts_with('.') && file_name.len() > 1 {
-        return true;
-    }
-
-    // Skip certain system directories and files
-    matches!(
-        file_name.as_ref(),
-        "node_modules"
-            | ".git"
-            | ".svn"
-            | ".hg"
-            | "target"
-            | "build"
-            | ".cargo"
-            | ".rustup"
-            | "System Volume Information"
-            | "$RECYCLE.BIN"
-            | "__pycache__"
-            | ".pytest_cache"
-            | ".mypy_cache"
-    )
+    is_hidden_or_forbidden_entry_name(file_name.as_ref())
 }
 
 /// Validate filename for safety
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn is_safe_filename(filename: &str) -> bool {
-    // Basic safety checks
-    if filename.is_empty() || filename.len() > 255 {
-        return false;
-    }
-
-    // Check for null bytes or other control characters
-    if filename.contains('\0') || filename.chars().any(|c| c.is_control()) {
-        return false;
-    }
-
-    // Check for Windows reserved names (even on Unix for cross-platform safety)
-    let name_upper = filename.to_uppercase();
-    let reserved = [
-        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
-        "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    ];
-
-    for reserved_name in &reserved {
-        if name_upper == *reserved_name || name_upper.starts_with(&format!("{}.", reserved_name)) {
-            return false;
-        }
-    }
-
-    true
+    is_safe_completion_filename(filename)
 }
 
 /// Build the completion path string
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn build_completion_path(dir_part: &str, filename: &str, is_dir: bool) -> String {
-    let mut path = if dir_part == "." {
-        filename.to_string()
-    } else {
-        format!("{}/{}", dir_part.trim_end_matches('/'), filename)
-    };
-
-    // Add trailing slash for directories
-    if is_dir {
-        path.push('/');
-    }
-
-    path
+    shared_build_completion_path(dir_part, filename, is_dir)
 }
 
 /// Get metadata for file completion item

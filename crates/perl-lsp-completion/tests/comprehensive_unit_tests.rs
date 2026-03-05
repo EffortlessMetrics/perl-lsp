@@ -14,9 +14,7 @@
 //! - CompletionItemKind and CompletionItem fields
 //! - Sort/dedup ordering
 
-use perl_lsp_completion::{
-    CompletionContext, CompletionItem, CompletionItemKind, CompletionProvider,
-};
+use perl_lsp_completion::{CompletionItem, CompletionItemKind, CompletionProvider};
 use perl_parser_core::Parser;
 use perl_tdd_support::{must, must_some};
 use perl_workspace_index::workspace_index::WorkspaceIndex;

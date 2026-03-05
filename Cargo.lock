@@ -1814,6 +1814,7 @@ dependencies = [
  "lsp-types",
  "perl-keywords",
  "perl-parser-core",
+ "perl-path-security",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
