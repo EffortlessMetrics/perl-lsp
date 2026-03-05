@@ -1,5 +1,5 @@
 [package]
-name = "perl-path-security"
+name = "perl-path-normalize"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,15 +7,14 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Workspace-bound path validation and traversal prevention for Perl tooling"
+description = "Secure workspace-relative path normalization"
 readme = "README.md"
-documentation = "https://docs.rs/perl-path-security"
-keywords = ["perl", "security", "path", "workspace", "validation"]
+documentation = "https://docs.rs/perl-path-normalize"
+keywords = ["perl", "path", "security", "workspace", "normalize"]
 categories = ["development-tools", "filesystem"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
-perl-path-normalize = { workspace = true }
 thiserror = "2.0.18"
 
 [dev-dependencies]
