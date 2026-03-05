@@ -22,6 +22,8 @@
 
 use std::time::Duration;
 
+use perl_lsp_limits_settings::{LimitsSettings, apply_from_lsp_settings};
+
 /// Central configuration for all LSP operation limits
 ///
 /// All handlers should reference these limits rather than defining their own
@@ -183,39 +185,41 @@ impl LspLimits {
     ///
     /// Reads from the `perl.limits` section of settings.
     pub fn update_from_value(&mut self, settings: &serde_json::Value) {
-        if let Some(limits) = settings.get("limits") {
-            // Result caps
-            if let Some(v) = limits.get("workspaceSymbolCap").and_then(|v| v.as_u64()) {
-                self.workspace_symbol_cap = v as usize;
-            }
-            if let Some(v) = limits.get("referencesCap").and_then(|v| v.as_u64()) {
-                self.references_cap = v as usize;
-            }
-            if let Some(v) = limits.get("completionCap").and_then(|v| v.as_u64()) {
-                self.completion_cap = v as usize;
-            }
+        apply_from_lsp_settings(self, settings);
+    }
+}
 
-            // Cache limits
-            if let Some(v) = limits.get("astCacheMaxEntries").and_then(|v| v.as_u64()) {
-                self.ast_cache_max_entries = v as usize;
-            }
+impl LimitsSettings for LspLimits {
+    fn set_workspace_symbol_cap(&mut self, value: usize) {
+        self.workspace_symbol_cap = value;
+    }
 
-            // Index limits
-            if let Some(v) = limits.get("maxIndexedFiles").and_then(|v| v.as_u64()) {
-                self.max_indexed_files = v as usize;
-            }
-            if let Some(v) = limits.get("maxTotalSymbols").and_then(|v| v.as_u64()) {
-                self.max_total_symbols = v as usize;
-            }
+    fn set_references_cap(&mut self, value: usize) {
+        self.references_cap = value;
+    }
 
-            // Deadlines (in milliseconds)
-            if let Some(v) = limits.get("workspaceScanDeadlineMs").and_then(|v| v.as_u64()) {
-                self.workspace_scan_deadline = Duration::from_millis(v);
-            }
-            if let Some(v) = limits.get("referenceSearchDeadlineMs").and_then(|v| v.as_u64()) {
-                self.reference_search_deadline = Duration::from_millis(v);
-            }
-        }
+    fn set_completion_cap(&mut self, value: usize) {
+        self.completion_cap = value;
+    }
+
+    fn set_ast_cache_max_entries(&mut self, value: usize) {
+        self.ast_cache_max_entries = value;
+    }
+
+    fn set_max_indexed_files(&mut self, value: usize) {
+        self.max_indexed_files = value;
+    }
+
+    fn set_max_total_symbols(&mut self, value: usize) {
+        self.max_total_symbols = value;
+    }
+
+    fn set_workspace_scan_deadline_ms(&mut self, value: u64) {
+        self.workspace_scan_deadline = Duration::from_millis(value);
+    }
+
+    fn set_reference_search_deadline_ms(&mut self, value: u64) {
+        self.reference_search_deadline = Duration::from_millis(value);
     }
 }
 

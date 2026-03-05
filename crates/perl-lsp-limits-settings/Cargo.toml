@@ -1,5 +1,5 @@
 [package]
-name = "perl-lsp-limits"
+name = "perl-lsp-limits-settings"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -7,11 +7,10 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "SRP microcrate for bounded LSP limits and deadline policy"
+description = "SRP microcrate for applying LSP limits from JSON settings"
 readme = "README.md"
 
 [dependencies]
-perl-lsp-limits-settings = { workspace = true }
 serde_json = { workspace = true }
 
 [lints]
