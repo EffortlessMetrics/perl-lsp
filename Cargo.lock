@@ -1760,6 +1760,7 @@ dependencies = [
  "perl-parser",
  "perl-position-tracking",
  "perl-source-file",
+ "perl-symbol-cursor",
  "perl-tdd-support",
  "perl-workspace-discovery",
  "predicates",
