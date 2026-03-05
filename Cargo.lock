@@ -2250,6 +2250,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-percentile"
+version = "0.10.0"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "perl-position-tracking"
 version = "0.10.0"
 dependencies = [
@@ -2498,6 +2505,7 @@ name = "perl-workspace-index-slo"
 version = "0.10.0"
 dependencies = [
  "parking_lot",
+ "perl-percentile",
  "proptest",
 ]
 

@@ -34,6 +34,7 @@
 //! ```
 
 use parking_lot::Mutex;
+use perl_percentile::nearest_rank_percentile;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -258,9 +259,9 @@ impl OperationSloTracker {
             self.samples.iter().map(|s| s.duration.as_millis() as u64).collect();
         durations_ms.sort_unstable();
 
-        let p50_ms = percentile(&durations_ms, 50);
-        let p95_ms = percentile(&durations_ms, 95);
-        let p99_ms = percentile(&durations_ms, 99);
+        let p50_ms = nearest_rank_percentile(&durations_ms, 50);
+        let p95_ms = nearest_rank_percentile(&durations_ms, 95);
+        let p99_ms = nearest_rank_percentile(&durations_ms, 99);
 
         let avg_ms =
             durations_ms.iter().map(|&d| d as f64).sum::<f64>() / durations_ms.len() as f64;
@@ -280,17 +281,6 @@ impl OperationSloTracker {
             slo_met,
         }
     }
-}
-
-/// Calculate a percentile from a sorted slice of values.
-fn percentile(sorted_values: &[u64], pct: u64) -> u64 {
-    if sorted_values.is_empty() {
-        return 0;
-    }
-
-    // Nearest-rank method: ceil(pct/100 * n) gives 1-based rank
-    let rank = ((pct as f64 / 100.0) * sorted_values.len() as f64).ceil() as usize;
-    sorted_values[rank.min(sorted_values.len()).saturating_sub(1)]
 }
 
 /// SLO tracker for workspace index operations.
@@ -602,7 +592,7 @@ mod tests {
     #[test]
     fn test_percentile() {
         let values = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-        assert_eq!(percentile(&values, 50), 5); // Median
-        assert_eq!(percentile(&values, 95), 10); // P95
+        assert_eq!(nearest_rank_percentile(&values, 50), 5); // Median
+        assert_eq!(nearest_rank_percentile(&values, 95), 10); // P95
     }
 }
