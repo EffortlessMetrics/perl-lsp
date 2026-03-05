@@ -249,7 +249,7 @@ fn refs_variable_with_different_sigils_not_confused() {
 
 #[test]
 fn type_definition_provider_default_trait() {
-    let provider = TypeDefinitionProvider::default();
+    let provider = TypeDefinitionProvider::new();
     // Just ensure Default impl works without panic
     let _ = provider;
 }
@@ -266,7 +266,7 @@ fn type_definition_provider_new() {
 
 #[test]
 fn type_hierarchy_provider_default_trait() {
-    let provider = TypeHierarchyProvider::default();
+    let provider = TypeHierarchyProvider::new();
     let _ = provider;
 }
 

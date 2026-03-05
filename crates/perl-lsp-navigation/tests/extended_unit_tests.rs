@@ -294,7 +294,7 @@ fn refs_qualified_function_call() {
     if let Some(call_offset) = code.rfind("Foo::bar") {
         let refs = find_references_single_file(&ast, call_offset);
         if let Some(refs) = refs {
-            assert!(refs.len() >= 1, "should find at least the call");
+            assert!(!refs.is_empty(), "should find at least the call");
         }
     }
 }
