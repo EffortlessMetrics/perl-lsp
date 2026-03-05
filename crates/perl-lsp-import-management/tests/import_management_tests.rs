@@ -1,0 +1,50 @@
+use perl_lsp_import_management::{
+    collect_imports, find_imports_range, guess_module_for_function, sort_imports,
+};
+
+#[test]
+fn guesses_common_module_names() {
+    assert_eq!(guess_module_for_function("encode"), Some("Encode".to_string()));
+    assert_eq!(guess_module_for_function("missing"), None);
+}
+
+#[test]
+fn collects_use_and_require_lines() {
+    let lines = vec![
+        "#!/usr/bin/perl".to_string(),
+        "use strict;".to_string(),
+        "my $x = 1;".to_string(),
+        "require Foo::Bar;".to_string(),
+    ];
+
+    let imports = collect_imports(&lines);
+    assert_eq!(imports, vec!["use strict;", "require Foo::Bar;"]);
+}
+
+#[test]
+fn sorts_imports_by_expected_bucket_order() {
+    let sorted = sort_imports(vec![
+        "use Foo::Bar;".to_string(),
+        "use strict;".to_string(),
+        "use lib './lib';".to_string(),
+        "use warnings;".to_string(),
+        "use integer;".to_string(),
+    ]);
+
+    assert_eq!(
+        sorted,
+        vec!["use strict;", "use warnings;", "use integer;", "use Foo::Bar;", "use lib './lib';",]
+    );
+}
+
+#[test]
+fn finds_import_block_range() {
+    let source = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'ok';\n";
+    let lines = source.lines().map(str::to_string).collect::<Vec<_>>();
+
+    let range = find_imports_range(source, &lines);
+    assert!(range.is_some());
+    if let Some((start, end)) = range {
+        assert_eq!(&source[start..end], "use strict;\nuse warnings;");
+    }
+}

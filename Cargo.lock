@@ -1800,6 +1800,7 @@ name = "perl-lsp-code-actions"
 version = "0.10.0"
 dependencies = [
  "perl-lsp-diagnostics",
+ "perl-lsp-import-management",
  "perl-lsp-rename",
  "perl-parser-core",
  "perl-tdd-support",
@@ -1922,6 +1923,10 @@ version = "0.10.0"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "perl-lsp-import-management"
+version = "0.10.0"
 
 [[package]]
 name = "perl-lsp-inlay-hints"
