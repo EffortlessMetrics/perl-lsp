@@ -6,8 +6,8 @@
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_parser_core::error_classifier::ErrorClassifier;
 
-use super::types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
 use super::walker::walk_node;
+use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
 
 /// Check for ERROR nodes in the AST and classify them
 ///

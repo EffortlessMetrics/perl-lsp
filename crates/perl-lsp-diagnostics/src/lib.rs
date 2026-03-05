@@ -38,13 +38,12 @@ mod lints;
 mod parse_errors;
 /// Scope analysis integration
 mod scope;
-/// Core diagnostic types
-mod types;
 /// AST walker utilities
 mod walker;
 
-pub use diagnostics::{
-    Diagnostic, DiagnosticSeverity, DiagnosticTag, DiagnosticsProvider, RelatedInformation,
+pub use diagnostics::DiagnosticsProvider;
+pub use perl_lsp_diagnostic_types::{
+    Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation,
 };
 
 // Re-export lint checks from the lints module

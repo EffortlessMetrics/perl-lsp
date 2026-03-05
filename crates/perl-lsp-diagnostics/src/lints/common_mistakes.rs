@@ -6,8 +6,8 @@
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};
 
-use super::super::types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
 use super::super::walker::walk_node;
+use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity, RelatedInformation};
 
 /// Check for common mistakes
 ///

@@ -9,8 +9,8 @@ use perl_semantic_analyzer::scope_analyzer::ScopeAnalyzer;
 
 use crate::scope::scope_issues_to_diagnostics;
 
-// Re-export types from types module
-pub use crate::types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, RelatedInformation};
+// Re-export diagnostic types from the shared SRP microcrate.
+pub use perl_lsp_diagnostic_types::{Diagnostic, DiagnosticSeverity};
 
 /// Diagnostics provider
 ///
