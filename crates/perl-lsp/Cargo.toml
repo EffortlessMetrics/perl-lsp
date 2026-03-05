@@ -27,6 +27,7 @@ perl-parser = { workspace = true, features = ["test-performance"] }
 perl-lsp-providers = { workspace = true, features = ["lsp-compat"] }
 perl-lsp-formatting = { workspace = true }
 perl-lsp-cancellation = { workspace = true }
+perl-lsp-input-validation = { workspace = true }
 perl-lsp-limits = { workspace = true }
 perl-lsp-uri = { workspace = true }
 perl-lsp-feature-governance = { workspace = true }

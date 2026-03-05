@@ -1763,6 +1763,7 @@ dependencies = [
  "perl-lsp-feature-governance",
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
+ "perl-lsp-input-validation",
  "perl-lsp-launcher",
  "perl-lsp-limits",
  "perl-lsp-navigation",
@@ -1953,6 +1954,17 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "serde_json",
+]
+
+[[package]]
+name = "perl-lsp-input-validation"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "perl-path-security",
+ "perl-tdd-support",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
