@@ -67,28 +67,10 @@
 use perl_module_path::normalize_package_separator;
 use perl_parser_core::{SourceLocation, ast::Node};
 use perl_position_tracking::{WireLocation, WireRange};
+use perl_qualified_name::container_name;
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-/// Extract container name from qualified symbol name.
-///
-/// Extracts the package/class portion from a fully qualified symbol name,
-/// following Perl's package qualification rules.
-///
-/// Examples:
-/// - `"Foo::Bar::baz"` → `Some("Foo::Bar")`
-/// - `"MyClass::new"` → `Some("MyClass")`
-/// - `"toplevel"` → `None`
-///
-/// # Performance
-/// - Time complexity: O(n) string scan
-/// - Memory: Allocates only when container exists
-fn extract_container_name(qualified_name: &str) -> Option<String> {
-    // "Foo::Bar::baz" → container = "Foo::Bar"
-    // Top-level symbols have no container
-    qualified_name.rfind("::").map(|idx| qualified_name[..idx].to_string())
-}
 
 /// LSP WorkspaceSymbol representing a symbol found in the workspace.
 ///
@@ -157,7 +139,7 @@ impl WorkspaceSymbolsProvider {
         // Extract symbols from the symbol table
         for (name, symbol_list) in &table.symbols {
             for symbol in symbol_list {
-                let container = extract_container_name(&symbol.qualified_name);
+                let container = container_name(&symbol.qualified_name).map(str::to_string);
 
                 symbols.push(SymbolInfo {
                     name: name.clone(),
@@ -506,24 +488,24 @@ sub baz {
     }
 
     #[test]
-    fn test_extract_container_name() {
+    fn test_container_name_helper() {
         // Nested package qualification
-        assert_eq!(extract_container_name("Foo::Bar::baz"), Some("Foo::Bar".to_string()));
+        assert_eq!(container_name("Foo::Bar::baz"), Some("Foo::Bar"));
 
         // Simple package qualification
-        assert_eq!(extract_container_name("MyClass::new"), Some("MyClass".to_string()));
+        assert_eq!(container_name("MyClass::new"), Some("MyClass"));
 
         // Top-level symbol (no container)
-        assert_eq!(extract_container_name("toplevel"), None);
+        assert_eq!(container_name("toplevel"), None);
 
         // Empty string
-        assert_eq!(extract_container_name(""), None);
+        assert_eq!(container_name(""), None);
 
         // Package name only (no method)
-        assert_eq!(extract_container_name("Package::"), Some("Package".to_string()));
+        assert_eq!(container_name("Package::"), Some("Package"));
 
         // Deep nesting
-        assert_eq!(extract_container_name("A::B::C::D::method"), Some("A::B::C::D".to_string()));
+        assert_eq!(container_name("A::B::C::D::method"), Some("A::B::C::D"));
     }
 
     #[test]

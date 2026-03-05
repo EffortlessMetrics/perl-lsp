@@ -35,6 +35,7 @@
 //! ```
 
 use perl_parser_core::ast::{Node, NodeKind};
+use perl_qualified_name::split_with_default_package;
 
 /// Return (start_offset, end_offset) for same-file references
 pub fn find_references_single_file(ast: &Node, offset: usize) -> Option<Vec<(usize, usize)>> {
@@ -47,20 +48,12 @@ pub fn find_references_single_file(ast: &Node, offset: usize) -> Option<Vec<(usi
             ("var", "main".to_string(), name.clone(), sigil_char)
         }
         NodeKind::FunctionCall { name, .. } => {
-            let (pkg, bare) = if let Some(idx) = name.rfind("::") {
-                (name[..idx].to_string(), name[idx + 2..].to_string())
-            } else {
-                ("main".to_string(), name.clone())
-            };
-            ("sub", pkg, bare, None)
+            let (pkg, bare) = split_with_default_package(name, "main");
+            ("sub", pkg.to_string(), bare.to_string(), None)
         }
         NodeKind::Subroutine { name: Some(name), .. } => {
-            let (pkg, bare) = if let Some(idx) = name.rfind("::") {
-                (name[..idx].to_string(), name[idx + 2..].to_string())
-            } else {
-                ("main".to_string(), name.clone())
-            };
-            ("sub", pkg, bare, None)
+            let (pkg, bare) = split_with_default_package(name, "main");
+            ("sub", pkg.to_string(), bare.to_string(), None)
         }
         _ => return None,
     };
@@ -84,11 +77,7 @@ pub fn find_references_single_file(ast: &Node, offset: usize) -> Option<Vec<(usi
                 }
             }
             NodeKind::FunctionCall { name, .. } if want_kind == "sub" => {
-                let (pkg, bare) = if let Some(idx) = name.rfind("::") {
-                    (&name[..idx], &name[idx + 2..])
-                } else {
-                    ("main", name.as_str())
-                };
+                let (pkg, bare) = split_with_default_package(name, "main");
                 if bare == want_name && pkg == want_pkg {
                     out.push((location.start, location.end));
                 }

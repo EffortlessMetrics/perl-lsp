@@ -61,6 +61,28 @@ pub fn split_qualified_name(name: &str) -> (Option<&str>, &str) {
     }
 }
 
+/// Return the container/package portion of a qualified Perl name.
+///
+/// `Foo::Bar::baz` => `Some("Foo::Bar")`
+/// `symbol` => `None`
+#[must_use]
+pub fn container_name(name: &str) -> Option<&str> {
+    split_qualified_name(name).0
+}
+
+/// Split a name into `(package, bare_name)` and apply a fallback package when unqualified.
+///
+/// `Foo::Bar` with default `main` => `(Foo, Bar)`
+/// `process` with default `main` => `(main, process)`
+#[must_use]
+pub fn split_with_default_package<'a>(
+    name: &'a str,
+    default_package: &'a str,
+) -> (&'a str, &'a str) {
+    let (package, bare) = split_qualified_name(name);
+    (package.unwrap_or(default_package), bare)
+}
+
 /// Validate a full Perl qualified name with package separators.
 ///
 /// - Rejects empty input.
@@ -102,12 +124,27 @@ pub fn is_valid_identifier_part(s: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_valid_identifier_part, split_qualified_name, validate_perl_qualified_name};
+    use super::{
+        container_name, is_valid_identifier_part, split_qualified_name, split_with_default_package,
+        validate_perl_qualified_name,
+    };
 
     #[test]
     fn splits_qualified_and_unqualified_names() {
         assert_eq!(split_qualified_name("Foo::Bar"), (Some("Foo"), "Bar"));
         assert_eq!(split_qualified_name("process"), (None, "process"));
+    }
+
+    #[test]
+    fn extracts_container_name_when_present() {
+        assert_eq!(container_name("Foo::Bar::baz"), Some("Foo::Bar"));
+        assert_eq!(container_name("top_level"), None);
+    }
+
+    #[test]
+    fn splits_with_default_package() {
+        assert_eq!(split_with_default_package("Foo::Bar", "main"), ("Foo", "Bar"));
+        assert_eq!(split_with_default_package("process", "main"), ("main", "process"));
     }
 
     #[test]
