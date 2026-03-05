@@ -34,6 +34,7 @@ members = [
     "crates/perl-lsp-semantic-tokens",
     "crates/perl-lsp-inlay-hints",
     "crates/perl-lsp-feature-contracts",
+    "crates/perl-lsp-feature-cli",
     "crates/perl-lsp-feature-flags",
     "crates/perl-lsp-feature-grid",
     "crates/perl-lsp-feature-ids",
@@ -178,6 +179,7 @@ allow = [
     "perl-lsp-feature-ids",
     "perl-lsp-capability-map",
     "perl-lsp-feature-contracts",
+    "perl-lsp-feature-cli",
     "perl-lsp-feature-flags",
     "perl-lsp-feature-profile",
     "perl-lsp-feature-policy",
@@ -283,6 +285,7 @@ perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.10.0
 perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version = "0.10.0" }
 perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.10.0" }
 perl-lsp-feature-contracts = { path = "crates/perl-lsp-feature-contracts", version = "0.10.0" }
+perl-lsp-feature-cli = { path = "crates/perl-lsp-feature-cli", version = "0.10.0" }
 perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.10.0" }
 perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.10.0" }
 perl-lsp-feature-grid = { path = "crates/perl-lsp-feature-grid", version = "0.10.0" }

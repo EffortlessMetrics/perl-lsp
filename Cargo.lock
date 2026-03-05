@@ -1835,6 +1835,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-feature-cli"
+version = "0.10.0"
+dependencies = [
+ "perl-lsp-feature-policy",
+ "perl-lsp-feature-profile",
+ "perl-tdd-support",
+]
+
+[[package]]
 name = "perl-lsp-feature-contracts"
 version = "0.10.0"
 dependencies = [
@@ -1859,6 +1868,7 @@ dependencies = [
 name = "perl-lsp-feature-governance"
 version = "0.10.0"
 dependencies = [
+ "perl-lsp-feature-cli",
  "perl-lsp-feature-contracts",
  "perl-lsp-feature-grid",
  "perl-lsp-feature-policy",

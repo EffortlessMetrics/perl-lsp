@@ -1,0 +1,31 @@
+[package]
+name = "perl-lsp-feature-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "CLI-oriented feature profile parsing helpers for Perl LSP."
+documentation = "https://docs.rs/perl-lsp-feature-cli"
+readme = "README.md"
+keywords = ["perl", "lsp", "features", "profile", "cli"]
+categories = ["development-tools", "command-line-interface"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+perl-lsp-feature-policy = { workspace = true }
+perl-lsp-feature-profile = { workspace = true }
+
+[features]
+lsp-ga-lock = [
+    "perl-lsp-feature-policy/lsp-ga-lock",
+    "perl-lsp-feature-profile/lsp-ga-lock",
+]
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
+
+[lints]
+workspace = true
