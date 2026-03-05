@@ -1625,15 +1625,31 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-dap-variables"
+name = "perl-dap-variable-parser"
 version = "0.10.0"
 dependencies = [
  "once_cell",
- "perl-tdd-support",
+ "perl-dap-variable-types",
  "regex",
+ "thiserror",
+]
+
+[[package]]
+name = "perl-dap-variable-types"
+version = "0.10.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "perl-dap-variables"
+version = "0.10.0"
+dependencies = [
+ "perl-dap-variable-parser",
+ "perl-dap-variable-types",
+ "perl-tdd-support",
  "serde",
  "serde_json",
- "thiserror",
 ]
 
 [[package]]

@@ -81,6 +81,8 @@ members = [
     "crates/perl-dap-eval",
     "crates/perl-dap-platform",
     "crates/perl-dap-stack",
+    "crates/perl-dap-variable-types",
+    "crates/perl-dap-variable-parser",
     "crates/perl-dap-variables",
     "crates/perl-feature-catalog",
     "crates/tree-sitter-perl-rs",
@@ -168,6 +170,8 @@ allow = [
     "perl-dap-eval",
     "perl-dap-platform",
     "perl-dap-stack",
+    "perl-dap-variable-types",
+    "perl-dap-variable-parser",
     "perl-dap-variables",
     "perl-path-security",
     "perl-feature-catalog",
@@ -264,6 +268,8 @@ perl-dead-code = { path = "crates/perl-dead-code", version = "0.10.0" }
 perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.10.0" }
 perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.10.0" }
 perl-dap-platform = { path = "crates/perl-dap-platform", version = "0.10.0" }
+perl-dap-variable-types = { path = "crates/perl-dap-variable-types", version = "0.10.0" }
+perl-dap-variable-parser = { path = "crates/perl-dap-variable-parser", version = "0.10.0" }
 perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.10.0" }
 perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.10.0" }
 perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.10.0" }

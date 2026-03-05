@@ -3,8 +3,8 @@
 //! This module provides utilities for parsing variable output from the Perl debugger
 //! into structured [`PerlValue`] representations.
 
-use crate::PerlValue;
 use once_cell::sync::Lazy;
+use perl_dap_variable_types::PerlValue;
 use regex::Regex;
 use thiserror::Error;
 

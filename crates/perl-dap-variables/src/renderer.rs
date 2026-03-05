@@ -3,7 +3,7 @@
 //! This module provides the [`VariableRenderer`] trait and [`PerlVariableRenderer`]
 //! implementation for converting Perl values into DAP-compatible variable representations.
 
-use crate::PerlValue;
+use perl_dap_variable_types::PerlValue;
 use serde::{Deserialize, Serialize};
 
 /// A rendered variable for the DAP protocol.
