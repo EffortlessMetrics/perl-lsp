@@ -1759,6 +1759,7 @@ dependencies = [
  "perl-lsp-cancellation",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
+ "perl-lsp-config",
  "perl-lsp-diagnostics",
  "perl-lsp-feature-governance",
  "perl-lsp-formatting",
@@ -1847,6 +1848,13 @@ dependencies = [
  "perl-workspace-index",
  "url",
  "walkdir",
+]
+
+[[package]]
+name = "perl-lsp-config"
+version = "0.10.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
