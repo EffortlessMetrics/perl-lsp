@@ -95,7 +95,7 @@ members = [
     "crates/perl-dap-eval",
     "crates/perl-dap-platform",
     "crates/perl-dap-command-args",
-    "crates/perl-dap-stack",
+    "crates/perl-dap-shell",
     "crates/perl-dap-value",
     "crates/perl-dap-variables",
     "crates/perl-feature-catalog",
@@ -196,6 +196,7 @@ allow = [
     "perl-dap-eval",
     "perl-dap-command-args",
     "perl-dap-platform",
+    "perl-dap-shell",
     "perl-dap-stack",
     "perl-dap-value",
     "perl-dap-variables",
@@ -309,7 +310,8 @@ perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.10.0" }
 perl-dap-platform = { path = "crates/perl-dap-platform", version = "0.10.0" }
 perl-dap-value = { path = "crates/perl-dap-value", version = "0.10.0" }
 perl-dap-command-args = { path = "crates/perl-dap-command-args", version = "0.10.0" }
-perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.10.0" }
+perl-dap-shell = { path = "crates/perl-dap-shell", version = "0.10.0" }
+perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.10.0" }
 perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.10.0" }
 perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.10.0" }
 perl-lsp-feature-ids = { path = "crates/perl-lsp-feature-ids", version = "0.10.0" }
