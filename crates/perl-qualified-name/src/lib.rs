@@ -61,6 +61,15 @@ pub fn split_qualified_name(name: &str) -> (Option<&str>, &str) {
     }
 }
 
+/// Extract the parent container/package from a qualified Perl symbol.
+///
+/// `Foo::Bar::baz` => `Some("Foo::Bar")`
+/// `process` => `None`
+#[must_use]
+pub fn container_name(name: &str) -> Option<&str> {
+    split_qualified_name(name).0
+}
+
 /// Validate a full Perl qualified name with package separators.
 ///
 /// - Rejects empty input.
@@ -102,12 +111,24 @@ pub fn is_valid_identifier_part(s: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_valid_identifier_part, split_qualified_name, validate_perl_qualified_name};
+    use super::{
+        container_name, is_valid_identifier_part, split_qualified_name,
+        validate_perl_qualified_name,
+    };
 
     #[test]
     fn splits_qualified_and_unqualified_names() {
         assert_eq!(split_qualified_name("Foo::Bar"), (Some("Foo"), "Bar"));
         assert_eq!(split_qualified_name("process"), (None, "process"));
+    }
+
+    #[test]
+    fn extracts_container_name() {
+        assert_eq!(container_name("Foo::Bar::baz"), Some("Foo::Bar"));
+        assert_eq!(container_name("MyClass::new"), Some("MyClass"));
+        assert_eq!(container_name("toplevel"), None);
+        assert_eq!(container_name(""), None);
+        assert_eq!(container_name("Package::"), Some("Package"));
     }
 
     #[test]
