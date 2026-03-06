@@ -21,6 +21,7 @@ perl-parser-core = { workspace = true }
 perl-lsp-ast-utils = { workspace = true }
 perl-lsp-rename = { workspace = true }
 perl-lsp-diagnostics = { workspace = true }
+perl-source-editing = { workspace = true }
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
