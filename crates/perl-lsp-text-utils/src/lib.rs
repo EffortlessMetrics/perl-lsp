@@ -91,6 +91,6 @@ impl<'a> TextEditHelpers<'a> {
     /// Whether the source includes non-ASCII content.
     #[must_use]
     pub fn has_non_ascii_content(&self) -> bool {
-        self.source.chars().any(|c| !c.is_ascii())
+        !self.source.is_ascii()
     }
 }
