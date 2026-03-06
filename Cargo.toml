@@ -49,6 +49,7 @@ members = [
     "crates/perl-lsp-completion",
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-ast-utils",
+    "crates/perl-lsp-import-management",
     "crates/perl-lsp-cancellation",
     "crates/perl-lsp-input-validation",
     "crates/perl-lsp-limits",
@@ -178,6 +179,7 @@ allow = [
     "perl-lsp-semantic-tokens",
     "perl-lsp-providers",
     "perl-lsp-ast-utils",
+    "perl-lsp-import-management",
     "perl-qualified-name",
     "perl-refactoring",
 
@@ -291,7 +293,9 @@ perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.10
 perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.10.0" }
 perl-uri-classify = { path = "crates/perl-uri-classify", version = "0.10.0" }
 perl-percentile = { path = "crates/perl-percentile", version = "0.10.0" }
-perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.10.0" }
+perl-lsp-import-management = { path = "crates/perl-lsp-import-management", version = "0.10.0" }
+perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
+perl-path-security = { path = "crates/perl-path-security", version = "0.10.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.10.0" }
 perl-dap = { path = "crates/perl-dap", version = "0.10.0" }
 perl-dead-code = { path = "crates/perl-dead-code", version = "0.10.0" }
