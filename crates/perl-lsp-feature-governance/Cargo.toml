@@ -19,6 +19,7 @@ perl-lsp-feature-contracts = { workspace = true }
 perl-lsp-feature-grid = { workspace = true }
 perl-lsp-feature-policy = { workspace = true }
 perl-lsp-feature-profile = { workspace = true }
+perl-lsp-feature-profile-cli = { workspace = true }
 
 [features]
 lsp-ga-lock = [
