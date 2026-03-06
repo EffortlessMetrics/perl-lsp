@@ -1611,12 +1611,7 @@ name = "perl-dap-platform"
 version = "0.10.0"
 dependencies = [
  "anyhow",
- "perl-dap-shell",
 ]
-
-[[package]]
-name = "perl-dap-shell"
-version = "0.10.0"
 
 [[package]]
 name = "perl-dap-stack"
@@ -1745,7 +1740,6 @@ dependencies = [
  "perl-lsp-cancellation",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
- "perl-lsp-diagnostic-catalog",
  "perl-lsp-diagnostics",
  "perl-lsp-feature-governance",
  "perl-lsp-formatting",
@@ -1806,7 +1800,6 @@ name = "perl-lsp-code-actions"
 version = "0.10.0"
 dependencies = [
  "perl-lsp-diagnostics",
- "perl-lsp-import-management",
  "perl-lsp-rename",
  "perl-parser-core",
  "perl-tdd-support",
@@ -1819,7 +1812,6 @@ dependencies = [
  "lsp-types",
  "perl-keywords",
  "perl-parser-core",
- "perl-path-security",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
@@ -1828,11 +1820,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-diagnostic-catalog"
+name = "perl-lsp-critic-parser"
 version = "0.10.0"
 dependencies = [
- "perl-diagnostics-codes",
- "serde_json",
+ "perl-tdd-support",
 ]
 
 [[package]]
@@ -1848,16 +1839,6 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
-]
-
-[[package]]
-name = "perl-lsp-document-links"
-version = "0.10.0"
-dependencies = [
- "perl-module-import",
- "perl-module-path",
- "serde_json",
- "url",
 ]
 
 [[package]]
@@ -1889,7 +1870,7 @@ dependencies = [
  "perl-lsp-feature-grid",
  "perl-lsp-feature-policy",
  "perl-lsp-feature-profile",
- "perl-lsp-feature-profile-cli",
+ "perl-tdd-support",
 ]
 
 [[package]]
@@ -1923,15 +1904,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-feature-profile-cli"
-version = "0.10.0"
-dependencies = [
- "perl-lsp-feature-policy",
- "perl-lsp-feature-profile",
- "perl-tdd-support",
-]
-
-[[package]]
 name = "perl-lsp-formatting"
 version = "0.10.0"
 dependencies = [
@@ -1947,10 +1919,6 @@ version = "0.10.0"
 dependencies = [
  "serde",
 ]
-
-[[package]]
-name = "perl-lsp-import-management"
-version = "0.10.0"
 
 [[package]]
 name = "perl-lsp-inlay-hints"
@@ -1984,23 +1952,15 @@ name = "perl-lsp-navigation"
 version = "0.10.0"
 dependencies = [
  "lsp-types",
- "perl-lsp-document-links",
+ "perl-module-import",
  "perl-module-path",
  "perl-parser-core",
  "perl-position-tracking",
- "perl-qualified-name",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "perl-lsp-performance"
-version = "0.10.0"
-dependencies = [
- "moka",
- "perl-parser-core",
+ "url",
 ]
 
 [[package]]
@@ -2065,7 +2025,8 @@ version = "0.10.0"
 dependencies = [
  "criterion",
  "lsp-types",
- "perl-lsp-performance",
+ "moka",
+ "perl-lsp-critic-parser",
  "perl-parser-core",
  "perl-subprocess-runtime",
  "perl-tdd-support",
@@ -2535,7 +2496,6 @@ dependencies = [
  "perl-tdd-support",
  "perl-uri",
  "perl-workspace-index-slo",
- "perl-workspace-index-state-machine",
  "serde",
  "tempfile",
  "url",
@@ -2547,13 +2507,6 @@ version = "0.10.0"
 dependencies = [
  "parking_lot",
  "proptest",
-]
-
-[[package]]
-name = "perl-workspace-index-state-machine"
-version = "0.10.0"
-dependencies = [
- "parking_lot",
 ]
 
 [[package]]

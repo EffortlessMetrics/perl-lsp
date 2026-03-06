@@ -31,7 +31,8 @@ members = [
     "crates/perl-lsp-tooling",
     "crates/perl-lsp-symbol-query",
     "crates/perl-lsp-performance",
-    "crates/perl-lsp-formatting-types",
+    "crates/perl-lsp-critic-parser",
+    "crates/perl-subprocess-runtime",
     "crates/perl-lsp-formatting",
     "crates/perl-lsp-diagnostic-types",
     "crates/perl-lsp-diagnostics",
@@ -179,7 +180,7 @@ allow = [
     "perl-lsp-document-links",
     "perl-lsp-tooling",
     "perl-lsp-performance",
-    "perl-lsp-formatting-types",
+    "perl-lsp-critic-parser",
     "perl-lsp-formatting",
     "perl-lsp-semantic-tokens",
     "perl-lsp-providers",
@@ -302,7 +303,8 @@ perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version
 perl-uri-classify = { path = "crates/perl-uri-classify", version = "0.10.0" }
 perl-percentile = { path = "crates/perl-percentile", version = "0.10.0" }
 perl-lsp-import-management = { path = "crates/perl-lsp-import-management", version = "0.10.0" }
-perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
+perl-lsp-critic-parser = { path = "crates/perl-lsp-critic-parser", version = "0.10.0" }
+perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
 perl-path-security = { path = "crates/perl-path-security", version = "0.10.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.10.0" }
 perl-dap = { path = "crates/perl-dap", version = "0.10.0" }
