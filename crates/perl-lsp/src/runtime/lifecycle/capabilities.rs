@@ -3,6 +3,7 @@
 //! Handles client capability parsing and server capabilities construction.
 
 use super::super::*;
+use perl_workspace_folder::{extract_workspace_folder_uris, root_path_to_file_uri};
 use serde_json::{Value, json};
 
 impl LspServer {
@@ -151,11 +152,9 @@ impl LspServer {
                 params.get("workspaceFolders").and_then(|f| f.as_array())
             {
                 let mut folders = self.workspace_folders.lock();
-                for folder in workspace_folders {
-                    if let Some(uri) = folder["uri"].as_str() {
-                        eprintln!("Initialized with workspace folder: {}", uri);
-                        folders.push(uri.to_string());
-                    }
+                for uri in extract_workspace_folder_uris(workspace_folders) {
+                    eprintln!("Initialized with workspace folder: {}", uri);
+                    folders.push(uri);
                 }
             } else if let Some(root_uri) = params.get("rootUri").and_then(|u| u.as_str()) {
                 // Fallback to rootUri if workspaceFolders is not provided
@@ -167,17 +166,7 @@ impl LspServer {
             } else if let Some(root_path) = params.get("rootPath").and_then(|p| p.as_str()) {
                 // Legacy fallback: rootPath is deprecated since LSP 3.0 but still sent by some clients
                 eprintln!("Initialized with legacy rootPath: {}", root_path);
-                // Convert rootPath to URI format using proper URL encoding
-                let path = std::path::Path::new(root_path);
-                let root_uri =
-                    url::Url::from_file_path(path).map(|u| u.to_string()).unwrap_or_else(|_| {
-                        // Fallback for edge cases (e.g., relative paths, UNC paths)
-                        if root_path.starts_with('/') {
-                            format!("file://{}", root_path)
-                        } else {
-                            format!("file:///{}", root_path.replace('\\', "/"))
-                        }
-                    });
+                let root_uri = root_path_to_file_uri(root_path);
                 let mut folders = self.workspace_folders.lock();
                 folders.push(root_uri.clone());
                 self.set_root_uri(&root_uri);
