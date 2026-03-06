@@ -3,6 +3,7 @@
 //! Complements `comprehensive_unit_tests.rs` with additional coverage for:
 //! - PHF map iteration and entry consistency
 //! - Parameter name semantics (FILEHANDLE, SCALAR, LIST patterns)
+#![allow(clippy::panic)]
 //! - Cross-module alignment between PHF and HashMap signatures
 //! - Signature variant ordering (most-specific-first convention)
 //! - Edge cases around whitespace, unicode, and boundary inputs
@@ -445,7 +446,7 @@ fn hashmap_signature_count_is_substantial() -> Result<(), String> {
 #[test]
 fn phf_params_crypt_has_plaintext_salt() -> Result<(), String> {
     let params = get_param_names("crypt");
-    if params != &["PLAINTEXT", "SALT"] {
+    if params != ["PLAINTEXT", "SALT"] {
         return Err(format!("crypt params should be [PLAINTEXT, SALT], got {params:?}"));
     }
     Ok(())
@@ -454,7 +455,7 @@ fn phf_params_crypt_has_plaintext_salt() -> Result<(), String> {
 #[test]
 fn phf_params_chmod_has_mode_list() -> Result<(), String> {
     let params = get_param_names("chmod");
-    if params != &["MODE", "LIST"] {
+    if params != ["MODE", "LIST"] {
         return Err(format!("chmod params should be [MODE, LIST], got {params:?}"));
     }
     Ok(())
@@ -463,7 +464,7 @@ fn phf_params_chmod_has_mode_list() -> Result<(), String> {
 #[test]
 fn phf_params_chown_has_uid_gid_list() -> Result<(), String> {
     let params = get_param_names("chown");
-    if params != &["UID", "GID", "LIST"] {
+    if params != ["UID", "GID", "LIST"] {
         return Err(format!("chown params should be [UID, GID, LIST], got {params:?}"));
     }
     Ok(())
@@ -472,7 +473,7 @@ fn phf_params_chown_has_uid_gid_list() -> Result<(), String> {
 #[test]
 fn phf_params_kill_has_signal_list() -> Result<(), String> {
     let params = get_param_names("kill");
-    if params != &["SIGNAL", "LIST"] {
+    if params != ["SIGNAL", "LIST"] {
         return Err(format!("kill params should be [SIGNAL, LIST], got {params:?}"));
     }
     Ok(())
@@ -481,7 +482,7 @@ fn phf_params_kill_has_signal_list() -> Result<(), String> {
 #[test]
 fn phf_params_waitpid_has_pid_flags() -> Result<(), String> {
     let params = get_param_names("waitpid");
-    if params != &["PID", "FLAGS"] {
+    if params != ["PID", "FLAGS"] {
         return Err(format!("waitpid params should be [PID, FLAGS], got {params:?}"));
     }
     Ok(())
@@ -490,7 +491,7 @@ fn phf_params_waitpid_has_pid_flags() -> Result<(), String> {
 #[test]
 fn phf_params_recv_has_four_params() -> Result<(), String> {
     let params = get_param_names("recv");
-    if params != &["SOCKET", "SCALAR", "LENGTH", "FLAGS"] {
+    if params != ["SOCKET", "SCALAR", "LENGTH", "FLAGS"] {
         return Err(format!("recv params wrong: {params:?}"));
     }
     Ok(())
@@ -499,7 +500,7 @@ fn phf_params_recv_has_four_params() -> Result<(), String> {
 #[test]
 fn phf_params_send_has_four_params() -> Result<(), String> {
     let params = get_param_names("send");
-    if params != &["SOCKET", "MSG", "FLAGS", "TO"] {
+    if params != ["SOCKET", "MSG", "FLAGS", "TO"] {
         return Err(format!("send params wrong: {params:?}"));
     }
     Ok(())
@@ -508,7 +509,7 @@ fn phf_params_send_has_four_params() -> Result<(), String> {
 #[test]
 fn phf_params_split_has_pattern_expr_limit() -> Result<(), String> {
     let params = get_param_names("split");
-    if params != &["PATTERN", "EXPR", "LIMIT"] {
+    if params != ["PATTERN", "EXPR", "LIMIT"] {
         return Err(format!("split params should be [PATTERN, EXPR, LIMIT], got {params:?}"));
     }
     Ok(())
@@ -517,7 +518,7 @@ fn phf_params_split_has_pattern_expr_limit() -> Result<(), String> {
 #[test]
 fn phf_params_index_has_str_substr_position() -> Result<(), String> {
     let params = get_param_names("index");
-    if params != &["STR", "SUBSTR", "POSITION"] {
+    if params != ["STR", "SUBSTR", "POSITION"] {
         return Err(format!("index params should be [STR, SUBSTR, POSITION], got {params:?}"));
     }
     Ok(())
@@ -542,7 +543,7 @@ fn phf_params_rindex_matches_index_params() -> Result<(), String> {
 #[test]
 fn phf_params_msgctl_has_id_cmd_arg() -> Result<(), String> {
     let params = get_param_names("msgctl");
-    if params != &["ID", "CMD", "ARG"] {
+    if params != ["ID", "CMD", "ARG"] {
         return Err(format!("msgctl params wrong: {params:?}"));
     }
     Ok(())
@@ -551,7 +552,7 @@ fn phf_params_msgctl_has_id_cmd_arg() -> Result<(), String> {
 #[test]
 fn phf_params_semget_has_key_nsems_flags() -> Result<(), String> {
     let params = get_param_names("semget");
-    if params != &["KEY", "NSEMS", "FLAGS"] {
+    if params != ["KEY", "NSEMS", "FLAGS"] {
         return Err(format!("semget params wrong: {params:?}"));
     }
     Ok(())
@@ -560,7 +561,7 @@ fn phf_params_semget_has_key_nsems_flags() -> Result<(), String> {
 #[test]
 fn phf_params_shmread_has_four_params() -> Result<(), String> {
     let params = get_param_names("shmread");
-    if params != &["ID", "VAR", "POS", "SIZE"] {
+    if params != ["ID", "VAR", "POS", "SIZE"] {
         return Err(format!("shmread params wrong: {params:?}"));
     }
     Ok(())
@@ -573,7 +574,7 @@ fn phf_params_shmread_has_four_params() -> Result<(), String> {
 #[test]
 fn phf_params_dbmopen_has_hash_dbname_mode() -> Result<(), String> {
     let params = get_param_names("dbmopen");
-    if params != &["HASH", "DBNAME", "MODE"] {
+    if params != ["HASH", "DBNAME", "MODE"] {
         return Err(format!("dbmopen params wrong: {params:?}"));
     }
     Ok(())
@@ -582,7 +583,7 @@ fn phf_params_dbmopen_has_hash_dbname_mode() -> Result<(), String> {
 #[test]
 fn phf_params_tie_has_variable_classname_list() -> Result<(), String> {
     let params = get_param_names("tie");
-    if params != &["VARIABLE", "CLASSNAME", "LIST"] {
+    if params != ["VARIABLE", "CLASSNAME", "LIST"] {
         return Err(format!("tie params wrong: {params:?}"));
     }
     Ok(())

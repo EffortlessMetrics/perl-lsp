@@ -2,6 +2,7 @@
 //!
 //! Covers: JSON-RPC message types, error codes, error builders,
 //! parameter extraction helpers, capabilities, and method constants.
+#![allow(clippy::assertions_on_constants)]
 
 use perl_lsp_protocol::*;
 use serde_json::{Value, json};
@@ -124,7 +125,7 @@ fn response_error_omits_result_field() -> Result<(), Box<dyn std::error::Error>>
     let resp = JsonRpcResponse::error(Some(json!(9)), err);
     let v = serde_json::to_value(&resp)?;
     // skip_serializing_if means "result" key should not appear at all
-    assert!(!v.as_object().map_or(false, |o| o.contains_key("result")));
+    assert!(!v.as_object().is_some_and(|o| o.contains_key("result")));
     Ok(())
 }
 
@@ -132,7 +133,7 @@ fn response_error_omits_result_field() -> Result<(), Box<dyn std::error::Error>>
 fn response_success_omits_error_field() -> Result<(), Box<dyn std::error::Error>> {
     let resp = JsonRpcResponse::success(Some(json!(10)), json!(42));
     let v = serde_json::to_value(&resp)?;
-    assert!(!v.as_object().map_or(false, |o| o.contains_key("error")));
+    assert!(!v.as_object().is_some_and(|o| o.contains_key("error")));
     Ok(())
 }
 
@@ -260,7 +261,7 @@ fn cancelled_response_builder() {
     assert!(resp.result.is_none());
     let err = resp.error.as_ref();
     assert!(err.is_some());
-    let err = err.map_or_else(|| unreachable!(), |e| e);
+    let err = err.unwrap_or_else(|| unreachable!());
     assert_eq!(err.code, REQUEST_CANCELLED);
     assert_eq!(err.message, "Request cancelled");
 }
@@ -271,11 +272,11 @@ fn cancelled_response_with_method_contains_provider() {
     let resp = cancelled_response_with_method(&id, "textDocument/hover");
     let err = resp.error.as_ref();
     assert!(err.is_some());
-    let err = err.map_or_else(|| unreachable!(), |e| e);
+    let err = err.unwrap_or_else(|| unreachable!());
     assert_eq!(err.code, REQUEST_CANCELLED);
     assert!(err.message.contains("hover"));
     assert!(err.data.is_some());
-    let data = err.data.as_ref().map_or_else(|| unreachable!(), |d| d);
+    let data = err.data.as_ref().unwrap_or_else(|| unreachable!());
     assert_eq!(data["provider"], "textDocument/hover");
     assert!(data["timestamp"].is_number());
 }
@@ -286,7 +287,7 @@ fn cancelled_response_with_method_single_segment() {
     let resp = cancelled_response_with_method(&id, "shutdown");
     let err = resp.error.as_ref();
     assert!(err.is_some());
-    let err = err.map_or_else(|| unreachable!(), |e| e);
+    let err = err.unwrap_or_else(|| unreachable!());
     assert!(err.message.contains("shutdown"));
 }
 
@@ -359,7 +360,7 @@ fn transport_error_builder() {
 fn document_not_found_error_is_json_value() {
     let v = document_not_found_error();
     assert_eq!(v["status"], "error");
-    assert!(v["message"].as_str().map_or(false, |s| s.contains("not found")));
+    assert!(v["message"].as_str().is_some_and(|s| s.contains("not found")));
 }
 
 #[test]
@@ -369,10 +370,10 @@ fn enhanced_error_contains_metadata() {
     assert_eq!(err.message, "oops");
     let data = err.data.as_ref();
     assert!(data.is_some());
-    let data = data.map_or_else(|| unreachable!(), |d| d);
+    let data = data.unwrap_or_else(|| unreachable!());
     assert_eq!(data["error_type"], "RuntimeError");
     assert_eq!(data["method"], "textDocument/hover");
-    assert!(data["server_info"]["name"].as_str().map_or(false, |s| s == "perl-lsp"));
+    assert!(data["server_info"]["name"].as_str() == Some("perl-lsp"));
     assert!(data["timestamp"].is_number());
 }
 
@@ -381,7 +382,7 @@ fn enhanced_error_without_method() {
     let err = enhanced_error(PARSE_ERROR, "bad json", "ParseError", None);
     let data = err.data.as_ref();
     assert!(data.is_some());
-    let data = data.map_or_else(|| unreachable!(), |d| d);
+    let data = data.unwrap_or_else(|| unreachable!());
     assert!(data.get("method").is_none());
 }
 
@@ -402,7 +403,7 @@ fn req_uri_returns_error_when_missing() {
     let params = json!({});
     let result = req_uri(&params);
     assert!(result.is_err());
-    let err = result.err().map_or_else(|| unreachable!(), |e| e);
+    let err = result.err().unwrap_or_else(|| unreachable!());
     assert_eq!(err.code, INVALID_PARAMS);
     assert!(err.message.contains("textDocument.uri"));
 }
@@ -428,7 +429,7 @@ fn req_position_returns_error_when_line_missing() {
     let params = json!({ "position": { "character": 5 } });
     let result = req_position(&params);
     assert!(result.is_err());
-    let err = result.err().map_or_else(|| unreachable!(), |e| e);
+    let err = result.err().unwrap_or_else(|| unreachable!());
     assert!(err.message.contains("position.line"));
 }
 
@@ -437,7 +438,7 @@ fn req_position_returns_error_when_character_missing() {
     let params = json!({ "position": { "line": 0 } });
     let result = req_position(&params);
     assert!(result.is_err());
-    let err = result.err().map_or_else(|| unreachable!(), |e| e);
+    let err = result.err().unwrap_or_else(|| unreachable!());
     assert!(err.message.contains("position.character"));
 }
 
@@ -447,7 +448,7 @@ fn req_position_returns_error_on_overflow() {
     let params = json!({ "position": { "line": over_u32, "character": 0 } });
     let result = req_position(&params);
     assert!(result.is_err());
-    let err = result.err().map_or_else(|| unreachable!(), |e| e);
+    let err = result.err().unwrap_or_else(|| unreachable!());
     assert!(err.message.contains("u32"));
 }
 
@@ -457,7 +458,7 @@ fn req_position_returns_error_on_character_overflow() {
     let params = json!({ "position": { "line": 0, "character": over_u32 } });
     let result = req_position(&params);
     assert!(result.is_err());
-    let err = result.err().map_or_else(|| unreachable!(), |e| e);
+    let err = result.err().unwrap_or_else(|| unreachable!());
     assert!(err.message.contains("u32"));
 }
 
@@ -503,7 +504,7 @@ fn req_range_returns_error_when_start_line_missing() {
     });
     let result = req_range(&params);
     assert!(result.is_err());
-    let err = result.err().map_or_else(|| unreachable!(), |e| e);
+    let err = result.err().unwrap_or_else(|| unreachable!());
     assert!(err.message.contains("range.start.line"));
 }
 
@@ -517,7 +518,7 @@ fn req_range_returns_error_when_end_character_missing() {
     });
     let result = req_range(&params);
     assert!(result.is_err());
-    let err = result.err().map_or_else(|| unreachable!(), |e| e);
+    let err = result.err().unwrap_or_else(|| unreachable!());
     assert!(err.message.contains("range.end.character"));
 }
 
@@ -790,7 +791,7 @@ fn inline_completion_uses_experimental_field() {
     let caps = capabilities::capabilities_for(flags);
     let exp = caps.experimental.as_ref();
     assert!(exp.is_some());
-    let exp = exp.map_or_else(|| unreachable!(), |e| e);
+    let exp = exp.unwrap_or_else(|| unreachable!());
     assert!(exp.get("inlineCompletionProvider").is_some());
 }
 
@@ -837,8 +838,8 @@ fn code_actions_include_refactor_extract() -> Result<(), Box<dyn std::error::Err
     let v = serde_json::to_value(&caps)?;
     let kinds = v.pointer("/codeActionProvider/codeActionKinds").and_then(|v| v.as_array());
     assert!(kinds.is_some());
-    let kinds = kinds.map_or_else(|| unreachable!(), |k| k);
-    let has_refactor = kinds.iter().any(|k| k.as_str().map_or(false, |s| s == "refactor.extract"));
+    let kinds = kinds.unwrap_or_else(|| unreachable!());
+    let has_refactor = kinds.iter().any(|k| k.as_str() == Some("refactor.extract"));
     assert!(has_refactor, "codeActionKinds should include refactor.extract");
     Ok(())
 }
@@ -853,9 +854,8 @@ fn code_actions_include_source_organize_imports_when_enabled()
     let v = serde_json::to_value(&caps)?;
     let kinds = v.pointer("/codeActionProvider/codeActionKinds").and_then(|v| v.as_array());
     assert!(kinds.is_some());
-    let kinds = kinds.map_or_else(|| unreachable!(), |k| k);
-    let has_organize =
-        kinds.iter().any(|k| k.as_str().map_or(false, |s| s == "source.organizeImports"));
+    let kinds = kinds.unwrap_or_else(|| unreachable!());
+    let has_organize = kinds.iter().any(|k| k.as_str() == Some("source.organizeImports"));
     assert!(has_organize);
     Ok(())
 }
@@ -1100,7 +1100,7 @@ fn roundtrip_request_to_error_response() -> Result<(), Box<dyn std::error::Error
     let v = serde_json::to_value(&resp)?;
     assert_eq!(v["id"], 200);
     assert_eq!(v["error"]["code"], METHOD_NOT_FOUND);
-    assert!(v["error"]["message"].as_str().map_or(false, |s| s.contains("textDocument/unknown")));
+    assert!(v["error"]["message"].as_str().is_some_and(|s| s.contains("textDocument/unknown")));
     Ok(())
 }
 
@@ -1123,7 +1123,7 @@ fn request_with_complex_params() -> Result<(), Box<dyn std::error::Error>> {
     let req: JsonRpcRequest = serde_json::from_value(raw)?;
     let params = req.params.as_ref();
     assert!(params.is_some());
-    let params = params.map_or_else(|| unreachable!(), |p| p);
+    let params = params.unwrap_or_else(|| unreachable!());
     assert_eq!(params["context"]["triggerCharacter"], "$");
     Ok(())
 }
@@ -1135,7 +1135,7 @@ fn response_with_large_result() -> Result<(), Box<dyn std::error::Error>> {
     let v = serde_json::to_value(&resp)?;
     let arr = v["result"].as_array();
     assert!(arr.is_some());
-    let arr = arr.map_or_else(|| unreachable!(), |a| a);
+    let arr = arr.unwrap_or_else(|| unreachable!());
     assert_eq!(arr.len(), 1000);
     Ok(())
 }

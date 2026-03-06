@@ -5,14 +5,11 @@
 
 use perl_lsp_feature_governance::{
     // Re-exports: contracts
-    BddFeatureRow,
-    // Re-exports: grid
     FEATURE_GRID_COLUMNS,
     // Re-exports: policy
     FeatureProfile,
     // Re-exports: profile
     FeatureProfileKind,
-    FeatureProfileSpec,
     LSP_VERSION,
     // Façade-local functions
     UnsupportedFeatureProfileError,

@@ -93,7 +93,7 @@ fn varkind_sigils_are_unique() -> Result<(), String> {
 fn varkind_clone_copy() -> Result<(), String> {
     let a = VarKind::Scalar;
     let b = a; // Copy
-    let c = a.clone(); // Clone
+    let c = a; // Clone
     if a != b || a != c {
         return Err("Clone/Copy mismatch".into());
     }
@@ -549,7 +549,7 @@ fn constructors_have_sigils() -> Result<(), String> {
 fn symbolkind_clone_copy() -> Result<(), String> {
     let a = SymbolKind::Subroutine;
     let b = a; // Copy
-    let c = a.clone(); // Clone
+    let c = a; // Clone
     if a != b || a != c {
         return Err("Clone/Copy mismatch".into());
     }
@@ -627,10 +627,8 @@ fn symbolkind_serde_roundtrip_all_variants() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn symbolkind_serde_all_variants_distinct() -> Result<(), Box<dyn std::error::Error>> {
-    let jsons: Vec<String> = all_symbol_kinds()
-        .iter()
-        .map(|sk| serde_json::to_string(sk))
-        .collect::<Result<Vec<_>, _>>()?;
+    let jsons: Vec<String> =
+        all_symbol_kinds().iter().map(serde_json::to_string).collect::<Result<Vec<_>, _>>()?;
     let unique: HashSet<&String> = jsons.iter().collect();
     if unique.len() != jsons.len() {
         return Err("some SymbolKind variants serialize to the same JSON".into());
@@ -658,10 +656,10 @@ fn lsp_kinds_are_in_valid_range() -> Result<(), String> {
     for sk in all_symbol_kinds() {
         let ws = sk.to_lsp_kind();
         let ds = sk.to_lsp_kind_document_symbol();
-        if ws < 1 || ws > 26 {
+        if !(1..=26).contains(&ws) {
             return Err(format!("{sk:?}.to_lsp_kind()={ws} out of LSP range 1..=26"));
         }
-        if ds < 1 || ds > 26 {
+        if !(1..=26).contains(&ds) {
             return Err(format!(
                 "{sk:?}.to_lsp_kind_document_symbol()={ds} out of LSP range 1..=26"
             ));

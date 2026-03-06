@@ -78,11 +78,11 @@ fn undefined_variable_preferred_is_my() {
 
     let my_action = actions.iter().find(|a| a.title.contains("my"));
     assert!(my_action.is_some(), "Expected my action");
-    assert!(my_action.map_or(false, |a| a.is_preferred), "'my' should be preferred");
+    assert!(my_action.is_some_and(|a| a.is_preferred), "'my' should be preferred");
 
     let our_action = actions.iter().find(|a| a.title.contains("our"));
     assert!(our_action.is_some());
-    assert!(!our_action.map_or(true, |a| a.is_preferred), "'our' should NOT be preferred");
+    assert!(!our_action.is_none_or(|a| a.is_preferred), "'our' should NOT be preferred");
 }
 
 #[test]
@@ -121,7 +121,7 @@ fn unused_variable_remove_is_preferred() {
     let actions = parse_and_get_actions(src, &diags);
 
     let remove = actions.iter().find(|a| a.title == "Remove unused variable");
-    assert!(remove.map_or(false, |a| a.is_preferred), "Remove should be preferred");
+    assert!(remove.is_some_and(|a| a.is_preferred), "Remove should be preferred");
 }
 
 // ---- assignment-in-condition ----------------------------------------------
@@ -149,9 +149,9 @@ fn assignment_in_condition_comparison_is_preferred() {
     let actions = parse_and_get_actions(src, &diags);
 
     let comparison = actions.iter().find(|a| a.title.contains("=="));
-    assert!(comparison.map_or(false, |a| a.is_preferred));
+    assert!(comparison.is_some_and(|a| a.is_preferred));
     let parens = actions.iter().find(|a| a.title.contains("parentheses"));
-    assert!(!parens.map_or(true, |a| a.is_preferred));
+    assert!(!parens.is_none_or(|a| a.is_preferred));
 }
 
 // ---- missing-strict / missing-warnings ------------------------------------
@@ -164,11 +164,11 @@ fn missing_strict_adds_use_strict() {
 
     let strict = actions.iter().find(|a| a.title.contains("use strict"));
     assert!(strict.is_some(), "Expected 'use strict' action");
-    assert!(strict.map_or(false, |a| a.is_preferred));
+    assert!(strict.is_some_and(|a| a.is_preferred));
 
     let edit = &strict.map(|a| &a.edit);
     assert!(
-        edit.map_or(false, |e| e.changes.iter().any(|c| c.new_text.contains("use strict;"))),
+        edit.is_some_and(|e| e.changes.iter().any(|c| c.new_text.contains("use strict;"))),
         "Edit should insert 'use strict;'"
     );
 }
@@ -284,9 +284,9 @@ fn bareword_single_quote_is_preferred() {
     let actions = parse_and_get_actions(src, &diags);
 
     let sq = actions.iter().find(|a| a.title.contains("single quotes"));
-    assert!(sq.map_or(false, |a| a.is_preferred));
+    assert!(sq.is_some_and(|a| a.is_preferred));
     let dq = actions.iter().find(|a| a.title.contains("double quotes"));
-    assert!(!dq.map_or(true, |a| a.is_preferred));
+    assert!(!dq.is_none_or(|a| a.is_preferred));
 }
 
 // ---- parse-error-* --------------------------------------------------------
@@ -751,7 +751,7 @@ fn use_strict_edit_inserts_at_position_zero() {
     assert!(strict.is_some());
     let edit = &strict.map(|a| &a.edit.changes[0]);
     assert!(edit.is_some());
-    let te = edit.as_ref().map(|e| e);
+    let te = edit.as_ref();
     assert_eq!(te.map(|t| t.location.start), Some(0));
     assert_eq!(te.map(|t| t.location.end), Some(0));
     assert_eq!(te.map(|t| t.new_text.as_str()), Some("use strict;\n"));

@@ -566,7 +566,7 @@ mod tests {
     #[test]
     fn discovery_method_clone_and_copy() {
         let original = DiscoveryMethod::Git;
-        let cloned = original.clone();
+        let cloned = original;
         let copied = original;
 
         assert_eq!(original, cloned);

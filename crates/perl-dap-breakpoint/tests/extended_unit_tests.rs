@@ -2,6 +2,7 @@
 //!
 //! Covers advanced edge cases, complex Perl constructs, boundary conditions,
 //! and comprehensive validation scenarios not covered in breakpoint_tests.rs
+#![allow(clippy::overly_complex_bool_expr, clippy::assertions_on_constants)]
 
 use perl_dap_breakpoint::{
     AstBreakpointValidator, BreakpointError, BreakpointValidation, BreakpointValidator,
@@ -24,7 +25,7 @@ fn validation_reason_debug_format() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn validation_reason_all_variants_have_distinct_display() -> Result<(), Box<dyn std::error::Error>>
 {
-    let reasons = vec![
+    let reasons = [
         ValidationReason::BlankLine,
         ValidationReason::CommentLine,
         ValidationReason::HeredocInterior,
@@ -340,7 +341,7 @@ fn search_direction_both_debug() -> Result<(), Box<dyn std::error::Error>> {
 fn search_direction_clone_copy() -> Result<(), Box<dyn std::error::Error>> {
     let d = SearchDirection::Forward;
     let d2 = d;
-    let d3 = d.clone();
+    let d3 = d;
     assert_eq!(d, d2);
     assert_eq!(d2, d3);
     Ok(())
@@ -589,7 +590,7 @@ fn blank_line_with_newline() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn blank_line_with_carriage_return() -> Result<(), Box<dyn std::error::Error>> {
-    let v = must(AstBreakpointValidator::new("my $x = 1;\n\r\nmy $y = 2;\n"));
+    let _v = must(AstBreakpointValidator::new("my $x = 1;\n\r\nmy $y = 2;\n"));
     // The line should still be blank regardless of line ending style
     // Note: parser may handle this differently
     assert!(true); // Just ensure no crash

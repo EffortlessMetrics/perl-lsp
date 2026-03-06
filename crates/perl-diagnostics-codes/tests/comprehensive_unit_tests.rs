@@ -76,7 +76,7 @@ fn severity_display() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn severity_clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
     let s = DiagnosticSeverity::Error;
-    let cloned = s.clone();
+    let cloned = s;
     let copied = s;
     assert_eq!(s, cloned);
     assert_eq!(s, copied);
@@ -130,7 +130,7 @@ fn tag_to_lsp_value_deprecated() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn tag_clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
     let t = DiagnosticTag::Unnecessary;
-    let cloned = t.clone();
+    let cloned = t;
     let copied = t;
     assert_eq!(t, cloned);
     assert_eq!(t, copied);
@@ -612,7 +612,7 @@ fn from_message_returns_none_for_unrecognized() -> Result<(), Box<dyn std::error
 #[test]
 fn code_clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
     let c = DiagnosticCode::ParseError;
-    let cloned = c.clone();
+    let cloned = c;
     let copied = c;
     assert_eq!(c, cloned);
     assert_eq!(c, copied);
@@ -656,7 +656,7 @@ fn code_equality() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn category_clone_and_copy() -> Result<(), Box<dyn std::error::Error>> {
     let c = DiagnosticCategory::Parser;
-    let cloned = c.clone();
+    let cloned = c;
     let copied = c;
     assert_eq!(c, cloned);
     assert_eq!(c, copied);
@@ -827,7 +827,7 @@ fn parser_codes_start_with_pl_and_are_below_100() -> Result<(), Box<dyn std::err
         let s = code.as_str();
         assert!(s.starts_with("PL"), "parser code should start with PL: {}", s);
         let num: u32 = s[2..].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
-        assert!(num >= 1 && num <= 99, "parser code out of range: {}", s);
+        assert!((1..=99).contains(&num), "parser code out of range: {}", s);
     }
     Ok(())
 }
@@ -1219,7 +1219,7 @@ fn all_lsp_severity_values_are_valid() {
     for code in ALL_CODES {
         let val = code.severity().to_lsp_value();
         assert!(
-            val >= 1 && val <= 4,
+            (1..=4).contains(&val),
             "severity LSP value out of range for {}: {}",
             code.as_str(),
             val

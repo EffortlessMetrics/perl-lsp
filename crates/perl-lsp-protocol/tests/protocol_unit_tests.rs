@@ -3,6 +3,12 @@
 //! Focuses on edge cases, boundary conditions, serialization roundtrips,
 //! error code semantics, parameter extraction corner cases, and capability
 //! configuration variations not covered by the existing test suite.
+#![allow(
+    clippy::approx_constant,
+    clippy::assertions_on_constants,
+    clippy::panic,
+    clippy::single_match
+)]
 
 use perl_lsp_protocol::capabilities::{
     BuildFlags, cap_bool_or_object, capabilities_for, capabilities_json, default_capabilities,
@@ -10,7 +16,7 @@ use perl_lsp_protocol::capabilities::{
 };
 use perl_lsp_protocol::methods;
 use perl_lsp_protocol::*;
-use serde_json::{Value, json};
+use serde_json::json;
 
 // ============================================================================
 // JsonRpcRequest — edge-case deserialization

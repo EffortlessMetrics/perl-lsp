@@ -3,6 +3,7 @@
 //! Supplements `comprehensive_unit_tests.rs` with additional coverage for:
 //! - Token span arithmetic and consistency
 //! - Field mutation (pub fields)
+#![allow(clippy::panic)]
 //! - Arc sharing across multiple clones and independent allocations
 //! - TokenKind memory layout and size guarantees
 //! - TokenKind Debug format specifics per variant
@@ -486,7 +487,7 @@ fn token_new_from_boxed_str() {
 #[test]
 fn token_sequence_hash_access() {
     // $hash{key}
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::ScalarSigil, "$", 0, 1),
         Token::new(TokenKind::Identifier, "hash", 1, 5),
         Token::new(TokenKind::LeftBrace, "{", 5, 6),
@@ -502,7 +503,7 @@ fn token_sequence_hash_access() {
 #[test]
 fn token_sequence_array_slice() {
     // @array[0..2]
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::ArraySigil, "@", 0, 1),
         Token::new(TokenKind::Identifier, "array", 1, 6),
         Token::new(TokenKind::LeftBracket, "[", 6, 7),
@@ -542,7 +543,7 @@ fn token_sequence_if_elsif_else() {
 #[test]
 fn token_sequence_use_module() {
     // use strict;
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::Use, "use", 0, 3),
         Token::new(TokenKind::Identifier, "strict", 4, 10),
         Token::new(TokenKind::Semicolon, ";", 10, 11),
@@ -554,7 +555,7 @@ fn token_sequence_use_module() {
 #[test]
 fn token_sequence_fat_comma_pair() {
     // key => "value"
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::Identifier, "key", 0, 3),
         Token::new(TokenKind::FatArrow, "=>", 4, 6),
         Token::new(TokenKind::String, "\"value\"", 7, 14),
@@ -565,7 +566,7 @@ fn token_sequence_fat_comma_pair() {
 #[test]
 fn token_sequence_ternary_operator() {
     // $x ? 1 : 0
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::ScalarSigil, "$", 0, 1),
         Token::new(TokenKind::Identifier, "x", 1, 2),
         Token::new(TokenKind::Question, "?", 3, 4),
@@ -580,7 +581,7 @@ fn token_sequence_ternary_operator() {
 #[test]
 fn token_sequence_regex_match() {
     // $str =~ /pattern/i
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::ScalarSigil, "$", 0, 1),
         Token::new(TokenKind::Identifier, "str", 1, 4),
         Token::new(TokenKind::Match, "=~", 5, 7),
@@ -593,7 +594,7 @@ fn token_sequence_regex_match() {
 #[test]
 fn token_sequence_chained_arrow_deref() {
     // $obj->method->field
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::ScalarSigil, "$", 0, 1),
         Token::new(TokenKind::Identifier, "obj", 1, 4),
         Token::new(TokenKind::Arrow, "->", 4, 6),
@@ -608,7 +609,7 @@ fn token_sequence_chained_arrow_deref() {
 #[test]
 fn token_sequence_defined_or_assign() {
     // $x //= "default"
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::ScalarSigil, "$", 0, 1),
         Token::new(TokenKind::Identifier, "x", 1, 2),
         Token::new(TokenKind::DefinedOrAssign, "//=", 3, 6),
@@ -643,7 +644,7 @@ fn token_sequence_try_catch_finally() {
 #[test]
 fn token_sequence_class_method_perl538() {
     // class Foo { method bar { } }
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::Class, "class", 0, 5),
         Token::new(TokenKind::Identifier, "Foo", 6, 9),
         Token::new(TokenKind::LeftBrace, "{", 10, 11),
@@ -660,7 +661,7 @@ fn token_sequence_class_method_perl538() {
 #[test]
 fn token_sequence_heredoc() {
     // <<EOF\ncontent\nEOF
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::HeredocStart, "<<EOF", 0, 5),
         Token::new(TokenKind::HeredocBody, "content\n", 6, 14),
     ];
@@ -722,7 +723,7 @@ fn token_sequence_while_with_loop_control() {
 #[test]
 fn token_sequence_package_declaration() {
     // package Foo::Bar;
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::Package, "package", 0, 7),
         Token::new(TokenKind::Identifier, "Foo", 8, 11),
         Token::new(TokenKind::DoubleColon, "::", 11, 13),
@@ -804,7 +805,7 @@ fn token_with_single_char_text() {
 
 #[test]
 fn filter_tokens_by_kind() {
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::My, "my", 0, 2),
         Token::new(TokenKind::ScalarSigil, "$", 3, 4),
         Token::new(TokenKind::Identifier, "x", 4, 5),
@@ -819,7 +820,7 @@ fn filter_tokens_by_kind() {
 
 #[test]
 fn map_tokens_to_text() {
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::Identifier, "foo", 0, 3),
         Token::new(TokenKind::DoubleColon, "::", 3, 5),
         Token::new(TokenKind::Identifier, "bar", 5, 8),
@@ -830,7 +831,7 @@ fn map_tokens_to_text() {
 
 #[test]
 fn partition_tokens_by_category() {
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::My, "my", 0, 2),
         Token::new(TokenKind::Plus, "+", 3, 4),
         Token::new(TokenKind::If, "if", 5, 7),
@@ -844,7 +845,7 @@ fn partition_tokens_by_category() {
 
 #[test]
 fn collect_token_spans() {
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::My, "my", 0, 2),
         Token::new(TokenKind::ScalarSigil, "$", 3, 4),
         Token::new(TokenKind::Identifier, "x", 4, 5),
@@ -855,7 +856,7 @@ fn collect_token_spans() {
 
 #[test]
 fn find_first_identifier() {
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::My, "my", 0, 2),
         Token::new(TokenKind::ScalarSigil, "$", 3, 4),
         Token::new(TokenKind::Identifier, "first_id", 4, 12),
@@ -870,7 +871,7 @@ fn find_first_identifier() {
 
 #[test]
 fn count_semicolons() {
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::Identifier, "a", 0, 1),
         Token::new(TokenKind::Semicolon, ";", 1, 2),
         Token::new(TokenKind::Identifier, "b", 3, 4),
@@ -999,7 +1000,7 @@ fn option_token_none() {
 
 #[test]
 fn vec_first_and_last() {
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::Use, "use", 0, 3),
         Token::new(TokenKind::Identifier, "strict", 4, 10),
         Token::new(TokenKind::Semicolon, ";", 10, 11),

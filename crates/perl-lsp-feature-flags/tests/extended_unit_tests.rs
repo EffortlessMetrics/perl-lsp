@@ -264,7 +264,7 @@ fn advertised_features_partial_initialization() -> Result<(), Box<dyn std::error
 
 #[test]
 fn advertised_features_clone_independence() -> Result<(), Box<dyn std::error::Error>> {
-    let mut af1 = AdvertisedFeatures { completion: true, ..Default::default() };
+    let af1 = AdvertisedFeatures { completion: true, ..Default::default() };
     let mut af2 = af1.clone();
     af2.completion = false;
     assert!(af1.completion);
@@ -373,7 +373,7 @@ fn build_flags_partial_initialization() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn build_flags_clone_independence() -> Result<(), Box<dyn std::error::Error>> {
-    let mut bf1 = BuildFlags { completion: true, ..Default::default() };
+    let bf1 = BuildFlags { completion: true, ..Default::default() };
     let mut bf2 = bf1.clone();
     bf2.completion = false;
     assert!(bf1.completion);

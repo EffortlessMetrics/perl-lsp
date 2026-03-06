@@ -447,7 +447,7 @@ fn token_kind_is_copy() {
 #[test]
 fn token_kind_clone_equals_original() {
     let a = TokenKind::Regex;
-    let b = a.clone();
+    let b = a;
     assert_eq!(a, b);
 }
 
@@ -725,7 +725,7 @@ fn unknown_token() {
 #[test]
 fn token_sequence_my_x_assign_42() {
     // Simulates: my $x = 42;
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::My, "my", 0, 2),
         Token::new(TokenKind::ScalarSigil, "$", 3, 4),
         Token::new(TokenKind::Identifier, "x", 4, 5),
@@ -746,7 +746,7 @@ fn token_sequence_my_x_assign_42() {
 #[test]
 fn token_sequence_sub_declaration() {
     // Simulates: sub greet { }
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::Sub, "sub", 0, 3),
         Token::new(TokenKind::Identifier, "greet", 4, 9),
         Token::new(TokenKind::LeftBrace, "{", 10, 11),
@@ -760,7 +760,7 @@ fn token_sequence_sub_declaration() {
 #[test]
 fn token_sequence_method_call() {
     // Simulates: $obj->method()
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::ScalarSigil, "$", 0, 1),
         Token::new(TokenKind::Identifier, "obj", 1, 4),
         Token::new(TokenKind::Arrow, "->", 4, 6),
@@ -776,7 +776,7 @@ fn token_sequence_method_call() {
 #[test]
 fn token_sequence_package_qualified() {
     // Simulates: Foo::Bar::baz
-    let tokens = vec![
+    let tokens = [
         Token::new(TokenKind::Identifier, "Foo", 0, 3),
         Token::new(TokenKind::DoubleColon, "::", 3, 5),
         Token::new(TokenKind::Identifier, "Bar", 5, 8),

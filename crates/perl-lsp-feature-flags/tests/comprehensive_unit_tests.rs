@@ -3,6 +3,7 @@
 //! Covers `BuildFlags`, `AdvertisedFeatures`, profile constructors,
 //! `to_advertised_features()`, `to_feature_ids()`, trait derivations,
 //! and cross-profile invariants.
+#![allow(clippy::type_complexity)]
 
 use perl_lsp_feature_flags::{AdvertisedFeatures, BuildFlags};
 use perl_lsp_feature_ids::*;

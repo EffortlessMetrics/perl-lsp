@@ -843,11 +843,9 @@ fn concurrent_validations_are_safe() -> TestResult {
         .collect();
 
     for handle in handles {
-        if let Ok(result) = handle.join() {
-            if let Ok(resolved) = result {
-                if let Ok(canonical) = ws.canonicalize() {
-                    assert!(resolved.starts_with(&canonical));
-                }
+        if let Ok(Ok(resolved)) = handle.join() {
+            if let Ok(canonical) = ws.canonicalize() {
+                assert!(resolved.starts_with(&canonical));
             }
         }
     }

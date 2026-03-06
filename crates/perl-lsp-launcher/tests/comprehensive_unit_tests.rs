@@ -2,6 +2,7 @@
 //!
 //! Covers: CLI arg parsing, transport modes, launch actions, feature profiles,
 //! error handling, edge cases, help text, and LaunchConfig API.
+#![allow(clippy::assertions_on_constants, clippy::absurd_extreme_comparisons, unused_comparisons)]
 
 use perl_lsp_launcher::{
     DEFAULT_LSP_PORT, FeatureProfile, LaunchConfig, LaunchParseError, TransportMode,

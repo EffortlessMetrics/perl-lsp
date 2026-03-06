@@ -2,6 +2,7 @@
 //!
 //! Tests cover: must/must_some/must_err helpers, governance structs,
 //! TDD workflow, test generation, test runner, and refactoring analysis.
+#![allow(clippy::field_reassign_with_default)]
 
 use perl_tdd_support::governance::*;
 use perl_tdd_support::must::{must, must_err, must_some};

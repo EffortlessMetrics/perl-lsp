@@ -8,6 +8,7 @@
 //! - Compliance percent calculations with various conditions
 //! - Grid structure consistency checks
 //! - Multi-profile payload scenarios
+#![allow(clippy::expect_used)]
 
 use perl_lsp_feature_grid::{
     FEATURE_GRID_COLUMNS, FeatureProfile, LSP_VERSION, VERSION, advertised_features,
@@ -25,7 +26,7 @@ use std::collections::HashSet;
 // Helper Functions
 // ---------------------------------------------------------------------------
 
-fn parse_json(s: &str) -> Result<Value, Box<dyn std::error::Error>> {
+fn _parse_json(s: &str) -> Result<Value, Box<dyn std::error::Error>> {
     Ok(serde_json::from_str(s)?)
 }
 
@@ -39,7 +40,7 @@ fn get_profile_from_json(value: &Value, profile_name: &str) -> Option<Value> {
 }
 
 fn extract_grid_rows(value: &Value) -> Option<Vec<Value>> {
-    value.get("feature_grid")?.get("rows")?.as_array().map(|a| a.clone())
+    value.get("feature_grid")?.get("rows")?.as_array().cloned()
 }
 
 // ===================================================================
@@ -118,7 +119,7 @@ fn all_features_descriptions_are_non_empty_strings() {
 #[test]
 fn all_features_have_valid_maturity_values() {
     // Maturity values should be one of the known types, but we don't assert consistency
-    let valid_maturities = vec!["draft", "beta", "stable", "deprecated", "ga"];
+    let valid_maturities = ["draft", "beta", "stable", "deprecated", "ga"];
     for feature in all_features() {
         assert!(
             valid_maturities.contains(&feature.maturity),
@@ -134,7 +135,7 @@ fn advertised_features_count_is_reasonable() {
     let advertised = advertised_features();
     let all = all_features();
     assert!(
-        advertised.len() > 0 && advertised.len() <= all.len(),
+        !advertised.is_empty() && advertised.len() <= all.len(),
         "advertised features count must be between 1 and total features"
     );
 }
@@ -414,8 +415,8 @@ fn to_json_for_all_profiles_includes_profile_array() -> Result<(), Box<dyn std::
 #[test]
 fn to_json_for_profiles_deterministic() {
     let profiles = FeatureProfile::all();
-    let payload1 = to_json_for_profiles(&profiles);
-    let payload2 = to_json_for_profiles(&profiles);
+    let payload1 = to_json_for_profiles(profiles);
+    let payload2 = to_json_for_profiles(profiles);
     assert_eq!(payload1, payload2, "to_json_for_profiles should be deterministic");
 }
 

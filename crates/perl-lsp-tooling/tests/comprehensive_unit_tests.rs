@@ -9,7 +9,7 @@ use perl_lsp_tooling::mock::{CommandInvocation, MockResponse, MockSubprocessRunt
 use perl_lsp_tooling::performance::parallel::process_files_parallel;
 use perl_lsp_tooling::performance::{AstCache, IncrementalParser, SymbolIndex};
 use perl_lsp_tooling::perl_critic::{
-    BuiltInAnalyzer, CriticAnalyzer, CriticConfig, Policy, QuickFix, Severity, TextEdit, Violation,
+    BuiltInAnalyzer, CriticAnalyzer, CriticConfig, QuickFix, Severity, TextEdit, Violation,
 };
 use perl_lsp_tooling::perltidy::{
     BuiltInFormatter, FormatSuggestion, PerlTidyConfig, PerlTidyFormatter,
@@ -295,7 +295,7 @@ fn symbol_index_empty_query() {
     let mut index = SymbolIndex::new();
     index.add_symbol("something".to_string());
 
-    assert!(index.search_prefix("").len() >= 1); // empty prefix matches all
+    assert!(!index.search_prefix("").is_empty()); // empty prefix matches all
     assert!(index.search_fuzzy("").is_empty()); // no tokens to match
 }
 
@@ -1494,7 +1494,7 @@ fn severity_clone_and_copy() {
     let s = Severity::Brutal;
     let s2 = s;
     assert_eq!(s, s2);
-    let s3 = s.clone();
+    let s3 = s;
     assert_eq!(s, s3);
 }
 

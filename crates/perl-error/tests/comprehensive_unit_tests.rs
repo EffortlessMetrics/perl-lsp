@@ -585,7 +585,7 @@ fn test_parse_output_with_empty_errors() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn test_error_classifier_default_and_new() -> Result<(), Box<dyn std::error::Error>> {
     let _a = ErrorClassifier::new();
-    let _b = ErrorClassifier::default();
+    let _b = ErrorClassifier;
     Ok(())
 }
 

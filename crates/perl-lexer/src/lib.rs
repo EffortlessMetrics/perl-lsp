@@ -32,7 +32,7 @@
 //! // First token is the keyword `my`
 //! assert!(matches!(&tokens[0].token_type, TokenType::Keyword(k) if &**k == "my"));
 //! // Tokens include variables, operators, literals, and EOF
-//! assert!(matches!(&tokens.last().unwrap().token_type, TokenType::EOF));
+//! assert!(matches!(&tokens.last().map(|t| &t.token_type), Some(TokenType::EOF)));
 //! ```
 //!
 //! ## Context-Aware Parsing

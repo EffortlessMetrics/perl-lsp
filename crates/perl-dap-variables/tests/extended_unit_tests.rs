@@ -2,6 +2,7 @@
 //!
 //! This module provides comprehensive test coverage for edge cases, boundary conditions,
 //! and complex scenarios not covered by the main test suite.
+#![allow(clippy::panic, clippy::approx_constant)]
 
 use perl_dap_variables::{
     PerlValue, PerlVariableRenderer, RenderedVariable, VariableParseError, VariableParser,
@@ -117,7 +118,7 @@ fn perl_value_array_single_element() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn perl_value_array_many_elements() -> Result<(), Box<dyn std::error::Error>> {
-    let elements = (0..1000).map(|i| PerlValue::Integer(i)).collect();
+    let elements = (0..1000).map(PerlValue::Integer).collect();
     let val = PerlValue::Array(elements);
     assert_eq!(val.child_count(), Some(1000));
     assert!(val.is_expandable());
@@ -901,7 +902,7 @@ fn parser_parse_array_with_nested_string_quotes() -> Result<(), Box<dyn std::err
     let parser = VariableParser::new();
     let result = parser.parse_value("(\"first\\\"quoted\", 'second')", 0);
     if let Ok(PerlValue::Array(arr)) = result {
-        assert!(arr.len() >= 1);
+        assert!(!arr.is_empty());
     }
     Ok(())
 }

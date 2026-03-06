@@ -464,7 +464,7 @@ mod os_runtime_tests {
 
     #[test]
     fn os_runtime_default() -> Result<(), Box<dyn std::error::Error>> {
-        let _runtime = OsSubprocessRuntime::default();
+        let _runtime = OsSubprocessRuntime;
         Ok(())
     }
 
