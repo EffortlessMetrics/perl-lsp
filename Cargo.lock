@@ -1988,6 +1988,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-on-type-formatting"
+version = "0.10.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "perl-lsp-protocol"
 version = "0.10.0"
 dependencies = [
@@ -2011,6 +2018,7 @@ dependencies = [
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
  "perl-lsp-navigation",
+ "perl-lsp-on-type-formatting",
  "perl-lsp-rename",
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
