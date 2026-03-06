@@ -3,7 +3,9 @@
 //! This crate centralizes path-boundary checks used by tooling that accepts
 //! user-provided file paths (for example LSP/DAP requests).
 
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
+
+use perl_path_normalize::{NormalizePathError, normalize_path_within_workspace};
 
 /// Path validation errors for workspace-bound operations.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -58,40 +60,13 @@ pub fn validate_workspace_path(
 
         canonical
     } else {
-        let mut stack: Vec<Component<'_>> = workspace_canonical.components().collect();
-        let workspace_depth = stack.len();
-
-        for component in path.components() {
-            match component {
-                Component::ParentDir => {
-                    if stack.len() <= workspace_depth {
-                        return Err(WorkspacePathError::PathTraversalAttempt(format!(
-                            "Path attempts to escape workspace: {}",
-                            path.display()
-                        )));
-                    }
-                    stack.pop();
+        normalize_path_within_workspace(path, &workspace_canonical).map_err(
+            |error| match error {
+                NormalizePathError::PathTraversalAttempt(message) => {
+                    WorkspacePathError::PathTraversalAttempt(message)
                 }
-                Component::Normal(name) => {
-                    stack.push(Component::Normal(name));
-                }
-                Component::CurDir => {
-                    // ignore
-                }
-                Component::RootDir | Component::Prefix(_) => {
-                    return Err(WorkspacePathError::PathTraversalAttempt(format!(
-                        "Invalid component in relative path: {}",
-                        path.display()
-                    )));
-                }
-            }
-        }
-
-        let mut normalized = PathBuf::new();
-        for component in stack {
-            normalized.push(component.as_os_str());
-        }
-        normalized
+            },
+        )?
     };
 
     if !final_path.starts_with(&workspace_canonical) {
