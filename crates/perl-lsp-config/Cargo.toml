@@ -1,0 +1,16 @@
+[package]
+name = "perl-lsp-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Configuration models for perl-lsp server and workspace behavior"
+
+[dependencies]
+serde_json = "1.0.149"
+
+[lints]
+workspace = true
