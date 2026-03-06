@@ -4,6 +4,9 @@
 //! exist on disk. It prevents parent-directory traversal beyond a canonical
 //! workspace root.
 
+#![deny(unsafe_code)]
+#![warn(missing_docs)]
+
 use std::path::{Component, Path, PathBuf};
 
 /// Errors produced while normalizing a relative path against a workspace root.
