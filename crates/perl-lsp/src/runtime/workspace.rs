@@ -22,6 +22,8 @@ use perl_parser::workspace_index::{DegradationReason, EarlyExitReason, ResourceK
 use perl_source_file::{is_perl_source_path, is_perl_source_uri};
 use perl_workspace_folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
+use perl_workspace_ignore::is_skipped_dir_name;
+#[cfg(feature = "workspace")]
 use std::io::Write;
 #[cfg(feature = "workspace")]
 use std::path::Path;
@@ -46,8 +48,7 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
     if !entry.file_type().is_dir() {
         return false;
     }
-    let name = entry.file_name().to_string_lossy();
-    matches!(name.as_ref(), ".git" | ".hg" | ".svn" | "target" | "node_modules" | ".cache")
+    is_skipped_dir_name(&entry.file_name().to_string_lossy())
 }
 
 #[cfg(feature = "workspace")]

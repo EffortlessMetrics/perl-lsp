@@ -90,6 +90,7 @@ members = [
     "crates/perl-path-normalize",
     "crates/perl-path-security",
     "crates/perl-percentile",
+    "crates/perl-workspace-ignore",
     "crates/perl-workspace-discovery",
     "crates/perl-corpus",
     "crates/perl-lsp",
@@ -240,6 +241,7 @@ allow = [
     "perl-module-rename",
     "perl-module-resolution-path",
     "perl-workspace-folder",
+    "perl-workspace-ignore",
     "perl-module-resolution-uri",
     "perl-module-resolution",
     "perl-source-file",
@@ -295,6 +297,7 @@ perl-module-resolution = { path = "crates/perl-module-resolution", version = "0.
 perl-module-resolution-path = { path = "crates/perl-module-resolution-path", version = "0.10.0" }
 perl-module-resolution-uri = { path = "crates/perl-module-resolution-uri", version = "0.10.0" }
 perl-workspace-folder = { path = "crates/perl-workspace-folder", version = "0.10.0" }
+perl-workspace-ignore = { path = "crates/perl-workspace-ignore", version = "0.10.0" }
 perl-keywords = { path = "crates/perl-keywords", version = "0.10.0" }
 perl-source-file = { path = "crates/perl-source-file", version = "0.10.0" }
 perl-text-line = { path = "crates/perl-text-line", version = "0.10.0" }
