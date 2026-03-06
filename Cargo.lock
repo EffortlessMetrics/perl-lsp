@@ -1526,7 +1526,14 @@ dependencies = [
 name = "perl-builtins"
 version = "0.10.0"
 dependencies = [
+ "perl-builtins-phf",
  "perl-tdd-support",
+]
+
+[[package]]
+name = "perl-builtins-phf"
+version = "0.10.0"
+dependencies = [
  "phf",
 ]
 
@@ -1563,6 +1570,7 @@ dependencies = [
  "once_cell",
  "perl-content-length-framing",
  "perl-dap-breakpoint",
+ "perl-dap-command-args",
  "perl-dap-eval",
  "perl-dap-platform",
  "perl-dap-stack",
@@ -1597,6 +1605,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-dap-command-args"
+version = "0.10.0"
+
+[[package]]
 name = "perl-dap-eval"
 version = "0.10.0"
 dependencies = [
@@ -1611,7 +1623,13 @@ name = "perl-dap-platform"
 version = "0.10.0"
 dependencies = [
  "anyhow",
+ "perl-dap-shell",
+ "perl-tdd-support",
 ]
+
+[[package]]
+name = "perl-dap-shell"
+version = "0.10.0"
 
 [[package]]
 name = "perl-dap-stack"
@@ -1621,7 +1639,15 @@ dependencies = [
  "perl-tdd-support",
  "regex",
  "serde",
+ "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "perl-dap-value"
+version = "0.10.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1629,6 +1655,7 @@ name = "perl-dap-variables"
 version = "0.10.0"
 dependencies = [
  "once_cell",
+ "perl-dap-value",
  "perl-tdd-support",
  "regex",
  "serde",
@@ -1642,6 +1669,7 @@ version = "0.10.0"
 dependencies = [
  "perl-workspace-index",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1667,6 +1695,7 @@ dependencies = [
  "perl-lexer",
  "perl-position-tracking",
  "perl-regex",
+ "perl-tdd-support",
  "thiserror",
 ]
 
@@ -1740,10 +1769,13 @@ dependencies = [
  "perl-lsp-cancellation",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
+ "perl-lsp-config",
+ "perl-lsp-diagnostic-catalog",
  "perl-lsp-diagnostics",
  "perl-lsp-feature-governance",
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
+ "perl-lsp-input-validation",
  "perl-lsp-launcher",
  "perl-lsp-limits",
  "perl-lsp-navigation",
@@ -1753,6 +1785,7 @@ dependencies = [
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
+ "perl-lsp-uri",
  "perl-module-path",
  "perl-module-reference",
  "perl-module-rename",
@@ -1760,8 +1793,10 @@ dependencies = [
  "perl-parser",
  "perl-position-tracking",
  "perl-source-file",
+ "perl-symbol-cursor",
  "perl-tdd-support",
  "perl-workspace-discovery",
+ "perl-workspace-folder",
  "predicates",
  "pretty_assertions",
  "proptest",
@@ -1777,6 +1812,13 @@ dependencies = [
  "uuid",
  "walkdir",
  "which",
+]
+
+[[package]]
+name = "perl-lsp-ast-utils"
+version = "0.10.0"
+dependencies = [
+ "perl-parser-core",
 ]
 
 [[package]]
@@ -1799,9 +1841,11 @@ dependencies = [
 name = "perl-lsp-code-actions"
 version = "0.10.0"
 dependencies = [
+ "perl-lsp-ast-utils",
  "perl-lsp-diagnostics",
  "perl-lsp-rename",
  "perl-parser-core",
+ "perl-source-editing",
  "perl-tdd-support",
 ]
 
@@ -1812,6 +1856,7 @@ dependencies = [
  "lsp-types",
  "perl-keywords",
  "perl-parser-core",
+ "perl-path-security",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
@@ -1820,10 +1865,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-config"
+version = "0.10.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "perl-lsp-critic-parser"
 version = "0.10.0"
 dependencies = [
  "perl-tdd-support",
+]
+
+[[package]]
+name = "perl-lsp-diagnostic-catalog"
+version = "0.10.0"
+dependencies = [
+ "perl-diagnostics-codes",
+ "serde_json",
 ]
 
 [[package]]
@@ -1840,6 +1900,16 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
+]
+
+[[package]]
+name = "perl-lsp-document-links"
+version = "0.10.0"
+dependencies = [
+ "perl-module-import",
+ "perl-module-path",
+ "serde_json",
+ "url",
 ]
 
 [[package]]
@@ -1871,7 +1941,9 @@ dependencies = [
  "perl-lsp-feature-grid",
  "perl-lsp-feature-policy",
  "perl-lsp-feature-profile",
+ "perl-lsp-feature-profile-cli",
  "perl-tdd-support",
+ "serde_json",
 ]
 
 [[package]]
@@ -1905,6 +1977,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-feature-profile-cli"
+version = "0.10.0"
+dependencies = [
+ "perl-lsp-feature-policy",
+ "perl-lsp-feature-profile",
+ "perl-tdd-support",
+]
+
+[[package]]
 name = "perl-lsp-formatting"
 version = "0.10.0"
 dependencies = [
@@ -1919,7 +2000,12 @@ name = "perl-lsp-formatting-types"
 version = "0.10.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
+
+[[package]]
+name = "perl-lsp-import-management"
+version = "0.10.0"
 
 [[package]]
 name = "perl-lsp-inlay-hints"
@@ -1930,6 +2016,17 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "serde_json",
+]
+
+[[package]]
+name = "perl-lsp-input-validation"
+version = "0.10.0"
+dependencies = [
+ "anyhow",
+ "perl-path-security",
+ "perl-tdd-support",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1953,15 +2050,34 @@ name = "perl-lsp-navigation"
 version = "0.10.0"
 dependencies = [
  "lsp-types",
+ "perl-lsp-document-links",
+ "perl-lsp-symbol-query",
  "perl-module-import",
  "perl-module-path",
  "perl-parser-core",
  "perl-position-tracking",
+ "perl-qualified-name",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "serde",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "perl-lsp-on-type-formatting"
+version = "0.10.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "perl-lsp-performance"
+version = "0.10.0"
+dependencies = [
+ "moka",
+ "perl-parser-core",
+ "perl-symbol-index",
 ]
 
 [[package]]
@@ -1988,9 +2104,11 @@ dependencies = [
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
  "perl-lsp-navigation",
+ "perl-lsp-on-type-formatting",
  "perl-lsp-rename",
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
+ "perl-lsp-uri",
  "perl-parser-core",
  "perl-semantic-analyzer",
  "perl-tdd-support",
@@ -2021,6 +2139,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-symbol-query"
+version = "0.10.0"
+
+[[package]]
 name = "perl-lsp-tooling"
 version = "0.10.0"
 dependencies = [
@@ -2028,10 +2150,13 @@ dependencies = [
  "lsp-types",
  "moka",
  "perl-lsp-critic-parser",
+ "perl-lsp-performance",
  "perl-parser-core",
  "perl-subprocess-runtime",
+ "perl-symbol-index",
  "perl-tdd-support",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2041,6 +2166,13 @@ dependencies = [
  "perl-content-length-framing",
  "perl-lsp-protocol",
  "serde_json",
+]
+
+[[package]]
+name = "perl-lsp-uri"
+version = "0.10.0"
+dependencies = [
+ "lsp-types",
 ]
 
 [[package]]
@@ -2259,6 +2391,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-percentile"
+version = "0.10.0"
+dependencies = [
+ "proptest",
+]
+
+[[package]]
 name = "perl-position-tracking"
 version = "0.10.0"
 dependencies = [
@@ -2329,6 +2468,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-source-editing"
+version = "0.10.0"
+
+[[package]]
 name = "perl-source-file"
 version = "0.10.0"
 
@@ -2344,6 +2487,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-symbol-index"
+version = "0.10.0"
+
+[[package]]
 name = "perl-symbol-table"
 version = "0.10.0"
 dependencies = [
@@ -2357,6 +2504,7 @@ name = "perl-symbol-types"
 version = "0.10.0"
 dependencies = [
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2459,7 +2607,15 @@ name = "perl-uri"
 version = "0.10.0"
 dependencies = [
  "perl-tdd-support",
+ "perl-uri-classify",
  "tempfile",
+ "url",
+]
+
+[[package]]
+name = "perl-uri-classify"
+version = "0.10.0"
+dependencies = [
  "url",
 ]
 
@@ -2479,6 +2635,7 @@ version = "0.10.0"
 dependencies = [
  "perl-uri",
  "proptest",
+ "serde_json",
  "tempfile",
  "url",
 ]
@@ -2497,6 +2654,7 @@ dependencies = [
  "perl-tdd-support",
  "perl-uri",
  "perl-workspace-index-slo",
+ "perl-workspace-index-state-machine",
  "serde",
  "tempfile",
  "url",
@@ -2507,7 +2665,15 @@ name = "perl-workspace-index-slo"
 version = "0.10.0"
 dependencies = [
  "parking_lot",
+ "perl-percentile",
  "proptest",
+]
+
+[[package]]
+name = "perl-workspace-index-state-machine"
+version = "0.10.0"
+dependencies = [
+ "parking_lot",
 ]
 
 [[package]]

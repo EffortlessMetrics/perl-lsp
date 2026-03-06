@@ -300,6 +300,7 @@ perl-lsp-performance = { path = "crates/perl-lsp-performance", version = "0.10.0
 perl-lsp-ast-utils = { path = "crates/perl-lsp-ast-utils", version = "0.10.0" }
 perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.10.0" }
 perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.10.0" }
+perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
 perl-uri-classify = { path = "crates/perl-uri-classify", version = "0.10.0" }
 perl-percentile = { path = "crates/perl-percentile", version = "0.10.0" }
 perl-lsp-import-management = { path = "crates/perl-lsp-import-management", version = "0.10.0" }
@@ -315,6 +316,7 @@ perl-dap-platform = { path = "crates/perl-dap-platform", version = "0.10.0" }
 perl-dap-value = { path = "crates/perl-dap-value", version = "0.10.0" }
 perl-dap-command-args = { path = "crates/perl-dap-command-args", version = "0.10.0" }
 perl-dap-shell = { path = "crates/perl-dap-shell", version = "0.10.0" }
+perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.10.0" }
 perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.10.0" }
 perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.10.0" }
 perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.10.0" }
@@ -341,6 +343,7 @@ perl-lsp-config = { path = "crates/perl-lsp-config", version = "0.10.0" }
 perl-lsp-feature-profile = { path = "crates/perl-lsp-feature-profile", version = "0.10.0" }
 perl-lsp-feature-profile-cli = { path = "crates/perl-lsp-feature-profile-cli", version = "0.10.0" }
 perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "0.10.0" }
+perl-lsp-feature-grid = { path = "crates/perl-lsp-feature-grid", version = "0.10.0" }
 perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.10.0" }
 perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.10.0" }
 perl-lsp-diagnostic-catalog = { path = "crates/perl-lsp-diagnostic-catalog", version = "0.10.0" }
@@ -355,6 +358,7 @@ perl-workspace-index = { path = "crates/perl-workspace-index", version = "0.10.0
 perl-workspace-index-state-machine = { path = "crates/perl-workspace-index-state-machine", version = "0.10.0" }
 perl-workspace-index-slo = { path = "crates/perl-workspace-index-slo", version = "0.10.0" }
 perl-incremental-parsing = { path = "crates/perl-incremental-parsing", version = "0.10.0" }
+perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.10.0" }
 perl-refactoring = { path = "crates/perl-refactoring", version = "0.10.0" }
 
 # Tier 4: Three-level dependencies
