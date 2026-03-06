@@ -3,7 +3,7 @@
 //! This crate centralizes path-boundary checks used by tooling that accepts
 //! user-provided file paths (for example LSP/DAP requests).
 
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use perl_path_normalize::{NormalizePathError, normalize_path_within_workspace};
 
