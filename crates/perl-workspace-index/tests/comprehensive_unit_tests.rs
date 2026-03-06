@@ -16,7 +16,6 @@ use perl_workspace_index::workspace::state_machine::{
     BuildPhase, DegradationReason, IndexState, IndexStateKind, IndexStateMachine,
     InvalidationReason, ResourceKind, TransitionResult,
 };
-use perl_workspace_index::workspace::workspace_index::IndexPerformanceCaps;
 use perl_workspace_index::workspace::workspace_index::{
     IndexCoordinator, IndexResourceLimits, SymKind, SymbolKey, WorkspaceIndex,
 };

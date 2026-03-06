@@ -2,9 +2,10 @@
 //!
 //! Tests cover the public API: `legend()`, `collect_semantic_tokens()`,
 //! `EncodedToken`, `TokensLegend`, and `SemanticTokensProvider`.
+#![allow(dead_code, unused_variables, unused_assignments)]
 
 use perl_lsp_semantic_tokens::{
-    EncodedToken, SemanticTokensProvider, TokensLegend, collect_semantic_tokens, legend,
+    EncodedToken, SemanticTokensProvider, collect_semantic_tokens, legend,
 };
 use perl_tdd_support::{Parser, must, must_some};
 
@@ -140,14 +141,14 @@ fn provider_new_creates_instance() {
 
 #[test]
 fn provider_default_creates_instance() {
-    let _provider = SemanticTokensProvider::default();
+    let _provider = SemanticTokensProvider;
 }
 
 #[test]
 fn provider_new_and_default_are_equivalent() {
     // Both should create a valid provider (placeholder)
     let _a = SemanticTokensProvider::new();
-    let _b = SemanticTokensProvider::default();
+    let _b = SemanticTokensProvider;
 }
 
 // ===========================================================================

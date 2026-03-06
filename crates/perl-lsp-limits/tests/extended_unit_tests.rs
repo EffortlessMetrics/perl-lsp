@@ -2,14 +2,14 @@
 //!
 //! Covers additional edge cases, boundary conditions, stress tests,
 //! and comprehensive API coverage beyond comprehensive_unit_tests.rs
+#![allow(clippy::field_reassign_with_default)]
 
 use std::time::Duration;
 
 use perl_lsp_limits::{
-    LSP_LIMITS, LspLimits, code_lens_cap, code_lens_resolve_deadline, completion_cap,
-    completion_deadline, diagnostics_per_file_cap, document_symbol_cap, inlay_hints_cap,
-    reference_search_deadline, references_cap, regex_scan_deadline, semantic_tokens_deadline,
-    workspace_symbol_cap,
+    LspLimits, code_lens_cap, code_lens_resolve_deadline, completion_cap, completion_deadline,
+    diagnostics_per_file_cap, document_symbol_cap, inlay_hints_cap, reference_search_deadline,
+    references_cap, regex_scan_deadline, semantic_tokens_deadline, workspace_symbol_cap,
 };
 
 // =============================================================================
@@ -551,13 +551,13 @@ fn degradation_flags_independent() -> Result<(), Box<dyn std::error::Error>> {
 
     limits.return_partial_on_timeout = true;
     limits.include_open_docs_when_degraded = false;
-    assert_eq!(limits.return_partial_on_timeout, true);
-    assert_eq!(limits.include_open_docs_when_degraded, false);
+    assert!(limits.return_partial_on_timeout);
+    assert!(!limits.include_open_docs_when_degraded);
 
     limits.return_partial_on_timeout = false;
     limits.include_open_docs_when_degraded = true;
-    assert_eq!(limits.return_partial_on_timeout, false);
-    assert_eq!(limits.include_open_docs_when_degraded, true);
+    assert!(!limits.return_partial_on_timeout);
+    assert!(limits.include_open_docs_when_degraded);
 
     Ok(())
 }

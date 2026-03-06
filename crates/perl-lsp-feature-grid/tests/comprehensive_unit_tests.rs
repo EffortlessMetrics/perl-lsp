@@ -4,14 +4,14 @@
 //! BDD grid structure, feature-profile contracts, and re-exported catalog functions.
 
 use perl_lsp_feature_grid::{
-    BddFeatureRow, FEATURE_GRID_COLUMNS, Feature, FeatureProfile, FeatureProfileSpec, LSP_VERSION,
-    VERSION, advertised_features, advertised_trackable_feature_count_for_grid, all_features,
-    bdd_feature_rows, catalog_advertised_feature_ids, compliance_percent,
-    compliance_percent_for_grid, compliance_percent_for_profile, feature_profile_contracts,
-    has_feature, to_json, to_json_for_all_profiles, to_json_for_profile, to_json_for_profiles,
+    FEATURE_GRID_COLUMNS, FeatureProfile, LSP_VERSION, VERSION, advertised_features,
+    advertised_trackable_feature_count_for_grid, all_features, bdd_feature_rows,
+    catalog_advertised_feature_ids, compliance_percent, compliance_percent_for_grid,
+    compliance_percent_for_profile, feature_profile_contracts, has_feature, to_json,
+    to_json_for_all_profiles, to_json_for_profile, to_json_for_profiles,
     trackable_feature_count_for_grid,
 };
-use perl_tdd_support::{must, must_some};
+use perl_tdd_support::must_some;
 use serde_json::Value;
 
 // ---------------------------------------------------------------------------

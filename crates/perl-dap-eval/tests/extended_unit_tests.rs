@@ -3,6 +3,7 @@
 //! Comprehensive test coverage including:
 //! - Advanced expression scenarios
 //! - Complex validation edge cases
+#![allow(clippy::expect_used)]
 //! - Nested expressions and combinations
 //! - Context-sensitive pattern detection
 //! - Comprehensive error message validation

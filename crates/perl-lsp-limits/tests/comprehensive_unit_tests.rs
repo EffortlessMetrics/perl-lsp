@@ -2,6 +2,7 @@
 //!
 //! Covers: Default values, presets, update_from_value, global accessors,
 //! trait implementations, edge cases, and degradation flags.
+#![allow(clippy::field_reassign_with_default)]
 
 use std::time::Duration;
 

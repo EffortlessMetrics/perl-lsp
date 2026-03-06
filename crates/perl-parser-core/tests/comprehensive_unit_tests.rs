@@ -25,7 +25,6 @@ use perl_parser_core::{
     builtin_signatures,
     builtin_signatures_phf,
     error::recovery_parser::RecoveryParser,
-    error_classifier,
     error_recovery::{ParseError as RecoveryParseError, RecoveryResult, SyncPoint},
     line_index::LineIndex,
     // ParserContext
@@ -2066,7 +2065,7 @@ mod error_classifier_tests {
     #[test]
     fn classifier_default_and_new() -> Result<(), Box<dyn std::error::Error>> {
         let _c1 = ErrorClassifier::new();
-        let _c2 = ErrorClassifier::default();
+        let _c2 = ErrorClassifier;
         Ok(())
     }
 
@@ -2784,7 +2783,7 @@ mod sync_point_extended_tests {
     #[test]
     fn all_variants_exist() -> Result<(), Box<dyn std::error::Error>> {
         let variants =
-            vec![SyncPoint::Semicolon, SyncPoint::CloseBrace, SyncPoint::Keyword, SyncPoint::Eof];
+            [SyncPoint::Semicolon, SyncPoint::CloseBrace, SyncPoint::Keyword, SyncPoint::Eof];
         // All are distinct
         for i in 0..variants.len() {
             for j in (i + 1)..variants.len() {

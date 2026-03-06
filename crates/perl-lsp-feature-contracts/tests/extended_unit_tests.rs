@@ -1,8 +1,9 @@
 //! Extended unit tests for `perl-lsp-feature-contracts` covering additional edge cases,
 //! serialization, data validation, and comprehensive API coverage.
+#![allow(clippy::panic)]
 
 use perl_lsp_feature_contracts::{
-    BddFeatureRow, FEATURE_PROFILE_SPECS, FeatureProfileKind, FeatureProfileSpec,
+    FEATURE_PROFILE_SPECS, FeatureProfileKind, FeatureProfileSpec,
     advertised_trackable_feature_count_for_grid, all_features, bdd_feature_rows,
     compliance_percent_for_grid, feature_profile_specs, trackable_feature_count_for_grid,
 };
@@ -370,7 +371,7 @@ fn bdd_feature_rows_all_have_non_empty_areas() {
 
 #[test]
 fn bdd_feature_rows_maturity_values_are_canonical() {
-    let valid_maturity = vec!["planned", "in_progress", "beta", "rc", "ga"];
+    let valid_maturity = ["planned", "in_progress", "beta", "rc", "ga"];
     for row in bdd_feature_rows() {
         assert!(
             valid_maturity.contains(&row.maturity),
@@ -491,7 +492,7 @@ fn compliance_percent_is_whole_number_or_zero() {
     let fractional = compliance - compliance.floor();
 
     assert!(
-        fractional < 0.001 || fractional > 0.999,
+        !(0.001..=0.999).contains(&fractional),
         "Compliance percent is not a whole number: {compliance}"
     );
 }

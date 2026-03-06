@@ -3,6 +3,7 @@
 //! Covers:
 //! - LineIndex: byte↔position mapping
 //! - IncrementalState: creation, checkpoint lookup, edit application
+#![allow(clippy::overly_complex_bool_expr, clippy::field_reassign_with_default)]
 //! - Edit: LSP change conversion, full-document changes
 //! - apply_edits / full_reparse: single & multiple edits, fallback paths
 //! - IncrementalEdit / IncrementalEditSet: arithmetic, overlap, application
@@ -1386,7 +1387,7 @@ fn incremental_edit_set_is_empty_check() -> Result<(), Box<dyn std::error::Error
 #[test]
 fn apply_edits_empty_edit_list() -> Result<(), Box<dyn std::error::Error>> {
     let mut state = IncrementalState::new("my $x = 42;".to_string());
-    let result = apply_edits(&mut state, &[])?;
+    let _result = apply_edits(&mut state, &[])?;
     // Multiple edits path produces full reparse for 0 edits? Actually sorted_edits.len() == 0
     // falls through to multiple-edit branch which does full_reparse.
     // Regardless, source should be unchanged.

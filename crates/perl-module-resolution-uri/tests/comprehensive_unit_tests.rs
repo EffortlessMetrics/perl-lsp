@@ -916,7 +916,7 @@ fn must_helper_on_url_parse() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     // Demonstrate must_some on string operations
-    let last_segment = must_some(uri.split('/').last());
+    let last_segment = must_some(uri.split('/').next_back());
     assert_eq!(last_segment, "Must.pm");
     Ok(())
 }

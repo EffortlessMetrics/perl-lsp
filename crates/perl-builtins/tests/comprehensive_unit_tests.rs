@@ -17,7 +17,7 @@ use perl_tdd_support::must::must_some;
 
 #[test]
 fn phf_map_is_nonempty() -> Result<(), String> {
-    if BUILTIN_SIGS.len() == 0 {
+    if BUILTIN_SIGS.is_empty() {
         return Err("BUILTIN_SIGS should not be empty".into());
     }
     Ok(())
@@ -390,7 +390,7 @@ fn is_builtin_case_sensitive() -> Result<(), String> {
 #[test]
 fn get_param_names_returns_correct_params_for_print() -> Result<(), String> {
     let params = get_param_names("print");
-    if params != &["FILEHANDLE", "LIST"] {
+    if params != ["FILEHANDLE", "LIST"] {
         return Err(format!("Unexpected params for print: {params:?}"));
     }
     Ok(())
@@ -399,7 +399,7 @@ fn get_param_names_returns_correct_params_for_print() -> Result<(), String> {
 #[test]
 fn get_param_names_returns_correct_params_for_open() -> Result<(), String> {
     let params = get_param_names("open");
-    if params != &["FILEHANDLE", "MODE", "FILENAME"] {
+    if params != ["FILEHANDLE", "MODE", "FILENAME"] {
         return Err(format!("Unexpected params for open: {params:?}"));
     }
     Ok(())
@@ -408,7 +408,7 @@ fn get_param_names_returns_correct_params_for_open() -> Result<(), String> {
 #[test]
 fn get_param_names_returns_correct_params_for_substr() -> Result<(), String> {
     let params = get_param_names("substr");
-    if params != &["EXPR", "OFFSET", "LENGTH", "REPLACEMENT"] {
+    if params != ["EXPR", "OFFSET", "LENGTH", "REPLACEMENT"] {
         return Err(format!("Unexpected params for substr: {params:?}"));
     }
     Ok(())
@@ -417,7 +417,7 @@ fn get_param_names_returns_correct_params_for_substr() -> Result<(), String> {
 #[test]
 fn get_param_names_returns_correct_params_for_splice() -> Result<(), String> {
     let params = get_param_names("splice");
-    if params != &["ARRAY", "OFFSET", "LENGTH", "LIST"] {
+    if params != ["ARRAY", "OFFSET", "LENGTH", "LIST"] {
         return Err(format!("Unexpected params for splice: {params:?}"));
     }
     Ok(())
@@ -455,7 +455,7 @@ fn get_param_names_returns_empty_for_empty_string() -> Result<(), String> {
 #[test]
 fn get_param_names_file_test_operator() -> Result<(), String> {
     let params = get_param_names("-e");
-    if params != &["FILE"] {
+    if params != ["FILE"] {
         return Err(format!("Unexpected params for -e: {params:?}"));
     }
     Ok(())
@@ -1187,7 +1187,7 @@ fn specific_signature_splice_variants_ordered() -> Result<(), String> {
 #[test]
 fn specific_phf_params_atan2() -> Result<(), String> {
     let params = get_param_names("atan2");
-    if params != &["Y", "X"] {
+    if params != ["Y", "X"] {
         return Err(format!("atan2 params should be [Y, X], got {params:?}"));
     }
     Ok(())
@@ -1196,7 +1196,7 @@ fn specific_phf_params_atan2() -> Result<(), String> {
 #[test]
 fn specific_phf_params_socketpair() -> Result<(), String> {
     let params = get_param_names("socketpair");
-    if params != &["SOCKET1", "SOCKET2", "DOMAIN", "TYPE", "PROTOCOL"] {
+    if params != ["SOCKET1", "SOCKET2", "DOMAIN", "TYPE", "PROTOCOL"] {
         return Err(format!("socketpair params wrong: {params:?}"));
     }
     Ok(())
@@ -1205,7 +1205,7 @@ fn specific_phf_params_socketpair() -> Result<(), String> {
 #[test]
 fn specific_phf_params_bless() -> Result<(), String> {
     let params = get_param_names("bless");
-    if params != &["REF", "CLASSNAME"] {
+    if params != ["REF", "CLASSNAME"] {
         return Err(format!("bless params should be [REF, CLASSNAME], got {params:?}"));
     }
     Ok(())
@@ -1214,7 +1214,7 @@ fn specific_phf_params_bless() -> Result<(), String> {
 #[test]
 fn specific_phf_params_use() -> Result<(), String> {
     let params = get_param_names("use");
-    if params != &["MODULE", "VERSION", "LIST"] {
+    if params != ["MODULE", "VERSION", "LIST"] {
         return Err(format!("use params should be [MODULE, VERSION, LIST], got {params:?}"));
     }
     Ok(())

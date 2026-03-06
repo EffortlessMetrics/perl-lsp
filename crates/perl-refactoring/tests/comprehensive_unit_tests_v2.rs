@@ -14,8 +14,7 @@ use perl_refactoring::import_optimizer::ImportOptimizer;
 use perl_refactoring::modernize::PerlModernizer as LegacyModernizer;
 use perl_refactoring::modernize_refactored::PerlModernizer as RefactoredModernizer;
 use perl_refactoring::refactor::refactoring::{
-    BackupCleanupResult, ModernizationPattern, RefactoringConfig, RefactoringEngine,
-    RefactoringResult, RefactoringScope, RefactoringType,
+    ModernizationPattern, RefactoringConfig, RefactoringEngine, RefactoringScope, RefactoringType,
 };
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -1232,10 +1231,7 @@ fn validate_rename_block_scope_nonexistent_file() -> Result<(), Box<dyn std::err
 #[test]
 fn validate_fileset_scope_exceeds_limit() -> Result<(), Box<dyn std::error::Error>> {
     let files: Vec<_> = (0..5)
-        .map(|i| {
-            let f = temp_perl(&format!("my $v{} = {};", i, i));
-            f.map(|(tf, p)| (tf, p))
-        })
+        .map(|i| temp_perl(&format!("my $v{} = {};", i, i)))
         .collect::<Result<Vec<_>, _>>()?;
 
     let paths: Vec<_> = files.iter().map(|(_, p)| p.clone()).collect();

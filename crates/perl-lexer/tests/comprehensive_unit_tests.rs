@@ -28,7 +28,7 @@ fn first_token(input: &str) -> Option<Token> {
     PerlLexer::new(input).next_token()
 }
 
-fn token_types(input: &str) -> Vec<String> {
+fn _token_types(input: &str) -> Vec<String> {
     tokens(input).iter().map(|t| format!("{:?}", std::mem::discriminant(&t.token_type))).collect()
 }
 
@@ -502,7 +502,7 @@ fn special_variables() -> R {
     let specials = ["$_", "$!", "$@", "$0", "$$", "$\\", "$,", "$/"];
     for sv in &specials {
         let toks = tokens(sv);
-        assert!(toks.len() >= 1, "expected at least one token for '{}'", sv);
+        assert!(!toks.is_empty(), "expected at least one token for '{}'", sv);
     }
     Ok(())
 }
@@ -1311,7 +1311,7 @@ fn deeply_nested_parens() {
 fn comment_line() -> R {
     let input = "# this is a comment\nmy $x;";
     let toks = tokens(input);
-    let first = toks.first().ok_or("no tokens")?;
+    let _first = toks.first().ok_or("no tokens")?;
     // The comment may be skipped or returned
     let has_keyword =
         toks.iter().any(|t| matches!(&t.token_type, TokenType::Keyword(k) if k.as_ref() == "my"));
@@ -1459,7 +1459,7 @@ fn format_body_with_dot_terminator() -> R {
     lexer.enter_format_mode();
     let tok = lexer.next_token().ok_or("expected format body")?;
     if let TokenType::FormatBody(ref body) = tok.token_type {
-        assert!(body.len() > 0 || tok.text.len() > 0);
+        assert!(!body.is_empty() || !tok.text.is_empty());
     }
     Ok(())
 }

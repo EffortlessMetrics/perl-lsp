@@ -345,8 +345,6 @@ mod on_type_formatting_tests {
         let text = "    my $x = 1;";
         let edits = compute_on_type_edit(text, 0, 14, ';');
         assert!(edits.is_some(), "semicolon should produce edits");
-        let edits = edits;
-        assert!(edits.is_some());
     }
 
     #[test]

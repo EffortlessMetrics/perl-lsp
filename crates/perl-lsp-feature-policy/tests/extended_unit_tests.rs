@@ -2,6 +2,7 @@
 //!
 //! These tests provide comprehensive coverage of edge cases, error conditions,
 //! and detailed behavior verification across all public APIs.
+#![allow(clippy::expect_used)]
 
 use perl_lsp_feature_policy::{
     FeatureProfile, catalog_advertised_feature_ids, feature_ids_from_flags, flags_for_profile,
@@ -292,7 +293,7 @@ fn build_flags_no_negative_flags() {
 fn runtime_flags_preserves_non_formatting_flags() {
     for &profile in FeatureProfile::all() {
         let base = profile.build_flags();
-        let runtime_true = profile.runtime_flags(true);
+        let _runtime_true = profile.runtime_flags(true);
         let runtime_false = profile.runtime_flags(false);
 
         // Formatting is the only thing affected by perltidy
@@ -403,7 +404,7 @@ fn as_str_never_empty() {
 fn as_str_is_ascii() {
     for &profile in FeatureProfile::all() {
         let s = profile.as_str();
-        assert!(s.chars().all(|c| c.is_ascii()));
+        assert!(s.is_ascii());
     }
 }
 
@@ -694,7 +695,7 @@ fn full_pipeline_ga_lock() {
     // All public APIs should work together
     let flags = profile.build_flags();
     let ids = feature_ids_from_flags(&flags);
-    let advertised = profile.advertised_features();
+    let _advertised = profile.advertised_features();
     let catalog_ids = catalog_advertised_feature_ids(profile);
 
     // All should be non-empty
@@ -715,12 +716,12 @@ fn full_pipeline_production() {
     let profile = FeatureProfile::Production;
 
     let runtime_flags_with_tool = profile.runtime_flags(true);
-    let runtime_flags_no_tool = profile.runtime_flags(false);
+    let _runtime_flags_no_tool = profile.runtime_flags(false);
 
     assert!(runtime_flags_with_tool.formatting);
 
     let advertised_with_tool = profile.runtime_advertised_features(true);
-    let advertised_no_tool = profile.runtime_advertised_features(false);
+    let _advertised_no_tool = profile.runtime_advertised_features(false);
 
     assert!(advertised_with_tool.formatting);
 
@@ -868,7 +869,7 @@ fn perltidy_toggle_affects_formatting_only() {
         let base = profile.build_flags();
 
         // The only difference should be formatting-related flags
-        let with_ids = with_tool.to_feature_ids();
+        let _with_ids = with_tool.to_feature_ids();
         let without_ids = without_tool.to_feature_ids();
         let base_ids = base.to_feature_ids();
 

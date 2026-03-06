@@ -2,6 +2,7 @@
 //!
 //! These tests complement comprehensive_unit_tests.rs by covering:
 //! - std::error::Error trait implementation
+#![allow(clippy::panic)]
 //! - ParseResult type alias usage
 //! - Multi-step BudgetTracker workflows
 //! - ParseOutput with complex diagnostics
@@ -569,7 +570,7 @@ fn make_error_node(start: usize, end: usize) -> perl_ast::Node {
 
 #[test]
 fn classifier_default_trait() {
-    let c = ErrorClassifier::default();
+    let c = ErrorClassifier;
     // Just verify it works the same as new()
     let source = "valid;";
     let node = make_error_node(0, 1);

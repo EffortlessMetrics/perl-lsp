@@ -70,7 +70,7 @@ fn find_statement_start_position_beyond_length() {
     let src = "my $x = 1;";
     // Position beyond the string should saturate
     let pos = src.len() + 100;
-    assert!(find_statement_start(src, pos) >= 0);
+    let _ = find_statement_start(src, pos); // should not panic
 }
 
 #[test]

@@ -393,7 +393,7 @@ fn mock_runtime_alternating_success_failure() -> Result<(), Box<dyn std::error::
         if i % 2 == 0 {
             runtime.add_response(MockResponse::success(format!("ok{}", i).into_bytes()));
         } else {
-            runtime.add_response(MockResponse::failure(format!("err{}", i).into_bytes(), i as i32));
+            runtime.add_response(MockResponse::failure(format!("err{}", i).into_bytes(), i));
         }
     }
 
