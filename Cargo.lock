@@ -1105,9 +1105,9 @@ dependencies = [
 
 [[package]]
 name = "inotify"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f37dccff2791ab604f9babef0ba14fbe0be30bd368dc541e2b08d07c8aa908f3"
+checksum = "bd5b3eaf1a28b758ac0faa5a4254e8ab2705605496f1b1f3fbbc3988ad73d199"
 dependencies = [
  "bitflags 2.11.0",
  "inotify-sys",
@@ -1844,6 +1844,7 @@ dependencies = [
  "perl-lsp-ast-utils",
  "perl-lsp-diagnostics",
  "perl-lsp-rename",
+ "perl-lsp-text-utils",
  "perl-parser-core",
  "perl-source-editing",
  "perl-tdd-support",
@@ -2140,6 +2141,10 @@ dependencies = [
 
 [[package]]
 name = "perl-lsp-symbol-query"
+version = "0.10.0"
+
+[[package]]
+name = "perl-lsp-text-utils"
 version = "0.10.0"
 
 [[package]]
