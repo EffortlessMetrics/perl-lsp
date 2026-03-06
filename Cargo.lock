@@ -1634,10 +1634,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-dap-value"
+version = "0.10.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "perl-dap-variables"
 version = "0.10.0"
 dependencies = [
  "once_cell",
+ "perl-dap-value",
  "perl-tdd-support",
  "regex",
  "serde",

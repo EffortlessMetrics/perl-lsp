@@ -14,6 +14,8 @@ keywords = ["perl", "dap", "debug", "variables", "rendering"]
 categories = ["development-tools::debugging", "development-tools"]
 
 [dependencies]
+perl-dap-value = { workspace = true }
+
 # Serialization for DAP protocol
 serde = { version = "1.0", features = ["derive"] }
 

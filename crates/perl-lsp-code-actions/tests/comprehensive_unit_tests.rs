@@ -459,8 +459,7 @@ fn empty_diagnostics_still_returns_refactoring_actions() {
     let actions = parse_and_get_actions(src, &[]);
 
     // Should still contain refactoring/enhanced actions (pragmas, extract, etc.)
-    // The exact count varies but it should not panic
-    assert!(actions.len() >= 0);
+    assert!(!actions.is_empty());
 }
 
 #[test]

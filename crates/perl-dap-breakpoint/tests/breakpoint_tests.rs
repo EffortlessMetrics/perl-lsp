@@ -188,7 +188,8 @@ fn line_zero_out_of_range() -> Result<(), Box<dyn std::error::Error>> {
     let result = v.validate(0);
     // Line 0 maps to index -1 clamped to 0, same as line 1
     // The code does `(line - 1).max(0)` so line 0 → index 0 → line 1 content
-    assert!(result.verified || !result.verified); // just ensure no crash
+    assert!(result.verified);
+    assert_eq!(result.line, 0);
     Ok(())
 }
 
@@ -198,7 +199,8 @@ fn negative_line_number() -> Result<(), Box<dyn std::error::Error>> {
     let result = v.validate(-5);
     // Negative lines: (-5 - 1).max(0) = 0, maps to first line
     // Should not crash
-    assert!(result.verified || !result.verified);
+    assert!(result.verified);
+    assert_eq!(result.line, -5);
     Ok(())
 }
 
@@ -381,7 +383,7 @@ fn breakpoint_error_implements_error_trait() -> Result<(), Box<dyn std::error::E
 fn validation_reason_clone_copy_eq() -> Result<(), Box<dyn std::error::Error>> {
     let r = ValidationReason::BlankLine;
     let r2 = r; // Copy
-    let r3 = r.clone(); // Clone
+    let r3 = r; // Copy
     assert_eq!(r2, r3); // Eq
     assert_eq!(r, ValidationReason::BlankLine);
     assert_ne!(r, ValidationReason::CommentLine);
