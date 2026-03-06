@@ -84,7 +84,9 @@
         "runtime": "node",
         "configurationAttributes": {
           "launch": {
-            "required": ["program"],
+            "required": [
+              "program"
+            ],
             "properties": {
               "program": {
                 "type": "string",
@@ -177,7 +179,11 @@
       "properties": {
         "perl-lsp.channel": {
           "type": "string",
-          "enum": ["latest", "stable", "tag"],
+          "enum": [
+            "latest",
+            "stable",
+            "tag"
+          ],
           "default": "latest",
           "markdownDescription": "Release channel: `latest` for newest release, `stable` for latest stable, `tag` for specific version"
         },
@@ -452,15 +458,15 @@
     "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package"
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.1",
     "adm-zip": "^0.5.16",
-    "tar": "^7.5.9"
+    "tar": "^7.5.10",
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
-    "@types/node": "^25.3.3",
-    "@types/vscode": "^1.88.0",
     "@types/adm-zip": "^0.5.7",
+    "@types/node": "^25.3.3",
     "@types/tar": "^7.0.87",
+    "@types/vscode": "^1.88.0",
     "@vscode/vsce": "^3.7.1",
     "typescript": "^5.9.3"
   }
