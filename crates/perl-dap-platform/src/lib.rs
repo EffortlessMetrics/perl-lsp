@@ -93,30 +93,6 @@ pub fn setup_environment(include_paths: &[PathBuf]) -> HashMap<String, String> {
     env
 }
 
-/// Format command-line arguments for platform-specific shells.
-pub fn format_command_args(args: &[String]) -> Vec<String> {
-    args.iter()
-        .map(|arg| {
-            if arg.contains(' ') {
-                #[cfg(windows)]
-                {
-                    format!("\"{}\"", arg.replace('"', "\\\""))
-                }
-                #[cfg(not(windows))]
-                {
-                    if arg.contains('\'') {
-                        format!("\"{}\"", arg.replace('"', "\\\""))
-                    } else {
-                        format!("'{}'", arg)
-                    }
-                }
-            } else {
-                arg.clone()
-            }
-        })
-        .collect()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,13 +122,5 @@ mod tests {
         let env =
             setup_environment(&[PathBuf::from("/workspace/lib"), PathBuf::from("/custom/lib")]);
         assert!(env.contains_key("PERL5LIB"));
-    }
-
-    #[test]
-    fn test_format_command_args_with_spaces() {
-        let args = vec!["file with spaces.txt".to_string()];
-        let formatted = format_command_args(&args);
-        assert_eq!(formatted.len(), 1);
-        assert!(formatted[0].contains("file with spaces.txt"));
     }
 }
