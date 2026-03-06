@@ -45,6 +45,7 @@ members = [
     "crates/perl-lsp-feature-governance",
     "crates/perl-lsp-launcher",
     "crates/perl-lsp-navigation",
+    "crates/perl-lsp-document-links",
     "crates/perl-lsp-completion",
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-ast-utils",
@@ -170,6 +171,7 @@ allow = [
 
     # Tier 4 — LSP providers
     "perl-lsp-navigation",
+    "perl-lsp-document-links",
     "perl-lsp-tooling",
     "perl-lsp-formatting-types",
     "perl-lsp-formatting",
@@ -282,6 +284,7 @@ perl-text-line = { path = "crates/perl-text-line", version = "0.10.0" }
 perl-source-editing = { path = "crates/perl-source-editing", version = "0.10.0" }
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.10.0" }
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.10.0" }
+perl-lsp-document-links = { path = "crates/perl-lsp-document-links", version = "0.10.0" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
 perl-lsp-ast-utils = { path = "crates/perl-lsp-ast-utils", version = "0.10.0" }
 perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.10.0" }

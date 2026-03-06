@@ -1,7 +1,12 @@
-//! Document links provider for LSP protocol compatibility.
+//! Document links provider for Perl LSP protocol compatibility.
 //!
-//! This module provides document link detection for Perl source files,
+//! This crate provides document link detection for Perl source files,
 //! identifying `use`, `require` module statements, and file includes.
+
+#![deny(unsafe_code)]
+#![warn(rust_2018_idioms)]
+#![warn(missing_docs)]
+#![warn(clippy::all)]
 
 use perl_module_import::{ModuleImportKind, parse_module_import_head};
 use perl_module_path::module_name_to_path;
@@ -13,16 +18,7 @@ use url::Url;
 /// This function scans the text for `use` and `require` statements and creates
 /// document links for them. Links are returned with a `data` field containing
 /// metadata for deferred resolution via `documentLink/resolve`.
-///
-/// # Arguments
-///
-/// * `uri` - The URI of the document being processed.
-/// * `text` - The content of the document.
-/// * `roots` - A slice of workspace root URLs to resolve modules against.
-///
-/// # Returns
-///
-/// A vector of `serde_json::Value` objects, each representing a document link.
+#[must_use]
 pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
     let mut out = Vec::new();
 
@@ -43,7 +39,6 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
                     }
                 }
                 ModuleImportKind::Require => {
-                    // Check if it's a module name (not a quoted file path)
                     if !import.token.starts_with('"')
                         && !import.token.starts_with('\'')
                         && import.token.contains("::")
@@ -63,19 +58,16 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
             }
         }
 
-        // naive "require 'Foo/Bar.pm';" or require "Foo/Bar.pm";
         if let Some(idx) = line.find("require ") {
             let rest = &line[idx + 8..];
             if let Some(start) = rest.find('"').or_else(|| rest.find('\'')) {
-                // Safety: find returns byte offset, use get() for safe char access
                 let quote_char = match rest.get(start..).and_then(|s| s.chars().next()) {
                     Some(c) => c,
-                    None => continue, // Skip if invalid offset
+                    None => continue,
                 };
                 let s = start + 1;
                 if let Some(end) = rest[s..].find(quote_char) {
                     let req = &rest[s..s + end];
-                    // Defer file resolution to documentLink/resolve
                     let col_start = (idx + 8 + start + 1) as u32;
                     let col_end = (idx + 8 + start + 1 + end) as u32;
                     out.push(json!({
@@ -97,10 +89,6 @@ pub fn compute_links(uri: &str, text: &str, _roots: &[Url]) -> Vec<Value> {
     out
 }
 
-/// Create a document link with deferred target resolution
-///
-/// Returns a link structure with a `data` field that will be used
-/// by `documentLink/resolve` to compute the actual target URI.
 fn make_deferred_module_link(
     uri: &str,
     line: u32,
@@ -166,31 +154,26 @@ fn is_pragma(pkg: &str) -> bool {
     )
 }
 
-#[allow(dead_code)] // Reserved for future document link resolution
+#[allow(dead_code)]
 fn resolve_pkg(pkg: &str, roots: &[Url]) -> Option<String> {
     let rel = module_name_to_path(pkg);
-    // Try each workspace root
     if let Some(base) = roots.first() {
         let mut u = base.clone();
         let mut p = u.path().to_string();
         if !p.ends_with('/') {
             p.push('/');
         }
-        // Check common Perl lib paths - return first match
         if let Some(lib_dir) = ["lib/", "blib/lib/", ""].first() {
             let full_path = format!("{}{}{}", p, lib_dir, rel);
             u.set_path(&full_path);
-            // In real implementation, check if file exists
-            // For now, just return first possibility
             return Some(u.to_string());
         }
     }
     None
 }
 
-#[allow(dead_code)] // Reserved for future document link resolution
+#[allow(dead_code)]
 fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
-    // Try to resolve relative to workspace roots - return first match
     if let Some(base) = roots.first() {
         let mut u = base.clone();
         let mut p = u.path().to_string();
@@ -204,9 +187,8 @@ fn resolve_file(path: &str, roots: &[Url]) -> Option<String> {
     None
 }
 
-#[allow(dead_code)] // Reserved for future document link resolution
+#[allow(dead_code)]
 fn make_link(_src: &str, line: u32, line_text: &str, pkg: &str, target: String) -> Option<Value> {
-    // Find the package name in the line to get exact column positions
     if let Some(idx) = line_text.find(pkg) {
         let start = idx as u32;
         let end = (idx + pkg.len()) as u32;
