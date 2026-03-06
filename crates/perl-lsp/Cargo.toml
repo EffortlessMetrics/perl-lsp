@@ -42,6 +42,7 @@ perl-lsp-rename = { workspace = true }
 perl-lsp-semantic-tokens = { workspace = true }
 perl-lsp-launcher = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
+perl-symbol-cursor = { workspace = true }
 perl-module-path = { workspace = true }
 perl-module-reference = { workspace = true }
 perl-module-rename = { workspace = true }

@@ -10,6 +10,7 @@ use perl_module_reference::extract_module_reference as extract_module_reference_
 
 // Re-export engine utilities
 pub use perl_parser::util::{code_slice, find_data_marker_byte_lexed};
+pub use perl_symbol_cursor::{byte_offset_utf16, is_modchar, is_word_boundary, token_under_cursor};
 
 // =============================================================================
 // Panic-free character accessors (Issue #143)
@@ -67,20 +68,6 @@ pub fn byte_to_utf16_col(line_text: &str, byte_pos: usize) -> usize {
     units
 }
 
-/// Convert UTF-16 column position to byte offset
-pub fn byte_offset_utf16(line_text: &str, col_utf16: usize) -> usize {
-    let mut units = 0;
-    for (i, ch) in line_text.char_indices() {
-        if units == col_utf16 {
-            return i;
-        }
-        // UTF-16 encoding: chars >= U+10000 use 2 units (surrogate pairs)
-        let add = if ch as u32 >= 0x10000 { 2 } else { 1 };
-        units += add;
-    }
-    line_text.len()
-}
-
 /// Convert byte offset to line and column
 pub fn byte_to_line_col(source: &str, offset: usize) -> (u32, u32) {
     let mut line = 0;
@@ -99,64 +86,6 @@ pub fn byte_to_line_col(source: &str, offset: usize) -> (u32, u32) {
     }
 
     (line, col)
-}
-
-/// Helper character check for Perl identifiers
-pub fn is_modchar(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b':' || b == b'_'
-}
-
-/// Extract token at cursor position (UTF-16 aware)
-pub fn token_under_cursor(text: &str, line: usize, col_utf16: usize) -> Option<String> {
-    let l = text.lines().nth(line)?;
-    let byte_pos = byte_offset_utf16(l, col_utf16);
-    let bytes = l.as_bytes();
-
-    if byte_pos >= bytes.len() {
-        return None;
-    }
-
-    // Expand to a "word" containing :: and \w
-    // Also include sigils if we're on or after one
-    let mut s = byte_pos;
-    let mut e = byte_pos;
-
-    // Expand left - if we hit a sigil, include it
-    while s > 0 && is_modchar(bytes[s - 1]) {
-        s -= 1;
-    }
-    if s > 0
-        && (bytes[s - 1] == b'$'
-            || bytes[s - 1] == b'@'
-            || bytes[s - 1] == b'%'
-            || bytes[s - 1] == b'&'
-            || bytes[s - 1] == b'*')
-    {
-        s -= 1;
-    }
-
-    // Expand right
-    while e < bytes.len() && is_modchar(bytes[e]) {
-        e += 1;
-    }
-
-    Some(l[s..e].to_string())
-}
-
-/// Check if position is at word boundary (for accurate reference matching)
-pub fn is_word_boundary(text: &[u8], pos: usize, word_len: usize) -> bool {
-    // Check left boundary (before the sigil if present)
-    if pos > 0 && is_modchar(text[pos - 1]) {
-        return false;
-    }
-
-    // Check right boundary (after the identifier part)
-    let end_pos = pos + word_len;
-    if end_pos < text.len() && is_modchar(text[end_pos]) {
-        return false;
-    }
-
-    true
 }
 
 /// Find matching closing parenthesis
