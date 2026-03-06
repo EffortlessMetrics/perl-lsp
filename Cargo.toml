@@ -74,6 +74,7 @@ members = [
     "crates/perl-content-length-framing",
     "crates/perl-uri",
     "crates/perl-path-security",
+    "crates/perl-percentile",
     "crates/perl-workspace-discovery",
     "crates/perl-corpus",
     "crates/perl-lsp",
@@ -112,6 +113,7 @@ allow = [
     "perl-builtins",
     "perl-builtins-phf",
     "perl-content-length-framing",
+    "perl-percentile",
     "perl-subprocess-runtime",
     "perl-keywords",
     "perl-regex",
@@ -267,6 +269,7 @@ perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
 perl-lsp-ast-utils = { path = "crates/perl-lsp-ast-utils", version = "0.10.0" }
 perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
 perl-path-security = { path = "crates/perl-path-security", version = "0.10.0" }
+perl-percentile = { path = "crates/perl-percentile", version = "0.10.0" }
 perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.10.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.10.0" }
 perl-dap = { path = "crates/perl-dap", version = "0.10.0" }
