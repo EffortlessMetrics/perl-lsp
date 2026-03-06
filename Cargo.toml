@@ -49,6 +49,7 @@ members = [
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-ast-utils",
     "crates/perl-lsp-cancellation",
+    "crates/perl-lsp-input-validation",
     "crates/perl-lsp-limits",
     "crates/perl-lsp-uri",
     "crates/perl-lsp-feature-policy",
@@ -191,6 +192,7 @@ allow = [
 
     # Tier 5 — LSP governance and infrastructure
     "perl-lsp-cancellation",
+    "perl-lsp-input-validation",
     "perl-lsp-feature-ids",
     "perl-lsp-capability-map",
     "perl-lsp-feature-contracts",
@@ -275,7 +277,8 @@ perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
 perl-lsp-ast-utils = { path = "crates/perl-lsp-ast-utils", version = "0.10.0" }
 perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.10.0" }
-perl-path-security = { path = "crates/perl-path-security", version = "0.10.0" }
+perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.10.0" }
+perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
 perl-percentile = { path = "crates/perl-percentile", version = "0.10.0" }
 perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.10.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.10.0" }
