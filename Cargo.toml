@@ -42,6 +42,7 @@ members = [
     "crates/perl-lsp-feature-ids",
     "crates/perl-lsp-capability-map",
     "crates/perl-lsp-feature-profile",
+    "crates/perl-lsp-feature-profile-cli",
     "crates/perl-lsp-feature-governance",
     "crates/perl-lsp-launcher",
     "crates/perl-lsp-diagnostic-catalog",
@@ -209,6 +210,7 @@ allow = [
     "perl-lsp-feature-contracts",
     "perl-lsp-feature-flags",
     "perl-lsp-feature-profile",
+    "perl-lsp-feature-profile-cli",
     "perl-lsp-feature-policy",
     "perl-lsp-feature-grid",
     "perl-lsp-feature-governance",
@@ -330,6 +332,7 @@ perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.10.0" }
 perl-lsp-uri = { path = "crates/perl-lsp-uri", version = "0.10.0" }
 perl-lsp-config = { path = "crates/perl-lsp-config", version = "0.10.0" }
 perl-lsp-feature-profile = { path = "crates/perl-lsp-feature-profile", version = "0.10.0" }
+perl-lsp-feature-profile-cli = { path = "crates/perl-lsp-feature-profile-cli", version = "0.10.0" }
 perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "0.10.0" }
 perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", version = "0.10.0" }
 perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.10.0" }
