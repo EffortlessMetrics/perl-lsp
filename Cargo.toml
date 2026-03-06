@@ -78,6 +78,7 @@ members = [
     "crates/perl-keywords",
     "crates/perl-source-file",
     "crates/perl-content-length-framing",
+    "crates/perl-uri-classify",
     "crates/perl-uri",
     "crates/perl-path-security",
     "crates/perl-percentile",
@@ -146,7 +147,8 @@ allow = [
     "perl-symbol-cursor",
     "perl-symbol-table",
     "perl-symbol-index",
-    "perl-workspace-index-slo",
+    "perl-uri-classify",
+    "perl-uri",
 
     # Tier 3 — Analysis and indexing
     "perl-workspace-index",
@@ -282,7 +284,7 @@ perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.10.0" }
 perl-lsp-ast-utils = { path = "crates/perl-lsp-ast-utils", version = "0.10.0" }
 perl-lsp-symbol-query = { path = "crates/perl-lsp-symbol-query", version = "0.10.0" }
 perl-lsp-input-validation = { path = "crates/perl-lsp-input-validation", version = "0.10.0" }
-perl-uri = { path = "crates/perl-uri", version = "0.10.0" }
+perl-uri-classify = { path = "crates/perl-uri-classify", version = "0.10.0" }
 perl-percentile = { path = "crates/perl-percentile", version = "0.10.0" }
 perl-workspace-discovery = { path = "crates/perl-workspace-discovery", version = "0.10.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.10.0" }

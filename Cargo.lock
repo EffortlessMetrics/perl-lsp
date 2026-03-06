@@ -2541,7 +2541,15 @@ name = "perl-uri"
 version = "0.10.0"
 dependencies = [
  "perl-tdd-support",
+ "perl-uri-classify",
  "tempfile",
+ "url",
+]
+
+[[package]]
+name = "perl-uri-classify"
+version = "0.10.0"
+dependencies = [
  "url",
 ]
 
