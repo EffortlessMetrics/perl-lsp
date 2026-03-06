@@ -3,7 +3,7 @@
 //! This module provides functionality for removing duplicate diagnostics
 //! to avoid reporting the same issue multiple times.
 
-use super::types::Diagnostic;
+use perl_lsp_diagnostic_types::Diagnostic;
 
 /// De-duplicate diagnostics to avoid reporting the same issue twice
 ///
