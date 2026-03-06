@@ -1990,6 +1990,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-performance"
+version = "0.10.0"
+dependencies = [
+ "moka",
+ "perl-parser-core",
+]
+
+[[package]]
 name = "perl-lsp-protocol"
 version = "0.10.0"
 dependencies = [
@@ -2051,7 +2059,7 @@ version = "0.10.0"
 dependencies = [
  "criterion",
  "lsp-types",
- "moka",
+ "perl-lsp-performance",
  "perl-parser-core",
  "perl-subprocess-runtime",
  "perl-tdd-support",

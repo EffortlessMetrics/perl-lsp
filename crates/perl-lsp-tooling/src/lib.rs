@@ -26,7 +26,9 @@
 #![allow(clippy::empty_line_after_outer_attr)]
 
 /// Performance optimizations for large projects.
-pub mod performance;
+pub mod performance {
+    pub use perl_lsp_performance::*;
+}
 /// Perl::Critic integration for code quality analysis.
 pub mod perl_critic;
 /// Perltidy integration for code formatting.
