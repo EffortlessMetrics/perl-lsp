@@ -2078,6 +2078,7 @@ dependencies = [
  "moka",
  "perl-parser-core",
  "perl-subprocess-runtime",
+ "perl-symbol-index",
  "perl-tdd-support",
  "serde",
  "serde_json",
@@ -2405,6 +2406,10 @@ version = "0.10.0"
 dependencies = [
  "perl-tdd-support",
 ]
+
+[[package]]
+name = "perl-symbol-index"
+version = "0.10.0"
 
 [[package]]
 name = "perl-symbol-table"
