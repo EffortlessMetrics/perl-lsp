@@ -1,24 +1,12 @@
 #!/bin/bash
-# CI script to test all heredoc features and ensure no regression
-# This script tests all the heredoc improvements:
-# - Multi-line statement heredocs
-# - Statement boundary tracking
-# - Builtin list operators (print, say, warn, die)
-
 set -e
 
-echo "🧪 Running comprehensive heredoc tests..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BIN="$REPO_ROOT/target/debug/perl-ci-hygiene"
 
-# Run using xtask if available
-if command -v cargo xtask &> /dev/null; then
-    echo "Using cargo xtask..."
-    cargo xtask test-heredoc --release
-else
-    echo "Running tests directly..."
-    # Run each heredoc test suite
-    cargo test --features pure-rust --release --test heredoc_missing_features_tests
-    cargo test --features pure-rust --release --test heredoc_integration_tests
-    cargo test --features pure-rust --release --test comprehensive_heredoc_tests
+if [ -x "$BIN" ]; then
+  exec "$BIN" test-heredocs "$@"
 fi
 
-echo "✅ All heredoc tests passed!"
+exec cargo run --quiet --manifest-path "$REPO_ROOT/Cargo.toml" -p perl-ci-hygiene -- test-heredocs "$@"

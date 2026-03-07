@@ -111,6 +111,7 @@ members = [
     "crates/perl-ts-heredoc-parser",
     "crates/perl-ts-partial-ast",
     "crates/perl-ts-advanced-parsers",
+    "crates/perl-ci-hygiene",
     "xtask",
 ]
 

@@ -1,103 +1,12 @@
 #!/usr/bin/env bash
-# Local quality check script - run before committing/pushing
-# This mirrors CI checks to catch issues early
-
 set -euo pipefail
 
-YELLOW='\033[1;33m'
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BIN="$REPO_ROOT/target/debug/perl-ci-hygiene"
 
-echo -e "${YELLOW}=== Running Local Quality Checks ===${NC}"
-echo ""
-
-# 1. Format check
-echo -e "${YELLOW}1. Format check...${NC}"
-if cargo fmt --all -- --check; then
-    echo -e "${GREEN}✓ Format check passed${NC}"
-else
-    echo -e "${RED}✗ Format check failed - run 'cargo fmt --all' to fix${NC}"
-    exit 1
-fi
-echo ""
-
-# 2. Clippy (strict on first-party crates)
-echo -e "${YELLOW}2. Clippy analysis (strict on first-party)...${NC}"
-CLIPPY_FAILED=0
-if ! cargo clippy -p perl-parser --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/clippy-parser.log; then
-    echo -e "${RED}✗ Clippy found issues in perl-parser${NC}"
-    CLIPPY_FAILED=1
-fi
-if ! cargo clippy -p perl-lexer --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/clippy-lexer.log; then
-    echo -e "${RED}✗ Clippy found issues in perl-lexer${NC}"
-    CLIPPY_FAILED=1
+if [ -x "$BIN" ]; then
+  exec "$BIN" check-local "$@"
 fi
 
-if [ $CLIPPY_FAILED -eq 0 ]; then
-    echo -e "${GREEN}✓ Clippy check passed for first-party crates${NC}"
-else
-    exit 1
-fi
-
-# Run smoke check on other crates (non-failing)
-echo -e "${YELLOW}  Running clippy smoke check on vendor crates...${NC}"
-cargo clippy --workspace --all-targets --all-features \
-    --exclude perl-parser \
-    --exclude perl-lexer 2>&1 | head -5 || true
-echo ""
-
-# 3. Documentation
-echo -e "${YELLOW}3. Documentation build...${NC}"
-if RUSTDOCFLAGS="-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls" cargo doc --workspace --no-deps >/dev/null 2>&1; then
-    echo -e "${GREEN}✓ Documentation builds cleanly${NC}"
-else
-    echo -e "${RED}✗ Documentation build failed${NC}"
-    echo "Run with full output: RUSTDOCFLAGS=\"-D rustdoc::broken_intra_doc_links -D rustdoc::bare_urls\" cargo doc --workspace --no-deps"
-    exit 1
-fi
-echo ""
-
-# 4. Tests (workspace, but not examples)
-echo -e "${YELLOW}4. Running tests...${NC}"
-if cargo test --workspace --all-features --quiet; then
-    echo -e "${GREEN}✓ All tests passed${NC}"
-else
-    echo -e "${RED}✗ Tests failed${NC}"
-    exit 1
-fi
-echo ""
-
-# 5. Ignored tests baseline
-echo -e "${YELLOW}5. Checking ignored tests baseline...${NC}"
-if [ -x "./ci/check_ignored.sh" ]; then
-    if ./ci/check_ignored.sh; then
-        echo -e "${GREEN}✓ Ignored tests baseline correct${NC}"
-    else
-        echo -e "${RED}✗ Ignored tests baseline mismatch${NC}"
-        exit 1
-    fi
-else
-    echo -e "${YELLOW}⚠ Skipping ignored tests check (script not found)${NC}"
-fi
-echo ""
-
-# 6. Optional: cargo deny (if available)
-echo -e "${YELLOW}6. Dependency security check...${NC}"
-if command -v cargo-deny &> /dev/null; then
-    if cargo deny check 2>&1 | tee /tmp/deny.log | grep -q "error:"; then
-        echo -e "${RED}✗ Dependency issues found${NC}"
-        cat /tmp/deny.log
-        exit 1
-    else
-        echo -e "${GREEN}✓ Dependencies are secure${NC}"
-    fi
-else
-    echo -e "${YELLOW}⚠ cargo-deny not installed (run: cargo install cargo-deny)${NC}"
-fi
-echo ""
-
-echo -e "${GREEN}=== All Local Checks Passed ===${NC}"
-echo ""
-echo "You can now safely commit/push your changes."
-echo "Pro tip: Install as git pre-push hook: cp ci/check_local.sh .git/hooks/pre-push"
+exec cargo run --quiet --manifest-path "$REPO_ROOT/Cargo.toml" -p perl-ci-hygiene -- check-local "$@"

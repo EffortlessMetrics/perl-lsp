@@ -1,20 +1,12 @@
-#!/bin/bash
-# Test script demonstrating feature catalog override
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+BIN="${REPO_ROOT}/target/debug/perl-ci-hygiene"
 
-echo "Testing with minimal features catalog..."
-echo "This disables several normally-advertised features"
-echo
+if [ -x "$BIN" ]; then
+  exec "$BIN" test-with-override
+fi
 
-# Run with override catalog
-FEATURES_TOML_OVERRIDE=crates/perl-parser/tests/data/features_minimal.toml \
-    cargo test -p perl-parser --test lsp_feature_gating_test -- --nocapture
-
-echo
-echo "Testing with disabled features catalog..."
-FEATURES_TOML_OVERRIDE=crates/perl-parser/tests/data/features_disabled_test.toml \
-    cargo test -p perl-parser --test lsp_features_snapshot_test -- --nocapture
-
-echo
-echo "✅ Override testing complete!"
+exec cargo run --quiet --manifest-path "$REPO_ROOT/Cargo.toml" -p perl-ci-hygiene -- test-with-override
