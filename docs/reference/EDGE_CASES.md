@@ -51,7 +51,7 @@ Before discussing heredoc edge cases, here are the main parsing limitations:
 ### Design Limitations (mostly fixed, ~0.004% impact)  
 1. **Heredoc-in-string** - `"$prefix<<$end_tag"` - heredocs initiated within interpolated strings
 
-See [KNOWN_LIMITATIONS.md](../KNOWN_LIMITATIONS.md) for details and workarounds.
+See [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) for details and workarounds.
 
 ## Why These Edge Cases Are Hard
 
@@ -365,6 +365,6 @@ let output = TreeSitterAdapter::convert_to_tree_sitter(
 
 - [Implementation Plan](EDGE_CASE_IMPLEMENTATION_PLAN.md) - Original design
 - [Test Coverage](EDGE_CASE_TEST_COVERAGE.md) - Testing details
-- [Tree-sitter Compatibility](TREE_SITTER_COMPATIBILITY.md) - AST format
+- [Tree-sitter Compatibility](../explanation/TREE_SITTER_COMPATIBILITY.md) - AST format
 
 This consolidated documentation supersedes individual edge case files and provides the authoritative reference for edge case handling in the Pure Rust Perl parser.

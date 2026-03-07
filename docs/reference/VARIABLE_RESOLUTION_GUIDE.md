@@ -283,7 +283,7 @@ assert!(issues.is_empty());
 
 - [LSP_ACTUAL_STATUS.md](../LSP_ACTUAL_STATUS.md) - Current LSP feature status
 - [ARCHITECTURE.md](../ARCHITECTURE.md) - Overall system architecture  
-- [docs/EDGE_CASES.md](EDGE_CASES.md) - Edge case handling details
+- [docs/reference/EDGE_CASES.md](EDGE_CASES.md) - Edge case handling details
 - [CLAUDE.md](../CLAUDE.md) - Development guide and feature overview
 
 ---

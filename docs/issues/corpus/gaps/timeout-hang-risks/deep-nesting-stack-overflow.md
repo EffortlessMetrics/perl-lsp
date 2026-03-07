@@ -258,8 +258,8 @@ fn check_depth(&self) -> Result<(), ParseError> {
 ### References
 
 - **Parser Architecture**: `/crates/perl-parser/src/parser.rs` - Parser implementation
-- **Error Handling**: [Error Handling Strategy Guide](docs/ERROR_HANDLING_STRATEGY.md)
-- **Security Development**: [Security Development Guide](docs/SECURITY_DEVELOPMENT_GUIDE.md)
+- **Error Handling**: [Error Handling Strategy Guide](../../../../explanation/ERROR_HANDLING_STRATEGY.md)
+- **Security Development**: [Security Development Guide](../../../../how-to/SECURITY_DEVELOPMENT_GUIDE.md)
 - **Corpus Structure**: See corpus coverage analysis in `/review/corpus-coverage-*.md`
 - **Related Issues**: None currently open
 - **GA Feature Alignment**: Deep nesting is a P0 critical risk with no protection

@@ -1003,8 +1003,8 @@ LSP operations slower than v0.8.x
 - **Upgrade Guide**: This document
 - **Migration Guide**: [docs/MIGRATION.md](MIGRATION.md) (v0.7.x → v0.8.x)
 - **API Docs**: `cargo doc --open`
-- **LSP Status**: [docs/LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)
-- **Roadmap**: [docs/ROADMAP.md](ROADMAP.md)
+- **LSP Status**: [docs/reference/LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md)
+- **Roadmap**: [docs/project/ROADMAP.md](../project/ROADMAP.md)
 
 ### Support Channels
 

@@ -28,10 +28,10 @@ Transform generic agent configurations to align with Perl LSP's specific Integra
 
 **Storage Convention:**
 - `docs/` - Comprehensive documentation following Diátaxis framework
-- `docs/COMMANDS_REFERENCE.md` - Comprehensive build/test commands
-- `docs/LSP_IMPLEMENTATION_GUIDE.md` - LSP server architecture and protocol compliance
-- `docs/INCREMENTAL_PARSING_GUIDE.md` - Performance and parsing implementation
-- `docs/SECURITY_DEVELOPMENT_GUIDE.md` - Enterprise security practices
+- `docs/reference/COMMANDS_REFERENCE.md` - Comprehensive build/test commands
+- `docs/reference/LSP_IMPLEMENTATION_GUIDE.md` - LSP server architecture and protocol compliance
+- `docs/how-to/INCREMENTAL_PARSING_GUIDE.md` - Performance and parsing implementation
+- `docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md` - Enterprise security practices
 - `crates/*/src/` - Workspace implementation: perl-parser, perl-lsp, perl-lexer, perl-corpus, tree-sitter-perl-rs
 - `tests/` - Test fixtures, integration tests, and comprehensive test suites
 - `xtask/src/` - Advanced testing tools and development automation

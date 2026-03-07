@@ -1,6 +1,6 @@
 # perl-module-resolution-uri Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-module-resolution-uri`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-module-resolution-uri`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Deterministic Perl module URI resolution with workspace-safe search behavior

@@ -1,3 +1,3 @@
 # Current Status
 
-{{#include ../../../docs/CURRENT_STATUS.md}}
+{{#include ../../../docs/project/CURRENT_STATUS.md}}

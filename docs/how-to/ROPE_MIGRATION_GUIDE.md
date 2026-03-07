@@ -307,9 +307,9 @@ doc.rope = Rope::from_str(&new_content); // Avoid unless necessary
 If you encounter issues during migration:
 
 1. **Check Documentation**: Review the enhanced documentation in:
-   - [LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md) (Rope section)
-   - [Position Tracking Guide](docs/POSITION_TRACKING_GUIDE.md) (Enhanced APIs)
-   - [Incremental Parsing Guide](docs/INCREMENTAL_PARSING_GUIDE.md) (Rope integration)
+   - [LSP Implementation Guide](../reference/LSP_IMPLEMENTATION_GUIDE.md) (Rope section)
+   - [Position Tracking Guide](../reference/POSITION_TRACKING_GUIDE.md) (Enhanced APIs)
+   - [Incremental Parsing Guide](INCREMENTAL_PARSING_GUIDE.md) (Rope integration)
 
 2. **Run Diagnostic Tests**:
    ```bash

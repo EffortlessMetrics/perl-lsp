@@ -239,4 +239,4 @@ Dual licensed under [MIT License](LICENSE-MIT) or [Apache License 2.0](LICENSE-A
 
 **Try Perl LSP v0.10.0 today and help shape the future of Perl development!**
 
-🚀 [Get Started Now](docs/GETTING_STARTED.md) | 📖 [Documentation](docs/INDEX.md) | 💬 [Community](https://github.com/EffortlessMetrics/perl-lsp/discussions)
+🚀 [Get Started Now](../tutorials/GETTING_STARTED.md) | 📖 [Documentation](docs/INDEX.md) | 💬 [Community](https://github.com/EffortlessMetrics/perl-lsp/discussions)

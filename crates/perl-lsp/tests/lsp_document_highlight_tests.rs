@@ -22,7 +22,7 @@
 //! - Empty array response for non-symbol positions
 //!
 //! Related Documentation:
-//! - docs/LSP_IMPLEMENTATION_GUIDE.md#document-highlight
+//! - docs/reference/LSP_IMPLEMENTATION_GUIDE.md#document-highlight
 //! - crates/perl-parser/src/lsp/server_impl/language/references.rs
 
 mod support;

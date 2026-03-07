@@ -345,6 +345,6 @@ cargo clippy -p perl-parser -- -W missing_docs         # Lint-level enforcement
 
 - **[API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)** - Comprehensive documentation requirements
 - **[ADR-002: API Documentation Infrastructure](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation architecture decisions
-- **[Comprehensive Testing Guide](COMPREHENSIVE_TESTING_GUIDE.md)** - Test framework and validation procedures
+- **[Comprehensive Testing Guide](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md)** - Test framework and validation procedures
 - **[LSP Implementation Guide](LSP_IMPLEMENTATION_GUIDE.md)** - LSP provider documentation requirements
-- **[Performance Preservation Guide](PERFORMANCE_PRESERVATION_GUIDE.md)** - Maintaining revolutionary performance improvements
+- **[Performance Preservation Guide](../how-to/PERFORMANCE_PRESERVATION_GUIDE.md)** - Maintaining revolutionary performance improvements

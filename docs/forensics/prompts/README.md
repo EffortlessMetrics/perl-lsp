@@ -267,8 +267,8 @@ Follow the format of existing prompts for consistency.
 
 ## See Also
 
-- [`../ANALYZER_FRAMEWORK.md`](../../ANALYZER_FRAMEWORK.md) - Framework specification
-- [`../QUALITY_SURFACES.md`](../../QUALITY_SURFACES.md) - Quality surface definitions
+- [`../ANALYZER_FRAMEWORK.md`](../../project/ANALYZER_FRAMEWORK.md) - Framework specification
+- [`../QUALITY_SURFACES.md`](../../project/QUALITY_SURFACES.md) - Quality surface definitions
 - [`../DEVLT_ESTIMATION.md`](../../DEVLT_ESTIMATION.md) - DevLT estimation rubric
-- [`../FORENSICS_SCHEMA.md`](../../FORENSICS_SCHEMA.md) - Full dossier template
-- [`../METRICS_PROVENANCE.md`](../../METRICS_PROVENANCE.md) - Provenance requirements
+- [`../FORENSICS_SCHEMA.md`](../../reference/FORENSICS_SCHEMA.md) - Full dossier template
+- [`../METRICS_PROVENANCE.md`](../../project/METRICS_PROVENANCE.md) - Provenance requirements

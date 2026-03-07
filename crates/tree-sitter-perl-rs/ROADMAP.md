@@ -1,6 +1,6 @@
 # tree-sitter-perl-rs Roadmap
 
-> **Note:** This is the component-specific roadmap for `tree-sitter-perl-rs`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `tree-sitter-perl-rs`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Pure-Rust Pest-based Perl parser with tree-sitter-compatible S-expression output (internal harness)

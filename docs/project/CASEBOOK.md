@@ -358,7 +358,7 @@ Each exhibit shows:
 ## Adding Exhibits
 
 To add an exhibit:
-1. Use Level 2 archaeology from [`FORENSICS_SCHEMA.md`](FORENSICS_SCHEMA.md)
+1. Use Level 2 archaeology from [`FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md)
 2. Identify the "what it proves" in one line
 3. Document the review map (key files)
 4. Link to receipts (test output, gate output, benchmarks)
@@ -375,4 +375,4 @@ See [`forensics/INDEX.md`](forensics/INDEX.md) for the PR inventory.
 - [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md) - Provenance schema for all metrics
 - [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md) - The four quality surfaces
 - [`ANALYZER_FRAMEWORK.md`](ANALYZER_FRAMEWORK.md) - Specialist analyzer specs
-- [`FORENSICS_SCHEMA.md`](FORENSICS_SCHEMA.md) - Full dossier template
+- [`FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - Full dossier template

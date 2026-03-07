@@ -1,6 +1,6 @@
 # perl-uri Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-uri`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-uri`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 URI ↔ filesystem path conversion and normalization utilities for Perl LSP

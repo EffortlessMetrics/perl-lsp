@@ -387,7 +387,7 @@ cargo test -p perl-parser --test mutation_hardening_tests -- --nocapture
 
 ### For New Feature Development
 1. **Write Code**: Implement functionality with comprehensive documentation
-2. **Document APIs**: Follow [API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)
+2. **Document APIs**: Follow [API Documentation Standards](../reference/API_DOCUMENTATION_STANDARDS.md)
 3. **Run Tests**: Execute relevant test suites based on changes
 4. **Validate Quality**: Check documentation and robustness metrics
 5. **Commit**: Ensure all quality gates pass
@@ -439,9 +439,9 @@ cargo test -p perl-parser --test mutation_hardening_tests -- --nocapture
 
 ## Cross-References
 
-- **[API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)**: Documentation quality requirements
+- **[API Documentation Standards](../reference/API_DOCUMENTATION_STANDARDS.md)**: Documentation quality requirements
 - **[Documentation Implementation Strategy](DOCUMENTATION_IMPLEMENTATION_STRATEGY.md)**: Systematic documentation completion plan
-- **[Mutation Testing Methodology](MUTATION_TESTING_METHODOLOGY.md)**: Detailed mutation testing approach
+- **[Mutation Testing Methodology](../reference/MUTATION_TESTING_METHODOLOGY.md)**: Detailed mutation testing approach
 - **[ADR-0002](adr/0002-api-documentation-infrastructure.md)**: Documentation infrastructure decision record
 - **[CLAUDE.md](../CLAUDE.md)**: Essential commands and project overview
 

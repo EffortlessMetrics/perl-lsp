@@ -519,8 +519,8 @@ All binaries include SHA256 checksums in their packages.
 
 ## Additional Resources
 
-- [Roadmap](ROADMAP.md)
-- [Commands Reference](COMMANDS_REFERENCE.md)
-- [API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)
+- [Roadmap](project/ROADMAP.md)
+- [Commands Reference](reference/COMMANDS_REFERENCE.md)
+- [API Documentation Standards](reference/API_DOCUMENTATION_STANDARDS.md)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [crates.io Documentation](https://doc.rust-lang.org/cargo/reference/publishing.html)

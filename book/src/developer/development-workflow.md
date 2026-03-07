@@ -127,7 +127,7 @@ For complex Perl edge cases:
 1. Add detection in `edge_case_handler.rs`
 2. Implement recovery strategy
 3. Add diagnostic information
-4. Update documentation in `docs/EDGE_CASES.md`
+4. Update documentation in `docs/reference/EDGE_CASES.md`
 
 ---
 
@@ -211,7 +211,7 @@ cargo run --features pure-rust --bin parse-rust -- --ast script.pl
 
 ### Architecture
 - `ARCHITECTURE.md`: System design
-- `docs/EDGE_CASES.md`: Edge case handling
+- `docs/reference/EDGE_CASES.md`: Edge case handling
 - `CLAUDE.md`: AI assistant guidance
 
 ---

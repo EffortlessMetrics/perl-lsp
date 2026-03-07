@@ -1,6 +1,6 @@
 # perl-lsp-transport Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-transport`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-transport`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 LSP transport layer with Content-Length message framing for perl-lsp

@@ -21,7 +21,7 @@ PR archaeology extracts actionable patterns from past work:
 
 Quality is the primary output. Budget metrics are secondary.
 
-See [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md) for the four quality surfaces:
+See [`QUALITY_SURFACES.md`](../project/QUALITY_SURFACES.md) for the four quality surfaces:
 - **Maintainability**: boundaries, coupling, complexity
 - **Correctness**: tests, error paths, mutation survival
 - **Governance**: schema alignment, anti-drift, receipts
@@ -396,7 +396,7 @@ Each action item should include:
 
 ## Panel 5: Budget Estimates (with Provenance)
 
-Every metric includes provenance. See [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md).
+Every metric includes provenance. See [`METRICS_PROVENANCE.md`](../project/METRICS_PROVENANCE.md).
 
 | Metric | Value | Kind | Confidence | Basis |
 | ------ | ----- | ---- | ---------- | ----- |
@@ -769,7 +769,7 @@ None - clean PR.
 3. Fill in the **four measurement panels first** (Change Surface, Verification Depth, Governance Integrity, Temporal Topology)
 4. Derive budget estimates, quality deltas, factory improvements from measured data
 5. Complete exhibit scoring
-6. Add systemic findings to `docs/LESSONS.md` if patterns emerge
+6. Add systemic findings to `docs/project/LESSONS.md` if patterns emerge
 7. Update guardrails if gaps are found
 
 ### Panel Completion Order
@@ -797,8 +797,8 @@ Existing dossiers following the 8-section structure remain valid. The four-panel
 ## See Also
 
 - [`DEVLT_ESTIMATION.md`](DEVLT_ESTIMATION.md) - Decision-weighted DevLT method
-- [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md) - Provenance schema for all metrics
-- [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md) - The four quality surfaces
-- [`ANALYZER_FRAMEWORK.md`](ANALYZER_FRAMEWORK.md) - Specialist analyzer specs
-- [`LESSONS.md`](LESSONS.md) - Aggregated wrongness log
-- [`AGENTIC_DEV.md`](AGENTIC_DEV.md) - Budget definitions and workflow
+- [`METRICS_PROVENANCE.md`](../project/METRICS_PROVENANCE.md) - Provenance schema for all metrics
+- [`QUALITY_SURFACES.md`](../project/QUALITY_SURFACES.md) - The four quality surfaces
+- [`ANALYZER_FRAMEWORK.md`](../project/ANALYZER_FRAMEWORK.md) - Specialist analyzer specs
+- [`LESSONS.md`](../project/LESSONS.md) - Aggregated wrongness log
+- [`AGENTIC_DEV.md`](../project/AGENTIC_DEV.md) - Budget definitions and workflow

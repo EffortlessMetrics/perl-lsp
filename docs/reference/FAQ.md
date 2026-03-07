@@ -12,7 +12,7 @@
 No. The installer installs `perl-lsp`. Build/run `perl-dap` from source when needed.
 
 ## Where is feature coverage tracked?
-`features.toml` is canonical. Computed metrics live in `docs/CURRENT_STATUS.md`.
+`features.toml` is canonical. Computed metrics live in `docs/project/CURRENT_STATUS.md`.
 
 ## Where do I report bugs?
 Open an issue with a minimal repro (smallest Perl snippet + expected vs actual).

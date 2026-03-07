@@ -10,7 +10,7 @@ Extract structured data from merged PRs to support forensics analysis:
 - **Dependency tracking**: Cargo.lock/Cargo.toml diff analysis
 - **Verification data**: CI check run results
 
-Output feeds into dossier creation per [`docs/FORENSICS_SCHEMA.md`](../../docs/FORENSICS_SCHEMA.md).
+Output feeds into dossier creation per [`docs/reference/FORENSICS_SCHEMA.md`](../../docs/reference/FORENSICS_SCHEMA.md).
 
 ## Tools
 
@@ -81,8 +81,8 @@ body: <multiline string>
 
 1. **Harvest facts**: `./scripts/forensics/pr-harvest.sh <PR>`
 2. **Create dossier**: Use output to populate `docs/forensics/pr-<N>.md`
-3. **Apply schema**: Follow [`FORENSICS_SCHEMA.md`](../../docs/FORENSICS_SCHEMA.md) for analysis
-4. **Extract lessons**: Add findings to [`docs/LESSONS.md`](../../docs/LESSONS.md)
+3. **Apply schema**: Follow [`FORENSICS_SCHEMA.md`](../../docs/reference/FORENSICS_SCHEMA.md) for analysis
+4. **Extract lessons**: Add findings to [`docs/project/LESSONS.md`](../../docs/project/LESSONS.md)
 
 ## Idempotency
 
@@ -93,6 +93,6 @@ All scripts are safe to re-run:
 
 ## See Also
 
-- [`docs/FORENSICS_SCHEMA.md`](../../docs/FORENSICS_SCHEMA.md) - Dossier schema
+- [`docs/reference/FORENSICS_SCHEMA.md`](../../docs/reference/FORENSICS_SCHEMA.md) - Dossier schema
 - [`docs/forensics/`](../../docs/forensics/) - PR dossiers
-- [`docs/LESSONS.md`](../../docs/LESSONS.md) - Aggregated wrongness log
+- [`docs/project/LESSONS.md`](../../docs/project/LESSONS.md) - Aggregated wrongness log

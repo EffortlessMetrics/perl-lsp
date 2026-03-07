@@ -1,7 +1,7 @@
 # TODOs & Missing Features
 
 > **Last Updated**: 2026-02-17
-> **Sources of truth**: `docs/ROADMAP.md` (plans), `docs/CURRENT_STATUS.md` (metrics), `features.toml` (capabilities)
+> **Sources of truth**: `docs/project/ROADMAP.md` (plans), `docs/project/CURRENT_STATUS.md` (metrics), `features.toml` (capabilities)
 > **Rule**: If this file conflicts with those sources, update this file (not the sources).
 
 ---
@@ -9,7 +9,7 @@
 ## How to Use This List
 
 - Treat this as an **actionable backlog**, not a status report.
-- Do **not** add metrics here; metrics live in `docs/CURRENT_STATUS.md`.
+- Do **not** add metrics here; metrics live in `docs/project/CURRENT_STATUS.md`.
 - For LSP capability truth, update `features.toml` and run `just status-update`.
 
 ---
@@ -37,7 +37,7 @@
 
 - [x] v0.10.0 release notes draft (CHANGELOG + release summary)
 - [x] Ensure `features.toml` and capability snapshots remain consistent
-- [x] Verify `docs/CURRENT_STATUS.md` narrative matches receipts
+- [x] Verify `docs/project/CURRENT_STATUS.md` narrative matches receipts
 
 ---
 
@@ -103,5 +103,5 @@ cargo doc --no-deps -p perl-parser
 
 ## Notes
 
-- If a TODO becomes a claim (\"done\", \"complete\"), move it into `docs/CURRENT_STATUS.md` with receipts.
+- If a TODO becomes a claim (\"done\", \"complete\"), move it into `docs/project/CURRENT_STATUS.md` with receipts.
 - If a capability is missing, update `features.toml` first; then regenerate computed docs via `just status-update`.

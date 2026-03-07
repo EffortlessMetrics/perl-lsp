@@ -77,7 +77,7 @@ A change that costs 10 DevLT minutes + 100K tokens is more efficient than one th
 
 ### 3. Wrongness is recorded
 
-- `docs/LESSONS.md` logs what went wrong
+- `docs/project/LESSONS.md` logs what went wrong
 - Each entry: wrong → evidence → fix → prevention
 - Guardrails are added to prevent recurrence
 
@@ -146,4 +146,4 @@ flowchart TD
 
 - [`INDEX.md`](INDEX.md) - Documentation front door
 - [`LESSONS.md`](LESSONS.md) - Wrongness log
-- [`FORENSICS_SCHEMA.md`](FORENSICS_SCHEMA.md) - PR analysis template
+- [`FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - PR analysis template

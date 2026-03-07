@@ -139,9 +139,9 @@ fn test_partial_ast_lsp_feature_availability() {
 
 ## Related Documentation
 
-- [LSP_IMPLEMENTATION_GUIDE.md](../../../../docs/LSP_IMPLEMENTATION_GUIDE.md)
+- [LSP_IMPLEMENTATION_GUIDE.md](../../../../docs/reference/LSP_IMPLEMENTATION_GUIDE.md)
 - [PARSER_ERROR_HANDLING_SPEC.md](../../../../docs/PARSER_ERROR_HANDLING_SPEC.md)
-- [THREADING_CONFIGURATION_GUIDE.md](../../../../docs/THREADING_CONFIGURATION_GUIDE.md)
+- [THREADING_CONFIGURATION_GUIDE.md](../../../../docs/how-to/THREADING_CONFIGURATION_GUIDE.md)
 - [issue-178-spec.md](../../../../docs/issue-178-spec.md)
 
 ## Acceptance Criteria Coverage

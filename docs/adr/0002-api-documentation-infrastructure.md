@@ -188,7 +188,7 @@ cargo doc --no-deps --package perl-parser 2>&1 | grep "missing documentation" | 
 ## Cross-References
 
 - **Implementation Details**: [DOCUMENTATION_IMPLEMENTATION_STRATEGY.md](../DOCUMENTATION_IMPLEMENTATION_STRATEGY.md)
-- **Quality Standards**: [API_DOCUMENTATION_STANDARDS.md](../API_DOCUMENTATION_STANDARDS.md)
+- **Quality Standards**: [API_DOCUMENTATION_STANDARDS.md](../reference/API_DOCUMENTATION_STANDARDS.md)
 - **Project Integration**: [CLAUDE.md](../../CLAUDE.md) - Essential Commands section
 - **Migration Guide**: [MIGRATION.md](../../MIGRATION.md) - v0.8.10+ Documentation Infrastructure Changes
 

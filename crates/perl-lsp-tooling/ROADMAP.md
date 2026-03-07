@@ -1,6 +1,6 @@
 # perl-lsp-tooling Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-tooling`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-tooling`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Tooling integration for Perl LSP (perltidy, perlcritic, subprocess abstraction)

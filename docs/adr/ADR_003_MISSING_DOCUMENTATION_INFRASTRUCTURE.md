@@ -299,8 +299,8 @@ cargo doc --no-deps --package perl-parser
 
 - **[ADR-001: Agent Architecture](ADR_001_AGENT_ARCHITECTURE.md)** - 97 specialized agents supporting documentation workflow
 - **[ADR-002: API Documentation Infrastructure](ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Original infrastructure design and rationale
-- **[API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)** - Comprehensive quality requirements and templates
-- **[Missing Documentation Guide](MISSING_DOCUMENTATION_GUIDE.md)** - Systematic 4-phase implementation strategy
+- **[API Documentation Standards](../reference/API_DOCUMENTATION_STANDARDS.md)** - Comprehensive quality requirements and templates
+- **[Missing Documentation Guide](../reference/MISSING_DOCUMENTATION_GUIDE.md)** - Systematic 4-phase implementation strategy
 
 ## Monitoring and Review
 

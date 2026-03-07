@@ -287,9 +287,9 @@
 //!
 //! # Documentation
 //!
-//! - **LSP Guide**: See `docs/LSP_IMPLEMENTATION_GUIDE.md` in the repository
-//! - **Capability Policy**: See `docs/LSP_CAPABILITY_POLICY.md`
-//! - **Commands Reference**: See `docs/COMMANDS_REFERENCE.md`
+//! - **LSP Guide**: See `docs/reference/LSP_IMPLEMENTATION_GUIDE.md` in the repository
+//! - **Capability Policy**: See `docs/reference/LSP_CAPABILITY_POLICY.md`
+//! - **Commands Reference**: See `docs/reference/COMMANDS_REFERENCE.md`
 //!
 //! # Usage Example
 //!

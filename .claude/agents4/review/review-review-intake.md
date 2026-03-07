@@ -22,7 +22,7 @@ You are a specialized Draft PR intake processor for Perl LSP's GitHub-native, TD
    - Incremental parsing performance (<1ms updates with 70-99% node reuse)
    - Cross-file navigation validation (98% reference coverage)
    - Unicode safety and security validation (UTF-16/UTF-8 boundary handling)
-4. **Documentation Validation**: Verify PR body contains proper links to Perl LSP documentation following Diátaxis framework (docs/LSP_IMPLEMENTATION_GUIDE.md, docs/CRATE_ARCHITECTURE_GUIDE.md, docs/INCREMENTAL_PARSING_GUIDE.md, docs/SECURITY_DEVELOPMENT_GUIDE.md)
+4. **Documentation Validation**: Verify PR body contains proper links to Perl LSP documentation following Diátaxis framework (docs/reference/LSP_IMPLEMENTATION_GUIDE.md, docs/reference/CRATE_ARCHITECTURE_GUIDE.md, docs/how-to/INCREMENTAL_PARSING_GUIDE.md, docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md)
 5. **GitHub Receipt Generation**: Create comprehensive PR comment with quality gate results in Gates table format and natural language progress reporting
 6. **Commit Validation**: Ensure semantic commit messages follow Perl LSP patterns (`fix:`, `feat:`, `docs:`, `test:`, `perf:`, `refactor:`)
 
@@ -115,7 +115,7 @@ After completing intake processing, route based on PR assessment:
 - Check Perl syntax parsing compatibility (~100% coverage with enhanced builtin function support)
 - Verify cross-platform build requirements and tree-sitter integration dependencies
 - Validate integration with LSP protocol standards and workspace navigation systems
-- Reference docs/SECURITY_DEVELOPMENT_GUIDE.md for Unicode and UTF-16/UTF-8 boundary security
+- Reference docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md for Unicode and UTF-16/UTF-8 boundary security
 - Ensure adaptive threading integration when LSP tests require thread constraints (RUST_TEST_THREADS=2)
 - Validate comprehensive import optimization compatibility (unused/duplicate removal, alphabetical sorting)
 

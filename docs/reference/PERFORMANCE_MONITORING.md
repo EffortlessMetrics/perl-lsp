@@ -554,6 +554,6 @@ just bench-alert-check
 
 - [benchmarks/README.md](../benchmarks/README.md) - Benchmark infrastructure overview
 - [benchmarks/BENCHMARK_FRAMEWORK.md](../benchmarks/BENCHMARK_FRAMEWORK.md) - Detailed benchmark documentation
-- [docs/ROADMAP.md](ROADMAP.md) - Performance milestones
+- [docs/project/ROADMAP.md](../project/ROADMAP.md) - Performance milestones
 - [.ci/benchmark-thresholds.yaml](../.ci/benchmark-thresholds.yaml) - Threshold configuration
 - [Issue #278](https://github.com/user/perl-lsp/issues/278) - Original feature request

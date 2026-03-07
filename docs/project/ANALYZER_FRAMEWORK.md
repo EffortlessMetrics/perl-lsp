@@ -340,4 +340,4 @@ To add a new analyzer:
 
 - [`QUALITY_SURFACES.md`](QUALITY_SURFACES.md) - The four quality surfaces
 - [`METRICS_PROVENANCE.md`](METRICS_PROVENANCE.md) - Provenance schema
-- [`FORENSICS_SCHEMA.md`](FORENSICS_SCHEMA.md) - Full dossier template
+- [`FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - Full dossier template

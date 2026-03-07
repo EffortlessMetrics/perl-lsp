@@ -288,4 +288,4 @@ Phase A → B requires:
 
 - [WORK_ORDER_FORMAT.md](WORK_ORDER_FORMAT.md) - Per-issue contract format
 - [DEVLT_ESTIMATION.md](../DEVLT_ESTIMATION.md) - Budget estimation
-- [FORENSICS_SCHEMA.md](../FORENSICS_SCHEMA.md) - PR dossier format
+- [FORENSICS_SCHEMA.md](../reference/FORENSICS_SCHEMA.md) - PR dossier format

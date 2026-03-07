@@ -19,7 +19,7 @@
 //! - Position: { line: number, character: number }
 //!
 //! Related Documentation:
-//! - docs/LSP_IMPLEMENTATION_GUIDE.md#go-to-definition
+//! - docs/reference/LSP_IMPLEMENTATION_GUIDE.md#go-to-definition
 //! - crates/perl-lsp-navigation/src/definition.rs
 
 mod support;

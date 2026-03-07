@@ -1,6 +1,6 @@
 # perl-semantic-analyzer Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-semantic-analyzer`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-semantic-analyzer`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Semantic analysis and symbol extraction for Perl

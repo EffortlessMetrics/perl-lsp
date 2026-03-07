@@ -194,7 +194,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test lsp_behavioral_tests
 
 **Route C - Architecture Impact Analysis:**
 If optimizations introduce parser complexity or memory layout changes:
-→ Route to **architecture-reviewer** for validation against docs/CRATE_ARCHITECTURE_GUIDE.md
+→ Route to **architecture-reviewer** for validation against docs/reference/CRATE_ARCHITECTURE_GUIDE.md
 
 **Route D - Comprehensive Testing Required:**
 When optimizations affect parsing algorithms or LSP protocol behavior:

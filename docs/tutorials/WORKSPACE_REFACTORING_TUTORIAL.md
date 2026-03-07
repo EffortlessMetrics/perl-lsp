@@ -681,7 +681,7 @@ You've learned how to use the comprehensive workspace refactoring capabilities i
 
 - [LSP_ACTUAL_STATUS.md](../LSP_ACTUAL_STATUS.md) - Complete feature status and capabilities
 - [ARCHITECTURE.md](../ARCHITECTURE.md) - Technical architecture and design decisions  
-- [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) - Implementation patterns and best practices
+- [LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md) - Implementation patterns and best practices
 - [Workspace Refactor API Documentation](../crates/perl-parser/src/workspace_refactor.rs) - Complete API reference
 
 ---

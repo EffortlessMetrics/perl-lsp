@@ -527,7 +527,7 @@ Add test cases to perl-corpus for:
 ### Phase 4: Documentation & Polish (Day 4)
 
 1. Update heredoc_parser.rs documentation
-2. Add examples to docs/BUILTIN_FUNCTION_PARSING.md
+2. Add examples to docs/explanation/BUILTIN_FUNCTION_PARSING.md
 3. Update CLAUDE.md if needed
 4. Close Issue #182
 

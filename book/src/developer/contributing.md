@@ -62,7 +62,7 @@ Thank you for your interest in contributing to Perl LSP! This guide will help yo
 
 ## Continuous Integration
 
-See **[CI & Automation](./docs/CI.md)** for comprehensive details about our GitHub Actions setup, including:
+See **[CI & Automation](./docs/project/CI.md)** for comprehensive details about our GitHub Actions setup, including:
 
 - **Pinned runner versions** (`ubuntu-22.04`, `windows-2022`)
 - **Default CI jobs** that run on every PR
@@ -240,8 +240,8 @@ SemVer checking is configured in `.cargo-semver-checks.toml`:
 
 - **SemVer spec:** https://semver.org/
 - **cargo-semver-checks:** https://github.com/obi1kenobi/cargo-semver-checks
-- **Project stability policy:** `docs/STABILITY.md`
-- **API stability guarantees:** `docs/STABILITY.md#api-surface-stability`
+- **Project stability policy:** `docs/reference/STABILITY.md`
+- **API stability guarantees:** `docs/reference/STABILITY.md#api-surface-stability`
 
 ## Coding Standards
 
@@ -418,14 +418,14 @@ gh pr list --author "app/dependabot" --search "status:success" --json number --j
   xargs -I {} gh pr merge {} --auto --squash
 ```
 
-See **[Dependency Management Guide](./docs/DEPENDENCY_MANAGEMENT.md)** for complete details on:
+See **[Dependency Management Guide](./docs/how-to/DEPENDENCY_MANAGEMENT.md)** for complete details on:
 - Update strategy and grouping
 - Review process by update type
 - Auto-merge configuration
 - Security update handling
 - Troubleshooting common issues
 
-For quick reference, see **[Dependency Quick Reference](./docs/DEPENDENCY_QUICK_REFERENCE.md)**.
+For quick reference, see **[Dependency Quick Reference](./docs/how-to/DEPENDENCY_QUICK_REFERENCE.md)**.
 
 ## Getting Help
 
@@ -480,7 +480,7 @@ just semver-check
 # Update documentation
 # - UPDATE_CHANGELOG.md
 # - Update version references in README.md
-# - Update feature matrix in docs/FEATURES.md
+# - Update feature matrix in docs/reference/FEATURES.md
 ```
 
 #### 2. Release Checklist

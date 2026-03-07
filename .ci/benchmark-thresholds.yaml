@@ -7,7 +7,7 @@
 # This file configures automated performance regression detection.
 # Thresholds are specified per benchmark category and individual benchmarks.
 #
-# See docs/PERFORMANCE_MONITORING.md for details.
+# See docs/reference/PERFORMANCE_MONITORING.md for details.
 
 # Global defaults (applied to all benchmarks unless overridden)
 defaults:

@@ -283,6 +283,6 @@ Features degrade gracefully:
 ## See Also
 
 - [CONFIG.md](CONFIG.md) - Full configuration reference
-- [EDITOR_SETUP.md](EDITOR_SETUP.md) - Editor setup guides
-- [THREADING_CONFIGURATION_GUIDE.md](THREADING_CONFIGURATION_GUIDE.md) - Threading options
+- [EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md) - Editor setup guides
+- [THREADING_CONFIGURATION_GUIDE.md](../how-to/THREADING_CONFIGURATION_GUIDE.md) - Threading options
 - [specs/LATENCY_CAPS_SLO_SPEC.md](specs/LATENCY_CAPS_SLO_SPEC.md) - Implementation specification

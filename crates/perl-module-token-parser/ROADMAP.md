@@ -1,6 +1,6 @@
 # perl-module-token-parser Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-module-token-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-module-token-parser`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Single-responsibility Perl module token parsing for import/reference workflows

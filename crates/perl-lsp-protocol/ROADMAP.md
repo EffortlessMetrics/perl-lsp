@@ -1,6 +1,6 @@
 # perl-lsp-protocol Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-protocol`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-protocol`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 JSON-RPC/LSP protocol types and capability configuration for perl-lsp

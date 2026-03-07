@@ -86,9 +86,9 @@
 //!
 //! # Related Documentation
 //!
-//! - [ERROR_HANDLING_STRATEGY.md](../../../docs/ERROR_HANDLING_STRATEGY.md) - Defensive programming principles
+//! - [ERROR_HANDLING_STRATEGY.md](../../../docs/explanation/ERROR_HANDLING_STRATEGY.md) - Defensive programming principles
 //! - [LEXER_ERROR_HANDLING_SPEC.md](../../../docs/LEXER_ERROR_HANDLING_SPEC.md) - Lexer error handling spec
-//! - [ERROR_HANDLING_API_CONTRACTS.md](../../../docs/ERROR_HANDLING_API_CONTRACTS.md) - API contracts
+//! - [ERROR_HANDLING_API_CONTRACTS.md](../../../docs/reference/ERROR_HANDLING_API_CONTRACTS.md) - API contracts
 //! - [issue-178-spec.md](../../../docs/issue-178-spec.md) - Issue specification
 //!
 //! # LSP Workflow Integration
@@ -110,7 +110,7 @@
 //!
 //! This test suite uses **conceptual validation** for theoretically unreachable error
 //! paths, supplemented by **mutation testing** for error message quality. This approach
-//! is documented in [ERROR_HANDLING_STRATEGY.md](../../../docs/ERROR_HANDLING_STRATEGY.md)
+//! is documented in [ERROR_HANDLING_STRATEGY.md](../../../docs/explanation/ERROR_HANDLING_STRATEGY.md)
 //! and represents best practices for testing defensive programming patterns.
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;

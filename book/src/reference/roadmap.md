@@ -1,7 +1,7 @@
 # Perl Parser Project - Roadmap
 
-> **Canonical**: This is a summary. See [docs/ROADMAP.md](../../../../docs/ROADMAP.md) for the full roadmap.
-> **Metrics**: See [CURRENT_STATUS.md](../../../../docs/CURRENT_STATUS.md) for computed metrics.
+> **Canonical**: This is a summary. See [docs/project/ROADMAP.md](../../../../docs/project/ROADMAP.md) for the full roadmap.
+> **Metrics**: See [CURRENT_STATUS.md](../../../../docs/project/CURRENT_STATUS.md) for computed metrics.
 
 > **Status (2026-02-20)**: **Initial Public Alpha (v0.10.0)**. Hardening underway with native DAP preview validated.
 >
@@ -83,14 +83,14 @@ Perl LSP is currently in **Initial Public Alpha**. Version 0.10.0 represents a s
 
 The LSP compliance table is auto-generated. Source of truth: `features.toml`
 
-For live metrics, run `just status-check` or see [CURRENT_STATUS.md](../../../../docs/CURRENT_STATUS.md).
+For live metrics, run `just status-check` or see [CURRENT_STATUS.md](../../../../docs/project/CURRENT_STATUS.md).
 
 ---
 
 ## Resources
 
-- **[Current Status](../../../../docs/CURRENT_STATUS.md)** - Computed metrics
+- **[Current Status](../../../../docs/project/CURRENT_STATUS.md)** - Computed metrics
 - **[features.toml](../features.toml)** - Canonical capability definitions
-- **[Full Roadmap](../../../../docs/ROADMAP.md)** - Complete release planning and history
+- **[Full Roadmap](../../../../docs/project/ROADMAP.md)** - Complete release planning and history
 
 <!-- Last Updated: 2026-02-20 -->

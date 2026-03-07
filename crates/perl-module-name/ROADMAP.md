@@ -1,6 +1,6 @@
 # perl-module-name Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-module-name`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-module-name`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Perl module-name separator normalization and canonical/legacy variant helpers

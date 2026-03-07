@@ -29,14 +29,14 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/), organ
 **Goal**: Learn by doing through step-by-step guided experiences.
 
 **Core Learning Paths**:
-- **[EXECUTE_COMMAND_TUTORIAL.md](EXECUTE_COMMAND_TUTORIAL.md)** - Build custom LSP commands from scratch
-- **[WORKSPACE_REFACTORING_TUTORIAL.md](WORKSPACE_REFACTORING_TUTORIAL.md)** - Master workspace-wide refactoring operations
-- **[COMPREHENSIVE_TESTING_GUIDE.md](COMPREHENSIVE_TESTING_GUIDE.md)** - Test-driven development workflows
+- **[EXECUTE_COMMAND_TUTORIAL.md](../tutorials/EXECUTE_COMMAND_TUTORIAL.md)** - Build custom LSP commands from scratch
+- **[WORKSPACE_REFACTORING_TUTORIAL.md](../tutorials/WORKSPACE_REFACTORING_TUTORIAL.md)** - Master workspace-wide refactoring operations
+- **[COMPREHENSIVE_TESTING_GUIDE.md](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md)** - Test-driven development workflows
 
 **Feature-Specific Tutorials**:
-- **[DAP_USER_GUIDE.md](DAP_USER_GUIDE.md)** - Set up debugging with Debug Adapter Protocol
-- **[LSP_DEVELOPMENT_GUIDE.md](LSP_DEVELOPMENT_GUIDE.md)** - Develop LSP features with source threading
-- **[AI_BUILD_GUIDE.md](AI_BUILD_GUIDE.md)** - AI-assisted development workflows
+- **[DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md)** - Set up debugging with Debug Adapter Protocol
+- **[LSP_DEVELOPMENT_GUIDE.md](../tutorials/LSP_DEVELOPMENT_GUIDE.md)** - Develop LSP features with source threading
+- **[AI_BUILD_GUIDE.md](../tutorials/AI_BUILD_GUIDE.md)** - AI-assisted development workflows
 
 **Validation**: All tutorials include testable code examples validated with `cargo test --doc`.
 
@@ -47,22 +47,22 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/), organ
 **Goal**: Solve specific problems with task-oriented instructions.
 
 **Development Tasks**:
-- **[IMPORT_OPTIMIZER_GUIDE.md](IMPORT_OPTIMIZER_GUIDE.md)** - Remove unused imports, add missing ones, sort alphabetically
-- **[FILE_COMPLETION_GUIDE.md](FILE_COMPLETION_GUIDE.md)** - Implement enterprise-secure path completion
-- **[INCREMENTAL_PARSING_GUIDE.md](INCREMENTAL_PARSING_GUIDE.md)** - Optimize parsing performance with <1ms updates
-- **[SOURCE_THREADING_GUIDE.md](SOURCE_THREADING_GUIDE.md)** - Extract documentation from source comments
+- **[IMPORT_OPTIMIZER_GUIDE.md](../how-to/IMPORT_OPTIMIZER_GUIDE.md)** - Remove unused imports, add missing ones, sort alphabetically
+- **[FILE_COMPLETION_GUIDE.md](../how-to/FILE_COMPLETION_GUIDE.md)** - Implement enterprise-secure path completion
+- **[INCREMENTAL_PARSING_GUIDE.md](../how-to/INCREMENTAL_PARSING_GUIDE.md)** - Optimize parsing performance with <1ms updates
+- **[SOURCE_THREADING_GUIDE.md](../how-to/SOURCE_THREADING_GUIDE.md)** - Extract documentation from source comments
 
 **Testing & Debugging**:
-- **[THREADING_CONFIGURATION_GUIDE.md](THREADING_CONFIGURATION_GUIDE.md)** - Adaptive threading for CI environments
-- **[LSP_ERROR_HANDLING_MONITORING_GUIDE.md](LSP_ERROR_HANDLING_MONITORING_GUIDE.md)** - Monitor and debug LSP errors
-- **[DAP_BREAKPOINT_VALIDATION_GUIDE.md](DAP_BREAKPOINT_VALIDATION_GUIDE.md)** - Validate breakpoint positioning
+- **[THREADING_CONFIGURATION_GUIDE.md](../how-to/THREADING_CONFIGURATION_GUIDE.md)** - Adaptive threading for CI environments
+- **[LSP_ERROR_HANDLING_MONITORING_GUIDE.md](../how-to/LSP_ERROR_HANDLING_MONITORING_GUIDE.md)** - Monitor and debug LSP errors
+- **[DAP_BREAKPOINT_VALIDATION_GUIDE.md](../how-to/DAP_BREAKPOINT_VALIDATION_GUIDE.md)** - Validate breakpoint positioning
 
 **Optimization**:
-- **[PERFORMANCE_PRESERVATION_GUIDE.md](PERFORMANCE_PRESERVATION_GUIDE.md)** - Maintain performance baselines
+- **[PERFORMANCE_PRESERVATION_GUIDE.md](../how-to/PERFORMANCE_PRESERVATION_GUIDE.md)** - Maintain performance baselines
 - **[benchmarks/BENCHMARK_FRAMEWORK.md](benchmarks/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
 
 **Security**:
-- **[SECURITY_DEVELOPMENT_GUIDE.md](SECURITY_DEVELOPMENT_GUIDE.md)** - Security development practices
+- **[SECURITY_DEVELOPMENT_GUIDE.md](../how-to/SECURITY_DEVELOPMENT_GUIDE.md)** - Security development practices
 
 **Commands**: All guides include proper cargo command specifications (`cargo test -p perl-parser`, `RUST_TEST_THREADS=2 cargo test -p perl-lsp`).
 
@@ -109,19 +109,19 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/), organ
 **Goal**: Understand concepts, design decisions, and architectural choices.
 
 **Core Concepts**:
-- **[CANCELLATION_ARCHITECTURE_GUIDE.md](CANCELLATION_ARCHITECTURE_GUIDE.md)** - LSP cancellation system design (PR #165)
-- **[ERROR_HANDLING_STRATEGY.md](ERROR_HANDLING_STRATEGY.md)** - Defensive programming principles (Issue #178)
-- **[CONDITIONAL_DOCS_COMPILATION_STRATEGY.md](CONDITIONAL_DOCS_COMPILATION_STRATEGY.md)** - Performance-optimized documentation enforcement
+- **[CANCELLATION_ARCHITECTURE_GUIDE.md](../explanation/CANCELLATION_ARCHITECTURE_GUIDE.md)** - LSP cancellation system design (PR #165)
+- **[ERROR_HANDLING_STRATEGY.md](../explanation/ERROR_HANDLING_STRATEGY.md)** - Defensive programming principles (Issue #178)
+- **[CONDITIONAL_DOCS_COMPILATION_STRATEGY.md](../explanation/CONDITIONAL_DOCS_COMPILATION_STRATEGY.md)** - Performance-optimized documentation enforcement
 
 **Parsing Theory**:
-- **[BUILTIN_FUNCTION_PARSING.md](BUILTIN_FUNCTION_PARSING.md)** - Enhanced empty block parsing for map/grep/sort
-- **[SLASH_DISAMBIGUATION.md](SLASH_DISAMBIGUATION.md)** - Division vs. regex disambiguation
-- **[TREE_SITTER_COMPATIBILITY.md](TREE_SITTER_COMPATIBILITY.md)** - Tree-sitter integration patterns
+- **[BUILTIN_FUNCTION_PARSING.md](../explanation/BUILTIN_FUNCTION_PARSING.md)** - Enhanced empty block parsing for map/grep/sort
+- **[SLASH_DISAMBIGUATION.md](../explanation/SLASH_DISAMBIGUATION.md)** - Division vs. regex disambiguation
+- **[TREE_SITTER_COMPATIBILITY.md](../explanation/TREE_SITTER_COMPATIBILITY.md)** - Tree-sitter integration patterns
 
 **LSP Architecture**:
-- **[LSP_CRATE_SEPARATION_GUIDE.md](LSP_CRATE_SEPARATION_GUIDE.md)** - Crate organization rationale
-- **[EXECUTE_COMMAND_CONFIGURATION_GUIDE.md](EXECUTE_COMMAND_CONFIGURATION_GUIDE.md)** - executeCommand integration design
-- **[LSP_DOCUMENTATION.md](LSP_DOCUMENTATION.md)** - LSP feature implementation philosophy
+- **[LSP_CRATE_SEPARATION_GUIDE.md](../explanation/LSP_CRATE_SEPARATION_GUIDE.md)** - Crate organization rationale
+- **[EXECUTE_COMMAND_CONFIGURATION_GUIDE.md](../explanation/EXECUTE_COMMAND_CONFIGURATION_GUIDE.md)** - executeCommand integration design
+- **[LSP_DOCUMENTATION.md](../explanation/LSP_DOCUMENTATION.md)** - LSP feature implementation philosophy
 
 **Design Decisions** (Architecture Decision Records):
 - **[adr/ADR_001_AGENT_ARCHITECTURE.md](adr/ADR_001_AGENT_ARCHITECTURE.md)** - 97 specialized agents (PR #153)
@@ -130,7 +130,7 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/), organ
 - **[AGENT_CUSTOMIZER.md](AGENT_CUSTOMIZER.md)** - Domain-specific agent adaptation
 
 **Implementation Context**:
-- **[PARSER_ROBUSTNESS_IMPROVEMENTS.md](PARSER_ROBUSTNESS_IMPROVEMENTS.md)** - Fuzz testing and mutation hardening
+- **[PARSER_ROBUSTNESS_IMPROVEMENTS.md](../explanation/PARSER_ROBUSTNESS_IMPROVEMENTS.md)** - Fuzz testing and mutation hardening
 - **[CI_HARDENING.md](CI_HARDENING.md)** - CI/CD reliability improvements
 - **[SPEC_149_GOVERNANCE.md](SPEC_149_GOVERNANCE.md)** - Documentation quality governance
 
@@ -143,30 +143,30 @@ Map features to their documentation:
 ### Parser Features
 | Feature | Tutorial | How-to | Reference | Explanation |
 |---------|----------|--------|-----------|-------------|
-| **Incremental Parsing** | [COMPREHENSIVE_TESTING_GUIDE](COMPREHENSIVE_TESTING_GUIDE.md) | [INCREMENTAL_PARSING_GUIDE](INCREMENTAL_PARSING_GUIDE.md) | [PERFORMANCE_PRESERVATION_GUIDE](PERFORMANCE_PRESERVATION_GUIDE.md) | [ARCHITECTURE_OVERVIEW](ARCHITECTURE_OVERVIEW.md) |
-| **Builtin Functions** | - | [COMMANDS_REFERENCE](COMMANDS_REFERENCE.md#testing) | [BUILTIN_FUNCTION_PARSING](BUILTIN_FUNCTION_PARSING.md) | [BUILTIN_FUNCTION_PARSING](BUILTIN_FUNCTION_PARSING.md) |
+| **Incremental Parsing** | [COMPREHENSIVE_TESTING_GUIDE](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md) | [INCREMENTAL_PARSING_GUIDE](../how-to/INCREMENTAL_PARSING_GUIDE.md) | [PERFORMANCE_PRESERVATION_GUIDE](../how-to/PERFORMANCE_PRESERVATION_GUIDE.md) | [ARCHITECTURE_OVERVIEW](ARCHITECTURE_OVERVIEW.md) |
+| **Builtin Functions** | - | [COMMANDS_REFERENCE](COMMANDS_REFERENCE.md#testing) | [BUILTIN_FUNCTION_PARSING](../explanation/BUILTIN_FUNCTION_PARSING.md) | [BUILTIN_FUNCTION_PARSING](../explanation/BUILTIN_FUNCTION_PARSING.md) |
 | **UTF-16/UTF-8** | - | [POSITION_TRACKING_GUIDE](POSITION_TRACKING_GUIDE.md) | [POSITION_TRACKING_GUIDE](POSITION_TRACKING_GUIDE.md) | [ROPE_INTEGRATION_GUIDE](ROPE_INTEGRATION_GUIDE.md) |
 
 ### LSP Features
 | Feature | Tutorial | How-to | Reference | Explanation |
 |---------|----------|--------|-----------|-------------|
-| **Cross-File Navigation** | [WORKSPACE_REFACTORING_TUTORIAL](WORKSPACE_REFACTORING_TUTORIAL.md) | [WORKSPACE_NAVIGATION_GUIDE](WORKSPACE_NAVIGATION_GUIDE.md) | [WORKSPACE_REFACTOR_API_REFERENCE](WORKSPACE_REFACTOR_API_REFERENCE.md) | [LSP_CRATE_SEPARATION_GUIDE](LSP_CRATE_SEPARATION_GUIDE.md) |
-| **Import Optimization** | - | [IMPORT_OPTIMIZER_GUIDE](IMPORT_OPTIMIZER_GUIDE.md) | [IMPORT_OPTIMIZER_GUIDE](IMPORT_OPTIMIZER_GUIDE.md) | - |
-| **File Completion** | - | [FILE_COMPLETION_GUIDE](FILE_COMPLETION_GUIDE.md) | [FILE_COMPLETION_GUIDE](FILE_COMPLETION_GUIDE.md) | [SECURITY_DEVELOPMENT_GUIDE](SECURITY_DEVELOPMENT_GUIDE.md) |
-| **executeCommand** | [EXECUTE_COMMAND_TUTORIAL](EXECUTE_COMMAND_TUTORIAL.md) | [EXECUTE_COMMAND_CONFIGURATION_GUIDE](EXECUTE_COMMAND_CONFIGURATION_GUIDE.md) | [WORKSPACE_REFACTOR_API_REFERENCE](WORKSPACE_REFACTOR_API_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE](LSP_IMPLEMENTATION_GUIDE.md) |
-| **Cancellation** | - | [LSP_ERROR_HANDLING_MONITORING_GUIDE](LSP_ERROR_HANDLING_MONITORING_GUIDE.md) | [LSP_CANCELLATION_PROTOCOL_SPECIFICATION](LSP_CANCELLATION_PROTOCOL_SPECIFICATION.md) | [CANCELLATION_ARCHITECTURE_GUIDE](CANCELLATION_ARCHITECTURE_GUIDE.md) |
+| **Cross-File Navigation** | [WORKSPACE_REFACTORING_TUTORIAL](../tutorials/WORKSPACE_REFACTORING_TUTORIAL.md) | [WORKSPACE_NAVIGATION_GUIDE](WORKSPACE_NAVIGATION_GUIDE.md) | [WORKSPACE_REFACTOR_API_REFERENCE](WORKSPACE_REFACTOR_API_REFERENCE.md) | [LSP_CRATE_SEPARATION_GUIDE](../explanation/LSP_CRATE_SEPARATION_GUIDE.md) |
+| **Import Optimization** | - | [IMPORT_OPTIMIZER_GUIDE](../how-to/IMPORT_OPTIMIZER_GUIDE.md) | [IMPORT_OPTIMIZER_GUIDE](../how-to/IMPORT_OPTIMIZER_GUIDE.md) | - |
+| **File Completion** | - | [FILE_COMPLETION_GUIDE](../how-to/FILE_COMPLETION_GUIDE.md) | [FILE_COMPLETION_GUIDE](../how-to/FILE_COMPLETION_GUIDE.md) | [SECURITY_DEVELOPMENT_GUIDE](../how-to/SECURITY_DEVELOPMENT_GUIDE.md) |
+| **executeCommand** | [EXECUTE_COMMAND_TUTORIAL](../tutorials/EXECUTE_COMMAND_TUTORIAL.md) | [EXECUTE_COMMAND_CONFIGURATION_GUIDE](../explanation/EXECUTE_COMMAND_CONFIGURATION_GUIDE.md) | [WORKSPACE_REFACTOR_API_REFERENCE](WORKSPACE_REFACTOR_API_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE](LSP_IMPLEMENTATION_GUIDE.md) |
+| **Cancellation** | - | [LSP_ERROR_HANDLING_MONITORING_GUIDE](../how-to/LSP_ERROR_HANDLING_MONITORING_GUIDE.md) | [LSP_CANCELLATION_PROTOCOL_SPECIFICATION](LSP_CANCELLATION_PROTOCOL_SPECIFICATION.md) | [CANCELLATION_ARCHITECTURE_GUIDE](../explanation/CANCELLATION_ARCHITECTURE_GUIDE.md) |
 
 ### DAP Features
 | Feature | Tutorial | How-to | Reference | Explanation |
 |---------|----------|--------|-----------|-------------|
-| **Debug Setup** | [DAP_USER_GUIDE](DAP_USER_GUIDE.md) | [DAP_USER_GUIDE](DAP_USER_GUIDE.md) | [CRATE_ARCHITECTURE_DAP](CRATE_ARCHITECTURE_DAP.md) | [ISSUE_207_DAP_SPECIFICATION_ANALYSIS](ISSUE_207_DAP_SPECIFICATION_ANALYSIS.md) |
-| **Breakpoints** | [DAP_USER_GUIDE](DAP_USER_GUIDE.md) | [DAP_BREAKPOINT_VALIDATION_GUIDE](DAP_BREAKPOINT_VALIDATION_GUIDE.md) | [CRATE_ARCHITECTURE_DAP](CRATE_ARCHITECTURE_DAP.md) | - |
+| **Debug Setup** | [DAP_USER_GUIDE](../tutorials/DAP_USER_GUIDE.md) | [DAP_USER_GUIDE](../tutorials/DAP_USER_GUIDE.md) | [CRATE_ARCHITECTURE_DAP](CRATE_ARCHITECTURE_DAP.md) | [ISSUE_207_DAP_SPECIFICATION_ANALYSIS](ISSUE_207_DAP_SPECIFICATION_ANALYSIS.md) |
+| **Breakpoints** | [DAP_USER_GUIDE](../tutorials/DAP_USER_GUIDE.md) | [DAP_BREAKPOINT_VALIDATION_GUIDE](../how-to/DAP_BREAKPOINT_VALIDATION_GUIDE.md) | [CRATE_ARCHITECTURE_DAP](CRATE_ARCHITECTURE_DAP.md) | - |
 
 ### Testing Features
 | Feature | Tutorial | How-to | Reference | Explanation |
 |---------|----------|--------|-----------|-------------|
-| **Adaptive Threading** | [COMPREHENSIVE_TESTING_GUIDE](COMPREHENSIVE_TESTING_GUIDE.md) | [THREADING_CONFIGURATION_GUIDE](THREADING_CONFIGURATION_GUIDE.md) | [COMMANDS_REFERENCE](COMMANDS_REFERENCE.md) | [CI_HARDENING](CI_HARDENING.md) |
-| **Mutation Testing** | - | [COMPREHENSIVE_TESTING_GUIDE](COMPREHENSIVE_TESTING_GUIDE.md) | [PARSER_ROBUSTNESS_IMPROVEMENTS](PARSER_ROBUSTNESS_IMPROVEMENTS.md) | [PARSER_ROBUSTNESS_IMPROVEMENTS](PARSER_ROBUSTNESS_IMPROVEMENTS.md) |
+| **Adaptive Threading** | [COMPREHENSIVE_TESTING_GUIDE](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md) | [THREADING_CONFIGURATION_GUIDE](../how-to/THREADING_CONFIGURATION_GUIDE.md) | [COMMANDS_REFERENCE](COMMANDS_REFERENCE.md) | [CI_HARDENING](CI_HARDENING.md) |
+| **Mutation Testing** | - | [COMPREHENSIVE_TESTING_GUIDE](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md) | [PARSER_ROBUSTNESS_IMPROVEMENTS](../explanation/PARSER_ROBUSTNESS_IMPROVEMENTS.md) | [PARSER_ROBUSTNESS_IMPROVEMENTS](../explanation/PARSER_ROBUSTNESS_IMPROVEMENTS.md) |
 | **Benchmarking** | - | [benchmarks/BENCHMARK_FRAMEWORK](benchmarks/BENCHMARK_FRAMEWORK.md) | [benchmarks/BENCHMARK_FRAMEWORK](benchmarks/BENCHMARK_FRAMEWORK.md) | [benchmarks/BENCHMARK_DESIGN](benchmarks/BENCHMARK_DESIGN.md) |
 
 ---
@@ -175,17 +175,17 @@ Map features to their documentation:
 
 ### Path 1: LSP Developer (New to Project)
 1. Start: [CLAUDE.md](../CLAUDE.md) - Project overview and quick start
-2. Setup: [AI_BUILD_GUIDE.md](AI_BUILD_GUIDE.md) - Development environment
+2. Setup: [AI_BUILD_GUIDE.md](../tutorials/AI_BUILD_GUIDE.md) - Development environment
 3. Architecture: [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) - System design
-4. First Feature: [EXECUTE_COMMAND_TUTORIAL.md](EXECUTE_COMMAND_TUTORIAL.md) - Build custom command
-5. Advanced: [WORKSPACE_REFACTORING_TUTORIAL.md](WORKSPACE_REFACTORING_TUTORIAL.md) - Cross-file features
+4. First Feature: [EXECUTE_COMMAND_TUTORIAL.md](../tutorials/EXECUTE_COMMAND_TUTORIAL.md) - Build custom command
+5. Advanced: [WORKSPACE_REFACTORING_TUTORIAL.md](../tutorials/WORKSPACE_REFACTORING_TUTORIAL.md) - Cross-file features
 
 ### Path 2: Parser Contributor
 1. Start: [CLAUDE.md](../CLAUDE.md) - Project overview
 2. Architecture: [CRATE_ARCHITECTURE_GUIDE.md](CRATE_ARCHITECTURE_GUIDE.md) - Component design
-3. Testing: [COMPREHENSIVE_TESTING_GUIDE.md](COMPREHENSIVE_TESTING_GUIDE.md) - TDD workflow
-4. Performance: [INCREMENTAL_PARSING_GUIDE.md](INCREMENTAL_PARSING_GUIDE.md) - Optimization
-5. Quality: [PARSER_ROBUSTNESS_IMPROVEMENTS.md](PARSER_ROBUSTNESS_IMPROVEMENTS.md) - Hardening
+3. Testing: [COMPREHENSIVE_TESTING_GUIDE.md](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md) - TDD workflow
+4. Performance: [INCREMENTAL_PARSING_GUIDE.md](../how-to/INCREMENTAL_PARSING_GUIDE.md) - Optimization
+5. Quality: [PARSER_ROBUSTNESS_IMPROVEMENTS.md](../explanation/PARSER_ROBUSTNESS_IMPROVEMENTS.md) - Hardening
 
 ### Path 3: API Documentation Maintainer
 1. Standards: [API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md) - Requirements
@@ -195,9 +195,9 @@ Map features to their documentation:
 5. Implementation: [adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) - Design
 
 ### Path 4: Debugging Integration
-1. Setup: [DAP_USER_GUIDE.md](DAP_USER_GUIDE.md) - Installation and configuration
+1. Setup: [DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md) - Installation and configuration
 2. Architecture: [CRATE_ARCHITECTURE_DAP.md](CRATE_ARCHITECTURE_DAP.md) - System design
-3. Validation: [DAP_BREAKPOINT_VALIDATION_GUIDE.md](DAP_BREAKPOINT_VALIDATION_GUIDE.md) - Testing
+3. Validation: [DAP_BREAKPOINT_VALIDATION_GUIDE.md](../how-to/DAP_BREAKPOINT_VALIDATION_GUIDE.md) - Testing
 4. Analysis: [ISSUE_207_DAP_SPECIFICATION_ANALYSIS.md](ISSUE_207_DAP_SPECIFICATION_ANALYSIS.md) - Protocol details
 
 ---
@@ -208,7 +208,7 @@ Map features to their documentation:
 
 **"How do I...?"** → [How-to Guides](#how-to-guides-problem-oriented)
 - Specific task-oriented instructions with cargo commands
-- Example: "How do I optimize imports?" → [IMPORT_OPTIMIZER_GUIDE.md](IMPORT_OPTIMIZER_GUIDE.md)
+- Example: "How do I optimize imports?" → [IMPORT_OPTIMIZER_GUIDE.md](../how-to/IMPORT_OPTIMIZER_GUIDE.md)
 
 **"What is...?"** → [Reference Documentation](#reference-documentation-information-oriented)
 - Precise technical specifications and API contracts
@@ -220,28 +220,28 @@ Map features to their documentation:
 
 **"Teach me..."** → [Tutorials](#tutorials-learning-oriented)
 - Step-by-step learning experiences
-- Example: "Teach me workspace refactoring" → [WORKSPACE_REFACTORING_TUTORIAL.md](WORKSPACE_REFACTORING_TUTORIAL.md)
+- Example: "Teach me workspace refactoring" → [WORKSPACE_REFACTORING_TUTORIAL.md](../tutorials/WORKSPACE_REFACTORING_TUTORIAL.md)
 
 ### Finding Information by Component
 
 **Parser** (`/crates/perl-parser/`):
 - Reference: [CRATE_ARCHITECTURE_GUIDE.md](CRATE_ARCHITECTURE_GUIDE.md)
-- Performance: [INCREMENTAL_PARSING_GUIDE.md](INCREMENTAL_PARSING_GUIDE.md)
-- Robustness: [PARSER_ROBUSTNESS_IMPROVEMENTS.md](PARSER_ROBUSTNESS_IMPROVEMENTS.md)
+- Performance: [INCREMENTAL_PARSING_GUIDE.md](../how-to/INCREMENTAL_PARSING_GUIDE.md)
+- Robustness: [PARSER_ROBUSTNESS_IMPROVEMENTS.md](../explanation/PARSER_ROBUSTNESS_IMPROVEMENTS.md)
 
 **LSP Server** (`/crates/perl-lsp/`):
-- Tutorial: [EXECUTE_COMMAND_TUTORIAL.md](EXECUTE_COMMAND_TUTORIAL.md)
+- Tutorial: [EXECUTE_COMMAND_TUTORIAL.md](../tutorials/EXECUTE_COMMAND_TUTORIAL.md)
 - Reference: [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)
-- Explanation: [LSP_CRATE_SEPARATION_GUIDE.md](LSP_CRATE_SEPARATION_GUIDE.md)
+- Explanation: [LSP_CRATE_SEPARATION_GUIDE.md](../explanation/LSP_CRATE_SEPARATION_GUIDE.md)
 
 **DAP Server** (`/crates/perl-dap/`):
-- Tutorial: [DAP_USER_GUIDE.md](DAP_USER_GUIDE.md)
+- Tutorial: [DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md)
 - Reference: [CRATE_ARCHITECTURE_DAP.md](CRATE_ARCHITECTURE_DAP.md)
-- How-to: [DAP_BREAKPOINT_VALIDATION_GUIDE.md](DAP_BREAKPOINT_VALIDATION_GUIDE.md)
+- How-to: [DAP_BREAKPOINT_VALIDATION_GUIDE.md](../how-to/DAP_BREAKPOINT_VALIDATION_GUIDE.md)
 
 **Testing** (`/tests/`):
-- Tutorial: [COMPREHENSIVE_TESTING_GUIDE.md](COMPREHENSIVE_TESTING_GUIDE.md)
-- How-to: [THREADING_CONFIGURATION_GUIDE.md](THREADING_CONFIGURATION_GUIDE.md)
+- Tutorial: [COMPREHENSIVE_TESTING_GUIDE.md](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md)
+- How-to: [THREADING_CONFIGURATION_GUIDE.md](../how-to/THREADING_CONFIGURATION_GUIDE.md)
 - Reference: [COMMANDS_REFERENCE.md](COMMANDS_REFERENCE.md)
 
 ---
@@ -294,7 +294,7 @@ See [API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md) for detaile
 
 ### Project Management
 - **[ISSUE_STATUS_2025-11-12.md](ISSUE_STATUS_2025-11-12.md)** - Complete issue analysis and priorities
-- **[CURRENT_STATUS.md](CURRENT_STATUS.md)** - Real-time project health dashboard
+- **[CURRENT_STATUS.md](../project/CURRENT_STATUS.md)** - Real-time project health dashboard
 - **[STABILITY.md](STABILITY.md)** - API stability guarantees
 
 ### Archived Documentation

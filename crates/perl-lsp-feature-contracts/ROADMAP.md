@@ -1,6 +1,6 @@
 # perl-lsp-feature-contracts Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-feature-contracts`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-feature-contracts`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Shared LSP feature contract model with SRP-friendly capability mapping helpers.

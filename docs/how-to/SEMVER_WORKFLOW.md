@@ -511,7 +511,7 @@ git push origin v0.10.0
 - **SemVer Spec:** https://semver.org/
 - **Rust API Guidelines:** https://rust-lang.github.io/api-guidelines/
 - **cargo-semver-checks:** https://github.com/obi1kenobi/cargo-semver-checks
-- **Project Stability Policy:** `docs/STABILITY.md`
+- **Project Stability Policy:** `docs/reference/STABILITY.md`
 
 ### Justfile Commands
 
@@ -542,4 +542,4 @@ File issues with label `tooling` for:
 ---
 
 **Last updated:** 2026-01-28
-**Related:** Issue #277, `docs/STABILITY.md`, `CONTRIBUTING.md`
+**Related:** Issue #277, `docs/reference/STABILITY.md`, `CONTRIBUTING.md`

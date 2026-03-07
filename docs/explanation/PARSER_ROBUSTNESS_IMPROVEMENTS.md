@@ -231,15 +231,15 @@ cargo test -p perl-parser --test fuzz_transliteration_crash_repro       # Transl
 ## Cross-References and Integration
 
 ### Related Documentation
-- **[COMPREHENSIVE_TESTING_GUIDE.md](COMPREHENSIVE_TESTING_GUIDE.md)**: Complete testing framework documentation
-- **[PERFORMANCE_PRESERVATION_GUIDE.md](PERFORMANCE_PRESERVATION_GUIDE.md)**: Performance maintenance during quality enhancement
-- **[MUTATION_TESTING_METHODOLOGY.md](MUTATION_TESTING_METHODOLOGY.md)**: Detailed mutation testing approach
-- **[API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md)**: Documentation quality requirements
+- **[COMPREHENSIVE_TESTING_GUIDE.md](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md)**: Complete testing framework documentation
+- **[PERFORMANCE_PRESERVATION_GUIDE.md](../how-to/PERFORMANCE_PRESERVATION_GUIDE.md)**: Performance maintenance during quality enhancement
+- **[MUTATION_TESTING_METHODOLOGY.md](../reference/MUTATION_TESTING_METHODOLOGY.md)**: Detailed mutation testing approach
+- **[API_DOCUMENTATION_STANDARDS.md](../reference/API_DOCUMENTATION_STANDARDS.md)**: Documentation quality requirements
 - **[ADR-0002](adr/0002-api-documentation-infrastructure.md)**: Documentation infrastructure decision record
 
 ### Integration with Development Workflow
 - **[CLAUDE.md](../CLAUDE.md)**: Essential commands and project overview with robustness testing integration
-- **[CONTRIBUTING_LSP.md](../CONTRIBUTING_LSP.md)**: Development guidelines with quality assurance requirements
+- **[CONTRIBUTING_LSP.md](../how-to/CONTRIBUTING_LSP.md)**: Development guidelines with quality assurance requirements
 - **[MIGRATION.md](../MIGRATION.md)**: Migration guidance including robustness testing adoption
 
 ## Summary

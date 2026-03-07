@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-This specification defines comprehensive security requirements for the DAP implementation, aligned with existing comprehensive security framework (`docs/SECURITY_DEVELOPMENT_GUIDE.md`). All security measures are testable via AC16 validation suite.
+This specification defines comprehensive security requirements for the DAP implementation, aligned with existing comprehensive security framework (`docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md`). All security measures are testable via AC16 validation suite.
 
 **Key Security Domains**:
 1. **Path Traversal Prevention**: Canonical path validation within workspace boundaries
@@ -46,7 +46,7 @@ use std::path::{Path, PathBuf, Component};
 use anyhow::{Result, bail};
 
 /// Validate breakpoint path is within workspace boundaries
-/// Aligned with docs/SECURITY_DEVELOPMENT_GUIDE.md
+/// Aligned with docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md
 pub fn validate_breakpoint_path(uri: &str, workspace_root: &Path) -> Result<PathBuf> {
     // Convert URI to filesystem path
     let path = uri_to_path(uri)?;
@@ -727,7 +727,7 @@ cargo audit -p perl-dap
 
 ### 8.1 Security Standards Alignment
 
-**Enterprise Security Framework** (`docs/SECURITY_DEVELOPMENT_GUIDE.md`):
+**Enterprise Security Framework** (`docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md`):
 - ✅ Path traversal prevention (canonical path validation)
 - ✅ UTF-16 position security (PR #153 symmetric conversion)
 - ✅ LSP error recovery patterns (safe logging)

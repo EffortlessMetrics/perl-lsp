@@ -50,5 +50,5 @@ Architecture Decision Records (ADRs) capture important architectural decisions a
 ## Cross-References
 
 - [CLAUDE.md](../CLAUDE.md) - Project overview and capabilities
-- [CRATE_ARCHITECTURE_GUIDE.md](../CRATE_ARCHITECTURE_GUIDE.md) - System architecture
-- [PARSER_COMPARISON.md](../PARSER_COMPARISON.md) - Parser implementation details
+- [CRATE_ARCHITECTURE_GUIDE.md](../reference/CRATE_ARCHITECTURE_GUIDE.md) - System architecture
+- [PARSER_COMPARISON.md](../reference/PARSER_COMPARISON.md) - Parser implementation details

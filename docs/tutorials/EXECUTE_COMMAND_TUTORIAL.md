@@ -376,9 +376,9 @@ perl-lsp --stdio --log
 
 ### Further Reading
 
-- [LSP Implementation Guide](/docs/LSP_IMPLEMENTATION_GUIDE.md) - Complete LSP feature reference
-- [Commands Reference](/docs/COMMANDS_REFERENCE.md) - All command specifications
-- [LSP Development Guide](/docs/LSP_DEVELOPMENT_GUIDE.md) - Advanced workflow integration
+- [LSP Implementation Guide](/docs/reference/LSP_IMPLEMENTATION_GUIDE.md) - Complete LSP feature reference
+- [Commands Reference](/docs/reference/COMMANDS_REFERENCE.md) - All command specifications
+- [LSP Development Guide](/docs/tutorials/LSP_DEVELOPMENT_GUIDE.md) - Advanced workflow integration
 
 ### Community and Support
 

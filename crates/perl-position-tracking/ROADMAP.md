@@ -1,6 +1,6 @@
 # perl-position-tracking Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-position-tracking`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-position-tracking`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 UTF-8/UTF-16 position tracking and conversion for Perl LSP

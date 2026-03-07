@@ -1,6 +1,6 @@
 # perl-feature-catalog Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-feature-catalog`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-feature-catalog`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Shared feature catalog model and code-generation helpers for capability-driven features.

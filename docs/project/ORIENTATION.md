@@ -2,7 +2,7 @@
 
 > For the documentation hub, see [README.md](README.md). This page provides project orientation for active contributors.
 
-> **SNAPSHOT DISCLAIMER**: Orientation-only. For live status and metrics, see `docs/CURRENT_STATUS.md` and GitHub milestones/issues.
+> **SNAPSHOT DISCLAIMER**: Orientation-only. For live status and metrics, see `docs/project/CURRENT_STATUS.md` and GitHub milestones/issues.
 
 Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 
@@ -47,12 +47,12 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 3. **[Milestones](MILESTONES.md)** - GitHub milestone mapping
 4. **[Docs Index](INDEX.md)** - Routes to the right doc fast
 5. **[TODO Backlog](TODO.md)** - Actionable tasks + missing features
-6. **[LSP Missing Features](LSP_MISSING_FEATURES_REPORT.md)** - Non-advertised capabilities (derived from `features.toml`)
+6. **[LSP Missing Features](../reference/LSP_MISSING_FEATURES_REPORT.md)** - Non-advertised capabilities (derived from `features.toml`)
 
 ### Development
 5. **[CLAUDE.md](../CLAUDE.md)** - Project guidance for AI assistants
 6. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - How to contribute
-7. **[COMMANDS_REFERENCE.md](COMMANDS_REFERENCE.md)** - Build/test commands
+7. **[COMMANDS_REFERENCE.md](../reference/COMMANDS_REFERENCE.md)** - Build/test commands
 
 ## 🚨 What Needs Attention RIGHT NOW
 
@@ -60,7 +60,7 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 1. 🟡 **Benchmark publication** - commit canonical benchmark outputs under `benchmarks/results/`
 2. 🟡 **v0.9.x packaging stance** - finalize supported platforms and shipping model
 3. 🟡 **Upgrade notes polish** - ensure v0.8.x → v0.9.x path is explicit
-4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/LSP_MISSING_FEATURES_REPORT.md`
+4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/reference/LSP_MISSING_FEATURES_REPORT.md`
 
 ### Next
 1. **v0.9.x readiness** - stability statement, packaging stance, benchmark receipts, upgrade notes
@@ -156,8 +156,8 @@ Run `just status-check` for live numbers.
 
 ### Day 2: Deep Dive
 1. Read [CLAUDE.md](../CLAUDE.md)
-2. Read [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md)
-3. Read [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)
+2. Read [ARCHITECTURE_OVERVIEW.md](../reference/ARCHITECTURE_OVERVIEW.md)
+3. Read [LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md)
 4. Explore codebase structure + docs index
 
 ### Day 3: First Contribution
@@ -171,8 +171,8 @@ Run `just status-check` for live numbers.
 ### Documentation
 - **Technical questions**: Check [docs/](.) directory
 - **Issue-specific**: Read the research comment on the issue
-- **LSP features**: [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)
-- **Testing**: [COMPREHENSIVE_TESTING_GUIDE.md](COMPREHENSIVE_TESTING_GUIDE.md)
+- **LSP features**: [LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md)
+- **Testing**: [COMPREHENSIVE_TESTING_GUIDE.md](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md)
 
 ### Communication
 - **GitHub Issues**: For bugs, features, questions

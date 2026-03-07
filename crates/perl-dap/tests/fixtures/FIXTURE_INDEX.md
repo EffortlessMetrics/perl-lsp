@@ -392,7 +392,7 @@ async fn test_breakpoint_performance_small_file() -> Result<()> {
 ## Cross-References
 
 - **Test Scaffolding**: `/crates/perl-dap/tests/dap_*_tests.rs` (8 test files, 67 test functions)
-- **Specifications**: `docs/DAP_IMPLEMENTATION_SPECIFICATION.md`, `docs/DAP_PROTOCOL_SCHEMA.md`
+- **Specifications**: `docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md`, `docs/reference/DAP_PROTOCOL_SCHEMA.md`
 - **Corpus Integration**: `/crates/perl-corpus/` (comprehensive Perl syntax coverage)
 - **Parser Tests**: `/crates/perl-parser/tests/` (existing Perl test infrastructure)
 

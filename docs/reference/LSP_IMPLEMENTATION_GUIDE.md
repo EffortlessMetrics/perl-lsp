@@ -1590,7 +1590,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp --test cancellation_thread_safety_tes
 
 For comprehensive implementation details, architecture specifications, and advanced usage patterns, see the dedicated cancellation documentation:
 
-- **[Cancellation Architecture Guide](CANCELLATION_ARCHITECTURE_GUIDE.md)** - Complete system architecture and integration patterns
+- **[Cancellation Architecture Guide](../explanation/CANCELLATION_ARCHITECTURE_GUIDE.md)** - Complete system architecture and integration patterns
 - **[LSP Cancellation Performance Specification](LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md)** - Performance requirements and benchmarking framework
 - **[LSP Cancellation Protocol](LSP_CANCELLATION_PROTOCOL.md)** - JSON-RPC protocol implementation and message handling
 - **[LSP Cancellation Test Strategy](LSP_CANCELLATION_TEST_STRATEGY.md)** - Comprehensive testing approach and validation methods
@@ -4857,7 +4857,7 @@ VS Code ↔ perl-dap (Rust) ↔ Devel::TSPerlDAP (Perl shim) ↔ perl -d
 
 ### See Also (*Diataxis: Reference* - Related documentation)
 
-- **[DAP User Guide](DAP_USER_GUIDE.md)**: Step-by-step setup and debugging tutorials
+- **[DAP User Guide](../tutorials/DAP_USER_GUIDE.md)**: Step-by-step setup and debugging tutorials
 - **[DAP Implementation Specification](DAP_IMPLEMENTATION_SPECIFICATION.md)**: Comprehensive technical specification
 - **[DAP Security Specification](DAP_SECURITY_SPECIFICATION.md)**: Security architecture and validation
 - **[Crate Architecture Guide](CRATE_ARCHITECTURE_GUIDE.md)**: `perl-dap` crate design and structure

@@ -652,7 +652,7 @@ fn is_executable_line(ast: &Node, line_start: usize, line_end: usize) -> bool {
 
 **Implementation Notes**:
 - AST validation utilities will be implemented in `perl-dap` crate (not in `perl-parser`)
-- See `docs/DAP_BREAKPOINT_VALIDATION_GUIDE.md` for detailed AST traversal patterns
+- See `docs/how-to/DAP_BREAKPOINT_VALIDATION_GUIDE.md` for detailed AST traversal patterns
 - Uses existing `Parser::parse()` API which returns `ast::Node` structure
 - Rope-based line-to-byte conversion for efficient position mapping
 
@@ -893,7 +893,7 @@ pub fn render_variable_value(value: &str, rope: &Rope) -> String {
 
 #### Task 1.3: Bridge Documentation (AC3)
 **Duration**: 0.5 days
-**Files Created**: `docs/DAP_BRIDGE_SETUP_GUIDE.md`
+**Files Created**: `docs/tutorials/DAP_BRIDGE_SETUP_GUIDE.md`
 
 **Content Requirements**:
 - Perl::LanguageServer installation instructions
@@ -1727,12 +1727,12 @@ jobs:
 - Attach configuration for remote debugging
 - Platform-specific setup (Windows, macOS, Linux, WSL)
 
-**Reference**: `docs/DAP_PROTOCOL_SCHEMA.md` (this document)
+**Reference**: `docs/reference/DAP_PROTOCOL_SCHEMA.md` (this document)
 - DAP protocol message schemas
 - Request/response formats
 - Error codes and handling
 
-**Explanation**: `docs/CRATE_ARCHITECTURE_DAP.md`
+**Explanation**: `docs/reference/CRATE_ARCHITECTURE_DAP.md`
 - Architecture decision rationale
 - Rust adapter + Perl shim design
 - LSP integration patterns
@@ -1813,8 +1813,8 @@ jobs:
 ### 11.2 Existing Perl LSP Documentation
 
 - [LSP Implementation Guide](LSP_IMPLEMENTATION_GUIDE.md): LSP server architecture
-- [Security Development Guide](SECURITY_DEVELOPMENT_GUIDE.md): Enterprise security practices
-- [Incremental Parsing Guide](INCREMENTAL_PARSING_GUIDE.md): <1ms parser updates
+- [Security Development Guide](../how-to/SECURITY_DEVELOPMENT_GUIDE.md): Enterprise security practices
+- [Incremental Parsing Guide](../how-to/INCREMENTAL_PARSING_GUIDE.md): <1ms parser updates
 - [Workspace Navigation Guide](WORKSPACE_NAVIGATION_GUIDE.md): Dual indexing strategy
 - [Position Tracking Guide](POSITION_TRACKING_GUIDE.md): UTF-16 ↔ UTF-8 conversion
 

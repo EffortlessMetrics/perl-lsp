@@ -20,7 +20,7 @@ This project started in Q2 2025. It was initially forked on July 15th, 2025 from
 
 | | Feature | Details |
 |---|---------|---------|
-| ✅ | **Full LSP Coverage** | All user-visible features and protocol methods ([status](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/CURRENT_STATUS.md)) |
+| ✅ | **Full LSP Coverage** | All user-visible features and protocol methods ([status](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/CURRENT_STATUS.md)) |
 | ✅ | **Completion** | Symbols, keywords, modules, variables, snippets |
 | ✅ | **Navigation** | Go-to-definition, references, workspace symbols |
 | ✅ | **Refactoring** | Rename, code actions, formatting |
@@ -28,14 +28,14 @@ This project started in Q2 2025. It was initially forked on July 15th, 2025 from
 | ✅ | **Hover** | Documentation and type information on hover |
 | ✅ | **Debug Adapter** | Breakpoints, stepping, variable inspection via DAP |
 | ✅ | **Comprehensive Perl 5 Syntax** | Heredocs, regex, quotes, formats, and all Perl 5 constructs |
-| ✅ | **Blazing Fast** | Fast incremental parsing and LSP responses ([status](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/CURRENT_STATUS.md)) |
+| ✅ | **Blazing Fast** | Fast incremental parsing and LSP responses ([status](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/CURRENT_STATUS.md)) |
 | ✅ | **Zero Perl Dependency** | Pure Rust — no Perl runtime needed for parsing or LSP |
 | ✅ | **Cross-File Navigation** | Dual indexing with comprehensive reference coverage |
 | ✅ | **Unicode-Safe** | Full UTF-8/UTF-16 handling with symmetric position conversion |
 
 ## Features
 
-- **Language Server** -- completion, hover, go-to-definition, references, rename, diagnostics, formatting, code actions, document symbols, workspace symbols, and more (**full advertised user-visible coverage**; `features.toml`; [current metrics](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/CURRENT_STATUS.md))
+- **Language Server** -- completion, hover, go-to-definition, references, rename, diagnostics, formatting, code actions, document symbols, workspace symbols, and more (**full advertised user-visible coverage**; `features.toml`; [current metrics](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/CURRENT_STATUS.md))
 - **Debug Adapter** -- breakpoints, stepping, variable inspection via DAP bridge to `perl -d`
 - **Parser** -- recursive-descent Perl parser with error recovery, heredoc/regex/quote support, and S-expression output
 - **Fast** -- pure Rust, no runtime dependencies on Perl for parsing or LSP
@@ -93,7 +93,7 @@ choco install perl-lsp
 | **Language** | Rust (native binary) | Perl | Perl |
 | **Requires Perl runtime** | No (parsing/LSP) | Yes | Yes |
 | **LSP coverage** | Full coverage | Partial | Partial |
-| **Incremental parsing** | Yes ([status](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/CURRENT_STATUS.md)) | N/A | N/A |
+| **Incremental parsing** | Yes ([status](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/CURRENT_STATUS.md)) | N/A | N/A |
 | **Debug adapter** | Built-in (DAP bridge) | Built-in | No |
 | **Cross-file navigation** | Dual-indexed | Limited | Limited |
 | **Mutation test score** | Yes (mutation tested) | N/A | N/A |
@@ -221,7 +221,7 @@ cargo run -p perl-parser -- path/to/file.pl
                    └─────────────────────────────────┘
 ```
 
-> Organized in dependency tiers — from leaf crates (tokens, AST) to application binaries (LSP, DAP). See [current metrics](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/CURRENT_STATUS.md).
+> Organized in dependency tiers — from leaf crates (tokens, AST) to application binaries (LSP, DAP). See [current metrics](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/CURRENT_STATUS.md).
 
 ## Workspace Layout
 
@@ -263,10 +263,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [CODE_OF_CONDUCT.md](CODE
 ## Documentation
 
 - [Book](book/) -- comprehensive user and developer guide (mdbook)
-- [docs/](docs/README.md) -- reference documentation index
-- [LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md) -- server architecture
-- [DAP User Guide](docs/DAP_USER_GUIDE.md) -- debugger setup and usage
-- [Stability Policy](docs/STABILITY.md) -- API versioning and compatibility
+- [docs/](docs/README.md) -- documentation index
+- [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md) -- server architecture
+- [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) -- debugger setup and usage
+- [Stability Policy](docs/reference/STABILITY.md) -- API versioning and compatibility
 - [features.toml](features.toml) -- canonical LSP feature catalog
 
 ## License

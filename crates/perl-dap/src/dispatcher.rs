@@ -32,8 +32,8 @@
 //!
 //! # References
 //!
-//! - [DAP Protocol Schema](../../docs/DAP_PROTOCOL_SCHEMA.md)
-//! - [DAP Implementation Spec](../../docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac5-adapter-scaffolding)
+//! - [DAP Protocol Schema](../../docs/reference/DAP_PROTOCOL_SCHEMA.md)
+//! - [DAP Implementation Spec](../../docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md#ac5-adapter-scaffolding)
 //! - [DAP Spec - Initialization](https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Initialize)
 
 use crate::breakpoints::BreakpointStore;

@@ -1,6 +1,6 @@
 # perl-diagnostics-codes Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-diagnostics-codes`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-diagnostics-codes`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Stable diagnostic codes and severity levels for Perl LSP

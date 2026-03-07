@@ -27,7 +27,7 @@ We will implement comprehensive API documentation infrastructure through systema
 ### Core Implementation Strategy
 
 1. **Infrastructure Enablement**: Enable `#![warn(missing_docs)]` in `/crates/perl-parser/src/lib.rs` with comprehensive test-driven validation
-2. **Quality Standards Framework**: Establish comprehensive documentation standards in `/docs/API_DOCUMENTATION_STANDARDS.md`
+2. **Quality Standards Framework**: Establish comprehensive documentation standards in `/docs/reference/API_DOCUMENTATION_STANDARDS.md`
 3. **Systematic Resolution Strategy**: Implement 4-phase approach targeting 605+ violations with priority-based module focus
 4. **Automated Validation**: Deploy comprehensive test suite with 12 acceptance criteria and property-based testing
 5. **CI Integration**: Ensure documentation quality gates prevent regression and maintain enterprise standards
@@ -231,11 +231,11 @@ The test suite at `/crates/perl-parser/tests/missing_docs_ac_tests.rs` provides:
 - **Cross-File Navigation Documentation**: Supports workspace indexing and navigation features
 
 ## Related Documents
-- [API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md) - Enterprise-grade documentation requirements
+- [API_DOCUMENTATION_STANDARDS.md](../reference/API_DOCUMENTATION_STANDARDS.md) - Enterprise-grade documentation requirements
 - [DOCUMENTATION_IMPLEMENTATION_STRATEGY.md](DOCUMENTATION_IMPLEMENTATION_STRATEGY.md) - 4-phase systematic resolution strategy
 - [CLAUDE.md](../CLAUDE.md) - Project overview with documentation command integration
-- [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) - LSP feature documentation context
-- [CRATE_ARCHITECTURE_GUIDE.md](CRATE_ARCHITECTURE_GUIDE.md) - System design documentation integration
+- [LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md) - LSP feature documentation context
+- [CRATE_ARCHITECTURE_GUIDE.md](../reference/CRATE_ARCHITECTURE_GUIDE.md) - System design documentation integration
 
 ## Future Considerations
 

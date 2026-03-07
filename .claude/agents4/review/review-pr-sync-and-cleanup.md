@@ -107,7 +107,7 @@ Your primary responsibilities are:
 ## Perl LSP Error Handling
 
 - Use Perl LSP-specific diagnostics: parsing validation failures, LSP protocol errors, workspace navigation issues
-- Reference Perl LSP troubleshooting patterns from CLAUDE.md and docs/LSP_DEVELOPMENT_GUIDE.md
+- Reference Perl LSP troubleshooting patterns from CLAUDE.md and docs/tutorials/LSP_DEVELOPMENT_GUIDE.md
 - Escalate using structured error context (anyhow::Error chains, parser error propagation, LSP component identification)
 - Preserve TDD principles and fix-forward patterns during Language Server Protocol conflict resolution
 - Apply bounded retry logic with clear attempt tracking (typically 2-3 attempts max)

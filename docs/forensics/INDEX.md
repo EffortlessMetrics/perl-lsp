@@ -58,12 +58,12 @@ Add one row to the table above.
 
 ### Level 1: Dossier (for interesting PRs)
 
-Create `pr-NNN.md` in this directory using the template in [`../FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md).
+Create `pr-NNN.md` in this directory using the template in [`../FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md).
 
 ### Level 2: Exhibit (for best PRs)
 
 1. Create dossier (Level 1)
-2. Add entry to [`../CASEBOOK.md`](../CASEBOOK.md)
+2. Add entry to [`../CASEBOOK.md`](../project/CASEBOOK.md)
 3. Draft cover sheet using format below
 4. Paste cover sheet into GitHub PR body with "Addendum (YYYY-MM-DD)" header
 
@@ -132,9 +132,9 @@ docs/forensics/
 
 See methodology docs:
 - [`../DEVLT_ESTIMATION.md`](../DEVLT_ESTIMATION.md) - DevLT estimation method
-- [`../METRICS_PROVENANCE.md`](../METRICS_PROVENANCE.md) - Provenance schema
-- [`../QUALITY_SURFACES.md`](../QUALITY_SURFACES.md) - The four quality surfaces
-- [`../FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md) - Full dossier template
+- [`../METRICS_PROVENANCE.md`](../project/METRICS_PROVENANCE.md) - Provenance schema
+- [`../QUALITY_SURFACES.md`](../project/QUALITY_SURFACES.md) - The four quality surfaces
+- [`../FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - Full dossier template
 
 ## Pre-PR Workflow (Issue Work Orders)
 
@@ -150,9 +150,9 @@ For coordinating multiple issues, see [IMPLEMENTATION_PHASES.md](IMPLEMENTATION_
 
 ## See Also
 
-- [`FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md) - Dossier template
-- [`CASEBOOK.md`](../CASEBOOK.md) - Exhibit entries
-- [`LESSONS.md`](../LESSONS.md) - Wrongness log
+- [`FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - Dossier template
+- [`CASEBOOK.md`](../project/CASEBOOK.md) - Exhibit entries
+- [`LESSONS.md`](../project/LESSONS.md) - Wrongness log
 - [`README.md`](README.md) - This directory's purpose
 - [`WORK_ORDER_FORMAT.md`](WORK_ORDER_FORMAT.md) - Pre-PR work order template
 - [`IMPLEMENTATION_PHASES.md`](IMPLEMENTATION_PHASES.md) - Swarm coordination

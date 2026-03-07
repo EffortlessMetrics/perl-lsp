@@ -1,6 +1,6 @@
 # perl-lsp Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Perl Language Server (LSP) — Tree-sitter-compatible with comprehensive IDE features

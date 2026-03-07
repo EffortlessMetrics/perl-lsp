@@ -1,6 +1,6 @@
 # perl-parser-pest Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser-pest`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-parser-pest`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Legacy Pest-based Perl parser (v2) — maintained as a learning tool and compatibility layer

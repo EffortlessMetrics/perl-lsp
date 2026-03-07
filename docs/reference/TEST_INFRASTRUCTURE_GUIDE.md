@@ -1147,8 +1147,8 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 
 ## Related Documentation
 
-- **[Threading Configuration Guide](THREADING_CONFIGURATION_GUIDE.md)**: Adaptive threading deep dive
+- **[Threading Configuration Guide](../how-to/THREADING_CONFIGURATION_GUIDE.md)**: Adaptive threading deep dive
 - **[Commands Reference](COMMANDS_REFERENCE.md)**: Comprehensive build/test commands
-- **[CI Documentation](CI.md)**: CI/CD pipeline architecture
+- **[CI Documentation](../project/CI.md)**: CI/CD pipeline architecture
 - **[LSP Implementation Guide](LSP_IMPLEMENTATION_GUIDE.md)**: LSP testing patterns
 - **[Ignored Tests Index](ci/IGNORED_TESTS_INDEX.md)**: BrokenPipe test tracking

@@ -1,6 +1,6 @@
 # perl-module-rename Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-module-rename`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-module-rename`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Deterministic module-import line edit planning for file rename workflows

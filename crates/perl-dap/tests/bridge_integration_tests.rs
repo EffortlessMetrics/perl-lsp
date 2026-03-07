@@ -2,7 +2,7 @@
 //!
 //! Tests for Phase 1: Bridge to Perl::LanguageServer DAP
 //!
-//! Specification: docs/DAP_IMPLEMENTATION_SPECIFICATION.md#phase-1-bridge-implementation-ac1-ac4
+//! Specification: docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md#phase-1-bridge-implementation-ac1-ac4
 
 use anyhow::Result;
 use perl_dap::{create_attach_json_snippet, create_launch_json_snippet};

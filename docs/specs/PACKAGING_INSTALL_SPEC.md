@@ -14,7 +14,7 @@ Turn "cool project" into "people actually use it" with frictionless installation
 
 ## Deliverables
 
-### 1. `docs/EDITOR_SETUP.md`
+### 1. `docs/how-to/EDITOR_SETUP.md`
 
 Complete setup instructions for each major editor.
 
@@ -211,7 +211,7 @@ args = ["--stdio"]
 
 ## Configuration Reference
 
-_Note: This section documents the configuration options that should be extracted to `docs/CONFIG.md`._
+_Note: This section documents the configuration options that should be extracted to `docs/reference/CONFIG.md`._
 
 ### Server Settings
 
@@ -400,8 +400,8 @@ echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
 ## Implementation Phases
 
 ### Phase 1: Core Docs (Week 1)
-- Create `docs/EDITOR_SETUP.md` with VS Code, Neovim, Emacs
-- Create `docs/CONFIG.md` with all settings
+- Create `docs/how-to/EDITOR_SETUP.md` with VS Code, Neovim, Emacs
+- Create `docs/reference/CONFIG.md` with all settings
 
 ### Phase 2: Expanded Coverage (Week 2)
 - Add Helix, Sublime Text, other editors

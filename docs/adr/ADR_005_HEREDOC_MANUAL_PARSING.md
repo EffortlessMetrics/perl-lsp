@@ -429,9 +429,9 @@ If critical issues are discovered post-release:
 ### Related Documentation
 
 - **[SPEC-183: Heredoc Declaration Parser Architecture](../SPEC_183_HEREDOC_DECLARATION_PARSER.md)**: Complete technical specification
-- **[HEREDOC_IMPLEMENTATION.md](../HEREDOC_IMPLEMENTATION.md)**: Existing three-phase architecture
-- **[ERROR_HANDLING_STRATEGY.md](../ERROR_HANDLING_STRATEGY.md)**: Error handling principles
-- **[MUTATION_TESTING_METHODOLOGY.md](../MUTATION_TESTING_METHODOLOGY.md)**: Test quality standards
+- **[HEREDOC_IMPLEMENTATION.md](../reference/HEREDOC_IMPLEMENTATION.md)**: Existing three-phase architecture
+- **[ERROR_HANDLING_STRATEGY.md](../explanation/ERROR_HANDLING_STRATEGY.md)**: Error handling principles
+- **[MUTATION_TESTING_METHODOLOGY.md](../reference/MUTATION_TESTING_METHODOLOGY.md)**: Test quality standards
 - **[ADR-001: Agent Architecture](ADR_001_AGENT_ARCHITECTURE.md)**: Workflow coordination patterns
 - **[ADR-002: API Documentation Infrastructure](ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)**: Documentation standards
 

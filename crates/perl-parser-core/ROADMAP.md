@@ -1,6 +1,6 @@
 # perl-parser-core Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-parser-core`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-parser-core`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Core parser engine for perl-parser

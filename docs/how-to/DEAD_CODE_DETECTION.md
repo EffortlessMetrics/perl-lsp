@@ -445,8 +445,8 @@ Potential improvements:
 ## Related Documentation
 
 - [CI Gate Policy](../.ci/gate-policy.yaml) - Gate configuration
-- [Technical Debt Tracking](DEBT_TRACKING.md) - Flaky tests and debt management
-- [Commands Reference](COMMANDS_REFERENCE.md) - All just commands
+- [Technical Debt Tracking](../explanation/DEBT_TRACKING.md) - Flaky tests and debt management
+- [Commands Reference](../reference/COMMANDS_REFERENCE.md) - All just commands
 
 ## References
 

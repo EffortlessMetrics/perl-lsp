@@ -77,7 +77,7 @@ This project uses comprehensive automated security scanning:
 - **Memory Safety**: Full Rust memory safety guarantees with minimal unsafe code
 - **Supply Chain Security**: Audited dependencies with pinned versions
 
-See `docs/SECURITY_DEVELOPMENT_GUIDE.md` for detailed security procedures.
+See `docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md` for detailed security procedures.
 
 ## Security Best Practices
 

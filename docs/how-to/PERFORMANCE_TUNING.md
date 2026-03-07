@@ -875,7 +875,7 @@ cargo bench -p perl-parser -- --baseline main
 
 ## See Also
 
-- [Configuration Schema](CONFIGURATION_SCHEMA.md) - Complete configuration reference
-- [Performance SLO](PERFORMANCE_SLO.md) - Service level objectives
+- [Configuration Schema](../reference/CONFIGURATION_SCHEMA.md) - Complete configuration reference
+- [Performance SLO](../reference/PERFORMANCE_SLO.md) - Service level objectives
 - [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
 - [Editor Setup](EDITOR_SETUP.md) - Editor-specific configuration

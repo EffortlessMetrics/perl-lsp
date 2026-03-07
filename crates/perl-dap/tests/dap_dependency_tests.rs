@@ -52,7 +52,7 @@ mod dap_dependencies {
     #[test]
     // AC:18
     fn test_bundled_shim_fallback() -> Result<()> {
-        let architecture_doc = read(repo_root().join("docs/CRATE_ARCHITECTURE_DAP.md"))?;
+        let architecture_doc = read(repo_root().join("docs/reference/CRATE_ARCHITECTURE_DAP.md"))?;
         assert!(architecture_doc.contains("perl-shim"));
         assert!(architecture_doc.contains("TSPerlDAP.pm"));
 
@@ -66,12 +66,12 @@ mod dap_dependencies {
     #[test]
     // AC:18
     fn test_dependency_management_documentation() -> Result<()> {
-        let user_guide = read(repo_root().join("docs/DAP_USER_GUIDE.md"))?;
+        let user_guide = read(repo_root().join("docs/tutorials/DAP_USER_GUIDE.md"))?;
         assert!(user_guide.contains("Perl::LanguageServer"));
         assert!(user_guide.contains("BridgeAdapter"));
         assert!(user_guide.contains("cpanm Perl::LanguageServer"));
 
-        let bridge_guide = read(repo_root().join("docs/DAP_BRIDGE_SETUP_GUIDE.md"))?;
+        let bridge_guide = read(repo_root().join("docs/tutorials/DAP_BRIDGE_SETUP_GUIDE.md"))?;
         assert!(bridge_guide.contains("cpan Perl::LanguageServer"));
         assert!(bridge_guide.contains("cpanm Perl::LanguageServer"));
         Ok(())
@@ -94,7 +94,7 @@ mod dap_dependencies {
             _ => {
                 // If Perl is unavailable in the test environment, ensure compatibility
                 // requirements are documented.
-                let guide = read(repo_root().join("docs/DAP_USER_GUIDE.md"))?;
+                let guide = read(repo_root().join("docs/tutorials/DAP_USER_GUIDE.md"))?;
                 assert!(guide.contains("Perl 5.10 or higher"));
             }
         }
@@ -106,7 +106,7 @@ mod dap_dependencies {
     #[test]
     // AC:18
     fn test_cpan_dependency_installation() -> Result<()> {
-        let guide = read(repo_root().join("docs/DAP_BRIDGE_SETUP_GUIDE.md"))?;
+        let guide = read(repo_root().join("docs/tutorials/DAP_BRIDGE_SETUP_GUIDE.md"))?;
         assert!(guide.contains("cpan Perl::LanguageServer"));
         assert!(guide.contains("cpanm Perl::LanguageServer"));
         assert!(guide.contains("Perl::LanguageServer not found"));

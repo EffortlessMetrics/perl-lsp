@@ -16,8 +16,8 @@ except ImportError:  # pragma: no cover
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 FEATURES_TOML = ROOT / "features.toml"
-CURRENT_STATUS = ROOT / "docs" / "CURRENT_STATUS.md"
-ROADMAP = ROOT / "docs" / "ROADMAP.md"
+CURRENT_STATUS = ROOT / "docs" / "project" / "CURRENT_STATUS.md"
+ROADMAP = ROOT / "docs" / "project" / "ROADMAP.md"
 TREE_SITTER_CORPUS = ROOT / "tree-sitter-perl" / "test" / "corpus"
 GAP_CORPUS = ROOT / "test_corpus"
 MISSING_DOCS_BASELINE = ROOT / "ci" / "missing_docs_baseline.txt"
@@ -402,7 +402,7 @@ def _update_roadmap() -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Update derived metrics in docs/CURRENT_STATUS.md and docs/ROADMAP.md"
+        description="Update derived metrics in docs/project/CURRENT_STATUS.md and docs/project/ROADMAP.md"
     )
     parser.add_argument(
         "--write",
@@ -426,13 +426,13 @@ def main() -> int:
     updated_status = _update_current_status()
     original_status = CURRENT_STATUS.read_text(encoding="utf-8")
     if updated_status != original_status:
-        files_to_update.append(("docs/CURRENT_STATUS.md", CURRENT_STATUS, updated_status))
+        files_to_update.append(("docs/project/CURRENT_STATUS.md", CURRENT_STATUS, updated_status))
 
     # Check ROADMAP.md
     updated_roadmap = _update_roadmap()
     original_roadmap = ROADMAP.read_text(encoding="utf-8")
     if updated_roadmap != original_roadmap:
-        files_to_update.append(("docs/ROADMAP.md", ROADMAP, updated_roadmap))
+        files_to_update.append(("docs/project/ROADMAP.md", ROADMAP, updated_roadmap))
 
     if not files_to_update:
         return 0

@@ -14,7 +14,7 @@
 //!
 //! # References
 //!
-//! - [DAP Protocol Schema](../../docs/DAP_PROTOCOL_SCHEMA.md)
+//! - [DAP Protocol Schema](../../docs/reference/DAP_PROTOCOL_SCHEMA.md)
 //! - [Debug Adapter Protocol Specification](https://microsoft.github.io/debug-adapter-protocol/)
 
 use serde::{Deserialize, Serialize};

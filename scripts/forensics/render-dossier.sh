@@ -2,7 +2,7 @@
 # Dossier Renderer: Synthesize forensics outputs into complete dossier markdown
 #
 # Reads YAML outputs from other forensics tools and renders a complete
-# dossier following docs/FORENSICS_SCHEMA.md format.
+# dossier following docs/reference/FORENSICS_SCHEMA.md format.
 #
 # Usage:
 #   ./scripts/forensics/render-dossier.sh 259
@@ -15,8 +15,8 @@
 #   - temporal.yaml     - Convergence analysis (from temporal-analysis.sh)
 #   - telemetry.yaml    - Static analysis deltas (future)
 #
-# See: docs/FORENSICS_SCHEMA.md for dossier structure
-#      docs/CASEBOOK.md for exhibit format
+# See: docs/reference/FORENSICS_SCHEMA.md for dossier structure
+#      docs/project/CASEBOOK.md for exhibit format
 #      docs/forensics/INDEX.md for cover sheet format
 
 set -euo pipefail
@@ -49,9 +49,9 @@ Examples:
     $(basename "$0") 259
     $(basename "$0") 259 -o docs/forensics/pr-259.md
     $(basename "$0") 259 --cover-sheet | pbcopy
-    $(basename "$0") 259 --exhibit >> docs/CASEBOOK.md
+    $(basename "$0") 259 --exhibit >> docs/project/CASEBOOK.md
 
-Output: Markdown following docs/FORENSICS_SCHEMA.md template
+Output: Markdown following docs/reference/FORENSICS_SCHEMA.md template
 EOF
     exit 0
 }

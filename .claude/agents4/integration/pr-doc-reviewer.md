@@ -99,11 +99,11 @@ docs: missing_docs_ac_tests: X/12 AC pass; cargo doc: clean; doctests: Y pass; v
 
 1. **Core Documentation Review (Diátaxis Framework):**
    - **docs/**: Comprehensive documentation following Diátaxis structure (Tutorial, How-to, Reference, Explanation)
-   - **docs/COMMANDS_REFERENCE.md**: Comprehensive build/test commands and cargo + xtask workflows
-   - **docs/LSP_IMPLEMENTATION_GUIDE.md**: LSP server architecture and protocol compliance (~89% features)
-   - **docs/INCREMENTAL_PARSING_GUIDE.md**: Performance implementation with SLO validation (≤1ms updates)
-   - **docs/SECURITY_DEVELOPMENT_GUIDE.md**: Enterprise security practices, UTF-16/UTF-8 safety, memory safety
-   - **docs/API_DOCUMENTATION_STANDARDS.md**: SPEC-149 compliance framework and quality enforcement
+   - **docs/reference/COMMANDS_REFERENCE.md**: Comprehensive build/test commands and cargo + xtask workflows
+   - **docs/reference/LSP_IMPLEMENTATION_GUIDE.md**: LSP server architecture and protocol compliance (~89% features)
+   - **docs/how-to/INCREMENTAL_PARSING_GUIDE.md**: Performance implementation with SLO validation (≤1ms updates)
+   - **docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md**: Enterprise security practices, UTF-16/UTF-8 safety, memory safety
+   - **docs/reference/API_DOCUMENTATION_STANDARDS.md**: SPEC-149 compliance framework and quality enforcement
    - **docs/DOCUMENTATION_IMPLEMENTATION_STRATEGY.md**: Phased approach for 129 violation resolution
 
 2. **API Documentation Validation (SPEC-149 Compliance):**

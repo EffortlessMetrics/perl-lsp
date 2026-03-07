@@ -71,7 +71,7 @@ test_command "CI workflow has semver-check job" "grep -q 'semver-check:' .github
 test_command "CONTRIBUTING.md mentions SemVer" "grep -q 'ci:semver' CONTRIBUTING.md"
 
 # Test 8: Documentation exists
-test_command "SEMVER_WORKFLOW.md exists" "test -f docs/SEMVER_WORKFLOW.md"
+test_command "SEMVER_WORKFLOW.md exists" "test -f docs/how-to/SEMVER_WORKFLOW.md"
 
 echo ""
 echo "================================="
@@ -93,7 +93,7 @@ if [ $TESTS_PASSED -eq $TESTS_RUN ]; then
     echo "  just semver-list-baselines           # List available baselines"
     echo ""
     echo "For more information, see:"
-    echo "  - docs/SEMVER_WORKFLOW.md"
+    echo "  - docs/how-to/SEMVER_WORKFLOW.md"
     echo "  - CONTRIBUTING.md (SemVer section)"
     exit 0
 else

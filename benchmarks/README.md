@@ -29,7 +29,7 @@ just bench-baseline
 
 ## Automated Performance Regression Alerts
 
-The perl-lsp project now includes automated performance regression detection with configurable thresholds and PR comment integration. See [docs/PERFORMANCE_MONITORING.md](../docs/PERFORMANCE_MONITORING.md) for comprehensive documentation.
+The perl-lsp project now includes automated performance regression detection with configurable thresholds and PR comment integration. See [docs/reference/PERFORMANCE_MONITORING.md](../docs/reference/PERFORMANCE_MONITORING.md) for comprehensive documentation.
 
 ### Alert Levels
 
@@ -339,6 +339,6 @@ These targets are based on editor responsiveness requirements:
 
 - [BENCHMARK_FRAMEWORK.md](./BENCHMARK_FRAMEWORK.md) - Comprehensive benchmark documentation
 - [results/README.md](./results/README.md) - Published benchmark results
-- [docs/CURRENT_STATUS.md](../docs/CURRENT_STATUS.md) - Project metrics
-- [docs/ROADMAP.md](../docs/ROADMAP.md) - Performance milestones
+- [docs/project/CURRENT_STATUS.md](../docs/project/CURRENT_STATUS.md) - Project metrics
+- [docs/project/ROADMAP.md](../docs/project/ROADMAP.md) - Performance milestones
 - `.github/workflows/benchmark.yml` - CI benchmark workflow

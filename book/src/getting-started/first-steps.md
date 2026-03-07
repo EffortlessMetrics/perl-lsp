@@ -2,7 +2,7 @@
 
 > For the documentation hub, see [README.md](README.md). This page provides project orientation for active contributors.
 
-> **SNAPSHOT DISCLAIMER**: Orientation-only. For live status and metrics, see `docs/CURRENT_STATUS.md` and GitHub milestones/issues.
+> **SNAPSHOT DISCLAIMER**: Orientation-only. For live status and metrics, see `docs/project/CURRENT_STATUS.md` and GitHub milestones/issues.
 
 Welcome to the perl-lsp project! This guide will get you up to speed quickly.
 
@@ -60,7 +60,7 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 1. 🟡 **Benchmark publication** - commit canonical benchmark outputs under `benchmarks/results/`
 2. 🟡 **v0.9.x packaging stance** - finalize supported platforms and shipping model
 3. 🟡 **Upgrade notes polish** - ensure v0.8.x → v0.9.x path is explicit
-4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/LSP_MISSING_FEATURES_REPORT.md`
+4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/reference/LSP_MISSING_FEATURES_REPORT.md`
 
 ### Next
 1. **v0.15.0 readiness** - stability contract, packaging stance, benchmark receipts

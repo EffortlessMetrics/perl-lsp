@@ -1,6 +1,6 @@
 # perl-symbol-table Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-symbol-table`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-symbol-table`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Symbol table and scope management for Perl LSP

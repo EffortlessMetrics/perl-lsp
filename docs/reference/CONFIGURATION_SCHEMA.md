@@ -1235,8 +1235,8 @@ Use online JSON Schema validators:
 
 ## See Also
 
-- [Getting Started](GETTING_STARTED.md) - Quick start guide
-- [Editor Setup](EDITOR_SETUP.md) - Editor-specific configuration
-- [Performance Tuning](PERFORMANCE_TUNING.md) - Performance optimization guide
-- [Troubleshooting Guide](TROUBLESHOOTING.md) - Common issues and solutions
-- [DAP User Guide](DAP_USER_GUIDE.md) - Debugging configuration
+- [Getting Started](../tutorials/GETTING_STARTED.md) - Quick start guide
+- [Editor Setup](../how-to/EDITOR_SETUP.md) - Editor-specific configuration
+- [Performance Tuning](../how-to/PERFORMANCE_TUNING.md) - Performance optimization guide
+- [Troubleshooting Guide](../how-to/TROUBLESHOOTING.md) - Common issues and solutions
+- [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) - Debugging configuration

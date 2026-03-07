@@ -129,7 +129,7 @@ For breaking changes, validate migration documentation in Perl LSP structure:
 
 **Required Documentation Locations**:
 - `docs/` for architectural migration guides (following Diátaxis framework)
-- `docs/STABILITY.md` updates for API stability commitments
+- `docs/reference/STABILITY.md` updates for API stability commitments
 - `MIGRATION.md` for library migration instructions
 - Inline code comments with `#[deprecated]` attributes for phased deprecation
 

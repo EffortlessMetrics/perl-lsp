@@ -302,9 +302,9 @@ env:
 
 ## Related Documentation
 
-- [Threading Configuration Guide](THREADING_CONFIGURATION_GUIDE.md) - Adaptive threading and concurrency management
-- [Cancellation Architecture Guide](CANCELLATION_ARCHITECTURE_GUIDE.md) - LSP cancellation system design
-- [LSP Development Guide](LSP_DEVELOPMENT_GUIDE.md) - General LSP testing patterns
+- [Threading Configuration Guide](../how-to/THREADING_CONFIGURATION_GUIDE.md) - Adaptive threading and concurrency management
+- [Cancellation Architecture Guide](../explanation/CANCELLATION_ARCHITECTURE_GUIDE.md) - LSP cancellation system design
+- [LSP Development Guide](../tutorials/LSP_DEVELOPMENT_GUIDE.md) - General LSP testing patterns
 
 ---
 

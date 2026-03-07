@@ -451,7 +451,7 @@ perl-dap --stdio --log
 ## References
 
 - [DAP Protocol Specification](https://microsoft.github.io/debug-adapter-protocol/)
-- [DAP User Guide](DAP_USER_GUIDE.md)
+- [DAP User Guide](../tutorials/DAP_USER_GUIDE.md)
 - [DAP Security Specification](DAP_SECURITY_SPECIFICATION.md)
 - [Debug Adapter Implementation](../crates/perl-dap/src/debug_adapter.rs)
 - [TCP Attach Module](../crates/perl-dap/src/tcp_attach.rs)

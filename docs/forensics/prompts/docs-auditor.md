@@ -179,7 +179,7 @@ Stated Scope: Document the status-check gate
 </pr_metadata>
 
 <docs_diff>
-diff --git a/docs/CURRENT_STATUS.md b/docs/CURRENT_STATUS.md
+diff --git a/docs/project/CURRENT_STATUS.md b/docs/project/CURRENT_STATUS.md
 + ## Verification
 +
 + ```bash
@@ -227,7 +227,7 @@ executable_snippets:
   broken: []
 
 drift_risk:
-  - doc: docs/CURRENT_STATUS.md
+  - doc: docs/project/CURRENT_STATUS.md
     code: scripts/status-check.sh
     risk: low
     reason: "Documentation added in same PR as feature"
@@ -262,7 +262,7 @@ findings:
     category: undeclared_limit
     summary: Status-check prerequisite not documented
     evidence:
-      - anchor: docs/CURRENT_STATUS.md:5-8
+      - anchor: docs/project/CURRENT_STATUS.md:5-8
         content: "just status-check - doesn't mention metrics must be computed first"
     recommendation: Add note that `just health` must run before status-check
     confidence: medium

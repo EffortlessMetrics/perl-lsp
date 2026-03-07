@@ -293,7 +293,7 @@ This security framework ensures that all code contributions maintain comprehensi
 
 This project implements comprehensive supply chain security measures including SBOM generation and SLSA provenance attestation. For detailed information, see:
 
-- **[SUPPLY_CHAIN_SECURITY.md](SUPPLY_CHAIN_SECURITY.md)** - Complete supply chain security documentation
+- **[SUPPLY_CHAIN_SECURITY.md](../reference/SUPPLY_CHAIN_SECURITY.md)** - Complete supply chain security documentation
 - **SBOM Generation**: `just sbom` to generate Software Bill of Materials
 - **Security Audit**: `just security-audit` to run vulnerability scans
 - **Provenance Verification**: `gh attestation verify` to verify build attestations
@@ -311,4 +311,4 @@ just security-audit
 gh attestation verify perl-lsp-v0.9.0-x86_64-unknown-linux-gnu.tar.gz --owner EffortlessMetrics
 ```
 
-See [SUPPLY_CHAIN_SECURITY.md](SUPPLY_CHAIN_SECURITY.md) for comprehensive documentation on SBOM formats, SLSA provenance, and verification procedures.
+See [SUPPLY_CHAIN_SECURITY.md](../reference/SUPPLY_CHAIN_SECURITY.md) for comprehensive documentation on SBOM formats, SLSA provenance, and verification procedures.

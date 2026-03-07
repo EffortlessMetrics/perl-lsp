@@ -184,7 +184,7 @@ For project-specific settings, the server reads configuration from your editor's
 }
 ```
 
-See [CONFIG.md](CONFIG.md) for all configuration options.
+See [CONFIG.md](../reference/CONFIG.md) for all configuration options.
 
 ## Troubleshooting
 
@@ -216,14 +216,14 @@ Reduce indexed files and result caps in your settings:
 }
 ```
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for more solutions.
+See [TROUBLESHOOTING.md](../how-to/TROUBLESHOOTING.md) for more solutions.
 
 ## Next Steps
 
-- **[EDITOR_SETUP.md](EDITOR_SETUP.md)** - Detailed editor configurations
-- **[CONFIG.md](CONFIG.md)** - All configuration options
-- **[LSP_FEATURES.md](LSP_FEATURES.md)** - Complete feature documentation
-- **[FAQ.md](FAQ.md)** - Frequently asked questions
+- **[EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md)** - Detailed editor configurations
+- **[CONFIG.md](../reference/CONFIG.md)** - All configuration options
+- **[LSP_FEATURES.md](../reference/LSP_FEATURES.md)** - Complete feature documentation
+- **[FAQ.md](../reference/FAQ.md)** - Frequently asked questions
 
 ## Getting Help
 

@@ -1,6 +1,6 @@
 # perl-error Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-error`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-error`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Error types, classification, and recovery strategies for the Perl parser ecosystem

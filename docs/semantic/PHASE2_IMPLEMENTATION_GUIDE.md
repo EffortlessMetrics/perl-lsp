@@ -1029,8 +1029,8 @@ Once all validations pass:
 - **LSP Integration**: `/crates/perl-lsp/tests/semantic_definition.rs`
 - **Issue Tracking**: GitHub Issue #188 (Semantic Analyzer Phases)
 - **Architecture**: `/docs/semantic/SEMANTIC_ANALYZER_ARCHITECTURE.md`
-- **Position Tracking**: `/docs/POSITION_TRACKING_GUIDE.md`
-- **Testing Framework**: `/docs/LSP_DEVELOPMENT_GUIDE.md`
+- **Position Tracking**: `/docs/reference/POSITION_TRACKING_GUIDE.md`
+- **Testing Framework**: `/docs/tutorials/LSP_DEVELOPMENT_GUIDE.md`
 
 ---
 

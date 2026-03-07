@@ -4,7 +4,7 @@ PR archaeology and investigation documentation.
 
 ## Forensics Schema
 
-See the [Forensics Schema](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/FORENSICS_SCHEMA.md) for the investigation template.
+See the [Forensics Schema](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/reference/FORENSICS_SCHEMA.md) for the investigation template.
 
 ## Examples
 

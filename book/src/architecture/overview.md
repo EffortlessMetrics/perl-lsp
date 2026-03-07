@@ -253,7 +253,7 @@ See `HEREDOC_IMPLEMENTATION.md` for full details.
 3. **Dynamic recovery** (`dynamic_delimiter_recovery.rs`) - Multiple strategies for runtime delimiters
 4. **Tree-sitter adapter** (`tree_sitter_adapter.rs`) - Ensures 100% AST compatibility
 
-See `docs/EDGE_CASES.md` for comprehensive documentation.
+See `docs/reference/EDGE_CASES.md` for comprehensive documentation.
 
 ## Thread-Safety Architecture (**Diataxis: Explanation**)
 

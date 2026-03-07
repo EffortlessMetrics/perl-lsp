@@ -253,9 +253,9 @@ brew install perl-lsp
 
 ### 📚 Documentation
 
-- [Getting Started](docs/GETTING_STARTED.md)
-- [LSP Features](docs/LSP_DOCUMENTATION.md)
-- [Troubleshooting](docs/TROUBLESHOOTING.md)
+- [Getting Started](../tutorials/GETTING_STARTED.md)
+- [LSP Features](../explanation/LSP_DOCUMENTATION.md)
+- [Troubleshooting](../how-to/TROUBLESHOOTING.md)
 
 ### 🙏 Contributors
 

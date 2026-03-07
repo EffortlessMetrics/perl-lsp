@@ -96,7 +96,7 @@ Post progress comments when branch preparation includes meaningful evidence:
 ```
 prep: branch rebased; format: pass; clippy: pass; build: parser/lsp ok; tests: 295/295 pass
 features: smoke 3/3 ok (parser|lsp|lexer); api docs: 12/12 ACs pass; parser: ~100% coverage
-paths: crates/perl-parser/src/lib.rs, crates/perl-lsp/src/main.rs, docs/LSP_IMPLEMENTATION_GUIDE.md
+paths: crates/perl-parser/src/lib.rs, crates/perl-lsp/src/main.rs, docs/reference/LSP_IMPLEMENTATION_GUIDE.md
 ```
 
 **Perl LSP-Specific Considerations:**

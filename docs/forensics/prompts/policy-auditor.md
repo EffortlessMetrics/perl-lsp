@@ -20,7 +20,7 @@ Provide the following context to the analyzer:
 ### 2. CURRENT_STATUS.md Diff
 ```
 <status_diff>
-[Git diff of docs/CURRENT_STATUS.md if changed, or "no changes"]
+[Git diff of docs/project/CURRENT_STATUS.md if changed, or "no changes"]
 </status_diff>
 ```
 
@@ -273,7 +273,7 @@ No changes to features.toml
 </features_diff>
 
 <status_diff>
-No changes to docs/CURRENT_STATUS.md
+No changes to docs/project/CURRENT_STATUS.md
 </status_diff>
 
 <capability_changes>
@@ -382,7 +382,7 @@ findings:
     category: metrics_drift
     summary: LSP Coverage metric needs recomputation after capability addition
     evidence:
-      - anchor: docs/CURRENT_STATUS.md:39
+      - anchor: docs/project/CURRENT_STATUS.md:39
         content: "82% (27/33 GA advertised)"
     recommendation: "Run `just status-update` to recompute LSP Coverage metric"
     confidence: high

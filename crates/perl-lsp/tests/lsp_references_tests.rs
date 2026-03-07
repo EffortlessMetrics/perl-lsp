@@ -18,7 +18,7 @@
 //! - Position-based symbol resolution
 //!
 //! Related Documentation:
-//! - docs/LSP_IMPLEMENTATION_GUIDE.md#find-references
+//! - docs/reference/LSP_IMPLEMENTATION_GUIDE.md#find-references
 //! - crates/perl-lsp-navigation/src/references.rs
 
 mod support;

@@ -1,6 +1,6 @@
 # perl-content-length-framing Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-content-length-framing`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-content-length-framing`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Shared Content-Length frame parsing and encoding for LSP and DAP transports

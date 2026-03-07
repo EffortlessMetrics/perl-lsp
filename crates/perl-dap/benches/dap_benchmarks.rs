@@ -7,7 +7,7 @@
 //! - Environment setup
 //! - Argument formatting
 //!
-//! Specification: docs/DAP_IMPLEMENTATION_SPECIFICATION.md#performance-specifications
+//! Specification: docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md#performance-specifications
 //!
 //! # Performance Targets (Phase 1)
 //!

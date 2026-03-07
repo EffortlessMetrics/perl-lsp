@@ -972,9 +972,9 @@ nix develop -c cargo mutants -p perl-parser --timeout 60
 - **[CI.md](CI.md)** - GitHub Actions workflow architecture
 - **[CI_TEST_LANES.md](CI_TEST_LANES.md)** - Test lane organization
 - **[CLAUDE.md](../CLAUDE.md)** - Project guidance (includes local workflow)
-- **[COMMANDS_REFERENCE.md](COMMANDS_REFERENCE.md)** - Full command catalog
-- **[COMPREHENSIVE_TESTING_GUIDE.md](COMPREHENSIVE_TESTING_GUIDE.md)** - Testing framework
-- **[THREADING_CONFIGURATION_GUIDE.md](THREADING_CONFIGURATION_GUIDE.md)** - Thread safety
+- **[COMMANDS_REFERENCE.md](../reference/COMMANDS_REFERENCE.md)** - Full command catalog
+- **[COMPREHENSIVE_TESTING_GUIDE.md](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md)** - Testing framework
+- **[THREADING_CONFIGURATION_GUIDE.md](../how-to/THREADING_CONFIGURATION_GUIDE.md)** - Thread safety
 
 ---
 

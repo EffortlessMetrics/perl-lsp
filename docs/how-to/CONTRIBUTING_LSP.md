@@ -52,7 +52,7 @@ cargo test -p perl-parser --test missing_docs_ac_tests
 cargo doc --no-deps --package perl-parser  # Should compile without warnings
 ```
 
-For complete documentation standards, see [API Documentation Standards](docs/API_DOCUMENTATION_STANDARDS.md).
+For complete documentation standards, see [API Documentation Standards](../reference/API_DOCUMENTATION_STANDARDS.md).
 
 ### 2. Pick a Task
 Check our priority list and pick an unassigned task:

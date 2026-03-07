@@ -1,6 +1,6 @@
 # perl-module-import Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-module-import`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-module-import`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Single-line Perl use/require import head parsing and classification

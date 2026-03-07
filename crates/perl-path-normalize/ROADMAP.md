@@ -1,6 +1,6 @@
 # perl-path-normalize Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-path-normalize`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-path-normalize`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Secure component-wise path normalization for workspace-relative paths.

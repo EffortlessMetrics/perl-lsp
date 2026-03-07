@@ -114,7 +114,7 @@ This document provides a comprehensive list of parsing limitations across all th
 
 ### ✅ LSP Coverage (tracked)
 
-LSP coverage is tracked in `features.toml`; current computed metrics live in [docs/CURRENT_STATUS.md](CURRENT_STATUS.md).
+LSP coverage is tracked in `features.toml`; current computed metrics live in [docs/project/CURRENT_STATUS.md](../project/CURRENT_STATUS.md).
 
 ### ✅ Fully Implemented Core Features
 

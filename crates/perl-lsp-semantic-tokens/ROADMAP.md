@@ -1,6 +1,6 @@
 # perl-lsp-semantic-tokens Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-semantic-tokens`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-semantic-tokens`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 LSP semantic tokens provider for Perl — token classification and delta encoding

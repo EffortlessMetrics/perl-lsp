@@ -274,7 +274,7 @@ labels:
 
 ## Resources
 
-- Full Guide: [docs/DEPENDENCY_MANAGEMENT.md](DEPENDENCY_MANAGEMENT.md)
+- Full Guide: [docs/how-to/DEPENDENCY_MANAGEMENT.md](DEPENDENCY_MANAGEMENT.md)
 - Dependabot Config: [.github/dependabot.yml](../.github/dependabot.yml)
 - Cargo Book: https://doc.rust-lang.org/cargo/
 - Semantic Versioning: https://semver.org/

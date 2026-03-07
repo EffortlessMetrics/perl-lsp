@@ -17,7 +17,7 @@
 //! - Position-based symbol resolution
 //!
 //! Related Documentation:
-//! - docs/LSP_IMPLEMENTATION_GUIDE.md#hover
+//! - docs/reference/LSP_IMPLEMENTATION_GUIDE.md#hover
 //! - crates/perl-lsp-navigation/src/hover.rs
 
 mod support;

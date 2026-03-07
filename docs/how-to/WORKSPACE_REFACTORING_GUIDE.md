@@ -512,4 +512,4 @@ println!("Operation took: {:?}", start.elapsed());
 - [CLAUDE.md](../CLAUDE.md) - Project overview and commands
 - [ARCHITECTURE.md](../ARCHITECTURE.md) - System architecture
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Development guidelines
-- [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) - LSP integration
+- [LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md) - LSP integration

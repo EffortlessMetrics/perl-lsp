@@ -1,6 +1,6 @@
 # perl-workspace-discovery Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-workspace-discovery`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-workspace-discovery`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Git-aware Perl workspace file discovery with WalkDir fallback

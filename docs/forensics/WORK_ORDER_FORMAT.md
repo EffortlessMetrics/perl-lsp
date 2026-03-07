@@ -234,6 +234,6 @@ Calibration Update (devlt.csv)
 ## See Also
 
 - [DEVLT_ESTIMATION.md](DEVLT_ESTIMATION.md) - Budget estimation rubric
-- [FORENSICS_SCHEMA.md](FORENSICS_SCHEMA.md) - PR dossier format (post-merge)
+- [FORENSICS_SCHEMA.md](../reference/FORENSICS_SCHEMA.md) - PR dossier format (post-merge)
 - [forensics/prompts/measurement-auditor.md](forensics/prompts/measurement-auditor.md) - Measurement integrity validation
 - [forensics/INDEX.md](forensics/INDEX.md) - PR archaeology index

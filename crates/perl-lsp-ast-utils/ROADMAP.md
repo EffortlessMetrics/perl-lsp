@@ -1,6 +1,6 @@
 # perl-lsp-ast-utils Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-ast-utils`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-ast-utils`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Shared AST range-lookup, insertion-position, and indentation helpers for Perl LSP features.

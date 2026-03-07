@@ -686,8 +686,8 @@ Parse → Index → Navigate → Complete → Analyze
   - Semantic token type explanation
 
 ### User-Facing Docs
-- Update `docs/LSP_IMPLEMENTATION_GUIDE.md` with new semantic token types
-- Add examples to `docs/LSP_DEVELOPMENT_GUIDE.md`
+- Update `docs/reference/LSP_IMPLEMENTATION_GUIDE.md` with new semantic token types
+- Add examples to `docs/tutorials/LSP_DEVELOPMENT_GUIDE.md`
 
 ---
 

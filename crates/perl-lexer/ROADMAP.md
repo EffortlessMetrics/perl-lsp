@@ -1,6 +1,6 @@
 # perl-lexer Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lexer`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lexer`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 High-performance Perl lexer with context-aware tokenization
