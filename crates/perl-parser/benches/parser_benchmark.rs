@@ -90,26 +90,13 @@ fn benchmark_complex_parsing(c: &mut Criterion) {
 }
 
 fn benchmark_ast_generation(c: &mut Criterion) {
+    let mut parser = Parser::new(COMPLEX_SCRIPT);
+    let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
+
     c.bench_function("ast_to_sexp", |b| {
-        let mut parser = Parser::new(COMPLEX_SCRIPT);
-        match parser.parse() {
-            Ok(ast) => {
-                b.iter(|| {
-                    let _ = black_box(ast.to_sexp());
-                });
-            }
-            Err(e) => {
-                // If parsing fails, we need to make sure the benchmark still runs
-                eprintln!("Warning: Parse error in ast_to_sexp benchmark: {:?}", e);
-                // Create a dummy benchmark that still measures something
-                b.iter(|| {
-                    let mut fallback_parser = Parser::new("my $x = 1;");
-                    if let Ok(fallback_ast) = fallback_parser.parse() {
-                        let _ = black_box(fallback_ast.to_sexp());
-                    }
-                });
-            }
-        }
+        b.iter(|| {
+            let _ = black_box(ast.to_sexp());
+        });
     });
 }
 
@@ -138,37 +125,15 @@ fn benchmark_isolated_components(c: &mut Criterion) {
 }
 
 fn benchmark_scope_analysis(c: &mut Criterion) {
-    c.bench_function("scope_analysis", |b| {
-        let mut parser = Parser::new(COMPLEX_SCRIPT);
-        match parser.parse() {
-            Ok(ast) => {
-                let analyzer = ScopeAnalyzer::new();
-                let pragma_map = vec![];
+    let mut parser = Parser::new(COMPLEX_SCRIPT);
+    let ast = parser.parse().expect("COMPLEX_SCRIPT must parse for benchmark");
+    let analyzer = ScopeAnalyzer::new();
+    let pragma_map = vec![];
 
-                b.iter(|| {
-                    analyzer.analyze(
-                        black_box(&ast),
-                        black_box(COMPLEX_SCRIPT),
-                        black_box(&pragma_map),
-                    );
-                });
-            }
-            Err(e) => {
-                eprintln!("Warning: Parse error in scope_analysis benchmark: {:?}", e);
-                b.iter(|| {
-                    // Fallback benchmark with minimal script
-                    let mut fallback_parser = Parser::new("my $x = 1;");
-                    if let Ok(fallback_ast) = fallback_parser.parse() {
-                        let analyzer = ScopeAnalyzer::new();
-                        analyzer.analyze(
-                            black_box(&fallback_ast),
-                            black_box("my $x = 1;"),
-                            black_box(&[]),
-                        );
-                    }
-                });
-            }
-        }
+    c.bench_function("scope_analysis", |b| {
+        b.iter(|| {
+            analyzer.analyze(black_box(&ast), black_box(COMPLEX_SCRIPT), black_box(&pragma_map));
+        });
     });
 }
 

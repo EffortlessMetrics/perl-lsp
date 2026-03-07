@@ -12,13 +12,13 @@ use warnings;
 
 sub process_data {
     my ($data) = @_;
-    
+
     # Process each item
     for my $item (@$data) {
         my $result = transform($item);
         print "Result: $result\n";
     }
-    
+
     return 1;
 }
 
@@ -32,20 +32,24 @@ process_data($items);
 "#
     .to_string();
 
-    let mut state = IncrementalState::new(source);
+    let start = must_some(source.find("transform"));
+    let old_end = start + "transform".len();
 
     c.bench_function("incremental small edit", |b| {
-        b.iter(|| {
-            // Edit line 9: change "transform" to "process"
-            let edit = Edit {
-                start_byte: 180, // approximate position
-                old_end_byte: 189,
-                new_end_byte: 187,
-                new_text: "process".to_string(),
-            };
-            must(apply_edits(&mut state, &[edit]));
-            black_box(&state.ast);
-        })
+        b.iter_batched(
+            || IncrementalState::new(source.clone()),
+            |mut state| {
+                let edit = Edit {
+                    start_byte: start,
+                    old_end_byte: old_end,
+                    new_end_byte: start + "process".len(),
+                    new_text: "process".to_string(),
+                };
+                must(apply_edits(&mut state, &[edit]));
+                black_box(&state.ast);
+            },
+            BatchSize::SmallInput,
+        );
     });
 }
 
@@ -93,27 +97,32 @@ print "$x $y $z\n";
 "#
     .to_string();
 
-    let mut state = IncrementalState::new(source);
+    let pos_1 = must_some(source.find("= 1")) + 2;
+    let pos_2 = must_some(source.find("= 2")) + 2;
 
     c.bench_function("incremental multiple edits", |b| {
-        b.iter(|| {
-            let edits = vec![
-                Edit {
-                    start_byte: 8,
-                    old_end_byte: 9,
-                    new_end_byte: 10,
-                    new_text: "10".to_string(),
-                },
-                Edit {
-                    start_byte: 19,
-                    old_end_byte: 20,
-                    new_end_byte: 10,
-                    new_text: "20".to_string(),
-                },
-            ];
-            must(apply_edits(&mut state, &edits));
-            black_box(&state.ast);
-        })
+        b.iter_batched(
+            || IncrementalState::new(source.clone()),
+            |mut state| {
+                let edits = vec![
+                    Edit {
+                        start_byte: pos_1,
+                        old_end_byte: pos_1 + 1,
+                        new_end_byte: pos_1 + 2,
+                        new_text: "10".to_string(),
+                    },
+                    Edit {
+                        start_byte: pos_2,
+                        old_end_byte: pos_2 + 1,
+                        new_end_byte: pos_2 + 2,
+                        new_text: "20".to_string(),
+                    },
+                ];
+                must(apply_edits(&mut state, &edits));
+                black_box(&state.ast);
+            },
+            BatchSize::SmallInput,
+        );
     });
 }
 
