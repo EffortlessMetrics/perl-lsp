@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BIN="$REPO_ROOT/target/debug/perl-ci-hygiene"
 
-# Run E2E tests with concurrency gating
-source "$(dirname "$0")/preflight.sh"
+if [ -x "$BIN" ]; then
+  exec "$BIN" test-e2e-capped "$@"
+fi
 
-echo "Running comprehensive E2E tests with concurrency caps..."
-"$(dirname "$0")/e2e-gate.sh" "$@"
+exec cargo run --quiet --manifest-path "$REPO_ROOT/Cargo.toml" -p perl-ci-hygiene -- test-e2e-capped "$@"

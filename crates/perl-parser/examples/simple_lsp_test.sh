@@ -1,11 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Simple test for the LSP server
-echo "Testing Perl LSP server..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+BIN="${REPO_ROOT}/target/debug/perl-ci-hygiene"
 
-# Create a test request
-cat << 'EOF' | cargo run -p perl-parser --bin perl-lsp 2>&1 | head -20
-Content-Length: 205
+if [ -x "$BIN" ]; then
+  exec "$BIN" simple-lsp-test
+fi
 
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":123,"rootUri":"file:///tmp","capabilities":{},"initializationOptions":{},"trace":"off","workspaceFolders":null}}
-EOF
+exec cargo run --quiet --manifest-path "$REPO_ROOT/Cargo.toml" -p perl-ci-hygiene -- simple-lsp-test

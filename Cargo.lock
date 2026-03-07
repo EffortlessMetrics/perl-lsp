@@ -1538,6 +1538,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-ci-hygiene"
+version = "0.10.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "color-eyre",
+ "regex",
+ "walkdir",
+]
+
+[[package]]
 name = "perl-content-length-framing"
 version = "0.10.0"
 

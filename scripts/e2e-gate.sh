@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-# Change MAX_E2E to 3 if your box can handle it comfortably
-MAX_E2E="${MAX_E2E:-2}"
-LOCK="/tmp/e2e-suite.lock"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BIN="$REPO_ROOT/target/debug/perl-ci-hygiene"
 
-# Acquire a shared lock with a small queue (emulates -j MAX_E2E)
-exec 200>"$LOCK"
-# Try immediate lock; if busy, wait (keeps logs cleaner)
-flock -n 200 || { echo "E2E slot busy → waiting..."; flock 200; }
+if [ -x "$BIN" ]; then
+  exec "$BIN" e2e-gate "$@"
+fi
 
-# For Rust projects, run comprehensive tests with concurrency caps
-RUST_TEST_THREADS="${RUST_TEST_THREADS:-2}" cargo test -- --test-threads="${RUST_TEST_THREADS:-2}" "$@"
+exec cargo run --quiet --manifest-path "$REPO_ROOT/Cargo.toml" -p perl-ci-hygiene -- e2e-gate "$@"

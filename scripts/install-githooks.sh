@@ -1,31 +1,11 @@
 #!/usr/bin/env bash
-# Install git hooks for perl-lsp development
-# Usage: bash scripts/install-githooks.sh
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BIN="$REPO_ROOT/target/debug/perl-ci-hygiene"
 
-mkdir -p .git/hooks
-
-cat > .git/hooks/pre-push <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-
-echo "🚪 Running local gate before push: nix develop -c just ci-gate"
-echo "   (Skip with: git push --no-verify)"
-echo ""
-
-# Try nix develop first, fall back to just alone
-if command -v nix &>/dev/null && [ -f flake.nix ]; then
-    nix develop -c just ci-gate
-elif command -v just &>/dev/null; then
-    just ci-gate
-else
-    echo "⚠️  Neither 'nix develop' nor 'just' available, skipping pre-push gate"
-    echo "   Install just: cargo install just"
-    exit 0
+if [ -x "$BIN" ]; then
+  exec "$BIN" install-githooks
 fi
-EOF
 
-chmod +x .git/hooks/pre-push
-echo "✅ Installed pre-push hook"
-echo "   The hook runs 'nix develop -c just ci-gate' before each push"
-echo "   Skip with: git push --no-verify"
+exec cargo run --quiet --manifest-path "$REPO_ROOT/Cargo.toml" -p perl-ci-hygiene -- install-githooks
