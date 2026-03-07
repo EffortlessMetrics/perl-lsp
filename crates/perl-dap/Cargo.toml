@@ -146,11 +146,5 @@ name = "dap_benchmarks"
 path = "benches/dap_benchmarks.rs"
 harness = false
 
-[[bench]]
-name = "dap_native_benchmarks"
-path = "benches/dap_native_benchmarks.rs"
-harness = false
-# Phase5: Native DAP performance benchmarks
-
 [lints]
 workspace = true

@@ -1,4 +1,4 @@
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use perl_lsp_tooling::performance::AstCache;
 use perl_parser_core::{Node, NodeKind, SourceLocation};
 use std::hint::black_box;
@@ -87,49 +87,61 @@ fn bench_cache_eviction(c: &mut Criterion) {
 }
 
 fn bench_cache_concurrent_access(c: &mut Criterion) {
+    let ast = create_test_ast(1);
+
     c.bench_function("cache_concurrent_access", |b| {
-        let cache = Arc::new(AstCache::new(100, 300));
-        let ast = create_test_ast(1);
+        b.iter_custom(|iters| {
+            let mut total = std::time::Duration::ZERO;
+            for _ in 0..iters {
+                let cache = AstCache::new(100, 300);
+                let barrier = std::sync::Barrier::new(5); // 4 workers + 1 main
 
-        b.iter(|| {
-            let mut handles = vec![];
-
-            for i in 0..4 {
-                let cache_clone = Arc::clone(&cache);
-                let ast_clone = ast.clone();
-
-                let handle = std::thread::spawn(move || {
-                    for j in 0..10 {
-                        let uri = format!("file_{}_{}.pl", i, j);
-                        let content = format!("content_{}_{}", i, j);
-                        cache_clone.put(uri.clone(), &content, ast_clone.clone());
-                        let _ = cache_clone.get(&uri, &content);
+                let start = std::thread::scope(|s| {
+                    for i in 0..4 {
+                        let cache_ref = &cache;
+                        let ast_ref = &ast;
+                        let barrier_ref = &barrier;
+                        s.spawn(move || {
+                            barrier_ref.wait();
+                            for j in 0..10 {
+                                let uri = format!("file_{}_{}.pl", i, j);
+                                let content = format!("content_{}_{}", i, j);
+                                cache_ref.put(uri.clone(), &content, ast_ref.clone());
+                                let _ = cache_ref.get(&uri, &content);
+                            }
+                        });
                     }
+                    // All workers spawned and blocking on barrier.
+                    // Start timing, then release.
+                    let start = std::time::Instant::now();
+                    barrier.wait();
+                    start
                 });
-                handles.push(handle);
+                // thread::scope joins all threads before returning.
+                // elapsed() captures only barrier-release + cache ops + join-wait.
+                total += start.elapsed();
             }
-
-            for handle in handles {
-                let _ = handle.join();
-            }
+            total
         });
     });
 }
 
 fn bench_cache_cleanup(c: &mut Criterion) {
+    let ast = create_test_ast(1);
+
     c.bench_function("cache_cleanup", |b| {
-        let cache = AstCache::new(100, 1); // Short TTL
-        let ast = create_test_ast(1);
-
-        // Pre-populate cache
-        for i in 0..50 {
-            cache.put(format!("file_{}.pl", i), &format!("content_{}", i), ast.clone());
-        }
-
-        // Wait for some entries to expire
-        std::thread::sleep(std::time::Duration::from_millis(1100));
-
-        b.iter(|| cache.cleanup());
+        b.iter_batched(
+            || {
+                let cache = AstCache::new(100, 1); // Short TTL
+                for i in 0..50 {
+                    cache.put(format!("file_{}.pl", i), &format!("content_{}", i), ast.clone());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1100));
+                cache
+            },
+            |cache| cache.cleanup(),
+            BatchSize::PerIteration,
+        );
     });
 }
 

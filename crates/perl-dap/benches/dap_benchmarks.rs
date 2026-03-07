@@ -32,7 +32,7 @@
 //! ```
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use perl_dap::configuration::{AttachConfiguration, LaunchConfiguration};
+use perl_dap::configuration::LaunchConfiguration;
 use perl_dap::debug_adapter::DebugAdapter;
 use perl_dap::platform::{
     format_command_args, normalize_path, resolve_perl_path, setup_environment,
@@ -44,62 +44,6 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 // ========== Configuration Benchmarks (AC14) ==========
-
-/// Benchmark LaunchConfiguration creation
-/// Target: <50ms
-fn benchmark_launch_config_creation(c: &mut Criterion) {
-    let mut group = c.benchmark_group("configuration");
-    group.measurement_time(Duration::from_secs(10));
-
-    group.bench_function("launch_config_creation", |b| {
-        b.iter(|| {
-            let _config = LaunchConfiguration {
-                program: black_box(PathBuf::from("/tmp/test.pl")),
-                args: black_box(vec!["arg1".to_string(), "arg2".to_string()]),
-                cwd: Some(PathBuf::from("/tmp")),
-                env: HashMap::new(),
-                perl_path: None,
-                include_paths: vec![],
-            };
-        })
-    });
-
-    group.bench_function("launch_config_creation_with_include_paths", |b| {
-        b.iter(|| {
-            let _config = LaunchConfiguration {
-                program: black_box(PathBuf::from("/tmp/test.pl")),
-                args: black_box(vec![]),
-                cwd: None,
-                env: HashMap::new(),
-                perl_path: None,
-                include_paths: black_box(vec![
-                    PathBuf::from("/usr/local/lib/perl5"),
-                    PathBuf::from("/home/user/lib"),
-                    PathBuf::from("./local/lib/perl5"),
-                ]),
-            };
-        })
-    });
-
-    group.bench_function("launch_config_creation_with_env", |b| {
-        let mut env = HashMap::new();
-        env.insert("PERL5LIB".to_string(), "/custom/lib".to_string());
-        env.insert("DEBUG".to_string(), "1".to_string());
-
-        b.iter(|| {
-            let _config = LaunchConfiguration {
-                program: black_box(PathBuf::from("/tmp/test.pl")),
-                args: black_box(vec![]),
-                cwd: None,
-                env: black_box(env.clone()),
-                perl_path: Some(PathBuf::from("/usr/bin/perl")),
-                include_paths: vec![],
-            };
-        })
-    });
-
-    group.finish();
-}
 
 /// Benchmark LaunchConfiguration validation
 /// Target: <50ms
@@ -159,35 +103,6 @@ fn benchmark_launch_config_validation(c: &mut Criterion) {
 
     // Clean up temp file
     let _ = fs::remove_file(&temp_file);
-
-    group.finish();
-}
-
-/// Benchmark AttachConfiguration creation
-/// Target: <50ms (trivial, but measure for baseline)
-fn benchmark_attach_config_creation(c: &mut Criterion) {
-    let mut group = c.benchmark_group("attach_configuration");
-    group.measurement_time(Duration::from_secs(10));
-
-    group.bench_function("attach_config_creation", |b| {
-        b.iter(|| {
-            let _config = AttachConfiguration {
-                host: black_box("localhost".to_string()),
-                port: black_box(13603),
-                timeout_ms: Some(5000),
-            };
-        })
-    });
-
-    group.bench_function("attach_config_creation_remote", |b| {
-        b.iter(|| {
-            let _config = AttachConfiguration {
-                host: black_box("192.168.1.100".to_string()),
-                port: black_box(9000),
-                timeout_ms: Some(5000),
-            };
-        })
-    });
 
     group.finish();
 }
@@ -372,12 +287,7 @@ fn benchmark_arg_formatting(c: &mut Criterion) {
 
 // ========== Benchmark Groups ==========
 
-criterion_group!(
-    configuration_benches,
-    benchmark_launch_config_creation,
-    benchmark_launch_config_validation,
-    benchmark_attach_config_creation
-);
+criterion_group!(configuration_benches, benchmark_launch_config_validation);
 
 criterion_group!(
     platform_benches,

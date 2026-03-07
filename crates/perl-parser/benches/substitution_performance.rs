@@ -1,5 +1,6 @@
 //! Performance benchmark for substitution operator parsing in PR #158
 //! Tests for performance regression in substitution operator implementation
+#![allow(clippy::expect_used)]
 use criterion::{Criterion, criterion_group, criterion_main};
 use perl_parser::Parser;
 use std::hint::black_box as bb;
@@ -144,24 +145,13 @@ fn benchmark_mixed_without_substitution(c: &mut Criterion) {
 }
 
 fn benchmark_ast_creation_substitution(c: &mut Criterion) {
+    let mut parser = Parser::new(COMPLEX_SUBSTITUTION_CODE);
+    let ast = parser.parse().expect("COMPLEX_SUBSTITUTION_CODE must parse for benchmark");
+
     c.bench_function("ast_creation_with_substitution", |b| {
-        let mut parser = Parser::new(COMPLEX_SUBSTITUTION_CODE);
-        match parser.parse() {
-            Ok(ast) => {
-                b.iter(|| {
-                    let _ = bb(ast.to_sexp());
-                });
-            }
-            Err(_) => {
-                // Fallback benchmark if parsing fails
-                b.iter(|| {
-                    let mut fallback_parser = Parser::new("s/foo/bar/g;");
-                    if let Ok(fallback_ast) = fallback_parser.parse() {
-                        let _ = bb(fallback_ast.to_sexp());
-                    }
-                });
-            }
-        }
+        b.iter(|| {
+            let _ = bb(ast.to_sexp());
+        });
     });
 }
 
