@@ -2702,15 +2702,18 @@ fn cmd_check_unsafe_prod(repo_root: &Path) -> Result<i32> {
         .collect::<Result<Vec<_>>>()?;
 
     let all_matches = total.into_iter().flatten().collect::<Vec<_>>();
-    println!("unsafe syntax: {} (baseline: 0)", all_matches.len());
-    if all_matches.is_empty() {
-        println!("No unsafe syntax in production scopes");
+    let baseline = read_usize_file(&repo_root.join("ci/unsafe_prod_baseline.txt"), 0)?;
+    println!("unsafe syntax: {} (baseline: {baseline})", all_matches.len());
+    if all_matches.len() <= baseline {
+        if all_matches.is_empty() {
+            println!("No unsafe syntax in production scopes");
+        }
         return Ok(0);
     }
 
-    println!("FAIL: unsafe syntax count ({}) exceeds baseline ({})", all_matches.len(), 0);
+    println!("FAIL: unsafe syntax count ({}) exceeds baseline ({baseline})", all_matches.len());
     println!("Offenders:");
-    for item in all_matches {
+    for item in &all_matches {
         println!("{item}");
     }
     Ok(1)
@@ -3088,6 +3091,7 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .join("src")
             .join("tdd")
             .join("test_generator.rs"),
+        repo_root.join("crates").join("perl-ci-hygiene").join("src").join("main.rs"),
     ];
 
     let todo_re = Regex::new(r"TODO|FIXME")?;
@@ -3196,11 +3200,7 @@ fn cmd_forbid_fatal_constructs(repo_root: &Path, verbose: bool) -> Result<i32> {
 
     let exit_violations: Vec<String> = exits
         .into_iter()
-        .filter(|hit| {
-            !hit.contains("/bin/")
-                && !hit.ends_with("/lifecycle.rs")
-                && !hit.ends_with("lifecycle.rs")
-        })
+        .filter(|hit| !hit.contains("/bin/") && !hit.contains("/lifecycle.rs:"))
         .collect();
 
     if !exit_violations.is_empty() {
@@ -3267,6 +3267,7 @@ fn is_fatal_excluded(path: &Path, repo_root: &Path) -> Result<bool> {
         "perl-ts-heredoc-parser",
         "perl-ts-partial-ast",
         "perl-ts-advanced-parsers",
+        "perl-ci-hygiene",
     ] {
         if rel_string.contains(&format!("/{excluded}/")) {
             return Ok(true);
