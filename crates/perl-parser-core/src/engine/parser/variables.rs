@@ -198,6 +198,59 @@ impl<'a> Parser<'a> {
             ));
         }
 
+        // Special handling for &{ (code dereference)
+        if &**text == "&{" {
+            let start = token.start;
+
+            // Parse the expression inside the braces
+            let inner_expr = self.parse_expression()?;
+
+            self.expect(TokenKind::RightBrace)?;
+
+            // Build the dereference node: &{expr}
+            let deref_end = self.previous_position();
+            let deref_node = Node::new(
+                NodeKind::Unary { op: "&{}".to_string(), operand: Box::new(inner_expr) },
+                SourceLocation { start, end: deref_end },
+            );
+
+            // Check if followed by parenthesized arguments: &{expr}(args)
+            if self.peek_kind() == Some(TokenKind::LeftParen) {
+                self.consume_token()?; // consume (
+                let mut args = vec![];
+
+                while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+                    args.push(self.parse_expression()?);
+
+                    if self.peek_kind() == Some(TokenKind::Comma) {
+                        self.consume_token()?; // consume comma
+                    } else if self.peek_kind() != Some(TokenKind::RightParen)
+                        && !self.tokens.is_eof()
+                    {
+                        return Err(ParseError::syntax(
+                            "Expected comma or right parenthesis",
+                            self.current_position(),
+                        ));
+                    }
+                }
+
+                self.expect(TokenKind::RightParen)?;
+                let call_end = self.previous_position();
+
+                return Ok(Node::new(
+                    NodeKind::FunctionCall { name: "&{}".to_string(), args: {
+                        let mut all = vec![deref_node];
+                        all.extend(args);
+                        all
+                    }},
+                    SourceLocation { start, end: call_end },
+                ));
+            }
+
+            // No parentheses: &{expr} alone (implicit @_ forwarding)
+            return Ok(deref_node);
+        }
+
         let (sigil, name) = if let Some(rest) = text.strip_prefix('$') {
             ("$".to_string(), rest.to_string())
         } else if let Some(rest) = text.strip_prefix('@') {
@@ -389,6 +442,62 @@ impl<'a> Parser<'a> {
                 NodeKind::Unary { op, operand: Box::new(expr) },
                 SourceLocation { start, end },
             ));
+        }
+
+        // Special handling for & sigil followed by { - code dereference: &{expr}(args)
+        if sigil == "&" && name.is_empty() && self.peek_kind() == Some(TokenKind::LeftBrace) {
+            self.tokens.next()?; // consume {
+
+            // Parse the expression inside the braces
+            let inner_expr = self.parse_expression()?;
+
+            self.expect(TokenKind::RightBrace)?;
+
+            // Build the dereference node: &{expr}
+            let deref_end = self.previous_position();
+            let deref_node = Node::new(
+                NodeKind::Unary { op: "&{}".to_string(), operand: Box::new(inner_expr) },
+                SourceLocation { start, end: deref_end },
+            );
+
+            // Check if followed by parenthesized arguments: &{expr}(args)
+            if self.peek_kind() == Some(TokenKind::LeftParen) {
+                self.consume_token()?; // consume (
+                let mut args = vec![];
+
+                // EOF guard to prevent infinite loop on truncated input
+                while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+                    args.push(self.parse_expression()?);
+
+                    if self.peek_kind() == Some(TokenKind::Comma) {
+                        self.consume_token()?; // consume comma
+                    } else if self.peek_kind() != Some(TokenKind::RightParen)
+                        && !self.tokens.is_eof()
+                    {
+                        return Err(ParseError::syntax(
+                            "Expected comma or right parenthesis",
+                            self.current_position(),
+                        ));
+                    }
+                }
+
+                self.expect(TokenKind::RightParen)?;
+                let call_end = self.previous_position();
+
+                // Wrap the dereference + arguments as a FunctionCall with the deref
+                // as a special operand. Use Unary for the deref, then Binary for the call.
+                return Ok(Node::new(
+                    NodeKind::FunctionCall { name: "&{}".to_string(), args: {
+                        let mut all = vec![deref_node];
+                        all.extend(args);
+                        all
+                    }},
+                    SourceLocation { start, end: call_end },
+                ));
+            }
+
+            // No parentheses: &{expr} alone (implicit @_ forwarding)
+            return Ok(deref_node);
         }
 
         // Special handling for & sigil - it's a function call
@@ -743,6 +852,185 @@ mod prototype_heuristic_tests {
 
         if let NodeKind::Subroutine { prototype, .. } = &node.kind {
             assert!(prototype.is_some(), "sub foo(&) should have a prototype");
+        }
+    }
+}
+
+#[cfg(test)]
+mod code_dereference_tests {
+    use super::*;
+
+    /// Helper: parse code and return the full AST.
+    fn parse_program(code: &str) -> Node {
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+        assert!(result.is_ok(), "Parse failed for `{}`: {:?}", code, result.err());
+        result.ok().unwrap_or_else(|| {
+            Node::new(NodeKind::Program { statements: vec![] }, SourceLocation { start: 0, end: 0 })
+        })
+    }
+
+    /// Helper: parse code and return the first statement node.
+    fn parse_first_stmt(code: &str) -> Node {
+        let ast = parse_program(code);
+        if let NodeKind::Program { statements } = ast.kind {
+            statements.into_iter().next().unwrap_or_else(|| {
+                Node::new(NodeKind::Error {
+                    message: "No statements found".to_string(),
+                    expected: vec![],
+                    found: None,
+                    partial: None,
+                }, SourceLocation { start: 0, end: 0 })
+            })
+        } else {
+            ast
+        }
+    }
+
+    /// Helper: check that the AST sexp contains no ERROR nodes.
+    fn assert_no_errors(code: &str) {
+        let ast = parse_program(code);
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "Parse of `{}` produced ERROR nodes: {}",
+            code,
+            sexp,
+        );
+    }
+
+    #[test]
+    fn code_deref_empty_args() {
+        // &{$coderef}() - code dereference with empty args
+        let code = "&{$coderef}();";
+        assert_no_errors(code);
+        let ast = parse_program(code);
+        let sexp = ast.to_sexp();
+        // Should contain the &{} operator and a function call structure
+        assert!(
+            sexp.contains("&{}"),
+            "Expected &{{}} dereference in sexp, got: {}",
+            sexp,
+        );
+    }
+
+    #[test]
+    fn code_deref_with_args() {
+        // &{$coderef}($arg) - code dereference with args
+        let code = "&{$coderef}($arg);";
+        assert_no_errors(code);
+        let ast = parse_program(code);
+        let sexp = ast.to_sexp();
+        assert!(
+            sexp.contains("&{}"),
+            "Expected &{{}} dereference in sexp, got: {}",
+            sexp,
+        );
+        assert!(
+            sexp.contains("arg"),
+            "Expected argument in sexp, got: {}",
+            sexp,
+        );
+    }
+
+    #[test]
+    fn code_deref_complex_expr() {
+        // &{$hash{callback}}($arg) - code dereference with complex expression
+        let code = "&{$hash{callback}}($arg);";
+        assert_no_errors(code);
+        let ast = parse_program(code);
+        let sexp = ast.to_sexp();
+        assert!(
+            sexp.contains("&{}"),
+            "Expected &{{}} dereference in sexp, got: {}",
+            sexp,
+        );
+        assert!(
+            sexp.contains("callback"),
+            "Expected 'callback' key in sexp, got: {}",
+            sexp,
+        );
+    }
+
+    #[test]
+    fn code_deref_simple_form_with_args() {
+        // &$coderef($arg) - simple form (no braces), should already work
+        let code = "&$coderef($arg);";
+        assert_no_errors(code);
+        let ast = parse_program(code);
+        let sexp = ast.to_sexp();
+        assert!(
+            sexp.contains("call"),
+            "Expected function call in sexp, got: {}",
+            sexp,
+        );
+    }
+
+    #[test]
+    fn code_deref_simple_form_no_parens() {
+        // &$coderef - no parens, implicit @_ forwarding
+        // The parser currently treats &$var as FunctionCall { name: "$", args: [] }
+        // because the lexer splits & and $coderef as separate tokens, and the
+        // & sigil handler treats $ as a special variable name (like $$).
+        // This is a known limitation for &$var without braces.
+        let code = "&$coderef;";
+        assert_no_errors(code);
+    }
+
+    #[test]
+    fn code_deref_no_parens() {
+        // &{$coderef} - code dereference without arguments (implicit @_ forwarding)
+        let code = "&{$coderef};";
+        assert_no_errors(code);
+        let ast = parse_program(code);
+        let sexp = ast.to_sexp();
+        assert!(
+            sexp.contains("&{}"),
+            "Expected &{{}} dereference in sexp, got: {}",
+            sexp,
+        );
+    }
+
+    #[test]
+    fn code_deref_produces_correct_ast_structure() {
+        // Verify the AST structure for &{$coderef}($x, $y)
+        let code = "&{$coderef}($x, $y);";
+        let stmt = parse_first_stmt(code);
+
+        // The statement should be an ExpressionStatement wrapping a FunctionCall
+        if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+            match &expression.kind {
+                NodeKind::FunctionCall { name, args } => {
+                    assert_eq!(name, "&{}", "Function call name should be &{{}}");
+                    // First arg is the Unary dereference node (&{$coderef}),
+                    // remaining args are the actual arguments (may be combined into
+                    // a single list node depending on comma parsing)
+                    assert!(
+                        !args.is_empty(),
+                        "Expected at least 1 arg (the deref node)",
+                    );
+                    // First arg should be the Unary &{} dereference
+                    assert_eq!(
+                        args.first().map(|a| a.kind.kind_name()),
+                        Some("Unary"),
+                        "First arg should be a Unary dereference node: {:?}",
+                        args.iter().map(|a| a.kind.kind_name()).collect::<Vec<_>>(),
+                    );
+                }
+                _ => {
+                    panic!(
+                        "Expected FunctionCall, got {} (sexp: {})",
+                        expression.kind.kind_name(),
+                        expression.to_sexp()
+                    );
+                }
+            }
+        } else {
+            panic!(
+                "Expected ExpressionStatement, got {} (sexp: {})",
+                stmt.kind.kind_name(),
+                stmt.to_sexp()
+            );
         }
     }
 }
