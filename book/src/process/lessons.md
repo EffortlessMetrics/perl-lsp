@@ -141,5 +141,5 @@ Keep entries short and falsifiable. The point is system improvement, not blame.
 ## See Also
 
 - [`AGENTIC_DEV.md`](AGENTIC_DEV.md) - Development model and budget definitions
-- [`FORENSICS_SCHEMA.md`](FORENSICS_SCHEMA.md) - PR archaeology dossier template
+- [`FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - PR archaeology dossier template
 - [`INDEX.md`](INDEX.md) - Documentation front door

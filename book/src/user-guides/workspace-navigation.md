@@ -308,7 +308,7 @@ impl CallHierarchyProvider {
 
 ## Quality Gate Integration
 
-- **Architectural Compliance**: Full compliance with Rust 2024 edition and MSRV 1.89+ requirements
+- **Architectural Compliance**: Full compliance with Rust 2024 edition and MSRV 1.92+ requirements
 - **Performance Validation**: No performance regressions detected in enhanced workspace operations
 - **Memory Safety**: All enhanced features maintain memory safety and thread safety guarantees
 - **Production Crate Compatibility**: Enhanced features fully compatible with published crate ecosystem

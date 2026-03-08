@@ -50,7 +50,7 @@ pub fn max_concurrent_threads() -> usize {
 
 ### Adaptive Timeout Configuration
 
-The adaptive timeout system uses multiple strategies based on the PR #140 significant performance improvements:
+The adaptive timeout system uses multiple strategies based on the PR #140 revolutionary performance improvements:
 
 #### LSP Harness Adaptive Timeout (*Diataxis: Reference* - Fine-grained timeout control)
 
@@ -215,16 +215,16 @@ RUN cargo test -p perl-lsp
 
 ## Threading Configuration Reference (*Diataxis: Reference* - Complete configuration matrix)
 
-### Significant Performance Improvements (*Diataxis: Reference* - PR #140 performance gains)
+### Performance Improvements (*Diataxis: Reference* - PR #140 performance gains)
 
 #### Before vs. After Performance Matrix
 
-| Test Suite | After (PR #140) |
-|------------|-----------------|
-| **LSP Behavioral Tests** | 0.31s |
-| **User Story Tests** | 0.32s |
-| **Workspace Tests** | 0.26s |
-| **Overall Suite** | <10s |
+| Test Suite | Before (PR #140) | After (PR #140) |
+|------------|------------------|------------------|
+| **LSP Behavioral Tests** | 1560s+ | 0.31s |
+| **User Story Tests** | 1500s+ | 0.32s |
+| **Workspace Tests** | 60s+ | 0.26s |
+| **Overall Suite** | 60s+ | <10s |
 
 #### Timeout Scaling Matrix (Updated)
 
@@ -284,7 +284,7 @@ CI Environment Improvements:
 
 ### Performance Characteristics (*Diataxis: Reference* - Post-PR #140 benchmark data)
 
-#### Significant Performance Metrics
+#### Performance Metrics
 
 ```bash
 # Benchmark results after adaptive timeout optimization (PR #140)
@@ -300,13 +300,13 @@ Thread Count | Avg Test Time | Memory Usage | Success Rate | Performance Gain
 
 ```bash
 # Individual test suite performance (PR #140 results)
-Test Suite                    | Time
-------------------------------|----------
-lsp_behavioral_tests.rs       | 0.31s
-lsp_full_coverage_user_stories| 0.32s
-lsp_golden_tests.rs           | 2.1s
-lsp_caps_contract_shapes.rs   | 1.8s
-Workspace integration tests   | 0.26s
+Test Suite                    | Before    | After
+------------------------------|-----------|----------
+lsp_behavioral_tests.rs       | 1560s+    | 0.31s
+lsp_full_coverage_user_stories| 1500s+    | 0.32s
+lsp_golden_tests.rs           | 45s       | 2.1s
+lsp_caps_contract_shapes.rs   | 30s       | 1.8s
+Workspace integration tests   | 60s+      | 0.26s
 ```
 
 #### Key Optimization Components

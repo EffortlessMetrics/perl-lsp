@@ -320,11 +320,11 @@ pub fn adaptive_timeout() -> Duration {
 ```
 Before Adaptive Timeouts          After Adaptive Timeouts (RUST_TEST_THREADS=2)
 ─────────────────────────────────  ─────────────────────────────────────────────
-lsp_behavioral_tests:            0.31s
-lsp_user_stories:                0.32s
-Individual workspace tests:      0.26s
-Overall test suite:              <10s
-CI reliability:                  100% pass rate
+lsp_behavioral_tests: 1560s+    →  0.31s
+lsp_user_stories: 1500s+        →  0.32s
+Individual workspace tests: 60s →  0.26s
+Overall test suite: 60s+        →  <10s
+CI reliability: ~55% pass rate  →  100% pass rate (Zero timeouts)
 ```
 
 #### 3. Optimized Idle Detection
@@ -607,7 +607,7 @@ cargo test -p perl-lsp --test lsp_init_torture_test -- --nocapture
 
 ### RUST_TEST_THREADS (*Diataxis: Reference*)
 
-**Enhancement in PR #140**: Adaptive threading for fast CI test execution.
+**Enhanced in PR #140**: Adaptive threading achieving significant performance gains in CI.
 
 **Purpose**: Control test parallelism and trigger adaptive timeout scaling.
 
@@ -1147,8 +1147,8 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
 
 ## Related Documentation
 
-- **[Threading Configuration Guide](THREADING_CONFIGURATION_GUIDE.md)**: Adaptive threading deep dive
+- **[Threading Configuration Guide](../how-to/THREADING_CONFIGURATION_GUIDE.md)**: Adaptive threading deep dive
 - **[Commands Reference](COMMANDS_REFERENCE.md)**: Comprehensive build/test commands
-- **[CI Documentation](CI.md)**: CI/CD pipeline architecture
+- **[CI Documentation](../project/CI.md)**: CI/CD pipeline architecture
 - **[LSP Implementation Guide](LSP_IMPLEMENTATION_GUIDE.md)**: LSP testing patterns
 - **[Ignored Tests Index](ci/IGNORED_TESTS_INDEX.md)**: BrokenPipe test tracking

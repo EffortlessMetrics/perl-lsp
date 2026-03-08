@@ -570,7 +570,7 @@ Use this checklist when adding new workflows or jobs:
 - **[CI_LOCAL_VALIDATION.md](CI_LOCAL_VALIDATION.md)** - Local-first validation workflow
 - **[CI.md](CI.md)** - GitHub Actions architecture
 - **[CI_TEST_LANES.md](CI_TEST_LANES.md)** - Test lane organization
-- **[COMMANDS_REFERENCE.md](COMMANDS_REFERENCE.md)** - Full command catalog
+- **[COMMANDS_REFERENCE.md](../reference/COMMANDS_REFERENCE.md)** - Full command catalog
 - **Issue #211** - CI Pipeline Cleanup (tracking issue)
 
 ---

@@ -13,16 +13,18 @@ Thank you for your interest in contributing to Perl LSP! This guide will help yo
 2. **Install Dependencies**
    ```bash
    # Rust toolchain (if not already installed)
+   # The project pins its toolchain via rust-toolchain.toml (MSRV 1.92)
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-   # Install nextest for faster testing
-   cargo install cargo-nextest
+   # Recommended: use Nix for a reproducible dev environment
+   nix develop
    ```
 
 3. **Build the Project**
    ```bash
-   cargo build
-   cargo test
+   cargo build -p perl-lsp --release     # LSP server
+   cargo build -p perl-parser --release  # Parser library
+   cargo test --workspace --lib          # Run all tests
    ```
 
 ## Development Workflow
@@ -42,9 +44,10 @@ Thank you for your interest in contributing to Perl LSP! This guide will help yo
 
 3. Test your changes:
    ```bash
-   cargo nextest run          # Fast test execution
-   cargo test                 # Traditional test runner
-   cargo clippy --workspace   # Lint checks
+   cargo test --workspace --lib   # Run all tests
+   cargo test -p perl-parser      # Test specific crate
+   cargo fmt --all                # Format code
+   cargo clippy --workspace       # Lint checks
    ```
 
 4. Commit with clear messages:
@@ -79,28 +82,27 @@ See **[CI & Automation](./docs/project/CI.md)** for comprehensive details about 
 - Add `ci:mac` label if your changes affect macOS
 - Add `ci:semver` label to check for breaking API changes
 
-### Local CI Validation (While GitHub Actions Is Unavailable)
+### Local CI Validation
 
-**⚠️ IMPORTANT**: GitHub Actions is currently unavailable due to billing issues. During this period:
-
-- **REQUIRED**: Run `just ci-gate` before every merge
-- **RECOMMENDED**: Run `just ci-full` for large/structural changes
-- See **[Local CI Protocol](./docs/ci/LOCAL_CI_PROTOCOL.md)** for complete details
+You **must** run the local CI gate before pushing. The canonical command uses Nix for a reproducible environment:
 
 ```bash
-# Fast merge gate (~2-5 min, required for all merges)
-just ci-gate
+# Canonical local gate (REQUIRED before push)
+nix develop -c just ci-gate
 
-# Comprehensive validation (~10-20 min, for large changes)
-just ci-full
+# Install pre-push hook (runs gate automatically)
+bash scripts/install-githooks.sh
 ```
 
-**Note in PR descriptions**:
-```markdown
-## Local CI Validation
-✅ `just ci-gate` passed
-See: [Local CI Protocol](docs/ci/LOCAL_CI_PROTOCOL.md)
-```
+### CI Gate Tiers
+
+| Tier | Command | Time | When to Use |
+|------|---------|------|-------------|
+| **A (PR-fast)** | `just pr-fast` | ~1-2 min | Quick iteration during development |
+| **B (Merge gate)** | `nix develop -c just ci-gate` | ~3-5 min | Before pushing (required) |
+| **C (Nightly)** | `just ci-full` | ~15-30 min | Mutation testing, fuzzing, benchmarks |
+
+See: [Local CI Summary](docs/ci/LOCAL_CI_SUMMARY.md)
 
 **Semantic & LSP Changes**:
 
@@ -119,8 +121,6 @@ The semantic tests validate that LSP definition resolution works correctly for:
 - Subroutine calls → sub definitions
 - Lexical scope resolution
 - Package-qualified symbol lookups
-
-Once GitHub Actions is restored, this section will be archived and normal CI workflow will resume.
 
 ## SemVer Breaking Change Detection
 
@@ -189,12 +189,12 @@ Add the `ci:semver` label to your PR to run automated breaking change detection:
 
 | Change Type | Example | Version Bump | Allowed In |
 |-------------|---------|--------------|------------|
-| **Breaking** | Remove public function | Major (1.0 → 2.0) | Major releases only |
-| **Breaking** | Change function signature | Major (1.0 → 2.0) | Major releases only |
-| **Additive** | Add new public function | Minor (1.0 → 1.1) | Minor releases |
-| **Additive** | Add new enum variant | Minor (1.0 → 1.1) | Minor releases (with `#[non_exhaustive]`) |
-| **Patch** | Fix bug, same behavior | Patch (0.9.x → 1.0.1) | Patch releases |
-| **Patch** | Documentation update | Patch (0.9.x → 1.0.1) | Patch releases |
+| **Breaking** | Remove public function | Major (0.9 → 1.0) | Major releases only |
+| **Breaking** | Change function signature | Major (0.9 → 1.0) | Major releases only |
+| **Additive** | Add new public function | Minor (0.x → 0.x+1.0) | Minor releases |
+| **Additive** | Add new enum variant | Minor (0.x → 0.x+1.0) | Minor releases (with `#[non_exhaustive]`) |
+| **Patch** | Fix bug, same behavior | Patch (0.x.y → 0.x.y+1) | Patch releases |
+| **Patch** | Documentation update | Patch (0.x.y → 0.x.y+1) | Patch releases |
 
 ### Breaking Change Workflow
 
@@ -240,16 +240,30 @@ SemVer checking is configured in `.cargo-semver-checks.toml`:
 
 - **SemVer spec:** https://semver.org/
 - **cargo-semver-checks:** https://github.com/obi1kenobi/cargo-semver-checks
-- **Project stability policy:** `docs/reference/STABILITY.md`
-- **API stability guarantees:** `docs/reference/STABILITY.md#api-surface-stability`
+- **Project stability policy:** [`docs/reference/STABILITY.md`](docs/reference/STABILITY.md)
+- **API stability guarantees:** [`docs/reference/STABILITY.md`](docs/reference/STABILITY.md)
 
 ## Coding Standards
 
 - **Formatting:** Use `cargo fmt --all` before committing
-- **Linting:** Fix all `cargo clippy` warnings
+- **Linting:** Fix all `cargo clippy --workspace` warnings
 - **Testing:** Maintain or improve test coverage
 - **Documentation:** Update docs for public APIs and new features
 - **Commits:** Use conventional commit format (feat:, fix:, docs:, etc.)
+
+### No Fatal Constructs in Production Code
+
+The following are **banned** in non-test code:
+
+| Banned | Use Instead |
+|--------|-------------|
+| `unwrap()`, `expect()` | `?`, `.ok_or_else()`, or pattern matching |
+| `panic!()`, `todo!()`, `unimplemented!()` | Return `Result`/`Option` |
+| `std::process::abort()` | Never use, not even in binaries |
+| `std::process::exit()` | Allowed **only** in `bin/` directories and `lifecycle.rs` |
+| `dbg!()` | `tracing::debug!` |
+
+In tests: use `Result<()>` return types, or `perl_tdd_support::must`/`must_some` helpers.
 
 ### Code Style Guidelines
 
@@ -257,7 +271,25 @@ SemVer checking is configured in `.cargo-semver-checks.toml`:
 - Use `.push(char)` instead of `.push_str("x")` for single characters
 - Use `or_default()` instead of `or_insert_with(Vec::new)` for default values
 - Avoid unnecessary `.clone()` on types that implement Copy
-- Add `#[allow(clippy::only_used_in_recursion)]` for recursive tree traversal functions
+- Use `Option<Regex>` with `.ok()` for graceful regex init degradation
+
+### Documentation Anti-Drift Policy
+
+Metrics in this project are **computed, not hand-edited**. The evidence surface is [`docs/project/CURRENT_STATUS.md`](docs/project/CURRENT_STATUS.md), auto-generated by `scripts/update-current-status.py`.
+
+**Rules for README and crates.io copy:**
+
+- No exact numeric claims (crate counts, test counts, percentages, timing numbers) in `README.md` or crate-level READMEs
+- Use qualitative descriptions ("fast", "comprehensive", "full coverage") and link to `docs/project/CURRENT_STATUS.md` for evidence
+- Links to `docs/project/CURRENT_STATUS.md` in `README.md` must use absolute URLs (`https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/CURRENT_STATUS.md`) for portability
+- `features.toml` is the canonical source for LSP capability definitions
+- No parenthetical counts in tier lists or family descriptions — list members by name instead
+
+**Where volatile metrics belong:**
+
+- `docs/project/CURRENT_STATUS.md` — auto-generated sections between `<!-- BEGIN -->` / `<!-- END -->` markers
+- CI output and benchmark receipts
+- NOT in `README.md`, `CLAUDE.md`, `CONTRIBUTING.md`, or `Cargo.toml` comments
 
 ### Cross-Platform `ExitStatus` in Tests
 
@@ -306,7 +338,7 @@ These crates have zero system dependencies and work on all platforms:
 - **perl-parser**: Main parser library
 - **perl-lsp**: LSP server binary
 - **perl-lexer**: Tokenizer
-- **tree-sitter-perl**: Pure-Rust tree-sitter bindings (default)
+- **tree-sitter-perl-rs**: Pure-Rust tree-sitter bindings (default)
 
 ### Advanced Components (Opt-in)
 Some functionality requires system dependencies (like `libclang-dev`) and is gated behind Cargo features:
@@ -343,7 +375,7 @@ All API changes are checked for Semantic Versioning (SemVer) compatibility using
 just semver-check
 ```
 
-Breaking changes are allowed in minor version bumps (pre-1.0) but require a migration guide in `CHANGELOG.md`. See [SEMVER_POLICY.md](docs/SEMVER_POLICY.md) for full details.
+Breaking changes are allowed in minor version bumps, but require a migration guide in `CHANGELOG.md`. See [STABILITY.md](docs/reference/STABILITY.md) for versioning details.
 
 ## Testing Guidelines
 
@@ -427,6 +459,16 @@ See **[Dependency Management Guide](./docs/how-to/DEPENDENCY_MANAGEMENT.md)** fo
 
 For quick reference, see **[Dependency Quick Reference](./docs/how-to/DEPENDENCY_QUICK_REFERENCE.md)**.
 
+## Adding New Crates
+
+The workspace uses a tiered dependency structure (see `Cargo.toml`). When adding a new crate:
+
+1. **Create the crate** under `crates/` following the naming convention of its family (e.g., `perl-lsp-*` for LSP providers, `perl-module-*` for module resolution).
+2. **Add it to the workspace** in the root `Cargo.toml` members list.
+3. **Place it in the correct tier** — leaf crates with no internal deps go in Tier 1, crates with dependencies go in later tiers.
+4. **Follow existing patterns** — look at a sibling crate in the same family for structure, `Cargo.toml` metadata, and test layout.
+5. **Run the full gate** to verify: `nix develop -c just ci-gate`
+
 ## Getting Help
 
 - **Issues:** Browse existing issues or create a new one
@@ -436,11 +478,11 @@ For quick reference, see **[Dependency Quick Reference](./docs/how-to/DEPENDENCY
 
 ## Code of Conduct
 
-We follow the Rust Code of Conduct. Please be respectful and constructive in all interactions.
+We follow the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). Please be respectful and constructive in all interactions.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same license as the project (typically MIT or Apache-2.0).
+This project is dual-licensed under [MIT](LICENSE-MIT) and [Apache-2.0](LICENSE-APACHE). By contributing, you agree that your contributions will be licensed under both licenses.
 
 ## Release Process
 
@@ -458,19 +500,17 @@ We follow [Semantic Versioning 2.0.0](https://semver.org/):
 
 | Release Type | Frequency | Examples | Requirements |
 |--------------|-----------|----------|--------------|
-| **Major** | Annually (as needed) | 0.9.x → 2.0.0 | Breaking changes, migration guide, extensive testing |
-| **Minor** | Quarterly | 0.9.x → 1.1.0 | New features, API additions, performance improvements |
-| **Patch** | Monthly (as needed) | 0.9.x → 1.0.1 | Bug fixes, security updates, documentation updates |
+| **Major** | As needed | 0.x → 1.0.0 | Breaking changes, migration guide, extensive testing |
+| **Minor** | Quarterly | 0.x → 0.x+1.0 | New features, API additions, performance improvements |
+| **Patch** | As needed | 0.x.y → 0.x.y+1 | Bug fixes, security updates, documentation updates |
 
 ### Release Process Workflow
 
 #### 1. Pre-Release Preparation
 
 ```bash
-# Update version numbers
-cargo update -p perl-parser --precise 0.9.x
-cargo update -p perl-lsp --precise 0.9.x
-# ... for all published crates
+# Update version numbers in Cargo.toml files
+# Then run cargo check to verify
 
 # Run comprehensive validation
 just ci-full
@@ -494,33 +534,30 @@ Before any release, ensure:
 - [ ] Performance benchmarks run: `cargo bench`
 - [ ] Release notes drafted: `RELEASE_NOTES.md`
 - [ ] Version numbers updated in all crates
-- [ ] Git tag prepared: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`
+- [ ] Git tag prepared: `git tag -a v<0.x.y> -m "Release v<0.x.y>"`
 
 #### 3. Release Execution
 
 ```bash
-# Create release branch
-git checkout -b release/vX.Y.Z
+# Ensure you are aligned with origin/master and clean.
+git fetch origin master
+git checkout master
+git reset --hard origin/master
+git status --short
 
-# Final validation
-just ci-full
+# One-command release orchestration (recommended).
+# Authoritative release command path:
+# `scripts/release-turnkey-pr.sh` is the canonical RC flow.
+# Legacy release scripts are listed in `scripts/DEPRECATED_RELEASE_SCRIPTS.md`.
+scripts/release-turnkey-pr.sh <0.x.y>
 
-# Merge to main
-git checkout main
-git merge release/vX.Y.Z
+# Manual equivalent flow:
+# 1) Dispatch "Version Bump & Changelog Generation" with version=<0.x.y>
+# 2) Review and merge the generated release/v<0.x.y> PR
+# 3) Dispatch "Release Orchestration" with version=<0.x.y>
 
-# Tag and push
-git tag vX.Y.Z
-git push origin main --tags
-
-# Publish to crates.io
-cargo publish -p perl-parser
-cargo publish -p perl-lexer
-cargo publish -p perl-lsp
-# ... other crates in dependency order
-
-# Create GitHub Release
-gh release create vX.Y.Z --title "vX.Y.Z" --notes-file RELEASE_NOTES.md
+# Optional controls:
+# --skip-crates, --skip-extension, --skip-docker, --prerelease
 ```
 
 #### 4. Post-Release Tasks
@@ -558,7 +595,7 @@ All releases require review from:
 - Dependency vulnerability scan
 - Security best practices
 - Attack surface analysis
-- Security requirements
+- Security best practices
 
 ### Testing Requirements for Releases
 
@@ -632,12 +669,12 @@ For critical security issues:
 - **CHANGELOG.md**: Detailed change log
 - **Security Advisories**: For security-related releases
 - **Community Forums**: Discussion and support
-- **Email Lists**: For notifications
+- **Email Lists**: For enterprise notifications
 
 #### Release Notes Template
 
 ```markdown
-# Release vX.Y.Z
+# Release v<0.x.y>
 
 ## Highlights
 - Key features and improvements

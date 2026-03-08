@@ -4,7 +4,7 @@ This guide gets you from zero to a working Perl language server in your editor.
 
 ## Prerequisites
 
-- **Rust 1.89+** (for building from source)
+- **Rust 1.92+** (for building from source)
 - **A supported editor**: VS Code, Neovim, Emacs, Helix, or Sublime Text
 
 ## Installation
@@ -17,27 +17,19 @@ Choose one method:
 cargo install perl-lsp
 ```
 
-### Option 2: Download Pre-built Binary
+### Option 2: Install Script (Linux/macOS)
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases):
+Use the installer script (best-effort / non-canonical):
 
 ```bash
-# Linux (x86_64)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-linux-x86_64.tar.gz
-tar xzf perl-lsp-linux-x86_64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
-
-# macOS (Apple Silicon)
-curl -LO https://github.com/EffortlessMetrics/perl-lsp/releases/latest/download/perl-lsp-darwin-aarch64.tar.gz
-tar xzf perl-lsp-darwin-aarch64.tar.gz
-sudo mv perl-lsp /usr/local/bin/
+curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
 ```
 
 ### Option 3: Build from Source
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
-cd tree-sitter-perl-rs
+cd perl-lsp
 cargo install --path crates/perl-lsp
 ```
 
@@ -49,7 +41,7 @@ perl-lsp --version
 
 # Quick health check
 perl-lsp --health
-# Should output: ok 0.9.0
+# Should output: ok 0.10.0
 ```
 
 ## Quick Editor Setup
@@ -192,7 +184,7 @@ For project-specific settings, the server reads configuration from your editor's
 }
 ```
 
-See [CONFIG.md](CONFIG.md) for all configuration options.
+See [CONFIG.md](../reference/CONFIG.md) for all configuration options.
 
 ## Troubleshooting
 
@@ -224,14 +216,14 @@ Reduce indexed files and result caps in your settings:
 }
 ```
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for more solutions.
+See [TROUBLESHOOTING.md](../how-to/TROUBLESHOOTING.md) for more solutions.
 
 ## Next Steps
 
-- **[EDITOR_SETUP.md](EDITOR_SETUP.md)** - Detailed editor configurations
-- **[CONFIG.md](CONFIG.md)** - All configuration options
-- **[LSP_FEATURES.md](LSP_FEATURES.md)** - Complete feature documentation
-- **[FAQ.md](FAQ.md)** - Frequently asked questions
+- **[EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md)** - Detailed editor configurations
+- **[CONFIG.md](../reference/CONFIG.md)** - All configuration options
+- **[LSP_FEATURES.md](../reference/LSP_FEATURES.md)** - Complete feature documentation
+- **[FAQ.md](../reference/FAQ.md)** - Frequently asked questions
 
 ## Getting Help
 

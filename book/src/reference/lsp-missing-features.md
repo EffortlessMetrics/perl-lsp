@@ -10,7 +10,7 @@
 
 ## Summary
 
-- **Advertised LSP features** are tracked in `features.toml` and should be stable and tested.
+- **Advertised LSP features** are tracked in `features.toml` and should be GA/production.
 - **Missing/Not advertised LSP features** are limited to notebook support (preview).
 - For **coverage metrics**, see `docs/project/CURRENT_STATUS.md` (do not restate numbers here).
 
@@ -40,7 +40,7 @@ These are DAP items but often requested alongside LSP functionality.
 - **`dap.breakpoints.logpoints`** - preview, not advertised
 - **`dap.exceptions.die`** - preview, not advertised
 
-Advertised DAP features:
+GA DAP features currently advertised:
 
 - **`dap.core`** - core launch/break/step/inspect/evaluate/setVariable loop
 - **`dap.breakpoints.basic`** - verified/unverified breakpoint lifecycle

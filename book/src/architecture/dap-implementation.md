@@ -147,7 +147,7 @@ Devel-TSPerlDAP/          # NEW - CPAN module (separate repo or subdir)
 name = "perl-dap"
 version = "0.1.0"
 edition = "2024"
-authors = ["Tree-sitter Perl Contributors"]
+authors = ["Steven Zimmerman, CPA"]
 description = "Debug Adapter Protocol server for Perl"
 license = "MIT OR Apache-2.0"
 
@@ -244,7 +244,7 @@ async fn main() -> anyhow::Result<()> {
 // crates/perl-dap/src/lib.rs
 //! Debug Adapter Protocol server for Perl
 //!
-//! This crate provides a robust DAP adapter for debugging Perl code.
+//! This crate provides a production-grade DAP adapter for debugging Perl code.
 //! It integrates with the perl-parser crate for AST-based breakpoint validation
 //! and leverages existing LSP infrastructure for position mapping and workspace navigation.
 
@@ -1175,7 +1175,7 @@ Adapter Protocol server.
 
 =head1 AUTHOR
 
-Tree-sitter Perl Contributors
+Steven Zimmerman, CPA
 
 =head1 LICENSE
 

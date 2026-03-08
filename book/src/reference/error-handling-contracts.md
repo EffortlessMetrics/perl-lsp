@@ -964,7 +964,7 @@ pub enum ParseError {
 - [crates/perl-lexer/src/lib.rs](../crates/perl-lexer/src/lib.rs) - Lexer error tokens
 
 **LSP Documentation**:
-- [LSP_ERROR_HANDLING_MONITORING_GUIDE.md](LSP_ERROR_HANDLING_MONITORING_GUIDE.md) - Error monitoring
+- [LSP_ERROR_HANDLING_MONITORING_GUIDE.md](../how-to/LSP_ERROR_HANDLING_MONITORING_GUIDE.md) - Error monitoring
 - [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) - LSP server architecture
 
 ---
