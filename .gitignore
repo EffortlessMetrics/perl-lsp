@@ -97,10 +97,6 @@ coverage-*.md
 # Docs directory is curated -- never ignore tracked documentation
 !docs/**/*.md
 
-# Working docs - not for version control
-docs/internal/
-docs/ISSUE_MANAGEMENT.md
-
 # Spec manifest files
 SPEC*.manifest.yml
 SPEC-*.manifest.yml
