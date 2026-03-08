@@ -825,6 +825,55 @@ impl<'a> PerlLexer<'a> {
                         self.position = self.input_bytes.len();
                     }
                 }
+                b'=' if self.position == 0
+                    || (self.position > 0 && self.input_bytes[self.position - 1] == b'\n') =>
+                {
+                    // Check if this starts a POD section (=pod, =head, =over, etc.)
+                    let remaining = &self.input[self.position..];
+                    if remaining.starts_with("=pod")
+                        || remaining.starts_with("=head")
+                        || remaining.starts_with("=over")
+                        || remaining.starts_with("=item")
+                        || remaining.starts_with("=back")
+                        || remaining.starts_with("=begin")
+                        || remaining.starts_with("=end")
+                        || remaining.starts_with("=for")
+                        || remaining.starts_with("=encoding")
+                    {
+                        // Scan forward for \n=cut (end of POD block)
+                        let search_start = self.position;
+                        let mut found_cut = false;
+                        let bytes = self.input_bytes;
+                        let mut i = search_start;
+                        while i < bytes.len() {
+                            // Look for =cut at the start of a line
+                            if (i == 0 || bytes[i - 1] == b'\n')
+                                && self.input[i..].starts_with("=cut")
+                            {
+                                i += 4; // Skip "=cut"
+                                // Skip rest of the =cut line
+                                while i < bytes.len() && bytes[i] != b'\n' {
+                                    i += 1;
+                                }
+                                // Consume the trailing newline if present
+                                if i < bytes.len() && bytes[i] == b'\n' {
+                                    i += 1;
+                                }
+                                self.position = i;
+                                found_cut = true;
+                                break;
+                            }
+                            i += 1;
+                        }
+                        if !found_cut {
+                            // POD extends to end of file
+                            self.position = bytes.len();
+                        }
+                        continue;
+                    }
+                    // Not a POD directive - regular '=' token
+                    break;
+                }
                 _ => {
                     // For non-ASCII whitespace, use char check only when needed
                     if byte >= 128
