@@ -1,6 +1,6 @@
 # perl-incremental-parsing Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-incremental-parsing`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-incremental-parsing`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Incremental parsing support for Perl with subtree reuse and LSP integration

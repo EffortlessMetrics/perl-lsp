@@ -1,6 +1,6 @@
 # perl-path-security Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-path-security`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-path-security`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Workspace-bound path validation and traversal prevention for Perl tooling

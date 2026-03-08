@@ -458,8 +458,8 @@ impl CancellationRegistry {
 ### Documentation
 
 - `/docs/SPEC_438_LSP_CANCELLATION_INFRASTRUCTURE.md` - Complete implementation specification
-- `/docs/CANCELLATION_ARCHITECTURE_GUIDE.md` - Detailed architecture guide
-- `/docs/LSP_IMPLEMENTATION_GUIDE.md` - LSP server architecture
+- `/docs/explanation/CANCELLATION_ARCHITECTURE_GUIDE.md` - Detailed architecture guide
+- `/docs/reference/LSP_IMPLEMENTATION_GUIDE.md` - LSP server architecture
 
 ### Code References
 

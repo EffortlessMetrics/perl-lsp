@@ -1,6 +1,6 @@
 # perl-lsp-completion Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-completion`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-completion`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Context-aware LSP completion engine for Perl — variables, functions, methods, packages, and file paths

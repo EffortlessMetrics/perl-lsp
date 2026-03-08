@@ -1,6 +1,6 @@
 # perl-ts-heredoc-parser Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-ts-heredoc-parser`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-ts-heredoc-parser`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Heredoc parsing pipeline for Perl

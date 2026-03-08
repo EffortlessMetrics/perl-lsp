@@ -173,7 +173,7 @@ my $match = $a m/ $b;    # Explicit regex match
 
 ### References
 
-- **Parser Architecture**: [Crate Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md)
+- **Parser Architecture**: [Crate Architecture Guide](../../../../reference/CRATE_ARCHITECTURE_GUIDE.md)
 - **Lexer Implementation**: `/crates/perl-lexer/src/lib.rs`
 - **Parser Implementation**: `/crates/perl-parser/src/parser.rs`
 - **LSP Providers**: `/crates/perl-parser/src/features.rs`
@@ -183,7 +183,7 @@ my $match = $a m/ $b;    # Explicit regex match
 
 ### References
 
-- **Parser Architecture**: [Crate Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md)
+- **Parser Architecture**: [Crate Architecture Guide](../../../../reference/CRATE_ARCHITECTURE_GUIDE.md)
 - **Lexer Implementation**: `/crates/perl-lexer/src/lib.rs`
 - **Parser Implementation**: `/crates/perl-parser/src/parser.rs`
 - **LSP Providers**: `/crates/perl-parser/src/features.rs`

@@ -21,8 +21,8 @@ body:
     id: location
     attributes:
       label: Documentation Location
-      description: Link to the page or file path (e.g., `docs/LSP_IMPLEMENTATION_GUIDE.md`, README section).
-      placeholder: "docs/ROADMAP.md or https://github.com/..."
+      description: Link to the page or file path (e.g., `docs/reference/LSP_IMPLEMENTATION_GUIDE.md`, README section).
+      placeholder: "docs/project/ROADMAP.md or https://github.com/..."
     validations:
       required: true
 

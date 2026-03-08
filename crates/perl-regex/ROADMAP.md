@@ -1,6 +1,6 @@
 # perl-regex Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-regex`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-regex`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Regex parsing and validation helpers for Perl syntax

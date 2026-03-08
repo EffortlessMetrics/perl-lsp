@@ -1,6 +1,6 @@
 # perl-ts-partial-ast Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-ts-partial-ast`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-ts-partial-ast`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Partial parse and anti-pattern AST for Perl

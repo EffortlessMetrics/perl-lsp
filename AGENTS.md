@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code when working with this repository.
 
 **Latest Release**: v0.10.0 - Initial Public Alpha
-**API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
+**API Stability**: See [docs/reference/STABILITY.md](docs/reference/STABILITY.md)
 
 ## Project Overview
 
@@ -193,12 +193,12 @@ file_index.references.entry(qualified).or_default().push(symbol_ref);
 
 See the [docs/](docs/) directory for comprehensive documentation:
 
-- **[Commands Reference](docs/COMMANDS_REFERENCE.md)** - Build/test commands
-- **[LSP Implementation Guide](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Server architecture
-- **[Current Status](docs/CURRENT_STATUS.md)** - Computed project health metrics
-- **[DAP User Guide](docs/DAP_USER_GUIDE.md)** - Debugger setup and usage
-- **[Stability Policy](docs/STABILITY.md)** - API versioning and compatibility
-- **[Crate Architecture Guide](docs/CRATE_ARCHITECTURE_GUIDE.md)** - System design and components
+- **[Commands Reference](docs/reference/COMMANDS_REFERENCE.md)** - Build/test commands
+- **[LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md)** - Server architecture
+- **[Current Status](docs/project/CURRENT_STATUS.md)** - Computed project health metrics
+- **[DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md)** - Debugger setup and usage
+- **[Stability Policy](docs/reference/STABILITY.md)** - API versioning and compatibility
+- **[Crate Architecture Guide](docs/reference/CRATE_ARCHITECTURE_GUIDE.md)** - System design and components
 
 ## Contributing
 

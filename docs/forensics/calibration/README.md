@@ -71,4 +71,4 @@ grep -v '^#' devlt.csv | awk -F, 'NR>1 && $5!="" && ($5<$3 || $5>$4) {print "Out
 ## See Also
 
 - [`../../../DEVLT_ESTIMATION.md`](../../DEVLT_ESTIMATION.md) - Estimation rubric and weights
-- [`../../../FORENSICS_SCHEMA.md`](../../FORENSICS_SCHEMA.md) - Dossier format
+- [`../../../FORENSICS_SCHEMA.md`](../../reference/FORENSICS_SCHEMA.md) - Dossier format

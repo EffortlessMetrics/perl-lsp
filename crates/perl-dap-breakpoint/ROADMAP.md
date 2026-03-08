@@ -1,6 +1,6 @@
 # perl-dap-breakpoint Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-dap-breakpoint`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-dap-breakpoint`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Breakpoint validation for Perl DAP

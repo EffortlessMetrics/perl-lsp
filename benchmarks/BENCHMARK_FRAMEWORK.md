@@ -266,9 +266,9 @@ cargo bench -p perl-parser -- --save-baseline current
 ## References
 
 - [Criterion.rs User Guide](https://bheisler.github.io/criterion.rs/book/)
-- [Perl LSP Performance Requirements](../docs/ROADMAP.md)
+- [Perl LSP Performance Requirements](../docs/project/ROADMAP.md)
 - [Parser Performance Targets](../crates/perl-parser/README.md)
-- [LSP Performance](../docs/LSP_IMPLEMENTATION_GUIDE.md)
+- [LSP Performance](../docs/reference/LSP_IMPLEMENTATION_GUIDE.md)
 
 ## History
 

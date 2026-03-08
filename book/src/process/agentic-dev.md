@@ -77,7 +77,7 @@ A change that costs 10 DevLT minutes + 100K tokens is more efficient than one th
 
 ### 3. Wrongness is recorded
 
-- `docs/LESSONS.md` logs what went wrong
+- `docs/project/LESSONS.md` logs what went wrong
 - Each entry: wrong → evidence → fix → prevention
 - Guardrails are added to prevent recurrence
 

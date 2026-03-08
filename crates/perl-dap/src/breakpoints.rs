@@ -12,8 +12,8 @@
 //!
 //! # References
 //!
-//! - [DAP Protocol Schema](../../docs/DAP_PROTOCOL_SCHEMA.md#4-breakpoint-requests)
-//! - [DAP Implementation Spec](../../docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management)
+//! - [DAP Protocol Schema](../../docs/reference/DAP_PROTOCOL_SCHEMA.md#4-breakpoint-requests)
+//! - [DAP Implementation Spec](../../docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management)
 
 use crate::protocol::{Breakpoint, SetBreakpointsArguments};
 use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};

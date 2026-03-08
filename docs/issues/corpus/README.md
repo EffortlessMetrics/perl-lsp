@@ -289,7 +289,7 @@ The corpus audit tool is designed for efficient execution:
 ## Related Documentation
 
 - [Corpus Gap Issues](./gaps/) - Detailed gap analysis and issue files
-- [Commands Reference](../../COMMANDS_REFERENCE.md) - Build and test commands
+- [Commands Reference](../../reference/COMMANDS_REFERENCE.md) - Build and test commands
 - [Parser Status](../../crates/perl-parser/PARSER_STATUS.md) - Parser implementation status
 
 ## Contributing

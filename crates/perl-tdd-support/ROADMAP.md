@@ -1,6 +1,6 @@
 # perl-tdd-support Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-tdd-support`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-tdd-support`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Test-driven development helpers and test generation for the Perl LSP ecosystem

@@ -6,9 +6,9 @@ Thank you for using perl-lsp! We want to ensure you have the best experience pos
 
 Before reaching out, please check the existing documentation:
 
-- **[Frequently Asked Questions (FAQ)](docs/FAQ.md)**: Common questions and issues.
-- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)**: Solutions for common setup problems.
-- **[Editor Setup](docs/EDITOR_SETUP.md)**: Detailed configuration for various editors.
+- **[Frequently Asked Questions (FAQ)](docs/reference/FAQ.md)**: Common questions and issues.
+- **[Troubleshooting Guide](docs/how-to/TROUBLESHOOTING.md)**: Solutions for common setup problems.
+- **[Editor Setup](docs/how-to/EDITOR_SETUP.md)**: Detailed configuration for various editors.
 - **[Documentation Index](docs/README.md)**: Comprehensive guides and references.
 
 ### 1. GitHub Discussions

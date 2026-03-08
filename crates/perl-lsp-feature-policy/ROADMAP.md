@@ -1,6 +1,6 @@
 # perl-lsp-feature-policy Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-feature-policy`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-feature-policy`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Policy and profile helpers for LSP capability selection.

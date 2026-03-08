@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code when working with code in this repository.
 
 **Latest Release**: 0.10.0
-**API Stability**: See [docs/STABILITY.md](docs/STABILITY.md)
-**Metrics**: See [docs/CURRENT_STATUS.md](docs/CURRENT_STATUS.md) for computed status
+**API Stability**: See [docs/reference/STABILITY.md](docs/reference/STABILITY.md)
+**Metrics**: See [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for computed status
 
 ## Quick Reference
 
@@ -191,7 +191,7 @@ These directories are excluded from the default workspace (require special build
 | CI gate policy | `.ci/gate-policy.yaml` |
 | Technical debt ledger | `.ci/debt-ledger.yaml` |
 | Dependabot config | `.github/dependabot.yml` |
-| Supply chain security | `deny.toml`, `docs/SUPPLY_CHAIN_SECURITY.md` |
+| Supply chain security | `deny.toml`, `docs/reference/SUPPLY_CHAIN_SECURITY.md` |
 | Build tooling | `xtask/` |
 
 ## Architecture Patterns
@@ -231,13 +231,13 @@ The workspace uses a tiered dependency structure (see `Cargo.toml`):
 
 ## Documentation
 
-- **[CURRENT_STATUS.md](docs/CURRENT_STATUS.md)** - Computed metrics and project health
-- **[ROADMAP.md](docs/ROADMAP.md)** - Milestones and release planning
-- **[COMMANDS_REFERENCE.md](docs/COMMANDS_REFERENCE.md)** - Full command catalog
-- **[LSP_IMPLEMENTATION_GUIDE.md](docs/LSP_IMPLEMENTATION_GUIDE.md)** - Server architecture
-- **[DEBT_TRACKING.md](docs/DEBT_TRACKING.md)** - Technical debt and flaky test tracking
-- **[DEPENDENCY_MANAGEMENT.md](docs/DEPENDENCY_MANAGEMENT.md)** - Automated dependency updates with Dependabot
-- **[DEPENDENCY_QUICK_REFERENCE.md](docs/DEPENDENCY_QUICK_REFERENCE.md)** - Quick commands for dependency management
+- **[CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md)** - Computed metrics and project health
+- **[ROADMAP.md](docs/project/ROADMAP.md)** - Milestones and release planning
+- **[COMMANDS_REFERENCE.md](docs/reference/COMMANDS_REFERENCE.md)** - Full command catalog
+- **[LSP_IMPLEMENTATION_GUIDE.md](docs/reference/LSP_IMPLEMENTATION_GUIDE.md)** - Server architecture
+- **[DEBT_TRACKING.md](docs/explanation/DEBT_TRACKING.md)** - Technical debt and flaky test tracking
+- **[DEPENDENCY_MANAGEMENT.md](docs/how-to/DEPENDENCY_MANAGEMENT.md)** - Automated dependency updates with Dependabot
+- **[DEPENDENCY_QUICK_REFERENCE.md](docs/how-to/DEPENDENCY_QUICK_REFERENCE.md)** - Quick commands for dependency management
 - **[features.toml](features.toml)** - Canonical LSP capability definitions
 
 ## Truth Sources
@@ -246,7 +246,7 @@ Metrics in this project are **computed, not hand-edited**:
 - `CURRENT_STATUS.md` - Auto-generated via `scripts/update-current-status.py`
 - `features.toml` - Canonical LSP capability definitions
 - Test output and CI receipts are the evidence for all claims
-- `README.md` and crates.io copy must not contain volatile metrics or exact numeric claims — use qualitative descriptions and link to `docs/CURRENT_STATUS.md`
+- `README.md` and crates.io copy must not contain volatile metrics or exact numeric claims — use qualitative descriptions and link to `docs/project/CURRENT_STATUS.md`
 
 ## Coding Standards
 

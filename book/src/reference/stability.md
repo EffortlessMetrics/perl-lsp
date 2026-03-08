@@ -2,7 +2,7 @@
 
 **MSRV:** 1.92 | **Edition:** 2024 | **Status:** Initial Public Alpha (v0.10.0)
 
-> For the full stability policy, see [docs/STABILITY.md](../../../../docs/STABILITY.md).
+> For the full stability policy, see [docs/reference/STABILITY.md](../../../../docs/reference/STABILITY.md).
 
 ---
 

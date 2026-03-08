@@ -1,6 +1,6 @@
 # perl-refactoring Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-refactoring`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-refactoring`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Refactoring and modernization utilities for Perl

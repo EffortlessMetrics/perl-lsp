@@ -1,6 +1,6 @@
 # perl-dap Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-dap`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-dap`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Debug Adapter Protocol server for Perl

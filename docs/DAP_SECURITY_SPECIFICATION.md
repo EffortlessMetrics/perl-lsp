@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-This specification defines comprehensive security requirements for the DAP implementation, aligned with existing enterprise security framework (`docs/SECURITY_DEVELOPMENT_GUIDE.md`). All security measures are testable via AC16 validation suite.
+This specification defines comprehensive security requirements for the DAP implementation, aligned with existing enterprise security framework (`docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md`). All security measures are testable via AC16 validation suite.
 
 **Key Security Domains**:
 1. **Path Traversal Prevention**: Canonical path validation within workspace boundaries
@@ -46,7 +46,7 @@ use std::path::{Path, PathBuf, Component};
 use anyhow::{Result, bail};
 
 /// Validate breakpoint path is within workspace boundaries
-/// Aligned with docs/SECURITY_DEVELOPMENT_GUIDE.md
+/// Aligned with docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md
 pub fn validate_breakpoint_path(uri: &str, workspace_root: &Path) -> Result<PathBuf> {
     // Convert URI to filesystem path
     let path = uri_to_path(uri)?;
@@ -727,7 +727,7 @@ cargo audit -p perl-dap
 
 ### 8.1 Security Standards Alignment
 
-**Enterprise Security Framework** (`docs/SECURITY_DEVELOPMENT_GUIDE.md`):
+**Enterprise Security Framework** (`docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md`):
 - ✅ Path traversal prevention (canonical path validation)
 - ✅ UTF-16 position security (PR #153 symmetric conversion)
 - ✅ LSP error recovery patterns (safe logging)
@@ -754,10 +754,10 @@ cargo audit -p perl-dap
 
 ## 9. References
 
-- [Security Development Guide](SECURITY_DEVELOPMENT_GUIDE.md): Enterprise security framework
-- [Position Tracking Guide](POSITION_TRACKING_GUIDE.md): UTF-16 ↔ UTF-8 conversion (PR #153)
-- [DAP Implementation Specification](DAP_IMPLEMENTATION_SPECIFICATION.md): Primary technical specification
-- [DAP Protocol Schema](DAP_PROTOCOL_SCHEMA.md): JSON-RPC message schemas
+- [Security Development Guide](how-to/SECURITY_DEVELOPMENT_GUIDE.md): Enterprise security framework
+- [Position Tracking Guide](reference/POSITION_TRACKING_GUIDE.md): UTF-16 ↔ UTF-8 conversion (PR #153)
+- [DAP Implementation Specification](reference/DAP_IMPLEMENTATION_SPECIFICATION.md): Primary technical specification
+- [DAP Protocol Schema](reference/DAP_PROTOCOL_SCHEMA.md): JSON-RPC message schemas
 - [OWASP Top 10 2021](https://owasp.org/www-project-top-ten/)
 
 ---

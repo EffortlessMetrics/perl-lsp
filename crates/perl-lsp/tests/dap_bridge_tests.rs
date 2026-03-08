@@ -101,7 +101,7 @@ mod dap_phase1_tests {
     #[test]
     // AC:3
     fn test_bridge_documentation_complete() -> Result<()> {
-        let path = "../../docs/DAP_BRIDGE_SETUP_GUIDE.md";
+        let path = "../../docs/tutorials/DAP_BRIDGE_SETUP_GUIDE.md";
         let content = std::fs::read_to_string(path)
             .map_err(|e| anyhow::anyhow!("Failed to read docs at {}: {}", path, e))?;
 

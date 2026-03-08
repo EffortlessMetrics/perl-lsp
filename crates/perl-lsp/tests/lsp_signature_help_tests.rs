@@ -18,7 +18,7 @@
 //! - Returns null when cursor is not inside a function call
 //!
 //! Related Documentation:
-//! - docs/LSP_IMPLEMENTATION_GUIDE.md#signature-help
+//! - docs/reference/LSP_IMPLEMENTATION_GUIDE.md#signature-help
 //! - crates/perl-lsp/src/features/signature_help.rs
 
 mod support;

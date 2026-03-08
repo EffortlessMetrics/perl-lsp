@@ -1,6 +1,6 @@
 # perl-lsp-feature-flags Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-feature-flags`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-feature-flags`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Shared feature-flag and advertised-feature models for LSP capability negotiation.

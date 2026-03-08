@@ -1,6 +1,6 @@
 # perl-lsp-feature-grid Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-feature-grid`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-feature-grid`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 BDD-aware feature-grid payload and profile-aware advertized feature APIs for Perl LSP.

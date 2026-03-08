@@ -52,17 +52,17 @@ When analyzing Perl Language Server Protocol stories or acceptance criteria, you
    find docs/ -name "*.md" -type f | head -20
 
    # Check parser architecture documentation structure
-   ls -la docs/LSP_IMPLEMENTATION_GUIDE.md docs/CRATE_ARCHITECTURE_GUIDE.md docs/INCREMENTAL_PARSING_GUIDE.md
+   ls -la docs/reference/LSP_IMPLEMENTATION_GUIDE.md docs/reference/CRATE_ARCHITECTURE_GUIDE.md docs/how-to/INCREMENTAL_PARSING_GUIDE.md
 
    # Verify workspace navigation documentation
-   ls -la docs/WORKSPACE_NAVIGATION_GUIDE.md docs/VARIABLE_RESOLUTION_GUIDE.md
+   ls -la docs/reference/WORKSPACE_NAVIGATION_GUIDE.md docs/reference/VARIABLE_RESOLUTION_GUIDE.md
    ```
    Pay special attention to:
-   - Parser specifications (~100% Perl syntax coverage) in `docs/LSP_IMPLEMENTATION_GUIDE.md`
-   - Dual indexing patterns in `docs/WORKSPACE_NAVIGATION_GUIDE.md`
-   - Incremental parsing architecture in `docs/INCREMENTAL_PARSING_GUIDE.md`
-   - LSP protocol compliance in `docs/LSP_DEVELOPMENT_GUIDE.md`
-   - Security specifications in `docs/SECURITY_DEVELOPMENT_GUIDE.md`
+   - Parser specifications (~100% Perl syntax coverage) in `docs/reference/LSP_IMPLEMENTATION_GUIDE.md`
+   - Dual indexing patterns in `docs/reference/WORKSPACE_NAVIGATION_GUIDE.md`
+   - Incremental parsing architecture in `docs/how-to/INCREMENTAL_PARSING_GUIDE.md`
+   - LSP protocol compliance in `docs/tutorials/LSP_DEVELOPMENT_GUIDE.md`
+   - Security specifications in `docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md`
 
 3. **Identify Perl LSP Components**: Determine which Perl LSP crates need modification using:
    ```bash

@@ -1,6 +1,6 @@
 # perl-qualified-name Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-qualified-name`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-qualified-name`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Perl qualified-name parsing, splitting, and validation helpers

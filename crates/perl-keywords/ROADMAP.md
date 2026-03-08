@@ -1,6 +1,6 @@
 # perl-keywords Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-keywords`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-keywords`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Canonical Perl keyword inventories and classification helpers

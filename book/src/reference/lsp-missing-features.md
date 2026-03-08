@@ -1,7 +1,7 @@
 # LSP Missing Features & Test Coverage Report
 
 > **Last Updated**: 2026-02-17
-> **Source of truth**: `features.toml` (capabilities) + `docs/CURRENT_STATUS.md` (metrics)
+> **Source of truth**: `features.toml` (capabilities) + `docs/project/CURRENT_STATUS.md` (metrics)
 >
 > This report lists **non-advertised** or **planned/preview** features only.
 > If this file conflicts with `features.toml`, update this file.
@@ -12,7 +12,7 @@
 
 - **Advertised LSP features** are tracked in `features.toml` and should be stable and tested.
 - **Missing/Not advertised LSP features** are limited to notebook support (preview).
-- For **coverage metrics**, see `docs/CURRENT_STATUS.md` (do not restate numbers here).
+- For **coverage metrics**, see `docs/project/CURRENT_STATUS.md` (do not restate numbers here).
 
 ---
 
@@ -46,7 +46,7 @@ Advertised DAP features:
 - **`dap.breakpoints.basic`** - verified/unverified breakpoint lifecycle
 - **`dap.inline_values`** - custom inlineValues request support
 
-For DAP roadmap items (attach, variables/evaluate, safe eval), see `docs/ROADMAP.md`.
+For DAP roadmap items (attach, variables/evaluate, safe eval), see `docs/project/ROADMAP.md`.
 
 ---
 

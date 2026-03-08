@@ -24,7 +24,7 @@
 #     timeline.txt        # commit timestamps for temporal analysis
 #     full_messages.txt   # full commit messages
 #
-# See: docs/FORENSICS_SCHEMA.md, docs/DEVLT_ESTIMATION.md
+# See: docs/reference/FORENSICS_SCHEMA.md, docs/DEVLT_ESTIMATION.md
 
 set -euo pipefail
 

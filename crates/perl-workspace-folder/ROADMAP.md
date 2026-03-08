@@ -1,6 +1,6 @@
 # perl-workspace-folder Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-workspace-folder`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-workspace-folder`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Parse Perl workspace folder declarations into filesystem paths

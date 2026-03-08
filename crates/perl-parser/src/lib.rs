@@ -143,7 +143,7 @@
 //! - **Call Hierarchy**: Function call navigation
 //! - **Type Hierarchy**: Class inheritance navigation
 //!
-//! See `docs/LSP_CAPABILITY_POLICY.md` for the complete capability matrix.
+//! See `docs/reference/LSP_CAPABILITY_POLICY.md` for the complete capability matrix.
 //!
 //! ## Incremental Parsing
 //!
@@ -283,10 +283,10 @@
 //! ## Documentation
 //!
 //! - **API Docs**: See module documentation below
-//! - **LSP Guide**: `docs/LSP_IMPLEMENTATION_GUIDE.md`
-//! - **Capability Policy**: `docs/LSP_CAPABILITY_POLICY.md`
-//! - **Commands**: `docs/COMMANDS_REFERENCE.md`
-//! - **Current Status**: `docs/CURRENT_STATUS.md`
+//! - **LSP Guide**: `docs/reference/LSP_IMPLEMENTATION_GUIDE.md`
+//! - **Capability Policy**: `docs/reference/LSP_CAPABILITY_POLICY.md`
+//! - **Commands**: `docs/reference/COMMANDS_REFERENCE.md`
+//! - **Current Status**: `docs/project/CURRENT_STATUS.md`
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)] // prevent stray pub items from escaping

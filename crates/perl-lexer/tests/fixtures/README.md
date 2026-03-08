@@ -63,7 +63,7 @@ fn test_ac2_lexer_substitution_operator_error_handling() {
 ## Related Documentation
 
 - [LEXER_ERROR_HANDLING_SPEC.md](../../../docs/LEXER_ERROR_HANDLING_SPEC.md)
-- [ERROR_HANDLING_API_CONTRACTS.md](../../../docs/ERROR_HANDLING_API_CONTRACTS.md)
+- [ERROR_HANDLING_API_CONTRACTS.md](../../../docs/reference/ERROR_HANDLING_API_CONTRACTS.md)
 - [issue-178-spec.md](../../../docs/issue-178-spec.md)
 
 ## Performance Guarantees

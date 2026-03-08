@@ -81,7 +81,7 @@ Evidence
 - test: 148/154 pass; new: 0/6 pass; AC satisfied: 9/9
 - mutation: 86% (threshold 80%); survivors: 12 (top 3 files…)
 - fuzz: 0 crashes in 300s; corpus size: 41
-- paths: crates/perl-parser/src/lib.rs:184, docs/LSP_IMPLEMENTATION_GUIDE.md
+- paths: crates/perl-parser/src/lib.rs:184, docs/reference/LSP_IMPLEMENTATION_GUIDE.md
 
 **Standardized Evidence Format (All Flows):**
 ```

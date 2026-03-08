@@ -41,7 +41,7 @@ def get_crate_version(crate_name: str) -> str:
 
 def main():
     report_path = Path("corpus_audit_report.json")
-    output_path = Path("docs/PARSER_FEATURE_MATRIX.md")
+    output_path = Path("docs/reference/PARSER_FEATURE_MATRIX.md")
     baseline_path = Path("ci/parse_errors_baseline.txt")
 
     if not report_path.exists():

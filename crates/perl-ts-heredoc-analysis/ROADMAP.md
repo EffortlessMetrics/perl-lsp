@@ -1,6 +1,6 @@
 # perl-ts-heredoc-analysis Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-ts-heredoc-analysis`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-ts-heredoc-analysis`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Standalone heredoc analysis tools for Perl parsing

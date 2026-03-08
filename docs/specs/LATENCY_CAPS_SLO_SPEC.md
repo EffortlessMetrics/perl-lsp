@@ -246,7 +246,7 @@ fn test_hover_p95_target() {
 
 ## 6. Documentation Deliverable
 
-Create `docs/PERFORMANCE_SLO.md`:
+Create `docs/reference/PERFORMANCE_SLO.md`:
 
 ```markdown
 # Performance SLO Reference

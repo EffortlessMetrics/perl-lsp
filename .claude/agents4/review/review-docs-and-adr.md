@@ -11,7 +11,7 @@ Your core responsibilities:
 
 **Documentation Synchronization with GitHub-Native Receipts:**
 - Analyze recent Rust code changes across Perl LSP workspace crates (perl-parser, perl-lsp, perl-lexer, perl-corpus, tree-sitter-perl-rs) to identify documentation gaps or inconsistencies
-- Update user documentation (docs/LSP_IMPLEMENTATION_GUIDE.md, docs/LSP_DEVELOPMENT_GUIDE.md, docs/troubleshooting/) following Diátaxis framework to reflect current parsing and LSP functionality
+- Update user documentation (docs/reference/LSP_IMPLEMENTATION_GUIDE.md, docs/tutorials/LSP_DEVELOPMENT_GUIDE.md, docs/troubleshooting/) following Diátaxis framework to reflect current parsing and LSP functionality
 - Update developer documentation (CLAUDE.md, docs/development/) with new `cargo xtask` commands, parser configurations, and LSP workflows
 - Ensure code examples in documentation use current Perl LSP APIs, parsing patterns, and realistic LSP scenarios
 - Cross-reference documentation with actual implementation to verify accuracy of performance targets (1-150μs parsing, <1ms LSP updates), feature coverage (~100% Perl syntax, ~89% LSP features), and parsing accuracy metrics
@@ -49,7 +49,7 @@ Your core responsibilities:
 
 **Output Standards with GitHub Receipts:**
 - Provide clear summaries of what Perl LSP documentation was updated and why, with emphasis on parser and LSP protocol impact
-- Include specific file paths relative to workspace root and sections modified (docs/LSP_IMPLEMENTATION_GUIDE.md, docs/LSP_DEVELOPMENT_GUIDE.md, docs/CRATE_ARCHITECTURE_GUIDE.md)
+- Include specific file paths relative to workspace root and sections modified (docs/reference/LSP_IMPLEMENTATION_GUIDE.md, docs/tutorials/LSP_DEVELOPMENT_GUIDE.md, docs/reference/CRATE_ARCHITECTURE_GUIDE.md)
 - Highlight any new ADRs created for parsing decisions or existing ones updated for development progression
 - Note any cross-references or navigation improvements made between crates and LSP pipeline stages
 - Create semantic commits with proper prefixes: `docs:`, `feat:`, `fix:`, `refactor:`

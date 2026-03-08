@@ -537,7 +537,7 @@ transport = "tcp"
 port-arg = "--port {}"
 ```
 
-See [DAP User Guide](../DAP_USER_GUIDE.md) for more details.
+See [DAP User Guide](../tutorials/DAP_USER_GUIDE.md) for more details.
 
 ### Performance Tuning
 
@@ -713,9 +713,9 @@ l = ":git-log"
 
 ## See Also
 
-- [Getting Started](../GETTING_STARTED.md) - Quick start guide
-- [Configuration Reference](../CONFIG.md) - Complete configuration options
-- [Troubleshooting Guide](../TROUBLESHOOTING.md) - Common issues and solutions
-- [Performance Tuning](../PERFORMANCE_TUNING.md) - Performance optimization guide
-- [Editor Setup](../EDITOR_SETUP.md) - Other editor configurations
+- [Getting Started](../tutorials/GETTING_STARTED.md) - Quick start guide
+- [Configuration Reference](../reference/CONFIG.md) - Complete configuration options
+- [Troubleshooting Guide](../how-to/TROUBLESHOOTING.md) - Common issues and solutions
+- [Performance Tuning](../how-to/PERFORMANCE_TUNING.md) - Performance optimization guide
+- [Editor Setup](../how-to/EDITOR_SETUP.md) - Other editor configurations
 - [Helix Documentation](https://docs.helix-editor.com/)

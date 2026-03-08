@@ -2,7 +2,7 @@
 //!
 //! Tests for breakpoint verification edge cases across file boundaries, comments, blank lines, heredocs, BEGIN/END blocks
 //!
-//! Specification: docs/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management
+//! Specification: docs/reference/DAP_IMPLEMENTATION_SPECIFICATION.md#ac7-breakpoint-management
 //!
 //! Run with: cargo test -p perl-dap
 

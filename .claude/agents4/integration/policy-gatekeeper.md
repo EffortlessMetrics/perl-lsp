@@ -166,7 +166,7 @@ Use clear, actionable language when reporting Perl LSP security violations:
 - "Unicode safety validation failed: 5 UTF-16/UTF-8 position mapping boundary failures - position conversion vulnerability"
 - "LSP protocol compliance below threshold: 82% features functional (expected ~89%) - workspace support gaps"
 - "Cross-file navigation failed: 94% reference coverage (expected 98%) - dual indexing strategy incomplete"
-- "Documentation in docs/LSP_IMPLEMENTATION_GUIDE.md outdated for new parsing features - architecture documentation gap"
+- "Documentation in docs/reference/LSP_IMPLEMENTATION_GUIDE.md outdated for new parsing features - architecture documentation gap"
 - "Tree-sitter highlight integration failed: 2/4 tests failing - scanner integration issue"
 - "Memory safety violation: parser library shows potential use-after-free in mutation testing"
 - "API breaking change detected: parser interface modified without migration documentation"

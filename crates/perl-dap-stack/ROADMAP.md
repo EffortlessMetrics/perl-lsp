@@ -1,6 +1,6 @@
 # perl-dap-stack Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-dap-stack`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-dap-stack`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Stack trace parsing and frame classification for the Perl Debug Adapter Protocol

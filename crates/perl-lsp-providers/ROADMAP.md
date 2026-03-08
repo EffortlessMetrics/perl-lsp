@@ -1,6 +1,6 @@
 # perl-lsp-providers Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-providers`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-providers`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 LSP provider aggregation and tooling integrations for Perl

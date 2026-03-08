@@ -25,7 +25,7 @@ echo "📁 Checking new files exist..."
 FILES=(
     "crates/perl-lsp/tests/common/test_reliability.rs"
     "crates/perl-lsp/tests/lsp_test_infrastructure_validation.rs"
-    "docs/LSP_TEST_INFRASTRUCTURE.md"
+    "docs/reference/LSP_TEST_INFRASTRUCTURE.md"
     "docs/TEST_INFRASTRUCTURE_MIGRATION.md"
 )
 
@@ -78,9 +78,9 @@ echo
 # 5. Check documentation quality
 echo "📚 Checking documentation..."
 DOC_CHECKS=(
-    "docs/LSP_TEST_INFRASTRUCTURE.md:Environment Validation"
-    "docs/LSP_TEST_INFRASTRUCTURE.md:Adaptive Timeouts"
-    "docs/LSP_TEST_INFRASTRUCTURE.md:Health Checks"
+    "docs/reference/LSP_TEST_INFRASTRUCTURE.md:Environment Validation"
+    "docs/reference/LSP_TEST_INFRASTRUCTURE.md:Adaptive Timeouts"
+    "docs/reference/LSP_TEST_INFRASTRUCTURE.md:Health Checks"
     "docs/TEST_INFRASTRUCTURE_MIGRATION.md:Migration Checklist"
     "docs/TEST_INFRASTRUCTURE_MIGRATION.md:Before.*After"
 )
@@ -136,6 +136,6 @@ echo "║ LSP Test Infrastructure enhancements are ready for use.           ║"
 echo "║                                                                    ║"
 echo "║ Next steps:                                                        ║"
 echo "║ 1. Run: RUST_TEST_THREADS=2 cargo test -p perl-lsp                ║"
-echo "║ 2. Review: docs/LSP_TEST_INFRASTRUCTURE.md                        ║"
+echo "║ 2. Review: docs/reference/LSP_TEST_INFRASTRUCTURE.md                        ║"
 echo "║ 3. Migrate: docs/TEST_INFRASTRUCTURE_MIGRATION.md                 ║"
 echo "╚════════════════════════════════════════════════════════════════════╝"

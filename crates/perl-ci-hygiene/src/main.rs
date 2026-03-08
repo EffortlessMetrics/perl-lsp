@@ -2636,7 +2636,7 @@ fn cmd_check_parser_matrix(repo_root: &Path) -> Result<i32> {
     }
 
     println!();
-    println!("DRIFT DETECTED: docs/PARSER_FEATURE_MATRIX.md is out of date");
+    println!("DRIFT DETECTED: docs/reference/PARSER_FEATURE_MATRIX.md is out of date");
     println!();
     let old_matrix = repo_root.join("target/.old_parser_matrix");
     let new_matrix = repo_root.join("target/.new_parser_matrix");
@@ -2667,7 +2667,7 @@ fn cmd_check_parser_matrix(repo_root: &Path) -> Result<i32> {
     println!("To fix:");
     println!("  1. Run: just parser-audit");
     println!("  2. Run: just parser-matrix-update");
-    println!("  3. Commit the updated docs/PARSER_FEATURE_MATRIX.md");
+    println!("  3. Commit the updated docs/reference/PARSER_FEATURE_MATRIX.md");
     let _ = fs::remove_file(&tmp_matrix);
     Ok(1)
 }
@@ -3081,7 +3081,7 @@ fn cmd_check_doc_paths(repo_root: &Path, docs_dir: Option<&str>) -> Result<i32> 
 
 fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
     let baseline_path = repo_root.join("ci").join("todo_baseline.txt");
-    let exclude_dirs = ["target", ".git", ".receipts", ".runs"];
+    let exclude_dirs = ["target", ".git", ".receipts", ".runs", "archive"];
     let exclude_files = [
         repo_root.join("ci").join("check_todos.sh"),
         repo_root.join("crates").join("perl-parser").join("tests").join("missing_docs_ac_tests.rs"),

@@ -18,7 +18,7 @@
 //! - Command structure validation
 //!
 //! Related Documentation:
-//! - docs/LSP_IMPLEMENTATION_GUIDE.md#code-lens
+//! - docs/reference/LSP_IMPLEMENTATION_GUIDE.md#code-lens
 //! - crates/perl-parser/src/code_lens_provider.rs
 
 mod support;

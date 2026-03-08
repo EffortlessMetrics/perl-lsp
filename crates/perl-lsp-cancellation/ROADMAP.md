@@ -1,6 +1,6 @@
 # perl-lsp-cancellation Roadmap
 
-> **Note:** This is the component-specific roadmap for `perl-lsp-cancellation`. For the project-wide roadmap, see [`docs/ROADMAP.md`](../../docs/ROADMAP.md).
+> **Note:** This is the component-specific roadmap for `perl-lsp-cancellation`. For the project-wide roadmap, see [`docs/project/ROADMAP.md`](../../docs/project/ROADMAP.md).
 
 ## Purpose
 Enhanced LSP cancellation infrastructure with token/registry support

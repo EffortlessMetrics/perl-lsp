@@ -128,7 +128,7 @@ Provide clear status updates during validation with Perl LSP-specific context, d
 
 **Validation Evidence Format:**
 ```
-spec: docs/INCREMENTAL_PARSING_GUIDE.md, docs/LSP_IMPLEMENTATION_GUIDE.md cross-linked; API contracts verified
+spec: docs/how-to/INCREMENTAL_PARSING_GUIDE.md, docs/reference/LSP_IMPLEMENTATION_GUIDE.md cross-linked; API contracts verified
 ```
 
 **Gate-Specific Micro-Policies:**

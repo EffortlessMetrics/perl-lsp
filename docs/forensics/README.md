@@ -40,7 +40,7 @@ When agents investigate issues, use [WORK_ORDER_FORMAT.md](WORK_ORDER_FORMAT.md)
 
 ### Post-PR: Forensics Dossiers
 
-After PRs merge, create `pr-NNN.md` using [`../FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md) to:
+After PRs merge, create `pr-NNN.md` using [`../FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) to:
 - Extract lessons from merged PRs
 - Measure actual DevLT vs estimated
 - Identify guardrail improvements
@@ -57,6 +57,6 @@ For multi-issue swarms, see [IMPLEMENTATION_PHASES.md](IMPLEMENTATION_PHASES.md)
 ## See Also
 
 - [`INDEX.md`](INDEX.md) - PR archaeology inventory
-- [`../FORENSICS_SCHEMA.md`](../FORENSICS_SCHEMA.md) - PR dossier template
+- [`../FORENSICS_SCHEMA.md`](../reference/FORENSICS_SCHEMA.md) - PR dossier template
 - [`../DEVLT_ESTIMATION.md`](../DEVLT_ESTIMATION.md) - Budget estimation rubric
-- [`../LESSONS.md`](../LESSONS.md) - Aggregate findings
+- [`../LESSONS.md`](../project/LESSONS.md) - Aggregate findings

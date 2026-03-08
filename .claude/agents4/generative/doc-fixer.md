@@ -137,7 +137,7 @@ gh api repos/:owner/:repo/check-runs \
 ```
 docs: cargo test --doc: 295/295 pass; links validated: 47/47; examples: 33/33 pass
 docs: doctests updated: perl-parser/src/lib.rs, perl-lsp/src/providers.rs
-docs: links repaired: docs/LSP_IMPLEMENTATION_GUIDE.md → docs/CRATE_ARCHITECTURE_GUIDE.md (5 fixes)
+docs: links repaired: docs/reference/LSP_IMPLEMENTATION_GUIDE.md → docs/reference/CRATE_ARCHITECTURE_GUIDE.md (5 fixes)
 docs: missing_docs warnings: resolved 12/129 violations; API documentation standards compliance improved
 docs: highlight tests: cd xtask && cargo run highlight (4/4 passing)
 ```
