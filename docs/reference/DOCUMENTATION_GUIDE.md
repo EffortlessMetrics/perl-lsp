@@ -1,4 +1,4 @@
-> For the documentation hub, see [README.md](README.md). This page describes documentation standards and the Diataxis structure.
+> For the documentation hub, see [README.md](../README.md). This page describes documentation standards and the Diataxis structure.
 
 # Documentation Guide
 
@@ -8,7 +8,7 @@
 
 New to perl-lsp? Start here:
 
-1. **[CLAUDE.md](../CLAUDE.md)** - Project overview, installation, essential commands
+1. **[CLAUDE.md](../../CLAUDE.md)** - Project overview, installation, essential commands
 2. **[COMMANDS_REFERENCE.md](COMMANDS_REFERENCE.md)** - Comprehensive build/test commands
 3. **[LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)** - LSP server architecture overview
 
@@ -59,7 +59,7 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/), organ
 
 **Optimization**:
 - **[PERFORMANCE_PRESERVATION_GUIDE.md](../how-to/PERFORMANCE_PRESERVATION_GUIDE.md)** - Maintain performance baselines
-- **[benchmarks/BENCHMARK_FRAMEWORK.md](benchmarks/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
+- **[benchmarks/BENCHMARK_FRAMEWORK.md](../benchmarks/BENCHMARK_FRAMEWORK.md)** - Cross-language performance analysis
 
 **Security**:
 - **[SECURITY_DEVELOPMENT_GUIDE.md](../how-to/SECURITY_DEVELOPMENT_GUIDE.md)** - Security development practices
@@ -85,9 +85,7 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/), organ
 - **[MODERN_ARCHITECTURE.md](MODERN_ARCHITECTURE.md)** - Current architectural patterns
 
 **Protocol Specifications**:
-- **[LSP_CANCELLATION_PROTOCOL_SPECIFICATION.md](LSP_CANCELLATION_PROTOCOL_SPECIFICATION.md)** - JSON-RPC 2.0 cancellation protocol
-- **[LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md](LSP_CANCELLATION_PERFORMANCE_SPECIFICATION.md)** - Performance requirements
-- **[ISSUE_207_DAP_SPECIFICATION_ANALYSIS.md](ISSUE_207_DAP_SPECIFICATION_ANALYSIS.md)** - DAP protocol analysis
+- **[LSP_CANCELLATION_PROTOCOL_SPECIFICATION.md](LSP_CANCELLATION_PROTOCOL.md)** - JSON-RPC 2.0 cancellation protocol
 
 **Technical Specifications**:
 - **[ROPE_INTEGRATION_GUIDE.md](ROPE_INTEGRATION_GUIDE.md)** - Document management implementation
@@ -124,15 +122,11 @@ This documentation follows the [Diataxis framework](https://diataxis.fr/), organ
 - **[LSP_DOCUMENTATION.md](../explanation/LSP_DOCUMENTATION.md)** - LSP feature implementation philosophy
 
 **Design Decisions** (Architecture Decision Records):
-- **[adr/ADR_001_AGENT_ARCHITECTURE.md](adr/ADR_001_AGENT_ARCHITECTURE.md)** - 97 specialized agents (PR #153)
-- **[adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Documentation enforcement (PR #160)
-- **[AGENT_ORCHESTRATION.md](AGENT_ORCHESTRATION.md)** - Agent ecosystem patterns
-- **[AGENT_CUSTOMIZER.md](AGENT_CUSTOMIZER.md)** - Domain-specific agent adaptation
+- **[adr/ADR_001_AGENT_ARCHITECTURE.md](../adr/ADR_001_AGENT_ARCHITECTURE.md)** - 97 specialized agents (PR #153)
+- **[adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md](../adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Documentation enforcement (PR #160)
 
 **Implementation Context**:
 - **[PARSER_ROBUSTNESS_IMPROVEMENTS.md](../explanation/PARSER_ROBUSTNESS_IMPROVEMENTS.md)** - Fuzz testing and mutation hardening
-- **[CI_HARDENING.md](CI_HARDENING.md)** - CI/CD reliability improvements
-- **[SPEC_149_GOVERNANCE.md](SPEC_149_GOVERNANCE.md)** - Documentation quality governance
 
 ---
 
@@ -154,34 +148,34 @@ Map features to their documentation:
 | **Import Optimization** | - | [IMPORT_OPTIMIZER_GUIDE](../how-to/IMPORT_OPTIMIZER_GUIDE.md) | [IMPORT_OPTIMIZER_GUIDE](../how-to/IMPORT_OPTIMIZER_GUIDE.md) | - |
 | **File Completion** | - | [FILE_COMPLETION_GUIDE](../how-to/FILE_COMPLETION_GUIDE.md) | [FILE_COMPLETION_GUIDE](../how-to/FILE_COMPLETION_GUIDE.md) | [SECURITY_DEVELOPMENT_GUIDE](../how-to/SECURITY_DEVELOPMENT_GUIDE.md) |
 | **executeCommand** | [EXECUTE_COMMAND_TUTORIAL](../tutorials/EXECUTE_COMMAND_TUTORIAL.md) | [EXECUTE_COMMAND_CONFIGURATION_GUIDE](../explanation/EXECUTE_COMMAND_CONFIGURATION_GUIDE.md) | [WORKSPACE_REFACTOR_API_REFERENCE](WORKSPACE_REFACTOR_API_REFERENCE.md) | [LSP_IMPLEMENTATION_GUIDE](LSP_IMPLEMENTATION_GUIDE.md) |
-| **Cancellation** | - | [LSP_ERROR_HANDLING_MONITORING_GUIDE](../how-to/LSP_ERROR_HANDLING_MONITORING_GUIDE.md) | [LSP_CANCELLATION_PROTOCOL_SPECIFICATION](LSP_CANCELLATION_PROTOCOL_SPECIFICATION.md) | [CANCELLATION_ARCHITECTURE_GUIDE](../explanation/CANCELLATION_ARCHITECTURE_GUIDE.md) |
+| **Cancellation** | - | [LSP_ERROR_HANDLING_MONITORING_GUIDE](../how-to/LSP_ERROR_HANDLING_MONITORING_GUIDE.md) | [LSP_CANCELLATION_PROTOCOL_SPECIFICATION](LSP_CANCELLATION_PROTOCOL.md) | [CANCELLATION_ARCHITECTURE_GUIDE](../explanation/CANCELLATION_ARCHITECTURE_GUIDE.md) |
 
 ### DAP Features
 | Feature | Tutorial | How-to | Reference | Explanation |
 |---------|----------|--------|-----------|-------------|
-| **Debug Setup** | [DAP_USER_GUIDE](../tutorials/DAP_USER_GUIDE.md) | [DAP_USER_GUIDE](../tutorials/DAP_USER_GUIDE.md) | [CRATE_ARCHITECTURE_DAP](CRATE_ARCHITECTURE_DAP.md) | [ISSUE_207_DAP_SPECIFICATION_ANALYSIS](ISSUE_207_DAP_SPECIFICATION_ANALYSIS.md) |
+| **Debug Setup** | [DAP_USER_GUIDE](../tutorials/DAP_USER_GUIDE.md) | [DAP_USER_GUIDE](../tutorials/DAP_USER_GUIDE.md) | [CRATE_ARCHITECTURE_DAP](CRATE_ARCHITECTURE_DAP.md) | - |
 | **Breakpoints** | [DAP_USER_GUIDE](../tutorials/DAP_USER_GUIDE.md) | [DAP_BREAKPOINT_VALIDATION_GUIDE](../how-to/DAP_BREAKPOINT_VALIDATION_GUIDE.md) | [CRATE_ARCHITECTURE_DAP](CRATE_ARCHITECTURE_DAP.md) | - |
 
 ### Testing Features
 | Feature | Tutorial | How-to | Reference | Explanation |
 |---------|----------|--------|-----------|-------------|
-| **Adaptive Threading** | [COMPREHENSIVE_TESTING_GUIDE](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md) | [THREADING_CONFIGURATION_GUIDE](../how-to/THREADING_CONFIGURATION_GUIDE.md) | [COMMANDS_REFERENCE](COMMANDS_REFERENCE.md) | [CI_HARDENING](CI_HARDENING.md) |
+| **Adaptive Threading** | [COMPREHENSIVE_TESTING_GUIDE](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md) | [THREADING_CONFIGURATION_GUIDE](../how-to/THREADING_CONFIGURATION_GUIDE.md) | [COMMANDS_REFERENCE](COMMANDS_REFERENCE.md) | - |
 | **Mutation Testing** | - | [COMPREHENSIVE_TESTING_GUIDE](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md) | [PARSER_ROBUSTNESS_IMPROVEMENTS](../explanation/PARSER_ROBUSTNESS_IMPROVEMENTS.md) | [PARSER_ROBUSTNESS_IMPROVEMENTS](../explanation/PARSER_ROBUSTNESS_IMPROVEMENTS.md) |
-| **Benchmarking** | - | [benchmarks/BENCHMARK_FRAMEWORK](benchmarks/BENCHMARK_FRAMEWORK.md) | [benchmarks/BENCHMARK_FRAMEWORK](benchmarks/BENCHMARK_FRAMEWORK.md) | [benchmarks/BENCHMARK_DESIGN](benchmarks/BENCHMARK_DESIGN.md) |
+| **Benchmarking** | - | [BENCHMARK_FRAMEWORK](../benchmarks/BENCHMARK_FRAMEWORK.md) | [BENCHMARK_FRAMEWORK](../benchmarks/BENCHMARK_FRAMEWORK.md) | [BENCHMARK_DESIGN](../benchmarks/BENCHMARK_DESIGN.md) |
 
 ---
 
 ## Progressive Learning Paths
 
 ### Path 1: LSP Developer (New to Project)
-1. Start: [CLAUDE.md](../CLAUDE.md) - Project overview and quick start
+1. Start: [CLAUDE.md](../../CLAUDE.md) - Project overview and quick start
 2. Setup: [AI_BUILD_GUIDE.md](../tutorials/AI_BUILD_GUIDE.md) - Development environment
 3. Architecture: [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md) - System design
 4. First Feature: [EXECUTE_COMMAND_TUTORIAL.md](../tutorials/EXECUTE_COMMAND_TUTORIAL.md) - Build custom command
 5. Advanced: [WORKSPACE_REFACTORING_TUTORIAL.md](../tutorials/WORKSPACE_REFACTORING_TUTORIAL.md) - Cross-file features
 
 ### Path 2: Parser Contributor
-1. Start: [CLAUDE.md](../CLAUDE.md) - Project overview
+1. Start: [CLAUDE.md](../../CLAUDE.md) - Project overview
 2. Architecture: [CRATE_ARCHITECTURE_GUIDE.md](CRATE_ARCHITECTURE_GUIDE.md) - Component design
 3. Testing: [COMPREHENSIVE_TESTING_GUIDE.md](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md) - TDD workflow
 4. Performance: [INCREMENTAL_PARSING_GUIDE.md](../how-to/INCREMENTAL_PARSING_GUIDE.md) - Optimization
@@ -191,14 +185,12 @@ Map features to their documentation:
 1. Standards: [API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md) - Requirements
 2. Validation: [VALIDATION-149-acceptance-criteria.md](VALIDATION-149-acceptance-criteria.md) - Quality gates
 3. Strategy: [MISSING_DOCUMENTATION_GUIDE.md](MISSING_DOCUMENTATION_GUIDE.md) - Enforcement
-4. Governance: [SPEC_149_GOVERNANCE.md](SPEC_149_GOVERNANCE.md) - Process
-5. Implementation: [adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) - Design
+4. Implementation: [adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md](../adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) - Design
 
 ### Path 4: Debugging Integration
 1. Setup: [DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md) - Installation and configuration
 2. Architecture: [CRATE_ARCHITECTURE_DAP.md](CRATE_ARCHITECTURE_DAP.md) - System design
 3. Validation: [DAP_BREAKPOINT_VALIDATION_GUIDE.md](../how-to/DAP_BREAKPOINT_VALIDATION_GUIDE.md) - Testing
-4. Analysis: [ISSUE_207_DAP_SPECIFICATION_ANALYSIS.md](ISSUE_207_DAP_SPECIFICATION_ANALYSIS.md) - Protocol details
 
 ---
 
@@ -212,7 +204,7 @@ Map features to their documentation:
 
 **"What is...?"** → [Reference Documentation](#reference-documentation-information-oriented)
 - Precise technical specifications and API contracts
-- Example: "What is the cancellation protocol?" → [LSP_CANCELLATION_PROTOCOL_SPECIFICATION.md](LSP_CANCELLATION_PROTOCOL_SPECIFICATION.md)
+- Example: "What is the cancellation protocol?" → [LSP_CANCELLATION_PROTOCOL_SPECIFICATION.md](LSP_CANCELLATION_PROTOCOL.md)
 
 **"Why does...?"** → [Explanation](#explanation-understanding-oriented)
 - Conceptual understanding and design rationale
@@ -293,15 +285,15 @@ See [API_DOCUMENTATION_STANDARDS.md](API_DOCUMENTATION_STANDARDS.md) for detaile
 ## Additional Resources
 
 ### Project Management
-- **[ISSUE_STATUS_2025-11-12.md](ISSUE_STATUS_2025-11-12.md)** - Complete issue analysis and priorities
+- **[CURRENT_STATUS.md](../project/CURRENT_STATUS.md)** - Real-time project health dashboard
 - **[CURRENT_STATUS.md](../project/CURRENT_STATUS.md)** - Real-time project health dashboard
 - **[STABILITY.md](STABILITY.md)** - API stability guarantees
 
 ### Archived Documentation
-- **[archive/](archive/)** - Historical documentation for reference
+- **[archive/](../archive/)** - Historical documentation for reference
 
 ### Benchmark Reports
-- **[benchmarks/](benchmarks/)** - Performance analysis and cross-language comparisons
+- **[benchmarks/](../benchmarks/)** - Performance analysis and cross-language comparisons
 
 ---
 
@@ -337,6 +329,6 @@ cd xtask && cargo run --no-default-features -- highlight
 1. Check the [Feature Index](#feature-index) for your specific feature
 2. Follow a [Progressive Learning Path](#progressive-learning-paths) for your role
 3. Use [Navigation Hints](#navigation-hints) to find information by type
-4. Review [CLAUDE.md](../CLAUDE.md) for project-wide context
+4. Review [CLAUDE.md](../../CLAUDE.md) for project-wide context
 
 **Found Missing Documentation?** See [MISSING_DOCUMENTATION_GUIDE.md](MISSING_DOCUMENTATION_GUIDE.md) for contribution guidelines.

@@ -87,6 +87,21 @@ nix develop -c just ci-gate       # Canonical local gate
 nix develop -c just status-check  # Verify metrics haven't drifted
 ```
 
+## Canonical Truth Sources
+
+| What | Where | Verified By |
+|------|-------|-------------|
+| Metrics | [CURRENT_STATUS.md](project/CURRENT_STATUS.md) | `just status-check` |
+| Plans | [ROADMAP.md](project/ROADMAP.md) | Human review |
+| Milestones | [MILESTONES.md](project/MILESTONES.md) | GitHub Milestones |
+| Capability catalog | [features.toml](../features.toml) | `just ci-gate` |
+| CI lanes | [CI_TEST_LANES.md](project/CI_TEST_LANES.md) | `just ci-gate` |
+| Local validation | [CI_LOCAL_VALIDATION.md](project/CI_LOCAL_VALIDATION.md) | `just ci-gate` |
+| What went wrong | [LESSONS.md](project/LESSONS.md) | Human review |
+| What went right | [CASEBOOK.md](project/CASEBOOK.md) | Human review |
+
+**Rule**: All metrics are computed and live in `CURRENT_STATUS.md`. If you see a number elsewhere, treat it as stale.
+
 ---
 
 Version: v0.10.0
