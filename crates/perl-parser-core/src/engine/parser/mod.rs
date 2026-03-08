@@ -412,9 +412,13 @@ mod error_recovery_tests;
 // #[cfg(test)]
 // mod enhanced_recovery_tests;
 #[cfg(test)]
+mod builtin_expansion_tests;
+#[cfg(test)]
 mod format_comprehensive_tests;
 #[cfg(test)]
 mod format_tests;
+#[cfg(test)]
+mod forward_declaration_tests;
 #[cfg(test)]
 mod glob_assignment_tests;
 #[cfg(test)]

@@ -243,7 +243,29 @@ impl<'a> Parser<'a> {
                 | "truncate" | "fcntl" | "ioctl" | "flock" | "seek" | "tell" | "select"
                 | "binmode" | "exec" | "system" | "bless" | "ref" | "defined" | "undef"
                 | "keys" | "values" | "each" | "delete" | "exists" | "push" | "pop" | "shift"
-                | "unshift" | "sort" | "map" | "grep" | "chomp" | "chop" | "split" | "join" => {
+                | "unshift" | "sort" | "map" | "grep" | "chomp" | "chop" | "split" | "join"
+                // Filesystem operations
+                | "chdir" | "chmod" | "chown" | "mkdir" | "rmdir" | "unlink" | "rename"
+                | "link" | "symlink" | "readlink" | "stat" | "lstat" | "chroot"
+                // Directory operations
+                | "opendir" | "closedir" | "readdir" | "seekdir" | "telldir" | "rewinddir"
+                // Socket operations
+                | "accept" | "bind" | "connect" | "listen" | "shutdown" | "send" | "recv"
+                | "socket" | "socketpair" | "getsockname" | "getpeername" | "setsockopt"
+                | "getsockopt"
+                // String operations
+                | "substr" | "index" | "rindex" | "lc" | "uc" | "lcfirst" | "ucfirst"
+                | "length" | "reverse" | "pack" | "unpack" | "sprintf"
+                // Process operations
+                | "kill" | "wait" | "waitpid" | "fork" | "alarm" | "sleep"
+                // Conversion and misc builtins
+                | "chr" | "ord" | "hex" | "oct" | "crypt" | "quotemeta" | "prototype"
+                | "fileno" | "pos" | "read" | "write" | "exit" | "goto" | "caller"
+                | "scalar" | "wantarray"
+                // Eval/require/do
+                | "eval" | "require" | "do"
+                // Tie builtins
+                | "tied" => {
                     let start = token.start;
                     // We need to clone the text to check for indirect call pattern because
                     // is_indirect_call_pattern borrows self mutably to peek ahead
