@@ -12,7 +12,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::PathBuf;
+use std::io::BufRead;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::time::Instant;
 use walkdir::WalkDir;
@@ -65,6 +66,8 @@ pub struct SweepConfig {
     pub base_roots: Vec<PathBuf>,
     /// Expanded directories to actually scan (includes versioned subdirs)
     pub corpus_roots: Vec<PathBuf>,
+    /// Optional manifest file listing module names to resolve via `perl`
+    pub manifest_path: Option<PathBuf>,
     /// Optional JSON output file
     pub output_path: Option<PathBuf>,
     /// Compare against baseline JSON file
@@ -210,19 +213,140 @@ fn walk_errors(
     });
 }
 
+/// Parse a manifest file into module names (skipping comments and empty lines).
+pub fn parse_manifest(manifest_path: &Path) -> Result<Vec<String>> {
+    let file = fs::File::open(manifest_path)
+        .with_context(|| format!("Failed to open manifest: {}", manifest_path.display()))?;
+    let reader = std::io::BufReader::new(file);
+    let mut modules = Vec::new();
+    for line in reader.lines() {
+        let line = line.context("Failed to read manifest line")?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        modules.push(trimmed.to_string());
+    }
+    Ok(modules)
+}
+
+/// Resolve module names to file paths via a single `perl` invocation.
+///
+/// Returns an error if fewer than `min_resolved` modules resolve successfully.
+pub fn resolve_manifest_modules(manifest_path: &Path, min_resolved: usize) -> Result<Vec<PathBuf>> {
+    let modules = parse_manifest(manifest_path)?;
+    if modules.is_empty() {
+        return Err(color_eyre::eyre::eyre!("Manifest is empty: {}", manifest_path.display()));
+    }
+
+    // Build a single perl command to resolve all modules at once
+    let module_list = modules.iter().map(|m| m.as_str()).collect::<Vec<_>>().join(" ");
+    let perl_script = format!(
+        r#"for (qw({})) {{ eval "require $_"; (my $f = "$_.pm") =~ s|::|/|g; print "$f=$INC{{$f}}\n" if $INC{{$f}} }}"#,
+        module_list
+    );
+
+    let output = std::process::Command::new("perl")
+        .args(["-e", &perl_script])
+        .output()
+        .context("Failed to run perl for module resolution")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Perl may emit warnings for missing modules but still succeed partially
+        eprintln!("perl warnings: {stderr}");
+    }
+
+    let stdout = String::from_utf8(output.stdout).context("Invalid UTF-8 in perl output")?;
+    let mut resolved = Vec::new();
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if let Some((_module_file, path)) = line.split_once('=') {
+            let p = PathBuf::from(path);
+            if p.exists() {
+                resolved.push(p);
+            }
+        }
+    }
+
+    if resolved.len() < min_resolved {
+        return Err(color_eyre::eyre::eyre!(
+            "Only {} of {} modules resolved (minimum: {}). Resolved: {:?}",
+            resolved.len(),
+            modules.len(),
+            min_resolved,
+            resolved,
+        ));
+    }
+
+    resolved.sort();
+    Ok(resolved)
+}
+
+/// Enforce strict zero-error policy for common corpus.
+///
+/// Returns violations if any files are unreadable or contain errors.
+pub fn enforce_strict_clean(report: &SweepReport) -> Vec<RatchetViolation> {
+    let mut violations = Vec::new();
+
+    if report.files_unreadable > 0 {
+        violations.push(RatchetViolation {
+            metric: "files_unreadable".to_string(),
+            baseline_value: "0".to_string(),
+            current_value: report.files_unreadable.to_string(),
+        });
+    }
+
+    if report.files_with_errors > 0 {
+        violations.push(RatchetViolation {
+            metric: "files_with_errors".to_string(),
+            baseline_value: "0".to_string(),
+            current_value: report.files_with_errors.to_string(),
+        });
+    }
+
+    if report.total_error_nodes > 0 {
+        violations.push(RatchetViolation {
+            metric: "total_error_nodes".to_string(),
+            baseline_value: "0".to_string(),
+            current_value: report.total_error_nodes.to_string(),
+        });
+    }
+
+    violations
+}
+
 /// Run the corpus sweep with the given configuration
 pub fn run(config: SweepConfig) -> Result<()> {
     let start_time = Instant::now();
 
-    // Discover .pm files
-    let pm_files = discover_pm_files(&config.corpus_roots);
+    // Determine corpus profile and file list
+    let (corpus_profile, pm_files) = if let Some(ref manifest) = config.manifest_path {
+        let files = resolve_manifest_modules(manifest, 6)?;
+        ("common".to_string(), files)
+    } else {
+        ("system".to_string(), discover_pm_files(&config.corpus_roots))
+    };
+
+    let use_manifest = config.manifest_path.is_some();
     if pm_files.is_empty() {
-        println!("No .pm files found in specified roots.");
-        println!("Searched: {:?}", config.corpus_roots);
+        if use_manifest {
+            println!("No modules resolved from manifest.");
+        } else {
+            println!("No .pm files found in specified roots.");
+            println!("Searched: {:?}", config.corpus_roots);
+        }
         return Ok(());
     }
 
-    println!("Found {} .pm files across {} roots", pm_files.len(), config.corpus_roots.len());
+    if use_manifest {
+        println!("Resolved {} modules from manifest", pm_files.len());
+    } else {
+        println!("Found {} .pm files across {} roots", pm_files.len(), config.corpus_roots.len());
+    }
 
     // Parse each file
     let progress = ProgressBar::new(pm_files.len() as u64);
@@ -328,9 +452,13 @@ pub fn run(config: SweepConfig) -> Result<()> {
         schema_version: "1.1.0".to_string(),
         commit,
         timestamp: chrono::Utc::now().to_rfc3339(),
-        corpus_profile: "system".to_string(),
-        corpus_roots: config.base_roots.iter().map(|p| p.display().to_string()).collect(),
-        resolved_roots_count: config.corpus_roots.len(),
+        corpus_profile: corpus_profile.clone(),
+        corpus_roots: if use_manifest {
+            vec![config.manifest_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default()]
+        } else {
+            config.base_roots.iter().map(|p| p.display().to_string()).collect()
+        },
+        resolved_roots_count: if use_manifest { pm_files.len() } else { config.corpus_roots.len() },
         perl_version: get_perl_version(),
         total_files,
         files_unreadable,
@@ -357,7 +485,8 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
     // Write receipt if requested
     if config.receipt {
-        let receipt_path = PathBuf::from("target/receipts/corpus-sweep.json");
+        let receipt_path =
+            PathBuf::from(format!("target/receipts/{}-corpus-sweep.json", corpus_profile));
         if let Some(parent) = receipt_path.parent() {
             fs::create_dir_all(parent).context("Failed to create receipt directory")?;
         }
@@ -366,7 +495,26 @@ pub fn run(config: SweepConfig) -> Result<()> {
         eprintln!("Receipt written to: {}", receipt_path.display());
     }
 
-    // Baseline comparison and ratchet enforcement
+    // Enforcement: strict clean for manifest mode, ratchet for system mode
+    if use_manifest && config.enforce {
+        let violations = enforce_strict_clean(&report);
+        if !violations.is_empty() {
+            println!("\n--- Strict clean violations ---");
+            for v in &violations {
+                println!(
+                    "  VIOLATION: {} — expected: {}, actual: {}",
+                    v.metric, v.baseline_value, v.current_value
+                );
+            }
+            return Err(color_eyre::eyre::eyre!(
+                "Common corpus strict enforcement failed: {} violation(s) detected",
+                violations.len(),
+            ));
+        }
+        println!("Strict clean: all {} files parse without errors", report.total_files);
+    }
+
+    // Baseline comparison and ratchet enforcement (system mode)
     if let Some(ref baseline_path) = config.baseline_path {
         let baseline_json =
             fs::read_to_string(baseline_path).context("Failed to read baseline file")?;
@@ -879,6 +1027,58 @@ mod tests {
         assert_eq!(report.corpus_profile, "system");
         assert_eq!(report.resolved_roots_count, 0);
         assert_eq!(report.perl_version, "unknown");
+    }
+
+    #[test]
+    fn test_enforce_strict_clean_all_clean() {
+        let report = test_report(10, 0, 0, 0, BTreeMap::new());
+        let violations = enforce_strict_clean(&report);
+        assert!(violations.is_empty(), "Expected no violations for all-clean report");
+    }
+
+    #[test]
+    fn test_enforce_strict_clean_with_errors() {
+        let report = test_report(8, 2, 5, 0, BTreeMap::from([("unclosed_brace".to_string(), 2)]));
+        let violations = enforce_strict_clean(&report);
+        assert_eq!(
+            violations.len(),
+            2,
+            "Expected 2 violations (files_with_errors + total_error_nodes)"
+        );
+        let metrics: Vec<&str> = violations.iter().map(|v| v.metric.as_str()).collect();
+        assert!(metrics.contains(&"files_with_errors"));
+        assert!(metrics.contains(&"total_error_nodes"));
+    }
+
+    #[test]
+    fn test_enforce_strict_clean_with_unreadable() {
+        let report = test_report(9, 0, 0, 1, BTreeMap::new());
+        let violations = enforce_strict_clean(&report);
+        assert_eq!(violations.len(), 1, "Expected 1 violation for unreadable files");
+        assert_eq!(violations[0].metric, "files_unreadable");
+    }
+
+    #[test]
+    fn test_parse_manifest() {
+        let dir = std::env::temp_dir().join("test_parse_manifest");
+        let _ = fs::create_dir_all(&dir);
+        let manifest = dir.join("test-manifest.txt");
+        fs::write(&manifest, "# Comment line\n\nExporter\nCarp\n# Another comment\nFile::Find\n")
+            .expect("write manifest");
+        let modules = parse_manifest(&manifest).expect("parse manifest");
+        assert_eq!(modules, vec!["Exporter", "Carp", "File::Find"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_parse_manifest_empty() {
+        let dir = std::env::temp_dir().join("test_parse_manifest_empty");
+        let _ = fs::create_dir_all(&dir);
+        let manifest = dir.join("empty-manifest.txt");
+        fs::write(&manifest, "# Only comments\n\n# Nothing here\n").expect("write manifest");
+        let modules = parse_manifest(&manifest).expect("parse manifest");
+        assert!(modules.is_empty());
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]

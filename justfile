@@ -372,6 +372,7 @@ ci-gate:
     just ci-unsafe-ratchet && \
     just ci-forbid-fatal && \
     just ci-test-lib && \
+    just common-corpus-check && \
     just ci-policy && \
     just ci-v2-bundle-sync && \
     just ci-v2-parity && \
@@ -1492,6 +1493,11 @@ corpus-sweep:
 corpus-sweep-check:
     cargo run -p xtask -- parser-corpus-sweep \
         --baseline .ci/parser-corpus-baseline.json --enforce --receipt
+
+# Check common-files corpus (strict: 0 errors, PR gate)
+common-corpus-check:
+    cargo run -p xtask -- parser-corpus-sweep \
+        --manifest .ci/common-corpus-manifest.txt --enforce --receipt
 
 # Update corpus baseline with current results
 corpus-sweep-update:
