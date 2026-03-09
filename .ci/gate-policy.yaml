@@ -486,6 +486,26 @@ gates:
       - coverage
       - tracking
 
+  - name: corpus_sweep
+    tier: nightly
+    description: "Parser corpus sweep ratchet check against baseline"
+    required: false
+    command: >-
+      cargo run --locked -p xtask
+      -- parser-corpus-sweep
+      --baseline .ci/parser-corpus-baseline.json --enforce --receipt
+    timeout_seconds: 600
+    retry_count: 0
+    budgets:
+      max_duration_ms: 600000
+    quarantine: true
+    artifacts:
+      - target/receipts/corpus-sweep.json
+    tags:
+      - corpus
+      - parser
+      - ratchet
+
   - name: determinism_check
     tier: nightly
     description: "Verify test output is deterministic across runs"

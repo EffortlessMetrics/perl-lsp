@@ -347,6 +347,33 @@ enum Commands {
         token: Option<String>,
     },
 
+    /// Sweep system Perl corpus for parser error rates
+    ParserCorpusSweep {
+        /// Comma-separated corpus root directories
+        #[arg(long, value_delimiter = ',')]
+        roots: Option<Vec<PathBuf>>,
+
+        /// Write JSON report to file
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Compare against baseline JSON file
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+
+        /// Return nonzero if regression detected
+        #[arg(long)]
+        enforce: bool,
+
+        /// Include per-file details in output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Write receipt JSON to target/receipts/corpus-sweep.json
+        #[arg(long)]
+        receipt: bool,
+    },
+
     /// Manage feature catalog and LSP compliance
     Features {
         #[command(subcommand)]
@@ -501,6 +528,19 @@ fn main() -> Result<()> {
         Commands::BumpVersion { version, yes } => bump_version::run(version, yes),
         Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
+        Commands::ParserCorpusSweep { roots, output, baseline, enforce, verbose, receipt } => {
+            let base_roots = roots.unwrap_or_else(parser_corpus_sweep::default_base_roots);
+            let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
+            parser_corpus_sweep::run(parser_corpus_sweep::SweepConfig {
+                base_roots,
+                corpus_roots,
+                output_path: output,
+                baseline_path: baseline,
+                enforce,
+                verbose,
+                receipt,
+            })
+        }
         Commands::Features { command } => match command {
             FeaturesCommand::SyncDocs => features::sync_docs(),
             FeaturesCommand::Verify => features::verify(),
