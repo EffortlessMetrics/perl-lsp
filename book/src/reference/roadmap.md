@@ -53,7 +53,7 @@ Perl LSP is currently in **Initial Public Alpha**. Version 0.10.0 represents a s
 
 ## Component Summary
 
-For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRENT_STATUS.md](CURRENT_STATUS.md).
+For current metrics (LSP coverage %, corpus counts, test pass rates), see [Current Status](current-status.md).
 
 | Crate | Version | Status | Purpose |
 |-------|---------|--------|----------|
@@ -96,13 +96,13 @@ The LSP compliance table is auto-generated from `features.toml`.
 > **Note:** All 97 features are implemented (maturity: GA). Of these, 96/97 are advertised to clients;
 > `lsp.notebook_cell_execution` is implemented but not advertised. See `features.toml` for details.
 
-For live metrics, run `just status-check` or see [CURRENT_STATUS.md](CURRENT_STATUS.md).
+For live metrics, run `just status-check` or see [Current Status](current-status.md).
 
 ---
 
 ## Completed Work
 
-See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
+See [Current Status](current-status.md) for detailed completion history.
 
 **Highlights:**
 - Initial project fork (July 15, 2025) from `tree-sitter-perl-better`.
@@ -120,11 +120,8 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 
 ## Resources
 
-**Start here:** [`INDEX.md`](INDEX.md) - Routes you to the right doc.
-
-- **[Current Status](CURRENT_STATUS.md)** - Computed metrics
-- **[features.toml](../features.toml)** - Canonical capability definitions
-- **[LESSONS.md](LESSONS.md)** - Project learnings
+- **[Current Status](current-status.md)** - Computed metrics
+- **[Lessons Learned](../process/lessons.md)** - Project learnings
 
 <!-- Last Updated: 2026-03-04 -->
 
