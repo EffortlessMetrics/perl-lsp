@@ -1,5 +1,5 @@
 # DAP Security Specification
-<!-- Labels: security:comprehensive, validation:comprehensive, compliance:maintained -->
+<!-- Labels: security:enterprise, validation:comprehensive, compliance:maintained -->
 
 **Issue**: #207 - Debug Adapter Protocol Support
 **Status**: Security Requirements Complete
@@ -10,7 +10,7 @@
 
 ## Executive Summary
 
-This specification defines comprehensive security requirements for the DAP implementation, aligned with existing comprehensive security framework (`docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md`). All security measures are testable via AC16 validation suite.
+This specification defines comprehensive security requirements for the DAP implementation, aligned with existing enterprise security framework (`docs/how-to/SECURITY_DEVELOPMENT_GUIDE.md`). All security measures are testable via AC16 validation suite.
 
 **Key Security Domains**:
 1. **Path Traversal Prevention**: Canonical path validation within workspace boundaries
@@ -709,7 +709,7 @@ cargo audit -p perl-dap
 
 ### 7.1 Vulnerability Reporting
 
-**Contact**: security@tree-sitter-perl.org
+**Contact**: See SECURITY.md
 **Response Time**: 72 hours
 **Disclosure Timeline**: 90 days coordinated disclosure
 
@@ -754,10 +754,10 @@ cargo audit -p perl-dap
 
 ## 9. References
 
-- [Security Development Guide](SECURITY_DEVELOPMENT_GUIDE.md): Enterprise security framework
-- [Position Tracking Guide](POSITION_TRACKING_GUIDE.md): UTF-16 ↔ UTF-8 conversion (PR #153)
-- [DAP Implementation Specification](DAP_IMPLEMENTATION_SPECIFICATION.md): Primary technical specification
-- [DAP Protocol Schema](DAP_PROTOCOL_SCHEMA.md): JSON-RPC message schemas
+- [Security Development Guide](how-to/SECURITY_DEVELOPMENT_GUIDE.md): Enterprise security framework
+- [Position Tracking Guide](reference/POSITION_TRACKING_GUIDE.md): UTF-16 ↔ UTF-8 conversion (PR #153)
+- [DAP Implementation Specification](reference/DAP_IMPLEMENTATION_SPECIFICATION.md): Primary technical specification
+- [DAP Protocol Schema](reference/DAP_PROTOCOL_SCHEMA.md): JSON-RPC message schemas
 - [OWASP Top 10 2021](https://owasp.org/www-project-top-ten/)
 
 ---

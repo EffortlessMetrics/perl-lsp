@@ -28,12 +28,12 @@ perl-lsp is a comprehensive Perl parsing + LSP/DAP ecosystem:
 - Publish benchmark outputs under `benchmarks/results/`
 
 **Next (v0.10.0)**
-- Moo/Moose semantic depth improvements
-- Native DAP enhancements (variables/evaluate)
-- Stability goal refinement for v0.15.0 contract
+- Stability statement + packaging stance
+- Benchmark publication with receipts
+- Upgrade notes from v0.8.x → v0.9.x
 
-**Later (targeting v0.15.0 for Stability Contract)**
-- Formal API stability and locked wire protocol
+**Later (post v0.9.x)**
+- DAP preview hardening (runtime variable/evaluate depth + packaging)
 - Full LSP 3.18 compliance
 - Package manager distribution
 
@@ -47,12 +47,12 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 3. **[Milestones](MILESTONES.md)** - GitHub milestone mapping
 4. **[Docs Index](INDEX.md)** - Routes to the right doc fast
 5. **[TODO Backlog](TODO.md)** - Actionable tasks + missing features
-6. **[LSP Missing Features](LSP_MISSING_FEATURES_REPORT.md)** - Non-advertised capabilities (derived from `features.toml`)
+6. **[LSP Missing Features](../reference/LSP_MISSING_FEATURES_REPORT.md)** - Non-advertised capabilities (derived from `features.toml`)
 
 ### Development
 5. **[CLAUDE.md](../CLAUDE.md)** - Project guidance for AI assistants
 6. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - How to contribute
-7. **[COMMANDS_REFERENCE.md](COMMANDS_REFERENCE.md)** - Build/test commands
+7. **[COMMANDS_REFERENCE.md](../reference/COMMANDS_REFERENCE.md)** - Build/test commands
 
 ## 🚨 What Needs Attention RIGHT NOW
 
@@ -63,7 +63,7 @@ See [ROADMAP.md](ROADMAP.md) for milestones and exit criteria.
 4. 📌 **Expanded backlog** - see `docs/TODO.md` + `docs/reference/LSP_MISSING_FEATURES_REPORT.md`
 
 ### Next
-1. **v0.15.0 readiness** - stability contract, packaging stance, benchmark receipts
+1. **v0.9.x readiness** - stability statement, packaging stance, benchmark receipts, upgrade notes
 2. **Merge gates** - #210 after CI pipeline cleanup (#211)
 
 ### Critical Blockers / Constraints
@@ -119,7 +119,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-lsp  # With adaptive threading
 
 - Check the active milestone and the `good first issue` / `help wanted` labels
 - Near-term work: benchmark publication + v0.9.x packaging/readiness (see ROADMAP)
-- Larger efforts: see ROADMAP.md and `phase:*` labels
+- Larger efforts: v0.9.x milestone and `phase:*` labels
 - See [CONTRIBUTING.md](../CONTRIBUTING.md) for workflow details
 
 ## 📊 Quality Metrics
@@ -156,8 +156,8 @@ Run `just status-check` for live numbers.
 
 ### Day 2: Deep Dive
 1. Read [CLAUDE.md](../CLAUDE.md)
-2. Read [ARCHITECTURE_OVERVIEW.md](ARCHITECTURE_OVERVIEW.md)
-3. Read [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)
+2. Read [ARCHITECTURE_OVERVIEW.md](../reference/ARCHITECTURE_OVERVIEW.md)
+3. Read [LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md)
 4. Explore codebase structure + docs index
 
 ### Day 3: First Contribution
@@ -171,8 +171,8 @@ Run `just status-check` for live numbers.
 ### Documentation
 - **Technical questions**: Check [docs/](.) directory
 - **Issue-specific**: Read the research comment on the issue
-- **LSP features**: [LSP_IMPLEMENTATION_GUIDE.md](LSP_IMPLEMENTATION_GUIDE.md)
-- **Testing**: [COMPREHENSIVE_TESTING_GUIDE.md](COMPREHENSIVE_TESTING_GUIDE.md)
+- **LSP features**: [LSP_IMPLEMENTATION_GUIDE.md](../reference/LSP_IMPLEMENTATION_GUIDE.md)
+- **Testing**: [COMPREHENSIVE_TESTING_GUIDE.md](../tutorials/COMPREHENSIVE_TESTING_GUIDE.md)
 
 ### Communication
 - **GitHub Issues**: For bugs, features, questions
@@ -189,7 +189,7 @@ See [CURRENT_STATUS.md](CURRENT_STATUS.md) for computed health signals and recei
 
 ## 🚀 Let's Build Together!
 
-The perl-lsp project is in active development with a clear path toward a stable v0.15.0 release. Your contributions will help make Perl development smoother across editors.
+The perl-lsp project has clear paths forward. Your contributions will help make Perl development smoother across editors.
 
 **Pick an issue, dive in, and let's ship this! 🎉**
 

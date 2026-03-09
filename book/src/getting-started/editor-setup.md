@@ -24,7 +24,7 @@ cargo install perl-lsp
 
 # Option 2: Install from source
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
-cd tree-sitter-perl-rs
+cd perl-lsp
 cargo install --path crates/perl-lsp
 
 # Option 3: Download pre-built binary
@@ -505,7 +505,7 @@ Examples:
 
 ## See Also
 
-- [CONFIG.md](CONFIG.md) - Complete configuration reference
-- [PERFORMANCE_SLO.md](PERFORMANCE_SLO.md) - Performance targets and limits
-- [LSP_FEATURES.md](LSP_FEATURES.md) - Supported LSP features
-- [DAP_USER_GUIDE.md](DAP_USER_GUIDE.md) - Debugging setup with perl-dap
+- [CONFIG.md](../reference/CONFIG.md) - Complete configuration reference
+- [PERFORMANCE_SLO.md](../reference/PERFORMANCE_SLO.md) - Performance targets and limits
+- [LSP_FEATURES.md](../reference/LSP_FEATURES.md) - Supported LSP features
+- [DAP_USER_GUIDE.md](../tutorials/DAP_USER_GUIDE.md) - Debugging setup with perl-dap

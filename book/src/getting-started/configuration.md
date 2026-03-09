@@ -755,7 +755,7 @@ RUST_LOG=perl_parser::lsp::state=debug perl-lsp --stdio
 
 ## See Also
 
-- [EDITOR_SETUP.md](EDITOR_SETUP.md) - Editor-specific configuration guides
+- [EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md) - Editor-specific configuration guides
 - [PERFORMANCE_SLO.md](PERFORMANCE_SLO.md) - Performance targets and limits
 - [LSP_FEATURES.md](LSP_FEATURES.md) - Supported LSP features
-- [THREADING_CONFIGURATION_GUIDE.md](THREADING_CONFIGURATION_GUIDE.md) - Advanced threading options
+- [THREADING_CONFIGURATION_GUIDE.md](../how-to/THREADING_CONFIGURATION_GUIDE.md) - Advanced threading options

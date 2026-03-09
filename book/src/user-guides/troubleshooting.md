@@ -23,10 +23,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}
 
 **Solutions**:
 
-1. Ensure you have Rust 1.89+ (MSRV):
+1. Ensure you have Rust 1.92+ (MSRV):
    ```bash
    rustup update stable
-   rustc --version  # Should be >= 1.89
+   rustc --version  # Should be >= 1.92
    ```
 
 2. Clean and rebuild:
@@ -288,7 +288,7 @@ chmod +x ~/.cargo/bin/perl-lsp
 
 **Solutions**:
 
-1. Check if the syntax is a known limitation - see [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)
+1. Check if the syntax is a known limitation - see [KNOWN_LIMITATIONS.md](../reference/KNOWN_LIMITATIONS.md)
 
 2. Report unhandled syntax:
    ```bash
@@ -434,8 +434,8 @@ For detailed editor configuration and troubleshooting:
 
 ## See Also
 
-- [FAQ.md](FAQ.md) - Frequently asked questions
-- [GETTING_STARTED.md](GETTING_STARTED.md) - Installation and setup guide
+- [FAQ.md](../reference/FAQ.md) - Frequently asked questions
+- [GETTING_STARTED.md](../tutorials/GETTING_STARTED.md) - Installation and setup guide
 - [EDITOR_SETUP.md](EDITOR_SETUP.md) - Detailed editor configurations
-- [CONFIG.md](CONFIG.md) - All configuration options
-- [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) - Current parser limitations
+- [CONFIG.md](../reference/CONFIG.md) - All configuration options
+- [KNOWN_LIMITATIONS.md](../reference/KNOWN_LIMITATIONS.md) - Current parser limitations

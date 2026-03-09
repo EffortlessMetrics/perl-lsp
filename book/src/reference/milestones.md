@@ -21,18 +21,25 @@
 
 ---
 
-### v0.10.0 and Beyond
+### v0.10.0: Boring Promises
 
-**Status**: Planning
-**Goal**: Continue refinement toward the v0.15.0 Stability Contract.
+**Status**: Queued (after v0.10.0)
+**Goal**: Freeze the surfaces you're willing to support.
 
-**Focus Areas**:
-- Moo/Moose semantic depth improvements
-- Native DAP enhancements (variables/evaluate)
-- Stability goal refinement for v0.15.0 contract
-- Benchmark publication under benchmarks/results/
+**Exit Criteria**:
+- v0.10.0 released and stable
+- Capability snapshot + docs aligned
+- Benchmarks published under benchmarks/results/
+- Upgrade notes exist from v0.8.x → v0.9.x
 
-See [ROADMAP.md](ROADMAP.md) for the full release plan.
+**Deliverables**:
+1. Stability statement (versioning rules)
+2. Packaging stance (binaries, crates, platforms)
+3. Benchmark publication
+
+**Effort Estimate**: ~40-80 hours after v0.10.0
+
+[View all v0.10.0 issues](https://github.com/EffortlessMetrics/perl-lsp/milestone/2)
 
 ---
 
@@ -84,8 +91,8 @@ gh issue list --label "phase:stability"
 # All v0.9.0 issues
 gh issue list --milestone "v0.9.0: Semantic-Ready"
 
-# All open issues
-gh issue list --state open
+# All v0.10.0 issues
+gh issue list --milestone "v0.10.0: Boring Promises"
 ```
 
 ---
