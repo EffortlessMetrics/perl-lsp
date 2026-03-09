@@ -114,7 +114,7 @@ serial_test = "3.4.0"
 tempfile = "3.24.0"
 proptest = "1.9.0"
 perl-tdd-support = { workspace = true }
-which = "8.0.0"
+which = "8.0.2"
 parking_lot = "0.12.5"
 criterion = "0.8.1"
 uuid = { version = "1.21.0", features = ["v4"] }
