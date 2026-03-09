@@ -99,7 +99,7 @@ $cflags{$_} ||= '';            # then if/for modifier
 
 **Root cause**: After parsing a complex expression with braces, the parser consumes the closing `}` but doesn't check for trailing statement modifiers.
 
-**Projected after Wave 2**: ~78-82% clean rate
+**After Wave 2**: measured after landing
 
 ---
 
@@ -150,7 +150,7 @@ exists $me->{login}
 
 **Construct**: Multi-expression list arguments with mixed commas.
 
-**Projected after Wave 3**: ~88-92% clean rate
+**After Wave 3**: measured after landing
 
 ---
 
@@ -165,7 +165,7 @@ exists $me->{login}
 | `RightBrace at Eof` (unclosed blocks) | ~30 | Cascade from earlier errors |
 | Miscellaneous (each <5 files) | ~90 | Various rare constructs |
 
-**Projected after Wave 4**: ~93-95% clean rate
+**After Wave 4**: measured after landing
 
 ---
 
@@ -192,8 +192,8 @@ cargo run -p xtask -- parser-corpus-sweep --verbose
 | Wave | Effort | Impact | Clean Rate |
 |------|--------|--------|------------|
 | 1 (done) | 4 merged PRs (#1215-#1218) | baseline | 51.1% |
-| 2 (next) | 4 targeted fixes | +500 files | ~80% |
-| 3 | 6 expression fixes | +300 files | ~90% |
-| 4 | Long tail cleanup | +150 files | ~95% |
+| 2 (next) | 4 targeted fixes | +500 files | measured |
+| 3 | 6 expression fixes | +300 files | measured |
+| 4 | Long tail cleanup | +150 files | measured |
 
 Wave 2 is the sweet spot: 4 fixes for ~500 files, with item 2A alone worth 261 files.
