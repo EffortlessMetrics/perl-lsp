@@ -103,10 +103,8 @@ impl RegexValidator {
                         chars.next(); // consume '?'
                         // Skip group-type specifier so it doesn't reach the
                         // quantifier match arm (mirrors check_complexity logic)
-                        if let Some((_, c)) = chars.peek() {
-                            if matches!(c, ':' | '=' | '!' | '<' | '>' | '|' | 'P' | '#') {
-                                chars.next();
-                            }
+                        if matches!(chars.peek(), Some((_, ':' | '=' | '!' | '<' | '>' | '|' | 'P' | '#'))) {
+                            chars.next();
                         }
                     }
                     group_stack.push(false); // false = no quantifier inside yet

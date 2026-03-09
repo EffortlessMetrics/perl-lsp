@@ -680,14 +680,6 @@ fn nested_quantifiers_lazy_modifier_still_detected() -> Result<(), Box<dyn std::
 // ── Non-capturing / lookaround groups with outer quantifier (no false positive) ──
 
 #[test]
-fn validate_non_capturing_group_with_quantifier_ok() -> Result<(), Box<dyn std::error::Error>> {
-    let v = RegexValidator::new();
-    // (?:abc)+ — no inner quantifier, outer quantifier is fine
-    v.validate("(?:abc)+", 0)?;
-    Ok(())
-}
-
-#[test]
 fn validate_lookahead_with_outer_quantifier_ok() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     // (?=abc)+ — lookahead with outer quantifier, no inner quantifier
@@ -709,6 +701,15 @@ fn validate_lookbehind_with_outer_quantifier_ok() -> Result<(), Box<dyn std::err
     let v = RegexValidator::new();
     // (?<=abc)+ — lookbehind with outer quantifier, no inner quantifier
     v.validate("(?<=abc)+", 0)?;
+    Ok(())
+}
+
+#[test]
+fn validate_negative_lookbehind_with_outer_quantifier_ok() -> Result<(), Box<dyn std::error::Error>>
+{
+    let v = RegexValidator::new();
+    // (?<!abc)+ — negative lookbehind with outer quantifier, no inner quantifier
+    v.validate("(?<!abc)+", 0)?;
     Ok(())
 }
 
@@ -742,10 +743,12 @@ fn no_false_positive_non_capturing_without_inner_quantifier()
 }
 
 #[test]
-fn no_false_positive_lookahead_without_inner_quantifier() -> Result<(), Box<dyn std::error::Error>>
+fn no_false_positive_lookaround_without_inner_quantifier() -> Result<(), Box<dyn std::error::Error>>
 {
     let v = RegexValidator::new();
     assert!(!v.detect_nested_quantifiers("(?=abc)+"));
     assert!(!v.detect_nested_quantifiers("(?!abc)+"));
+    assert!(!v.detect_nested_quantifiers("(?<=abc)+"));
+    assert!(!v.detect_nested_quantifiers("(?<!abc)+"));
     Ok(())
 }
