@@ -76,150 +76,23 @@ impl<'a> Parser<'a> {
         f(guard.0)
     }
 
-    /// Check if an identifier is a builtin function that can take arguments without parens
+    /// Check if an identifier is a builtin function that can take arguments without parens.
+    /// Delegates to the canonical builtin registry in `perl-builtins-phf`,
+    /// excluding nullary builtins and keywords that have dedicated parser handlers.
     fn is_builtin_function(name: &str) -> bool {
+        perl_builtins::builtin_signatures_phf::is_builtin(name)
+            && !Self::is_nullary_builtin(name)
+            && !Self::is_keyword_handled_builtin(name)
+    }
+
+    /// Builtins that have dedicated keyword token kinds or parser handlers and
+    /// must NOT be matched by the generic `is_builtin_function` guard.
+    fn is_keyword_handled_builtin(name: &str) -> bool {
         matches!(
             name,
-            "print"
-                | "say"
-                | "die"
-                | "warn"
-                | "return"
-                | "defined"
-                | "undef"
-                | "ref"
-                | "chomp"
-                | "chop"
-                | "split"
-                | "join"
-                | "push"
-                | "pop"
-                | "shift"
-                | "unshift"
-                | "sort"
-                | "map"
-                | "grep"
-                | "keys"
-                | "values"
-                | "each"
-                | "delete"
-                | "exists"
-                | "open"
-                | "close"
-                | "read"
-                | "write"
-                | "printf"
-                | "sprintf"
-                | "exit"
-                | "next"
-                | "last"
-                | "redo"
-                | "goto"
-                | "dump"
-                | "caller"
-                | "import"
-                | "unimport"
-                | "require"
-                | "bless"
-                | "tie"
-                | "tied"
-                | "untie"
-                | "scalar"
-                | "wantarray"
-                // Math functions
-                | "abs"
-                | "atan2"
-                | "cos"
-                | "sin"
-                | "exp"
-                | "log"
-                | "sqrt"
-                | "rand"
-                | "srand"
-                | "int"
-                // Filesystem operations
-                | "chdir"
-                | "chmod"
-                | "chown"
-                | "mkdir"
-                | "rmdir"
-                | "unlink"
-                | "rename"
-                | "link"
-                | "symlink"
-                | "readlink"
-                | "stat"
-                | "lstat"
-                | "chroot"
-                // Directory operations
-                | "opendir"
-                | "closedir"
-                | "readdir"
-                | "seekdir"
-                | "telldir"
-                | "rewinddir"
-                // Socket operations
-                | "accept"
-                | "bind"
-                | "connect"
-                | "listen"
-                | "shutdown"
-                | "send"
-                | "recv"
-                | "socket"
-                | "socketpair"
-                | "getsockname"
-                | "getpeername"
-                | "setsockopt"
-                | "getsockopt"
-                // String operations
-                | "substr"
-                | "index"
-                | "rindex"
-                | "lc"
-                | "uc"
-                | "lcfirst"
-                | "ucfirst"
-                | "length"
-                | "reverse"
-                | "pack"
-                | "unpack"
-                // Process operations
-                | "kill"
-                | "wait"
-                | "waitpid"
-                | "fork"
-                | "alarm"
-                | "sleep"
-                // Conversion and misc builtins
-                | "chr"
-                | "ord"
-                | "hex"
-                | "oct"
-                | "crypt"
-                | "quotemeta"
-                | "prototype"
-                | "fileno"
-                | "pos"
-                // Eval/do
-                | "eval"
-                | "do"
-                // I/O operations (already above: open, close, read, write, printf, sprintf)
-                | "pipe"
-                | "sysopen"
-                | "sysread"
-                | "syswrite"
-                | "truncate"
-                | "fcntl"
-                | "ioctl"
-                | "flock"
-                | "seek"
-                | "tell"
-                | "select"
-                | "binmode"
-                // System operations
-                | "exec"
-                | "system"
+            "my" | "our" | "local" | "state" // variable declarations
+                | "use" // pragma handling
+                | "tie" | "untie" // dedicated AST nodes (matched before guard)
         )
     }
 

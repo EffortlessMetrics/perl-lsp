@@ -238,34 +238,64 @@ impl<'a> Parser<'a> {
         // Check if it's a builtin that can take arguments without parens
         if let Ok(token) = self.tokens.peek() {
             match token.text.as_ref() {
-                "print" | "say" | "die" | "warn" | "return" | "next" | "last" | "redo" | "open"
-                | "printf" | "close" | "pipe" | "sysopen" | "sysread" | "syswrite"
-                | "truncate" | "fcntl" | "ioctl" | "flock" | "seek" | "tell" | "select"
-                | "binmode" | "exec" | "system" | "bless" | "ref" | "defined" | "undef"
-                | "keys" | "values" | "each" | "delete" | "exists" | "push" | "pop" | "shift"
-                | "unshift" | "sort" | "map" | "grep" | "chomp" | "chop" | "split" | "join"
-                // Filesystem operations
-                | "chdir" | "chmod" | "chown" | "mkdir" | "rmdir" | "unlink" | "rename"
-                | "link" | "symlink" | "readlink" | "stat" | "lstat" | "chroot"
-                // Directory operations
-                | "opendir" | "closedir" | "readdir" | "seekdir" | "telldir" | "rewinddir"
-                // Socket operations
-                | "accept" | "bind" | "connect" | "listen" | "shutdown" | "send" | "recv"
-                | "socket" | "socketpair" | "getsockname" | "getpeername" | "setsockopt"
-                | "getsockopt"
-                // String operations
-                | "substr" | "index" | "rindex" | "lc" | "uc" | "lcfirst" | "ucfirst"
-                | "length" | "reverse" | "pack" | "unpack" | "sprintf"
-                // Process operations
-                | "kill" | "wait" | "waitpid" | "fork" | "alarm" | "sleep"
-                // Conversion and misc builtins
-                | "chr" | "ord" | "hex" | "oct" | "crypt" | "quotemeta" | "prototype"
-                | "fileno" | "pos" | "read" | "write" | "exit" | "goto" | "caller"
-                | "scalar" | "wantarray"
-                // Eval/require/do
-                | "eval" | "require" | "do"
-                // Tie builtins
-                | "tied" => {
+                // Special-cased builtins with dedicated AST nodes — must come
+                // before the generic `is_builtin_function` guard below.
+                "tie" => {
+                    let start = token.start;
+                    self.consume_token()?; // consume tie
+                    self.mark_not_stmt_start();
+
+                    // First argument to tie can be a variable declaration, e.g. tie my %hash, ...
+                    let variable = if matches!(self.peek_kind(), Some(TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State)) {
+                        Box::new(self.parse_variable_declaration()?)
+                    } else {
+                        Box::new(self.parse_assignment()?)
+                    };
+
+                    self.expect(TokenKind::Comma)?;
+                    let package = Box::new(self.parse_assignment()?);
+
+                    let mut args = vec![];
+                    while self.peek_kind() == Some(TokenKind::Comma) {
+                        self.consume_token()?; // consume ,
+                        args.push(self.parse_assignment()?);
+                    }
+
+                    let end = self.previous_position();
+                    Ok(Node::new(
+                        NodeKind::Tie { variable, package, args },
+                        SourceLocation { start, end },
+                    ))
+                }
+                "untie" => {
+                    let start = token.start;
+                    self.consume_token()?; // consume untie
+                    self.mark_not_stmt_start();
+
+                    let variable = Box::new(self.parse_assignment()?);
+
+                    let end = self.previous_position();
+                    Ok(Node::new(
+                        NodeKind::Untie { variable },
+                        SourceLocation { start, end },
+                    ))
+                }
+                "new" => {
+                    // Check for indirect constructor syntax
+                    let _start = token.start;
+                    // Clone to satisfy borrow checker
+                    let text = token.text.clone();
+
+                    if self.is_indirect_call_pattern(&text) {
+                        return self.parse_indirect_call();
+                    }
+
+                    // Otherwise parse as regular expression
+                    self.parse_expression()
+                }
+                // Generic builtin functions that can take arguments without parens.
+                // Uses the canonical builtin registry in `perl-builtins-phf`.
+                name if Self::is_builtin_function(name) => {
                     let start = token.start;
                     // We need to clone the text to check for indirect call pattern because
                     // is_indirect_call_pattern borrows self mutably to peek ahead
@@ -375,59 +405,6 @@ impl<'a> Parser<'a> {
                             ))
                         }
                     }
-                }
-                "tie" => {
-                    let start = token.start;
-                    self.consume_token()?; // consume tie
-                    self.mark_not_stmt_start();
-
-                    // First argument to tie can be a variable declaration, e.g. tie my %hash, ...
-                    let variable = if matches!(self.peek_kind(), Some(TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State)) {
-                        Box::new(self.parse_variable_declaration()?)
-                    } else {
-                        Box::new(self.parse_assignment()?)
-                    };
-
-                    self.expect(TokenKind::Comma)?;
-                    let package = Box::new(self.parse_assignment()?);
-
-                    let mut args = vec![];
-                    while self.peek_kind() == Some(TokenKind::Comma) {
-                        self.consume_token()?; // consume ,
-                        args.push(self.parse_assignment()?);
-                    }
-
-                    let end = self.previous_position();
-                    Ok(Node::new(
-                        NodeKind::Tie { variable, package, args },
-                        SourceLocation { start, end },
-                    ))
-                }
-                "untie" => {
-                    let start = token.start;
-                    self.consume_token()?; // consume untie
-                    self.mark_not_stmt_start();
-
-                    let variable = Box::new(self.parse_assignment()?);
-
-                    let end = self.previous_position();
-                    Ok(Node::new(
-                        NodeKind::Untie { variable },
-                        SourceLocation { start, end },
-                    ))
-                }
-                "new" => {
-                    // Check for indirect constructor syntax
-                    let _start = token.start;
-                    // Clone to satisfy borrow checker
-                    let text = token.text.clone();
-
-                    if self.is_indirect_call_pattern(&text) {
-                        return self.parse_indirect_call();
-                    }
-
-                    // Otherwise parse as regular expression
-                    self.parse_expression()
                 }
                 _ => {
                     // Regular expression
