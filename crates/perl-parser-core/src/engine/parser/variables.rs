@@ -200,55 +200,7 @@ impl<'a> Parser<'a> {
 
         // Special handling for &{ (code dereference)
         if &**text == "&{" {
-            let start = token.start;
-
-            // Parse the expression inside the braces
-            let inner_expr = self.parse_expression()?;
-
-            self.expect(TokenKind::RightBrace)?;
-
-            // Build the dereference node: &{expr}
-            let deref_end = self.previous_position();
-            let deref_node = Node::new(
-                NodeKind::Unary { op: "&{}".to_string(), operand: Box::new(inner_expr) },
-                SourceLocation { start, end: deref_end },
-            );
-
-            // Check if followed by parenthesized arguments: &{expr}(args)
-            if self.peek_kind() == Some(TokenKind::LeftParen) {
-                self.consume_token()?; // consume (
-                let mut args = vec![];
-
-                while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                    args.push(self.parse_expression()?);
-
-                    if self.peek_kind() == Some(TokenKind::Comma) {
-                        self.consume_token()?; // consume comma
-                    } else if self.peek_kind() != Some(TokenKind::RightParen)
-                        && !self.tokens.is_eof()
-                    {
-                        return Err(ParseError::syntax(
-                            "Expected comma or right parenthesis",
-                            self.current_position(),
-                        ));
-                    }
-                }
-
-                self.expect(TokenKind::RightParen)?;
-                let call_end = self.previous_position();
-
-                return Ok(Node::new(
-                    NodeKind::FunctionCall { name: "&{}".to_string(), args: {
-                        let mut all = vec![deref_node];
-                        all.extend(args);
-                        all
-                    }},
-                    SourceLocation { start, end: call_end },
-                ));
-            }
-
-            // No parentheses: &{expr} alone (implicit @_ forwarding)
-            return Ok(deref_node);
+            return self.parse_code_dereference(token.start);
         }
 
         let (sigil, name) = if let Some(rest) = text.strip_prefix('$') {
@@ -447,85 +399,14 @@ impl<'a> Parser<'a> {
         // Special handling for & sigil followed by { - code dereference: &{expr}(args)
         if sigil == "&" && name.is_empty() && self.peek_kind() == Some(TokenKind::LeftBrace) {
             self.tokens.next()?; // consume {
-
-            // Parse the expression inside the braces
-            let inner_expr = self.parse_expression()?;
-
-            self.expect(TokenKind::RightBrace)?;
-
-            // Build the dereference node: &{expr}
-            let deref_end = self.previous_position();
-            let deref_node = Node::new(
-                NodeKind::Unary { op: "&{}".to_string(), operand: Box::new(inner_expr) },
-                SourceLocation { start, end: deref_end },
-            );
-
-            // Check if followed by parenthesized arguments: &{expr}(args)
-            if self.peek_kind() == Some(TokenKind::LeftParen) {
-                self.consume_token()?; // consume (
-                let mut args = vec![];
-
-                // EOF guard to prevent infinite loop on truncated input
-                while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                    args.push(self.parse_expression()?);
-
-                    if self.peek_kind() == Some(TokenKind::Comma) {
-                        self.consume_token()?; // consume comma
-                    } else if self.peek_kind() != Some(TokenKind::RightParen)
-                        && !self.tokens.is_eof()
-                    {
-                        return Err(ParseError::syntax(
-                            "Expected comma or right parenthesis",
-                            self.current_position(),
-                        ));
-                    }
-                }
-
-                self.expect(TokenKind::RightParen)?;
-                let call_end = self.previous_position();
-
-                // Wrap the dereference + arguments as a FunctionCall with the deref
-                // as a special operand. Use Unary for the deref, then Binary for the call.
-                return Ok(Node::new(
-                    NodeKind::FunctionCall { name: "&{}".to_string(), args: {
-                        let mut all = vec![deref_node];
-                        all.extend(args);
-                        all
-                    }},
-                    SourceLocation { start, end: call_end },
-                ));
-            }
-
-            // No parentheses: &{expr} alone (implicit @_ forwarding)
-            return Ok(deref_node);
+            return self.parse_code_dereference(start);
         }
 
         // Special handling for & sigil - it's a function call
         if sigil == "&" {
-            // Check if there are parentheses for arguments
             let args = if self.peek_kind() == Some(TokenKind::LeftParen) {
                 self.consume_token()?; // consume (
-                let mut args = vec![];
-
-                // EOF guard to prevent infinite loop on truncated input
-                while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                    args.push(self.parse_expression()?);
-
-                    if self.peek_kind() == Some(TokenKind::Comma) {
-                        self.consume_token()?; // consume comma
-                    } else if self.peek_kind() != Some(TokenKind::RightParen)
-                        && !self.tokens.is_eof()
-                    {
-                        return Err(ParseError::syntax(
-                            "Expected comma or right parenthesis",
-                            self.current_position(),
-                        ));
-                    }
-                }
-
-                let right_paren = self.expect(TokenKind::RightParen)?;
-                let _end = right_paren.end;
-                args
+                self.parse_parenthesized_arg_list()?
             } else {
                 vec![]
             };
@@ -536,6 +417,52 @@ impl<'a> Parser<'a> {
         } else {
             Ok(Node::new(NodeKind::Variable { sigil, name }, SourceLocation { start, end }))
         }
+    }
+
+    /// Parse a parenthesized argument list: (expr, expr, ...).
+    /// Assumes the opening `(` has already been consumed.
+    fn parse_parenthesized_arg_list(&mut self) -> ParseResult<Vec<Node>> {
+        let mut args = vec![];
+        while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+            args.push(self.parse_expression()?);
+            if self.peek_kind() == Some(TokenKind::Comma) {
+                self.consume_token()?;
+            } else if self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+                return Err(ParseError::syntax(
+                    "Expected comma or right parenthesis",
+                    self.current_position(),
+                ));
+            }
+        }
+        self.expect(TokenKind::RightParen)?;
+        Ok(args)
+    }
+
+    /// Parse code dereference: {expr} optionally followed by (args).
+    /// Assumes the opening `{` has already been consumed.
+    /// `start` is the position of the `&` sigil.
+    fn parse_code_dereference(&mut self, start: usize) -> ParseResult<Node> {
+        let inner_expr = self.parse_expression()?;
+        self.expect(TokenKind::RightBrace)?;
+        let deref_end = self.previous_position();
+        let deref_node = Node::new(
+            NodeKind::Unary { op: "&{}".to_string(), operand: Box::new(inner_expr) },
+            SourceLocation { start, end: deref_end },
+        );
+
+        if self.peek_kind() == Some(TokenKind::LeftParen) {
+            self.consume_token()?;
+            let args = self.parse_parenthesized_arg_list()?;
+            let call_end = self.previous_position();
+            let mut all = vec![deref_node];
+            all.extend(args);
+            return Ok(Node::new(
+                NodeKind::FunctionCall { name: "&{}".to_string(), args: all },
+                SourceLocation { start, end: call_end },
+            ));
+        }
+
+        Ok(deref_node)
     }
 
     /// Parse subroutine signature
@@ -863,27 +790,20 @@ mod code_dereference_tests {
     /// Helper: parse code and return the full AST.
     fn parse_program(code: &str) -> Node {
         let mut parser = Parser::new(code);
-        let result = parser.parse();
-        assert!(result.is_ok(), "Parse failed for `{}`: {:?}", code, result.err());
-        result.ok().unwrap_or_else(|| {
-            Node::new(NodeKind::Program { statements: vec![] }, SourceLocation { start: 0, end: 0 })
-        })
+        match parser.parse() {
+            Ok(ast) => ast,
+            Err(e) => panic!("Parse failed for `{code}`: {e:?}"),
+        }
     }
 
     /// Helper: parse code and return the first statement node.
     fn parse_first_stmt(code: &str) -> Node {
         let ast = parse_program(code);
-        if let NodeKind::Program { statements } = ast.kind {
-            statements.into_iter().next().unwrap_or_else(|| {
-                Node::new(NodeKind::Error {
-                    message: "No statements found".to_string(),
-                    expected: vec![],
-                    found: None,
-                    partial: None,
-                }, SourceLocation { start: 0, end: 0 })
-            })
-        } else {
-            ast
+        match ast.kind {
+            NodeKind::Program { mut statements } if !statements.is_empty() => {
+                statements.swap_remove(0)
+            }
+            _ => panic!("Expected Program with statements, got: {}", ast.to_sexp()),
         }
     }
 
