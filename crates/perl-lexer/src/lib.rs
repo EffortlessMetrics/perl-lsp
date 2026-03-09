@@ -848,8 +848,7 @@ impl<'a> PerlLexer<'a> {
                         let mut i = search_start;
                         while i < bytes.len() {
                             // Look for =cut at the start of a line
-                            if (i == 0 || bytes[i - 1] == b'\n')
-                                && bytes[i..].starts_with(b"=cut")
+                            if (i == 0 || bytes[i - 1] == b'\n') && bytes[i..].starts_with(b"=cut")
                             {
                                 i += 4; // Skip "=cut"
                                 // Skip rest of the =cut line
