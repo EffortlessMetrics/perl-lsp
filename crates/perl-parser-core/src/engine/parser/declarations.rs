@@ -106,7 +106,18 @@ impl<'a> Parser<'a> {
             (None, None)
         };
 
-        let body = self.parse_block()?;
+        // Check for forward declaration: sub foo; or sub foo(@); or sub foo :method;
+        // Forward declarations have no block body — they end with a semicolon
+        let body = if self.peek_kind() == Some(TokenKind::Semicolon) {
+            // Forward declaration — return an empty block as the body
+            let pos = self.current_position();
+            Node::new(
+                NodeKind::Block { statements: vec![] },
+                SourceLocation { start: pos, end: pos },
+            )
+        } else {
+            self.parse_block()?
+        };
 
         let end = self.previous_position();
         Ok(Node::new(
