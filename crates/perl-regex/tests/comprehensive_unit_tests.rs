@@ -154,11 +154,11 @@ fn validate_non_capturing_group_without_outer_quantifier() -> Result<(), Box<dyn
 }
 
 #[test]
-fn validate_non_capturing_group_with_outer_quantifier_flagged()
--> Result<(), Box<dyn std::error::Error>> {
+fn validate_non_capturing_group_with_outer_quantifier_ok() -> Result<(), Box<dyn std::error::Error>>
+{
     let v = RegexValidator::new();
-    // Heuristic treats ? in (?:...) as a quantifier, so (?:abc)+ is flagged
-    assert!(v.validate("(?:abc)+", 0).is_err());
+    // Non-capturing group with an outer quantifier but no inner quantifier is safe
+    v.validate("(?:abc)+", 0)?;
     Ok(())
 }
 
@@ -674,5 +674,81 @@ fn nested_quantifiers_lazy_modifier_still_detected() -> Result<(), Box<dyn std::
     // (a+?)+ — the ? here makes the inner + lazy, but the outer + still nests
     // The ? after ) is the outer quantifier on a group with inner +
     assert!(v.detect_nested_quantifiers("(a+?)+"));
+    Ok(())
+}
+
+// ── Non-capturing / lookaround groups with outer quantifier (no false positive) ──
+
+#[test]
+fn validate_lookahead_with_outer_quantifier_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // (?=abc)+ — lookahead with outer quantifier, no inner quantifier
+    v.validate("(?=abc)+", 0)?;
+    Ok(())
+}
+
+#[test]
+fn validate_negative_lookahead_with_outer_quantifier_ok() -> Result<(), Box<dyn std::error::Error>>
+{
+    let v = RegexValidator::new();
+    // (?!abc)+ — negative lookahead with outer quantifier, no inner quantifier
+    v.validate("(?!abc)+", 0)?;
+    Ok(())
+}
+
+#[test]
+fn validate_lookbehind_with_outer_quantifier_ok() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // (?<=abc)+ — lookbehind with outer quantifier, no inner quantifier
+    v.validate("(?<=abc)+", 0)?;
+    Ok(())
+}
+
+#[test]
+fn validate_negative_lookbehind_with_outer_quantifier_ok() -> Result<(), Box<dyn std::error::Error>>
+{
+    let v = RegexValidator::new();
+    // (?<!abc)+ — negative lookbehind with outer quantifier, no inner quantifier
+    v.validate("(?<!abc)+", 0)?;
+    Ok(())
+}
+
+// ── True positive: non-capturing group WITH inner quantifier still detected ──
+
+#[test]
+fn nested_quantifiers_non_capturing_with_inner_quantifier_detected()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // (?:a+)+ — inner quantifier a+, outer quantifier on group → nested
+    assert!(v.detect_nested_quantifiers("(?:a+)+"));
+    Ok(())
+}
+
+#[test]
+fn nested_quantifiers_capturing_with_inner_quantifier_detected()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // (a+)+ — classic nested quantifier case
+    assert!(v.detect_nested_quantifiers("(a+)+"));
+    Ok(())
+}
+
+#[test]
+fn no_false_positive_non_capturing_without_inner_quantifier()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // (?:abc)+ — no inner quantifier, should NOT be flagged
+    assert!(!v.detect_nested_quantifiers("(?:abc)+"));
+    Ok(())
+}
+
+#[test]
+fn no_false_positive_lookaround_without_inner_quantifier() -> Result<(), Box<dyn std::error::Error>>
+{
+    let v = RegexValidator::new();
+    assert!(!v.detect_nested_quantifiers("(?=abc)+"));
+    assert!(!v.detect_nested_quantifiers("(?!abc)+"));
+    assert!(!v.detect_nested_quantifiers("(?<=abc)+"));
+    assert!(!v.detect_nested_quantifiers("(?<!abc)+"));
     Ok(())
 }

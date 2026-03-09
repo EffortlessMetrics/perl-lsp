@@ -100,8 +100,15 @@ impl RegexValidator {
                 '(' => {
                     // Check if non-capturing or other special group
                     if let Some((_, '?')) = chars.peek() {
-                        // Special group, might be safe or not
-                        // For now we just track it as a group start
+                        chars.next(); // consume '?'
+                        // Skip group-type specifier so it doesn't reach the
+                        // quantifier match arm (mirrors check_complexity logic)
+                        if matches!(
+                            chars.peek(),
+                            Some((_, ':' | '=' | '!' | '<' | '>' | '|' | 'P' | '#'))
+                        ) {
+                            chars.next();
+                        }
                     }
                     group_stack.push(false); // false = no quantifier inside yet
                     last_type = 0;
