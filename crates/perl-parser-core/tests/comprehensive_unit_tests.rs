@@ -3146,6 +3146,83 @@ mod line_index_extended_tests {
         assert!(!sexp.contains("ERROR"), "split with string should still work, got: {sexp}");
         Ok(())
     }
+
+    // ---- Wave 2D: Postfix modifiers after complex expressions ----
+
+    #[test]
+    fn wave2d_push_deref_with_if() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("push @{$hash{key}}, $val if $cond;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "push @{{$hash{{key}}}}, $val if $cond should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2d_push_deref_simple() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("push @{$arr}, 1;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "push @{{$arr}}, 1 should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2d_or_assign_for() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("$hash{$_} ||= '' for @list;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "$hash{{$_}} ||= '' for @list should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2d_simple_modifier_regression() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("print $msg unless $quiet;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "print $msg unless $quiet should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2d_do_thing_for_list() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("do_thing() for @list;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "do_thing() for @list should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2d_deref_hash_push() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("push @{$self->{items}}, $item;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "push @{{$self->{{items}}}}, $item should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2d_complex_lvalue_while() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("chomp($line) while ($line = <STDIN>);");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "should parse cleanly, got: {sexp}");
+        Ok(())
+    }
 }
 
 // ---- Wave 2A: Package-qualified subscripts ----
