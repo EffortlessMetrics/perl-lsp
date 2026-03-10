@@ -1077,8 +1077,76 @@ impl<'a> PerlLexer<'a> {
             return None;
         }
 
-        // Consume initial digits - unrolled for better performance
+        // Check for hex (0x), binary (0b), or octal (0o) prefixes
         let mut pos = self.position;
+        if Self::byte_at(bytes, pos) == b'0' && pos + 1 < bytes.len() {
+            let prefix_byte = bytes[pos + 1];
+            if prefix_byte == b'x' || prefix_byte == b'X' {
+                // Hexadecimal: 0x[0-9a-fA-F_]+
+                pos += 2; // consume '0x'
+                let digit_start = pos;
+                while pos < bytes.len() && (bytes[pos].is_ascii_hexdigit() || bytes[pos] == b'_') {
+                    pos += 1;
+                }
+                if pos > digit_start {
+                    self.position = pos;
+                    let text = &self.input[start..self.position];
+                    self.mode = LexerMode::ExpectOperator;
+                    return Some(Token {
+                        token_type: TokenType::Number(Arc::from(text)),
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    });
+                }
+                // No hex digits after 0x - fall through to parse '0' as decimal
+            } else if prefix_byte == b'b' || prefix_byte == b'B' {
+                // Binary: 0b[01_]+
+                pos += 2; // consume '0b'
+                let digit_start = pos;
+                while pos < bytes.len()
+                    && (bytes[pos] == b'0' || bytes[pos] == b'1' || bytes[pos] == b'_')
+                {
+                    pos += 1;
+                }
+                if pos > digit_start {
+                    self.position = pos;
+                    let text = &self.input[start..self.position];
+                    self.mode = LexerMode::ExpectOperator;
+                    return Some(Token {
+                        token_type: TokenType::Number(Arc::from(text)),
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    });
+                }
+                // No binary digits after 0b - fall through to parse '0' as decimal
+            } else if prefix_byte == b'o' || prefix_byte == b'O' {
+                // Octal (explicit): 0o[0-7_]+
+                pos += 2; // consume '0o'
+                let digit_start = pos;
+                while pos < bytes.len()
+                    && ((bytes[pos] >= b'0' && bytes[pos] <= b'7') || bytes[pos] == b'_')
+                {
+                    pos += 1;
+                }
+                if pos > digit_start {
+                    self.position = pos;
+                    let text = &self.input[start..self.position];
+                    self.mode = LexerMode::ExpectOperator;
+                    return Some(Token {
+                        token_type: TokenType::Number(Arc::from(text)),
+                        text: Arc::from(text),
+                        start,
+                        end: self.position,
+                    });
+                }
+                // No octal digits after 0o - fall through to parse '0' as decimal
+            }
+        }
+
+        // Consume initial digits - unrolled for better performance
+        pos = self.position;
         while pos < bytes.len() {
             let byte = Self::byte_at(bytes, pos);
             if byte.is_ascii_digit() || byte == b'_' {
