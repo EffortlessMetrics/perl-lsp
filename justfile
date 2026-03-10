@@ -1480,6 +1480,24 @@ lsp-tier-b: lsp-tier-a
         --locked -- --test-threads=2
     @echo "LSP Tier B passed"
 
+# ============================================================================
+# Parser Corpus Sweep
+# ============================================================================
+
+# Sweep system Perl corpus and print results
+corpus-sweep:
+    cargo run -p xtask -- parser-corpus-sweep
+
+# Check corpus against baseline (fails on regression)
+corpus-sweep-check:
+    cargo run -p xtask -- parser-corpus-sweep \
+        --baseline .ci/parser-corpus-baseline.json --enforce --receipt
+
+# Update corpus baseline with current results
+corpus-sweep-update:
+    cargo run -p xtask -- parser-corpus-sweep \
+        --output .ci/parser-corpus-baseline.json
+
 # Tier C: full suite (nightly, all integration tests)
 lsp-tier-c:
     @echo "Running LSP Tier C (full suite)..."

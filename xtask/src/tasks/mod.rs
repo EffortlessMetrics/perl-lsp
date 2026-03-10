@@ -23,6 +23,7 @@ pub mod gates;
 #[cfg(feature = "parser-tasks")]
 pub mod highlight;
 pub mod parse_rust;
+pub mod parser_corpus_sweep;
 pub mod publish;
 pub mod release;
 pub mod srp_microcrates;
