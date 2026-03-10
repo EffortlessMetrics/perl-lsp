@@ -3028,4 +3028,69 @@ mod line_index_extended_tests {
         assert_eq!(line, 2);
         Ok(())
     }
+
+    // ---- Wave 2B: Fat arrow as general separator ----
+
+    #[test]
+    fn wave2b_push_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("push @array => $value;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "push @array => $value should parse cleanly, got: {sexp}");
+        assert!(sexp.contains("call push"), "should be a function call");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_bless_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("bless \\%opts => $class;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "bless \\%opts => $class should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_push_fat_arrow_nested() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("push @attrs => (key => $val);");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "push @attrs => (key => $val) should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_push_comma_regression() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("push @array, $value;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "push @array, $value should still work, got: {sexp}");
+        assert!(sexp.contains("call push"), "should be a function call");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_indirect_call_regression() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("print $fh \"data\";");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "print $fh \"data\" should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_hash_fat_arrow_regression() -> Result<(), Box<dyn std::error::Error>> {
+        // Hash construction should still work
+        let mut parser = Parser::new("my %h = (key => 'value');");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "hash construction should still work, got: {sexp}");
+        Ok(())
+    }
 }
