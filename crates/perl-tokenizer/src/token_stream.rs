@@ -125,6 +125,26 @@ impl<'a> TokenStream<'a> {
         self.lexer.set_mode(LexerMode::ExpectTerm);
     }
 
+    /// Re-lex the current peeked token in `ExpectTerm` mode.
+    ///
+    /// This is needed for context-sensitive constructs like `split /regex/`
+    /// where the `/` was lexed as division (`Slash`) but should be a regex
+    /// delimiter. Rolls the lexer back to the peeked token's start position,
+    /// switches to `ExpectTerm` mode, and clears the peek cache so the next
+    /// `peek()` or `next()` re-lexes it as a regex.
+    pub fn relex_as_term(&mut self) {
+        if let Some(ref token) = self.peeked {
+            use perl_lexer::Checkpointable;
+            let pos = token.start;
+            // Build a checkpoint at the peeked token's position with ExpectTerm mode
+            let cp = perl_lexer::LexerCheckpoint::at_position(pos);
+            self.lexer.restore(&cp);
+        }
+        self.peeked = None;
+        self.peeked_second = None;
+        self.peeked_third = None;
+    }
+
     /// Pure peek cache invalidation - no mode changes
     pub fn invalidate_peek(&mut self) {
         self.peeked = None;
