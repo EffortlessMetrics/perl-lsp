@@ -350,8 +350,12 @@ enum Commands {
     /// Sweep system Perl corpus for parser error rates
     ParserCorpusSweep {
         /// Comma-separated corpus root directories
-        #[arg(long, value_delimiter = ',')]
+        #[arg(long, value_delimiter = ',', conflicts_with = "manifest")]
         roots: Option<Vec<PathBuf>>,
+
+        /// Manifest file listing module names to resolve via perl
+        #[arg(long, conflicts_with = "roots")]
+        manifest: Option<PathBuf>,
 
         /// Write JSON report to file
         #[arg(long)]
@@ -528,12 +532,21 @@ fn main() -> Result<()> {
         Commands::BumpVersion { version, yes } => bump_version::run(version, yes),
         Commands::PublishCrates { yes, dry_run } => publish::publish_crates(yes, dry_run),
         Commands::PublishVscode { yes, token } => publish::publish_vscode(yes, token),
-        Commands::ParserCorpusSweep { roots, output, baseline, enforce, verbose, receipt } => {
+        Commands::ParserCorpusSweep {
+            roots,
+            manifest,
+            output,
+            baseline,
+            enforce,
+            verbose,
+            receipt,
+        } => {
             let base_roots = roots.unwrap_or_else(parser_corpus_sweep::default_base_roots);
             let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
             parser_corpus_sweep::run(parser_corpus_sweep::SweepConfig {
                 base_roots,
                 corpus_roots,
+                manifest_path: manifest,
                 output_path: output,
                 baseline_path: baseline,
                 enforce,

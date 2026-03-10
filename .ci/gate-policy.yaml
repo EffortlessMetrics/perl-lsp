@@ -234,6 +234,25 @@ gates:
       - integration
       - deterministic
 
+  - name: common_corpus_clean
+    tier: merge_gate
+    description: "Pinned common Perl modules must parse with zero errors"
+    required: true
+    command: >-
+      cargo run --locked -p xtask
+      -- parser-corpus-sweep
+      --manifest .ci/common-corpus-manifest.txt --enforce --receipt
+    timeout_seconds: 120
+    retry_count: 0
+    budgets:
+      max_duration_ms: 90000
+    quarantine: false
+    tags:
+      - corpus
+      - parser
+      - common
+      - strict
+
   - name: security_audit
     tier: merge_gate
     description: "Check dependencies for known security vulnerabilities"
@@ -790,6 +809,7 @@ workflow_integration:
         - clippy_full
         - unit_core
         - unit_full
+        - common_corpus_clean
         - lsp_tier_a
         - lsp_tier_b
         - lsp_smoke
