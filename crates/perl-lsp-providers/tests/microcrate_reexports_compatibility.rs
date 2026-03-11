@@ -23,6 +23,9 @@ fn top_level_microcrate_reexports_are_usable() -> Result<(), ParseError> {
     let _type_definition_provider = perl_lsp_providers::navigation::TypeDefinitionProvider::new();
     let _semantic_tokens_provider =
         perl_lsp_providers::semantic_tokens::SemanticTokensProvider::new();
+    let mut folding_extractor = perl_lsp_providers::folding::FoldingRangeExtractor::new();
+    let folding_ranges = folding_extractor.extract(ast.as_ref());
+    assert!(folding_ranges.iter().all(|range| range.end_offset > range.start_offset));
 
     let opts = perl_lsp_providers::formatting::FormattingOptions {
         tab_size: 4,
