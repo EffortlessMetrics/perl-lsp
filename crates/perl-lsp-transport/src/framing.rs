@@ -1,6 +1,7 @@
 //! Message framing for the LSP base protocol.
 
-use perl_content_length_framing::{ContentLengthFramer, frame};
+use perl_content_length_framing::ContentLengthFramer;
+pub use perl_content_length_framing::frame;
 use perl_lsp_protocol::{JsonRpcRequest, JsonRpcResponse};
 use std::io::{self, BufRead, Read, Write};
 

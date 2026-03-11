@@ -51,7 +51,6 @@ perl-module-reference = { workspace = true }
 perl-module-rename = { workspace = true }
 perl-module-resolution = { workspace = true }
 perl-source-file = { workspace = true }
-perl-content-length-framing = { workspace = true }
 perl-workspace-discovery = { workspace = true }
 perl-workspace-folder = { workspace = true }
 perl-workspace-ignore = { workspace = true }

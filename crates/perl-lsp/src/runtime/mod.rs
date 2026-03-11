@@ -37,7 +37,6 @@ use perl_parser::{
 
 use crate::call_hierarchy_provider::CallHierarchyProvider;
 use crate::cancellation::{GLOBAL_CANCELLATION_REGISTRY, PerlLspCancellationToken};
-use perl_content_length_framing::frame;
 use perl_lsp_feature_governance::FeatureProfile;
 
 // Import LSP providers from features (these moved from perl-parser to perl-lsp)
@@ -71,7 +70,7 @@ use crate::{
         ClientCapabilities, DocumentState, ServerConfig, WorkspaceConfig,
         normalize_package_separator,
     },
-    transport::{ContentLengthMessageReader, log_response, write_message},
+    transport::{ContentLengthMessageReader, frame, log_response, write_message},
     // Import text processing helpers
     util::{
         byte_to_line_col, byte_to_utf16_col, extract_module_reference, get_text_around_offset,

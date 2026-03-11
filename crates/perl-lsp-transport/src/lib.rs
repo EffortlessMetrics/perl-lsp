@@ -43,5 +43,6 @@
 mod framing;
 
 pub use framing::{
-    ContentLengthMessageReader, log_response, read_message, write_message, write_notification,
+    ContentLengthMessageReader, frame, log_response, read_message, write_message,
+    write_notification,
 };
