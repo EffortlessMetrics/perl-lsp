@@ -269,11 +269,8 @@ impl FoldingRangeExtractor {
             }
 
             // ArrayRef and HashRef don't exist as separate NodeKinds, they're handled via references
-            NodeKind::VariableDeclaration { initializer, .. } => {
-                // Visit the initializer if present
-                if let Some(init) = initializer {
-                    self.visit_node(init);
-                }
+            NodeKind::VariableDeclaration { initializer: Some(init), .. } => {
+                self.visit_node(init);
             }
 
             NodeKind::DataSection { marker: _, body } => {
