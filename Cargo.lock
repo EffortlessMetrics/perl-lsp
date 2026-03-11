@@ -1868,6 +1868,7 @@ version = "0.10.0"
 dependencies = [
  "perl-lsp-ast-utils",
  "perl-lsp-diagnostics",
+ "perl-lsp-import-management",
  "perl-lsp-rename",
  "perl-lsp-text-utils",
  "perl-parser-core",
