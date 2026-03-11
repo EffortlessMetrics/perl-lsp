@@ -8,13 +8,32 @@
 [![Rust](https://img.shields.io/badge/rust-1.92%2B-orange.svg)](https://www.rust-lang.org/)
 [![Downloads](https://img.shields.io/crates/d/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
 
-A fast, native **Perl language server** and **parser toolkit** written in Rust — bringing modern IDE features to Perl. Currently in **Initial Public Alpha (v0.10.0)**.
+A fast, native **Perl language server** and **parser toolkit** written in Rust — bringing modern IDE features to Perl. The workspace currently contains **112 Rust crates** and is in **Initial Public Alpha (v0.10.0)**.
 
 > **Full LSP coverage** · **fast incremental parsing** · **zero runtime Perl dependency**
 
 ## Origins
 
 This project started in Q2 2025. It was initially forked on July 15th, 2025 from [tree-sitter-perl-better](https://github.com/tree-sitter-perl/tree-sitter-perl) (the current official tree-sitter repository). Since then, it has evolved into a native Rust implementation focused on LSP and DAP performance.
+
+## Workspace Snapshot (current)
+
+- **Workspace crates**: 112 (`Cargo.toml` workspace members)
+- **Crate families**:
+  - `perl-module-*`: 13
+  - `perl-lsp-*`: 38
+  - `perl-lsp-feature-*`: 8
+  - `perl-dap-*`: 9
+  - `perl-ts-*`: 5
+  - `perl-workspace-*`: 6
+
+Regenerate family counts with:
+
+```bash
+for prefix in perl-module- perl-lsp- perl-lsp-feature- perl-dap- perl-ts- perl-workspace-; do
+  printf "%-18s %s\n" "$prefix" "$(find crates -maxdepth 1 -mindepth 1 -type d -name "${prefix}*" | wc -l)"
+done
+```
 
 ## Features at a Glance
 
