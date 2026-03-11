@@ -6,6 +6,37 @@
 default:
     @just --list
 
+# Developer experience: quick environment diagnosis + next-step hints
+devex:
+    @echo "=============================================="
+    @echo "  Developer Experience Quick Check"
+    @echo "=============================================="
+    @if command -v cargo >/dev/null 2>&1; then \
+        echo "✅ cargo: $$(cargo --version)"; \
+    else \
+        echo "❌ cargo not found (install Rust via https://rustup.rs)"; \
+    fi
+    @if command -v rustfmt >/dev/null 2>&1; then \
+        echo "✅ rustfmt: available"; \
+    else \
+        echo "⚠️ rustfmt missing (run: rustup component add rustfmt)"; \
+    fi
+    @if command -v just >/dev/null 2>&1; then \
+        echo "✅ just: $$(just --version)"; \
+    else \
+        echo "⚠️ just missing (run: cargo install just)"; \
+    fi
+    @if command -v nix >/dev/null 2>&1; then \
+        echo "✅ nix: available"; \
+    else \
+        echo "⚠️ nix not found (recommended for reproducible local CI)"; \
+    fi
+    @echo ""
+    @echo "Recommended next steps:"
+    @echo "  1) just pr-fast               # quick validation (~1-2 min)"
+    @echo "  2) nix develop -c just ci-gate  # canonical pre-push gate"
+    @echo "  3) bash scripts/install-githooks.sh # auto-run gate on push"
+
 # ============================================================================
 # Tiered CI Execution (works locally via Nix and in GitHub Actions)
 # ============================================================================
