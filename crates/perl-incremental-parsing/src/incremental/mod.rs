@@ -3,6 +3,7 @@
 use anyhow::Result;
 use lsp_types::Diagnostic;
 use lsp_types::TextDocumentContentChangeEvent;
+pub use perl_line_index::LineIndex;
 use ropey::Rope;
 use std::ops::Range;
 
@@ -43,35 +44,6 @@ pub struct ParseCheckpoint {
     pub byte: usize,
     pub scope_snapshot: ScopeSnapshot,
     pub node_id: usize, // ID of AST node at this point
-}
-
-/// Line index for byte <-> (line, col) mapping
-#[derive(Clone, Debug)]
-pub struct LineIndex {
-    /// Byte offset of each line start
-    line_starts: Vec<usize>,
-}
-
-impl LineIndex {
-    pub fn new(text: &str) -> Self {
-        let mut line_starts = vec![0];
-        for (i, ch) in text.char_indices() {
-            if ch == '\n' {
-                line_starts.push(i + 1);
-            }
-        }
-        Self { line_starts }
-    }
-
-    pub fn byte_to_position(&self, byte: usize) -> (usize, usize) {
-        let line = self.line_starts.binary_search(&byte).unwrap_or_else(|i| i.saturating_sub(1));
-        let column = byte - self.line_starts[line];
-        (line, column)
-    }
-
-    pub fn position_to_byte(&self, line: usize, column: usize) -> Option<usize> {
-        self.line_starts.get(line).map(|&start| start + column)
-    }
 }
 
 /// Incremental parsing state

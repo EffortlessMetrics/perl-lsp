@@ -83,6 +83,7 @@ members = [
     "crates/perl-module-resolution-uri",
     "crates/perl-text-line",
     "crates/perl-source-editing",
+    "crates/perl-line-index",
     "crates/perl-keywords",
     "crates/perl-source-file",
     "crates/perl-content-length-framing",
@@ -239,6 +240,7 @@ allow = [
     # Tier 6 — Module resolution higher tiers
     "perl-module-token-parser",
     "perl-text-line",
+    "perl-line-index",
     "perl-module-reference",
     "perl-module-import-match",
     "perl-module-rename",
@@ -305,6 +307,7 @@ perl-keywords = { path = "crates/perl-keywords", version = "0.10.0" }
 perl-source-file = { path = "crates/perl-source-file", version = "0.10.0" }
 perl-text-line = { path = "crates/perl-text-line", version = "0.10.0" }
 perl-source-editing = { path = "crates/perl-source-editing", version = "0.10.0" }
+perl-line-index = { path = "crates/perl-line-index", version = "0.10.0" }
 perl-content-length-framing = { path = "crates/perl-content-length-framing", version = "0.10.0" }
 perl-subprocess-runtime = { path = "crates/perl-subprocess-runtime", version = "0.10.0" }
 perl-lsp-document-links = { path = "crates/perl-lsp-document-links", version = "0.10.0" }
