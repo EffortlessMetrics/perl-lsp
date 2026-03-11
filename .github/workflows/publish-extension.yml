@@ -70,7 +70,7 @@ jobs:
           echo "VSIX_FILE=$(ls *.vsix)" >> $GITHUB_ENV
 
       - name: Publish to VSCode Marketplace
-        if: env.VSCE_PAT != ''
+        if: ${{ secrets.VSCE_PAT != '' }}
         working-directory: vscode-extension
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
@@ -78,7 +78,7 @@ jobs:
           vsce publish --pat $VSCE_PAT --packagePath ${{ env.VSIX_FILE }}
 
       - name: Publish to Open VSX
-        if: env.OVSX_PAT != ''
+        if: ${{ secrets.OVSX_PAT != '' }}
         working-directory: vscode-extension
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
