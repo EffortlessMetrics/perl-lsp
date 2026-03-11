@@ -1744,6 +1744,7 @@ dependencies = [
  "lsp-types",
  "perl-edit",
  "perl-lexer",
+ "perl-line-index",
  "perl-parser-core",
  "perl-tdd-support",
  "ropey",
@@ -1767,6 +1768,13 @@ dependencies = [
  "proptest",
  "thiserror",
  "unicode-ident",
+]
+
+[[package]]
+name = "perl-line-index"
+version = "0.10.0"
+dependencies = [
+ "perl-tdd-support",
 ]
 
 [[package]]
