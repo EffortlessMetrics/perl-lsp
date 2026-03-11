@@ -381,9 +381,10 @@ impl<'a> Parser<'a> {
                                     args.push(self.parse_assignment()?);
                                 }
                             } else {
-                                // For other functions, require commas between arguments
-                                while self.peek_kind() == Some(TokenKind::Comma) {
-                                    self.consume_token()?; // consume comma
+                                // For other functions, require commas (or fat arrows) between arguments
+                                // Perl allows `push @array => $value` as well as `push @array, $value`
+                                while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    self.consume_token()?; // consume comma or fat arrow
 
                                     // Check if we hit a statement modifier
                                     match self.peek_kind() {

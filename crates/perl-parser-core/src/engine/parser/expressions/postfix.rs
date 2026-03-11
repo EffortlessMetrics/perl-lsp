@@ -449,9 +449,10 @@ impl<'a> Parser<'a> {
                                     // Parse the first argument
                                     args.push(self.parse_ternary()?);
 
-                                    // Parse remaining arguments separated by commas
-                                    while self.peek_kind() == Some(TokenKind::Comma) {
-                                        self.consume_token()?; // consume comma
+                                    // Parse remaining arguments separated by commas or fat arrows
+                                    // Perl allows `push @array => $value` as well as commas
+                                    while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                        self.consume_token()?;
                                         if self.is_at_statement_end() {
                                             break;
                                         }

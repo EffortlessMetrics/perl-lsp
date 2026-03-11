@@ -116,10 +116,16 @@ impl<'a> Parser<'a> {
             if let Ok(next) = self.tokens.peek_second() {
                 let next_text = &next.text;
                 if next_text.starts_with('$') || next_text.starts_with('@') || next_text.starts_with('%') {
+                    // Bare sigil followed by { or [ is a dereference expression
+                    // like @{$ref}, %{$hash}, not an indirect object
+                    if next_text.len() <= 1 {
+                        return false;
+                    }
                     // Check if another typical arg or terminator follows to confirm it's not a regular call
                     if let Ok(third) = self.tokens.peek_third() {
-                        // Comma means regular call: func $arg, ...
-                        if third.kind == TokenKind::Comma {
+                        // Comma or fat arrow means regular call: func $arg, ...
+                        // e.g. push @array, $val  or  push @array => $val
+                        if matches!(third.kind, TokenKind::Comma | TokenKind::FatArrow) {
                             return false;
                         }
                         return true;
