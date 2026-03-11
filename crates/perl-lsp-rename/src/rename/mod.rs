@@ -61,7 +61,7 @@
 //! # See also
 //!
 //! - [`RenameProvider`] for executing rename operations
-//! - [`crate::ide::lsp_compat::references`] for related navigation workflows
+//! - `crate::ide::lsp_compat::references` for related navigation workflows
 //!
 //! # Usage Examples
 //!
