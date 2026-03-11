@@ -445,6 +445,21 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_assignment()?);
                                     }
+                                } else if name == "split"
+                                    && self.peek_kind() == Some(TokenKind::Slash)
+                                {
+                                    // For `split /regex/, ...`, re-lex `/` as regex delimiter
+                                    self.tokens.relex_as_term();
+                                    args.push(self.parse_ternary()?);
+
+                                    // Parse remaining arguments separated by commas
+                                    while self.peek_kind() == Some(TokenKind::Comma) {
+                                        self.consume_token()?;
+                                        if self.is_at_statement_end() {
+                                            break;
+                                        }
+                                        args.push(self.parse_ternary()?);
+                                    }
                                 } else {
                                     // Parse the first argument
                                     args.push(self.parse_ternary()?);

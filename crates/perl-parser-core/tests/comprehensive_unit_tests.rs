@@ -3093,6 +3093,59 @@ mod line_index_extended_tests {
         assert!(!sexp.contains("ERROR"), "hash construction should still work, got: {sexp}");
         Ok(())
     }
+
+    // ---- Wave 2C: split /regex/ ----
+
+    #[test]
+    fn wave2c_split_regex() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("split /\\./, $string;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "split /\\./, $string should parse cleanly, got: {sexp}");
+        assert!(sexp.contains("regex"), "should contain a regex node");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_whitespace() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("split /\\s+/, $cmd;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "split /\\s+/, $cmd should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_assignment() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("my @parts = split /::/, $module;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "my @parts = split /::/, $module should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_parens_regression() -> Result<(), Box<dyn std::error::Error>> {
+        // Parenthesized form should still work
+        let mut parser = Parser::new("split(/\\./, $x);");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "split(/\\./, $x) should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_string_regression() -> Result<(), Box<dyn std::error::Error>> {
+        // split with string pattern should still work
+        let mut parser = Parser::new("split ',', $csv;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "split with string should still work, got: {sexp}");
+        Ok(())
+    }
 }
 
 // ---- Wave 2A: Package-qualified subscripts ----

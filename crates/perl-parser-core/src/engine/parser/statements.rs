@@ -354,6 +354,14 @@ impl<'a> Parser<'a> {
                                 // Special handling for map/grep/sort with block first argument
                                 args.push(self.parse_builtin_block()?);
                                 parsed_block_arg = true;
+                            } else if func_name.as_ref() == "split"
+                                && self.peek_kind() == Some(TokenKind::Slash)
+                            {
+                                // For `split /regex/, ...`, the `/` after split is a regex
+                                // delimiter, not division. Roll back the lexer to re-lex
+                                // the `/` in ExpectTerm mode so it becomes a regex.
+                                self.tokens.relex_as_term();
+                                args.push(self.parse_assignment()?);
                             } else {
                                 // For builtins, use parse_assignment to avoid consuming comma operators
                                 args.push(self.parse_assignment()?);
