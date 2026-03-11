@@ -816,27 +816,43 @@ return$x*2}
     harness.open(&uri, unformatted)?;
 
     scenario.when("requesting document formatting");
-    let formatting = harness.request(
-        "textDocument/formatting",
-        json!({
+    let formatting_response = harness.request_raw(json!({
+        "jsonrpc": "2.0",
+        "method": "textDocument/formatting",
+        "params": {
             "textDocument": { "uri": uri },
             "options": { "tabSize": 4, "insertSpaces": true }
-        }),
-    )?;
+        }
+    }));
 
-    scenario.then("the response is null or a valid list of text edits");
-    assert!(
-        formatting.is_null() || formatting.is_array(),
-        "formatting should return null or text edit array"
-    );
-
-    if let Some(edits) = formatting.as_array()
-        && let Some(first_edit) = edits.first()
-    {
-        assert!(has_lsp_range(first_edit), "text edits should include an LSP range structure");
+    scenario.then("the response is structured edits or a graceful tooling error");
+    if let Some(result) = formatting_response.get("result") {
         assert!(
-            first_edit.get("newText").and_then(Value::as_str).is_some(),
-            "text edits should include newText"
+            result.is_null() || result.is_array(),
+            "formatting should return null or text edit array"
+        );
+
+        if let Some(edits) = result.as_array()
+            && let Some(first_edit) = edits.first()
+        {
+            assert!(has_lsp_range(first_edit), "text edits should include an LSP range structure");
+            assert!(
+                first_edit.get("newText").and_then(Value::as_str).is_some(),
+                "text edits should include newText"
+            );
+        }
+    } else {
+        let error = formatting_response
+            .get("error")
+            .ok_or("formatting response should include either result or error")?;
+        let message = error
+            .get("message")
+            .and_then(Value::as_str)
+            .ok_or("formatting error should include a message")?;
+
+        assert!(
+            message.contains("perltidy"),
+            "formatting error should mention perltidy availability"
         );
     }
 
