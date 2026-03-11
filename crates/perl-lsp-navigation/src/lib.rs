@@ -30,14 +30,13 @@
 mod references;
 mod type_definition;
 mod type_hierarchy;
-mod workspace_symbols;
 
 // Re-export key types and functions
 pub use self::references::find_references_single_file;
 pub use self::type_definition::TypeDefinitionProvider;
 pub use self::type_hierarchy::{TypeHierarchyItem, TypeHierarchyProvider, TypeHierarchySymbolKind};
-pub use self::workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
 pub use perl_lsp_document_links::compute_links;
+pub use perl_lsp_workspace_symbols::{WorkspaceSymbol, WorkspaceSymbolsProvider};
 
 // Re-export Location type for convenience
 pub use lsp_types::Location;
