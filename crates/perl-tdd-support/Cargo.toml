@@ -29,11 +29,12 @@ serde_json = "1.0.149"
 anyhow = "1.0.102"
 lsp-types = { version = "0.97.0", optional = true }
 url = { version = "2.5.8", optional = true }
+uselesskey = { version = "0.2.0", default-features = false, features = ["rsa"], optional = true }
 
 [features]
 default = []
 lsp-compat = ["lsp-types", "url"]
+crypto-fixtures = ["dep:uselesskey"]
 
 [lints]
 workspace = true
-

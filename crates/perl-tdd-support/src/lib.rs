@@ -83,3 +83,7 @@ pub use must::{must, must_err, must_some};
 
 /// CI Guardrail Ignored Test Monitoring and Governance.
 pub mod governance;
+
+/// Deterministic cryptographic fixtures for tests.
+#[cfg(feature = "crypto-fixtures")]
+pub mod crypto;
