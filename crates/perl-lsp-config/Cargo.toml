@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Configuration models for perl-lsp server and workspace behavior"
+readme = "README.md"
+documentation = "https://docs.rs/perl-lsp-config"
+keywords = ["perl", "lsp", "config", "language-server", "settings"]
+categories = ["development-tools", "text-editors"]
 
 [dependencies]
 serde_json = "1.0.149"
