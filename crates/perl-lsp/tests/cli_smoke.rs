@@ -15,3 +15,9 @@ fn version_shows_git_tag() {
         .stdout(predicates::str::contains("perl-lsp"))
         .stdout(predicates::str::contains("Git tag:"));
 }
+
+#[test]
+fn help_prints_to_stdout() {
+    let mut cmd = cargo_bin_cmd!("perl-lsp");
+    cmd.arg("--help").assert().success().stdout(predicates::str::contains("Usage: perl-lsp"));
+}
