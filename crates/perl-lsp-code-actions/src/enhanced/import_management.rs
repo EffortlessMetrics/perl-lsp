@@ -1,6 +1,9 @@
 //! Import management code actions
 
 use crate::types::{CodeAction, CodeActionEdit, CodeActionKind};
+use perl_lsp_import_management::{
+    collect_imports, find_imports_range, guess_module_for_function, sort_imports,
+};
 use perl_lsp_rename::TextEdit;
 use perl_parser_core::ast::{Node, SourceLocation};
 
@@ -77,83 +80,4 @@ pub fn find_undefined_functions(_ast: &Node) -> Vec<String> {
     // This would require full semantic analysis
     // For now, return empty
     Vec::new()
-}
-
-/// Guess module for a function
-pub fn guess_module_for_function(func: &str) -> Option<String> {
-    match func {
-        "dumper" => Some("Data::Dumper"),
-        "encode" | "decode" => Some("Encode"),
-        "basename" | "dirname" => Some("File::Basename"),
-        "mkpath" | "rmtree" => Some("File::Path"),
-        "slurp" => Some("File::Slurp"),
-        "decode_json" | "encode_json" => Some("JSON"),
-        _ => None,
-    }
-    .map(|s| s.to_string())
-}
-
-/// Collect all import statements
-pub fn collect_imports(lines: &[String]) -> Vec<String> {
-    let mut imports = Vec::new();
-
-    for line in lines {
-        let trimmed = line.trim();
-        if trimmed.starts_with("use ") || trimmed.starts_with("require ") {
-            imports.push(line.to_owned());
-        }
-    }
-
-    imports
-}
-
-/// Sort imports by category
-pub fn sort_imports(imports: Vec<String>) -> Vec<String> {
-    let mut pragmas = Vec::new();
-    let mut core = Vec::new();
-    let mut cpan = Vec::new();
-    let mut local = Vec::new();
-
-    for import in imports {
-        if import.contains("strict")
-            || import.contains("warnings")
-            || import.contains("utf8")
-            || import.contains("feature")
-        {
-            pragmas.push(import);
-        } else if import.contains("::") {
-            cpan.push(import);
-        } else if import.starts_with("use lib") || import.contains("./") {
-            local.push(import);
-        } else {
-            core.push(import);
-        }
-    }
-
-    pragmas.sort();
-    core.sort();
-    cpan.sort();
-    local.sort();
-
-    let mut result = Vec::new();
-    result.extend(pragmas);
-    result.extend(core);
-    result.extend(cpan);
-    result.extend(local);
-
-    result
-}
-
-/// Find the range of import statements
-pub fn find_imports_range(source: &str, lines: &[String]) -> Option<(usize, usize)> {
-    let imports = collect_imports(lines);
-    if imports.is_empty() {
-        return None;
-    }
-
-    let first = source.find(&imports[0])?;
-    let last = source.find(&imports[imports.len() - 1])?;
-    let last_end = last + imports[imports.len() - 1].len();
-
-    Some((first, last_end))
 }
