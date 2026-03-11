@@ -176,6 +176,19 @@ perl-dap
 cargo run -p perl-parser -- path/to/file.pl
 ```
 
+### Contributor quick checks
+
+```bash
+# Validate local toolchain and optional dev tools
+just doctor
+
+# Run the fast PR feedback checks
+just pr-fast
+
+# Canonical local gate before push
+nix develop -c just ci-gate
+```
+
 ## Published Crates
 
 | Crate | Purpose |

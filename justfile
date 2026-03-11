@@ -266,6 +266,33 @@ ci-local:
         exit 1; \
     fi
 
+# Developer environment health check (required + optional tools)
+doctor: _check-tools-basic
+    @echo "🩺 perl-lsp developer environment check"
+    @echo ""
+    @echo "Required tools"
+    @for tool in cargo rustfmt rustc; do \
+        if command -v $$tool >/dev/null 2>&1; then \
+            printf "  ✅ %-16s %s\n" "$$tool" "$$(command -v $$tool)"; \
+        else \
+            printf "  ❌ %-16s missing\n" "$$tool"; \
+        fi; \
+    done
+    @echo ""
+    @echo "Optional tools"
+    @for tool in just nix cargo-audit cargo-mutants; do \
+        if command -v $$tool >/dev/null 2>&1; then \
+            printf "  ✅ %-16s %s\n" "$$tool" "$$(command -v $$tool)"; \
+        else \
+            printf "  ℹ️  %-16s not installed\n" "$$tool"; \
+        fi; \
+    done
+    @echo ""
+    @echo "Next steps"
+    @echo "  - Fast feedback loop: just pr-fast"
+    @echo "  - Canonical local gate: nix develop -c just ci-gate"
+    @echo "  - Install pre-push hook: bash scripts/install-githooks.sh"
+
 # Tool availability check (basic tools for PR-fast)
 [private]
 _check-tools-basic:
