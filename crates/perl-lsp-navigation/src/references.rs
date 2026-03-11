@@ -123,22 +123,5 @@ fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
 }
 
 fn get_node_children(node: &Node) -> Vec<&Node> {
-    match &node.kind {
-        NodeKind::Program { statements } => statements.iter().collect(),
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
-            let mut children = vec![variable.as_ref()];
-            if let Some(init) = initializer {
-                children.push(init.as_ref());
-            }
-            children
-        }
-        NodeKind::Assignment { lhs, rhs, .. } => vec![lhs.as_ref(), rhs.as_ref()],
-        NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
-        NodeKind::FunctionCall { args, .. } => args.iter().collect(),
-        NodeKind::Subroutine { body, .. } => {
-            vec![body.as_ref()]
-        }
-        NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
-        _ => vec![],
-    }
+    node.children()
 }
