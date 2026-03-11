@@ -2013,6 +2013,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-folding"
+version = "0.10.0"
+dependencies = [
+ "perl-lexer",
+ "perl-parser-core",
+]
+
+[[package]]
 name = "perl-lsp-formatting"
 version = "0.10.0"
 dependencies = [
@@ -2124,10 +2132,10 @@ version = "0.10.0"
 dependencies = [
  "lsp-types",
  "nix",
- "perl-lexer",
  "perl-lsp-code-actions",
  "perl-lsp-completion",
  "perl-lsp-diagnostics",
+ "perl-lsp-folding",
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
  "perl-lsp-navigation",

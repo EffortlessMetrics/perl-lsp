@@ -112,3 +112,8 @@ pub mod code_actions {
 pub mod navigation {
     pub use perl_lsp_navigation::*;
 }
+
+/// Re-exports from `perl_lsp_folding` for backward compatibility.
+pub mod folding {
+    pub use perl_lsp_folding::*;
+}

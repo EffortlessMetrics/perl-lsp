@@ -52,6 +52,7 @@ members = [
     "crates/perl-lsp-document-links",
     "crates/perl-lsp-completion",
     "crates/perl-lsp-code-actions",
+    "crates/perl-lsp-folding",
     "crates/perl-lsp-ast-utils",
     "crates/perl-lsp-import-management",
     "crates/perl-lsp-text-utils",
@@ -170,6 +171,7 @@ allow = [
     "perl-lsp-diagnostic-types",
     "perl-lsp-diagnostics",
     "perl-lsp-code-actions",
+    "perl-lsp-folding",
     "perl-lsp-completion",
     "perl-lsp-inlay-hints",
 
@@ -364,6 +366,7 @@ perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.10.0" 
 perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.10.0" }
 perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.10.0" }
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.10.0" }
+perl-lsp-folding = { path = "crates/perl-lsp-folding", version = "0.10.0" }
 perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.10.0" }
 
 # Tier 3: Two-level dependencies

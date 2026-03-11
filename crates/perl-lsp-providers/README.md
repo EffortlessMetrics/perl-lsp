@@ -20,6 +20,7 @@ Top-level re-export modules (preferred for new code):
 - `semantic_tokens` -- from `perl-lsp-semantic-tokens`
 - `inlay_hints` -- from `perl-lsp-inlay-hints`
 - `code_actions` -- from `perl-lsp-code-actions`
+- `folding` -- from `perl-lsp-folding`
 - `tooling` -- from `perl-lsp-tooling` (perltidy, perlcritic)
 - `ide` -- LSP/DAP runtime compatibility shims
 
