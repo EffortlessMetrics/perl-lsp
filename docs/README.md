@@ -2,6 +2,26 @@
 
 Documentation for Perl LSP v0.10.0 — a Language Server Protocol implementation for Perl.
 
+## Repository snapshot
+
+- Workspace version: **v0.10.0**
+- Workspace members: **112 crates**
+- Family counts (from `crates/`):
+  - `perl-module-*`: 13
+  - `perl-lsp-*`: 38
+  - `perl-lsp-feature-*`: 8
+  - `perl-dap-*`: 9
+  - `perl-ts-*`: 5
+  - `perl-workspace-*`: 6
+
+To refresh counts:
+
+```bash
+for prefix in perl-module- perl-lsp- perl-lsp-feature- perl-dap- perl-ts- perl-workspace-; do
+  printf "%-18s %s\n" "$prefix" "$(find crates -maxdepth 1 -mindepth 1 -type d -name "${prefix}*" | wc -l)"
+done
+```
+
 ## Tutorials — learn by doing
 
 Step-by-step guides to get you started.
