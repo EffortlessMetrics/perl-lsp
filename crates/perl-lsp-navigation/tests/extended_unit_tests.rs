@@ -325,9 +325,22 @@ fn refs_variable_in_nested_sub() {
     let _ = refs;
 }
 
-// ══════════════════════════════════════════════
-// type_hierarchy — additional coverage
-// ══════════════════════════════════════════════
+#[test]
+fn refs_variable_inside_if_condition_and_block() {
+    let code = "my $flag = 1; if ($flag) { print $flag; }";
+    let ast = parse_ast(code);
+
+    let offset = must_some(code.find("$flag"));
+    let refs = find_references_single_file(&ast, offset);
+    assert!(refs.is_some(), "should find references for $flag");
+
+    let refs = must_some(refs);
+    assert!(
+        refs.len() >= 3,
+        "should include declaration + if condition + print usage, found {}",
+        refs.len()
+    );
+}
 
 #[test]
 fn hierarchy_diamond_inheritance() {
@@ -799,7 +812,7 @@ fn refs_and_workspace_symbols_same_source() {
 
     // References
     let ast = parse_ast(code);
-    let offset = must_some(code.find("greet"));
+    let offset = must_some(code.rfind("greet"));
     let refs = find_references_single_file(&ast, offset);
     assert!(refs.is_some());
 
