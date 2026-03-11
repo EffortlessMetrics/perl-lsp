@@ -50,6 +50,7 @@ members = [
     "crates/perl-lsp-diagnostic-catalog",
     "crates/perl-lsp-navigation",
     "crates/perl-lsp-document-links",
+    "crates/perl-lsp-workspace-symbols",
     "crates/perl-lsp-completion",
     "crates/perl-lsp-completion-item",
     "crates/perl-lsp-code-actions",
@@ -189,6 +190,7 @@ allow = [
     # Tier 4 — LSP providers
     "perl-lsp-navigation",
     "perl-lsp-document-links",
+    "perl-lsp-workspace-symbols",
     "perl-lsp-tooling",
     "perl-lsp-performance",
     "perl-lsp-critic-parser",
@@ -368,6 +370,7 @@ perl-lsp-feature-governance = { path = "crates/perl-lsp-feature-governance", ver
 perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.10.0" }
 perl-lsp-diagnostic-catalog = { path = "crates/perl-lsp-diagnostic-catalog", version = "0.10.0" }
 perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.10.0" }
+perl-lsp-workspace-symbols = { path = "crates/perl-lsp-workspace-symbols", version = "0.10.0" }
 perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.10.0" }
 perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.10.0" }
 perl-lsp-completion-item = { path = "crates/perl-lsp-completion-item", version = "0.10.0" }
