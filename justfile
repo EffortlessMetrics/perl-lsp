@@ -266,6 +266,13 @@ ci-local:
         exit 1; \
     fi
 
+# Developer environment diagnostics (onboarding/troubleshooting helper)
+doctor:
+    @echo "=============================================="
+    @echo "  perl-lsp developer environment doctor"
+    @echo "=============================================="
+    @bash scripts/devex-doctor.sh
+
 # Tool availability check (basic tools for PR-fast)
 [private]
 _check-tools-basic:
