@@ -56,7 +56,7 @@ pub struct LspArgs {
     #[arg(long)]
     pub log: bool,
 
-    /// Quick health check (prints 'ok <version>')
+    /// Quick health check (prints 'ok `<version>`')
     #[arg(long)]
     pub health: bool,
 
