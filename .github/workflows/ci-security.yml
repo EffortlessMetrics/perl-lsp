@@ -136,7 +136,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Run Trivy vulnerability scanner (filesystem mode)
-        uses: aquasecurity/trivy-action@0.34.1
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -161,7 +161,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner (table format for PR comments)
         if: github.event_name == 'pull_request'
-        uses: aquasecurity/trivy-action@0.34.1
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -197,7 +197,7 @@ jobs:
           docker build -t perl-lsp:${{ github.sha }} -f .docker/rust/Dockerfile .
 
       - name: Run Trivy vulnerability scanner (Docker image)
-        uses: aquasecurity/trivy-action@0.34.1
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: 'image'
           image-ref: 'perl-lsp:${{ github.sha }}'
