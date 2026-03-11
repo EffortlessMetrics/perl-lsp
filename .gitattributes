@@ -1,6 +1,15 @@
 * text eol=lf
 
 # =============================================================================
+# Image and font files (must not have line endings modified)
+# =============================================================================
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+
+# =============================================================================
 # Tree-sitter vendored/generated code
 # =============================================================================
 # This ensures tokei and GitHub language stats reflect "code we wrote" vs

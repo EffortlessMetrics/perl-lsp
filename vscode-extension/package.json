@@ -71,6 +71,13 @@
         "configuration": "./language-configuration.json"
       }
     ],
+    "grammars": [
+      {
+        "language": "perl",
+        "scopeName": "source.perl",
+        "path": "./syntaxes/perl.tmLanguage.json"
+      }
+    ],
     "breakpoints": [
       {
         "language": "perl"
@@ -354,18 +361,6 @@
         {
           "command": "perl-lsp.runTests",
           "when": "editorLangId == perl && resourceExtname =~ /\\.(t|pl)$/"
-        },
-        {
-          "command": "perl-lsp.extractSubroutine",
-          "when": "editorLangId == perl"
-        },
-        {
-          "command": "perl-lsp.extractVariable",
-          "when": "editorLangId == perl"
-        },
-        {
-          "command": "perl-lsp.inlineVariable",
-          "when": "editorLangId == perl"
         }
       ],
       "editor/title": [
@@ -380,21 +375,6 @@
           "command": "perl-lsp.runTests",
           "when": "editorLangId == perl",
           "group": "navigation"
-        },
-        {
-          "command": "perl-lsp.extractSubroutine",
-          "when": "editorLangId == perl",
-          "group": "1_modification"
-        },
-        {
-          "command": "perl-lsp.extractVariable",
-          "when": "editorLangId == perl",
-          "group": "1_modification"
-        },
-        {
-          "command": "perl-lsp.inlineVariable",
-          "when": "editorLangId == perl",
-          "group": "1_modification"
         }
       ]
     },
@@ -453,8 +433,8 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
-    "package": "npx @vscode/vsce package --no-dependencies",
-    "publish": "npx @vscode/vsce publish --no-dependencies",
+    "package": "npx @vscode/vsce package",
+    "publish": "npx @vscode/vsce publish",
     "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package"
   },
   "dependencies": {
