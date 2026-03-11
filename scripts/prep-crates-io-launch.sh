@@ -11,7 +11,7 @@ Usage: scripts/prep-crates-io-launch.sh [--core|--all]
 
 Runs crates.io launch readiness checks:
   1) cargo check --locked for selected crates
-  2) cargo package --list validation for selected crates
+  2) cargo package dry-run validation for selected crates
 
 Options:
   --core      Validate public launch crates (default)
@@ -63,7 +63,7 @@ PY
 fi
 
 echo "🚀 crates.io launch prep (${MODE})"
-echo "📦 Running cargo check + cargo package --list for ${#CRATES[@]} crate(s)"
+echo "📦 Running cargo check + cargo package dry-run for ${#CRATES[@]} crate(s)"
 
 for crate in "${CRATES[@]}"; do
   echo ""
@@ -71,7 +71,7 @@ for crate in "${CRATES[@]}"; do
   (
     cd "$ROOT_DIR"
     cargo check --locked -p "$crate"
-    cargo package --list -p "$crate" >/dev/null
+    CARGO_PACKAGE_NO_VERIFY=1 scripts/cargo-package-workspace-dry-run.sh "$crate" >/dev/null
   )
 done
 
