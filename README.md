@@ -254,6 +254,9 @@ cargo test --workspace
 # Lint + format
 cargo clippy --workspace --lib && cargo fmt --all
 
+# Check local tooling (dev environment doctor)
+just doctor
+
 # Full local gate (requires Nix)
 nix develop -c just ci-gate
 ```
