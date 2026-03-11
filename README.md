@@ -2,26 +2,27 @@
 
 ![CI](https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg)
 [![crates.io](https://img.shields.io/crates/v/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
-[![docs.rs](https://docs.rs/perl-parser/badge.svg)](https://docs.rs/perl-parser)
+[![docs.rs](https://docs.rs/perl-lsp/badge.svg)](https://docs.rs/perl-lsp)
 [![codecov](https://codecov.io/gh/EffortlessMetrics/perl-lsp/branch/master/graph/badge.svg)](https://codecov.io/gh/EffortlessMetrics/perl-lsp)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 [![Rust](https://img.shields.io/badge/rust-1.92%2B-orange.svg)](https://www.rust-lang.org/)
 [![Downloads](https://img.shields.io/crates/d/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
 
-A fast, native **Perl language server** and **parser toolkit** written in Rust — bringing modern IDE features to Perl. The workspace currently contains **112 Rust crates** and is in **Initial Public Alpha (v0.10.0)**.
+A fast, native **Perl language server** and **parser toolkit** written in Rust — bringing modern IDE features to Perl. The workspace currently contains **over 115 Rust crates** and is in **Initial Public Alpha (v0.10.0)**.
 
 > **Full LSP coverage** · **fast incremental parsing** · **zero runtime Perl dependency**
 
 ## Origins
 
-This project started in Q2 2025. It was initially forked on July 15th, 2025 from [tree-sitter-perl-better](https://github.com/tree-sitter-perl/tree-sitter-perl) (the current official tree-sitter repository). Since then, it has evolved into a native Rust implementation focused on LSP and DAP performance.
+This project was initially forked on July 15th, 2025 (Q3 2025) from [tree-sitter-perl-better](https://github.com/tree-sitter-perl/tree-sitter-perl) (the current official tree-sitter repository). Since then, it has evolved into a native Rust implementation focused on LSP and DAP performance.
 
 ## Workspace Snapshot (current)
 
-- **Workspace crates**: 112 (`Cargo.toml` workspace members)
+- **Crate directories**: 121 (under `crates/`)
+- **Workspace members**: 116 (`Cargo.toml` workspace members)
 - **Crate families**:
   - `perl-module-*`: 13
-  - `perl-lsp-*`: 38
+  - `perl-lsp-*`: 41
   - `perl-lsp-feature-*`: 8
   - `perl-dap-*`: 9
   - `perl-ts-*`: 5
@@ -87,24 +88,6 @@ curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/i
 irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.ps1 | iex
 ```
 
-### Homebrew (macOS / Linux)
-
-```bash
-brew install perl-lsp
-```
-
-### Scoop (Windows)
-
-```powershell
-scoop install perl-lsp
-```
-
-### Chocolatey (Windows)
-
-```powershell
-choco install perl-lsp
-```
-
 ## Why perl-lsp?
 
 | | perl-lsp | Perl::LanguageServer | PLS |
@@ -115,7 +98,7 @@ choco install perl-lsp
 | **Incremental parsing** | Yes ([status](https://github.com/EffortlessMetrics/perl-lsp/blob/master/docs/project/CURRENT_STATUS.md)) | N/A | N/A |
 | **Debug adapter** | Built-in (DAP bridge) | Built-in | No |
 | **Cross-file navigation** | Dual-indexed | Limited | Limited |
-| **Mutation test score** | Yes (mutation tested) | N/A | N/A |
+| **Mutation tested** | 87% score | N/A | N/A |
 | **Startup overhead** | Minimal (native) | Perl interpreter | Perl interpreter |
 
 ## Editor Setup
