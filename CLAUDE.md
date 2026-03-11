@@ -22,7 +22,7 @@ cargo test --workspace --lib
 
 ## Crate Structure
 
-The workspace is organized in dependency tiers. Key crates:
+The workspace contains **116 workspace members** across **121 crate directories** (see `Cargo.toml`), organized in dependency tiers. Key crates:
 
 | Crate | Path | Purpose |
 |-------|------|---------|
@@ -170,9 +170,10 @@ CI is optional/opt-in. The repo is local-first by design.
 ## Workspace Exclusions
 
 These directories are excluded from the default workspace (require special builds):
-- `tree-sitter-perl-c/` - Requires libclang
+- `crates/tree-sitter-perl-c/` - Requires libclang (bindgen)
+- `tree-sitter-perl/` - Legacy C parser
 - `fuzz/` - Specialized fuzz testing build
-- `archive/` - Legacy components
+- `archive/` - Archived legacy components
 
 ## Key Paths
 
