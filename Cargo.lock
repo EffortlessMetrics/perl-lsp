@@ -1882,6 +1882,7 @@ version = "0.10.0"
 dependencies = [
  "lsp-types",
  "perl-keywords",
+ "perl-lsp-completion-item",
  "perl-parser-core",
  "perl-path-security",
  "perl-semantic-analyzer",
@@ -1889,6 +1890,13 @@ dependencies = [
  "perl-workspace-index",
  "url",
  "walkdir",
+]
+
+[[package]]
+name = "perl-lsp-completion-item"
+version = "0.10.0"
+dependencies = [
+ "perl-parser-core",
 ]
 
 [[package]]
