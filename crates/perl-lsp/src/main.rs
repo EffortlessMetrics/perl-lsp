@@ -38,7 +38,7 @@ fn main() {
             process::exit(0);
         }
         LaunchAction::Help => {
-            eprintln!("{}", help_text());
+            println!("{}", help_text());
             process::exit(0);
         }
     }
