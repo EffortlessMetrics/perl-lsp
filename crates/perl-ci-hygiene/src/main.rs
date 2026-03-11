@@ -261,10 +261,10 @@ fn is_excluded_test_path(path: &Path) -> bool {
         return true;
     }
 
-    if let Some(file_name) = path.file_name().and_then(|name| name.to_str()) {
-        if CI_TEST_FILE_SUFFIXES.iter().any(|suffix| file_name.ends_with(suffix)) {
-            return true;
-        }
+    if let Some(file_name) = path.file_name().and_then(|name| name.to_str())
+        && CI_TEST_FILE_SUFFIXES.iter().any(|suffix| file_name.ends_with(suffix))
+    {
+        return true;
     }
 
     if path.components().any(|component| {
@@ -326,42 +326,6 @@ fn command_with_output_all(
     Ok(combined)
 }
 
-fn command_with_input(
-    repo_root: &Path,
-    command: &str,
-    args: &[&str],
-    env_vars: &[(&str, &str)],
-    stdin_payload: &str,
-) -> Result<(i32, String)> {
-    let mut child = Command::new(command);
-    child.current_dir(repo_root).args(args);
-    for (key, value) in env_vars {
-        child.env(key, value);
-    }
-    child.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
-
-    let mut child = child.spawn().wrap_err_with(|| format!("running {command}"))?;
-    {
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| color_eyre::eyre::eyre!("failed to open stdin for command {command}"))?;
-        stdin
-            .write_all(stdin_payload.as_bytes())
-            .wrap_err_with(|| format!("writing to stdin for {command}"))?;
-    }
-    let output = child.wait_with_output().wrap_err_with(|| format!("running {command}"))?;
-    let status = output.status.code().unwrap_or(1);
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    if status != 0 {
-        return Err(color_eyre::eyre::eyre!(
-            "command '{command}' failed (exit {status}): {stderr}"
-        ));
-    }
-    Ok((status, stdout))
-}
-
 fn command_with_input_with_status(
     repo_root: &Path,
     command: &str,
@@ -411,27 +375,6 @@ fn command_output_with_status(
     let status = output.status.code().unwrap_or(1);
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     Ok((status, stdout))
-}
-
-fn command_output_with_status_all(
-    repo_root: &Path,
-    command: &str,
-    args: &[&str],
-    env_vars: &[(&str, &str)],
-) -> Result<(i32, String)> {
-    let mut child = Command::new(command);
-    child.current_dir(repo_root).args(args);
-    for (key, value) in env_vars {
-        child.env(key, value);
-    }
-    child.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let output = child.output().wrap_err_with(|| format!("running {command}"))?;
-    let status = output.status.code().unwrap_or(1);
-    let mut combined = String::from_utf8_lossy(&output.stdout).into_owned();
-    if !output.stderr.is_empty() {
-        combined.push_str(&String::from_utf8_lossy(&output.stderr));
-    }
-    Ok((status, combined))
 }
 
 fn command_timed_status(
@@ -520,13 +463,12 @@ fn command_status_strict(
 }
 
 fn command_exists(command: &str) -> bool {
-    let check = Command::new("sh")
+    Command::new("sh")
         .arg("-c")
         .arg(format!("command -v {command} >/dev/null 2>&1"))
         .status()
         .map(|status| status.success())
-        .unwrap_or(false);
-    check
+        .unwrap_or(false)
 }
 
 fn command_output_lines(output: &str) -> Vec<String> {
@@ -1314,10 +1256,10 @@ fn cmd_cargo_package_workspace_dry_run(repo_root: &Path, crates: &[String]) -> R
             if !workspace_members.contains(id) {
                 continue;
             }
-            if let Some(publish) = package.get("publish").and_then(Value::as_array) {
-                if publish.is_empty() {
-                    continue;
-                }
+            if let Some(publish) = package.get("publish").and_then(Value::as_array)
+                && publish.is_empty()
+            {
+                continue;
             }
             let name = package.get("name").and_then(Value::as_str).unwrap_or("");
             if name.is_empty() {
@@ -1757,7 +1699,6 @@ fn cmd_quick_receipts(repo_root: &Path) -> Result<i32> {
 fn cmd_test_lsp_cancellation(repo_root: &Path) -> Result<i32> {
     const GREEN: &str = "\x1b[0;32m";
     const YELLOW: &str = "\x1b[1;33m";
-    const RED: &str = "\x1b[0;31m";
     const NC: &str = "\x1b[0m";
 
     println!("{YELLOW}Enhanced LSP Cancellation System Test Runner{NC}");
@@ -1826,10 +1767,10 @@ fn find_cancel_test_binary(repo_root: &Path) -> Option<PathBuf> {
         if !path.is_file() {
             continue;
         }
-        if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-            if name.contains("lsp_cancel_test") {
-                return Some(path.to_path_buf());
-            }
+        if let Some(name) = path.file_name().and_then(|name| name.to_str())
+            && name.contains("lsp_cancel_test")
+        {
+            return Some(path.to_path_buf());
         }
     }
     None
@@ -2193,7 +2134,7 @@ fn cmd_check_ignored(repo_root: &Path) -> Result<i32> {
         .sum::<usize>();
 
     let current = ignored_in_tests + ignored_in_src;
-    let mut baseline = read_usize_file(&baseline_file, current)?;
+    let baseline = read_usize_file(&baseline_file, current)?;
     if !baseline_file.is_file() {
         fs::write(&baseline_file, format!("{current}\n"))
             .with_context(|| format!("creating {:?}", baseline_file))?;
@@ -2859,7 +2800,7 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
             unwrap_offenders.len(),
             unwrap_baseline
         );
-        println!("");
+        println!();
         println!("Offenders:");
         for line in unwrap_offenders.iter().take(10) {
             println!("{line}");
@@ -2874,7 +2815,7 @@ fn cmd_check_unwraps_prod(repo_root: &Path) -> Result<i32> {
             panic_offenders.len(),
             panic_baseline
         );
-        println!("");
+        println!();
         println!("Offenders:");
         for line in panic_offenders.iter().take(10) {
             println!("{line}");
@@ -3111,7 +3052,7 @@ fn cmd_check_todos(repo_root: &Path, list_mode: bool) -> Result<i32> {
             .parse::<usize>()
             .wrap_err("parsing ci/todo_baseline.txt")?
     } else {
-        fs::create_dir_all(&baseline_path.parent().unwrap_or(repo_root).to_path_buf())?;
+        fs::create_dir_all(baseline_path.parent().unwrap_or(repo_root))?;
         fs::write(&baseline_path, format!("{current_count}\n"))?;
         println!("📝 Creating initial TODO baseline...");
         println!("✅ Baseline established: {current_count}");
@@ -3305,7 +3246,6 @@ fn cmd_ignored_test_count(repo_root: &Path, update: bool, check: bool) -> Result
             location: detail.location,
             test_name: detail.test_name,
             reason: detail.reason,
-            context: detail.context,
         });
     }
 
@@ -3486,9 +3426,6 @@ fn write_ignored_baseline(
 
 #[derive(Clone)]
 struct TodoHit {
-    path: String,
-    line_no: usize,
-    text: String,
     line_text: String,
 }
 
@@ -3503,7 +3440,6 @@ struct IgnoreMatch {
 struct IgnoredDetail {
     category: String,
     location: String,
-    context: String,
     reason: String,
     test_name: String,
 }
@@ -3527,7 +3463,7 @@ fn collect_todo_hits(
             .strip_prefix(root)
             .with_context(|| format!("path under {:?}", root))?
             .to_path_buf();
-        if exclude_files.iter().any(|p| p == &path) {
+        if exclude_files.iter().any(|p| p == path) {
             continue;
         }
         if rel.components().any(|component| {
@@ -3553,12 +3489,7 @@ fn collect_todo_hits(
             if !match_line {
                 continue;
             }
-            hits.push(TodoHit {
-                path: rel.display().to_string(),
-                line_no: line_no + 1,
-                text: line.to_string(),
-                line_text: format!("{}:{}:{}", rel.display(), line_no + 1, line),
-            });
+            hits.push(TodoHit { line_text: format!("{}:{}:{}", rel.display(), line_no + 1, line) });
         }
     }
     Ok(hits)
@@ -3566,15 +3497,16 @@ fn collect_todo_hits(
 
 fn has_unlinked_todo_in_rust_line(line: &str, token_re: &Regex) -> bool {
     let mut has_hit = false;
-    if let Some(idx) = line.find("//") {
-        if !is_url_like_hash_comment(line, idx) && has_unlinked_token(&line[idx + 2..], token_re) {
-            has_hit = true;
-        }
+    if let Some(idx) = line.find("//")
+        && !is_url_like_hash_comment(line, idx)
+        && has_unlinked_token(&line[idx + 2..], token_re)
+    {
+        has_hit = true;
     }
-    if let Some(idx) = line.find("/*") {
-        if has_unlinked_token(&line[idx + 2..], token_re) {
-            has_hit = true;
-        }
+    if let Some(idx) = line.find("/*")
+        && has_unlinked_token(&line[idx + 2..], token_re)
+    {
+        has_hit = true;
     }
     let trimmed = line.trim_start();
     if trimmed.starts_with('*') && has_unlinked_token(trimmed, token_re) {
@@ -3588,7 +3520,7 @@ fn has_unlinked_todo_in_hash_line(line: &str, token_re: &Regex) -> bool {
         if idx > 0 && line.as_bytes()[idx - 1] == b'!' {
             return false;
         }
-        if idx > 0 && !line[..idx].chars().rev().next().is_some_and(char::is_whitespace) {
+        if idx > 0 && !line[..idx].chars().next_back().is_some_and(char::is_whitespace) {
             return false;
         }
         has_unlinked_token(&line[idx + 1..], token_re)
@@ -3667,20 +3599,25 @@ fn collect_ignored_matches(crates_root: &Path, repo_root: &Path) -> Result<Vec<I
                 let end = std::cmp::min(lines.len(), i + 4);
                 lines[i..end].join("\n")
             };
-            if reason.is_empty() && comment_re.is_match(line) {
-                if let Some(comment) = comment_re.captures(line).and_then(|m| m.get(1)) {
-                    reason = comment.as_str().to_string();
-                }
+            if reason.is_empty()
+                && comment_re.is_match(line)
+                && let Some(comment) = comment_re.captures(line).and_then(|m| m.get(1))
+            {
+                reason = comment.as_str().to_string();
             }
-            if reason.is_empty() && i + 1 < lines.len() && comment_re.is_match(&lines[i + 1]) {
-                if let Some(comment) = comment_re.captures(&lines[i + 1]).and_then(|m| m.get(1)) {
-                    reason = comment.as_str().to_string();
-                }
+            if reason.is_empty()
+                && i + 1 < lines.len()
+                && comment_re.is_match(&lines[i + 1])
+                && let Some(comment) = comment_re.captures(&lines[i + 1]).and_then(|m| m.get(1))
+            {
+                reason = comment.as_str().to_string();
             }
-            if reason.is_empty() && i + 2 < lines.len() && comment_re.is_match(&lines[i + 2]) {
-                if let Some(comment) = comment_re.captures(&lines[i + 2]).and_then(|m| m.get(1)) {
-                    reason = comment.as_str().to_string();
-                }
+            if reason.is_empty()
+                && i + 2 < lines.len()
+                && comment_re.is_match(&lines[i + 2])
+                && let Some(comment) = comment_re.captures(&lines[i + 2]).and_then(|m| m.get(1))
+            {
+                reason = comment.as_str().to_string();
             }
 
             let mut test_name = String::new();
