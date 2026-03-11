@@ -1071,6 +1071,7 @@ mod ast_node_validation_tests {
 #[cfg(all(test, feature = "incremental"))]
 mod integration_mutation_tests {
     use super::*;
+    use perl_tdd_support::must;
 
     /// Test complex scenarios that exercise multiple mutation points
     #[test]
@@ -1129,10 +1130,7 @@ mod integration_mutation_tests {
         // This test documents a real bug in incremental_document.rs:356
         // where nodes_reused can be larger than count_nodes(), causing underflow
         let source = "package Test; sub test_function { }";
-        let mut doc = match IncrementalDocument::new(source.to_string()) {
-            Ok(d) => d,
-            Err(e) => must(Err::<(), _>(format!("Should create document: {:?}", e))),
-        };
+        let mut doc = must(IncrementalDocument::new(source.to_string()));
 
         // This edit triggers the underflow bug - it's a legitimate bug to fix
         let edit = IncrementalEdit::with_positions(
