@@ -1,0 +1,23 @@
+[package]
+name = "perl-lsp-completion-items"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "SRP microcrate for Perl LSP completion item types and deterministic sorting"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-completion-items"
+keywords = ["perl", "lsp", "completion", "ide"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-parser-core = { workspace = true }
+
+[lints]
+workspace = true

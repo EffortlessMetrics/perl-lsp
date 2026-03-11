@@ -50,6 +50,7 @@ members = [
     "crates/perl-lsp-diagnostic-catalog",
     "crates/perl-lsp-navigation",
     "crates/perl-lsp-document-links",
+    "crates/perl-lsp-completion-items",
     "crates/perl-lsp-completion",
     "crates/perl-lsp-code-actions",
     "crates/perl-lsp-ast-utils",
@@ -169,6 +170,7 @@ allow = [
     "perl-lsp-diagnostic-types",
     "perl-lsp-diagnostics",
     "perl-lsp-code-actions",
+    "perl-lsp-completion-items",
     "perl-lsp-completion",
     "perl-lsp-inlay-hints",
 
@@ -361,6 +363,7 @@ perl-lsp-launcher = { path = "crates/perl-lsp-launcher", version = "0.10.0" }
 perl-lsp-diagnostic-catalog = { path = "crates/perl-lsp-diagnostic-catalog", version = "0.10.0" }
 perl-lsp-navigation = { path = "crates/perl-lsp-navigation", version = "0.10.0" }
 perl-lsp-rename = { path = "crates/perl-lsp-rename", version = "0.10.0" }
+perl-lsp-completion-items = { path = "crates/perl-lsp-completion-items", version = "0.10.0" }
 perl-lsp-completion = { path = "crates/perl-lsp-completion", version = "0.10.0" }
 perl-lsp-code-actions = { path = "crates/perl-lsp-code-actions", version = "0.10.0" }
 perl-diagnostics-codes = { path = "crates/perl-diagnostics-codes", version = "0.10.0" }
