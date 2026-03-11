@@ -5,7 +5,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BIN="$REPO_ROOT/target/debug/perl-ci-hygiene"
 
 if [ -x "$BIN" ]; then
+  echo "Using existing perl-ci-hygiene binary: $BIN"
   exec "$BIN" install-githooks
 fi
 
-exec cargo run --quiet --manifest-path "$REPO_ROOT/Cargo.toml" -p perl-ci-hygiene -- install-githooks
+echo "Building perl-ci-hygiene (first run may take a minute)..."
+exec cargo run --manifest-path "$REPO_ROOT/Cargo.toml" -p perl-ci-hygiene -- install-githooks
