@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-03-04)**: **Initial Public Alpha (v0.10.0)**. Post-release hardening and SRP microcrate extractions underway.
+> **Status (2026-03-11)**: **Initial Public Alpha (v0.10.0)**. Release preparation (crates.io, VS Code marketplace) and documentation alignment underway.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -32,13 +32,14 @@ Perl LSP is currently in **Initial Public Alpha**. Version 0.10.0 represents a s
 
 ## Now / Next / Later (Summary)
 
-**Now (Post-v0.10.0 Hardening)**
-- SRP microcrate extractions (ongoing — PRs #934, #945, #950, #953)
-- Moo/Moose semantic depth: `requires` tracking and multi-attribute `has` landed (PR #946)
+**Now (Release Preparation)**
+- Release preparation: crates.io publish validation, VS Code marketplace packaging
+- Documentation cleanup and alignment for launch (article series, workspace snapshots)
+- Final CI validation and release-blocker fixes (rustdoc, clippy, crate metadata)
 - Keep close-out receipts green (`just ci-gate`)
 
 **Next (v0.11.0)**
-- Complete Moo/Moose/Class::Accessor attribute resolution (partial: PR #946)
+- Complete Moo/Moose/Class::Accessor attribute resolution (foundation: `requires` tracking and multi-attribute `has` landed in PR #946)
 - Cross-file type inference via `use parent`/`use base`
 - Native DAP enhancements (variables/evaluate)
 - Stability goal refinement: define requirements for v0.15.0 contract
@@ -105,16 +106,19 @@ For live metrics, run `just status-check` or see [CURRENT_STATUS.md](CURRENT_STA
 See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 
 **Highlights:**
-- Initial project fork (July 15, 2025) from `tree-sitter-perl-better`.
+- Project began (forked from `tree-sitter-perl-better` July 15, 2025) as a validation harness, evolved into native Rust implementation.
 - Statement Tracker & Heredocs (2025-11-20)
 - Semantic Analyzer Phase 1 (2025-11-20)
 - Semantic Analyzer Phase 2-6 Complete (2026-01-21)
 - Refactoring Engine: inline + move_code (2026-01-21)
 - Security Hardening: path traversal + command injection (2026-01-21)
 - v0.10.0 Initial Public Alpha Preparation (2026-02-28)
-- Moo/Moose `requires` tracking and multi-attribute `has` (PR #946, 2026-03)
-- SRP microcrate extractions: dead-code (#945), lsp-limits (#934), capability-mapping (#950), subprocess-runtime (#953)
+- Moo/Moose `requires` tracking and multi-attribute `has` (PR #946, merged 2026-03)
+- SRP microcrate extractions: dead-code (#945), lsp-limits (#934), capability-mapping (#950), subprocess-runtime (#953) -- all merged
 - Feature governance extracted into 9 microcrates (PR #848)
+- Additional SRP extractions: workspace-symbol provider (#1237), line-index (#1234), folding (#1238), import-management (#1239, #1242) -- all merged
+- Launch article series: parser evolution, workspace architecture, LSP implementation, quality infrastructure, agentic development history, and more (2026-03)
+- Release-prep fixes: crates.io metadata, rustdoc warnings, clippy blockers, VS Code marketplace packaging (2026-03)
 
 ---
 
@@ -126,14 +130,14 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - Project learnings
 
-<!-- Last Updated: 2026-03-04 -->
+<!-- Last Updated: 2026-03-11 -->
 
 ## Detailed Forward-Looking Roadmap
 
 ### v0.11.0: Advanced Semantic Engine
 - **Goal:** Deepen semantic understanding of complex Perl constructs.
 - **Features:**
-  - Full Moo/Moose/Class::Accessor attribute resolution. *(In progress: `requires` tracking and multi-attribute `has` landed in PR #946; `Class::Accessor` not yet started.)*
+  - Full Moo/Moose/Class::Accessor attribute resolution. *(Foundation landed: `requires` tracking and multi-attribute `has` merged in PR #946; `Class::Accessor` not yet started.)*
   - Cross-file type inference across standard import mechanisms (`use parent`, `use base`).
   - Improved bareword disambiguation based on export lists.
   - Constant folding and compile-time evaluation approximations.
