@@ -563,6 +563,20 @@ scripts/release-turnkey-pr.sh <0.x.y>
 # --skip-crates, --skip-extension, --skip-docker, --prerelease
 ```
 
+#### Required GitHub Secrets
+
+The full release pipeline requires the following repository secrets. Configure them under **Settings > Secrets and variables > Actions** in the GitHub repository.
+
+| Secret | Purpose | Where to create |
+|--------|---------|-----------------|
+| `CARGO_REGISTRY_TOKEN` | Publish crates to crates.io | [crates.io Account Settings > API Tokens](https://crates.io/settings/tokens) -- create a token scoped to the `perl-lsp` and related crates |
+| `VSCE_PAT` | Publish the VS Code extension to the Visual Studio Marketplace | [Azure DevOps > User Settings > Personal Access Tokens](https://dev.azure.com/) -- scope to **Marketplace (Manage)** |
+| `OVSX_PAT` | Publish the VS Code extension to the Open VSX Registry | [Open VSX > User Settings > Access Tokens](https://open-vsx.org/user-settings/tokens) |
+| `DOCKER_USERNAME` | Push container images to Docker Hub (optional -- GHCR works without secrets) | [Docker Hub Account Settings](https://hub.docker.com/settings/general) |
+| `DOCKER_PASSWORD` | Docker Hub authentication (optional -- GHCR works without secrets) | Same Docker Hub account; use an access token rather than your password |
+
+> **Note:** `DOCKER_USERNAME` and `DOCKER_PASSWORD` are only needed if you publish to Docker Hub. GitHub Container Registry (GHCR) uses the built-in `GITHUB_TOKEN` and requires no additional secrets.
+
 #### 4. Post-Release Tasks
 
 - [ ] Update website/documentation
