@@ -283,7 +283,6 @@
 //! - `perl_parser`: Parsing engine and analysis infrastructure
 //! - `perl_lexer`: Context-aware Perl tokenizer
 //! - `perl_corpus`: Comprehensive test corpus
-//! - `perl_dap`: Debug Adapter Protocol implementation
 //!
 //! # Documentation
 //!
@@ -341,10 +340,6 @@ pub mod util;
 // Re-exports for key types
 pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 pub use server::LspServer;
-
-/// DAP bridge adapter re-export
-#[cfg(feature = "dap-phase1")]
-pub use perl_dap::BridgeAdapter;
 
 // =============================================================================
 // Internal compatibility re-exports (crate-internal, not API surface)
