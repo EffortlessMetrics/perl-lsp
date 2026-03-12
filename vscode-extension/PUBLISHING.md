@@ -98,9 +98,9 @@ vsce login <publisher-id>
 npm run publish
 
 # Or with version bump
-vsce publish minor  # 0.5.0 -> 0.6.0
-vsce publish major  # 0.5.0 -> 0.9.x
-vsce publish 0.5.1  # Specific version
+vsce publish minor  # e.g. 0.11.0 -> 0.12.0
+vsce publish major  # e.g. 0.11.0 -> 1.0.0
+vsce publish 0.11.1 # Specific version
 ```
 
 ## Post-Publishing
@@ -116,7 +116,7 @@ vsce publish 0.5.1  # Specific version
    - Update CHANGELOG.md
 
 3. **Create GitHub Release**
-   - Tag the release: `git tag vscode-extension-v0.5.0`
+   - Tag the release: `git tag vscode-extension-v0.11.0`
    - Create release on GitHub
    - Attach the .vsix file
 
