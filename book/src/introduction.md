@@ -64,6 +64,7 @@ This documentation is organized to serve different audiences:
 - **Developers**: Understand the architecture and contribute to the project
 - **LSP Implementers**: Dive deep into the LSP provider system and protocols
 - **Quality Engineers**: Explore testing, benchmarking, and CI infrastructure
+- **Maintainers**: Use process guides such as [Casebook](./process/casebook.md) to capture end-to-end user journeys
 
 ## Documentation Structure
 
