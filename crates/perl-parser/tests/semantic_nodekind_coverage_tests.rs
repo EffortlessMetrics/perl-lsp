@@ -107,6 +107,8 @@ EOF
         (
             "control_flow_and_modifiers",
             r#"
+                my $eval_result = eval "1 + 1";
+                my $do_result = do "script.pl";
                 eval { my $v = 0; };
                 do { my $w = 1; };
 
