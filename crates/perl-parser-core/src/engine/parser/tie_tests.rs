@@ -313,4 +313,45 @@ mod tests {
             assert!(!statements.is_empty(), "tie with local should parse");
         }
     }
+
+    #[test]
+    fn test_tie_with_local_special_var_and_arg() {
+        // Real-world pattern from corpus: tie the input record separator.
+        let source = "tie local $/, 'Tie::Scalar', \\$custom_rs;";
+        let ast_opt = parse_code(source);
+        assert!(ast_opt.is_some());
+        let ast = ast_opt.unwrap_or_else(|| {
+            Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
+        });
+        if let NodeKind::Program { statements } = &ast.kind {
+            let stmt = &statements[0];
+            if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
+                if let NodeKind::Tie { variable, package, args } = &expression.kind {
+                    if let NodeKind::VariableDeclaration { declarator, variable: inner, .. } =
+                        &variable.kind
+                    {
+                        assert_eq!(declarator, "local");
+                        if let NodeKind::Variable { sigil, name } = &inner.kind {
+                            assert_eq!(sigil, "$");
+                            assert_eq!(name, "/");
+                        } else {
+                            unreachable!("Expected inner Variable, got {:?}", inner.kind);
+                        }
+                    } else {
+                        unreachable!("Expected VariableDeclaration, got {:?}", variable.kind);
+                    }
+                    if let NodeKind::String { value, .. } = &package.kind {
+                        assert!(value.contains("Tie::Scalar"));
+                    } else {
+                        unreachable!("Expected String package, got {:?}", package.kind);
+                    }
+                    assert_eq!(args.len(), 1);
+                } else {
+                    unreachable!("Expected Tie node, got {:?}", expression.kind);
+                }
+            } else {
+                unreachable!("Expected ExpressionStatement, got {:?}", stmt.kind);
+            }
+        }
+    }
 }
