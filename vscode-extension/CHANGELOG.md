@@ -4,12 +4,38 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-03-11
+
+### Fixed
+- **Corrupted Extension Icon**: Added binary rules for image files in `.gitattributes` to prevent line-ending normalization from corrupting PNGs; regenerated `icon.png` with correct PNG signature header.
+- **TextMate Grammar Registration**: Registered `syntaxes/perl.tmLanguage.json` in `contributes.grammars` so VS Code actually loads the bundled grammar.
+- **Stub Refactoring Commands**: Removed `Extract Subroutine`, `Extract Variable`, and `Inline Variable` from editor context and command palette menus (still available from the full command list with "in development" messaging).
+- **VSCE Packaging**: Removed `--no-dependencies` flag so runtime dependencies (`vscode-languageclient`, `adm-zip`, `tar`) are properly bundled in the `.vsix`.
+- **pnpm Compatibility**: Made `vsce package`/`publish` resilient in pnpm environments.
+
+### Changed
+- **Parser Bug Fixes** (6 fixes in the underlying `perl-lsp` server):
+  - Handle postfix modifiers after dereference expressions (`$obj->method if $cond`)
+  - Re-lex slash as regex delimiter after `split` keyword
+  - Accept fat arrow as argument separator in function calls
+  - Handle subscripts on package-qualified variables (`$Foo::bar[0]`)
+  - Support `&{expr}` code dereference syntax
+  - Expand builtin list and support forward declarations
+- **Lexer Bug Fixes** (2 fixes):
+  - Skip POD blocks in whitespace/comment handler
+  - Make POD scanning byte-safe for UTF-8 source files
+- **Regex Engine Fixes** (2 fixes):
+  - Eliminate false positive nested quantifier detection
+  - Clean up false positive regex detection
+- **LSP Feature Polish**: Maintained 100% user-visible feature coverage and protocol compliance.
+- **Documentation**: Comprehensive release readiness updates including README, roadmap, and launch article series.
+
 ### Added
 - Marketplace readiness workflow via `npm run verify:marketplace` for compile + bundle + package validation.
 - VS Marketplace badges and installation link in extension README.
-
-### Changed
-- Publishing guide refreshed with a launch checklist and pre-release recommendation for initial rollout.
+- Publishing guide refreshed with launch checklist and pre-release recommendation.
+- SRP microcrate extraction campaign: 30+ new single-responsibility microcrates extracted.
+- Comprehensive unit test campaign: 80+ new test modules across all crate tiers.
 
 ## [0.10.0] - 2026-02-28
 
