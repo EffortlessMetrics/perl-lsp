@@ -38,11 +38,13 @@ impl DiagnosticsProvider {
         source: &str,
     ) -> Vec<Diagnostic> {
         let mut diagnostics = Vec::new();
+        let source_len = source.len();
 
         // Convert parse errors to diagnostics
         for error in parse_errors {
             let (location, message) = match error {
                 ParseError::UnexpectedToken { location, expected, found } => {
+                    let found = format_found_token(found);
                     (*location, format!("Expected {expected}, found {found}"))
                 }
                 ParseError::SyntaxError { location, message } => (*location, message.clone()),
@@ -51,8 +53,11 @@ impl DiagnosticsProvider {
                 _ => (0, error.to_string()),
             };
 
+            let range_start = location.min(source_len);
+            let range_end = range_start.saturating_add(1).min(source_len.saturating_add(1));
+
             diagnostics.push(Diagnostic {
-                range: (location, location.saturating_add(1)),
+                range: (range_start, range_end),
                 severity: DiagnosticSeverity::Error,
                 code: Some("parse-error".to_string()),
                 message,
@@ -68,5 +73,13 @@ impl DiagnosticsProvider {
         diagnostics.extend(scope_issues_to_diagnostics(scope_issues));
 
         diagnostics
+    }
+}
+
+fn format_found_token(found: &str) -> String {
+    if found.is_empty() || found == "<EOF>" {
+        "end of input".to_string()
+    } else {
+        format!("`{found}`")
     }
 }
