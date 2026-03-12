@@ -40,7 +40,7 @@ static CONTEXT_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
 /// - `  #0  main::foo at script.pl line 10`
 static STACK_FRAME_RE: Lazy<Result<Regex, regex::Error>> = Lazy::new(|| {
     Regex::new(
-        r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)",
+        r"^\s*(?:(?:#?\s*(?P<frame>\d+)\s+)|(?:[\$\@\.]\s*=\s*))?(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+(?:at|called\s+from(?:\s+file)?)\s+[`']?(?P<file>[^\s'`]+)[`']?\s+line\s+(?P<line>\d+)",
     )
 });
 
@@ -338,6 +338,17 @@ mod tests {
         assert_eq!(frame.name, "main::foo");
         assert_eq!(frame.line, 10);
         assert_eq!(frame.file_path(), Some("script.pl"));
+    }
+
+    #[test]
+    fn test_parse_called_from_frame() {
+        use perl_tdd_support::must_some;
+        let mut parser = PerlStackParser::new();
+        let line = "  @ = Package::func called from file `path/file.pl' line 42";
+        let frame = must_some(parser.parse_frame(line, 0));
+        assert_eq!(frame.name, "Package::func");
+        assert_eq!(frame.line, 42);
+        assert_eq!(frame.file_path(), Some("path/file.pl"));
     }
 
     #[test]
