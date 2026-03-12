@@ -133,6 +133,13 @@ EOF
             "#,
         ),
         (
+            "eval_and_do_expression_forms",
+            r#"
+                my $eval_result = eval "40 + 2";
+                my $do_result = do "./maybe_load.pl";
+            "#,
+        ),
+        (
             "given_when_default",
             r#"
                 use feature 'switch';
