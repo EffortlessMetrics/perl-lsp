@@ -113,6 +113,7 @@ serial_test = "3.4.0"
 tempfile = "3.24.0"
 proptest = "1.9.0"
 perl-tdd-support = { workspace = true }
+perl-content-length-framing = { workspace = true }
 which = "8.0.2"
 parking_lot = "0.12.5"
 criterion = "0.8.1"

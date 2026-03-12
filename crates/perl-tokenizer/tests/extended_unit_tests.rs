@@ -21,11 +21,7 @@ use perl_tokenizer::util::{code_slice, find_data_marker_byte_lexed};
 fn collect_kinds(src: &str) -> Vec<TokenKind> {
     let mut s = TokenStream::new(src);
     let mut kinds = Vec::new();
-    loop {
-        let t = match s.next() {
-            Ok(t) => t,
-            Err(_) => break,
-        };
+    while let Ok(t) = s.next() {
         if t.kind == TokenKind::Eof {
             break;
         }
@@ -37,11 +33,7 @@ fn collect_kinds(src: &str) -> Vec<TokenKind> {
 fn collect_texts(src: &str) -> Vec<String> {
     let mut s = TokenStream::new(src);
     let mut texts = Vec::new();
-    loop {
-        let t = match s.next() {
-            Ok(t) => t,
-            Err(_) => break,
-        };
+    while let Ok(t) = s.next() {
         if t.kind == TokenKind::Eof {
             break;
         }
@@ -786,8 +778,6 @@ fn ext_format_with_trivia_includes_leading() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn ext_format_with_trivia_empty_trivia() -> Result<(), Box<dyn std::error::Error>> {
-    use perl_tokenizer::trivia::NodeWithTrivia;
-
     // Parse an empty source to get a program node with no trivia
     let parser = TriviaPreservingParser::new(String::new());
     let result = parser.parse();

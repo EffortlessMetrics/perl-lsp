@@ -1789,6 +1789,7 @@ dependencies = [
  "md5",
  "once_cell",
  "parking_lot",
+ "perl-content-length-framing",
  "perl-dap",
  "perl-keywords",
  "perl-lsp-cancellation",
