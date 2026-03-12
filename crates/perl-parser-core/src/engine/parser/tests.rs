@@ -151,6 +151,22 @@ fn test_qualified_function_call() {
 }
 
 #[test]
+fn test_my_declaration_in_function_call_parentheses() {
+    let mut parser = Parser::new("foo(my $x);");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse my declaration in function call parens");
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(!sexp.contains("(ERROR"), "Expected parse without syntax errors, got: {}", sexp);
+    assert!(
+        sexp.contains("my_declaration") || sexp.contains("var_decl my"),
+        "Expected my variable declaration argument, got: {}",
+        sexp
+    );
+}
+
+#[test]
 fn test_issue_461_variable_length_lookbehind() {
     // Variable-length lookbehind
     let code = r#"my $pattern = qr/(?<=\d{1,1000})\w+/;"#;
