@@ -154,6 +154,26 @@ impl<'a> Parser<'a> {
                             }
                         }
 
+                        Some(TokenKind::LeftParen) => {
+                            // Coderef call: $code->(...)
+                            //
+                            // We model this as a method-like call with an empty method name so
+                            // downstream passes still see a call node and arguments.
+                            let args = self.parse_args()?;
+
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+
+                            expr = Node::new(
+                                NodeKind::MethodCall {
+                                    object: Box::new(expr),
+                                    method: String::new(),
+                                    args,
+                                },
+                                SourceLocation { start, end },
+                            );
+                        }
+
                         Some(TokenKind::Identifier | TokenKind::Method) => {
                             // Method call
                             let method = self.tokens.next()?.text.to_string();

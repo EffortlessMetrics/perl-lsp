@@ -58,6 +58,9 @@ fn test_postfix_deref_edge_cases() -> TestResult {
         ("$ref->@*->%*", vec!["unary_->@*", "unary_->%*"]),
         // Postfix deref with method calls (use simpler example for now)
         ("$ref->@*->length()", vec!["unary_->@*", "method_call"]),
+        // Coderef invocation through arrow syntax
+        ("$coderef->()", vec!["method_call"]),
+        ("$coderef->($x, $y)", vec!["method_call", "(variable $ x)", "(variable $ y)"]),
         // In ternary expressions
         ("$flag ? $ref->@* : ()", vec!["ternary", "unary_->@*"]),
         // With string interpolation (the parser should handle the variable, not the string)
