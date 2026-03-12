@@ -90,6 +90,9 @@ You **must** run the local CI gate before pushing. The canonical command uses Ni
 # Canonical local gate (REQUIRED before push)
 nix develop -c just ci-gate
 
+# Quick environment diagnostics (recommended when onboarding/troubleshooting)
+just doctor
+
 # Fallback without `just`/Nix: run the Rust-native local mirror
 cargo run -p perl-ci-hygiene -- check-local
 
