@@ -173,6 +173,33 @@ impl<'a> Parser<'a> {
                             );
                         }
 
+                        Some(TokenKind::LeftParen) => {
+                            // Code reference call: $code_ref->(...)
+                            let args = self.parse_args()?;
+
+                            // Keep compatibility with existing dereference-call shape (&{}):
+                            // the first argument is the callee expression.
+                            let mut all = vec![expr];
+                            all.extend(args);
+
+                            let start = all
+                                .first()
+                                .ok_or_else(|| {
+                                    ParseError::syntax(
+                                        "Empty coderef call argument vector",
+                                        self.previous_position(),
+                                    )
+                                })?
+                                .location
+                                .start;
+                            let end = self.previous_position();
+
+                            expr = Node::new(
+                                NodeKind::FunctionCall { name: "->()".to_string(), args: all },
+                                SourceLocation { start, end },
+                            );
+                        }
+
                         _ => {
                             // Just the arrow by itself - could be an error or incomplete
                             // For now, we'll leave expr unchanged
