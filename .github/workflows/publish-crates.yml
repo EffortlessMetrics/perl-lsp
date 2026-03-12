@@ -244,10 +244,21 @@ jobs:
             PUBLISHED=false
             for attempt in 1 2 3; do
               echo "Attempt $attempt/3: cargo publish -p $CRATE --no-verify"
-              if cargo publish -p "$CRATE" --no-verify 2>&1; then
+              PUBLISH_LOG="$(mktemp)"
+              if cargo publish -p "$CRATE" --no-verify 2>&1 | tee "$PUBLISH_LOG"; then
                 PUBLISHED=true
+                rm -f "$PUBLISH_LOG"
                 break
               fi
+
+              if grep -q "crate ${CRATE}@${VERSION} already exists on crates.io index" "$PUBLISH_LOG"; then
+                echo "::warning::$CRATE@$VERSION already exists on crates.io index, skipping"
+                PUBLISHED=true
+                rm -f "$PUBLISH_LOG"
+                break
+              fi
+
+              rm -f "$PUBLISH_LOG"
               echo "Attempt $attempt failed, waiting 30s..."
               sleep 30
             done
