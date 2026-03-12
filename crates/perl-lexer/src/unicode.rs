@@ -61,8 +61,20 @@ pub fn is_perl_identifier_start(ch: char) -> bool {
 /// Check if a character can continue a Perl identifier
 pub fn is_perl_identifier_continue(ch: char) -> bool {
     // For continuation, we accept identifier start chars, XID_Continue chars,
-    // and the single quote (for old-style package separators like Foo'Bar)
-    is_perl_identifier_start(ch) || is_xid_continue(ch) || ch == '\''
+    // the single quote (for old-style package separators like Foo'Bar),
+    // and emoji continuation code points used by ZWJ grapheme sequences.
+    is_perl_identifier_start(ch)
+        || is_xid_continue(ch)
+        || ch == '\''
+        || matches!(
+            ch as u32,
+            // Unicode join controls used in emoji and script shaping.
+            0x200C | 0x200D |
+            // Standard variation selectors (e.g. U+FE0F) used to keep emoji presentation.
+            0xFE00..=0xFE0F |
+            // Fitzpatrick skin-tone modifiers.
+            0x1F3FB..=0x1F3FF
+        )
 }
 
 /// Validate Unicode string complexity for performance monitoring
