@@ -191,6 +191,104 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    /// Parse an assignment expression or a variable declaration.
+    ///
+    /// When the current token is `my`, `our`, `local`, or `state`, this
+    /// delegates to [`parse_declaration_arg`] so that the declaration is
+    /// properly constructed and its initializer uses `parse_assignment()`
+    /// (not `parse_expression()`), preventing commas from being absorbed
+    /// into the initializer.  Otherwise, falls back to `parse_assignment()`.
+    fn parse_assignment_or_declaration(&mut self) -> ParseResult<Node> {
+        if matches!(
+            self.peek_kind(),
+            Some(TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State)
+        ) {
+            self.parse_declaration_arg()
+        } else {
+            self.parse_assignment()
+        }
+    }
+
+    /// Parse a variable declaration as a function argument.
+    ///
+    /// Handles `my $x`, `our @arr`, `local $var`, `state $count` inside
+    /// parenthesized argument lists (e.g. `foo(my $x, $y)`).
+    ///
+    /// Uses `parse_assignment()` for any initializer so that commas are
+    /// treated as argument separators rather than being consumed by the
+    /// comma operator.
+    fn parse_declaration_arg(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        let declarator_token = self.consume_token()?;
+        let declarator = declarator_token.text.to_string();
+
+        // Check if we have a list declaration like `my ($x, $y)`
+        if self.peek_kind() == Some(TokenKind::LeftParen) {
+            self.consume_token()?; // consume (
+
+            let mut variables = Vec::new();
+
+            while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
+                let var = self.parse_variable()?;
+                variables.push(var);
+
+                if self.peek_kind() == Some(TokenKind::Comma) {
+                    self.consume_token()?; // consume comma
+                } else if self.peek_kind() != Some(TokenKind::RightParen) {
+                    return Err(ParseError::syntax(
+                        "Expected comma or closing parenthesis in variable list",
+                        self.current_position(),
+                    ));
+                }
+            }
+
+            self.expect(TokenKind::RightParen)?; // consume )
+
+            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
+                self.tokens.next()?; // consume =
+                Some(Box::new(self.parse_assignment()?))
+            } else {
+                None
+            };
+
+            let end = self.previous_position();
+            Ok(Node::new(
+                NodeKind::VariableListDeclaration {
+                    declarator,
+                    variables,
+                    attributes: Vec::new(),
+                    initializer,
+                },
+                SourceLocation { start, end },
+            ))
+        } else {
+            // Single variable declaration
+            let variable = if declarator == "local" {
+                self.parse_assignment()?
+            } else {
+                self.parse_variable()?
+            };
+
+            let initializer = if self.peek_kind() == Some(TokenKind::Assign) {
+                self.tokens.next()?; // consume =
+                Some(Box::new(self.parse_assignment()?))
+            } else {
+                None
+            };
+
+            let end = self.previous_position();
+            Ok(Node::new(
+                NodeKind::VariableDeclaration {
+                    declarator,
+                    variable: Box::new(variable),
+                    attributes: Vec::new(),
+                    initializer,
+                },
+                SourceLocation { start, end },
+            ))
+        }
+    }
+
     /// Parse function arguments
     /// Handles both comma-separated and fat-comma-separated arguments.
     /// Fat comma (=>) auto-quotes bareword identifiers on its left side.
@@ -200,8 +298,9 @@ impl<'a> Parser<'a> {
             let mut args = Vec::new();
 
             while s.peek_kind() != Some(TokenKind::RightParen) && !s.tokens.is_eof() {
-                // Use parse_assignment instead of parse_expression to avoid comma operator handling
-                let mut arg = s.parse_assignment()?;
+                // Handle variable declarations (my/our/local/state) inside argument lists,
+                // otherwise parse as a normal assignment expression.
+                let mut arg = s.parse_assignment_or_declaration()?;
 
                 // Check for fat arrow after the argument
                 // If we see =>, the argument should be auto-quoted if it's a bare identifier

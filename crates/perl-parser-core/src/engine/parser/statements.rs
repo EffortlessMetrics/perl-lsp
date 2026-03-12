@@ -476,7 +476,7 @@ impl<'a> Parser<'a> {
                             if (func_name.as_ref() == "open"
                                 || func_name.as_ref() == "pipe"
                                 || func_name.as_ref() == "socket")
-                                && (self.peek_kind() == Some(TokenKind::My) 
+                                && (self.peek_kind() == Some(TokenKind::My)
                                     || self.peek_kind() == Some(TokenKind::Our)
                                     || self.peek_kind() == Some(TokenKind::Local)
                                     || self.peek_kind() == Some(TokenKind::State))
@@ -497,8 +497,9 @@ impl<'a> Parser<'a> {
                                 self.tokens.relex_as_term();
                                 args.push(self.parse_assignment()?);
                             } else {
-                                // For builtins, use parse_assignment to avoid consuming comma operators
-                                args.push(self.parse_assignment()?);
+                                // For builtins, use parse_assignment_or_declaration to handle
+                                // my/our/local/state declarations inside argument lists
+                                args.push(self.parse_assignment_or_declaration()?);
                             }
 
                             // Handle map/grep/sort { block } LIST case where no comma separates block and list
@@ -536,7 +537,7 @@ impl<'a> Parser<'a> {
                                         | Some(TokenKind::Until)
                                         | Some(TokenKind::For)
                                         | Some(TokenKind::Foreach) => break,
-                                        _ => args.push(self.parse_assignment()?),
+                                        _ => args.push(self.parse_assignment_or_declaration()?),
                                     }
                                 }
                             }

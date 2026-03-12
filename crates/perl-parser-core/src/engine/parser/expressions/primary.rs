@@ -466,10 +466,10 @@ impl<'a> Parser<'a> {
                 // to handle operators like 'or', 'and' etc.
                 let first = if self.peek_kind() == Some(TokenKind::RightParen) {
                     // Simple case - just one element
-                    self.parse_assignment()?
+                    self.parse_assignment_or_declaration()?
                 } else {
                     // Peek ahead to see if this is a list or a complex expression
-                    let expr = self.parse_assignment()?;
+                    let expr = self.parse_assignment_or_declaration()?;
 
                     // Check what comes after
                     match self.peek_kind() {
@@ -509,7 +509,7 @@ impl<'a> Parser<'a> {
                             );
                         }
                         self.tokens.next()?; // consume =>
-                        elements.push(self.parse_assignment()?);
+                        elements.push(self.parse_assignment_or_declaration()?);
                     }
 
                     while self.peek_kind() == Some(TokenKind::Comma)
@@ -523,7 +523,7 @@ impl<'a> Parser<'a> {
                             break;
                         }
 
-                        let mut elem = self.parse_assignment()?;
+                        let mut elem = self.parse_assignment_or_declaration()?;
 
                         // Check for fat arrow after element — auto-quote bare identifiers
                         if self.peek_kind() == Some(TokenKind::FatArrow) {
@@ -537,7 +537,7 @@ impl<'a> Parser<'a> {
                             self.consume_token()?; // consume =>
                             elements.push(elem);
                             if self.peek_kind() != Some(TokenKind::RightParen) {
-                                elements.push(self.parse_assignment()?);
+                                elements.push(self.parse_assignment_or_declaration()?);
                             }
                         } else {
                             elements.push(elem);
