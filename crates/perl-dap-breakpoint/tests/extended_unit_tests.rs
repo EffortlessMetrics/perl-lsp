@@ -117,8 +117,9 @@ fn validation_adjusted_all_reasons() -> Result<(), Box<dyn std::error::Error>> {
 fn validator_with_single_character() -> Result<(), Box<dyn std::error::Error>> {
     let v = must(AstBreakpointValidator::new("1"));
     let result = v.validate(1);
-    // Single character could be executable code
-    assert!(result.verified || !result.verified); // Just no crash
+    assert!(result.verified);
+    assert_eq!(result.line, 1);
+    assert_eq!(result.reason, None);
     Ok(())
 }
 
@@ -224,8 +225,11 @@ fn validate_with_column_large_column_numbers() -> Result<(), Box<dyn std::error:
 fn validate_with_column_negative_line() -> Result<(), Box<dyn std::error::Error>> {
     let v = must(AstBreakpointValidator::new("my $x = 1;\n"));
     let result = v.validate_with_column(-10, Some(5));
-    // Negative line → clamped to 0 → maps to line 1
-    assert!(result.verified || !result.verified); // Just no crash
+    // Negative line is clamped for lookup and validated against first source line.
+    assert!(result.verified);
+    assert_eq!(result.line, -10);
+    assert_eq!(result.column, Some(5));
+    assert_eq!(result.reason, None);
     Ok(())
 }
 
@@ -233,8 +237,11 @@ fn validate_with_column_negative_line() -> Result<(), Box<dyn std::error::Error>
 fn validate_with_column_zero_line() -> Result<(), Box<dyn std::error::Error>> {
     let v = must(AstBreakpointValidator::new("my $x = 1;\n"));
     let result = v.validate_with_column(0, Some(1));
-    // Line 0 → clamped to index 0 → may be valid or not
-    assert!(result.verified || !result.verified);
+    // Line 0 is clamped for lookup and validated against first source line.
+    assert!(result.verified);
+    assert_eq!(result.line, 0);
+    assert_eq!(result.column, Some(1));
+    assert_eq!(result.reason, None);
     Ok(())
 }
 
@@ -252,9 +259,8 @@ fn is_executable_line_boundary_large_line() -> Result<(), Box<dyn std::error::Er
 #[test]
 fn is_executable_line_negative() -> Result<(), Box<dyn std::error::Error>> {
     let v = must(AstBreakpointValidator::new("my $x = 1;\n"));
-    // Negative line should not be executable
     let result = v.is_executable_line(-5);
-    assert!(result || !result); // Just ensure no crash
+    assert!(result);
     Ok(())
 }
 
@@ -590,10 +596,10 @@ fn blank_line_with_newline() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn blank_line_with_carriage_return() -> Result<(), Box<dyn std::error::Error>> {
-    let _v = must(AstBreakpointValidator::new("my $x = 1;\n\r\nmy $y = 2;\n"));
-    // The line should still be blank regardless of line ending style
-    // Note: parser may handle this differently
-    assert!(true); // Just ensure no crash
+    let v = must(AstBreakpointValidator::new("my $x = 1;\n\r\nmy $y = 2;\n"));
+    let result = v.validate(2);
+    assert!(!result.verified);
+    assert_eq!(result.reason, Some(ValidationReason::BlankLine));
     Ok(())
 }
 
