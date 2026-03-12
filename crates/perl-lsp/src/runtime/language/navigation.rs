@@ -21,15 +21,22 @@ static FQN_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 static ARROW_METHOD_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 #[cfg(feature = "workspace")]
-fn get_fqn_regex() -> Option<&'static regex::Regex> {
+static PACKAGE_ARROW_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+#[cfg(feature = "workspace")]
+fn get_fqn_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     FQN_RE
         .get_or_init(|| regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)"))
         .as_ref()
-        .ok()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize fully-qualified symbol regex: {err}"
+            ))
+        })
 }
 
 #[cfg(feature = "workspace")]
-fn get_arrow_method_regex() -> Option<&'static regex::Regex> {
+fn get_arrow_method_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     ARROW_METHOD_RE
         .get_or_init(|| {
             regex::Regex::new(
@@ -37,7 +44,25 @@ fn get_arrow_method_regex() -> Option<&'static regex::Regex> {
             )
         })
         .as_ref()
-        .ok()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize method-call regex: {err}"
+            ))
+        })
+}
+
+#[cfg(feature = "workspace")]
+fn get_package_arrow_regex() -> Result<&'static regex::Regex, JsonRpcError> {
+    PACKAGE_ARROW_RE
+        .get_or_init(|| {
+            regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*->")
+        })
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize package navigation regex: {err}"
+            ))
+        })
 }
 
 /// Look up a symbol definition in the workspace index.
@@ -243,24 +268,18 @@ impl LspServer {
                         Some((module_name, text_around.clone()))
                     } else {
                         // Also check if we're on a package name followed by ->
-                        let package_pattern = regex::Regex::new(
-                            r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)\s*->",
-                        )
-                        .ok();
                         let mut package_name_result = None;
-                        if let Some(re) = package_pattern {
-                            for cap in re.captures_iter(&text_around) {
-                                if let Some(package_match) = cap.get(1) {
-                                    let match_start = package_match.start();
-                                    let match_end = package_match.end();
-                                    if cursor_in_text >= match_start && cursor_in_text <= match_end
-                                    {
-                                        package_name_result = Some((
-                                            package_match.as_str().to_string(),
-                                            text_around.clone(),
-                                        ));
-                                        break;
-                                    }
+                        let package_pattern = get_package_arrow_regex()?;
+                        for cap in package_pattern.captures_iter(&text_around) {
+                            if let Some(package_match) = cap.get(1) {
+                                let match_start = package_match.start();
+                                let match_end = package_match.end();
+                                if cursor_in_text >= match_start && cursor_in_text <= match_end {
+                                    package_name_result = Some((
+                                        package_match.as_str().to_string(),
+                                        text_around.clone(),
+                                    ));
+                                    break;
                                 }
                             }
                         }
@@ -303,52 +322,47 @@ impl LspServer {
                 #[cfg(feature = "workspace")]
                 {
                     // Attempt to resolve fully-qualified symbols like Package::sub
-                    if let Some(fqn_regex) = get_fqn_regex() {
-                        for cap in fqn_regex.captures_iter(&text_around) {
-                            if let Some(m) = cap.get(1) {
-                                if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
-                                    let parts: Vec<&str> = m.as_str().split("::").collect();
-                                    if parts.len() >= 2 {
-                                        let name = parts.last().copied().unwrap_or("");
-                                        let pkg = parts[..parts.len() - 1].join("::");
+                    let fqn_regex = get_fqn_regex()?;
+                    for cap in fqn_regex.captures_iter(&text_around) {
+                        if let Some(m) = cap.get(1) {
+                            if cursor_in_text >= m.start() && cursor_in_text <= m.end() {
+                                let parts: Vec<&str> = m.as_str().split("::").collect();
+                                if parts.len() >= 2 {
+                                    let name = parts.last().copied().unwrap_or("");
+                                    let pkg = parts[..parts.len() - 1].join("::");
 
-                                        if let Some(result) = lookup_workspace_definition(
-                                            self.coordinator(),
-                                            &pkg,
-                                            name,
-                                        ) {
-                                            return Ok(Some(result));
-                                        }
-                                        // Partial/None: fall through to same-file resolution
+                                    if let Some(result) =
+                                        lookup_workspace_definition(self.coordinator(), &pkg, name)
+                                    {
+                                        return Ok(Some(result));
                                     }
-                                    break;
+                                    // Partial/None: fall through to same-file resolution
                                 }
+                                break;
                             }
                         }
                     }
 
                     // Attempt to resolve Package->method calls
-                    if let Some(arrow_re) = get_arrow_method_regex() {
-                        for cap in arrow_re.captures_iter(&text_around) {
-                            if let (Some(package_match), Some(method_match)) =
-                                (cap.get(1), cap.get(2))
+                    let arrow_re = get_arrow_method_regex()?;
+                    for cap in arrow_re.captures_iter(&text_around) {
+                        if let (Some(package_match), Some(method_match)) = (cap.get(1), cap.get(2))
+                        {
+                            if cursor_in_text >= method_match.start()
+                                && cursor_in_text <= method_match.end()
                             {
-                                if cursor_in_text >= method_match.start()
-                                    && cursor_in_text <= method_match.end()
-                                {
-                                    let package_name = package_match.as_str();
-                                    let method_name = method_match.as_str();
+                                let package_name = package_match.as_str();
+                                let method_name = method_match.as_str();
 
-                                    if let Some(result) = lookup_workspace_definition(
-                                        self.coordinator(),
-                                        package_name,
-                                        method_name,
-                                    ) {
-                                        return Ok(Some(result));
-                                    }
-                                    // Partial/None: fall through to same-file resolution
-                                    break;
+                                if let Some(result) = lookup_workspace_definition(
+                                    self.coordinator(),
+                                    package_name,
+                                    method_name,
+                                ) {
+                                    return Ok(Some(result));
                                 }
+                                // Partial/None: fall through to same-file resolution
+                                break;
                             }
                         }
                     }
