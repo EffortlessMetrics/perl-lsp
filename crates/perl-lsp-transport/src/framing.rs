@@ -5,6 +5,20 @@ pub use perl_content_length_framing::frame;
 use perl_lsp_protocol::{JsonRpcRequest, JsonRpcResponse};
 use std::io::{self, BufRead, Read, Write};
 
+const LOG_PREFIX: &str = "[perl-lsp:transport]";
+const LOG_PREVIEW_MAX_BYTES: usize = 160;
+
+fn body_preview(body: &[u8]) -> String {
+    let truncated_len = body.len().min(LOG_PREVIEW_MAX_BYTES);
+    let mut preview = String::from_utf8_lossy(&body[..truncated_len]).to_string();
+
+    if body.len() > LOG_PREVIEW_MAX_BYTES {
+        preview.push('…');
+    }
+
+    preview.replace(['\r', '\n'], "\\n")
+}
+
 /// Stateful reader for `Content-Length` framed JSON-RPC requests.
 ///
 /// This reader keeps partial frame state across reads, which allows it to
@@ -39,13 +53,17 @@ impl ContentLengthMessageReader {
                 Ok(Some(body)) => match serde_json::from_slice::<JsonRpcRequest>(&body) {
                     Ok(request) => return Ok(Some(request)),
                     Err(error) => {
-                        eprintln!("LSP server: JSON parse error - {error}");
+                        eprintln!(
+                            "{LOG_PREFIX} incoming JSON parse error: {error}; payload_bytes={}; preview=\"{}\"",
+                            body.len(),
+                            body_preview(&body)
+                        );
                         continue;
                     }
                 },
                 Ok(None) => {}
                 Err(error) => {
-                    eprintln!("LSP server: frame parse error - {error}");
+                    eprintln!("{LOG_PREFIX} frame parse error: {error}");
                     continue;
                 }
             }
@@ -84,7 +102,10 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
             match value.trim().parse::<usize>() {
                 Ok(length) => content_length = Some(length),
                 Err(error) => {
-                    eprintln!("LSP server: invalid Content-Length header - {error}");
+                    eprintln!(
+                        "{LOG_PREFIX} invalid Content-Length header: {error}; raw_header=\"{}\"",
+                        header
+                    );
                     return Ok(None);
                 }
             }
@@ -94,7 +115,7 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
     let length = match content_length {
         Some(length) => length,
         None => {
-            eprintln!("LSP server: missing Content-Length header");
+            eprintln!("{LOG_PREFIX} missing Content-Length header");
             return Ok(None);
         }
     };
@@ -110,7 +131,11 @@ pub fn read_message(reader: &mut dyn BufRead) -> io::Result<Option<JsonRpcReques
     match serde_json::from_slice::<JsonRpcRequest>(&body) {
         Ok(request) => Ok(Some(request)),
         Err(error) => {
-            eprintln!("LSP server: JSON parse error - {error}");
+            eprintln!(
+                "{LOG_PREFIX} JSON parse error: {error}; payload_bytes={}; preview=\"{}\"",
+                body.len(),
+                body_preview(&body)
+            );
             Ok(None)
         }
     }
@@ -146,7 +171,7 @@ pub fn write_notification<W: Write>(
 pub fn log_response(response: &JsonRpcResponse) {
     if let Ok(content) = serde_json::to_string(response) {
         eprintln!(
-            "[perl-lsp:tx] id={:?} has_result={} has_error={} len={}",
+            "{LOG_PREFIX} outgoing response id={:?} has_result={} has_error={} payload_bytes={}",
             response.id,
             response.result.is_some(),
             response.error.is_some(),
