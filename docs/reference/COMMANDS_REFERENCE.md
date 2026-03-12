@@ -100,6 +100,16 @@ The xtask crate is excluded from the workspace to maintain clean builds while pr
 - **Benefits**: Workspace builds remain system-dependency-free
 - **Advanced features**: Dual-scanner corpus comparison requires libclang-dev
 
+## Developer Environment Commands
+
+```bash
+# Check required/recommended local tooling and repo setup
+just doctor
+
+# Install git hooks (pre-push runs ci-gate)
+bash scripts/install-githooks.sh
+```
+
 ## Test Commands
 
 ### Workspace Testing (v0.8.8)

@@ -259,6 +259,9 @@ cargo clippy --workspace --lib && cargo fmt --all
 # Check local tooling (dev environment doctor)
 just doctor
 
+# Install pre-push hook (runs ci-gate automatically on push)
+bash scripts/install-githooks.sh
+
 # Full local gate (requires Nix)
 nix develop -c just ci-gate
 ```
