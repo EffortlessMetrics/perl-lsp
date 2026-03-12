@@ -211,7 +211,10 @@ where
     I: IntoIterator,
     I::Item: Into<std::ffi::OsString> + Clone,
 {
-    match LspArgs::try_parse_from(args) {
+    let collected_args: Vec<std::ffi::OsString> = args.into_iter().map(Into::into).collect();
+    prevalidate_cli_values(&collected_args)?;
+
+    match LspArgs::try_parse_from(collected_args) {
         Ok(parsed_args) => {
             let mut config = LaunchConfig::new(FeatureProfile::current());
 
@@ -252,6 +255,70 @@ where
             Err(LaunchParseError::UnknownOption { option: err.to_string() })
         }
     }
+}
+
+fn prevalidate_cli_values(args: &[std::ffi::OsString]) -> Result<(), LaunchParseError> {
+    let mut index = 1usize;
+
+    while index < args.len() {
+        let token = args[index].to_string_lossy();
+
+        if token == "--port" {
+            let next = args.get(index + 1).map(|value| value.to_string_lossy().to_string());
+            let Some(raw_port) = next else {
+                return Err(LaunchParseError::MissingValue { option: "--port".to_string() });
+            };
+
+            if raw_port.starts_with("--") {
+                return Err(LaunchParseError::MissingValue { option: "--port".to_string() });
+            }
+
+            raw_port.parse::<u16>().map_err(|reason| LaunchParseError::InvalidPort {
+                raw_port: raw_port.clone(),
+                reason: reason.to_string(),
+            })?;
+
+            index += 2;
+            continue;
+        }
+
+        if let Some(raw_port) = token.strip_prefix("--port=") {
+            if raw_port.is_empty() {
+                return Err(LaunchParseError::MissingValue { option: "--port".to_string() });
+            }
+
+            raw_port.parse::<u16>().map_err(|reason| LaunchParseError::InvalidPort {
+                raw_port: raw_port.to_string(),
+                reason: reason.to_string(),
+            })?;
+        }
+
+        if token == "--feature-profile" {
+            let next = args.get(index + 1).map(|value| value.to_string_lossy().to_string());
+            let Some(raw_profile) = next else {
+                return Err(LaunchParseError::MissingValue {
+                    option: "--feature-profile".to_string(),
+                });
+            };
+
+            if raw_profile.starts_with("--") {
+                return Err(LaunchParseError::MissingValue {
+                    option: "--feature-profile".to_string(),
+                });
+            }
+
+            index += 2;
+            continue;
+        }
+
+        if token == "--feature-profile=" {
+            return Err(LaunchParseError::MissingValue { option: "--feature-profile".to_string() });
+        }
+
+        index += 1;
+    }
+
+    Ok(())
 }
 
 /// Human-readable CLI help text shared by CLI consumers.
