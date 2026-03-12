@@ -29,7 +29,7 @@ export async function activate(context: vscode.ExtensionContext) {
     const serverPath = await getServerPath(context);
     if (!serverPath) {
         vscode.window.showErrorMessage(
-            'Perl Language Server (perl-lsp) not found. Please install it or set perl.lsp.path in settings.'
+            'Perl Language Server (perl-lsp) not found. Please install it or set perl-lsp.serverPath in settings.'
         );
         return;
     }
@@ -107,32 +107,6 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize debug adapter
     activateDebugger(context);
 
-    // Helper for unimplemented refactoring commands
-    const handleMissingRefactor = async (title: string) => {
-        const selection = await vscode.window.showInformationMessage(
-            `The '${title}' feature is currently in development.`,
-            'View Roadmap'
-        );
-        if (selection === 'View Roadmap') {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/EffortlessMetrics/perl-lsp'));
-        }
-    };
-
-    // Register placeholder refactoring commands
-    const extractSubCommand = vscode.commands.registerCommand('perl-lsp.extractSubroutine', () =>
-        handleMissingRefactor('Extract Subroutine')
-    );
-
-    const extractVarCommand = vscode.commands.registerCommand('perl-lsp.extractVariable', () =>
-        handleMissingRefactor('Extract Variable')
-    );
-
-    const inlineVarCommand = vscode.commands.registerCommand('perl-lsp.inlineVariable', () =>
-        handleMissingRefactor('Inline Variable')
-    );
-
-    context.subscriptions.push(extractSubCommand, extractVarCommand, inlineVarCommand);
-    
     // Register commands
     const restartCommand = vscode.commands.registerCommand('perl-lsp.restart', async () => {
         await restartServer(context);
@@ -380,14 +354,26 @@ function getSupportedFeatureProfiles(): string[] {
 }
 
 async function restartServer(context: vscode.ExtensionContext) {
-    if (client) {
-        await client.stop();
+    if (!client) {
+        vscode.window.showWarningMessage('Perl Language Server is not initialized yet.');
+        return;
     }
-    
-    await activate(context);
-    vscode.window.showInformationMessage('Perl Language Server restarted', 'Show Output').then(selection => {
-        if (selection === 'Show Output') {
-            outputChannel.show();
-        }
-    });
+
+    try {
+        await client.stop();
+        await client.start();
+        vscode.window.showInformationMessage('Perl Language Server restarted', 'Show Output').then(selection => {
+            if (selection === 'Show Output') {
+                outputChannel.show();
+            }
+        });
+    } catch (error: any) {
+        const message = error instanceof Error ? error.message : String(error);
+        outputChannel.appendLine(`Failed to restart perl-lsp: ${message}`);
+        vscode.window.showErrorMessage(`Failed to restart Perl Language Server: ${message}`, 'Show Output').then(selection => {
+            if (selection === 'Show Output') {
+                outputChannel.show();
+            }
+        });
+    }
 }

@@ -1,123 +1,109 @@
-# VSCode Extension Guide
+# VS Code Extension Guide
 
 ## Installation
 
-### From VSCode Marketplace
-1. Open VSCode
-2. Go to Extensions (Ctrl+Shift+X)
-3. Search for "Perl Language Server"
-4. Click Install
+### From the VS Code Marketplace
+1. Open VS Code.
+2. Open Extensions.
+3. Search for `Perl Language Server`.
+4. Install `effortlesssteven.perl-lsp`.
 
-### From Open VSX (for VSCodium, Gitpod, etc.)
-```bash
-code --install-extension effortlesssteven.perl-lsp
-```
+### From a VSIX
+Download the `.vsix` asset from the matching GitHub release and install it manually:
 
-### Manual Installation
-Download the `.vsix` file from [releases](https://github.com/EffortlessMetrics/perl-lsp/releases) and install:
 ```bash
 code --install-extension perl-lsp-*.vsix
 ```
 
-## Configuration
+## Server Resolution Order
 
-### Settings
+The extension resolves the `perl-lsp` binary in this order:
+1. `perl-lsp.serverPath`
+2. A bundled development binary inside the extension, if one is present
+3. `perl-lsp` on your `PATH`
+4. Automatic download from GitHub releases when `perl-lsp.autoDownload` is enabled
+
+The Marketplace package is designed to work with `PATH`, `serverPath`, or runtime download. It does not rely on a platform-specific binary being pre-bundled into the published VSIX.
+
+## Settings
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `perl-lsp.autoDownload` | `true` | Automatically download LSP binary if not found |
-| `perl-lsp.serverPath` | `"perl-lsp"` | Path to the LSP server binary |
-| `perl-lsp.trace.server` | `"off"` | LSP communication tracing |
-| `perl-lsp.maxNumberOfProblems` | `100` | Maximum diagnostics per file |
-| `perl-lsp.enableStrictMode` | `false` | Enable strict mode warnings |
-| `perl-lsp.enableWarnings` | `true` | Enable Perl warnings |
+| `perl-lsp.channel` | `"latest"` | Release channel used for runtime download resolution. |
+| `perl-lsp.versionTag` | `""` | Specific GitHub release tag when `channel` is `tag`. |
+| `perl-lsp.serverPath` | `""` | Absolute path to a `perl-lsp` binary. |
+| `perl-lsp.autoDownload` | `true` | Download `perl-lsp` automatically when it is not bundled, configured, or on `PATH`. |
+| `perl-lsp.downloadBaseUrl` | `""` | Override the download host for internal mirrors. |
+| `perl-lsp.trace.server` | `"off"` | LSP trace level: `off`, `messages`, or `verbose`. |
+| `perl-lsp.enableDiagnostics` | `true` | Enable server diagnostics. |
+| `perl-lsp.enableSemanticTokens` | `true` | Enable semantic token highlighting. |
+| `perl-lsp.enableFormatting` | `true` | Enable formatting integration. |
+| `perl-lsp.formatOnSave` | `false` | Request formatting on save. |
+| `perl-lsp.enableRefactoring` | `true` | Enable server-supplied refactoring code actions where supported. |
+| `perl-lsp.perltidyConfig` | `""` | Path to a `.perltidyrc` file. |
+| `perl-lsp.includePaths` | `["lib", "local/lib/perl5"]` | Additional Perl include paths passed to the server. |
+| `perl-lsp.enableTestIntegration` | `true` | Enable test integration for `.t` and runnable `.pl` files. |
+| `perl-lsp.featureProfile` | `"auto"` | Forward a concrete feature profile to `perl-lsp` when needed. |
 
-### Custom Server Path
-If you have a custom build or prefer a specific version:
-```json
-{
-  "perl-lsp.serverPath": "/usr/local/bin/perl-lsp",
-  "perl-lsp.autoDownload": false
-}
-```
+## What Ships Today
 
-## Features
+### Language features
+The extension is a thin client for `perl-lsp`, so the exact feature surface depends on the installed server version. The intended day-one experience includes diagnostics, completion, hover, definition, references, symbols, semantic tokens, formatting, code actions, and debugger launch support.
 
-### Auto-Download
-The extension automatically downloads the correct LSP binary for your platform:
-- Detects OS and architecture (Windows/macOS/Linux, x64/arm64)
-- Downloads from GitHub releases with SHA256 verification
-- Caches in extension storage
-- Shows progress notifications
+### Extension UX
+- Output channel for server logs
+- Status bar menu for common actions
+- Restart command
+- Installed-server version command
+- Test runner integration for `.t` and `.pl` files
+- Runtime download with checksum verification
+- Debugger registration for `perl-dap`
 
-### Supported Features
-- ✅ **Diagnostics**: Real-time syntax and semantic errors
-- ✅ **Completion**: Variables, functions, keywords, modules
-- ✅ **Go to Definition**: Jump to declarations
-- ✅ **Find References**: Find all usages
-- ✅ **Hover**: Documentation and type info
-- ✅ **Signature Help**: Parameter hints
-- ✅ **Document Symbols**: Outline view
-- ✅ **Rename**: Safe refactoring
-- ✅ **Code Actions**: Quick fixes and refactorings
-- ✅ **Semantic Highlighting**: Smart syntax coloring
-
-## Troubleshooting
-
-### Server Not Starting
-1. Check Output panel (View → Output → Perl LSP)
-2. Verify server path: `which perl-lsp`
-3. Try manual download: [releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
-4. Disable auto-download and set custom path
-
-### CRLF Line Endings
-The LSP handles CRLF correctly but some edge cases exist:
-- Position mapping for `\r` in CRLF may be off by 1
-- Workaround: Save files with LF endings on Unix systems
-
-### Performance Issues
-- Increase `perl-lsp.maxNumberOfProblems` for large files
-- Check server logs with `"perl-lsp.trace.server": "verbose"`
-
-### Offline Installation
-1. Download the server binary from GitHub releases
-2. Download the `.vsix` extension file
-3. Install extension: `code --install-extension perl-lsp-*.vsix`
-4. Configure server path in settings
+Refactoring is exposed through server-backed code actions when available. The extension no longer advertises placeholder command-palette commands for extraction or inlining flows that are not implemented as standalone commands.
 
 ## Commands
 
-| Command | Description | Shortcut |
-|---------|-------------|----------|
-| `Perl: Restart Language Server` | Restart the LSP server | - |
-| `Perl: Show Output` | Show LSP output channel | - |
-| `Perl: Run Tests` | Run Perl tests | - |
+| Command | Description |
+|---------|-------------|
+| `Perl: Restart Perl Language Server` | Stop and restart the active `perl-lsp` client. |
+| `Perl: Show Server Version` | Show the installed `perl-lsp` version. |
+| `Perl: Show Output Channel` | Open the extension output channel. |
+| `Perl: Show Status Menu` | Open the quick status/action menu. |
+| `Perl: Organize Use Statements` | Trigger organize-imports for the active Perl document. |
+| `Perl: Run Tests in Current File` | Run tests for the active `.t` or `.pl` file. |
+
+## Troubleshooting
+
+### Server not found
+If activation fails because the server cannot be located:
+1. Set `perl-lsp.serverPath` to an installed binary.
+2. Ensure `perl-lsp.autoDownload` is enabled.
+3. Confirm the binary is on your `PATH`.
+4. Open `Perl: Show Output Channel` for detailed logs.
+
+### Offline environments
+For offline or air-gapped installs:
+1. Download the matching `perl-lsp` release asset manually.
+2. Install the extension `.vsix`.
+3. Set `perl-lsp.serverPath` to the extracted binary.
+4. Optionally set `perl-lsp.autoDownload` to `false`.
+
+### Logging and diagnostics
+Set `perl-lsp.trace.server` to `verbose` and inspect the output channel if requests or startup fail.
 
 ## Development
 
-### Building from Source
 ```bash
-# Clone repository
-git clone https://github.com/EffortlessMetrics/perl-lsp
 cd vscode-extension
-
-# Install dependencies
 npm install
-
-# Compile
 npm run compile
-
-# Package
-vsce package
+npm run package
 ```
 
-### Testing Locally
-1. Open `vscode-extension` folder in VSCode
-2. Press F5 to launch Extension Development Host
-3. Open a Perl file to test
+For current-platform development only, you can also build and bundle a local binary:
 
-## Support
+```bash
+npm run bundle-lsp
+```
 
-- **Issues**: [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/EffortlessMetrics/perl-lsp/discussions)
-- **Updates**: Watch the repository for releases
+That local bundling step is intended for development and smoke testing, not as the portable Marketplace packaging strategy.

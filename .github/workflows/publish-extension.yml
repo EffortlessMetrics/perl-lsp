@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false  # Don't cancel publishing
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   publish:
@@ -59,15 +59,11 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "release_tag=v${VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Compile extension
-        working-directory: vscode-extension
-        run: npm run compile
-
-      - name: Package extension
+      - name: Build release VSIX
         working-directory: vscode-extension
         run: |
-          vsce package
-          echo "VSIX_FILE=$(ls *.vsix)" >> $GITHUB_ENV
+          npm run verify:marketplace
+          echo "VSIX_FILE=$(ls -1 *.vsix | head -n 1)" >> $GITHUB_ENV
 
       - name: Publish to VSCode Marketplace
         if: ${{ secrets.VSCE_PAT != '' }}
@@ -98,11 +94,17 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.version.outputs.release_tag }}
         run: |
-          if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
-            echo "::warning::Release ${RELEASE_TAG} does not exist yet. Skipping VSIX attachment."
-            exit 0
-          fi
+          for attempt in $(seq 1 30); do
+            if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+              gh release upload "${RELEASE_TAG}" \
+                "vscode-extension/${{ env.VSIX_FILE }}" \
+                --clobber
+              exit 0
+            fi
 
-          gh release upload "${RELEASE_TAG}" \
-            "vscode-extension/${{ env.VSIX_FILE }}" \
-            --clobber
+            echo "Waiting for GitHub release ${RELEASE_TAG} to become available..."
+            sleep 10
+          done
+
+          echo "::error::Release ${RELEASE_TAG} was not available in time for VSIX attachment."
+          exit 1

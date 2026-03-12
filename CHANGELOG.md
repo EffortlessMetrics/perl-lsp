@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-03-12
+
+This release finalizes the 0.11.0 distribution pipeline across GitHub releases,
+crates.io, and the VS Code extension so the workspace can ship from a single,
+repeatable release flow.
+
+### Added
+- **Turnkey Release Orchestration**: A PR-driven release path now covers version
+  bumping, changelog generation, tagging, GitHub release creation, crates.io
+  publishing, extension publishing, and downstream package manager automation.
+- **Topological crates.io Publishing**: Workspace publish automation computes
+  dependency order from `cargo metadata` and publishes only the crates in the
+  workspace allowlist.
+- **Release Guardrails**: Release helper scripts now validate semver inputs and
+  align manual operator flows with the automated `0.11.0` release path.
+
+### Changed
+- **Workspace Release Alignment**: Workspace packages, extension metadata, and
+  release workflows now target `0.11.0`.
+- **Release Tooling**: Legacy release helper scripts now delegate to the current
+  GitHub workflow-based release flow instead of relying on stale one-off cargo
+  publish steps and outdated examples.
+- **Operator Documentation in Scripts**: Manual publish and smoke-test helpers
+  now accept an explicit version argument and default to the matching `vX.Y.Z`
+  release ref when dispatching workflows or validating published artifacts.
+
+### Fixed
+- **Stale Release Examples**: Removed hardcoded `0.8.3` release references from
+  publish and smoke-test scripts that could misdirect manual release operations.
+- **Publish Version Safety**: crates.io publishing now fails early when the
+  workflow target version does not match the versions resolved for workspace
+  crates scheduled for publication.
+
 ## [0.10.0] - 2026-02-28
 
 A major release campaign spanning 60+ PRs (#845–#911) focused on build reliability,

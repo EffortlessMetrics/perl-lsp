@@ -180,6 +180,34 @@ jobs:
           cache-on-failure: true
           cache-all-crates: true
 
+      - name: Validate crate versions match release target
+        env:
+          CRATES_JSON: ${{ needs.compute-order.outputs.crates }}
+          TARGET_VERSION: ${{ needs.compute-order.outputs.version }}
+        run: |
+          echo "$CRATES_JSON" | python3 -c '
+          import json, os, sys
+
+          target = os.environ["TARGET_VERSION"]
+          crates = json.load(sys.stdin)
+          mismatches = [
+              "{}@{}".format(crate["name"], crate["version"])
+              for crate in crates
+              if crate["version"] != target
+          ]
+
+          if mismatches:
+              print(
+                  "::error::Crate versions do not match release target {}: {}".format(
+                      target,
+                      ", ".join(mismatches),
+                  )
+              )
+              sys.exit(1)
+
+          print("All publishable crates match target version {}".format(target))
+          '
+
       - name: Publish all crates
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

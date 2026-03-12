@@ -4,7 +4,7 @@
   "description": "Comprehensive Perl language support powered by perl-lsp",
   "version": "0.11.0",
   "publisher": "effortlesssteven",
-  "preview": true,
+  "preview": false,
   "markdown": "github",
   "engines": {
     "vscode": "^1.88.0"
@@ -249,7 +249,7 @@
         "perl-lsp.enableRefactoring": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Enable **advanced refactoring features** (e.g. `Extract Variable`, `Extract Subroutine`)."
+          "markdownDescription": "Enable refactoring-related code actions when supported by the connected `perl-lsp` server."
         },
         "perl-lsp.perltidyConfig": {
           "type": "string",
@@ -320,24 +320,6 @@
         "title": "Run Tests in Current File",
         "category": "Perl",
         "icon": "$(beaker)"
-      },
-      {
-        "command": "perl-lsp.extractSubroutine",
-        "title": "Extract Subroutine",
-        "category": "Perl Refactor",
-        "icon": "$(symbol-method)"
-      },
-      {
-        "command": "perl-lsp.extractVariable",
-        "title": "Extract Variable",
-        "category": "Perl Refactor",
-        "icon": "$(symbol-variable)"
-      },
-      {
-        "command": "perl-lsp.inlineVariable",
-        "title": "Inline Variable",
-        "category": "Perl Refactor",
-        "icon": "$(replace)"
       }
     ],
     "menus": {
