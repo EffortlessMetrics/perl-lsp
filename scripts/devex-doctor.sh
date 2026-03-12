@@ -1,9 +1,46 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-pass() { printf '✅ %s\n' "$1"; }
-warn() { printf '⚠️  %s\n' "$1"; }
-fail() { printf '❌ %s\n' "$1"; }
+PASS_COUNT=0
+WARN_COUNT=0
+FAIL_COUNT=0
+
+if [ -t 1 ]; then
+  BOLD='\033[1m'
+  DIM='\033[2m'
+  BLUE='\033[34m'
+  GREEN='\033[32m'
+  YELLOW='\033[33m'
+  RED='\033[31m'
+  RESET='\033[0m'
+else
+  BOLD=''
+  DIM=''
+  BLUE=''
+  GREEN=''
+  YELLOW=''
+  RED=''
+  RESET=''
+fi
+
+pass() {
+  PASS_COUNT=$((PASS_COUNT + 1))
+  printf '%b✅ %-11s%b %s\n' "$GREEN" "PASS" "$RESET" "$1"
+}
+
+warn() {
+  WARN_COUNT=$((WARN_COUNT + 1))
+  printf '%b⚠️  %-11s%b %s\n' "$YELLOW" "WARN" "$RESET" "$1"
+}
+
+fail() {
+  FAIL_COUNT=$((FAIL_COUNT + 1))
+  printf '%b❌ %-11s%b %s\n' "$RED" "FAIL" "$RESET" "$1"
+}
+
+print_section() {
+  printf '\n%b%s%b\n' "$BOLD$BLUE" "$1" "$RESET"
+}
 
 check_cmd() {
   local cmd="$1"
@@ -30,18 +67,17 @@ show_version() {
 
 MISSING_REQUIRED=0
 
-echo "Repository: $(pwd)"
+printf '%bPerl LSP DevEx Doctor%b\n' "$BOLD" "$RESET"
+printf '%bRepository:%b %s\n' "$DIM" "$RESET" "$(pwd)"
 
-echo
-printf '== Required ==\n'
+print_section "== Required =="
 if ! check_cmd cargo "cargo"; then MISSING_REQUIRED=1; fi
 if ! check_cmd rustfmt "rustfmt"; then MISSING_REQUIRED=1; fi
 
 show_version "rustc" rustc --version
 show_version "cargo" cargo --version
 
-echo
-printf '== Recommended ==\n'
+print_section "== Recommended =="
 check_cmd just "just" || true
 check_cmd nix "nix" || true
 check_cmd cargo-audit "cargo-audit" || true
@@ -57,17 +93,19 @@ else
   warn "rust-toolchain.toml not found"
 fi
 
-echo
-printf '== Suggested next commands ==\n'
+print_section "== Suggested next commands =="
 echo "  just pr-fast"
 echo "  just ci-gate"
 echo "  nix develop -c just ci-gate"
 
+print_section "== Summary =="
+printf '%bPassed:%b  %d\n' "$GREEN" "$RESET" "$PASS_COUNT"
+printf '%bWarnings:%b %d\n' "$YELLOW" "$RESET" "$WARN_COUNT"
+printf '%bFailures:%b %d\n' "$RED" "$RESET" "$FAIL_COUNT"
+
 if [ "$MISSING_REQUIRED" -ne 0 ]; then
-  echo
   fail "Missing required tools. Install Rust via https://rustup.rs"
   exit 1
 fi
 
-echo
 pass "Doctor completed: required tooling is available"
