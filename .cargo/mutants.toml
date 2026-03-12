@@ -1,7 +1,17 @@
-timeout_multiplier = 1.0
+timeout_multiplier = 1.25
+
+# Mutation hardening focus area: quote parsing logic now lives in perl-quote.
+# Keep this subset intentionally narrow so it stays usable in local/CI flows.
 examine_globs = [
-    "crates/perl-parser/src/quote_parser.rs"
+    "crates/perl-quote/src/lib.rs",
 ]
+
+# Exercise both direct crate tests and parser-level integration tests that consume
+# quote parsing helpers via re-exports.
 additional_cargo_test_args = [
-    "--test", "quote_operator_tests"
+    "-p", "perl-quote",
+    "--test", "comprehensive_unit_tests",
+    "-p", "perl-parser",
+    "--test", "quote_operator_tests",
+    "--test", "quote_parser_mutation_survivors_elimination",
 ]
