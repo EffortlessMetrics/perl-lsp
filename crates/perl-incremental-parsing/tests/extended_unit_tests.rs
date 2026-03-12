@@ -36,7 +36,7 @@ use perl_incremental_parsing::incremental::{
     Edit, IncrementalState, LineIndex, ParseCheckpoint, ScopeSnapshot, apply_edits,
 };
 use perl_incremental_parsing::position::Position;
-use perl_incremental_parsing::{Node, NodeKind, Parser, SourceLocation};
+use perl_incremental_parsing::{Node, NodeKind, Parser};
 
 use lsp_types::{Range as LspRange, TextDocumentContentChangeEvent};
 use ropey::Rope;
@@ -984,7 +984,7 @@ fn byte_to_lsp_pos_middle() {
 #[test]
 fn byte_to_lsp_pos_past_end_clamped() {
     let rope = Rope::from_str("Hi");
-    let (line, col) = byte_to_lsp_pos(&rope, 1000);
+    let (line, _col) = byte_to_lsp_pos(&rope, 1000);
     // Should clamp to end of document
     assert!(line <= 1);
 }

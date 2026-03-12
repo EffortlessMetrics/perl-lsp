@@ -784,6 +784,7 @@ mod prototype_heuristic_tests {
 }
 
 #[cfg(test)]
+#[allow(clippy::panic)]
 mod code_dereference_tests {
     use super::*;
 

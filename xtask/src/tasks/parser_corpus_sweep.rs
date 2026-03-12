@@ -713,6 +713,7 @@ fn print_summary(report: &SweepReport) {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
 
