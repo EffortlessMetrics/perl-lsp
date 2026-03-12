@@ -412,6 +412,8 @@ mod error_recovery_tests;
 // #[cfg(test)]
 // mod enhanced_recovery_tests;
 #[cfg(test)]
+mod builtin_block_list_tests;
+#[cfg(test)]
 mod builtin_expansion_tests;
 #[cfg(test)]
 mod declaration_in_args_tests;
