@@ -1999,7 +1999,7 @@ impl DebugAdapter {
                 }
             } else {
                 // Extract host and port for TCP attachment.
-                let host = args.get("host").and_then(|h| h.as_str()).unwrap_or("localhost");
+                let host = args.get("host").and_then(|h| h.as_str()).unwrap_or("localhost").trim();
                 let raw_port = args.get("port").and_then(|p| p.as_u64()).unwrap_or(13603);
                 if raw_port > 65535 {
                     return DapMessage::Response {
@@ -5612,6 +5612,29 @@ mod tests {
                 assert!(message.is_some());
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("Host cannot be empty"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_attach_host_is_trimmed_before_connect() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "  localhost  ",
+            "port": 13603
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success);
+                assert_eq!(command, "attach");
+                assert!(message.is_some());
+                let msg = message.ok_or("Expected message")?;
+                assert!(msg.contains("localhost:13603"));
+                assert!(!msg.contains("  localhost  :13603"));
             }
             _ => return Err("Expected response".into()),
         }
