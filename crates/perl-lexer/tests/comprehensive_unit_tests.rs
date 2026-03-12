@@ -1430,6 +1430,34 @@ fn cjk_identifier() -> R {
 }
 
 #[test]
+fn emoji_zwj_identifier() -> R {
+    let input = "my $👨‍💻dev = 1;";
+    let toks = tokens(input);
+    let has_ident = toks.iter().any(|t| {
+        matches!(
+            &t.token_type,
+            TokenType::Identifier(id) if id.as_ref().contains("👨‍💻dev")
+        )
+    });
+    assert!(has_ident, "expected emoji ZWJ identifier token");
+    Ok(())
+}
+
+#[test]
+fn emoji_variation_selector_identifier() -> R {
+    let input = "my $☕️_count = 1;";
+    let toks = tokens(input);
+    let has_ident = toks.iter().any(|t| {
+        matches!(
+            &t.token_type,
+            TokenType::Identifier(id) if id.as_ref().contains("☕️_count")
+        )
+    });
+    assert!(has_ident, "expected variation-selector emoji identifier token");
+    Ok(())
+}
+
+#[test]
 fn empty_input_eof_position() -> R {
     let toks = tokens("");
     let eof = toks.first().ok_or("no eof")?;
