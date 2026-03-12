@@ -518,21 +518,34 @@ fn all_profiles_json_includes_all_profile() -> Result<(), Box<dyn std::error::Er
 }
 
 #[test]
-fn feature_grid_is_same_across_all_payloads() -> Result<(), Box<dyn std::error::Error>> {
+fn feature_grid_row_identity_is_same_across_all_payloads() -> Result<(), Box<dyn std::error::Error>>
+{
     let payload1 = to_json();
-    let payload2 = to_json_for_profile(FeatureProfile::All);
+    let payload2 = to_json_for_profile(FeatureProfile::GaLock);
     let payload3 = to_json_for_all_profiles();
 
     let value1 = serde_json::from_str::<Value>(&payload1)?;
     let value2 = serde_json::from_str::<Value>(&payload2)?;
     let value3 = serde_json::from_str::<Value>(&payload3)?;
 
-    let grid1 = value1["feature_grid"]["rows"].to_string();
-    let grid2 = value2["feature_grid"]["rows"].to_string();
-    let grid3 = value3["feature_grid"]["rows"].to_string();
+    let rows1 = must_some(value1["feature_grid"]["rows"].as_array());
+    let rows2 = must_some(value2["feature_grid"]["rows"].as_array());
+    let rows3 = must_some(value3["feature_grid"]["rows"].as_array());
 
-    assert_eq!(grid1, grid2, "feature grid should be same in to_json and to_json_for_profile");
-    assert_eq!(grid1, grid3, "feature grid should be same in all payloads");
+    let key_of = |row: &Value| {
+        (
+            row["area"].as_str().unwrap_or_default().to_string(),
+            row["id"].as_str().unwrap_or_default().to_string(),
+            row["spec"].as_str().unwrap_or_default().to_string(),
+        )
+    };
+
+    let keys1: Vec<_> = rows1.iter().map(key_of).collect();
+    let keys2: Vec<_> = rows2.iter().map(key_of).collect();
+    let keys3: Vec<_> = rows3.iter().map(key_of).collect();
+
+    assert_eq!(keys1, keys2, "feature row identity should stay stable for profile payloads");
+    assert_eq!(keys1, keys3, "feature row identity should stay stable in all payloads");
     Ok(())
 }
 

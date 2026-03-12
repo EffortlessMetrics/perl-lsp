@@ -95,6 +95,7 @@ fn feature_grid_payload(
         None => (advertised_features().to_vec(), advertised_trackable_feature_count_for_grid()),
     };
     let trackable_feature_count = trackable_feature_count_for_grid();
+    let rows = selected_profile.map(bdd_feature_rows_for_profile).unwrap_or_else(bdd_feature_rows);
     let compliance_percent = if trackable_feature_count == 0 {
         0.0
     } else {
@@ -111,7 +112,7 @@ fn feature_grid_payload(
         "feature_profiles": feature_profile_contracts(),
         "feature_grid": {
             "columns": FEATURE_GRID_COLUMNS,
-            "rows": bdd_feature_rows(),
+            "rows": rows,
         },
         "profiles": profile_summaries,
         "feature_count": all_features().len(),
@@ -122,6 +123,20 @@ fn feature_grid_payload(
     }
 
     payload
+}
+
+/// BDD rows with `advertised` projected to a specific runtime profile.
+pub fn bdd_feature_rows_for_profile(profile: FeatureProfile) -> Vec<BddFeatureRow> {
+    let advertised = catalog_advertised_feature_ids(profile);
+    let advertised_set: std::collections::HashSet<&'static str> = advertised.into_iter().collect();
+
+    bdd_feature_rows()
+        .into_iter()
+        .map(|mut row| {
+            row.advertised = advertised_set.contains(row.id);
+            row
+        })
+        .collect()
 }
 
 fn profile_summary(profile: FeatureProfile) -> Value {
@@ -148,8 +163,8 @@ fn profile_summary(profile: FeatureProfile) -> Value {
 #[cfg(test)]
 mod tests {
     use super::{
-        FeatureProfile, compliance_percent_for_profile, to_json, to_json_for_all_profiles,
-        to_json_for_profile,
+        FeatureProfile, bdd_feature_rows_for_profile, catalog_advertised_feature_ids,
+        compliance_percent_for_profile, to_json, to_json_for_all_profiles, to_json_for_profile,
     };
     use perl_tdd_support::{must, must_some};
 
@@ -214,5 +229,36 @@ mod tests {
         assert!(keys.contains(&"ga-lock"));
         assert!(keys.contains(&"production"));
         assert!(keys.contains(&"all"));
+    }
+
+    #[test]
+    fn profile_payload_projects_bdd_row_advertised_flags() {
+        let payload = to_json_for_profile(FeatureProfile::GaLock);
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+        let rows = must_some(
+            value
+                .get("feature_grid")
+                .and_then(|grid| grid.get("rows"))
+                .and_then(|rows| rows.as_array()),
+        );
+
+        let advertised_row_count = rows
+            .iter()
+            .filter(|row| row.get("advertised").and_then(|v| v.as_bool()) == Some(true))
+            .count();
+        let expected_advertised = catalog_advertised_feature_ids(FeatureProfile::GaLock);
+
+        assert_eq!(advertised_row_count, expected_advertised.len());
+    }
+
+    #[test]
+    fn bdd_rows_for_profile_match_advertised_catalog_ids() {
+        let rows = bdd_feature_rows_for_profile(FeatureProfile::GaLock);
+        let expected_advertised = catalog_advertised_feature_ids(FeatureProfile::GaLock);
+
+        for row in rows {
+            let is_expected = expected_advertised.contains(&row.id);
+            assert_eq!(row.advertised, is_expected, "row {} has incorrect advertised flag", row.id);
+        }
     }
 }
