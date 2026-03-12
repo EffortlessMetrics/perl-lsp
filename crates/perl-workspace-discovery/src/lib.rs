@@ -161,8 +161,8 @@ fn log_discovery(result: &DiscoveryResult) {
 #[cfg(test)]
 mod tests {
     use super::{
-        DiscoveryMethod, parse_git_ls_files_output, path_contains_skipped_component,
-        should_skip_dir, walk_discovery,
+        DiscoveryMethod, discover_perl_files, parse_git_ls_files_output,
+        path_contains_skipped_component, should_skip_dir, walk_discovery,
     };
     use std::fs;
     use std::path::Path;
@@ -416,7 +416,13 @@ mod tests {
         create_file(root, "app/main.psgi")?;
 
         let result = walk_discovery(root, Instant::now());
+        assert_eq!(result.method, DiscoveryMethod::Walk);
         assert_eq!(result.files.len(), 4);
+        assert_eq!(result.excluded_count, 0);
+        assert!(result.files.iter().any(|p| p.ends_with("lib/Foo.pm")));
+        assert!(result.files.iter().any(|p| p.ends_with("bin/run.pl")));
+        assert!(result.files.iter().any(|p| p.ends_with("t/basic.t")));
+        assert!(result.files.iter().any(|p| p.ends_with("app/main.psgi")));
 
         Ok(())
     }
@@ -461,8 +467,28 @@ mod tests {
     fn walk_discovery_records_duration() -> TestResult {
         let tmp = tempfile::tempdir()?;
         let result = walk_discovery(tmp.path(), Instant::now());
-        // Duration should be non-zero (or at least not panic)
-        let _ = result.duration.as_nanos();
+
+        assert_eq!(result.method, DiscoveryMethod::Walk);
+        assert_eq!(result.files.len(), 0);
+        assert_eq!(result.excluded_count, 0);
+        assert!(result.duration >= std::time::Duration::ZERO);
+
+        Ok(())
+    }
+
+    #[test]
+    fn discover_perl_files_falls_back_to_walk_outside_git_repo() -> TestResult {
+        let tmp = tempfile::tempdir()?;
+        let root = tmp.path();
+
+        create_file(root, "lib/Fallback.pm")?;
+
+        let result = discover_perl_files(root);
+
+        assert_eq!(result.method, DiscoveryMethod::Walk);
+        assert_eq!(result.files.len(), 1);
+        assert!(result.files[0].ends_with("lib/Fallback.pm"));
+        assert_eq!(result.excluded_count, 0);
 
         Ok(())
     }
@@ -545,9 +571,8 @@ mod tests {
 
         assert_eq!(git, git2);
         assert_ne!(git, walk);
-        // Debug is derivable, just verify it doesn't panic
-        let _ = format!("{git:?}");
-        let _ = format!("{walk:?}");
+        assert_eq!(format!("{git:?}"), "Git");
+        assert_eq!(format!("{walk:?}"), "Walk");
     }
 
     #[test]
@@ -574,8 +599,12 @@ mod tests {
         assert_eq!(cloned.files.len(), result.files.len());
         assert_eq!(cloned.method, result.method);
         assert_eq!(cloned.excluded_count, result.excluded_count);
-        // Debug format should not panic
-        let _ = format!("{result:?}");
+        assert_eq!(cloned.duration, result.duration);
+
+        let debug = format!("{result:?}");
+        assert!(debug.contains("DiscoveryResult"));
+        assert!(debug.contains("method"));
+        assert!(debug.contains("excluded_count"));
 
         Ok(())
     }
