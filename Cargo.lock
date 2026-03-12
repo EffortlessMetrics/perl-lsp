@@ -2550,6 +2550,9 @@ version = "0.11.0"
 [[package]]
 name = "perl-subprocess-runtime"
 version = "0.11.0"
+dependencies = [
+ "perl-tdd-support",
+]
 
 [[package]]
 name = "perl-symbol-cursor"

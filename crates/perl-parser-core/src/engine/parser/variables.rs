@@ -784,27 +784,24 @@ mod prototype_heuristic_tests {
 }
 
 #[cfg(test)]
-#[allow(clippy::panic)]
 mod code_dereference_tests {
     use super::*;
+    use perl_tdd_support::{must, must_some};
 
     /// Helper: parse code and return the full AST.
     fn parse_program(code: &str) -> Node {
         let mut parser = Parser::new(code);
-        match parser.parse() {
-            Ok(ast) => ast,
-            Err(e) => panic!("Parse failed for `{code}`: {e:?}"),
-        }
+        must(parser.parse())
     }
 
     /// Helper: parse code and return the first statement node.
-    fn parse_first_stmt(code: &str) -> Node {
+    fn parse_first_stmt(code: &str) -> Option<Node> {
         let ast = parse_program(code);
         match ast.kind {
             NodeKind::Program { mut statements } if !statements.is_empty() => {
-                statements.swap_remove(0)
+                Some(statements.swap_remove(0))
             }
-            _ => panic!("Expected Program with statements, got: {}", ast.to_sexp()),
+            _ => None,
         }
     }
 
@@ -916,42 +913,45 @@ mod code_dereference_tests {
     fn code_deref_produces_correct_ast_structure() {
         // Verify the AST structure for &{$coderef}($x, $y)
         let code = "&{$coderef}($x, $y);";
-        let stmt = parse_first_stmt(code);
+        let stmt = must_some(parse_first_stmt(code));
 
         // The statement should be an ExpressionStatement wrapping a FunctionCall
-        if let NodeKind::ExpressionStatement { expression } = &stmt.kind {
-            match &expression.kind {
-                NodeKind::FunctionCall { name, args } => {
-                    assert_eq!(name, "&{}", "Function call name should be &{{}}");
-                    // First arg is the Unary dereference node (&{$coderef}),
-                    // remaining args are the actual arguments (may be combined into
-                    // a single list node depending on comma parsing)
-                    assert!(
-                        !args.is_empty(),
-                        "Expected at least 1 arg (the deref node)",
-                    );
-                    // First arg should be the Unary &{} dereference
-                    assert_eq!(
-                        args.first().map(|a| a.kind.kind_name()),
-                        Some("Unary"),
-                        "First arg should be a Unary dereference node: {:?}",
-                        args.iter().map(|a| a.kind.kind_name()).collect::<Vec<_>>(),
-                    );
-                }
-                _ => {
-                    panic!(
-                        "Expected FunctionCall, got {} (sexp: {})",
-                        expression.kind.kind_name(),
-                        expression.to_sexp()
-                    );
-                }
-            }
-        } else {
-            panic!(
+        let NodeKind::ExpressionStatement { expression } = &stmt.kind else {
+            assert_eq!(
+                stmt.kind.kind_name(),
+                "ExpressionStatement",
                 "Expected ExpressionStatement, got {} (sexp: {})",
                 stmt.kind.kind_name(),
-                stmt.to_sexp()
+                stmt.to_sexp(),
             );
+            return;
+        };
+
+        match &expression.kind {
+            NodeKind::FunctionCall { name, args } => {
+                assert_eq!(name, "&{}", "Function call name should be &{{}}");
+                // First arg is the Unary dereference node (&{$coderef}),
+                // remaining args are the actual arguments (may be combined into
+                // a single list node depending on comma parsing)
+                assert!(
+                    !args.is_empty(),
+                    "Expected at least 1 arg (the deref node)",
+                );
+                // First arg should be the Unary &{} dereference
+                assert_eq!(
+                    args.first().map(|a| a.kind.kind_name()),
+                    Some("Unary"),
+                    "First arg should be a Unary dereference node: {:?}",
+                    args.iter().map(|a| a.kind.kind_name()).collect::<Vec<_>>(),
+                );
+            }
+            _ => assert_eq!(
+                expression.kind.kind_name(),
+                "FunctionCall",
+                "Expected FunctionCall, got {} (sexp: {})",
+                expression.kind.kind_name(),
+                expression.to_sexp(),
+            ),
         }
     }
 }
