@@ -9,6 +9,9 @@ All notable changes to the Perl Language Server extension will be documented in 
 - VS Marketplace badges and installation link in extension README.
 
 ### Changed
+- Extension README rewritten for Marketplace clarity (clearer value proposition, install flow, config examples, and troubleshooting).
+- Marketplace metadata improved in `package.json` (`qna`, sponsor URL, and broader keyword coverage).
+
 - Publishing guide refreshed with a launch checklist and pre-release recommendation for initial rollout.
 
 ## [0.10.0] - 2026-02-28
