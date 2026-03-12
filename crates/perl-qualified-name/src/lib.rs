@@ -112,7 +112,7 @@ pub fn is_valid_identifier_part(s: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        container_name, is_valid_identifier_part, split_qualified_name,
+        QualifiedNameError, container_name, is_valid_identifier_part, split_qualified_name,
         validate_perl_qualified_name,
     };
 
@@ -145,6 +145,44 @@ mod tests {
         assert!(validate_perl_qualified_name("Package::").is_err());
         assert!(validate_perl_qualified_name("Foo::::Bar").is_err());
         assert!(validate_perl_qualified_name("$foo").is_err());
+    }
+
+    #[test]
+    fn reports_precise_error_variants_and_locations() {
+        assert_eq!(validate_perl_qualified_name(""), Err(QualifiedNameError::EmptyName));
+        assert_eq!(
+            validate_perl_qualified_name("@array"),
+            Err(QualifiedNameError::LeadingSigil('@'))
+        );
+        assert_eq!(
+            validate_perl_qualified_name("Foo::"),
+            Err(QualifiedNameError::EmptySegment { index: 1 })
+        );
+        assert_eq!(
+            validate_perl_qualified_name("Foo::::Bar"),
+            Err(QualifiedNameError::EmptySegment { index: 1 })
+        );
+        assert_eq!(
+            validate_perl_qualified_name("Foo::1bar"),
+            Err(QualifiedNameError::InvalidSegment { index: 1 })
+        );
+    }
+
+    #[test]
+    fn split_uses_last_separator_for_bare_name() {
+        assert_eq!(split_qualified_name("Foo::Bar::baz"), (Some("Foo::Bar"), "baz"));
+    }
+
+    #[test]
+    fn qualified_name_error_messages_are_actionable() {
+        let empty_segment = QualifiedNameError::EmptySegment { index: 2 };
+        assert_eq!(
+            empty_segment.to_string(),
+            "segment 2 is empty (leading/trailing/double separator)"
+        );
+
+        let invalid_segment = QualifiedNameError::InvalidSegment { index: 3 };
+        assert_eq!(invalid_segment.to_string(), "segment 3 is not a valid identifier");
     }
 
     #[test]
