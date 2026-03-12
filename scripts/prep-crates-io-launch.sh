@@ -65,13 +65,39 @@ fi
 echo "🚀 crates.io launch prep (${MODE})"
 echo "📦 Running cargo check + cargo package dry-run for ${#CRATES[@]} crate(s)"
 
+filter_cargo_package_noise() {
+  awk '
+    skip_help_lines > 0 {
+      skip_help_lines--
+      next
+    }
+    /^warning: ignoring (test|example|benchmark) / {
+      next
+    }
+    /^warning: patch .* was not used in the crate graph$/ {
+      next
+    }
+    /^help: Check that the patched package version and available features are compatible$/ {
+      skip_help_lines = 3
+      next
+    }
+    {
+      print
+    }
+  '
+}
+
 for crate in "${CRATES[@]}"; do
   echo ""
   echo "==> ${crate}"
   (
     cd "$ROOT_DIR"
     cargo check --locked -p "$crate"
-    CARGO_PACKAGE_NO_VERIFY=1 scripts/cargo-package-workspace-dry-run.sh "$crate" >/dev/null
+    if ! package_output="$(CARGO_PACKAGE_NO_VERIFY=1 scripts/cargo-package-workspace-dry-run.sh "$crate" 2>&1)"; then
+      printf '%s\n' "$package_output"
+      exit 1
+    fi
+    printf '%s\n' "$package_output" | filter_cargo_package_noise
   )
 done
 
