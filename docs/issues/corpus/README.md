@@ -253,6 +253,69 @@ The `--check` mode validates the audit results and exits with an error if:
 - Any P0 critical timeout risks are identified
 - GA feature coverage is below 80%
 
+## Remaining Parse Errors (System Corpus Snapshot)
+
+The parser still reports parse errors when run against the system Perl module corpus.
+This is expected today and is tracked by a ratchet (`.ci/parser-corpus-baseline.json`) so
+we can improve without regressions.
+
+### Latest local sweep
+
+Command:
+
+```bash
+cargo run -p xtask -- parser-corpus-sweep --receipt
+```
+
+Receipt:
+
+- `target/receipts/system-corpus-sweep.json`
+- Timestamp: `2026-03-12T01:44:21Z`
+
+Summary:
+
+- Total files scanned: **2990**
+- Files unreadable: **42**
+- Clean files: **1033**
+- Files with errors: **1915**
+- Total ERROR nodes: **40610**
+
+### Highest-volume first-error buckets
+
+These are the most frequent *first* parse error categories from the latest sweep:
+
+1. `unexpected_token_in_expr` -- 336 files
+2. `unclosed_brace_semicolon` -- 316 files
+3. `unclosed_paren_identifier` -- 308 files
+4. `unclosed_brace` -- 158 files
+5. `unexpected_arrow_expr` -- 136 files
+6. `unexpected_fat_arrow_expr` -- 126 files
+7. `unclosed_paren` -- 104 files
+8. `expected_variable` -- 98 files
+9. `catastrophic_backtracking` -- 81 files
+10. `expected_colon` -- 40 files
+
+### Progress vs checked-in baseline
+
+Compared to `.ci/parser-corpus-baseline.json`:
+
+- Files with errors improved from **3420 -> 1915** (**-1505**)
+- Total ERROR nodes improved from **66771 -> 40610** (**-26161**)
+
+The largest remaining concentration is still expression/structure recovery:
+
+- expression ambiguity (`unexpected_*_expr`, `expected_*`)
+- delimiter closure and recovery (`unclosed_*`)
+- regex complexity/backtracking diagnostics
+
+### Next documentation update policy
+
+When `parser-corpus-sweep` materially changes these numbers:
+
+1. Re-run the sweep with `--receipt`
+2. Update this section with new counts and top buckets
+3. If metrics improve, update `.ci/parser-corpus-baseline.json` in the same change
+
 ## Performance Requirements
 
 The corpus audit tool is designed for efficient execution:
