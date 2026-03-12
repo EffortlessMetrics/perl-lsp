@@ -229,7 +229,17 @@ mutation-subset:
         cargo mutants --workspace -j 2 --timeout 60 2>&1 || echo "Mutation testing completed (some mutants may survive)"; \
     else \
         echo "SKIP: cargo-mutants not installed (run: cargo install cargo-mutants)"; \
+        echo "Running mutation regression harnesses instead..."; \
+        just mutation-regression; \
     fi
+
+# Mutation regression harness (fast fallback + PR guardrail)
+mutation-regression:
+    @echo "🧪 Running mutation regression harnesses..."
+    @cargo test -p perl-parser --test mutation_hardening_tests
+    @cargo test -p perl-parser --test parser_boolean_logic_mutation_hardening
+    @cargo test -p perl-lsp --test mutation_survivors_elimination
+    @echo "✅ Mutation regression harnesses passed"
 
 # Bounded fuzz run (quick fuzzing for CI/nightly)
 fuzz-bounded:
