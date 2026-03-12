@@ -302,3 +302,12 @@ fn statement_modifier_with_complex_expression() -> Result<(), Box<dyn std::error
     );
     Ok(())
 }
+
+#[test]
+fn method_call_fat_arrow_with_builtin_bareword_key() {
+    let code = r#"
+my $emitter = Mojo::EventEmitter->new();
+$emitter->on(accept => sub { 1 });
+"#;
+    assert_parses(code);
+}

@@ -374,6 +374,13 @@ impl<'a> Parser<'a> {
                             // This was already parsed as a quote operator in parse_primary
                             // Don't try to parse arguments
                         } else if Self::is_builtin_function(name) {
+                            // In call argument lists, `builtin => value` should keep the lhs as a
+                            // bareword key so parse_args can auto-quote it for fat-comma pairs.
+                            // Example: `$obj->on(accept => sub { ... })`.
+                            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                                break;
+                            }
+
                             // Builtins always become function calls, even with no arguments
                             // This ensures they work correctly in expressions like "return $x or die"
                             //
@@ -466,7 +473,10 @@ impl<'a> Parser<'a> {
 
                                     // Parse remaining arguments separated by commas or fat arrows
                                     // Perl allows `push @array => $value` as well as commas
-                                    while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    while matches!(
+                                        self.peek_kind(),
+                                        Some(TokenKind::Comma) | Some(TokenKind::FatArrow)
+                                    ) {
                                         self.consume_token()?;
                                         if self.is_at_statement_end() {
                                             break;
@@ -518,5 +528,4 @@ impl<'a> Parser<'a> {
                 | None
         )
     }
-
 }
