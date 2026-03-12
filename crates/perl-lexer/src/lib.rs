@@ -708,7 +708,11 @@ impl<'a> PerlLexer<'a> {
 
     #[inline(always)]
     fn peek_char(&self, offset: usize) -> Option<char> {
-        let pos = self.position + offset;
+        if offset > self.config.max_lookahead {
+            return None;
+        }
+
+        let pos = self.position.checked_add(offset)?;
         if pos < self.input_bytes.len() {
             // For ASCII, direct access is safe
             let byte = Self::byte_at(self.input_bytes, pos);
@@ -741,14 +745,29 @@ impl<'a> PerlLexer<'a> {
     /// Fast byte-level check for ASCII characters
     #[inline]
     fn peek_byte(&self, offset: usize) -> Option<u8> {
-        let pos = self.position + offset;
+        if offset > self.config.max_lookahead {
+            return None;
+        }
+
+        let pos = self.position.checked_add(offset)?;
         if pos < self.input_bytes.len() { Some(self.input_bytes[pos]) } else { None }
     }
 
     /// Check if the next bytes match a pattern (ASCII only)
     #[inline]
     fn matches_bytes(&self, pattern: &[u8]) -> bool {
-        let end = self.position + pattern.len();
+        let Some(end_offset) = pattern.len().checked_sub(1) else {
+            return true;
+        };
+
+        if end_offset > self.config.max_lookahead {
+            return false;
+        }
+
+        let Some(end) = self.position.checked_add(pattern.len()) else {
+            return false;
+        };
+
         if end <= self.input_bytes.len() {
             &self.input_bytes[self.position..end] == pattern
         } else {
@@ -1979,12 +1998,9 @@ impl<'a> PerlLexer<'a> {
                 // Examples: `$x / 2`, `$x // $y`, `10 / 3`
                 self.advance();
                 // Check for // or //= using byte-level operations for speed
-                if self.position < self.input_bytes.len() && self.input_bytes[self.position] == b'/'
-                {
+                if self.peek_byte(0) == Some(b'/') {
                     self.position += 1; // consume second / directly
-                    if self.position < self.input_bytes.len()
-                        && self.input_bytes[self.position] == b'='
-                    {
+                    if self.peek_byte(0) == Some(b'=') {
                         self.position += 1; // consume = directly
                         let text = &self.input[start..self.position];
                         self.mode = LexerMode::ExpectTerm;

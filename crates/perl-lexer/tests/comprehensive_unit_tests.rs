@@ -308,6 +308,34 @@ fn with_config_custom_lookahead() -> R {
 }
 
 #[test]
+fn with_config_zero_lookahead_disables_decimal_number_peek() -> R {
+    let cfg = LexerConfig { max_lookahead: 0, ..LexerConfig::default() };
+    let mut lexer = PerlLexer::with_config(".5", cfg);
+
+    let dot = lexer.next_token().ok_or("expected dot operator")?;
+    assert_eq!(dot.text.as_ref(), ".");
+
+    let number = lexer.next_token().ok_or("expected number token")?;
+    assert!(matches!(number.token_type, TokenType::Number(_)));
+    assert_eq!(number.text.as_ref(), "5");
+    Ok(())
+}
+
+#[test]
+fn with_config_small_lookahead_limits_namespace_parsing() -> R {
+    let cfg = LexerConfig { max_lookahead: 0, ..LexerConfig::default() };
+    let mut lexer = PerlLexer::with_config("Foo::Bar", cfg);
+
+    let first = lexer.next_token().ok_or("expected first token")?;
+    assert!(matches!(first.token_type, TokenType::Identifier(_)));
+    assert_eq!(first.text.as_ref(), "Foo");
+
+    let colon = lexer.next_token().ok_or("expected colon token")?;
+    assert_eq!(colon.text.as_ref(), ":");
+    Ok(())
+}
+
+#[test]
 fn with_body_tokens_emits_heredoc_body() -> R {
     let input = "print <<EOF;\nhello world\nEOF\n";
     let mut lexer = PerlLexer::with_body_tokens(input);
