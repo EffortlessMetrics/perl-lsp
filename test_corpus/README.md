@@ -23,6 +23,10 @@ This directory contains test files that cover gaps in the original test corpus. 
 12. **tie_interface.pl** - Tie/untie interface coverage for scalars, arrays, hashes, handles
 13. **parser_stress_cases.pl** - Ambiguity and boundedness cases (slash vs regex, hash vs block, indirect objects, deep nesting, complex delimiters, multiple heredocs)
 
+### Real-World Corpus Fixtures
+
+14. **real_world/cpan_distribution_tooling.pl** - CPAN packaging and installer tooling patterns (WriteMakefile metadata, dynamic prereq probing, MY::postamble hooks)
+
 ## Running Tests
 
 ```bash
