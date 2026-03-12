@@ -849,6 +849,93 @@ sub healthy_sub {
 
 #[test]
 #[serial]
+fn bdd_pull_diagnostics_emits_new_result_after_file_change()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Pull diagnostics emit new result after file change");
+
+    let healthy = r#"use strict;
+use warnings;
+
+sub score {
+    return 1;
+}
+"#;
+
+    let broken = r#"use strict;
+use warnings;
+
+sub score {
+    if (1 {
+        return 1;
+    }
+}
+"#;
+
+    scenario.given("a Perl file with a stable diagnostic resultId");
+    let (mut harness, workspace) = setup_workspace(&[("cycle.pl", healthy)])?;
+    let uri = workspace.uri("cycle.pl");
+    harness.open(&uri, healthy)?;
+
+    scenario.when("requesting pull diagnostics to establish a baseline resultId");
+    let first = harness.request(
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri }
+        }),
+    )?;
+
+    let baseline_result_id = first
+        .get("resultId")
+        .and_then(Value::as_str)
+        .ok_or("first diagnostic report missing resultId")?
+        .to_string();
+
+    scenario.when("requesting diagnostics again with previousResultId without edits");
+    let unchanged = harness.request(
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri },
+            "previousResultId": baseline_result_id.clone()
+        }),
+    )?;
+
+    scenario.then("the server reports unchanged diagnostics");
+    assert_eq!(unchanged.get("kind").and_then(Value::as_str), Some("unchanged"));
+
+    scenario.when("introducing a syntax error via didChange");
+    harness.change_full(&uri, 2, broken)?;
+    harness.barrier();
+
+    let changed = harness.request(
+        "textDocument/diagnostic",
+        json!({
+            "textDocument": { "uri": uri },
+            "previousResultId": baseline_result_id.clone()
+        }),
+    )?;
+
+    scenario.then("the server emits a full report with a fresh resultId and parse errors");
+    assert_eq!(changed.get("kind").and_then(Value::as_str), Some("full"));
+
+    let changed_result_id = changed
+        .get("resultId")
+        .and_then(Value::as_str)
+        .ok_or("changed diagnostic report missing resultId")?;
+
+    assert_ne!(
+        changed_result_id, baseline_result_id,
+        "changed diagnostics should provide a new resultId"
+    );
+    assert!(
+        diagnostic_error_count(&changed) > 0,
+        "syntax regression should produce error diagnostics"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
 fn bdd_formatting_workflow_returns_structured_edits() -> Result<(), Box<dyn std::error::Error>> {
     let scenario = BddScenario::new("Formatting workflow returns structured edits");
 
