@@ -12,7 +12,7 @@ indexing, refactoring, and LSP provider re-exports.
 use perl_parser::Parser;
 
 let mut parser = Parser::new("my $x = 42;");
-let ast = parser.parse().unwrap();
+let ast = parser.parse()?;
 println!("{}", ast.to_sexp());
 ```
 
@@ -31,6 +31,8 @@ in S-expression, JSON, or debug format.
 | `refactor` | `perl-refactoring` | Import optimizer, modernization, refactoring engine |
 | `tdd` | `perl-tdd-support` | Test generation and TDD workflow |
 | `completion`, `diagnostics`, `rename`, ... | `perl-lsp-*` | LSP feature providers |
+
+Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## License
 

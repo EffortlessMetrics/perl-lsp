@@ -4,7 +4,7 @@
 
 Debug Adapter Protocol (DAP) server for Perl, enabling debugging in VS Code, Neovim, Emacs, and other DAP-compatible editors.
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Features
 
@@ -19,7 +19,7 @@ Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
 ## Usage
 
 ```bash
-cargo install --path crates/perl-dap
+cargo install perl-dap
 perl-dap --stdio            # Native adapter on stdio (default)
 perl-dap --socket --port 13603  # Native adapter on TCP
 perl-dap --bridge           # Bridge mode (requires Perl::LanguageServer)
