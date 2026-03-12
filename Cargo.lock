@@ -1557,7 +1557,6 @@ dependencies = [
  "clap",
  "glob",
  "once_cell",
- "perl-parser",
  "perl-tdd-support",
  "proptest",
  "rand 0.10.0",
