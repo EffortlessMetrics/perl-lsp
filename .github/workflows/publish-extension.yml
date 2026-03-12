@@ -58,7 +58,12 @@ jobs:
           fi
 
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          npm version "$VERSION" --no-git-tag-version
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          if [ "$CURRENT_VERSION" = "$VERSION" ]; then
+            echo "Extension already at version $VERSION"
+          else
+            npm version "$VERSION" --no-git-tag-version
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "release_tag=v${VERSION}" >> "$GITHUB_OUTPUT"
 
