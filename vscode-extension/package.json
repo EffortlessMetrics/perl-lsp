@@ -2,7 +2,7 @@
   "name": "perl-lsp",
   "displayName": "Perl Language Server",
   "description": "Comprehensive Perl language support powered by perl-lsp",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publisher": "effortlesssteven",
   "preview": true,
   "markdown": "github",

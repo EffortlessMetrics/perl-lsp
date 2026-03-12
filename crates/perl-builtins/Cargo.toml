@@ -1,6 +1,6 @@
 [package]
 name = "perl-builtins"
-version = "0.10.0"
+version = "0.11.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
@@ -14,7 +14,7 @@ keywords = ["perl", "builtins", "parser", "lsp", "signatures"]
 categories = ["development-tools", "text-processing"]
 
 [dependencies]
-perl-builtins-phf = { path = "../perl-builtins-phf", version = "0.10.0" }
+perl-builtins-phf = { path = "../perl-builtins-phf", version = "0.11.0" }
 
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }
