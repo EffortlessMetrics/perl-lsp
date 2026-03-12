@@ -417,3 +417,26 @@ fn test_catastrophic_backtracking_detection() {
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
+
+#[test]
+fn test_string_repetition_operator_x() {
+    let mut parser = Parser::new("$a x 3;");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse x repetition operator: {:?}", result.err());
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("binary_x"), "Expected binary_x in AST, got: {}", sexp);
+}
+
+#[test]
+fn test_string_repetition_precedence_with_additive() {
+    let mut parser = Parser::new("\"a\" . \"b\" x 2;");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse expression with x repetition operator");
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("binary_x"), "Expected binary_x in AST, got: {}", sexp);
+    assert!(sexp.contains("binary_."), "Expected binary_. in AST, got: {}", sexp);
+}

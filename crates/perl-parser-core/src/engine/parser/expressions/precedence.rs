@@ -617,8 +617,26 @@ impl<'a> Parser<'a> {
         let mut expr = self.parse_power()?;
 
         while let Some(kind) = self.peek_kind() {
+            let is_repeat_operator = kind == TokenKind::Identifier
+                && self.peek_token().map(|token| token.text.as_ref() == "x").unwrap_or(false);
+
             match kind {
-                TokenKind::Star | TokenKind::Slash | TokenKind::Percent => {
+                TokenKind::Star | TokenKind::Slash | TokenKind::Percent if !is_repeat_operator => {
+                    let op_token = self.tokens.next()?;
+                    let right = self.parse_unary()?;
+                    let start = expr.location.start;
+                    let end = right.location.end;
+
+                    expr = Node::new(
+                        NodeKind::Binary {
+                            op: op_token.text.to_string(),
+                            left: Box::new(expr),
+                            right: Box::new(right),
+                        },
+                        SourceLocation { start, end },
+                    );
+                }
+                TokenKind::Identifier if is_repeat_operator => {
                     let op_token = self.tokens.next()?;
                     let right = self.parse_unary()?;
                     let start = expr.location.start;
