@@ -96,6 +96,53 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Check if a `TokenKind` is a keyword that has a dedicated parser handler.
+    /// Used for fat-comma autoquoting: `keyword => value` treats the keyword
+    /// as a bareword string rather than invoking its parser.
+    fn is_keyword_kind(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::My
+                | TokenKind::Our
+                | TokenKind::Local
+                | TokenKind::State
+                | TokenKind::Sub
+                | TokenKind::If
+                | TokenKind::Elsif
+                | TokenKind::Else
+                | TokenKind::Unless
+                | TokenKind::While
+                | TokenKind::Until
+                | TokenKind::For
+                | TokenKind::Foreach
+                | TokenKind::Return
+                | TokenKind::Package
+                | TokenKind::Use
+                | TokenKind::No
+                | TokenKind::Begin
+                | TokenKind::End
+                | TokenKind::Check
+                | TokenKind::Init
+                | TokenKind::Unitcheck
+                | TokenKind::Eval
+                | TokenKind::Do
+                | TokenKind::Given
+                | TokenKind::When
+                | TokenKind::Default
+                | TokenKind::Try
+                | TokenKind::Catch
+                | TokenKind::Finally
+                | TokenKind::Continue
+                | TokenKind::Next
+                | TokenKind::Last
+                | TokenKind::Redo
+                | TokenKind::Class
+                | TokenKind::Method
+                | TokenKind::Format
+                | TokenKind::Undef
+        )
+    }
+
     /// Check if an identifier is a nullary builtin that can stand alone without arguments.
     /// These builtins work on implicit variables like @_ when called without arguments.
     fn is_nullary_builtin(name: &str) -> bool {

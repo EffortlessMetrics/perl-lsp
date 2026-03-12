@@ -155,7 +155,10 @@ impl<'a> Parser<'a> {
 
         // Handle 'return' as an expression in expression context
         // This allows patterns like: open $fh, $file or return;
-        if self.peek_kind() == Some(TokenKind::Return) {
+        // But NOT when followed by `=>` (fat comma autoquoting: `return => 1`)
+        if self.peek_kind() == Some(TokenKind::Return)
+            && self.tokens.peek_second().ok().map(|t| t.kind) != Some(TokenKind::FatArrow)
+        {
             return self.parse_return();
         }
 

@@ -65,10 +65,22 @@ impl<'a> Parser<'a> {
 
         let kind = self.tokens.peek()?.kind;
 
+        // Fat comma autoquoting: if a keyword is followed by `=>`, Perl treats
+        // the keyword as a bareword string (e.g., `delete => 1`, `if => 1`).
+        // Check this before the keyword dispatch so we fall through to
+        // expression parsing instead.
+        let fat_arrow_follows = Self::is_keyword_kind(kind)
+            && self.tokens.peek_second().ok().map(|t| t.kind) == Some(TokenKind::FatArrow);
+
         // Don't check for labels here - it breaks regular identifier parsing
         // Labels will be handled differently
 
         let mut stmt = match kind {
+            // Fat comma autoquoting: when `=>` follows a keyword, treat it as
+            // an expression (bareword identifier) rather than dispatching the
+            // keyword's dedicated parser.
+            _ if fat_arrow_follows => self.parse_expression_statement(),
+
             // Empty statement (lone semicolon) - just consume and return a no-op
             TokenKind::Semicolon => {
                 let pos = self.current_position();
@@ -235,6 +247,12 @@ impl<'a> Parser<'a> {
 
     /// Parse simple statement (print, die, next, last, etc. with their arguments)
     fn parse_simple_statement(&mut self) -> ParseResult<Node> {
+        // Fat comma autoquoting: if the current identifier is followed by `=>`,
+        // treat it as a bareword expression, not a builtin function call.
+        if self.tokens.peek_second().ok().map(|t| t.kind) == Some(TokenKind::FatArrow) {
+            return self.parse_expression();
+        }
+
         // Check if it's a builtin that can take arguments without parens
         if let Ok(token) = self.tokens.peek() {
             match token.text.as_ref() {

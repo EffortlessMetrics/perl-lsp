@@ -50,6 +50,19 @@ impl<'a> Parser<'a> {
         let token = self.tokens.peek()?;
         let token_kind = token.kind;
 
+        // Fat comma autoquoting: any keyword followed by `=>` is treated as a
+        // bareword string identifier.  This must be checked before the keyword
+        // match arms below so that `eval => 1`, `do => 2`, etc. work.
+        if Self::is_keyword_kind(token_kind)
+            && self.tokens.peek_second().ok().map(|t| t.kind) == Some(TokenKind::FatArrow)
+        {
+            let token = self.tokens.next()?;
+            return Ok(Node::new(
+                NodeKind::Identifier { name: token.text.to_string() },
+                SourceLocation { start: token.start, end: token.end },
+            ));
+        }
+
         match token_kind {
             TokenKind::Number => {
                 let token = self.tokens.next()?;

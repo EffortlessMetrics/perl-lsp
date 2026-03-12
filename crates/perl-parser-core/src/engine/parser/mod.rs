@@ -441,3 +441,5 @@ mod slash_ambiguity_tests;
 mod tests;
 #[cfg(test)]
 mod tie_tests;
+#[cfg(test)]
+mod fat_comma_autoquote_tests;

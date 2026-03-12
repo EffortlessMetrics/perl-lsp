@@ -238,8 +238,12 @@ impl<'a> Parser<'a> {
 
                 Some(TokenKind::LeftBrace) => {
                     // Check if this is a builtin function that needs special handling
+                    // But NOT when followed by `=>` (fat comma autoquoting)
                     if let NodeKind::Identifier { name } = &expr.kind {
-                        if Self::is_builtin_function(name) {
+                        if Self::is_builtin_function(name)
+                            && self.tokens.peek_second().ok().map(|t| t.kind)
+                                != Some(TokenKind::FatArrow)
+                        {
                             // This is a builtin function with {} as argument
                             // Parse arguments without parentheses
                             let mut args = Vec::new();
@@ -373,7 +377,9 @@ impl<'a> Parser<'a> {
                         if matches!(name.as_str(), "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s") {
                             // This was already parsed as a quote operator in parse_primary
                             // Don't try to parse arguments
-                        } else if Self::is_builtin_function(name) {
+                        } else if Self::is_builtin_function(name)
+                            && self.peek_kind() != Some(TokenKind::FatArrow)
+                        {
                             // Builtins always become function calls, even with no arguments
                             // This ensures they work correctly in expressions like "return $x or die"
                             //
