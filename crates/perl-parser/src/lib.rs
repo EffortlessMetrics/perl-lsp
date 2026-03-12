@@ -760,6 +760,7 @@ mod tests {
             ("$a % $b", "%"),   // Modulo (not hash sigil)
             ("$a ** $b", "**"), // Exponent (not glob)
             ("$a // $b", "//"), // Defined-or (not regex)
+            ("'a' x 3", "x"),   // String repetition operator
         ];
 
         for (code, expected_op) in cases {
