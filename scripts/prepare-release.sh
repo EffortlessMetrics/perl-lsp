@@ -1,137 +1,61 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Prepare Release Script for Perl Parser & LSP
-# Usage: ./scripts/prepare-release.sh <version>
+usage() {
+  cat <<'USAGE'
+Usage:
+  scripts/prepare-release.sh <0.x.y> [release-turnkey-pr options]
+  scripts/prepare-release.sh --version <0.x.y> [release-turnkey-pr options]
 
-set -e
+Examples:
+  scripts/prepare-release.sh 0.11.0
+  scripts/prepare-release.sh 0.11.0 --dry-run
+  scripts/prepare-release.sh 0.11.0 --skip-docker --no-auto-merge
+USAGE
+}
 
-VERSION=$1
+die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
 
-if [ -z "$VERSION" ]; then
-    echo "Usage: $0 <version>"
-    echo "Example: $0 0.7.4"
-    exit 1
+validate_version() {
+  local version="$1"
+  if ! [[ "$version" =~ ^0\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+    die "invalid 0.x.y release version: $version"
+  fi
+}
+
+if [[ $# -eq 0 ]]; then
+  usage
+  exit 1
 fi
 
-echo "🚀 Preparing release v$VERSION"
+case "${1:-}" in
+  --help|-h)
+    usage
+    exit 0
+    ;;
+  --version)
+    [[ $# -ge 2 ]] || die "missing value for --version"
+    VERSION="$2"
+    shift 2
+    ;;
+  -* )
+    die "first argument must be <version> or --version <version>"
+    ;;
+  *)
+    VERSION="$1"
+    shift
+    ;;
+esac
 
-# Update version in Cargo.toml files
-echo "📝 Updating Cargo.toml versions..."
-sed -i "s/^version = \".*\"/version = \"$VERSION\"/" crates/perl-lexer/Cargo.toml
-sed -i "s/^version = \".*\"/version = \"$VERSION\"/" crates/perl-parser/Cargo.toml
-sed -i "s/perl-lexer = { version = \".*\"/perl-lexer = { version = \"$VERSION\"/" crates/perl-parser/Cargo.toml
+validate_version "$VERSION"
 
-# Update version in VSCode extension
-echo "📝 Updating VSCode extension version..."
-cd vscode-extension
-npm version $VERSION --no-git-tag-version
-cd ..
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TURNKEY_SCRIPT="$SCRIPT_DIR/release-turnkey-pr.sh"
 
-# Update ROADMAP.md
-echo "📝 Updating ROADMAP.md..."
-DATE=$(date +"%Y-%m-%d")
-sed -i "s/Last Updated: .*/Last Updated: $DATE/" ROADMAP.md
+[[ -e "$TURNKEY_SCRIPT" ]] || die "missing release script: $TURNKEY_SCRIPT"
+[[ -x "$TURNKEY_SCRIPT" ]] || die "release script is not executable: $TURNKEY_SCRIPT"
 
-# Check if CHANGELOG.md exists and update it
-if [ -f "CHANGELOG.md" ]; then
-    echo "📝 Updating CHANGELOG.md..."
-    # Add new version section if it doesn't exist
-    if ! grep -q "## v$VERSION" CHANGELOG.md; then
-        cat > CHANGELOG.tmp.md << EOF
-# Changelog
-
-## v$VERSION - $(date +"%B %d, %Y")
-
-### ✨ Features
-- Incremental parsing with <1ms updates
-- Workspace-wide refactoring capabilities
-- Cross-file symbol indexing
-- Dead code detection
-
-### 🐛 Bug Fixes
-- Various performance optimizations
-- Memory usage improvements
-
-### 📚 Documentation
-- Updated roadmap with completed milestones
-- Enhanced development guidelines
-
-EOF
-        tail -n +2 CHANGELOG.md >> CHANGELOG.tmp.md
-        mv CHANGELOG.tmp.md CHANGELOG.md
-    fi
-else
-    echo "📝 Creating CHANGELOG.md..."
-    cat > CHANGELOG.md << EOF
-# Changelog
-
-## v$VERSION - $(date +"%B %d, %Y")
-
-### ✨ Features
-- Incremental parsing with <1ms updates
-- Workspace-wide refactoring capabilities
-- Cross-file symbol indexing
-- Dead code detection
-- 25+ LSP features implemented
-- 100% edge case coverage
-
-### 🚀 Performance
-- Parser: 1-150us parsing (native Rust)
-- Incremental updates: 0.005ms average
-- LSP response: <50ms for all operations
-
-### 📚 Documentation
-- Complete roadmap for 2025
-- Enhanced development guidelines
-- VSCode extension publishing ready
-
-EOF
-fi
-
-# Run tests to ensure everything works
-echo "🧪 Running tests..."
-cargo test --all --quiet
-
-# Build to verify compilation
-echo "🔨 Building release binaries..."
-cargo build --release -p perl-parser --bin perl-lsp
-cargo build --release -p perl-parser --bin perl-dap
-
-# Check formatting
-echo "🎨 Checking code formatting..."
-cargo fmt --all -- --check || (echo "⚠️  Code needs formatting. Run: cargo fmt --all" && exit 1)
-
-# Run clippy
-echo "🔍 Running clippy..."
-cargo clippy --all -- -D warnings || (echo "⚠️  Clippy warnings found. Please fix them." && exit 1)
-
-# Create version tag commit
-echo "📋 Creating git commit..."
-git add -A
-git commit -m "chore: release v$VERSION
-
-- Incremental parsing with <1ms updates
-- Workspace-wide refactoring capabilities  
-- Cross-file symbol indexing
-- Dead code detection
-- Performance optimizations"
-
-# Create git tag
-echo "🏷️  Creating git tag..."
-git tag -a "v$VERSION" -m "Release v$VERSION"
-
-echo "✅ Release v$VERSION prepared successfully!"
-echo ""
-echo "Next steps:"
-echo "1. Review the changes: git diff HEAD~1"
-echo "2. Push to GitHub: git push && git push --tags"
-echo "3. The GitHub Actions workflow will automatically:"
-echo "   - Build binaries for all platforms"
-echo "   - Create GitHub release"
-echo "   - Publish to crates.io"
-echo "   - Publish VSCode extension to marketplace"
-echo ""
-echo "Make sure you have set up these secrets in GitHub:"
-echo "  - CARGO_REGISTRY_TOKEN (for crates.io)"
-echo "  - VSCE_PAT (for VSCode marketplace)"
-echo "  - HOMEBREW_GITHUB_TOKEN (optional, for Homebrew)"
+exec "$TURNKEY_SCRIPT" --version "$VERSION" "$@"

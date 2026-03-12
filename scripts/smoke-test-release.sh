@@ -1,107 +1,74 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-echo "🔍 v0.8.3 Release Smoke Test"
-echo "============================"
-echo ""
+usage() {
+  cat <<'USAGE'
+Usage:
+  scripts/smoke-test-release.sh <0.x.y>
 
-# Create temp directory for testing
-TEMP_DIR=$(mktemp -d)
-cd "$TEMP_DIR"
-echo "Testing in: $TEMP_DIR"
-echo ""
-
-# Test 1: Install perl-lsp from crates.io
-echo "📦 Installing perl-lsp from crates.io..."
-if cargo install perl-parser --bin perl-lsp --locked; then
-    echo "✅ Installation successful"
-else
-    echo "❌ Installation failed"
-    exit 1
-fi
-echo ""
-
-# Test 2: Verify version
-echo "📋 Checking version..."
-VERSION=$(perl-lsp --version | head -1)
-if [[ "$VERSION" == *"0.8.3"* ]]; then
-    echo "✅ Version correct: $VERSION"
-else
-    echo "❌ Version mismatch: $VERSION"
-    exit 1
-fi
-echo ""
-
-# Test 3: Basic LSP functionality
-echo "🔧 Testing LSP server..."
-cat > test_request.json << 'EOF'
-Content-Length: 85
-
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{},"rootUri":null}}
-EOF
-
-if timeout 2 perl-lsp --stdio < test_request.json > response.json 2>/dev/null; then
-    if grep -q '"id":1' response.json; then
-        echo "✅ LSP server responds to initialize"
-    else
-        echo "❌ LSP server response invalid"
-        exit 1
-    fi
-else
-    echo "⚠️  LSP server timed out (expected for stdio mode)"
-fi
-echo ""
-
-# Test 4: Parse simple Perl file
-echo "🔍 Testing Perl parsing..."
-cat > test.pl << 'EOF'
-#!/usr/bin/perl
-use strict;
-use warnings;
-
-my $greeting = "Hello, World!";
-print "$greeting\n";
-
-sub factorial {
-    my ($n) = @_;
-    return 1 if $n <= 1;
-    return $n * factorial($n - 1);
+Example:
+  scripts/smoke-test-release.sh 0.11.0
+USAGE
 }
 
-print factorial(5), "\n";
-EOF
+die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
 
-# Since perl-lsp is an LSP server, we can't directly parse files
-# But we can check that the binary exists and runs
-if perl-lsp --help > /dev/null 2>&1; then
-    echo "✅ perl-lsp binary functional"
-else
-    echo "❌ perl-lsp binary not working"
-    exit 1
+validate_version() {
+  local version="$1"
+  if ! [[ "$version" =~ ^0\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+    die "invalid 0.x.y release version: $version"
+  fi
+}
+
+if [[ $# -ne 1 ]]; then
+  usage
+  exit 1
 fi
-echo ""
 
-# Test 5: Verify all crates published
-echo "📚 Checking crates.io for all packages..."
-for crate in perl-lexer perl-corpus perl-parser-pest perl-parser; do
-    echo -n "  Checking $crate... "
-    if curl -s "https://crates.io/api/v1/crates/$crate" | grep -q '"newest_version":"0.8.3"'; then
-        echo "✅"
-    else
-        echo "⚠️  (may need more time to index)"
-    fi
-done
-echo ""
+if [[ "$1" == "--help" || "$1" == "-h" ]]; then
+  usage
+  exit 0
+fi
 
-# Cleanup
-cd /
-rm -rf "$TEMP_DIR"
+RELEASE_VERSION="$1"
+validate_version "$RELEASE_VERSION"
 
-echo "================================"
-echo "✨ Smoke test complete!"
-echo ""
-echo "Next steps:"
-echo "1. Check crates.io pages for proper descriptions"
-echo "2. Verify keywords and categories are correct"
-echo "3. Test with your editor's LSP client"
-echo "4. Announce the release!"
+TEMP_DIR="$(mktemp -d)"
+INSTALL_ROOT="$TEMP_DIR/install"
+trap 'rm -rf "$TEMP_DIR"' EXIT
+
+export PATH="$INSTALL_ROOT/bin:$PATH"
+
+printf 'Smoke testing release %s\n' "$RELEASE_VERSION"
+printf 'Temporary install root: %s\n\n' "$INSTALL_ROOT"
+
+cargo install perl-lsp --version "$RELEASE_VERSION" --locked --root "$INSTALL_ROOT"
+cargo install perl-dap --version "$RELEASE_VERSION" --locked --root "$INSTALL_ROOT"
+
+LSP_VERSION="$(perl-lsp --version | head -n 1)"
+DAP_VERSION="$(perl-dap --version | head -n 1)"
+
+[[ "$LSP_VERSION" == *"$RELEASE_VERSION"* ]] || die "perl-lsp version mismatch: $LSP_VERSION"
+[[ "$DAP_VERSION" == *"$RELEASE_VERSION"* ]] || die "perl-dap version mismatch: $DAP_VERSION"
+
+perl-lsp --help >/dev/null
+perl-dap --help >/dev/null
+
+printf 'Installed versions:\n'
+printf '  perl-lsp: %s\n' "$LSP_VERSION"
+printf '  perl-dap: %s\n\n' "$DAP_VERSION"
+
+printf 'Sparse index checks:\n'
+cargo search perl-lsp --limit 1
+cargo search perl-dap --limit 1
+cargo search perl-parser --limit 1
+
+cat <<EOF
+
+Manual follow-up:
+1. Verify GitHub release assets for v${RELEASE_VERSION}.
+2. Verify the VS Code Marketplace and Open VSX list version ${RELEASE_VERSION}.
+3. Open VS Code against a Perl workspace and confirm the extension downloads or locates perl-lsp successfully.
