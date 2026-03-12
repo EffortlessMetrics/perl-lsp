@@ -91,7 +91,7 @@ impl RegexValidator {
         // Type: 0=other, 1=quantifier, 2=group_end
         let mut last_type = 0;
 
-        while let Some((_, ch)) = chars.next() {
+        while let Some((idx, ch)) = chars.next() {
             match ch {
                 '\\' => {
                     chars.next(); // skip escaped
@@ -123,17 +123,18 @@ impl RegexValidator {
                     }
                 }
                 '+' | '*' | '?' | '{' => {
+                    let is_quantifier =
+                        if ch == '{' { Self::is_brace_quantifier(pattern, idx) } else { true };
+
+                    if !is_quantifier {
+                        last_type = 0;
+                        continue;
+                    }
+
                     // If we just closed a group that had a quantifier inside,
                     // and now we see another quantifier, that's a nested quantifier!
                     if last_type == 2 {
-                        // Check if it's really a quantifier or literal {
-                        if ch == '{' {
-                            // Only count as quantifier if it looks like {n} or {n,m}
-                            // peek ahead... (simplified for now)
-                            return true; // Assume { is quantifier for safety heuristic
-                        } else {
-                            return true;
-                        }
+                        return true;
                     }
 
                     // Mark current group as having a quantifier
@@ -148,6 +149,33 @@ impl RegexValidator {
             }
         }
         false
+    }
+
+    fn is_brace_quantifier(pattern: &str, open_brace_idx: usize) -> bool {
+        let mut iter = pattern[open_brace_idx + 1..].chars().peekable();
+
+        // Perl quantifiers need at least a lower bound, e.g. {2}, {2,}, {2,5}
+        let mut lower_digits = 0;
+        while matches!(iter.peek(), Some(c) if c.is_ascii_digit()) {
+            iter.next();
+            lower_digits += 1;
+        }
+
+        if lower_digits == 0 {
+            return false;
+        }
+
+        match iter.peek() {
+            Some('}') => true,
+            Some(',') => {
+                iter.next();
+                while matches!(iter.peek(), Some(c) if c.is_ascii_digit()) {
+                    iter.next();
+                }
+                matches!(iter.peek(), Some('}'))
+            }
+            _ => false,
+        }
     }
 
     fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), RegexError> {

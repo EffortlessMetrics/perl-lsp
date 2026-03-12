@@ -752,3 +752,13 @@ fn no_false_positive_lookaround_without_inner_quantifier() -> Result<(), Box<dyn
     assert!(!v.detect_nested_quantifiers("(?<!abc)+"));
     Ok(())
 }
+
+#[test]
+fn no_false_positive_literal_braces_after_quantified_group()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    // Literal braces after a quantified group should not be treated as {n,m} quantifier syntax
+    assert!(!v.detect_nested_quantifiers("(a+){foo}"));
+    v.validate("(a+){foo}", 0)?;
+    Ok(())
+}
