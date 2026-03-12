@@ -630,13 +630,74 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse multiplicative expression
+    /// Parse multiplicative expression (including the `x` string repetition operator)
     fn parse_multiplicative(&mut self) -> ParseResult<Node> {
         let mut expr = self.parse_power()?;
 
         while let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::Star | TokenKind::Slash | TokenKind::Percent => {
+                    let op_token = self.tokens.next()?;
+                    let right = self.parse_unary()?;
+                    let start = expr.location.start;
+                    let end = right.location.end;
+
+                    expr = Node::new(
+                        NodeKind::Binary {
+                            op: op_token.text.to_string(),
+                            left: Box::new(expr),
+                            right: Box::new(right),
+                        },
+                        SourceLocation { start, end },
+                    );
+                }
+                // Handle Perl's `x` string repetition operator.
+                // `x` is an identifier that acts as a binary operator at
+                // multiplicative precedence: `"ha" x 3` => `"hahaha"`.
+                //
+                // Disambiguation: `x` is only an operator when the token
+                // after it looks like an operand (number, variable sigil,
+                // opening paren/bracket). This avoids misinterpreting
+                // `$x = 5` or `x($arg)` as repetition.
+                //
+                // Note: the lexer sometimes produces `$var` as a single
+                // Identifier token rather than ScalarSigil + Identifier,
+                // so we must also check whether the following Identifier
+                // text begins with a sigil character.
+                TokenKind::Identifier => {
+                    let peeked = self.tokens.peek()?;
+                    if peeked.text.as_ref() != "x" {
+                        break;
+                    }
+                    // Lookahead: the token *after* `x` must begin an operand
+                    let is_operand_start = if let Ok(next) = self.tokens.peek_second() {
+                        match next.kind {
+                            TokenKind::Number
+                            | TokenKind::ScalarSigil
+                            | TokenKind::ArraySigil
+                            | TokenKind::HashSigil
+                            | TokenKind::LeftParen
+                            | TokenKind::LeftBracket
+                            | TokenKind::String
+                            | TokenKind::QuoteSingle
+                            | TokenKind::QuoteDouble => true,
+                            // The lexer may emit `$var`, `@arr`, or `%hash`
+                            // as a single Identifier token with the sigil
+                            // embedded in the text.
+                            TokenKind::Identifier => {
+                                let t = next.text.as_ref();
+                                t.starts_with('$')
+                                    || t.starts_with('@')
+                                    || t.starts_with('%')
+                            }
+                            _ => false,
+                        }
+                    } else {
+                        false
+                    };
+                    if !is_operand_start {
+                        break;
+                    }
                     let op_token = self.tokens.next()?;
                     let right = self.parse_unary()?;
                     let start = expr.location.start;

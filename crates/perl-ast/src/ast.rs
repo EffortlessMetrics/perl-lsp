@@ -2316,6 +2316,9 @@ fn format_binary_operator(op: &str) -> String {
         // Smart match
         "~~" => "binary_~~".to_string(),
 
+        // String repetition
+        "x" => "binary_x".to_string(),
+
         // Concatenation
         "." => "binary_.".to_string(),
 
