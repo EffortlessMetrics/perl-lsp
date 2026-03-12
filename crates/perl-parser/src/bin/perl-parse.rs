@@ -290,11 +290,25 @@ fn main() {
 
 fn read_input(input: &Input) -> io::Result<String> {
     match input {
-        Input::File(path) => fs::read_to_string(path),
+        Input::File(path) => read_source_bytes(fs::read(path)?),
         Input::Stdin => {
-            let mut buffer = String::new();
-            io::stdin().read_to_string(&mut buffer)?;
-            Ok(buffer)
+            let mut buffer = Vec::new();
+            io::stdin().read_to_end(&mut buffer)?;
+            read_source_bytes(buffer)
+        }
+    }
+}
+
+fn read_source_bytes(bytes: Vec<u8>) -> io::Result<String> {
+    match String::from_utf8(bytes) {
+        Ok(source) => Ok(source),
+        Err(err) => {
+            let raw = err.into_bytes();
+            let mut decoded = String::with_capacity(raw.len());
+            for byte in raw {
+                decoded.push(char::from(byte));
+            }
+            Ok(decoded)
         }
     }
 }
@@ -400,5 +414,25 @@ fn print_error_context(source: &str, position: usize, stderr: &mut io::Stderr) {
         if line_num < lines.len() {
             writeln!(stderr, "  {} | {}", line_num + 1, lines[line_num]).ok();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_source_bytes;
+
+    #[test]
+    fn read_source_bytes_preserves_utf8() -> Result<(), Box<dyn std::error::Error>> {
+        let decoded = read_source_bytes(b"use strict;\n".to_vec())?;
+        assert_eq!(decoded, "use strict;\n");
+        Ok(())
+    }
+
+    #[test]
+    fn read_source_bytes_decodes_latin1_losslessly() -> Result<(), Box<dyn std::error::Error>> {
+        // "Sår" in ISO-8859-1 bytes
+        let decoded = read_source_bytes(vec![0x53, 0xE5, 0x72, 0x0A])?;
+        assert_eq!(decoded, "Sår\n");
+        Ok(())
     }
 }
