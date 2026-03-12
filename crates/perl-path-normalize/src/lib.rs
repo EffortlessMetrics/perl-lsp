@@ -94,4 +94,47 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn allows_parent_dir_that_stays_within_workspace() -> TestResult {
+        let temp_dir = tempfile::tempdir()?;
+        let workspace = temp_dir.path().canonicalize()?;
+
+        let normalized = normalize_path_within_workspace(
+            &PathBuf::from("src/lib/../main.pl"),
+            &workspace,
+        )?;
+
+        assert_eq!(normalized, workspace.join("src").join("main.pl"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_absolute_paths() -> TestResult {
+        let temp_dir = tempfile::tempdir()?;
+        let workspace = temp_dir.path().canonicalize()?;
+
+        let absolute = std::env::temp_dir().join("outside_workspace.pl");
+        let result = normalize_path_within_workspace(&absolute, &workspace);
+
+        assert!(matches!(result, Err(NormalizePathError::PathTraversalAttempt(_))));
+
+        Ok(())
+    }
+
+    #[test]
+    fn ignores_current_directory_components() -> TestResult {
+        let temp_dir = tempfile::tempdir()?;
+        let workspace = temp_dir.path().canonicalize()?;
+
+        let normalized = normalize_path_within_workspace(
+            &PathBuf::from("./src/./module/../main.pl"),
+            &workspace,
+        )?;
+
+        assert_eq!(normalized, workspace.join("src").join("main.pl"));
+
+        Ok(())
+    }
 }
