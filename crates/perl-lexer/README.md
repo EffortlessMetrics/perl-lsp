@@ -3,7 +3,7 @@
 [![Documentation](https://docs.rs/perl-lexer/badge.svg)](https://docs.rs/perl-lexer)
 
 Context-aware Perl lexer with mode-based tokenization for the
-[tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+[perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Overview
 

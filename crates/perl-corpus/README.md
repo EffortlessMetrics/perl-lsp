@@ -4,7 +4,7 @@
 
 Test corpus management, property-based generators, and edge case fixtures for Perl parsers.
 
-Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp) workspace.
+Part of the [perl-lsp](https://github.com/EffortlessMetrics/perl-lsp) workspace.
 
 ## Overview
 
@@ -25,7 +25,7 @@ Part of the [tree-sitter-perl-rs](https://github.com/EffortlessMetrics/perl-lsp)
 use perl_corpus::{parse_dir, find_by_tag, EdgeCaseGenerator, generate_perl_code_with_seed};
 
 // Load and query corpus sections
-let sections = parse_dir(std::path::Path::new("test_corpus")).unwrap();
+let sections = parse_dir(std::path::Path::new("test_corpus"))?;
 let regex_tests = find_by_tag(&sections, "regex");
 
 // Generate deterministic Perl code
