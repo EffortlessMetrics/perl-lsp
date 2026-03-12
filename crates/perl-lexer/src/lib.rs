@@ -1233,14 +1233,22 @@ impl<'a> PerlLexer<'a> {
                 pos += 1;
             }
 
-            // Must have at least one digit after exponent
-            let digit_start = pos;
-            while pos < bytes.len() && bytes[pos].is_ascii_digit() {
-                pos += 1;
+            // Must have at least one digit after exponent (underscores allowed between digits)
+            let mut saw_digit = false;
+            while pos < bytes.len() {
+                let byte = bytes[pos];
+                if byte.is_ascii_digit() {
+                    saw_digit = true;
+                    pos += 1;
+                } else if byte == b'_' {
+                    pos += 1;
+                } else {
+                    break;
+                }
             }
 
             // If no digits after exponent, backtrack
-            if pos == digit_start {
+            if !saw_digit {
                 pos = exp_start;
             }
 
@@ -1277,11 +1285,24 @@ impl<'a> PerlLexer<'a> {
                             self.advance();
                         }
                     }
-                    // Parse exponent digits
-                    while self.position < self.input_bytes.len()
-                        && self.input_bytes[self.position].is_ascii_digit()
-                    {
-                        self.position += 1;
+                    // Parse exponent digits (underscores allowed between digits)
+                    let exponent_start = self.position;
+                    let mut saw_digit = false;
+                    while self.position < self.input_bytes.len() {
+                        let byte = self.input_bytes[self.position];
+                        if byte.is_ascii_digit() {
+                            saw_digit = true;
+                            self.position += 1;
+                        } else if byte == b'_' {
+                            self.position += 1;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    // No digits after exponent marker, rewind so caller treats `e` as separate token.
+                    if !saw_digit {
+                        self.position = exponent_start.saturating_sub(1);
                     }
                     break;
                 }
