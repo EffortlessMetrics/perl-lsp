@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Release Prep (v0.10.1 candidate)
+
+#### Added
+- _No user-visible additions yet._
+
+#### Changed
+- _No user-visible changes yet._
+
+#### Fixed
+- _No user-visible fixes yet._
+
+#### Security
+- _No security advisories yet._
+
+#### Infrastructure
+- _Release candidate validation in progress._
+
 ## [0.10.0] - 2026-02-28
 
 A major release campaign spanning 60+ PRs (#845–#911) focused on build reliability,
