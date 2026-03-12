@@ -14,3 +14,4 @@ current release operations:
 - `scripts/release.sh` (removed, legacy pre-flows)
 - `scripts/release-ga.sh` (removed, legacy GA helper)
 - `scripts/publish-v0.8.3.sh` (removed, historical one-off v0.8.3 helper)
+- `scripts/prepare-release.sh` (compatibility wrapper; forwards to turnkey flow)
