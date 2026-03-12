@@ -202,8 +202,52 @@ fn provider_unexpected_token_error() -> Result<(), Box<dyn std::error::Error>> {
     let first = &parse_diags[0];
     assert_eq!(first.severity, DiagnosticSeverity::Error);
     assert!(first.message.contains("Expected expression"));
-    assert!(first.message.contains(";"));
+    assert!(first.message.contains("`;`"));
     assert_eq!(first.range.0, 8);
+    Ok(())
+}
+
+#[test]
+fn provider_unexpected_token_formats_end_of_input() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "my $x = ";
+    let errors = vec![ParseError::UnexpectedToken {
+        location: source.len(),
+        expected: "expression".to_string(),
+        found: "<EOF>".to_string(),
+    }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+
+    let first = &parse_diags[0];
+    assert!(first.message.contains("Expected expression"));
+    assert!(first.message.contains("end of input"));
+    Ok(())
+}
+
+#[test]
+fn provider_clamps_out_of_bounds_ranges() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "short";
+    let errors = vec![ParseError::UnexpectedToken {
+        location: 999,
+        expected: "statement".to_string(),
+        found: "foo".to_string(),
+    }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+
+    let first = &parse_diags[0];
+    assert_eq!(first.range.0, source.len());
+    assert_eq!(first.range.1, source.len().saturating_add(1));
     Ok(())
 }
 
@@ -278,7 +322,7 @@ fn provider_multiple_errors() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
-fn provider_error_range_uses_saturating_add() -> Result<(), Box<dyn std::error::Error>> {
+fn provider_error_range_is_clamped_to_source_bounds() -> Result<(), Box<dyn std::error::Error>> {
     let ast = Arc::new(program(vec![]));
     let source = "x";
     let errors = vec![ParseError::UnexpectedToken {
@@ -292,8 +336,8 @@ fn provider_error_range_uses_saturating_add() -> Result<(), Box<dyn std::error::
     let parse_diags: Vec<_> =
         diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
     assert!(!parse_diags.is_empty());
-    // saturating_add should prevent overflow
-    assert_eq!(parse_diags[0].range.1, usize::MAX);
+    assert_eq!(parse_diags[0].range.0, source.len());
+    assert_eq!(parse_diags[0].range.1, source.len().saturating_add(1));
     Ok(())
 }
 
