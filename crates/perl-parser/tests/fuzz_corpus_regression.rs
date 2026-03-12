@@ -7,15 +7,29 @@ use std::fs;
 use std::path::PathBuf;
 
 fn get_fuzzed_files() -> Vec<PathBuf> {
-    let fuzz_dir = "/home/steven/code/Rust/perl-lsp/review/benchmark_tests/fuzzed";
+    let fuzz_dir =
+        std::env::var("PERL_PARSER_FUZZ_CORPUS_DIR").map(PathBuf::from).unwrap_or_else(|_| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..").join("perl-corpus").join("fuzz")
+        });
 
-    if let Ok(entries) = fs::read_dir(fuzz_dir) {
-        entries
+    let max_files = std::env::var("PERL_PARSER_FUZZ_CORPUS_LIMIT")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(50);
+
+    if let Ok(entries) = fs::read_dir(&fuzz_dir) {
+        let mut files: Vec<_> = entries
             .filter_map(|entry| entry.ok())
             .map(|entry| entry.path())
-            .filter(|path| path.extension().and_then(|s| s.to_str()) == Some("pl"))
-            .take(20) // Limit to first 20 files for bounded testing
-            .collect()
+            .filter(|path| path.is_file())
+            .filter(|path| {
+                !matches!(path.extension().and_then(|extension| extension.to_str()), Some("md"))
+            })
+            .collect();
+
+        files.sort();
+        files.truncate(max_files);
+        files
     } else {
         Vec::new()
     }
@@ -37,7 +51,9 @@ fn test_fuzz_corpus_regression() {
     for file_path in fuzzed_files {
         total_files += 1;
 
-        if let Ok(content) = fs::read_to_string(&file_path) {
+        if let Ok(content_bytes) = fs::read(&file_path) {
+            let content = String::from_utf8_lossy(&content_bytes);
+
             // Test that parser doesn't panic on existing fuzzed content
             let result = std::panic::catch_unwind(|| {
                 let mut parser = Parser::new(&content);
