@@ -122,6 +122,18 @@ impl RegexValidator {
                         }
                     }
                 }
+                '[' => {
+                    // Character classes may contain quantifier characters literally.
+                    // Skip class contents to avoid false positives like ([+*?])+.
+                    while let Some((_, c)) = chars.next() {
+                        if c == '\\' {
+                            chars.next();
+                        } else if c == ']' {
+                            break;
+                        }
+                    }
+                    last_type = 0;
+                }
                 '+' | '*' | '?' | '{' => {
                     // If we just closed a group that had a quantifier inside,
                     // and now we see another quantifier, that's a nested quantifier!

@@ -387,6 +387,20 @@ fn test_branch_reset_complexity() {
 }
 
 #[test]
+fn test_regex_validator_no_false_positive_for_character_class_quantifier_chars() {
+    let code = r#"qr/([+*?])+/;"#;
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+
+    assert!(
+        result.is_ok(),
+        "Regex with quantifier chars inside character class should parse: {:?}",
+        result.err()
+    );
+    assert!(parser.errors().is_empty(), "Unexpected parser errors: {:?}", parser.errors());
+}
+
+#[test]
 fn test_catastrophic_backtracking_detection() {
     // Nested quantifiers (a+)+
     let code = r#"qr/(a+)+/;"#;

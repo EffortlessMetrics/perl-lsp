@@ -346,6 +346,24 @@ fn nested_quantifiers_group_without_outer_quantifier() -> Result<(), Box<dyn std
     Ok(())
 }
 
+#[test]
+fn no_false_positive_quantifier_chars_inside_character_class()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    assert!(!v.detect_nested_quantifiers(r"([+*?])+"));
+    v.validate(r"([+*?])+", 0)?;
+    Ok(())
+}
+
+#[test]
+fn no_false_positive_brace_quantifier_chars_inside_character_class()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    assert!(!v.detect_nested_quantifiers(r"([{}])+"));
+    v.validate(r"([{}])+", 0)?;
+    Ok(())
+}
+
 // ── detects_code_execution() ────────────────────────────────────────────
 
 #[test]
