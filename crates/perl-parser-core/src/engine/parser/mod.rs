@@ -416,9 +416,9 @@ mod builtin_block_list_tests;
 #[cfg(test)]
 mod builtin_expansion_tests;
 #[cfg(test)]
-mod declaration_in_args_tests;
-#[cfg(test)]
 mod coderef_invocation_tests;
+#[cfg(test)]
+mod declaration_in_args_tests;
 #[cfg(test)]
 mod format_comprehensive_tests;
 #[cfg(test)]
