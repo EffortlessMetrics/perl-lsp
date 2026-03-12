@@ -394,11 +394,13 @@ impl PureRustPerlParser {
                             }
                         }
                         current_block.clear();
+                        brace_count = 0;
                         in_single_quote = false;
                         in_double_quote = false;
                     } else {
                         // If that fails, skip and continue
                         current_block.clear();
+                        brace_count = 0;
                         in_single_quote = false;
                         in_double_quote = false;
                     }
@@ -406,6 +408,7 @@ impl PureRustPerlParser {
                     // Handle comments
                     statements.push(AstNode::Comment(Arc::from(trimmed)));
                     current_block.clear();
+                    brace_count = 0;
                 }
             }
         }
@@ -2782,5 +2785,20 @@ mod tests {
         let sexp = parser.to_sexp(&ast);
         println!("Hash assignment AST: {:?}", ast);
         println!("S-expression: {}", sexp);
+    }
+
+    #[test]
+    fn test_recovery_keeps_parsing_after_incomplete_block() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "if ($x) {\n\nmy $y = 1;\n";
+
+        let result = parser.parse(source);
+        assert!(result.is_ok(), "Expected recovery to parse trailing statement");
+
+        let sexp = parser.to_sexp(&must(result));
+        assert!(
+            sexp.contains("$y") && sexp.contains("(number 1)"),
+            "Recovered AST should include trailing declaration, got: {sexp}"
+        );
     }
 }
