@@ -581,30 +581,17 @@ impl PureRustPerlParser {
                 let expr = self.build_node(expr_pair)?;
                 let modifier = inner.next().ok_or("Missing modifier in modified statement")?;
 
-                // Extract modifier type and condition from the statement_modifier
-                let modifier_str = modifier.as_str();
-                let (modifier_type, condition_expr) =
-                    if let Some(rest) = modifier_str.strip_prefix("if ") {
-                        ("if", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("unless ") {
-                        ("unless", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("while ") {
-                        ("while", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("until ") {
-                        ("until", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("for ") {
-                        ("for", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("foreach ") {
-                        ("foreach", rest)
-                    } else {
-                        return Ok(expr);
-                    };
+                if let Some(expr) = expr {
+                    let modifier_src = modifier.as_str();
+                    let mut modifier_inner = modifier.into_inner();
+                    let condition_pair =
+                        modifier_inner.next().ok_or("Missing condition in statement modifier")?;
+                    let condition = self
+                        .build_node(condition_pair)?
+                        .ok_or("Failed to build condition in statement modifier")?;
 
-                // For now, create a simple identifier for the condition
-                // In a real implementation, we'd parse the condition expression
-                let condition = Some(AstNode::Identifier(Arc::from(condition_expr.trim())));
+                    let modifier_type = modifier_src.split_whitespace().next().unwrap_or("");
 
-                if let (Some(expr), Some(condition)) = (expr, condition) {
                     match modifier_type {
                         "if" => Ok(Some(AstNode::IfStatement {
                             condition: Box::new(condition),
@@ -2754,6 +2741,27 @@ mod tests {
         println!("S-expression: {}", sexp);
     }
 
+    #[test]
+    fn test_modified_statement_parses_condition_ast() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "print $x if $a > 0;";
+        let ast = must(parser.parse(source));
+        let sexp = parser.to_sexp(&ast);
+
+        assert!(sexp.contains("(if_statement"));
+        assert!(!sexp.contains("(identifier $a > 0)"));
+    }
+
+    #[test]
+    fn test_modified_statement_with_parenthesized_condition() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "print $x unless ($ready);";
+        let ast = must(parser.parse(source));
+        let sexp = parser.to_sexp(&ast);
+
+        assert!(sexp.contains("(unless_statement"));
+        assert!(!sexp.contains("(identifier ($ready))"));
+    }
     #[test]
     fn test_regression_percent_string_in_if_assignment() {
         let mut parser = PureRustPerlParser::new();
