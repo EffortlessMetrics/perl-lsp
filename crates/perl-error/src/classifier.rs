@@ -87,6 +87,18 @@ impl Default for ErrorClassifier {
 }
 
 impl ErrorClassifier {
+    fn clamp_to_char_boundary(source: &str, index: usize) -> usize {
+        if index >= source.len() {
+            return source.len();
+        }
+
+        let mut clamped = index;
+        while clamped > 0 && !source.is_char_boundary(clamped) {
+            clamped -= 1;
+        }
+        clamped
+    }
+
     /// Create new error classifier for Perl script analysis
     ///
     /// # Returns
@@ -112,13 +124,9 @@ impl ErrorClassifier {
     pub fn classify(&self, error_node: &Node, source: &str) -> ParseErrorKind {
         // Get the error text if available based on location
         let error_text = {
-            let start = error_node.location.start;
-            let end = (start + 10).min(source.len()); // Look at next 10 chars
-            if start < source.len() && end <= source.len() && start <= end {
-                &source[start..end]
-            } else {
-                ""
-            }
+            let start = Self::clamp_to_char_boundary(source, error_node.location.start);
+            let end = Self::clamp_to_char_boundary(source, start.saturating_add(10)); // Look at next 10 chars
+            if start < source.len() && start <= end { &source[start..end] } else { "" }
         };
 
         // Check for common patterns - check the entire source for unclosed quotes
@@ -151,7 +159,7 @@ impl ErrorClassifier {
 
         // Check context around error
         {
-            let pos = error_node.location.start;
+            let pos = Self::clamp_to_char_boundary(source, error_node.location.start);
             let line_start = source[..pos].rfind('\n').map(|i| i + 1).unwrap_or(0);
             let line_end = source[pos..].find('\n').map(|i| pos + i).unwrap_or(source.len());
 
@@ -196,7 +204,10 @@ impl ErrorClassifier {
         }
 
         // Check if we're at EOF
-        if error_node.location.start >= source.len() - 1 {
+        if source.is_empty() {
+            return ParseErrorKind::UnexpectedEof;
+        }
+        if error_node.location.start >= source.len().saturating_sub(1) {
             return ParseErrorKind::UnexpectedEof;
         }
 
@@ -381,5 +392,44 @@ mod tests {
         );
         let kind = classifier.classify(&error, source);
         assert_eq!(kind, ParseErrorKind::MissingSemicolon);
+    }
+
+    #[test]
+    fn test_classify_empty_source_as_unexpected_eof() {
+        let classifier = ErrorClassifier::new();
+        let source = "";
+
+        let error = Node::new(
+            NodeKind::Error {
+                message: "Unexpected end".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            SourceLocation { start: 0, end: 0 },
+        );
+        let kind = classifier.classify(&error, source);
+        assert_eq!(kind, ParseErrorKind::UnexpectedEof);
+    }
+
+    #[test]
+    fn test_classify_handles_non_char_boundary_location() {
+        let classifier = ErrorClassifier::new();
+        let source = "my $x = 'é';\nmy $y = 1";
+
+        let error = Node::new(
+            NodeKind::Error {
+                message: "Unexpected token".to_string(),
+                expected: vec![],
+                found: None,
+                partial: None,
+            },
+            // 9 points into the middle of UTF-8 sequence for é (byte index 8 is char boundary, 9 is not)
+            SourceLocation { start: 9, end: 10 },
+        );
+
+        // Should not panic when the location is not on a UTF-8 char boundary.
+        let kind = classifier.classify(&error, source);
+        assert_eq!(kind, ParseErrorKind::InvalidSyntax);
     }
 }
