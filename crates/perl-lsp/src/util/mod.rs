@@ -455,7 +455,11 @@ pub fn offset_to_position(content: &str, offset: usize) -> Position {
 
 #[cfg(test)]
 mod tests {
-    use super::extract_module_reference;
+    use super::{
+        arg_starts_in_call_body, arg_starts_top_level, extract_module_reference,
+        offset_to_position, position_to_offset,
+    };
+    use lsp_types::Position;
 
     #[test]
     fn extract_module_reference_detects_use_statement_token() {
@@ -471,5 +475,49 @@ mod tests {
         let cursor = line.find("Worker").unwrap_or(0);
 
         assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+    }
+
+    #[test]
+    fn arg_starts_top_level_ignores_nested_structures_and_quotes() {
+        let args = r#"  $a, call(1, 2), [3, 4], {x => 'a,b'}, "still,one", $z"#;
+
+        let starts = arg_starts_top_level(args);
+
+        assert_eq!(starts.len(), 6);
+        assert_eq!(&args[starts[0]..starts[0] + 2], "$a");
+        assert_eq!(&args[starts[1]..starts[1] + 4], "call");
+        assert_eq!(&args[starts[2]..starts[2] + 1], "[");
+        assert_eq!(&args[starts[3]..starts[3] + 1], "{");
+        assert_eq!(args.as_bytes()[starts[4]], b'"');
+        assert_eq!(&args[starts[5]..starts[5] + 2], "$z");
+    }
+
+    #[test]
+    fn arg_starts_in_call_body_tracks_only_top_level_commas() {
+        let body = "$a, fn_call(\"x,y\", [1,2]), { ok => \"a,b\" }, $last";
+
+        let starts = arg_starts_in_call_body(body);
+
+        assert_eq!(starts.len(), 4);
+        assert_eq!(&body[starts[0]..starts[0] + 2], "$a");
+        assert_eq!(&body[starts[1]..starts[1] + 7], "fn_call");
+        assert_eq!(&body[starts[2]..starts[2] + 1], "{");
+        assert_eq!(&body[starts[3]..starts[3] + 5], "$last");
+    }
+
+    #[test]
+    fn position_offset_roundtrip_handles_utf16_and_crlf() {
+        let text = ["my $x = \"😺\";", "print $x;", ""].join("\r\n");
+
+        let emoji_offset = text.find('😺').unwrap_or(0);
+        let emoji_position = offset_to_position(&text, emoji_offset);
+        assert_eq!(emoji_position, Position::new(0, 9));
+        assert_eq!(
+            position_to_offset(&text, emoji_position.line, emoji_position.character),
+            Some(emoji_offset)
+        );
+
+        let print_offset = text.find("print").unwrap_or(0);
+        assert_eq!(offset_to_position(&text, print_offset), Position::new(1, 0));
     }
 }
