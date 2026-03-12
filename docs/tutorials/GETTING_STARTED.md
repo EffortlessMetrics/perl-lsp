@@ -41,7 +41,7 @@ perl-lsp --version
 
 # Quick health check
 perl-lsp --health
-# Should output: ok 0.10.0
+# Should output: ok 0.11.0
 ```
 
 ## Quick Editor Setup

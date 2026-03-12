@@ -1,14 +1,14 @@
 # Perl LSP Documentation
 
-Documentation for Perl LSP v0.10.0 — a Language Server Protocol implementation for Perl.
+Documentation for Perl LSP v0.11.0 — a Language Server Protocol implementation for Perl.
 
 ## Repository snapshot
 
-- Workspace version: **v0.10.0**
-- Workspace members: **112 crates**
+- Workspace version: **v0.11.0**
+- Workspace members: **116 crates**
 - Family counts (from `crates/`):
   - `perl-module-*`: 13
-  - `perl-lsp-*`: 38
+  - `perl-lsp-*`: 41
   - `perl-lsp-feature-*`: 8
   - `perl-dap-*`: 9
   - `perl-ts-*`: 5
@@ -124,4 +124,4 @@ nix develop -c just status-check  # Verify metrics haven't drifted
 
 ---
 
-Version: v0.10.0
+Version: v0.11.0

@@ -8,7 +8,7 @@
 [![Rust](https://img.shields.io/badge/rust-1.92%2B-orange.svg)](https://www.rust-lang.org/)
 [![Downloads](https://img.shields.io/crates/d/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
 
-A fast, native **Perl language server** and **parser toolkit** written in Rust — bringing modern IDE features to Perl. The workspace currently contains **over 115 Rust crates** and is in **Initial Public Alpha (v0.10.0)**.
+A fast, native **Perl language server** and **parser toolkit** written in Rust — bringing modern IDE features to Perl. The workspace currently contains **over 115 Rust crates** and is in **Initial Public Alpha (v0.11.0)**.
 
 > **Full LSP coverage** · **fast incremental parsing** · **zero runtime Perl dependency**
 

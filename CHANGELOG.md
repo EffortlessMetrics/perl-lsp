@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Release Prep**: Updated primary version references to `0.11.0` across user-facing docs and feature SoT catalogs.
+- **Documentation Snapshot Refresh**: Synced workspace member/family counts in `docs/README.md` with current workspace state.
+
 ## [0.10.0] - 2026-02-28
 
 A major release campaign spanning 60+ PRs (#845–#911) focused on build reliability,
