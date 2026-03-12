@@ -11,6 +11,7 @@ fn test_complex_postfix_deref() -> TestResult {
         ("my %hash = $hashref->%*;", "unary_->%*"),
         ("my $scalar = $scalarref->$*;", "unary_->$*"),
         ("my $result = $coderef->&*;", "unary_->&*"),
+        ("my $invoke = $coderef->();", "method_call"),
         ("my $glob = $globref->**;", "unary_->**"),
         // Array and hash slices
         ("my @slice = $arrayref->@[0..2];", "binary_->@[]"),
@@ -58,6 +59,8 @@ fn test_postfix_deref_edge_cases() -> TestResult {
         ("$ref->@*->%*", vec!["unary_->@*", "unary_->%*"]),
         // Postfix deref with method calls (use simpler example for now)
         ("$ref->@*->length()", vec!["unary_->@*", "method_call"]),
+        // Coderef call syntax after arrow
+        ("$code->($x, $y)", vec!["method_call"]),
         // In ternary expressions
         ("$flag ? $ref->@* : ()", vec!["ternary", "unary_->@*"]),
         // With string interpolation (the parser should handle the variable, not the string)

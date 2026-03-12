@@ -173,6 +173,25 @@ impl<'a> Parser<'a> {
                             );
                         }
 
+                        Some(TokenKind::LeftParen) => {
+                            // Coderef call syntax: $code->(...)
+                            // Represent as a MethodCall with an empty method name to preserve
+                            // call structure while distinguishing it from direct function calls.
+                            let args = self.parse_args()?;
+
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+
+                            expr = Node::new(
+                                NodeKind::MethodCall {
+                                    object: Box::new(expr),
+                                    method: String::new(),
+                                    args,
+                                },
+                                SourceLocation { start, end },
+                            );
+                        }
+
                         _ => {
                             // Just the arrow by itself - could be an error or incomplete
                             // For now, we'll leave expr unchanged
