@@ -211,7 +211,9 @@ where
     I: IntoIterator,
     I::Item: Into<std::ffi::OsString> + Clone,
 {
-    match LspArgs::try_parse_from(args) {
+    let args_vec: Vec<std::ffi::OsString> = args.into_iter().map(Into::into).collect();
+
+    match LspArgs::try_parse_from(args_vec.clone()) {
         Ok(parsed_args) => {
             let mut config = LaunchConfig::new(FeatureProfile::current());
 
@@ -249,9 +251,65 @@ where
                 });
             }
 
-            Err(LaunchParseError::UnknownOption { option: err.to_string() })
+            Err(infer_parse_error(&args_vec, &err.to_string()))
         }
     }
+}
+
+fn infer_parse_error(args: &[std::ffi::OsString], fallback: &str) -> LaunchParseError {
+    if has_missing_value(args, "--port") {
+        return LaunchParseError::MissingValue { option: "--port".to_string() };
+    }
+
+    if has_missing_value(args, "--feature-profile") {
+        return LaunchParseError::MissingValue { option: "--feature-profile".to_string() };
+    }
+
+    if let Some(raw_port) = extract_option_value(args, "--port") {
+        if raw_port.parse::<u16>().is_err() {
+            return LaunchParseError::InvalidPort {
+                raw_port,
+                reason: "Expected an integer between 0 and 65535".to_string(),
+            };
+        }
+    }
+
+    LaunchParseError::UnknownOption { option: fallback.to_string() }
+}
+
+fn has_missing_value(args: &[std::ffi::OsString], option: &str) -> bool {
+    let option_owned = option.to_string();
+    let values: Vec<String> = args.iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
+
+    for (idx, arg) in values.iter().enumerate() {
+        if arg == &option_owned {
+            let next = values.get(idx + 1);
+            if next.is_none_or(|next_arg| next_arg.starts_with('-')) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+fn extract_option_value(args: &[std::ffi::OsString], option: &str) -> Option<String> {
+    let option_prefix = format!("{option}=");
+    let values: Vec<String> = args.iter().map(|arg| arg.to_string_lossy().into_owned()).collect();
+
+    for (idx, arg) in values.iter().enumerate() {
+        if arg == option {
+            if let Some(next) = values.get(idx + 1)
+                && !next.starts_with('-')
+            {
+                return Some(next.clone());
+            }
+        } else if let Some(raw) = arg.strip_prefix(&option_prefix) {
+            return Some(raw.to_string());
+        }
+    }
+
+    None
 }
 
 /// Human-readable CLI help text shared by CLI consumers.
@@ -298,7 +356,7 @@ fn parse_feature_profile(raw_profile: &str) -> Result<FeatureProfile, LaunchPars
 
 #[cfg(test)]
 mod tests {
-    use super::{DEFAULT_LSP_PORT, LaunchAction, TransportMode, parse_args};
+    use super::{DEFAULT_LSP_PORT, LaunchAction, LaunchParseError, TransportMode, parse_args};
     use perl_tdd_support::must;
 
     #[test]
@@ -353,5 +411,17 @@ mod tests {
     fn help_mentions_default_port() {
         let text = super::help_text();
         assert!(text.contains(&DEFAULT_LSP_PORT.to_string()));
+    }
+
+    #[test]
+    fn parse_invalid_port_returns_invalid_port_error() {
+        let err = parse_args(["perl-lsp", "--port", "99999"]).expect_err("expected parse error");
+        assert!(matches!(err, LaunchParseError::InvalidPort { .. }));
+    }
+
+    #[test]
+    fn parse_missing_port_value_returns_missing_value_error() {
+        let err = parse_args(["perl-lsp", "--port"]).expect_err("expected parse error");
+        assert!(matches!(err, LaunchParseError::MissingValue { .. }));
     }
 }
