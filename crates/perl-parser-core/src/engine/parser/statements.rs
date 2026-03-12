@@ -488,12 +488,13 @@ impl<'a> Parser<'a> {
                                 // Special handling for map/grep/sort with block first argument
                                 args.push(self.parse_builtin_block()?);
                                 parsed_block_arg = true;
-                            } else if func_name.as_ref() == "split"
+                            } else if matches!(func_name.as_ref(), "split" | "grep" | "map" | "sort")
                                 && self.peek_kind() == Some(TokenKind::Slash)
                             {
-                                // For `split /regex/, ...`, the `/` after split is a regex
-                                // delimiter, not division. Roll back the lexer to re-lex
-                                // the `/` in ExpectTerm mode so it becomes a regex.
+                                // For `split /regex/, ...` and `grep /regex/, @list`,
+                                // the `/` after these builtins is a regex delimiter, not
+                                // division. Roll back the lexer to re-lex the `/` in
+                                // ExpectTerm mode so it becomes a regex.
                                 self.tokens.relex_as_term();
                                 args.push(self.parse_assignment()?);
                             } else {
