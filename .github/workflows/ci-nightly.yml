@@ -368,6 +368,7 @@ jobs:
         target: [
           builtin_functions,
           heredoc_parsing,
+          lsp_cancellation_registry,
           lsp_navigation,
           substitution_parsing,
           unicode_positions
