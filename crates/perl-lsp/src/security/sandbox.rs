@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
 /// Sandbox configuration for process execution
@@ -58,7 +58,8 @@ impl Sandbox {
         let temp_dir = if config.enabled {
             // Create temporary directory for sandbox
             let temp_dir = std::env::temp_dir().join(format!("perl-lsp-sandbox-{}", uuid::Uuid::new_v4()));
-            std::fs::create_dir_all(&temp_dir)?;
+            std::fs::create_dir_all(&temp_dir)
+                .with_context(|| format!("failed to create sandbox temp dir at {}", temp_dir.display()))?;
             Some(temp_dir)
         } else {
             None
@@ -81,7 +82,9 @@ impl Sandbox {
 
         // Execute and capture output
         let start = std::time::Instant::now();
-        let output = cmd.output()?;
+        let output = cmd
+            .output()
+            .with_context(|| format!("failed to execute sandboxed command: {}", program))?;
         let execution_time = start.elapsed();
 
         Ok(SandboxResult {
@@ -98,7 +101,9 @@ impl Sandbox {
         let mut cmd = Command::new(program);
         cmd.args(args);
         
-        let output = cmd.output()?;
+        let output = cmd
+            .output()
+            .with_context(|| format!("failed to execute command: {}", program))?;
         
         Ok(SandboxResult {
             exit_code: output.status.code().unwrap_or(-1),
@@ -111,6 +116,15 @@ impl Sandbox {
 
     /// Apply sandbox restrictions to a command
     fn apply_sandbox_restrictions(&self, cmd: &mut Command) -> Result<()> {
+        if let Some(ref work_dir) = self.config.working_directory
+            && !work_dir.exists()
+        {
+            return Err(anyhow!(
+                "sandbox working directory does not exist: {}",
+                work_dir.display()
+            ));
+        }
+
         // Set working directory
         if let Some(ref work_dir) = self.config.working_directory {
             cmd.current_dir(work_dir);
@@ -243,7 +257,9 @@ impl Sandbox {
         if let Some(ref temp_dir) = self.temp_dir {
             // Clean up temporary directory
             if temp_dir.exists() {
-                std::fs::remove_dir_all(temp_dir)?;
+                std::fs::remove_dir_all(temp_dir).with_context(|| {
+                    format!("failed to remove sandbox temp dir at {}", temp_dir.display())
+                })?;
             }
         }
         self.temp_dir = None;
@@ -253,7 +269,9 @@ impl Sandbox {
 
 impl Drop for Sandbox {
     fn drop(&mut self) {
-        let _ = self.cleanup();
+        if let Err(error) = self.cleanup() {
+            log::warn!("Sandbox cleanup failed during drop: {error:#}");
+        }
     }
 }
 
@@ -312,15 +330,21 @@ impl SafeExecutor {
 
     /// Execute a command safely
     pub fn execute(&self, program: &str, args: &[&str]) -> Result<SandboxResult> {
-        let sandbox = Sandbox::new(self.default_config.clone())?;
-        let result = sandbox.execute(program, args)?;
+        let sandbox = Sandbox::new(self.default_config.clone())
+            .context("failed to initialize sandbox with default configuration")?;
+        let result = sandbox
+            .execute(program, args)
+            .with_context(|| format!("safe execution failed for command: {}", program))?;
         Ok(result)
     }
 
     /// Execute a command with custom configuration
     pub fn execute_with_config(&self, program: &str, args: &[&str], config: &SandboxConfig) -> Result<SandboxResult> {
-        let sandbox = Sandbox::new(config.clone())?;
-        let result = sandbox.execute(program, args)?;
+        let sandbox = Sandbox::new(config.clone())
+            .context("failed to initialize sandbox with provided configuration")?;
+        let result = sandbox
+            .execute(program, args)
+            .with_context(|| format!("safe execution failed for command: {}", program))?;
         Ok(result)
     }
 
@@ -336,8 +360,15 @@ impl SafeExecutor {
         // Set working directory to script directory
         config.working_directory = script_path.parent().map(|p| p.to_path_buf());
         
-        let path_str = script_path.to_str().ok_or_else(|| anyhow!("Invalid script path"))?;
-        self.execute_with_config("perl", &[path_str], &config)
+        let path_str = script_path
+            .to_str()
+            .ok_or_else(|| anyhow!("Invalid script path: {}", script_path.display()))?;
+        let mut perl_args = Vec::with_capacity(args.len() + 1);
+        perl_args.push(path_str);
+        perl_args.extend_from_slice(args);
+
+        self.execute_with_config("perl", &perl_args, &config)
+            .with_context(|| format!("failed to execute Perl script at {}", script_path.display()))
     }
 }
 
