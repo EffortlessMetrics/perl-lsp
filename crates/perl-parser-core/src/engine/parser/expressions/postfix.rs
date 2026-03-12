@@ -173,6 +173,25 @@ impl<'a> Parser<'a> {
                             );
                         }
 
+                        Some(TokenKind::LeftBrace) => {
+                            // Hash dereference key access: $ref->{$key}
+                            self.tokens.next()?; // consume {
+                            let key = self.parse_expression()?;
+                            self.expect(TokenKind::RightBrace)?;
+
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+
+                            expr = Node::new(
+                                NodeKind::Binary {
+                                    op: "->{}".to_string(),
+                                    left: Box::new(expr),
+                                    right: Box::new(key),
+                                },
+                                SourceLocation { start, end },
+                            );
+                        }
+
                         _ => {
                             // Just the arrow by itself - could be an error or incomplete
                             // For now, we'll leave expr unchanged

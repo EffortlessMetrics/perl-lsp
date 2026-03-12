@@ -110,8 +110,9 @@ impl<'a> Parser<'a> {
 
         // AC1: General indirect method call heuristic: method $object
         // Lowercase identifier followed by a sigiled variable ($x, @arr, %hash)
-        if name.chars().next().is_some_and(|c| c.is_lowercase()) 
-           && !matches!(name, "tie" | "untie") 
+        if name.chars().next().is_some_and(|c| c.is_lowercase())
+            && !Self::is_builtin_function(name)
+            && !Self::is_keyword_handled_builtin(name)
         {
             if let Ok(next) = self.tokens.peek_second() {
                 let next_text = &next.text;

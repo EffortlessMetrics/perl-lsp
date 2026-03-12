@@ -158,6 +158,55 @@ tie my %hash, 'Tie::StdHash';
 }
 
 #[test]
+fn parser_tie_our_declaration_no_recovery() {
+    let code = r#"tie our %config, 'Config::Tie';"#;
+    let mut parser = Parser::new(code);
+    let output = parser.parse_with_recovery();
+
+    assert!(
+        output.diagnostics.is_empty(),
+        "Expected clean parse for tie+our declaration, diagnostics: {:?}",
+        output.diagnostics
+    );
+}
+
+#[test]
+fn parser_tie_local_special_variable_no_recovery() {
+    let code = r#"tie local $/, 'Tie::Scalar', \$custom_rs;"#;
+    let mut parser = Parser::new(code);
+    let output = parser.parse_with_recovery();
+
+    assert!(
+        output.diagnostics.is_empty(),
+        "Expected clean parse for tie+local special variable, diagnostics: {:?}",
+        output.diagnostics
+    );
+}
+
+#[test]
+fn parser_hash_deref_delete_exists_no_recovery() {
+    let code = r#"
+sub DELETE {
+    my ($self, $key) = @_;
+    delete $self->{$key};
+}
+
+sub EXISTS {
+    my ($self, $key) = @_;
+    return exists $self->{$key};
+}
+"#;
+    let mut parser = Parser::new(code);
+    let output = parser.parse_with_recovery();
+
+    assert!(
+        output.diagnostics.is_empty(),
+        "Expected clean parse for hash deref delete/exists, diagnostics: {:?}",
+        output.diagnostics
+    );
+}
+
+#[test]
 fn parser_tie_with_usage() {
     let code = r#"
 tie my %cache, 'Tie::StdHash';
