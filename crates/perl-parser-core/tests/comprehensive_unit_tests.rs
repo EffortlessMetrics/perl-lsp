@@ -3094,6 +3094,35 @@ mod line_index_extended_tests {
         Ok(())
     }
 
+    #[test]
+    fn wave2b_keyword_autoquote_before_fat_arrow_in_list() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let mut parser = Parser::new("my %h = (if => 1, while => 2, sub => 3);");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "keywords before => should autoquote in list context, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_keyword_autoquote_before_fat_arrow_in_braces()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new(
+            "my $h = { if => 1, while => 2, sub => 3 };
+",
+        );
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "keywords before => should autoquote in brace hash context, got: {sexp}"
+        );
+        Ok(())
+    }
+
     // ---- Wave 2C: split /regex/ ----
 
     #[test]

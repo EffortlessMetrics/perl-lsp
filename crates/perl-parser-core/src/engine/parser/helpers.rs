@@ -283,6 +283,52 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Returns true when a token is a keyword/bareword that Perl autoquotes
+    /// in `key => value` contexts.
+    fn is_autoquotable_keyword(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::My
+                | TokenKind::Our
+                | TokenKind::Local
+                | TokenKind::State
+                | TokenKind::Sub
+                | TokenKind::If
+                | TokenKind::Elsif
+                | TokenKind::Else
+                | TokenKind::Unless
+                | TokenKind::While
+                | TokenKind::Until
+                | TokenKind::For
+                | TokenKind::Foreach
+                | TokenKind::Return
+                | TokenKind::Package
+                | TokenKind::Use
+                | TokenKind::No
+                | TokenKind::Begin
+                | TokenKind::End
+                | TokenKind::Check
+                | TokenKind::Init
+                | TokenKind::Unitcheck
+                | TokenKind::Eval
+                | TokenKind::Do
+                | TokenKind::Given
+                | TokenKind::When
+                | TokenKind::Default
+                | TokenKind::Try
+                | TokenKind::Catch
+                | TokenKind::Finally
+                | TokenKind::Continue
+                | TokenKind::Next
+                | TokenKind::Last
+                | TokenKind::Redo
+                | TokenKind::Class
+                | TokenKind::Method
+                | TokenKind::Format
+                | TokenKind::Undef
+        )
+    }
+
     /// Record a parse error for later retrieval
     fn record_error(&mut self, error: ParseError) {
         self.errors.push(error);

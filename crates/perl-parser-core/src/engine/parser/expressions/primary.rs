@@ -263,9 +263,41 @@ impl<'a> Parser<'a> {
                 ))
             }
 
-            TokenKind::Eval => self.parse_eval(),
+            TokenKind::Return => {
+                if self.tokens.peek_second().ok().map(|t| t.kind) == Some(TokenKind::FatArrow) {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_return()
+                }
+            }
 
-            TokenKind::Do => self.parse_do(),
+            TokenKind::Eval => {
+                if self.tokens.peek_second().ok().map(|t| t.kind) == Some(TokenKind::FatArrow) {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_eval()
+                }
+            }
+
+            TokenKind::Do => {
+                if self.tokens.peek_second().ok().map(|t| t.kind) == Some(TokenKind::FatArrow) {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_do()
+                }
+            }
 
             // Note: TokenKind::Sub is handled in the keyword-as-identifier case below
             // This allows 'sub' to be used as a hash key or identifier in expressions
@@ -545,56 +577,50 @@ impl<'a> Parser<'a> {
                 ))
             }
 
-            // Handle 'sub' specially - it might be an anonymous subroutine
-            TokenKind::Sub => {
-                // Check if the token AFTER 'sub' is { or ( (anonymous subroutine)
-                // We use peek_second() because peek() is still 'sub' (unconsumed)
-                let next = self.tokens.peek_second().ok().map(|t| t.kind);
-                if matches!(next, Some(k) if matches!(k, TokenKind::LeftBrace | TokenKind::LeftParen))
-                {
-                    // It's an anonymous subroutine
-                    self.parse_subroutine()
-                } else {
-                    // It's used as an identifier
+            // Handle keywords/barewords as identifiers in autoquoting contexts like
+            // `keyword => $value` and similar hash key positions.
+            kind if Self::is_autoquotable_keyword(kind) => {
+                if self.tokens.peek_second().ok().map(|t| t.kind) == Some(TokenKind::FatArrow) {
                     let token = self.tokens.next()?;
-                    Ok(Node::new(
+                    return Ok(Node::new(
                         NodeKind::Identifier { name: token.text.to_string() },
                         SourceLocation { start: token.start, end: token.end },
-                    ))
+                    ));
                 }
-            }
 
-            // Handle keywords that can be used as identifiers in certain contexts
-            // Note: Statement-level keywords (if, unless, while, return, etc.) should NOT be here
-            TokenKind::My
-            | TokenKind::Our
-            | TokenKind::Local
-            | TokenKind::State
-            | TokenKind::Package
-            | TokenKind::Use
-            | TokenKind::No
-            | TokenKind::Begin
-            | TokenKind::End
-            | TokenKind::Check
-            | TokenKind::Init
-            | TokenKind::Unitcheck
-            | TokenKind::Given
-            | TokenKind::When
-            | TokenKind::Default
-            | TokenKind::Catch
-            | TokenKind::Finally
-            | TokenKind::Continue
-            | TokenKind::Class
-            | TokenKind::Method
-            | TokenKind::Format => {
-                // In expression context, some keywords can be used as barewords/identifiers
-                // This happens in hash keys, method names, etc.
-                // But NOT for statement modifiers like if, unless, while, etc.
-                let token = self.tokens.next()?;
-                Ok(Node::new(
-                    NodeKind::Identifier { name: token.text.to_string() },
-                    SourceLocation { start: token.start, end: token.end },
-                ))
+                match kind {
+                    // Handle 'sub' specially - it might be an anonymous subroutine
+                    TokenKind::Sub => {
+                        // Check if the token AFTER 'sub' is { or ( (anonymous subroutine)
+                        // We use peek_second() because peek() is still 'sub' (unconsumed)
+                        let next = self.tokens.peek_second().ok().map(|t| t.kind);
+                        if matches!(next, Some(k) if matches!(k, TokenKind::LeftBrace | TokenKind::LeftParen))
+                        {
+                            // It's an anonymous subroutine
+                            self.parse_subroutine()
+                        } else {
+                            // In expression context, allow keyword as identifier/bareword
+                            let token = self.tokens.next()?;
+                            Ok(Node::new(
+                                NodeKind::Identifier { name: token.text.to_string() },
+                                SourceLocation { start: token.start, end: token.end },
+                            ))
+                        }
+                    }
+                    // Keep dedicated statement/expression handlers for these keywords unless
+                    // we're in explicit autoquoting (`=>`) context (handled above).
+                    TokenKind::Return => {
+                        let pos = self.current_position();
+                        Err(ParseError::unexpected("expression", format!("{:?}", kind), pos))
+                    }
+                    _ => {
+                        let token = self.tokens.next()?;
+                        Ok(Node::new(
+                            NodeKind::Identifier { name: token.text.to_string() },
+                            SourceLocation { start: token.start, end: token.end },
+                        ))
+                    }
+                }
             }
 
             TokenKind::DoubleColon => {
