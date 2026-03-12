@@ -200,8 +200,36 @@ impl<'a> Parser<'a> {
             let mut args = Vec::new();
 
             while s.peek_kind() != Some(TokenKind::RightParen) && !s.tokens.is_eof() {
-                // Use parse_assignment instead of parse_expression to avoid comma operator handling
-                let mut arg = s.parse_assignment()?;
+                // For fat-arrow pairs, Perl auto-quotes bareword keys, including keywords
+                // like `close => sub { ... }`. Parsing those as expressions can fail because
+                // keyword tokens are not valid expression starters in this position.
+                let mut arg = if s.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::FatArrow)
+                {
+                    let token = s.tokens.peek()?.clone();
+                    if token
+                        .text
+                        .as_bytes()
+                        .first()
+                        .is_some_and(|b| *b == b'_' || b.is_ascii_alphabetic())
+                    {
+                        s.consume_token()?;
+                        Node::new(
+                            NodeKind::String {
+                                value: token.text.to_string(),
+                                interpolated: false,
+                            },
+                            SourceLocation { start: token.start, end: token.end },
+                        )
+                    } else {
+                        // Use parse_assignment instead of parse_expression to avoid comma
+                        // operator handling.
+                        s.parse_assignment()?
+                    }
+                } else {
+                    // Use parse_assignment instead of parse_expression to avoid comma
+                    // operator handling.
+                    s.parse_assignment()?
+                };
 
                 // Check for fat arrow after the argument
                 // If we see =>, the argument should be auto-quoted if it's a bare identifier

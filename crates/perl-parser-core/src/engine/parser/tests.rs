@@ -226,6 +226,31 @@ fn test_unicode_property_complexity() {
 }
 
 #[test]
+fn test_hash_style_callback_args_in_parenthesized_call() {
+    let mut parser = Parser::new("$handle->on(close => sub { 1; });");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse callback args with fat arrow");
+    assert!(
+        parser.errors().is_empty(),
+        "Expected no parse recovery errors, got: {:?}",
+        parser.errors()
+    );
+}
+
+#[test]
+fn test_hash_style_callback_args_with_keyword_keys() {
+    let mut parser =
+        Parser::new("$self->emit(unless => sub { 1; }, close => sub { 2; }, read => sub { 3; });");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse keyword-like fat-arrow keys");
+    assert!(
+        parser.errors().is_empty(),
+        "Expected no parse recovery errors, got: {:?}",
+        parser.errors()
+    );
+}
+
+#[test]
 fn test_deep_nesting_stack_overflow() {
     // Issue #423: Deep nesting stack overflow
     // Nested if statements
