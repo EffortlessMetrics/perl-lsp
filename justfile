@@ -313,6 +313,12 @@ doctor:
     @echo "=============================================="
     @bash scripts/devex-doctor.sh
 
+
+# Targeted checks for changed crates (fast feedback for active branch)
+devex-targeted base='origin/master' mode='all':
+    @echo "Running targeted checks (base={{base}}, mode={{mode}})..."
+    @bash scripts/devex-targeted-checks.sh --base "{{base}}" --mode "{{mode}}"
+
 # Tool availability check (basic tools for PR-fast)
 [private]
 _check-tools-basic:
