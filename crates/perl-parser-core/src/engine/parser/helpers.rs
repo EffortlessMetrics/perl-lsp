@@ -1,4 +1,33 @@
 impl<'a> Parser<'a> {
+    /// Parse a bareword token that appears immediately before a fat arrow (`=>`).
+    ///
+    /// Perl auto-quotes barewords on the left-hand side of fat arrows, including
+    /// reserved keywords (e.g. `if => 1`). This helper detects that pattern and
+    /// returns a string node without invoking the regular expression parser.
+    fn parse_autoquoted_fat_arrow_key(&mut self) -> ParseResult<Option<Node>> {
+        if self.tokens.peek_second().map(|t| t.kind) != Ok(TokenKind::FatArrow) {
+            return Ok(None);
+        }
+
+        let token = self.tokens.peek()?;
+        let text = token.text.as_ref();
+        let is_bareword = text
+            .chars()
+            .next()
+            .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+            && text.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_');
+
+        if !is_bareword {
+            return Ok(None);
+        }
+
+        let token = self.tokens.next()?;
+        Ok(Some(Node::new(
+            NodeKind::String { value: token.text.to_string(), interpolated: false },
+            SourceLocation { start: token.start, end: token.end },
+        )))
+    }
+
     #[inline]
     fn is_statement_terminator(kind: Option<TokenKind>) -> bool {
         matches!(kind, Some(TokenKind::Semicolon) | Some(TokenKind::Eof) | None)

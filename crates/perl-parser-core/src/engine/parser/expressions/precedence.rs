@@ -148,6 +148,10 @@ impl<'a> Parser<'a> {
 
     /// Parse assignment expression
     fn parse_assignment(&mut self) -> ParseResult<Node> {
+        if let Some(autoquoted_key) = self.parse_autoquoted_fat_arrow_key()? {
+            return Ok(autoquoted_key);
+        }
+
         // Check if we have a 'not' operator first
         if self.peek_kind() == Some(TokenKind::WordNot) {
             return self.parse_word_not_expr();

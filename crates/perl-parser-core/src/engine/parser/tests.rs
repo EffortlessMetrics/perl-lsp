@@ -136,6 +136,30 @@ fn test_block_vs_hash_context() {
 }
 
 #[test]
+fn test_keyword_autoquoted_before_fat_arrow() {
+    let cases = [
+        "my $x = { if => 1, return => 2 };",
+        "my $x = ( if => 1, return => 2 );",
+        "foo(if => 1, while => 2);",
+    ];
+
+    for code in cases {
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+        assert!(result.is_ok(), "Failed to parse `{}`", code);
+
+        let ast = must(result);
+        let sexp = ast.to_sexp();
+        assert!(sexp.contains("(string \"if\")"), "Expected autoquoted `if` in AST: {}", sexp);
+        assert!(
+            sexp.contains("(string \"return\")") || sexp.contains("(string \"while\")"),
+            "Expected autoquoted keyword key in AST: {}",
+            sexp
+        );
+    }
+}
+
+#[test]
 fn test_qualified_function_call() {
     let mut parser = Parser::new("return Data::Dumper::Dumper($param);");
     let result = parser.parse();

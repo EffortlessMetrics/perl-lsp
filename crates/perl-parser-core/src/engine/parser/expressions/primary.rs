@@ -47,6 +47,10 @@ impl<'a> Parser<'a> {
 
     /// Inner implementation of parse_primary (called under recursion guard)
     fn parse_primary_inner(&mut self) -> ParseResult<Node> {
+        if let Some(autoquoted_key) = self.parse_autoquoted_fat_arrow_key()? {
+            return Ok(autoquoted_key);
+        }
+
         let token = self.tokens.peek()?;
         let token_kind = token.kind;
 
