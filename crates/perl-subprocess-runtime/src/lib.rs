@@ -290,10 +290,7 @@ mod tests {
         let result = runtime.run_command("perltidy", &["-st"], Some(b"my $x = 1;"));
 
         assert!(result.is_ok());
-        let output = match result {
-            Ok(output) => output,
-            Err(_) => panic!("expected ok subprocess output"),
-        };
+        let output = perl_tdd_support::must(result);
         assert!(output.success());
         assert_eq!(output.stdout_lossy(), "formatted code");
 
@@ -311,10 +308,7 @@ mod tests {
         let result = runtime.run_command("echo", &["hello"], None);
 
         assert!(result.is_ok());
-        let output = match result {
-            Ok(output) => output,
-            Err(_) => panic!("expected ok subprocess output"),
-        };
+        let output = perl_tdd_support::must(result);
         assert!(output.success());
         assert!(output.stdout_lossy().trim() == "hello");
     }
