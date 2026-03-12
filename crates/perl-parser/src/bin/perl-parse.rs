@@ -359,11 +359,12 @@ fn print_error(error: &ParseError, source: &str) {
 }
 
 fn position_to_line_col(source: &str, position: usize) -> (usize, usize) {
+    let position = position.min(source.len());
     let mut line = 1;
     let mut col = 1;
 
-    for (i, ch) in source.chars().enumerate() {
-        if i >= position {
+    for (byte_offset, ch) in source.char_indices() {
+        if byte_offset >= position {
             break;
         }
         if ch == '\n' {
@@ -390,15 +391,37 @@ fn print_error_context(source: &str, position: usize, stderr: &mut io::Stderr) {
         }
 
         // Show error line
-        writeln!(stderr, "  {} | {}", line_num, lines[line_num - 1]).ok();
+        let error_line = lines[line_num - 1];
+        writeln!(stderr, "  {} | {}", line_num, error_line).ok();
 
         // Show error pointer
+        let pointer_col = col_num.min(error_line.chars().count().saturating_add(1));
         write!(stderr, "  {} | ", " ".repeat(line_num.to_string().len())).ok();
-        writeln!(stderr, "{}^", " ".repeat(col_num - 1)).ok();
+        writeln!(stderr, "{}^", " ".repeat(pointer_col.saturating_sub(1))).ok();
 
         // Show next line if available
         if line_num < lines.len() {
             writeln!(stderr, "  {} | {}", line_num + 1, lines[line_num]).ok();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::position_to_line_col;
+
+    #[test]
+    fn position_to_line_col_uses_byte_offsets_for_unicode_text() {
+        let source = "my $emoji = \"😀\";\nmy $broken = ;";
+        let broken_pos = source.find("broken").unwrap_or(source.len());
+
+        assert_eq!(position_to_line_col(source, broken_pos), (2, 5));
+    }
+
+    #[test]
+    fn position_to_line_col_clamps_positions_past_end_of_file() {
+        let source = "my $x = 1;";
+
+        assert_eq!(position_to_line_col(source, usize::MAX), (1, 11));
     }
 }
