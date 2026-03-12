@@ -178,6 +178,26 @@ perl-dap
 cargo run -p perl-parser -- path/to/file.pl
 ```
 
+## Development Commands
+
+Use these commands when working inside this repository:
+
+```bash
+# Build key binaries/libraries
+cargo build -p perl-lsp --release
+cargo build -p perl-parser --release
+
+# Run focused tests
+cargo test -p perl-parser
+cargo test -p perl-lsp
+
+# Thread-constrained LSP tests (CI-like behavior)
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+
+# Full local quality gate (recommended before push)
+nix develop -c just ci-gate
+```
+
 ## Published Crates
 
 | Crate | Purpose |
