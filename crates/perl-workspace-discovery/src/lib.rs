@@ -165,7 +165,7 @@ mod tests {
         should_skip_dir, walk_discovery,
     };
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::time::Instant;
 
     type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -177,6 +177,20 @@ mod tests {
         }
         fs::write(path, "# synthetic\n")?;
         Ok(())
+    }
+
+    fn relative_file_set(root: &Path, files: &[PathBuf]) -> Vec<String> {
+        let mut relative = files
+            .iter()
+            .map(|path| {
+                path.strip_prefix(root).ok().map_or_else(
+                    || path.to_string_lossy().to_string(),
+                    |p| p.to_string_lossy().to_string(),
+                )
+            })
+            .collect::<Vec<_>>();
+        relative.sort();
+        relative
     }
 
     #[test]
@@ -416,7 +430,20 @@ mod tests {
         create_file(root, "app/main.psgi")?;
 
         let result = walk_discovery(root, Instant::now());
+        assert_eq!(result.method, DiscoveryMethod::Walk);
         assert_eq!(result.files.len(), 4);
+        assert_eq!(result.excluded_count, 0);
+
+        let relative = relative_file_set(root, &result.files);
+        assert_eq!(
+            relative,
+            vec![
+                "app/main.psgi".to_string(),
+                "bin/run.pl".to_string(),
+                "lib/Foo.pm".to_string(),
+                "t/basic.t".to_string(),
+            ]
+        );
 
         Ok(())
     }
@@ -461,8 +488,10 @@ mod tests {
     fn walk_discovery_records_duration() -> TestResult {
         let tmp = tempfile::tempdir()?;
         let result = walk_discovery(tmp.path(), Instant::now());
-        // Duration should be non-zero (or at least not panic)
-        let _ = result.duration.as_nanos();
+        assert_eq!(result.method, DiscoveryMethod::Walk);
+        assert!(result.duration <= std::time::Duration::from_secs(1));
+        assert_eq!(result.files.len(), 0);
+        assert_eq!(result.excluded_count, 0);
 
         Ok(())
     }
@@ -545,9 +574,8 @@ mod tests {
 
         assert_eq!(git, git2);
         assert_ne!(git, walk);
-        // Debug is derivable, just verify it doesn't panic
-        let _ = format!("{git:?}");
-        let _ = format!("{walk:?}");
+        assert_eq!(format!("{git:?}"), "Git");
+        assert_eq!(format!("{walk:?}"), "Walk");
     }
 
     #[test]
@@ -574,8 +602,9 @@ mod tests {
         assert_eq!(cloned.files.len(), result.files.len());
         assert_eq!(cloned.method, result.method);
         assert_eq!(cloned.excluded_count, result.excluded_count);
-        // Debug format should not panic
-        let _ = format!("{result:?}");
+        let debug = format!("{result:?}");
+        assert!(debug.contains("DiscoveryResult"));
+        assert!(debug.contains("method: Walk"));
 
         Ok(())
     }
@@ -612,5 +641,6 @@ mod tests {
         assert_eq!(files.len(), 4);
         // README.md + Makefile (non-perl) + node_modules/e.pm (skipped dir)
         assert_eq!(excluded_count, 3);
+        assert!(files.iter().all(|path| path.starts_with(root)));
     }
 }
