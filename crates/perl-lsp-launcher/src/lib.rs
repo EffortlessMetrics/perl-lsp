@@ -205,6 +205,50 @@ impl fmt::Display for LaunchParseError {
 
 impl Error for LaunchParseError {}
 
+fn extract_option_token(message: &str) -> Option<String> {
+    message
+        .split_whitespace()
+        .find(|token| token.starts_with("--"))
+        .map(|token| token.trim_matches(|c: char| matches!(c, ',' | '.' | ':' | ';' | ')' | '(')))
+        .map(str::to_string)
+}
+
+fn extract_single_quoted_token(message: &str) -> Option<String> {
+    let mut chunks = message.split('\'');
+    chunks.next()?;
+    chunks.next().map(str::to_string)
+}
+
+fn classify_parse_error(err: clap::Error) -> LaunchParseError {
+    let message = err.to_string();
+
+    if message.contains("a value is required for") {
+        return LaunchParseError::MissingValue {
+            option: extract_option_token(&message).unwrap_or_else(|| "required argument".into()),
+        };
+    }
+
+    match err.kind() {
+        clap::error::ErrorKind::MissingRequiredArgument
+        | clap::error::ErrorKind::TooFewValues
+        | clap::error::ErrorKind::WrongNumberOfValues => LaunchParseError::MissingValue {
+            option: extract_option_token(&message).unwrap_or_else(|| "required argument".into()),
+        },
+        clap::error::ErrorKind::ValueValidation | clap::error::ErrorKind::InvalidValue => {
+            if message.contains("--port") {
+                LaunchParseError::InvalidPort {
+                    raw_port: extract_single_quoted_token(&message)
+                        .unwrap_or_else(|| "<unknown>".into()),
+                    reason: message,
+                }
+            } else {
+                LaunchParseError::UnknownOption { option: message }
+            }
+        }
+        _ => LaunchParseError::UnknownOption { option: message },
+    }
+}
+
 /// Parse command line arguments for the Perl LSP launcher.
 pub fn parse_args<I>(args: I) -> Result<LaunchPlan, LaunchParseError>
 where
@@ -249,7 +293,7 @@ where
                 });
             }
 
-            Err(LaunchParseError::UnknownOption { option: err.to_string() })
+            Err(classify_parse_error(err))
         }
     }
 }

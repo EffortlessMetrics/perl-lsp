@@ -310,6 +310,30 @@ fn parse_invalid_feature_profile_returns_error() {
 }
 
 #[test]
+fn parse_missing_value_for_feature_profile_classifies_error() {
+    let err =
+        parse_args(["perl-lsp", "--feature-profile"]).expect_err("missing value should error");
+    match err {
+        LaunchParseError::MissingValue { option } => {
+            assert!(option.contains("--feature-profile") || option.contains("required"));
+        }
+        other => panic!("expected MissingValue, got {other:?}"),
+    }
+}
+
+#[test]
+fn parse_invalid_port_value_classifies_error() {
+    let err = parse_args(["perl-lsp", "--port", "abc"]).expect_err("invalid port should error");
+    match err {
+        LaunchParseError::InvalidPort { raw_port, reason } => {
+            assert!(raw_port.contains("abc") || raw_port.contains("<unknown>"));
+            assert!(!reason.is_empty());
+        }
+        other => panic!("expected InvalidPort, got {other:?}"),
+    }
+}
+
+#[test]
 fn parse_empty_feature_profile_returns_error() {
     let result = parse_args(["perl-lsp", "--feature-profile", ""]);
     assert!(result.is_err());
