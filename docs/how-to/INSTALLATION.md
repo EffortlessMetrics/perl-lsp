@@ -84,7 +84,7 @@ perl-lsp 0.10.0
 ## Editor Configuration
 
 ### VS Code
-1. Install the [Perl LSP extension](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp)
+1. Install the [Perl LSP extension](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
 2. Open a Perl file (.pl or .pm)
 3. The language server will start automatically
 

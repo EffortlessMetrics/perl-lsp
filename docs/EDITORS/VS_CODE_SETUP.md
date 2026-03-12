@@ -90,7 +90,7 @@ The official perl-lsp extension provides the best experience with automatic conf
 
 ```bash
 # Install from command line
-code --install-extension effortlesssteven.perl-lsp
+code --install-extension EffortlessMetrics.perl-lsp-rs
 
 # Or search in VS Code Extensions marketplace:
 # 1. Press Ctrl+Shift+X (Cmd+Shift+X on macOS)
@@ -142,7 +142,7 @@ For project-specific settings, create `.vscode/settings.json` in your project ro
   "perl-lsp.useSystemInc": false,
   "perl-lsp.formatOnSave": true,
   "[perl]": {
-    "editor.defaultFormatter": "effortlesssteven.perl-lsp",
+    "editor.defaultFormatter": "EffortlessMetrics.perl-lsp-rs",
     "editor.formatOnSave": true
   }
 }
@@ -705,7 +705,7 @@ Here's a comprehensive example configuration for a typical Perl project:
 
   // Language-specific settings
   "[perl]": {
-    "editor.defaultFormatter": "effortlesssteven.perl-lsp",
+    "editor.defaultFormatter": "EffortlessMetrics.perl-lsp-rs",
     "editor.formatOnSave": true,
     "editor.tabSize": 4,
     "editor.insertSpaces": true,

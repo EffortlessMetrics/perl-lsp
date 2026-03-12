@@ -50,7 +50,7 @@ perl-lsp --health
 
 1. Install the extension:
    ```bash
-   code --install-extension effortlesssteven.perl-lsp
+   code --install-extension EffortlessMetrics.perl-lsp-rs
    ```
 
 2. Open a `.pl` or `.pm` file - the server starts automatically.

@@ -1,9 +1,9 @@
 {
-  "name": "perl-lsp",
-  "displayName": "Perl Language Server",
+  "name": "perl-lsp-rs",
+  "displayName": "perl-lsp-rs",
   "description": "Comprehensive Perl language support powered by perl-lsp",
   "version": "0.11.0",
-  "publisher": "effortlesssteven",
+  "publisher": "EffortlessMetrics",
   "preview": false,
   "markdown": "github",
   "engines": {

@@ -6,13 +6,13 @@
 1. Open VS Code.
 2. Open Extensions.
 3. Search for `Perl Language Server`.
-4. Install `effortlesssteven.perl-lsp`.
+4. Install `EffortlessMetrics.perl-lsp-rs`.
 
 ### From a VSIX
 Download the `.vsix` asset from the matching GitHub release and install it manually:
 
 ```bash
-code --install-extension perl-lsp-*.vsix
+code --install-extension perl-lsp-rs-*.vsix
 ```
 
 ## Server Resolution Order

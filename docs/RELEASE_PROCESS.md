@@ -285,16 +285,16 @@ docker run --rm -v ${PWD}:/workspace effortlessmetrics/perl-lsp:latest
 
 VSCode extension is published to:
 
-- VSCode Marketplace: `effortlesssteven.perl-lsp`
-- Open VSX: `effortlesssteven.perl-lsp`
+- VSCode Marketplace: `EffortlessMetrics.perl-lsp-rs`
+- Open VSX: `EffortlessMetrics.perl-lsp-rs`
 
 **Installation:**
 ```bash
 # From VSCode Marketplace
-code --install-extension effortlesssteven.perl-lsp
+code --install-extension EffortlessMetrics.perl-lsp-rs
 
 # From Open VSX
-code --install-extension effortlesssteven.perl-lsp --extensions-dir ~/.vscode-oss/extensions
+code --install-extension EffortlessMetrics.perl-lsp-rs --extensions-dir ~/.vscode-oss/extensions
 ```
 
 ## Rollback Procedures

@@ -1,7 +1,7 @@
 # Perl Language Server
 
-[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/effortlesssteven.perl-lsp?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp)
-[![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/effortlesssteven.perl-lsp)](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp)
+[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/EffortlessMetrics.perl-lsp-rs?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
+[![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/EffortlessMetrics.perl-lsp-rs)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
 
 Lightning-fast Perl language support with 26+ IDE features powered by perl-lsp.
 
@@ -48,7 +48,7 @@ Lightning-fast Perl language support with 26+ IDE features powered by perl-lsp.
 
 ## 📦 Installation
 
-Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp).
+Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs).
 
 The extension automatically downloads the correct language server for your platform:
 - Windows (x64, ARM64)
