@@ -455,7 +455,15 @@ pub fn offset_to_position(content: &str, offset: usize) -> Position {
 
 #[cfg(test)]
 mod tests {
-    use super::extract_module_reference;
+    use lsp_types::Position;
+
+    use super::{
+        anchor_arg_start, arg_starts_in_call_body, arg_starts_top_level, byte_to_line_col,
+        byte_to_utf16_col, extract_module_reference, find_matching_paren, first_char,
+        first_char_is, first_char_string, nth_char, nth_char_is, offset_to_position,
+        pos_to_offset_bytes, position_to_offset, slice_in_range, slice_until_stmt_end,
+        smart_arg_anchor,
+    };
 
     #[test]
     fn extract_module_reference_detects_use_statement_token() {
@@ -471,5 +479,87 @@ mod tests {
         let cursor = line.find("Worker").unwrap_or(0);
 
         assert_eq!(extract_module_reference(line, cursor), Some("Demo::Worker".to_string()));
+    }
+
+    #[test]
+    fn panic_free_char_accessors_handle_bounds_and_unicode() {
+        assert_eq!(first_char(""), None);
+        assert_eq!(first_char("$sigil"), Some('$'));
+        assert_eq!(first_char("😀perl"), Some('😀'));
+
+        assert_eq!(nth_char("abc", 10), None);
+        assert_eq!(nth_char("😀x", 1), Some('x'));
+
+        assert_eq!(first_char_string(""), None);
+        assert_eq!(first_char_string("@array"), Some("@".to_string()));
+
+        assert!(first_char_is("Perl", |ch| ch.is_ascii_uppercase()));
+        assert!(!first_char_is("", |ch| ch == 'x'));
+
+        assert!(nth_char_is("a😀", 1, |ch| ch == '😀'));
+        assert!(!nth_char_is("a", 2, |ch| ch == 'a'));
+    }
+
+    #[test]
+    fn byte_and_position_helpers_cover_utf16_and_ranges() {
+        let line = "a😀b";
+        assert_eq!(byte_to_utf16_col(line, 0), 0);
+        assert_eq!(byte_to_utf16_col(line, 1), 1);
+        assert_eq!(byte_to_utf16_col(line, 5), 3);
+
+        let source = "first\nsecond\n";
+        assert_eq!(byte_to_line_col(source, 0), (0, 0));
+        assert_eq!(byte_to_line_col(source, 6), (1, 0));
+        assert_eq!(byte_to_line_col(source, source.len()), (2, 0));
+
+        let text = "one\ntwo\nthree";
+        assert_eq!(pos_to_offset_bytes(text, 1, 1), 5);
+        let (start, end, sliced) = slice_in_range(text, (1, 0), (2, 2));
+        assert_eq!((start, end, sliced), (4, 10, "two\nth"));
+    }
+
+    #[test]
+    fn delimiter_scans_handle_quotes_and_nesting() {
+        let source = "call(foo(') not end', [1,2]), tail)";
+        assert_eq!(find_matching_paren(source, 4), Some(32));
+        assert_eq!(find_matching_paren("(unterminated", 0), None);
+
+        let stmt = r#"do_stuff("a;b", [x;y], { z => 1 }); next();"#;
+        assert_eq!(slice_until_stmt_end(stmt, 0), 33);
+    }
+
+    #[test]
+    fn argument_start_helpers_skip_nested_commas_and_whitespace() {
+        let src = "  one, two(1, 2), { a => [3,4] }, 'x,y'";
+        assert_eq!(arg_starts_top_level(src), vec![2, 7, 18, 35]);
+        assert_eq!(arg_starts_in_call_body(src), vec![2, 7, 18, 35]);
+    }
+
+    #[test]
+    fn argument_anchor_helpers_retarget_declarations() {
+        let body = "   my   $fh,  our  %map, STDOUT";
+        assert_eq!(anchor_arg_start(body, 0), 8);
+        assert_eq!(smart_arg_anchor(body, 0), 8);
+
+        let second = body.find("our").unwrap_or(0);
+        assert_eq!(smart_arg_anchor(body, second), 18);
+
+        let third = body.find("STDOUT").unwrap_or(0);
+        assert_eq!(smart_arg_anchor(body, third), third);
+    }
+
+    #[test]
+    fn lsp_position_offset_conversion_handles_crlf_and_utf16() {
+        let content = "a\r\n😀b\n";
+
+        assert_eq!(position_to_offset(content, 0, 0), Some(0));
+        assert_eq!(position_to_offset(content, 1, 0), Some(3));
+        assert_eq!(position_to_offset(content, 1, 2), Some(7));
+        assert_eq!(position_to_offset(content, 9, 0), None);
+
+        assert_eq!(offset_to_position(content, 0), Position::new(0, 0));
+        assert_eq!(offset_to_position(content, 3), Position::new(1, 0));
+        assert_eq!(offset_to_position(content, 7), Position::new(1, 3));
+        assert_eq!(offset_to_position(content, content.len()), Position::new(2, 0));
     }
 }
