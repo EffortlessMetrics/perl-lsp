@@ -28,6 +28,46 @@ Each exhibit shows:
 
 ---
 
+## Storybooking Workflow
+
+Use this lightweight workflow when turning raw PR history into a high-signal casebook exhibit:
+
+1. **Select the right PR**
+   - Prefer PRs with clear user-visible impact or architecture change.
+   - Skip mechanical-only PRs unless they establish a reusable governance pattern.
+
+2. **Gather receipts first (before writing narrative)**
+   - Capture exact commands and outputs (`cargo test`, `just ci-gate`, benchmarks, ignored-test deltas).
+   - Record before/after numbers with units and source.
+
+3. **Write the scar story as a causal chain**
+   - `Wrong` → concrete failure mode.
+   - `Caught` → detector (mutation test, CI failure, protocol test, review finding).
+   - `Fix` → code or architecture intervention.
+   - `Prevention` → reusable guardrail (test, lint, checklist, gate).
+
+4. **Score quality surfaces explicitly**
+   - Assign +2/+1/0/-1/-2 for Maintainability, Correctness, Governance, Reproducibility.
+   - Keep notes evidence-linked; avoid intuition-only scoring.
+
+5. **Close with reusable factory deltas**
+   - Prefer wording that future contributors can apply as a pattern.
+   - If no durable delta exists, state that explicitly.
+
+### Exhibit Acceptance Checklist
+
+An exhibit is ready when all checks pass:
+
+- [ ] **One-line proof claim** is specific and falsifiable.
+- [ ] **Review map** names the highest-impact files/components.
+- [ ] **Proof bundle** includes reproducible receipts (commands + outcomes).
+- [ ] **Scar story** includes wrongness and prevention (or clearly says N/A).
+- [ ] **Quality deltas** are scored for all four surfaces with notes.
+- [ ] **Budget row** includes provenance fields (`kind`, `coverage`, `confidence`).
+- [ ] **Dossier link** exists in `forensics/` and resolves correctly.
+
+---
+
 ## Exhibits
 
 ### Exhibit 1: Semantic Analyzer Phase 1 (Issue #188 → PRs #231/232/234)
