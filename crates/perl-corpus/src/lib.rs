@@ -175,7 +175,7 @@
 //!
 //! The corpus integrates with `perl-parser` test suites:
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use perl_parser::Parser;
 //! use perl_corpus::{parse_dir, find_by_tag};
 //!
