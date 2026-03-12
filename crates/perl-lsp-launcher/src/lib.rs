@@ -249,9 +249,60 @@ where
                 });
             }
 
-            Err(LaunchParseError::UnknownOption { option: err.to_string() })
+            Err(map_clap_error(err))
         }
     }
+}
+
+fn map_clap_error(err: clap::Error) -> LaunchParseError {
+    let rendered = err.to_string();
+
+    if rendered.contains("--port")
+        && (rendered.contains("requires a value") || rendered.contains("value is required"))
+    {
+        return LaunchParseError::MissingValue {
+            option: extract_wrapped_token(&rendered).unwrap_or_else(|| "--port".to_string()),
+        };
+    }
+
+    if rendered.contains("--port")
+        && (rendered.contains("invalid value")
+            || rendered.contains("invalid digit")
+            || rendered.contains("out of range"))
+    {
+        return LaunchParseError::InvalidPort {
+            raw_port: extract_wrapped_token(&rendered).unwrap_or_else(|| "<unknown>".to_string()),
+            reason: "Expected an integer between 1 and 65535".to_string(),
+        };
+    }
+
+    match err.kind() {
+        clap::error::ErrorKind::MissingRequiredArgument
+        | clap::error::ErrorKind::TooFewValues
+        | clap::error::ErrorKind::WrongNumberOfValues => LaunchParseError::MissingValue {
+            option: extract_wrapped_token(&rendered)
+                .unwrap_or_else(|| "<unknown option>".to_string()),
+        },
+        clap::error::ErrorKind::InvalidSubcommand
+        | clap::error::ErrorKind::UnknownArgument
+        | clap::error::ErrorKind::InvalidValue
+        | clap::error::ErrorKind::InvalidUtf8
+        | clap::error::ErrorKind::TooManyValues
+        | clap::error::ErrorKind::ValueValidation => {
+            LaunchParseError::UnknownOption { option: rendered }
+        }
+        _ => LaunchParseError::UnknownOption { option: rendered },
+    }
+}
+
+fn extract_wrapped_token(input: &str) -> Option<String> {
+    extract_token(input, '\'').or_else(|| extract_token(input, '`'))
+}
+
+fn extract_token(input: &str, delimiter: char) -> Option<String> {
+    let mut parts = input.split(delimiter);
+    let _ = parts.next();
+    parts.next().map(ToString::to_string)
 }
 
 /// Human-readable CLI help text shared by CLI consumers.
@@ -266,7 +317,7 @@ Usage: perl-lsp [options]\n\
 Options:\n\
   --stdio          Use stdio for communication (default)\n\
   --socket         Use TCP socket for communication\n\
-  --port           Port to listen on (default: {DEFAULT_LSP_PORT})\n\
+  --port           Port to listen on (implies --socket, default: {DEFAULT_LSP_PORT})\n\
   --log            Enable logging to stderr\n\
   --health         Quick health check (prints \'ok <version>\')\n\
   --version        Show version information\n\
@@ -286,7 +337,11 @@ Examples:\n\
   perl-lsp --stdio --log\n\
 \
   # Run in socket mode\n\
-  perl-lsp --socket --port 9257\n"
+  perl-lsp --socket --port 9257\n\
+  # Check server health in scripts/CI\n\
+  perl-lsp --health\n\
+  # Inspect the active feature catalog\n\
+  perl-lsp --features-json --feature-profile=prod\n"
     )
 }
 

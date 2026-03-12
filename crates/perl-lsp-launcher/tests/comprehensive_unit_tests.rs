@@ -315,6 +315,31 @@ fn parse_empty_feature_profile_returns_error() {
     assert!(result.is_err());
 }
 
+#[test]
+fn parse_missing_port_value_is_classified() {
+    let result = parse_args(["perl-lsp", "--port"]);
+    match result {
+        Err(LaunchParseError::MissingValue { option }) => {
+            assert!(option.contains("--port") || option.contains("port"));
+        }
+        Err(other) => panic!("expected MissingValue, got: {other:?}"),
+        Ok(_) => panic!("expected parse failure for missing --port value"),
+    }
+}
+
+#[test]
+fn parse_invalid_port_is_classified() {
+    let result = parse_args(["perl-lsp", "--port", "abc"]);
+    match result {
+        Err(LaunchParseError::InvalidPort { raw_port, reason }) => {
+            assert!(raw_port.contains("abc") || raw_port.contains("PORT"));
+            assert!(reason.contains("integer") || reason.contains("Expected"));
+        }
+        Err(other) => panic!("expected InvalidPort, got: {other:?}"),
+        Ok(_) => panic!("expected parse failure for invalid --port"),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Module: LaunchParseError display formatting
 // ---------------------------------------------------------------------------
