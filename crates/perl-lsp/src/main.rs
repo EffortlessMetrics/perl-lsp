@@ -96,41 +96,44 @@ fn run_server(launch_config: LaunchConfig) {
                         Ok((stream, peer_addr)) => {
                             eprintln!("Accepted connection from {peer_addr}");
                             tokio::spawn(async move {
-                                if let Ok(std_stream) = stream.into_std() {
-                                    if let Err(e) = std_stream.set_nonblocking(false) {
-                                        eprintln!("Failed to set blocking mode: {}", e);
+                                let std_stream = match stream.into_std() {
+                                    Ok(std_stream) => std_stream,
+                                    Err(error) => {
+                                        eprintln!("Failed to convert stream to std: {error}");
                                         return;
                                     }
+                                };
 
-                                    let writer = match std_stream.try_clone() {
-                                        Ok(w) => w,
-                                        Err(e) => {
-                                            eprintln!("Failed to clone stream: {e}");
-                                            return;
-                                        }
-                                    };
-                                    let reader = std_stream;
-                                    let profile = feature_profile;
+                                if let Err(error) = std_stream.set_nonblocking(false) {
+                                    eprintln!("Failed to set blocking mode: {error}");
+                                    return;
+                                }
 
-                                    let output = Arc::new(parking_lot::Mutex::new(
-                                        Box::new(writer) as Box<dyn std::io::Write + Send>,
-                                    ));
-
-                                    if let Err(e) = tokio::task::spawn_blocking(move || -> () {
-                                        let mut server = LspServer::with_output_and_feature_profile(
-                                            output, profile,
-                                        );
-                                        let mut buf_reader = std::io::BufReader::new(reader);
-                                        if let Err(e) = server.serve(&mut buf_reader) {
-                                            eprintln!("Connection error: {e}");
-                                        }
-                                    })
-                                    .await
-                                    {
-                                        eprintln!("Task panic: {e}");
+                                let writer = match std_stream.try_clone() {
+                                    Ok(writer) => writer,
+                                    Err(error) => {
+                                        eprintln!("Failed to clone stream: {error}");
+                                        return;
                                     }
-                                } else {
-                                    eprintln!("Failed to convert stream to std");
+                                };
+                                let reader = std_stream;
+                                let profile = feature_profile;
+
+                                let output = Arc::new(parking_lot::Mutex::new(
+                                    Box::new(writer) as Box<dyn std::io::Write + Send>
+                                ));
+
+                                if let Err(error) = tokio::task::spawn_blocking(move || -> () {
+                                    let mut server =
+                                        LspServer::with_output_and_feature_profile(output, profile);
+                                    let mut buf_reader = std::io::BufReader::new(reader);
+                                    if let Err(error) = server.serve(&mut buf_reader) {
+                                        eprintln!("Connection error: {error}");
+                                    }
+                                })
+                                .await
+                                {
+                                    eprintln!("Task panic: {error}");
                                 }
                             });
                         }
