@@ -403,10 +403,95 @@ fn test_document_updates() -> TestResult {
     let symbols = result.ok_or("Failed to get workspace symbols")?;
     let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
 
-    // Should find both new functions
-    assert_eq!(symbols_array.len(), 2);
-    assert_eq!(symbols_array[0]["name"], "new_function");
-    assert_eq!(symbols_array[1]["name"], "another_new");
+    // Should find both new functions, regardless of ordering
+    let names: Vec<&str> = symbols_array
+        .iter()
+        .map(|symbol| symbol["name"].as_str().ok_or("Expected symbol name string"))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(names.len(), 2);
+    assert!(names.contains(&"new_function"));
+    assert!(names.contains(&"another_new"));
+
+    // Ensure stale symbols from old content are no longer discoverable
+    let stale_result = send_request(
+        &mut server,
+        "workspace/symbol",
+        Some(json!({
+            "query": "old_function"
+        })),
+    )
+    .ok_or("Failed to search for stale symbols")?;
+    let stale_symbols = stale_result.as_array().ok_or("Expected stale symbols array")?;
+    assert!(
+        stale_symbols.is_empty(),
+        "Expected no stale symbols after didChange, found: {stale_symbols:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_incremental_change_replaces_symbol_set() -> TestResult {
+    let mut server = create_test_server();
+
+    send_request(
+        &mut server,
+        "initialize",
+        Some(json!({
+            "processId": null,
+            "capabilities": {},
+            "rootUri": "file:///test"
+        })),
+    );
+    send_initialized(&mut server);
+
+    send_request(
+        &mut server,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/update_symbol_set.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": "sub alpha_symbol { }\nsub beta_symbol { }"
+            }
+        })),
+    );
+
+    send_request(
+        &mut server,
+        "textDocument/didChange",
+        Some(json!({
+            "textDocument": {
+                "uri": "file:///test/update_symbol_set.pl",
+                "version": 2
+            },
+            "contentChanges": [{
+                "text": "sub gamma_symbol { }\nsub delta_symbol { }"
+            }]
+        })),
+    );
+
+    let new_symbols = send_request(
+        &mut server,
+        "workspace/symbol",
+        Some(json!({
+            "query": "symbol"
+        })),
+    )
+    .ok_or("Expected workspace/symbol response")?;
+
+    let names: Vec<&str> = new_symbols
+        .as_array()
+        .ok_or("Expected workspace symbol array")?
+        .iter()
+        .map(|symbol| symbol["name"].as_str().ok_or("Expected symbol name string"))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    assert!(names.contains(&"gamma_symbol"));
+    assert!(names.contains(&"delta_symbol"));
+    assert!(!names.contains(&"alpha_symbol"));
+    assert!(!names.contains(&"beta_symbol"));
+
     Ok(())
 }
 
