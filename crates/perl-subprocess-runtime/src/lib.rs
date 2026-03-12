@@ -281,7 +281,7 @@ mod tests {
     }
 
     #[test]
-    fn test_mock_runtime() {
+    fn test_mock_runtime() -> Result<(), String> {
         use mock::*;
 
         let runtime = MockSubprocessRuntime::new();
@@ -290,9 +290,8 @@ mod tests {
         let result = runtime.run_command("perltidy", &["-st"], Some(b"my $x = 1;"));
 
         assert!(result.is_ok());
-        let output = match result {
-            Ok(output) => output,
-            Err(_) => panic!("expected ok subprocess output"),
+        let Ok(output) = result else {
+            return Err("expected ok subprocess output".to_string());
         };
         assert!(output.success());
         assert_eq!(output.stdout_lossy(), "formatted code");
@@ -302,21 +301,24 @@ mod tests {
         assert_eq!(invocations[0].program, "perltidy");
         assert_eq!(invocations[0].args, vec!["-st"]);
         assert_eq!(invocations[0].stdin, Some(b"my $x = 1;".to_vec()));
+
+        Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn test_os_runtime_echo() {
+    fn test_os_runtime_echo() -> Result<(), String> {
         let runtime = OsSubprocessRuntime::new();
         let result = runtime.run_command("echo", &["hello"], None);
 
         assert!(result.is_ok());
-        let output = match result {
-            Ok(output) => output,
-            Err(_) => panic!("expected ok subprocess output"),
+        let Ok(output) = result else {
+            return Err("expected ok subprocess output".to_string());
         };
         assert!(output.success());
         assert!(output.stdout_lossy().trim() == "hello");
+
+        Ok(())
     }
 
     #[cfg(not(target_arch = "wasm32"))]
