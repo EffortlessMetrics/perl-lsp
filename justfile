@@ -273,6 +273,9 @@ doctor:
     @echo "=============================================="
     @bash scripts/devex-doctor.sh
 
+# Alias: shorter, discoverable DX command name
+devex: doctor
+
 # Tool availability check (basic tools for PR-fast)
 [private]
 _check-tools-basic:
