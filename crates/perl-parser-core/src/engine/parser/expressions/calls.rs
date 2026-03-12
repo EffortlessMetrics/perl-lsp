@@ -10,7 +10,7 @@ impl<'a> Parser<'a> {
     fn is_indirect_call_pattern(&mut self, name: &str) -> bool {
         // Only check for indirect objects at statement start to avoid false positives
         // in contexts like: my $x = 1; if (1) { print $x; }
-        if !self.at_stmt_start {
+        if !self.at_stmt_start && name != "new" {
             return false;
         }
 

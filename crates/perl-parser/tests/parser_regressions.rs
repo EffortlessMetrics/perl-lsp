@@ -120,6 +120,21 @@ fn new_constructor_pattern() {
 }
 
 #[test]
+fn new_qualified_constructor_indirect_call() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"my $obj = new IO::Handle $fh;"#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+    let sexp = ast.to_sexp();
+
+    assert!(
+        sexp.contains("indirect_call"),
+        "qualified constructor should parse as indirect call: {sexp}"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn statement_modifier_inside_block_if() -> Result<(), Box<dyn std::error::Error>> {
     let code = r#"
     {

@@ -417,6 +417,42 @@ impl<'a> Parser<'a> {
                                 SourceLocation { start, end },
                             ))
                         }
+                        "new" => {
+                            let new_token = self.tokens.next()?;
+                            let start = new_token.start;
+
+                            // Constructor target can be qualified (e.g. IO::Handle)
+                            let object = Box::new(self.parse_qualified_identifier()?);
+                            let mut args = Vec::new();
+
+                            // In expression context, stop at common delimiters to avoid
+                            // consuming surrounding list/argument separators.
+                            while !self.tokens.is_eof()
+                                && !matches!(
+                                    self.peek_kind(),
+                                    Some(
+                                        TokenKind::Semicolon
+                                            | TokenKind::RightParen
+                                            | TokenKind::RightBracket
+                                            | TokenKind::RightBrace
+                                            | TokenKind::Comma
+                                            | TokenKind::FatArrow
+                                    )
+                                )
+                            {
+                                args.push(self.parse_assignment()?);
+                            }
+
+                            let end = self.previous_position();
+                            Ok(Node::new(
+                                NodeKind::IndirectCall {
+                                    method: String::from("new"),
+                                    object,
+                                    args,
+                                },
+                                SourceLocation { start, end },
+                            ))
+                        }
                         _ => {
                             // Regular identifier (possibly qualified with ::)
                             self.parse_qualified_identifier()
