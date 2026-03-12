@@ -130,7 +130,7 @@ impl<'a> Parser<'a> {
             // Parse as hash
             _is_hash = true;
 
-            if self.peek_kind() != /* ~ changed by cargo-mutants ~ */ Some(TokenKind::FatArrow) {
+            if self.peek_kind() == Some(TokenKind::FatArrow) {
                 // key => value pattern
                 self.tokens.next()?; // consume =>
                 let value = self.parse_expression()?;
