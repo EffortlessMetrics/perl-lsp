@@ -24,7 +24,7 @@ done
 
 ## Tutorials — learn by doing
 
-Step-by-step guides to get you started.
+Step-by-step guides to get you started (Diátaxis: learning-oriented).
 
 - [Getting Started](tutorials/GETTING_STARTED.md) — Installation and first steps
 - [DAP User Guide](tutorials/DAP_USER_GUIDE.md) — Debug Adapter Protocol setup and usage
@@ -34,7 +34,7 @@ Step-by-step guides to get you started.
 
 ## How-to guides — solve a problem
 
-Task-oriented instructions for common operations.
+Task-oriented instructions for common operations (Diátaxis: problem-oriented).
 
 - [Installation](how-to/INSTALLATION.md) — Install from source or binary
 - [Editor Setup](how-to/EDITOR_SETUP.md) — Configure your editor
@@ -46,7 +46,7 @@ Task-oriented instructions for common operations.
 
 ## Reference — look it up
 
-Precise, complete information for lookup.
+Precise, complete information for lookup (Diátaxis: information-oriented).
 
 - [Commands Reference](reference/COMMANDS_REFERENCE.md) — Full command catalog
 - [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) — System design and components
@@ -61,7 +61,7 @@ Precise, complete information for lookup.
 
 ## Explanation — understand why
 
-Conceptual discussions and design rationale.
+Conceptual discussions and design rationale (Diátaxis: understanding-oriented).
 
 - [Pure Rust Parser](explanation/PURE_RUST_PARSER.md) — Why we built a native parser
 - [Error Handling Strategy](explanation/ERROR_HANDLING_STRATEGY.md) — Error philosophy and patterns
@@ -91,7 +91,6 @@ Process, metrics, and project health.
 | [design/](design/) | Semantic analyzer design |
 | [EDITORS/](EDITORS/) | Editor-specific setup |
 | [forensics/](forensics/) | PR archaeology |
-| [internal/](internal/) | Internal working docs |
 | [issues/](issues/) | Corpus gap tracking |
 | [semantic/](semantic/) | Semantic validation |
 | [specs/](specs/) | Specification documents |
