@@ -28,6 +28,44 @@ Each exhibit shows:
 
 ---
 
+
+## Storybooking Playbook
+
+To improve storybooking quality, treat each exhibit as a reusable end-to-end story that can be re-run by reviewers and CI.
+
+### Story template
+
+Each story should include:
+
+1. **Goal** - the user or maintainer outcome.
+2. **Trigger** - exact action taken (command, editor action, or request type).
+3. **Expected behavior** - parser/LSP/DAP outcome in observable terms.
+4. **Failure signals** - diagnostics, logs, or protocol symptoms that indicate regressions.
+5. **Validation** - tests and commands that prove the story still works.
+
+### Example story skeleton
+
+```text
+Story: Safe symbol rename across workspace
+Goal: Rename a symbol without missing qualified/bare references
+Trigger: textDocument/rename on a cross-file symbol
+Expected behavior: all intended references updated; no unrelated edits
+Failure signals: unresolved references, parse diagnostics spike, incorrect workspace edits
+Validation: targeted rename tests + workspace smoke checks
+```
+
+### Story quality checklist
+
+- **Task-oriented:** describes what a user is trying to achieve.
+- **Observable:** names concrete success/failure signals.
+- **Repeatable:** can be executed by another engineer without hidden context.
+- **Scoped:** narrow enough that failures are actionable.
+- **Traceable:** linked to a PR, issue, and proof bundle in this casebook.
+
+Use this playbook when adding new exhibits so the casebook doubles as a high-signal regression narrative, not just a historical record.
+
+---
+
 ## Exhibits
 
 ### Exhibit 1: Semantic Analyzer Phase 1 (Issue #188 → PRs #231/232/234)
