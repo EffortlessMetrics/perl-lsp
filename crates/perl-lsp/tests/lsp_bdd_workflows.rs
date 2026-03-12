@@ -76,6 +76,42 @@ fn workspace_edit_uris(edit: &Value) -> BTreeSet<String> {
     uris
 }
 
+fn workspace_edit_new_texts_for_uri(edit: &Value, target_uri: &str) -> Vec<String> {
+    let mut new_texts = Vec::new();
+
+    if let Some(changes) = edit.get("changes").and_then(Value::as_object)
+        && let Some(edits) = changes.get(target_uri).and_then(Value::as_array)
+    {
+        new_texts.extend(
+            edits
+                .iter()
+                .filter_map(|entry| entry.get("newText").and_then(Value::as_str))
+                .map(ToOwned::to_owned),
+        );
+    }
+
+    if let Some(doc_changes) = edit.get("documentChanges").and_then(Value::as_array) {
+        for change in doc_changes {
+            let uri_matches =
+                change.pointer("/textDocument/uri").and_then(Value::as_str) == Some(target_uri);
+            if !uri_matches {
+                continue;
+            }
+
+            if let Some(edits) = change.get("edits").and_then(Value::as_array) {
+                new_texts.extend(
+                    edits
+                        .iter()
+                        .filter_map(|entry| entry.get("newText").and_then(Value::as_str))
+                        .map(ToOwned::to_owned),
+                );
+            }
+        }
+    }
+
+    new_texts
+}
+
 fn first_location_uri(response: &Value) -> Option<String> {
     if let Some(arr) = response.as_array() {
         arr.first().and_then(|v| v.get("uri").and_then(Value::as_str)).map(ToOwned::to_owned)
@@ -315,6 +351,18 @@ my $also = process_data();
     let uris = workspace_edit_uris(&edit);
     assert!(uris.contains(&module_uri), "rename should edit module file");
     assert!(uris.contains(&main_uri), "rename should edit main script file");
+
+    scenario.then("rename edits include the new symbol text in both files");
+    let module_texts = workspace_edit_new_texts_for_uri(&edit, &module_uri);
+    let main_texts = workspace_edit_new_texts_for_uri(&edit, &main_uri);
+    assert!(
+        module_texts.iter().any(|text| text.contains("process_records")),
+        "module edits should contain new function name; got {module_texts:?}"
+    );
+    assert!(
+        main_texts.iter().any(|text| text.contains("process_records")),
+        "main edits should contain new function name; got {main_texts:?}"
+    );
 
     Ok(())
 }
