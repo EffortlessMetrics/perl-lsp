@@ -273,6 +273,13 @@ doctor:
     @echo "=============================================="
     @bash scripts/devex-doctor.sh
 
+# Developer environment diagnostics in strict mode (for CI/automation)
+doctor-strict:
+    @echo "=============================================="
+    @echo "  perl-lsp developer environment doctor (strict)"
+    @echo "=============================================="
+    @bash scripts/devex-doctor.sh --strict
+
 # Tool availability check (basic tools for PR-fast)
 [private]
 _check-tools-basic:

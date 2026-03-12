@@ -259,6 +259,12 @@ cargo clippy --workspace --lib && cargo fmt --all
 # Check local tooling (dev environment doctor)
 just doctor
 
+# Strict doctor for automation (fails if recommended tools are missing)
+just doctor-strict
+
+# Install repository git hooks (recommended)
+bash scripts/install-githooks.sh
+
 # Full local gate (requires Nix)
 nix develop -c just ci-gate
 ```
