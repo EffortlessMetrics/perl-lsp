@@ -72,5 +72,36 @@ sub my_sub {
             "map should take a block even with hash-like content: {}",
             sexp2
         );
+
+        // map/grep/sort block with a statement list followed by list args
+        let code3 = "map { my $x = $_; $x * 2 } @list;";
+        let mut parser3 = Parser::new(code3);
+        let result3 = parser3.parse();
+        assert!(result3.is_ok(), "map block+list should parse: {:?}", result3.err());
+
+        let code4 = "grep { my $x = $_; $x > 0 } @list;";
+        let mut parser4 = Parser::new(code4);
+        let result4 = parser4.parse();
+        assert!(result4.is_ok(), "grep block+list should parse: {:?}", result4.err());
+
+        let code5 = "sort { my $x = $a <=> $b; $x } @list;";
+        let mut parser5 = Parser::new(code5);
+        let result5 = parser5.parse();
+        assert!(result5.is_ok(), "sort block+list should parse: {:?}", result5.err());
+
+        let code6 = "my @m = map { my $x = $_; $x * 2 } @list;";
+        let mut parser6 = Parser::new(code6);
+        let result6 = parser6.parse();
+        assert!(result6.is_ok(), "map expression block+list should parse: {:?}", result6.err());
+
+        let code7 = "my @g = grep { my $x = $_; $x > 0 } @list;";
+        let mut parser7 = Parser::new(code7);
+        let result7 = parser7.parse();
+        assert!(result7.is_ok(), "grep expression block+list should parse: {:?}", result7.err());
+
+        let code8 = "my @s = sort { my $x = $a <=> $b; $x } @list;";
+        let mut parser8 = Parser::new(code8);
+        let result8 = parser8.parse();
+        assert!(result8.is_ok(), "sort expression block+list should parse: {:?}", result8.err());
     }
 }

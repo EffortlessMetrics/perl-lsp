@@ -397,26 +397,10 @@ impl<'a> Parser<'a> {
                                 if matches!(name.as_str(), "sort" | "map" | "grep")
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
-                                    // Parse block expression as first argument
-                                    let block_start = self.current_position();
-                                    self.expect(TokenKind::LeftBrace)?;
-
-                                    // Parse the expression inside the block (if any)
-                                    let mut statements = Vec::new();
-                                    if self.peek_kind() != Some(TokenKind::RightBrace) {
-                                        statements.push(self.parse_expression()?);
-                                    }
-
-                                    self.expect(TokenKind::RightBrace)?;
-                                    let block_end = self.previous_position();
-
-                                    // Wrap the expression in a block node
-                                    let block = Node::new(
-                                        NodeKind::Block { statements },
-                                        SourceLocation { start: block_start, end: block_end },
-                                    );
-
-                                    args.push(block);
+                                    // Parse block first argument using dedicated builtin logic.
+                                    // This correctly handles statement-list blocks like:
+                                    // map { my $x = $_; $x * 2 } @list
+                                    args.push(self.parse_builtin_block()?);
 
                                     // Parse remaining arguments for map/grep/sort without requiring commas
                                     // But respect statement boundaries including ] and )
@@ -429,7 +413,7 @@ impl<'a> Parser<'a> {
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_ternary()?);
+                                        args.push(self.parse_assignment()?);
                                     }
                                 } else if name == "bless"
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
