@@ -10,8 +10,22 @@ use perl_lsp_launcher::{LaunchAction, LaunchConfig, TransportMode, help_text, pa
 use std::env;
 use std::process;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
+
+static CONNECTION_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+fn log_info(enabled: bool, message: impl AsRef<str>) {
+    if enabled {
+        eprintln!("[perl-lsp][info] {}", message.as_ref());
+    }
+}
+
+fn log_error(message: impl AsRef<str>) {
+    eprintln!("[perl-lsp][error] {}", message.as_ref());
+}
 
 fn main() {
     let launch_plan = match parse_args(env::args()) {
@@ -45,14 +59,15 @@ fn main() {
 }
 
 fn run_server(launch_config: LaunchConfig) {
-    if launch_config.enable_logging {
-        eprintln!("Perl Language Server starting...");
-        eprintln!("Mode: {}", launch_config.transport.label());
-        if let Some(port) = launch_config.transport.port() {
-            eprintln!("Port: {port}");
-        }
-        eprintln!("Feature profile: {}", launch_config.feature_profile.as_str());
+    log_info(launch_config.enable_logging, "Perl Language Server starting");
+    log_info(launch_config.enable_logging, format!("mode={}", launch_config.transport.label()));
+    if let Some(port) = launch_config.transport.port() {
+        log_info(launch_config.enable_logging, format!("port={port}"));
     }
+    log_info(
+        launch_config.enable_logging,
+        format!("feature_profile={}", launch_config.feature_profile.as_str()),
+    );
 
     match launch_config.transport {
         TransportMode::Stdio => {
@@ -69,7 +84,7 @@ fn run_server(launch_config: LaunchConfig) {
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
-                    eprintln!("Failed to create Tokio runtime: {e}");
+                    log_error(format!("failed to create Tokio runtime: {e}"));
                     process::exit(1);
                 }
             };
@@ -78,34 +93,44 @@ fn run_server(launch_config: LaunchConfig) {
                 let listener = match TcpListener::bind(&addr).await {
                     Ok(l) => l,
                     Err(e) => {
-                        eprintln!("Failed to bind to {addr}: {e}");
+                        log_error(format!("failed to bind to {addr}: {e}"));
                         process::exit(1);
                     }
                 };
                 let local_addr = match listener.local_addr() {
                     Ok(a) => a,
                     Err(e) => {
-                        eprintln!("Failed to get local address: {e}");
+                        log_error(format!("failed to get local address: {e}"));
                         process::exit(1);
                     }
                 };
-                eprintln!("Perl LSP listening on {}", local_addr);
+                log_info(launch_config.enable_logging, format!("listening_on={local_addr}"));
 
                 loop {
                     match listener.accept().await {
                         Ok((stream, peer_addr)) => {
-                            eprintln!("Accepted connection from {peer_addr}");
+                            let connection_id = CONNECTION_COUNTER.fetch_add(1, Ordering::Relaxed);
+                            log_info(
+                                launch_config.enable_logging,
+                                format!("connection_id={connection_id} accepted peer={peer_addr}"),
+                            );
+                            let connection_started = Instant::now();
+                            let logging_enabled = launch_config.enable_logging;
                             tokio::spawn(async move {
                                 if let Ok(std_stream) = stream.into_std() {
                                     if let Err(e) = std_stream.set_nonblocking(false) {
-                                        eprintln!("Failed to set blocking mode: {}", e);
+                                        log_error(format!(
+                                            "connection_id={connection_id} failed to set blocking mode: {e}"
+                                        ));
                                         return;
                                     }
 
                                     let writer = match std_stream.try_clone() {
                                         Ok(w) => w,
                                         Err(e) => {
-                                            eprintln!("Failed to clone stream: {e}");
+                                            log_error(format!(
+                                                "connection_id={connection_id} failed to clone stream: {e}"
+                                            ));
                                             return;
                                         }
                                     };
@@ -122,19 +147,33 @@ fn run_server(launch_config: LaunchConfig) {
                                         );
                                         let mut buf_reader = std::io::BufReader::new(reader);
                                         if let Err(e) = server.serve(&mut buf_reader) {
-                                            eprintln!("Connection error: {e}");
+                                            log_error(format!(
+                                                "connection_id={connection_id} connection error: {e}"
+                                            ));
                                         }
                                     })
                                     .await
                                     {
-                                        eprintln!("Task panic: {e}");
+                                        log_error(format!(
+                                            "connection_id={connection_id} task panic: {e}"
+                                        ));
                                     }
+
+                                    log_info(
+                                        logging_enabled,
+                                        format!(
+                                            "connection_id={connection_id} closed duration_ms={}",
+                                            connection_started.elapsed().as_millis()
+                                        ),
+                                    );
                                 } else {
-                                    eprintln!("Failed to convert stream to std");
+                                    log_error(format!(
+                                        "connection_id={connection_id} failed to convert stream to std"
+                                    ));
                                 }
                             });
                         }
-                        Err(e) => eprintln!("Failed to accept: {e}"),
+                        Err(e) => log_error(format!("failed to accept connection: {e}")),
                     }
                 }
             });
