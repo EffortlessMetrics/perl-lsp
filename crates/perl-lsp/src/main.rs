@@ -10,6 +10,7 @@ use perl_lsp_launcher::{LaunchAction, LaunchConfig, TransportMode, help_text, pa
 use std::env;
 use std::process;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 
@@ -17,8 +18,8 @@ fn main() {
     let launch_plan = match parse_args(env::args()) {
         Ok(plan) => plan,
         Err(error) => {
-            eprintln!("{error}");
-            eprintln!("{}", help_text());
+            log_error(format_args!("{error}"));
+            log_error(format_args!("{}", help_text()));
             process::exit(1);
         }
     };
@@ -46,12 +47,12 @@ fn main() {
 
 fn run_server(launch_config: LaunchConfig) {
     if launch_config.enable_logging {
-        eprintln!("Perl Language Server starting...");
-        eprintln!("Mode: {}", launch_config.transport.label());
+        log_info(true, format_args!("Perl Language Server starting..."));
+        log_info(true, format_args!("Mode: {}", launch_config.transport.label()));
         if let Some(port) = launch_config.transport.port() {
-            eprintln!("Port: {port}");
+            log_info(true, format_args!("Port: {port}"));
         }
-        eprintln!("Feature profile: {}", launch_config.feature_profile.as_str());
+        log_info(true, format_args!("Feature profile: {}", launch_config.feature_profile.as_str()));
     }
 
     match launch_config.transport {
@@ -59,7 +60,7 @@ fn run_server(launch_config: LaunchConfig) {
             let mut server = LspServer::new_with_feature_profile(launch_config.feature_profile);
 
             if let Err(e) = server.run() {
-                eprintln!("LSP server error: {}", e);
+                log_error(format_args!("LSP server error: {e}"));
                 process::exit(1);
             }
         }
@@ -69,7 +70,7 @@ fn run_server(launch_config: LaunchConfig) {
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
-                    eprintln!("Failed to create Tokio runtime: {e}");
+                    log_error(format_args!("Failed to create Tokio runtime: {e}"));
                     process::exit(1);
                 }
             };
@@ -78,34 +79,40 @@ fn run_server(launch_config: LaunchConfig) {
                 let listener = match TcpListener::bind(&addr).await {
                     Ok(l) => l,
                     Err(e) => {
-                        eprintln!("Failed to bind to {addr}: {e}");
+                        log_error(format_args!("Failed to bind to {addr}: {e}"));
                         process::exit(1);
                     }
                 };
                 let local_addr = match listener.local_addr() {
                     Ok(a) => a,
                     Err(e) => {
-                        eprintln!("Failed to get local address: {e}");
+                        log_error(format_args!("Failed to get local address: {e}"));
                         process::exit(1);
                     }
                 };
-                eprintln!("Perl LSP listening on {}", local_addr);
+                log_info(
+                    launch_config.enable_logging,
+                    format_args!("Perl LSP listening on {local_addr}"),
+                );
 
                 loop {
                     match listener.accept().await {
                         Ok((stream, peer_addr)) => {
-                            eprintln!("Accepted connection from {peer_addr}");
+                            log_info(
+                                launch_config.enable_logging,
+                                format_args!("Accepted connection from {peer_addr}"),
+                            );
                             tokio::spawn(async move {
                                 if let Ok(std_stream) = stream.into_std() {
                                     if let Err(e) = std_stream.set_nonblocking(false) {
-                                        eprintln!("Failed to set blocking mode: {}", e);
+                                        log_error(format_args!("Failed to set blocking mode: {e}"));
                                         return;
                                     }
 
                                     let writer = match std_stream.try_clone() {
                                         Ok(w) => w,
                                         Err(e) => {
-                                            eprintln!("Failed to clone stream: {e}");
+                                            log_error(format_args!("Failed to clone stream: {e}"));
                                             return;
                                         }
                                     };
@@ -122,24 +129,43 @@ fn run_server(launch_config: LaunchConfig) {
                                         );
                                         let mut buf_reader = std::io::BufReader::new(reader);
                                         if let Err(e) = server.serve(&mut buf_reader) {
-                                            eprintln!("Connection error: {e}");
+                                            log_error(format_args!("Connection error: {e}"));
                                         }
                                     })
                                     .await
                                     {
-                                        eprintln!("Task panic: {e}");
+                                        log_error(format_args!("Task panic: {e}"));
                                     }
                                 } else {
-                                    eprintln!("Failed to convert stream to std");
+                                    log_error(format_args!("Failed to convert stream to std"));
                                 }
                             });
                         }
-                        Err(e) => eprintln!("Failed to accept: {e}"),
+                        Err(e) => log_error(format_args!("Failed to accept: {e}")),
                     }
                 }
             });
         }
     }
+}
+
+fn log_info(enabled: bool, message: std::fmt::Arguments<'_>) {
+    if enabled {
+        eprintln!("{} [INFO] {message}", log_prefix());
+    }
+}
+
+fn log_error(message: std::fmt::Arguments<'_>) {
+    eprintln!("{} [ERROR] {message}", log_prefix());
+}
+
+fn log_prefix() -> String {
+    let pid = process::id();
+    let millis = match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis(),
+        Err(_) => 0,
+    };
+    format!("[perl-lsp][pid={pid}][ts={millis}]")
 }
 
 fn print_version() {
