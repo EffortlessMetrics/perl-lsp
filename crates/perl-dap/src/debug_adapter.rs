@@ -1933,7 +1933,8 @@ impl DebugAdapter {
     /// For TCP attachment, the arguments should contain:
     /// - `host`: Hostname or IP address (default: "localhost")
     /// - `port`: Port number (default: 13603)
-    /// - `timeout`: Connection timeout in milliseconds (optional)
+    /// - `timeoutMs`: Connection timeout in milliseconds (optional, canonical)
+    /// - `timeout`: Connection timeout in milliseconds (optional, legacy alias)
     ///
     /// # Current Implementation
     ///
@@ -2012,7 +2013,11 @@ impl DebugAdapter {
                     };
                 }
                 let port = raw_port as u16;
-                let timeout = args.get("timeout").and_then(|t| t.as_u64()).map(|t| t as u32);
+                let timeout = args
+                    .get("timeoutMs")
+                    .and_then(|t| t.as_u64())
+                    .or_else(|| args.get("timeout").and_then(|t| t.as_u64()))
+                    .map(|t| t as u32);
 
                 // Validate arguments.
                 if host.trim().is_empty() {
@@ -5541,6 +5546,29 @@ mod tests {
                 assert!(!success); // Not yet implemented, but validates correctly
                 assert_eq!(command, "attach");
                 assert!(message.is_some());
+                let msg = message.ok_or("Expected message")?;
+                assert!(msg.contains("localhost:13603"));
+                assert!(msg.contains("5000ms timeout"));
+            }
+            _ => return Err("Expected response".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn test_attach_tcp_valid_arguments_timeout_ms() -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        let args = json!({
+            "host": "localhost",
+            "port": 13603,
+            "timeoutMs": 5000
+        });
+        let response = adapter.handle_request(1, "attach", Some(args));
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success); // No running shim in unit test environment
+                assert_eq!(command, "attach");
                 let msg = message.ok_or("Expected message")?;
                 assert!(msg.contains("localhost:13603"));
                 assert!(msg.contains("5000ms timeout"));

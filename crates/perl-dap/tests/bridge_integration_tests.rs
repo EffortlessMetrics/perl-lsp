@@ -126,7 +126,7 @@ fn test_attach_configuration_json() -> Result<()> {
     assert!(snippet.contains("attach"));
     assert!(snippet.contains("localhost"));
     assert!(snippet.contains("13603"));
-    assert!(snippet.contains("timeout"));
+    assert!(snippet.contains("timeoutMs"));
 
     Ok(())
 }
@@ -309,7 +309,7 @@ fn test_attach_json_snippet_completeness() -> Result<()> {
     assert!(json.get("name").is_some(), "name field missing");
     assert!(json.get("host").is_some(), "host field missing");
     assert!(json.get("port").is_some(), "port field missing");
-    assert!(json.get("timeout").is_some(), "timeout field missing");
+    assert!(json.get("timeoutMs").is_some(), "timeoutMs field missing");
 
     // Verify field types and values
     assert_eq!(json["type"], "perl");
@@ -317,7 +317,7 @@ fn test_attach_json_snippet_completeness() -> Result<()> {
     assert!(json["name"].is_string());
     assert_eq!(json["host"], "localhost");
     assert_eq!(json["port"], 13603);
-    assert!(json["timeout"].is_number());
+    assert!(json["timeoutMs"].is_number());
 
     Ok(())
 }

@@ -226,6 +226,10 @@ pub struct AttachConfiguration {
     pub port: u16,
 
     /// Connection timeout in milliseconds (optional)
+    ///
+    /// Accepts both `timeoutMs` (canonical) and legacy `timeout` during
+    /// deserialization for backward compatibility.
+    #[serde(alias = "timeout")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u32>,
 }
@@ -353,7 +357,7 @@ pub fn create_attach_json_snippet() -> String {
         "name": "Attach to Perl::LanguageServer",
         "host": "localhost",
         "port": 13603,
-        "timeout": 5000
+        "timeoutMs": 5000
     });
     serde_json::to_string_pretty(&json).unwrap_or_else(|e| {
         eprintln!("Failed to serialize attach.json snippet: {}", e);
@@ -408,6 +412,7 @@ mod tests {
         assert!(snippet.contains("\"request\""));
         assert!(snippet.contains("attach"));
         assert!(snippet.contains("13603"));
+        assert!(snippet.contains("timeoutMs"));
     }
 
     // Edge case tests for mutation testing hardening
@@ -707,7 +712,17 @@ mod tests {
         assert_eq!(parsed["request"], "attach");
         assert_eq!(parsed["host"], "localhost");
         assert_eq!(parsed["port"], 13603);
-        assert!(parsed["timeout"].is_number());
+        assert!(parsed["timeoutMs"].is_number());
+        Ok(())
+    }
+
+    #[test]
+    fn test_attach_config_deserializes_legacy_timeout_field()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let json = r#"{"host":"localhost","port":13603,"timeout":5000}"#;
+        let parsed: AttachConfiguration = serde_json::from_str(json)?;
+
+        assert_eq!(parsed.timeout_ms, Some(5000));
         Ok(())
     }
 
