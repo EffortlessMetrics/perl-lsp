@@ -151,6 +151,32 @@ fn test_qualified_function_call() {
 }
 
 #[test]
+fn test_my_declaration_in_function_call_parens() {
+    let mut parser = Parser::new("foo(my $x);");
+    let ast = must(parser.parse());
+
+    let NodeKind::Program { statements } = &ast.kind else {
+        unreachable!("Expected Program");
+    };
+    let Some(first_stmt) = statements.first() else {
+        unreachable!("Expected one statement");
+    };
+    let NodeKind::ExpressionStatement { expression } = &first_stmt.kind else {
+        unreachable!("Expected ExpressionStatement");
+    };
+    let NodeKind::FunctionCall { name, args } = &expression.kind else {
+        unreachable!("Expected FunctionCall");
+    };
+
+    assert_eq!(name, "foo");
+    assert_eq!(args.len(), 1);
+    assert!(matches!(
+        args[0].kind,
+        NodeKind::VariableDeclaration { ref declarator, .. } if declarator == "my"
+    ));
+}
+
+#[test]
 fn test_issue_461_variable_length_lookbehind() {
     // Variable-length lookbehind
     let code = r#"my $pattern = qr/(?<=\d{1,1000})\w+/;"#;
