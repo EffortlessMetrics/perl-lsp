@@ -373,6 +373,9 @@ impl<'a> Parser<'a> {
                         if matches!(name.as_str(), "q" | "qq" | "qw" | "qr" | "qx" | "m" | "s") {
                             // This was already parsed as a quote operator in parse_primary
                             // Don't try to parse arguments
+                        } else if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            // Identifier before => is a hash key — do NOT treat as
+                            // a builtin function call.  Fall through to break.
                         } else if Self::is_builtin_function(name) {
                             // Builtins always become function calls, even with no arguments
                             // This ensures they work correctly in expressions like "return $x or die"

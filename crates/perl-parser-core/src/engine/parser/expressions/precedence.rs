@@ -12,9 +12,18 @@ impl<'a> Parser<'a> {
             let mut expressions = vec![expr];
             let mut saw_fat_comma = false;
 
-            // Handle initial fat arrow
+            // Handle initial fat arrow — auto-quote the key if it is a bare identifier
             if self.peek_kind() == Some(TokenKind::FatArrow) {
                 saw_fat_comma = true;
+                // Auto-quote bare identifiers before =>
+                let last_idx = expressions.len() - 1;
+                if let NodeKind::Identifier { ref name } = expressions[last_idx].kind {
+                    let loc = expressions[last_idx].location;
+                    expressions[last_idx] = Node::new(
+                        NodeKind::String { value: name.clone(), interpolated: false },
+                        loc,
+                    );
+                }
                 self.tokens.next()?; // consume =>
                 expressions.push(self.parse_assignment()?);
             }
@@ -35,11 +44,17 @@ impl<'a> Parser<'a> {
                     _ => {}
                 }
 
-                let elem = self.parse_assignment()?;
+                let mut elem = self.parse_assignment()?;
 
-                // Check for fat arrow after element
+                // Check for fat arrow after element — auto-quote bare identifiers
                 if self.peek_kind() == Some(TokenKind::FatArrow) {
                     saw_fat_comma = true;
+                    if let NodeKind::Identifier { ref name } = elem.kind {
+                        elem = Node::new(
+                            NodeKind::String { value: name.clone(), interpolated: false },
+                            elem.location,
+                        );
+                    }
                     self.tokens.next()?; // consume =>
                     expressions.push(elem);
 
@@ -155,7 +170,10 @@ impl<'a> Parser<'a> {
 
         // Handle 'return' as an expression in expression context
         // This allows patterns like: open $fh, $file or return;
-        if self.peek_kind() == Some(TokenKind::Return) {
+        // But NOT when followed by => (autoquoted hash key: return => $val)
+        if self.peek_kind() == Some(TokenKind::Return)
+            && !self.is_keyword_before_fat_arrow()
+        {
             return self.parse_return();
         }
 

@@ -59,6 +59,21 @@ impl<'a> Parser<'a> {
         self.with_recursion_guard(|s| s.parse_statement_inner())
     }
 
+    /// Check if the current token is a keyword that is being used as an
+    /// autoquoted hash key before a fat arrow (`=>`).
+    ///
+    /// In Perl, any bareword before `=>` is treated as a string:
+    /// ```perl
+    /// my %h = (if => 1, for => 2, return => 3);
+    /// ```
+    fn is_keyword_before_fat_arrow(&mut self) -> bool {
+        self.tokens
+            .peek_second()
+            .ok()
+            .map(|t| t.kind == TokenKind::FatArrow)
+            .unwrap_or(false)
+    }
+
     fn parse_statement_inner(&mut self) -> ParseResult<Node> {
         // Every new statement begins here
         self.at_stmt_start = true;
@@ -67,6 +82,34 @@ impl<'a> Parser<'a> {
 
         // Don't check for labels here - it breaks regular identifier parsing
         // Labels will be handled differently
+
+        // In Perl, any bareword (including reserved keywords) before `=>` is
+        // autoquoted as a string.  Detect this pattern early so that keyword
+        // tokens such as `if`, `for`, `return`, `my`, etc. are NOT dispatched
+        // to their keyword-specific parsers when they appear as hash keys.
+        if Self::is_keyword_token(kind) && self.is_keyword_before_fat_arrow() {
+            let token = self.consume_token()?;
+            self.mark_not_stmt_start();
+            // Produce a String node (autoquoting) and continue as an expression statement
+            let key_node = Node::new(
+                NodeKind::String { value: token.text.to_string(), interpolated: false },
+                SourceLocation { start: token.start, end: token.end },
+            );
+            // Now parse the rest of the expression (=> value, more pairs, etc.)
+            // Re-enter the comma parser with the key already consumed
+            let mut stmt = self.finish_expression_from(key_node)?;
+            // Check for statement modifiers on ANY statement
+            if matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k)) {
+                stmt = self.parse_statement_modifier(stmt)?;
+            }
+            // Check for optional semicolon
+            if self.peek_kind() == Some(TokenKind::Semicolon) {
+                let semi_token = self.consume_token()?;
+                self.byte_cursor = semi_token.end;
+            }
+            self.drain_pending_heredocs(&mut stmt);
+            return Ok(stmt);
+        }
 
         let mut stmt = match kind {
             // Empty statement (lone semicolon) - just consume and return a no-op
@@ -201,6 +244,97 @@ impl<'a> Parser<'a> {
     }
 
     /// Parse expression statement
+    /// Resume comma-level expression parsing from an already-consumed first
+    /// token (used when a keyword has been autoquoted before `=>`).
+    ///
+    /// Produces an `ExpressionStatement` wrapping the resulting list / hash
+    /// expression.
+    fn finish_expression_from(&mut self, first: Node) -> ParseResult<Node> {
+        let start = first.location.start;
+        let mut expr = first;
+
+        // Continue with comma / fat-arrow parsing (mirrors parse_comma logic)
+        if self.peek_kind() == Some(TokenKind::Comma)
+            || self.peek_kind() == Some(TokenKind::FatArrow)
+        {
+            let mut expressions = vec![expr];
+            let mut saw_fat_comma = false;
+
+            // Handle initial fat arrow
+            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                saw_fat_comma = true;
+                self.tokens.next()?; // consume =>
+                expressions.push(self.parse_assignment()?);
+            }
+
+            while self.peek_kind() == Some(TokenKind::Comma)
+                || self.peek_kind() == Some(TokenKind::FatArrow)
+            {
+                if self.peek_kind() == Some(TokenKind::Comma) {
+                    self.consume_token()?; // consume comma
+                }
+
+                // Check for end of expression
+                match self.peek_kind() {
+                    Some(TokenKind::Semicolon)
+                    | Some(TokenKind::RightParen)
+                    | Some(TokenKind::RightBrace)
+                    | Some(TokenKind::RightBracket) => break,
+                    _ => {}
+                }
+
+                // The next element might also be a keyword before =>
+                let elem = if self.peek_kind().is_some_and(Self::is_keyword_token)
+                    && self.is_keyword_before_fat_arrow()
+                {
+                    let token = self.consume_token()?;
+                    Node::new(
+                        NodeKind::String {
+                            value: token.text.to_string(),
+                            interpolated: false,
+                        },
+                        SourceLocation { start: token.start, end: token.end },
+                    )
+                } else {
+                    self.parse_assignment()?
+                };
+
+                // Check for fat arrow after element
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    saw_fat_comma = true;
+                    self.tokens.next()?; // consume =>
+                    expressions.push(elem);
+
+                    // Check again for end of expression
+                    match self.peek_kind() {
+                        Some(TokenKind::Semicolon)
+                        | Some(TokenKind::RightParen)
+                        | Some(TokenKind::RightBrace)
+                        | Some(TokenKind::RightBracket) => break,
+                        _ => expressions.push(self.parse_assignment()?),
+                    }
+                } else {
+                    expressions.push(elem);
+                }
+            }
+
+            let end = expressions
+                .last()
+                .map(|e| e.location.end)
+                .unwrap_or(start);
+            expr = Self::build_list_or_hash(expressions, saw_fat_comma, start, end);
+        }
+
+        // Handle trailing word operators (or, and, xor)
+        expr = self.parse_word_or_expr(expr)?;
+
+        let end = self.previous_position();
+        Ok(Node::new(
+            NodeKind::ExpressionStatement { expression: Box::new(expr) },
+            SourceLocation { start, end },
+        ))
+    }
+
     fn parse_expression_statement(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
 

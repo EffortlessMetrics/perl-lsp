@@ -149,6 +149,62 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Check if a token kind is a keyword that has a dedicated parser handler
+    /// in `parse_statement_inner`.  These are the tokens that would normally be
+    /// dispatched to keyword-specific parsers but should instead be treated as
+    /// autoquoted barewords when followed by `=>`.
+    #[inline]
+    fn is_keyword_token(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            // Variable declarations
+            TokenKind::My
+                | TokenKind::Our
+                | TokenKind::State
+                | TokenKind::Local
+                // Control flow
+                | TokenKind::If
+                | TokenKind::Unless
+                | TokenKind::While
+                | TokenKind::Until
+                | TokenKind::For
+                | TokenKind::Foreach
+                | TokenKind::Given
+                | TokenKind::Default
+                | TokenKind::Try
+                // Loop control
+                | TokenKind::Next
+                | TokenKind::Last
+                | TokenKind::Redo
+                // Subroutines and OOP
+                | TokenKind::Sub
+                | TokenKind::Class
+                | TokenKind::Method
+                // Package management
+                | TokenKind::Package
+                | TokenKind::Use
+                | TokenKind::No
+                // Format
+                | TokenKind::Format
+                // Phase blocks
+                | TokenKind::Begin
+                | TokenKind::End
+                | TokenKind::Check
+                | TokenKind::Init
+                | TokenKind::Unitcheck
+                // Return
+                | TokenKind::Return
+                // Other keywords handled in parse_primary
+                | TokenKind::Eval
+                | TokenKind::Do
+                | TokenKind::Continue
+                | TokenKind::Catch
+                | TokenKind::Finally
+                | TokenKind::When
+                | TokenKind::Undef
+        )
+    }
+
     /// Check if a token kind is a binary operator that couldn't start an expression argument.
     fn is_binary_operator(kind: TokenKind) -> bool {
         matches!(

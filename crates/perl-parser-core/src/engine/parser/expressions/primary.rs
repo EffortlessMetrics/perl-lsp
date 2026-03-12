@@ -263,13 +263,46 @@ impl<'a> Parser<'a> {
                 ))
             }
 
-            TokenKind::Eval => self.parse_eval(),
+            TokenKind::Eval => {
+                // Check for autoquoting: `eval => value`
+                if self.is_keyword_before_fat_arrow() {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_eval()
+                }
+            }
 
-            TokenKind::Do => self.parse_do(),
+            TokenKind::Do => {
+                // Check for autoquoting: `do => value`
+                if self.is_keyword_before_fat_arrow() {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_do()
+                }
+            }
 
             // Note: TokenKind::Sub is handled in the keyword-as-identifier case below
             // This allows 'sub' to be used as a hash key or identifier in expressions
-            TokenKind::Try => self.parse_try(),
+            TokenKind::Try => {
+                // Check for autoquoting: `try => value`
+                if self.is_keyword_before_fat_arrow() {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_try()
+                }
+            }
 
             TokenKind::Less => {
                 // Could be diamond operator <> or <FILEHANDLE>
@@ -448,9 +481,18 @@ impl<'a> Parser<'a> {
                     let mut elements = vec![first];
                     let mut saw_fat_comma = false;
 
-                    // Handle fat arrow after first element
+                    // Handle fat arrow after first element — auto-quote bare identifiers
                     if self.peek_kind() == Some(TokenKind::FatArrow) {
                         saw_fat_comma = true;
+                        // Auto-quote the key if it is a bare identifier
+                        let last_idx = elements.len() - 1;
+                        if let NodeKind::Identifier { ref name } = elements[last_idx].kind {
+                            let loc = elements[last_idx].location;
+                            elements[last_idx] = Node::new(
+                                NodeKind::String { value: name.clone(), interpolated: false },
+                                loc,
+                            );
+                        }
                         self.tokens.next()?; // consume =>
                         elements.push(self.parse_assignment()?);
                     }
@@ -466,11 +508,17 @@ impl<'a> Parser<'a> {
                             break;
                         }
 
-                        let elem = self.parse_assignment()?;
+                        let mut elem = self.parse_assignment()?;
 
-                        // Check for fat arrow after element
+                        // Check for fat arrow after element — auto-quote bare identifiers
                         if self.peek_kind() == Some(TokenKind::FatArrow) {
                             saw_fat_comma = true;
+                            if let NodeKind::Identifier { ref name } = elem.kind {
+                                elem = Node::new(
+                                    NodeKind::String { value: name.clone(), interpolated: false },
+                                    elem.location,
+                                );
+                            }
                             self.consume_token()?; // consume =>
                             elements.push(elem);
                             if self.peek_kind() != Some(TokenKind::RightParen) {
@@ -564,8 +612,10 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // Handle keywords that can be used as identifiers in certain contexts
-            // Note: Statement-level keywords (if, unless, while, return, etc.) should NOT be here
+            // Handle keywords that can be used as identifiers in certain contexts.
+            // In expression context, keywords can appear as barewords / hash keys
+            // (especially before `=>`).  Control-flow keywords are only safe here
+            // because `parse_statement_inner` already handled the real keyword case.
             TokenKind::My
             | TokenKind::Our
             | TokenKind::Local
@@ -586,10 +636,21 @@ impl<'a> Parser<'a> {
             | TokenKind::Continue
             | TokenKind::Class
             | TokenKind::Method
-            | TokenKind::Format => {
-                // In expression context, some keywords can be used as barewords/identifiers
+            | TokenKind::Format
+            // Control-flow keywords — allowed as barewords in expression context
+            // (e.g. `if => 1` or `(for => 2)`)
+            | TokenKind::If
+            | TokenKind::Unless
+            | TokenKind::While
+            | TokenKind::Until
+            | TokenKind::For
+            | TokenKind::Foreach
+            | TokenKind::Return
+            | TokenKind::Next
+            | TokenKind::Last
+            | TokenKind::Redo => {
+                // In expression context, keywords are used as barewords/identifiers
                 // This happens in hash keys, method names, etc.
-                // But NOT for statement modifiers like if, unless, while, etc.
                 let token = self.tokens.next()?;
                 Ok(Node::new(
                     NodeKind::Identifier { name: token.text.to_string() },
