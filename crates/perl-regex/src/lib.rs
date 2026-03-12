@@ -151,12 +151,11 @@ impl RegexValidator {
     }
 
     fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), RegexError> {
-        if self.detect_nested_quantifiers(pattern) {
-            return Err(RegexError::syntax(
-                "Potential catastrophic backtracking detected (nested quantifiers)",
-                start_pos,
-            ));
-        }
+        // NOTE: Nested quantifier detection (detect_nested_quantifiers) is intentionally
+        // NOT called here. The heuristic produces too many false positives on valid Perl
+        // patterns such as (?:/\.)+, (\w+)*, (?:pattern)+. Callers that want an advisory
+        // check can invoke detect_nested_quantifiers() directly and surface the result
+        // as a non-fatal diagnostic.
 
         let mut chars = pattern.char_indices().peekable();
         // Stack stores the type of the current group

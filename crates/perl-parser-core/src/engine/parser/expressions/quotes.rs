@@ -199,6 +199,12 @@ impl<'a> Parser<'a> {
                         ParseError::syntax(message, offset)
                     }
                 })?;
+                if validator.detect_nested_quantifiers(&content) {
+                    self.record_error(ParseError::syntax(
+                        "Nested quantifiers detected (possible backtracking risk)",
+                        start,
+                    ));
+                }
                 let has_embedded_code = validator.detects_code_execution(&content);
 
                 Ok(Node::new(
@@ -227,6 +233,12 @@ impl<'a> Parser<'a> {
                         ParseError::syntax(message, offset)
                     }
                 })?;
+                if validator.detect_nested_quantifiers(&content) {
+                    self.record_error(ParseError::syntax(
+                        "Nested quantifiers detected (possible backtracking risk)",
+                        start,
+                    ));
+                }
                 let has_embedded_code = validator.detects_code_execution(&content);
 
                 let mut modifiers = String::new();

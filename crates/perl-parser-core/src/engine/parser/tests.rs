@@ -388,32 +388,60 @@ fn test_branch_reset_complexity() {
 
 #[test]
 fn test_catastrophic_backtracking_detection() {
-    // Nested quantifiers (a+)+
+    // Nested quantifiers (a+)+ -- now recorded as a non-fatal diagnostic
     let code = r#"qr/(a+)+/;"#;
     let mut parser = Parser::new(code);
     let result = parser.parse();
 
-    // Parser might recover, so check either result is Err or errors list has the error
-    if let Err(e) = result {
-        assert!(e.to_string().contains("catastrophic backtracking"), "Error was: {}", e);
-    } else {
-        let errors = parser.errors();
-        assert!(!errors.is_empty(), "Should have recorded errors for nested quantifiers");
-        let found = errors.iter().any(|e| e.to_string().contains("catastrophic backtracking"));
-        assert!(found, "Should have found specific error in: {:?}", errors);
-    }
+    // Parse should succeed (nested quantifiers are no longer a hard error)
+    assert!(result.is_ok(), "Parse should succeed for nested quantifiers: {:?}", result.err());
+    let errors = parser.errors();
+    let found = errors.iter().any(|e| e.to_string().contains("Nested quantifiers"));
+    assert!(found, "Should have found backtracking diagnostic in: {:?}", errors);
 
     // Another case: (a*)*
     let code2 = r#"qr/(a*)*b/;"#;
     let mut parser2 = Parser::new(code2);
     let result2 = parser2.parse();
 
-    if let Err(e) = result2 {
-        assert!(e.to_string().contains("catastrophic backtracking"), "Error was: {}", e);
-    } else {
-        let errors = parser2.errors();
-        assert!(!errors.is_empty(), "Should have recorded errors for nested quantifiers");
-        let found = errors.iter().any(|e| e.to_string().contains("catastrophic backtracking"));
-        assert!(found, "Should have found specific error in: {:?}", errors);
+    assert!(result2.is_ok(), "Parse should succeed for nested quantifiers: {:?}", result2.err());
+    let errors2 = parser2.errors();
+    let found2 = errors2.iter().any(|e| e.to_string().contains("Nested quantifiers"));
+    assert!(found2, "Should have found backtracking diagnostic in: {:?}", errors2);
+}
+
+#[test]
+fn test_valid_regex_patterns_no_false_positive() {
+    // These valid Perl patterns should parse cleanly with no errors at all
+    let valid_patterns = vec![
+        (r#"$x =~ /(?:pattern)+/;"#, "non-capturing group with literal"),
+        (r#"$x =~ /(?:ab)+/;"#, "non-capturing group with two-char literal"),
+    ];
+
+    for (code, desc) in valid_patterns {
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+        assert!(
+            result.is_ok(),
+            "Pattern '{}' ({}) should parse without error: {:?}",
+            code,
+            desc,
+            result.err()
+        );
+        let backtracking_errors: Vec<_> = parser
+            .errors()
+            .iter()
+            .filter(|e| {
+                let msg = e.to_string();
+                msg.contains("backtracking") || msg.contains("Nested quantifiers")
+            })
+            .collect();
+        assert!(
+            backtracking_errors.is_empty(),
+            "Pattern '{}' ({}) should not produce backtracking diagnostics: {:?}",
+            code,
+            desc,
+            backtracking_errors
+        );
     }
 }
