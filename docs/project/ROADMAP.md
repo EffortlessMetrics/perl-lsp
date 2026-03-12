@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-03-11)**: **Initial Public Alpha (v0.10.0)**. Release preparation (crates.io, VS Code marketplace) and documentation alignment underway.
+> **Status (2026-03-11)**: **Public Alpha (v0.11.0)**. Release preparation (crates.io, VS Code marketplace) and documentation alignment underway.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -12,11 +12,11 @@
 
 ## Alpha Disclaimer
 
-Perl LSP is currently in **Initial Public Alpha**. Version 0.10.0 represents a substantially complete feature set, but APIs and protocols are still evolving. We value early adopter feedback to refine the project toward the v0.15.0 Stability Contract milestone.
+Perl LSP is currently in **Public Alpha**. Version 0.11.0 represents a substantially complete feature set, but APIs and protocols are still evolving. We value early adopter feedback to refine the project toward the v0.15.0 Stability Contract milestone.
 
 ---
 
-## Current State (v0.10.0)
+## Current State (v0.11.0)
 
 | Component | Release Stance | Evidence | Notes |
 |-----------|----------------|----------|-------|
@@ -58,12 +58,12 @@ For current metrics (LSP coverage %, corpus counts, test pass rates), see [CURRE
 
 | Crate | Version | Status | Purpose |
 |-------|---------|--------|----------|
-| **perl-parser** | v0.10.0 | Public Alpha | Main parser library |
-| **perl-lsp** | v0.10.0 | Public Alpha | LSP server |
-| **perl-lexer** | v0.10.0 | Public Alpha | Context-aware tokenizer |
-| **perl-corpus** | v0.10.0 | Public Alpha | Test corpus |
-| **perl-dap** | v0.2.0 | Preview (Native + Bridge) | Debug Adapter Protocol |
-| **perl-parser-pest** | v0.10.0 | Legacy | Pest-based parser (maintained) |
+| **perl-parser** | v0.11.0 | Public Alpha | Main parser library |
+| **perl-lsp** | v0.11.0 | Public Alpha | LSP server |
+| **perl-lexer** | v0.11.0 | Public Alpha | Context-aware tokenizer |
+| **perl-corpus** | v0.11.0 | Public Alpha | Test corpus |
+| **perl-dap** | v0.11.0 | Preview (Native + Bridge) | Debug Adapter Protocol |
+| **perl-parser-pest** | v0.11.0 | Legacy | Pest-based parser (maintained) |
 
 ---
 

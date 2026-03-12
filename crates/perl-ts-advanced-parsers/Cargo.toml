@@ -1,6 +1,6 @@
 [package]
 name = "perl-ts-advanced-parsers"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 rust-version = "1.92"
 description = "Composed parser experiments for Perl"
