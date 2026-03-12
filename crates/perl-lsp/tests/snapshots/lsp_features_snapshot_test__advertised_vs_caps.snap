@@ -16,7 +16,6 @@ caps:
   - lsp.document_symbol
   - lsp.execute_command
   - lsp.folding_range
-  - lsp.formatting
   - lsp.hover
   - lsp.implementation
   - lsp.inlay_hint
@@ -26,7 +25,6 @@ caps:
   - lsp.notebook_document_sync
   - lsp.on_type_formatting
   - lsp.pull_diagnostics
-  - lsp.range_formatting
   - lsp.references
   - lsp.rename
   - lsp.selection_range
