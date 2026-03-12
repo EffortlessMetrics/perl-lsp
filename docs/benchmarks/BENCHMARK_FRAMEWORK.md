@@ -1,10 +1,10 @@
-# Benchmark Framework Documentation (*Diataxis: Reference* - Complete benchmarking system specification)
+# Benchmark Framework Documentation
 
-## Overview (*Diataxis: Explanation* - Understanding the benchmarking system)
+## Overview
 
 This document describes the comprehensive benchmarking framework for comparing C and Rust parser implementations. The framework provides statistical analysis, configurable performance gates, and detailed reporting capabilities.
 
-### Purpose and Design Goals (*Diataxis: Explanation* - Why this framework exists)
+### Purpose and Design Goals
 - **Performance Validation**: Ensure Rust implementation meets or exceeds C parser performance
 - **Regression Detection**: Automatically detect performance regressions during development
 - **Statistical Rigor**: Provide confidence intervals and significance testing for reliable comparisons
@@ -39,23 +39,23 @@ This document describes the comprehensive benchmarking framework for comparing C
    - **Memory estimation** for subprocess operations with size-based heuristics
    - **Comprehensive validation** with workload simulation testing
 
-6. **Corpus Comparison Infrastructure** (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
+6. **Corpus Comparison Infrastructure** (v0.8.8+) ⭐ **NEW**
    - **C vs V3 Scanner Comparison**: Direct benchmarking between legacy C scanner and V3 native parser
    - **Performance Optimization Validation**: Measure improvements from lexer optimizations (PR #102)
    - **Multi-implementation Analysis**: Compare performance characteristics across different parser versions
    - **Regression Detection**: Automated detection of performance degradation across parser implementations
 
-7. **LSP Performance Benchmarking (PR #140)** (v0.8.8+) (**Diataxis: Reference**)
+7. **LSP Performance Benchmarking (PR #140)** (v0.8.8+)
    - **LSP Behavioral Tests**: 1560s+ → 0.31s validation
    - **User Story Tests**: 1500s+ → 0.32s measurement
 
-8. **Substitution Operator Performance Validation (PR #158)** (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
+8. **Substitution Operator Performance Validation (PR #158)** (v0.8.8+) ⭐ **NEW**
    - **Zero Performance Impact**: Comprehensive substitution operator parsing with no measurable overhead
    - **<10µs Parsing Time**: Typical substitution operators (`s/old/new/g`) parse in under 10 microseconds
    - **Minimal Memory Overhead**: Reuses existing AST structures without additional memory allocation
    - **Regression Prevention**: Continuous monitoring ensures substitution parsing doesn't impact overall parser performance
 
-9. **Security-Performance Validation Framework (PR #153)** ⭐ **SECURITY-ENHANCED** (**Diataxis: Reference**)
+9. **Security-Performance Validation Framework (PR #153)** ⭐ **SECURITY-ENHANCED**
    - **Comprehensive Security Benchmarking**: UTF-16 position conversion security with zero performance regression
    - **Mutation Testing Integration**: Quality validation (87% score) with performance preservation verification
    - **Security Boundary Testing**: UTF-16 boundary validation benchmarks with overflow protection measurement
@@ -67,14 +67,14 @@ This document describes the comprehensive benchmarking framework for comparing C
    - **Enhanced Test Harness**: Real JSON-RPC protocol performance validation
    - **CI Reliability**: 100% pass rate validation
 
-8. **Traditional LSP Performance Benchmarking** (v0.8.8+) (**Diataxis: Reference**)
+8. **Traditional LSP Performance Benchmarking** (v0.8.8+)
    - **Workspace Symbol Search Optimization**: 99.5% performance improvement measurement
    - **Test Timeout Reduction**: Validation of 60s+ → 0.26s improvements
    - **Cooperative Yielding Validation**: Measure non-blocking behavior in symbol processing
    - **Memory Usage Profiling**: Track bounded processing and memory consumption limits
    - **Fast Mode Benchmarking**: Performance validation with LSP_TEST_FALLBACKS configuration
 
-9. **Dual Function Call Indexing Benchmarking** (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
+9. **Dual Function Call Indexing Benchmarking** (v0.8.8+) ⭐ **NEW**
    - **98% Reference Coverage Validation**: Measure comprehensive function call detection improvements
    - **Dual Indexing Performance**: Benchmark O(1) lookup performance for bare + qualified function names
    - **Unicode Processing Enhancement**: Atomic performance counter validation with emoji/character processing
@@ -82,13 +82,13 @@ This document describes the comprehensive benchmarking framework for comparing C
    - **Thread-Safe Indexing**: Benchmark concurrent workspace indexing with zero race conditions
    - **Memory Overhead Analysis**: Validate ~2x index memory usage vs. reference coverage trade-off
 
-## Security-Performance Validation Methodology (PR #153) (*Diataxis: Explanation* - Comprehensive security benchmarking)
+## Security-Performance Validation Methodology (PR #153)
 
 ### Overview
 
 PR #153 introduces a security-performance validation framework that ensures security enhancements maintain the performance achievements from PR #140. This methodology validates that security improvements introduce zero performance regression while providing comprehensive vulnerability protection.
 
-### Security-Performance Balance Validation (*Diataxis: Reference* - Validation specifications)
+### Security-Performance Balance Validation
 
 #### UTF-16 Position Conversion Security Benchmarking
 
@@ -142,7 +142,7 @@ cargo test -p perl-parser --test mutation_hardening_tests --release -- --nocaptu
 - **Coverage Analysis**: <5s for complete mutation score calculation
 - **Memory Efficiency**: <100MB additional memory for mutation testing infrastructure
 
-#### Performance Preservation (*Diataxis: Reference* - Performance regression prevention)
+#### Performance Preservation
 
 **Comprehensive Regression Prevention:**
 
@@ -158,7 +158,7 @@ cargo test -p perl-parser --test lsp_comprehensive_e2e_test
 # Target: 0.26s (maintained workspace improvement)
 ```
 
-### Security Benchmarking Framework (*Diataxis: How-to* - Implementing security benchmarks)
+### Security Benchmarking Framework
 
 #### Security Validation Tests
 
@@ -224,7 +224,7 @@ cargo xtask bench --security-enhanced --performance-regression-detection
 # 5. Zero regression tolerance: Any performance degradation fails validation
 ```
 
-### Performance Metrics Integration (*Diataxis: Reference* - Security-enhanced metrics)
+### Performance Metrics Integration
 
 **Enhanced Metrics Collection:**
 - **Security Validation Overhead**: Measure performance impact of UTF-16 security checks
@@ -239,7 +239,7 @@ cargo xtask bench --security-enhanced --performance-regression-detection
 - **Quality-Performance Balance**: Track 87% mutation score achievement with performance preservation
 - **Compliance Metrics**: Security compliance validation with performance impact measurement
 
-### Implementation Guidelines (*Diataxis: How-to* - Security-performance best practices)
+### Implementation Guidelines
 
 1. **Security-First Performance**: Always benchmark security enhancements for performance impact
 2. **Zero Regression Tolerance**: Security improvements must not degrade performance
@@ -274,7 +274,7 @@ echo '{"iterations": 200, "warmup_iterations": 20}' > benchmark_config.json
 cargo run -p tree-sitter-perl --bin ts_benchmark_parsers --features pure-rust
 ```
 
-#### LSP Test Performance Benchmarking (**Diataxis: How-to**)
+#### LSP Test Performance Benchmarking
 
 ```bash
 # Performance validation (PR #140)
@@ -294,7 +294,7 @@ echo "After PR #140: 0.31s behavioral tests"
 echo "Result: sub-second behavioral tests"
 ```
 
-#### Corpus Comparison Benchmarking ⭐ **NEW** (**Diataxis: How-to**)
+#### Corpus Comparison Benchmarking ⭐ **NEW**
 
 ```bash
 # Run V3 vs C scanner comparison
@@ -316,7 +316,7 @@ python3 scripts/generate_comparison.py \
 cargo run -p perl-lexer --example whitespace_benchmark
 cargo run -p perl-lexer --example operator_disambiguation_benchmark
 
-#### Dual Indexing Performance Benchmarking ⭐ **NEW** (**Diataxis: How-to**)
+#### Dual Indexing Performance Benchmarking ⭐ **NEW**
 
 ```bash
 # Benchmark dual function call indexing performance
@@ -444,7 +444,7 @@ The framework includes configurable performance gates that automatically detect 
 - **Status**: WARNING/FAIL for memory increases
 - **Action**: Warns on memory regressions
 
-### LSP Performance Gates (v0.8.8+) (**Diataxis: Reference**)
+### LSP Performance Gates (v0.8.8+)
 - **Test Timeout Threshold**: Validates 99.5% timeout reduction (60s+ → 0.26s)
 - **Workspace Symbol Search**: Validates bounded processing (MAX_PROCESS: 1000)
 - **Cooperative Yielding**: Validates non-blocking behavior (yield every 32 symbols)
@@ -568,7 +568,7 @@ Tests are automatically categorized by:
 - **Success rate**: >99% for valid Perl code
 - **Memory usage**: <1MB peak memory for typical files (measured with dual-mode tracking)
 
-### Lexer Optimization Targets (v0.8.8+) ⭐ **NEW** (**Diataxis: Reference**)
+### Lexer Optimization Targets (v0.8.8+) ⭐ **NEW**
 
 **Achieved Performance Improvements (PR #102):**
 - **Whitespace Processing**: 18.779% improvement through batch processing
@@ -583,13 +583,13 @@ Tests are automatically categorized by:
 - **Operator-Heavy Expressions**: 14-16% improvement in disambiguation
 - **Template/Interpolation Code**: 20-22% faster variable extraction
 
-### Unicode Processing Performance Instrumentation (v0.8.8+) ⭐ **NEW** (*Diataxis: Reference* - Unicode performance monitoring)
+### Unicode Processing Performance Instrumentation (v0.8.8+) ⭐ **NEW**
 
-#### Overview (*Diataxis: Explanation* - Understanding Unicode processing costs)
+#### Overview
 
 The v0.8.8+ release introduces comprehensive performance instrumentation for Unicode character processing in the lexer. This enables monitoring of Unicode-heavy codebases and optimization of character classification performance.
 
-#### Performance Counters (*Diataxis: Reference* - Atomic instrumentation API)
+#### Performance Counters
 
 The lexer maintains atomic performance counters for Unicode operations:
 
@@ -615,7 +615,7 @@ pub fn reset_unicode_stats() {
 }
 ```
 
-#### Instrumented Unicode Classification (*Diataxis: Reference* - Performance-monitored character classification)
+#### Instrumented Unicode Classification
 
 Each Unicode character classification is instrumented with performance tracking:
 
@@ -645,7 +645,7 @@ pub fn is_perl_identifier_start(ch: char) -> bool {
 }
 ```
 
-#### Benchmarking Unicode Performance (*Diataxis: How-to* - Measuring Unicode processing costs)
+#### Benchmarking Unicode Performance
 
 Use the instrumentation API to benchmark Unicode-heavy codebases:
 
@@ -678,7 +678,7 @@ my $𝓾𝓷𝓲𝓬𝓸𝓭𝓮_math = "fancy";
 }
 ```
 
-#### Performance Analysis Features (*Diataxis: Reference* - Unicode complexity analysis)
+#### Performance Analysis Features
 
 Enhanced Unicode analysis for comprehensive performance monitoring:
 
@@ -711,7 +711,7 @@ pub struct UnicodeStats {
 }
 ```
 
-#### Performance Targets (*Diataxis: Reference* - Unicode processing benchmarks)
+#### Performance Targets
 
 **Unicode Processing Performance Targets:**
 - **ASCII-Heavy Files**: <1μs per 1000 character checks
@@ -725,7 +725,7 @@ pub struct UnicodeStats {
 - Unicode timeout: <30s for any single file
 - Memory efficiency: <1MB additional overhead for Unicode stats
 
-#### Integration with LSP Testing (*Diataxis: How-to* - Unicode performance in LSP tests)
+#### Integration with LSP Testing
 
 The Unicode instrumentation integrates with LSP testing for performance validation:
 
@@ -912,7 +912,7 @@ cargo xtask compare --report  # Includes memory metrics in output
 - **Minimum Guarantees**: Ensures at least 0.1MB reported for tiny files
 - **Fallback Values**: Returns 0.5MB default for inaccessible files
 
-### LSP Performance Benchmarking (v0.8.8+) (**Diataxis: How-to Guide**)
+### LSP Performance Benchmarking (v0.8.8+)
 
 The framework now includes specialized LSP performance benchmarking to validate workspace optimization improvements:
 

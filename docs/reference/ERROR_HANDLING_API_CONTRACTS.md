@@ -1,4 +1,4 @@
-# Error Handling API Contracts (*Diataxis: Reference*)
+# Error Handling API Contracts
 
 **Issue**: #178 (GitHub #204) - Eliminate Fragile unreachable!() Macros
 **Related Specs**: [issue-178-spec.md](issue-178-spec.md), [PARSER_ERROR_HANDLING_SPEC.md](PARSER_ERROR_HANDLING_SPEC.md), [LEXER_ERROR_HANDLING_SPEC.md](LEXER_ERROR_HANDLING_SPEC.md)

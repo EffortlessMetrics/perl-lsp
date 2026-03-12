@@ -1,6 +1,6 @@
 # Missing Documentation Guide - SPEC-149 Implementation
 
-*Diataxis: How-to Guide* - Systematic documentation resolution strategy for perl-parser crate comprehensive API documentation compliance.
+Systematic documentation resolution strategy for perl-parser crate comprehensive API documentation compliance.
 
 ## Overview
 

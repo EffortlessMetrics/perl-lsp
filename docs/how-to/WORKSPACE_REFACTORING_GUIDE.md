@@ -6,14 +6,14 @@ The tree-sitter-perl project provides comprehensive workspace refactoring capabi
 
 ## Table of Contents
 
-1. [Getting Started](#getting-started) (**Diataxis: Tutorial**)
-2. [Core Operations](#core-operations) (**Diataxis: How-to**)
-3. [API Reference](#api-reference) (**Diataxis: Reference**)
-4. [Architecture](#architecture) (**Diataxis: Explanation**)
+1. [Getting Started](#getting-started)
+2. [Core Operations](#core-operations)
+3. [API Reference](#api-reference)
+4. [Architecture](#architecture)
 5. [Contributing](#contributing)
 6. [Troubleshooting](#troubleshooting)
 
-## Getting Started (**Diataxis: Tutorial**)
+## Getting Started
 
 ### Prerequisites
 
@@ -64,7 +64,7 @@ for file_edit in result.file_edits {
 }
 ```
 
-## Core Operations (**Diataxis: How-to**)
+## Core Operations
 
 ### Symbol Renaming
 
@@ -235,7 +235,7 @@ let result = refactor.inline_variable(
 - Handles complex initializer expressions
 - Removes original variable declaration
 
-## API Reference (**Diataxis: Reference**)
+## API Reference
 
 ### WorkspaceRefactor
 
@@ -332,7 +332,7 @@ pub enum RefactorError {
 }
 ```
 
-## Architecture (**Diataxis: Explanation**)
+## Architecture
 
 ### Design Principles
 

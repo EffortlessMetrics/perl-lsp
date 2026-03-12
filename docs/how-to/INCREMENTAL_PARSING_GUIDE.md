@@ -114,7 +114,7 @@ println!("After edit: Reparsed={}, Reused={} (efficiency: {:.1}%)",
 // Production scenarios: Reused efficiency often reaches 96.8-99.7%
 ```
 
-## Statistical Validation Framework (**Diataxis: Explanation**)
+## Statistical Validation Framework
 
 The incremental parser includes a comprehensive statistical validation system for production reliability:
 
@@ -160,7 +160,7 @@ cargo test -p perl-parser incremental_edge_cases_test --features incremental
 - **Key Modules**: `textdoc.rs`, `position_mapper.rs`, `incremental_*.rs` modules
 - **NOT Internal Test Harnesses**: Avoid modifying `/crates/tree-sitter-perl-rs/` or other internal test code
 
-## Intelligent Cache Management (*Diataxis: Explanation*)
+## Intelligent Cache Management
 
 ### Symbol Priority System
 
@@ -177,7 +177,7 @@ pub enum SymbolPriority {
 }
 ```
 
-### Symbol Classification (*Diataxis: Reference*)
+### Symbol Classification
 
 **Critical Priority** - Essential for LSP functionality:
 - `NodeKind::Package` - Package declarations for namespace resolution
@@ -198,7 +198,7 @@ pub enum SymbolPriority {
 - `NodeKind::Number` / `NodeKind::String` - Literal values
 - `NodeKind::Binary` / `NodeKind::Unary` - Simple expressions
 
-### Cache Eviction Strategy (*Diataxis: Explanation*)
+### Cache Eviction Strategy
 
 When cache size exceeds the configured limit (`max_size`, default 1000 entries), the eviction algorithm follows these steps:
 
@@ -226,7 +226,7 @@ fn find_least_important_entry(&self) -> Option<u64> {
 }
 ```
 
-### Cache Configuration (*Diataxis: How-to Guide*)
+### Cache Configuration
 
 **Workload-Specific Cache Sizing**:
 
@@ -252,7 +252,7 @@ doc.subtree_cache.set_max_size(5000);
 
 *Memory usage varies based on AST complexity and symbol types cached*
 
-### Performance Impact (*Diataxis: Explanation*)
+### Performance Impact
 
 The intelligent cache eviction provides these benefits:
 

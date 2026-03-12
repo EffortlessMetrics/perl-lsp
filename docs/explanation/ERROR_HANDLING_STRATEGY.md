@@ -1,4 +1,4 @@
-# Error Handling Strategy Guide (*Diataxis: Explanation*)
+# Error Handling Strategy Guide
 
 **Issue**: #178 (GitHub #204) - Eliminate Fragile unreachable!() Macros
 **Related**: [issue-178-spec.md](issue-178-spec.md), [ERROR_HANDLING_API_CONTRACTS.md](../reference/ERROR_HANDLING_API_CONTRACTS.md)

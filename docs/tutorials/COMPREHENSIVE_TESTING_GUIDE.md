@@ -1,6 +1,6 @@
 # Comprehensive Testing Guide - PR #160 Parser Robustness & Documentation Infrastructure
 
-*Diataxis: How-to Guide* - Complete testing framework for perl-parser comprehensive quality assurance and documentation validation.
+Complete testing framework for perl-parser comprehensive quality assurance and documentation validation.
 
 ## Overview
 

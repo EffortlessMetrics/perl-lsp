@@ -26,11 +26,11 @@ The v0.8.8+ releases introduce production-stable workspace navigation with compr
 - **Cross-File Call Analysis**: Improved workspace-wide call relationship tracking with accurate reference resolution
 - **Advanced Symbol Navigation**: Enhanced go-to-definition and find-references with comprehensive workspace indexing
 
-## Enhanced Cross-File Function Reference Navigation (*Diataxis: Explanation* - Understanding dual indexing benefits)
+## Enhanced Cross-File Function Reference Navigation
 
 The dual indexing strategy revolutionizes cross-file navigation by indexing function calls under both qualified and bare names, enabling comprehensive reference finding regardless of calling convention.
 
-### Key Enhancement: Dual Pattern Matching (*Diataxis: Reference* - Feature specification)
+### Key Enhancement: Dual Pattern Matching
 
 When you use "Find References" on a function, the LSP server now:
 
@@ -39,7 +39,7 @@ When you use "Find References" on a function, the LSP server now:
 3. **Automatic Deduplication**: Ensures each location appears only once in results
 4. **Cross-Package Resolution**: Handles imports, same-package calls, and explicit qualification
 
-## Tutorial: Using Enhanced Workspace Features (*Diataxis: Tutorial* - Hands-on learning)
+## Tutorial: Using Enhanced Workspace Features
 
 ### Step 1: Enhanced Function Reference Navigation
 
@@ -78,7 +78,7 @@ sub main_handler {
 1;
 ```
 
-### Step 2: Testing Dual Indexing in Your Editor (*Diataxis: How-to* - Step-by-step usage)
+### Step 2: Testing Dual Indexing in Your Editor
 
 1. **Right-click on `process_data` in Utils.pm**
    - Select "Find All References"
@@ -92,7 +92,7 @@ sub main_handler {
    - Works consistently regardless of qualified vs bare usage
    - Maintains 98% success rate with multi-tier fallback
 
-### Performance Impact of Dual Indexing (*Diataxis: Reference* - Performance characteristics)
+### Performance Impact of Dual Indexing
 
 The dual indexing strategy provides significant benefits with minimal performance overhead:
 
@@ -104,7 +104,7 @@ The dual indexing strategy provides significant benefits with minimal performanc
 | Search Speed | Fast | Fast (dual lookup) | Maintained performance |
 | Memory Usage | Baseline | +10-15% | Efficient deduplication |
 
-### Advanced Reference Patterns (*Diataxis: Reference* - Comprehensive coverage examples)
+### Advanced Reference Patterns
 
 The dual indexing strategy handles complex Perl reference patterns:
 
@@ -130,7 +130,7 @@ sub main_function {     # Found via workspace/symbol search
 }
 ```
 
-### Step 4: Cross-File Navigation Patterns (*Diataxis: How-to* - Advanced usage patterns)
+### Step 4: Cross-File Navigation Patterns
 ```perl
 # File: lib/Utils.pm
 our $GLOBAL_CONFIG = {};   # Workspace-wide rename support
@@ -146,7 +146,7 @@ $Utils::GLOBAL_CONFIG = {};  # Cross-file reference resolution
 Utils::utility_function();  # Enhanced call hierarchy navigation
 ```
 
-### Step 3: Dual Function Call Indexing (v0.8.8+) (*Diataxis: Tutorial* - Understanding enhanced cross-file navigation)
+### Step 3: Dual Function Call Indexing (v0.8.8+)
 
 The enhanced workspace navigation now supports **production-stable dual indexing** for function calls, achieving **98% reference coverage improvement** and dramatically improving cross-file reference finding:
 
@@ -182,7 +182,7 @@ my $result3 = MyModule::transformed("test");    # Qualified call
 #    of all function usage patterns across the entire workspace
 ```
 
-#### How Dual Indexing Works (*Diataxis: Explanation* - Technical implementation)
+#### How Dual Indexing Works
 
 1. **Bare Name Indexing**: Every function call like `foo()` is indexed under the bare name "foo"
 2. **Qualified Name Indexing**: The same call is also indexed under its qualified name like "MyModule::foo"
@@ -192,7 +192,7 @@ my $result3 = MyModule::transformed("test");    # Qualified call
 6. **Unicode Processing Enhancement**: Optimized Unicode character and emoji processing with performance instrumentation
 7. **Atomic Performance Tracking**: Real-time monitoring of indexing operations for performance regression detection
 
-#### Benefits for Workspace Navigation (*Diataxis: Explanation* - User experience improvements)
+#### Benefits for Workspace Navigation
 
 - **98% Reference Coverage**: Dramatically improved reference finding with comprehensive function call detection
 - **Cross-Package Navigation**: Seamlessly navigate between bare and qualified function calls  

@@ -21,7 +21,7 @@
 
 ## Test Categories
 
-### Overview (*Diataxis: Reference*)
+### Overview
 
 The Perl LSP project uses a comprehensive multi-tiered testing strategy with ~720 baseline tests across unit, integration, property-based, and E2E categories:
 
@@ -45,7 +45,7 @@ The Perl LSP project uses a comprehensive multi-tiered testing strategy with ~72
 
 **5% Drop Threshold**: If test count falls below 684 tests (720 × 0.95), investigate for accidentally disabled or deleted tests.
 
-### 1. Unit Tests (*Diataxis: Tutorial*)
+### 1. Unit Tests
 
 **Purpose**: Fast, isolated component testing with millisecond execution times.
 
@@ -74,7 +74,7 @@ cargo test -p perl-parser semantic::tests
 - Lexer unit tests: `/crates/perl-lexer/src/lib.rs` (tokenization, Unicode handling)
 - LSP unit tests: `/crates/perl-lsp/src/lib.rs` (protocol handling, state management)
 
-### 2. Integration Tests (*Diataxis: Tutorial*)
+### 2. Integration Tests
 
 **Purpose**: Test component interactions, LSP protocol compliance, and cross-module behavior.
 
@@ -104,7 +104,7 @@ cargo test -p perl-parser --test substitution_fixed_tests
 - `lsp_full_coverage_user_stories.rs`: User story validation (0.32s with RUST_TEST_THREADS=2)
 - `semantic_definition.rs`: Semantic-aware go-to-definition tests
 
-### 3. Property-Based Tests (*Diataxis: Tutorial*)
+### 3. Property-Based Tests
 
 **Purpose**: Validate invariants across randomly generated inputs using proptest framework.
 
@@ -152,7 +152,7 @@ proptest! {
 }
 ```
 
-### 4. End-to-End (E2E) Tests (*Diataxis: Tutorial*)
+### 4. End-to-End (E2E) Tests
 
 **Purpose**: Full workflow validation including LSP server lifecycle, client communication, and workspace operations.
 
@@ -187,7 +187,7 @@ RUST_LOG=debug RUST_TEST_THREADS=1 cargo test -p perl-lsp --test lsp_comprehensi
 
 ## Test Discovery Protocol
 
-### Baseline Verification (*Diataxis: Reference*)
+### Baseline Verification
 
 **Current Baseline**: 720 tests (workspace lib tests: 382 tests)
 
@@ -211,7 +211,7 @@ running 9 tests     # perl-dap
 running 324 tests   # perl-parser
 ```
 
-### Test Count Monitoring (*Diataxis: How-to*)
+### Test Count Monitoring
 
 **5% Drop Threshold**: Investigate if total test count falls below 684 tests.
 
@@ -250,7 +250,7 @@ fi
 
 ## Timeout Strategy
 
-### Adaptive Timeout Architecture (*Diataxis: Explanation*)
+### Adaptive Timeout Architecture
 
 The LSP server implements **adaptive timeout scaling** based on thread count detection (PR #140):
 
@@ -269,7 +269,7 @@ The LSP server implements **adaptive timeout scaling** based on thread count det
 * LSP harness millisecond-precision timeouts (see get_adaptive_timeout)
 ```
 
-### Multi-Tier Timeout System (*Diataxis: Reference*)
+### Multi-Tier Timeout System
 
 #### 1. LSP Harness Timeouts (Millisecond Precision)
 
@@ -347,7 +347,7 @@ pub fn wait_for_idle(&self) {
 }
 ```
 
-### Timeout Configuration Best Practices (*Diataxis: How-to*)
+### Timeout Configuration Best Practices
 
 **For CI Environments**:
 ```bash
@@ -377,7 +377,7 @@ RUST_TEST_THREADS=8 cargo test --workspace
 
 ## Nextest Configuration
 
-### Overview (*Diataxis: Reference*)
+### Overview
 
 The project uses **cargo-nextest** for enhanced test execution with retry support, slow test detection, and thread management.
 
@@ -388,7 +388,7 @@ The project uses **cargo-nextest** for enhanced test execution with retry suppor
 cargo install cargo-nextest
 ```
 
-### Profiles (*Diataxis: Reference*)
+### Profiles
 
 #### 1. Default Profile (Local Development)
 
@@ -456,7 +456,7 @@ retries = 3
 
 **Rationale**: Cancellation tests require careful thread management to validate race condition handling.
 
-### Flaky Test Retry Configuration (*Diataxis: Reference*)
+### Flaky Test Retry Configuration
 
 ```toml
 # Known flaky BrokenPipe tests get extra retries
@@ -486,7 +486,7 @@ cargo nextest run --profile local-fast --workspace
 
 ## Known Flaky Tests
 
-### Overview (*Diataxis: Explanation*)
+### Overview
 
 Most historical "BrokenPipe" test failures were environmental/timing issues, now fully resolved by:
 1. Adaptive threading configuration (RUST_TEST_THREADS=2)
@@ -498,7 +498,7 @@ Most historical "BrokenPipe" test failures were environmental/timing issues, now
 - **Non-default lanes**: Feature-gated tests run with `--all-features` or specific feature flags
 - **Baseline**: `scripts/.ignored-baseline`
 
-### Known Flaky Test Categories (*Diataxis: Reference*)
+### Known Flaky Test Categories
 
 #### 1. LSP Document Symbols (`lsp_document_symbols_test.rs`)
 
@@ -563,7 +563,7 @@ retries = 3
 cargo test -p perl-lsp --test lsp_encoding_edge_cases -- --nocapture
 ```
 
-### BrokenPipe Error Handling (*Diataxis: How-to*)
+### BrokenPipe Error Handling
 
 **Understanding BrokenPipe Errors**:
 ```rust
@@ -605,7 +605,7 @@ cargo test -p perl-lsp --test lsp_init_torture_test -- --nocapture
 
 ## Environment Variables
 
-### RUST_TEST_THREADS (*Diataxis: Reference*)
+### RUST_TEST_THREADS
 
 **Enhanced in PR #140**: Adaptive threading achieving significant performance gains in CI.
 
@@ -642,7 +642,7 @@ pub fn max_concurrent_threads() -> usize {
 }
 ```
 
-### LSP_TEST_FALLBACKS (*Diataxis: Reference*)
+### LSP_TEST_FALLBACKS
 
 **NEW in v0.8.8**: Fast testing mode reducing timeouts by 75% (2000ms → 500ms).
 
@@ -682,7 +682,7 @@ if use_fallback {
 - CI gate validation (2-5 min total)
 - Development iteration (rapid test cycles)
 
-### RUN_REAL_WORLD (*Diataxis: Reference*)
+### RUN_REAL_WORLD
 
 **Purpose**: Enable expensive real-world corpus testing (disabled by default).
 
@@ -704,7 +704,7 @@ RUN_REAL_WORLD=1 RUST_TEST_THREADS=8 cargo test -p perl-corpus
 - ~5MB+ of Perl source code
 - Edge case coverage: heredocs, Unicode, operator precedence
 
-### CI (*Diataxis: Reference*)
+### CI
 
 **Purpose**: Detect CI environment and adjust test behavior.
 
@@ -733,7 +733,7 @@ env:
   RUST_TEST_THREADS: 2
 ```
 
-### LSP_TEST_ECHO_STDERR (*Diataxis: Reference*)
+### LSP_TEST_ECHO_STDERR
 
 **Purpose**: Echo LSP server stderr to test output for debugging.
 
@@ -750,7 +750,7 @@ LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --nocapture
 RUST_LOG=debug LSP_TEST_ECHO_STDERR=1 cargo test -p perl-lsp --test specific_test -- --nocapture
 ```
 
-### RUST_LOG (*Diataxis: Reference*)
+### RUST_LOG
 
 **Purpose**: Control tracing/logging output level.
 
@@ -777,7 +777,7 @@ RUST_LOG=perl_parser::semantic=debug cargo test -p perl-parser
 
 ## Running Tests Locally vs CI
 
-### Local Development (*Diataxis: How-to*)
+### Local Development
 
 #### Quick Iteration Workflow
 
@@ -824,7 +824,7 @@ done
 cargo nextest run --profile local-fast --workspace
 ```
 
-### CI Environment (*Diataxis: How-to*)
+### CI Environment
 
 #### GitHub Actions Configuration
 
@@ -909,7 +909,7 @@ test:
       junit: target/nextest/ci/junit.xml
 ```
 
-### Justfile Recipes (*Diataxis: How-to*)
+### Justfile Recipes
 
 The project provides **justfile** recipes for standardized test execution:
 
@@ -960,7 +960,7 @@ cargo doc -p perl-parser -p perl-lsp --no-deps
 
 ## Test Quality Assurance
 
-### Mutation Testing (*Diataxis: Tutorial*)
+### Mutation Testing
 
 **Purpose**: Validate test effectiveness by introducing code mutations and ensuring tests fail.
 
@@ -992,7 +992,7 @@ RUST_TEST_THREADS=2 cargo test -p perl-parser --test mutation_hardening_tests
 - `cancellation_atomic_operations_hardening.rs`: Concurrency mutations
 - `documentation_validation_mutation_hardening.rs`: API documentation mutations
 
-### Fuzz Testing (*Diataxis: Tutorial*)
+### Fuzz Testing
 
 **Purpose**: Property-based testing with crash detection and AST invariant validation.
 
@@ -1018,7 +1018,7 @@ cargo test -p perl-parser --test substitution_fuzz_tests
 - `fuzz_incremental_parsing.rs`: Incremental parser stress testing
 - `fuzz_documentation_infrastructure_pr159.rs`: Documentation infrastructure fuzzing
 
-### Test Coverage Tracking (*Diataxis: How-to*)
+### Test Coverage Tracking
 
 **Installation**:
 ```bash
@@ -1043,7 +1043,7 @@ cargo tarpaulin --workspace --exclude-files '**/prop_*.rs' --out Html
 - **Integration tests**: 70-75% feature coverage
 - **Property tests**: 95%+ invariant coverage
 
-### Test Hygiene Metrics (*Diataxis: Reference*)
+### Test Hygiene Metrics
 
 **Health Scoreboard** (`just health`):
 ```bash
@@ -1077,7 +1077,7 @@ cargo tarpaulin --workspace --exclude-files '**/prop_*.rs' --out Html
   ...
 ```
 
-### Test Documentation Standards (*Diataxis: Reference*)
+### Test Documentation Standards
 
 **Acceptance Criteria Validation**:
 ```bash
@@ -1106,7 +1106,7 @@ cargo test -p perl-parser --test missing_docs_ac_tests -- --nocapture
 
 ## Summary
 
-### Quick Reference Card (*Diataxis: Reference*)
+### Quick Reference Card
 
 ```bash
 # Fastest validation (2-5 min)

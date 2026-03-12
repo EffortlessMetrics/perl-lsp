@@ -36,7 +36,7 @@
 
 ## Workspace Configuration Strategy (v0.8.8+)
 
-### Exclusion Architecture (**Diataxis: Explanation** - Design decisions)
+### Exclusion Architecture
 
 The workspace uses a **production-focused exclusion strategy** to ensure reliable builds:
 
@@ -69,7 +69,7 @@ See [WORKSPACE_TEST_REPORT.md](../WORKSPACE_TEST_REPORT.md) for current workspac
 - Tree-sitter compatible node types
 - Position tracking for all nodes
 
-### 3. Incremental Parsing (**Diataxis: Explanation**)
+### 3. Incremental Parsing
 - **IncrementalParserV2**: Advanced incremental parser with intelligent node reuse
 - **Statistical Validation**: Comprehensive performance analysis framework
   - Performance metrics: 65µs average (Excellent), 205µs moderate (Very Good), 538µs large (Good)
@@ -255,7 +255,7 @@ See `HEREDOC_IMPLEMENTATION.md` for full details.
 
 See `docs/reference/EDGE_CASES.md` for comprehensive documentation.
 
-## Thread-Safety Architecture (**Diataxis: Explanation**)
+## Thread-Safety Architecture
 
 ### Thread-Safety Design Principles
 
@@ -263,7 +263,7 @@ The tree-sitter-perl architecture implements comprehensive thread-safety through
 
 #### Core Thread-Safety Patterns
 
-1. **Immutable Provider Pattern** (**Diataxis: Reference**)
+1. **Immutable Provider Pattern**
    ```rust
    // Thread-safe provider with immutable data
    pub struct SemanticTokensProvider {
@@ -280,7 +280,7 @@ The tree-sitter-perl architecture implements comprehensive thread-safety through
    }
    ```
 
-2. **Local State Collector Pattern** (**Diataxis: Reference**)
+2. **Local State Collector Pattern**
    ```rust
    // Each operation creates fresh local state
    struct TokenCollector<'a> {
@@ -298,7 +298,7 @@ The tree-sitter-perl architecture implements comprehensive thread-safety through
    }
    ```
 
-3. **Arc-Based Node Sharing** (**Diataxis: Reference**)
+3. **Arc-Based Node Sharing**
    ```rust
    // AST nodes use Arc for safe concurrent access
    pub struct Node {
@@ -322,7 +322,7 @@ The tree-sitter-perl architecture implements comprehensive thread-safety through
 - **Efficient cleanup**: Local state automatically dropped after operation
 - **No locks required**: Immutable data eliminates need for synchronization
 
-#### Thread-Safety Validation (**Diataxis: How-to**)
+#### Thread-Safety Validation
 
 The architecture includes comprehensive thread-safety testing:
 
@@ -345,7 +345,7 @@ fn test_concurrent_semantic_token_access() {
 }
 ```
 
-#### Integration with LSP Server (**Diataxis: How-to**)
+#### Integration with LSP Server
 
 The thread-safe design enables high-performance LSP operations:
 
@@ -364,7 +364,7 @@ fn handle_semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Re
 }
 ```
 
-#### Benefits of Thread-Safe Architecture (**Diataxis: Explanation**)
+#### Benefits of Thread-Safe Architecture
 
 1. **Eliminated Race Conditions**: No shared mutable state prevents data races
 2. **Exceptional Performance**: Local state management avoids synchronization overhead  
@@ -373,7 +373,7 @@ fn handle_semantic_tokens_full(&self, params: SemanticTokensParams) -> Result<Re
 5. **Consistency**: Identical results guaranteed for same inputs across threads
 6. **Maintainability**: Clear ownership and lifetime semantics reduce complexity
 
-#### Future Thread-Safety Extensions (**Diataxis: Reference**)
+#### Future Thread-Safety Extensions
 
 The thread-safe patterns established for semantic tokens provide a template for future LSP features:
 
@@ -384,7 +384,7 @@ The thread-safe patterns established for semantic tokens provide a template for 
 
 This architecture ensures all LSP features can achieve similar performance and safety characteristics as the semantic token provider.
 
-### Adaptive Timeout System Design (PR #140) (**Diataxis: Explanation** - Testing architecture)
+### Adaptive Timeout System Design (PR #140)
 
 PR #140 introduces an adaptive timeout system that delivers significant performance improvements:
 

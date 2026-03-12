@@ -47,7 +47,7 @@ Advanced pattern recognition for dynamic delimiter detection:
 - **All declaration types**: `my`, `our`, `local`, `state` variable declarations
 - **Multiple recovery strategies**: Conservative, BestGuess, Interactive modes
 
-### Performance Optimization Engine (v0.8.8+) ⭐ **NEW** (**Diataxis: Explanation**)
+### Performance Optimization Engine (v0.8.8+) ⭐ **NEW**
 
 **PR #102 Lexer Optimizations** deliver significant performance improvements through intelligent algorithm optimization:
 
@@ -211,7 +211,7 @@ python3 scripts/generate_comparison.py \
   --memory-threshold 15.0
 ```
 
-This framework enables data-driven performance optimization and ensures no performance regressions across implementations (**Diataxis: How-to**).
+This framework enables data-driven performance optimization and ensures no performance regressions across implementations.
 
 ## Integration Points
 
@@ -285,7 +285,7 @@ The perl-parser crate includes a comprehensive **Rope-based document management 
                             └─────────────────┘         └─────────────────┘
 ```
 
-### Key Components (**Diataxis: Reference**)
+### Key Components
 
 #### Rope-based Position Management
 - **`textdoc.rs`**: Core `Doc` struct with `ropey::Rope` for efficient text storage
@@ -298,7 +298,7 @@ The perl-parser crate includes a comprehensive **Rope-based document management 
 - **`incremental_handler_v2.rs`**: Enhanced document change processing using Rope operations
 - **Automatic fallback**: Graceful degradation to full parsing when needed
 
-### Benefits (**Diataxis: Explanation**)
+### Benefits
 - **Efficient text operations**: Rope's piece table architecture optimizes insertions/deletions
 - **Accurate position mapping**: Eliminates UTF-16/UTF-8 conversion bugs common in LSP servers  
 - **Real-time editing support**: Sub-millisecond document updates with incremental parsing

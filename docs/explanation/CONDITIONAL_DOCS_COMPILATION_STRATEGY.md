@@ -1,6 +1,6 @@
 # Conditional Documentation Compilation Strategy
 
-*Diataxis: Explanation* - Performance-optimized documentation enforcement strategy for perl-parser crate.
+Performance-optimized documentation enforcement strategy for perl-parser crate.
 
 ## Overview
 

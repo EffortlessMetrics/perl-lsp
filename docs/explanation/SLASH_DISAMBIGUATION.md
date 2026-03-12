@@ -11,7 +11,7 @@ Perl's use of delimiter characters for multiple purposes creates a context-sensi
 - Transliteration: `tr/abc/xyz/`
 - Quote-regex: `qr/pattern/`
 
-**Single-Quote Delimiters (`'`) (*Diataxis: Reference* - Supported delimiter variations)**:
+**Single-Quote Delimiters (`'`)**:
 - Substitution operator: `s'pattern'replacement'modifiers`
 - Transliteration operators: `y'from'to'modifiers`, `tr'from'to'modifiers`
 - Edge cases: Escaped quotes (`s'it\'s'it is'`), empty patterns (`s''replacement'`), empty replacements (`s'pattern''`)
@@ -75,7 +75,7 @@ The implementation correctly handles all edge cases from the reference document:
 1. **Division after identifier**: `x / 2` → Division
 2. **Regex after operator**: `=~ /foo/` → Regex
 3. **Mixed expressions**: `1/ /abc/` → Division then Regex
-4. **Substitution variants (*Diataxis: Reference* - Complete delimiter support)**: 
+4. **Substitution variants**:
    - Slash delimiters: `s/a/b/`, `tr/abc/xyz/`
    - Brace delimiters: `s{a}{b}`, `tr{from}{to}`
    - **Single-quote delimiters**: `s'a'b'`, `y'abc'xyz'`, `tr'from'to'`

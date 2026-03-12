@@ -13,7 +13,7 @@ This guide covers the tree-sitter-perl parser's enhanced builtin function parsin
 - **Issue Reference**: #110
 - **Status**: Complete and Production Ready
 
-## The Problem (*Diataxis: Explanation*)
+## The Problem
 
 Perl's ambiguous syntax presents unique challenges when parsing constructs like `{}`. The same syntax can represent either an empty hash reference or an empty code block, depending on context:
 
@@ -26,7 +26,7 @@ Both expressions use identical `{}` syntax, but they have fundamentally differen
 - `map` expects a code block that transforms array elements
 - `ref` expects a hash reference to check the reference type
 
-## Solution Implementation (*Diataxis: How-to Guide*)
+## Solution Implementation
 
 ### Enhanced Parser Method
 
@@ -69,7 +69,7 @@ The enhanced parser recognizes specific builtin functions and applies appropriat
 }
 ```
 
-## Supported Functions (*Diataxis: Reference*)
+## Supported Functions
 
 ### Block-Expecting Functions
 
@@ -91,7 +91,7 @@ These functions treat `{}` as empty hash references:
 | `defined` | `defined {}` | `(call defined ((hash )))` |
 | `scalar` | `scalar {}` | `(call scalar ((hash )))` |
 
-## Examples (*Diataxis: Tutorial*)
+## Examples
 
 ### Before Enhancement
 
@@ -126,7 +126,7 @@ my @ordered = sort { $a cmp $b } @values;
 (call sort ((block (statements ...)) (variable @ values)))
 ```
 
-## Testing (*Diataxis: How-to Guide*)
+## Testing
 
 ### Running Tests
 
@@ -186,7 +186,7 @@ fn test_new_function_empty_block() {
 }
 ```
 
-## Benefits (*Diataxis: Explanation*)
+## Benefits
 
 ### Parser Accuracy Improvements
 
@@ -199,7 +199,7 @@ fn test_new_function_empty_block() {
 
 This enhancement contributes to the parser's ~100% Perl syntax coverage by handling one of Perl's most ambiguous constructs correctly.
 
-## Performance Impact (*Diataxis: Reference*)
+## Performance Impact
 
 The enhanced parsing logic has minimal performance impact:
 
@@ -208,7 +208,7 @@ The enhanced parsing logic has minimal performance impact:
 - **Memory**: No additional memory allocation required
 - **Compatibility**: Zero breaking changes to existing API
 
-## Edge Cases (*Diataxis: Reference*)
+## Edge Cases
 
 ### Supported Complex Cases
 
@@ -236,7 +236,7 @@ my $map_ref = \&map;
 $map_ref->({}, @array);   # ❌ Reference call loses context
 ```
 
-## Migration Notes (*Diataxis: How-to Guide*)
+## Migration Notes
 
 ### For Parser Users
 
@@ -267,7 +267,7 @@ match node.kind() {
 }
 ```
 
-## Implementation Details (*Diataxis: Explanation*)
+## Implementation Details
 
 ### Context-Aware Parsing
 

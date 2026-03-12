@@ -1,4 +1,4 @@
-# Workspace Refactoring Tutorial (**Diataxis: Tutorial**)
+# Workspace Refactoring Tutorial
 
 This tutorial provides step-by-step guidance on using the comprehensive workspace refactoring capabilities introduced in v0.8.8. These features enable safe cross-file refactoring operations for Perl codebases.
 
@@ -79,7 +79,7 @@ let refactor = WorkspaceRefactor::new(index);
 - ✅ Indexed multiple Perl files with their content
 - ✅ Initialized the WorkspaceRefactor system
 
-## Step 1.5: Understanding Dual Function Call Indexing (v0.8.8+) (**Diataxis: Tutorial**)
+## Step 1.5: Understanding Dual Function Call Indexing (v0.8.8+)
 
 Before diving into refactoring operations, let's understand the enhanced dual indexing strategy that makes comprehensive cross-file navigation possible:
 

@@ -1,6 +1,6 @@
 # Performance Preservation Guide - PR #160 Baseline Maintenance
 
-*Diataxis: Explanation & How-to Guide* - Understanding and maintaining revolutionary performance characteristics during quality infrastructure implementation.
+Understanding and maintaining revolutionary performance characteristics during quality infrastructure implementation.
 
 ## Overview
 

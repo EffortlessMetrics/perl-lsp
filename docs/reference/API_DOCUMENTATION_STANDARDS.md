@@ -1,6 +1,6 @@
 # API Documentation Standards - perl-parser crate
 
-*Diataxis: How-to Guide* - Comprehensive API documentation requirements for production-quality perl-parser crate.
+Comprehensive API documentation requirements for production-quality perl-parser crate.
 
 ## Overview
 

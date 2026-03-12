@@ -264,7 +264,7 @@ fn generate_import_fix_actions(&self, analysis: &ImportAnalysis) -> Vec<CodeActi
 
 Recent improvements address critical regression issues in bare import analysis:
 
-#### Regression Fix for Object-Oriented Modules (*Diataxis: Explanation* - Understanding the bare import logic)
+#### Regression Fix for Object-Oriented Modules
 
 The import optimizer now correctly distinguishes between:
 
@@ -279,7 +279,7 @@ The import optimizer now correctly distinguishes between:
    use strict;          # Pragma modules automatically excluded
    ```
 
-#### Technical Implementation (*Diataxis: Reference* - Bare import analysis algorithm)
+#### Technical Implementation
 
 ```rust
 // Enhanced logic for marking bare imports as unused
@@ -294,7 +294,7 @@ fn should_flag_bare_import_as_unused(&self, module: &str) -> bool {
 }
 ```
 
-#### Test Coverage for Regression Prevention (*Diataxis: Tutorial* - Testing bare import scenarios)
+#### Test Coverage for Regression Prevention
 
 The enhanced test suite includes specific coverage for regression prevention:
 

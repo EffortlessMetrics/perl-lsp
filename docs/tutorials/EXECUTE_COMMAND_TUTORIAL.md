@@ -1,4 +1,4 @@
-# ExecuteCommand Tutorial (*Diataxis: Tutorial* - Learning-oriented executeCommand guide)
+# ExecuteCommand Tutorial
 
 *Get started with the new executeCommand functionality in Perl LSP server. This tutorial walks you through using perl.runCritic and other commands to enhance your Perl development workflow.*
 

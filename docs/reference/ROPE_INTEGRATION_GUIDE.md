@@ -6,11 +6,11 @@
 - **Reference**: API documentation and specifications
 - **Explanation**: Design decisions and concepts
 
-## Overview (*Diataxis: Explanation* - Design concepts)
+## Overview
 
 The perl-parser crate includes comprehensive Rope support for efficient document management, enabling sub-millisecond position conversions and scalable text manipulation for large Perl files. Rope integration provides the foundation for LSP performance with UTF-16/UTF-8 compatibility.
 
-## Core Rope Modules (*Diataxis: Reference* - API specifications)
+## Core Rope Modules
 
 The perl-parser crate includes comprehensive Rope support for document management:
 
@@ -19,7 +19,7 @@ The perl-parser crate includes comprehensive Rope support for document managemen
 - **`incremental_integration.rs`**: Bridge between LSP server and incremental parsing with Rope
 - **`incremental_handler_v2.rs`**: Enhanced incremental document updates using Rope
 
-## Getting Started (*Diataxis: Tutorial* - Learning-oriented guidance)
+## Getting Started
 
 ### Basic Rope Usage
 
@@ -38,7 +38,7 @@ let char_count = doc.rope.len_chars();
 println!("Document has {} lines and {} characters", line_count, char_count);
 ```
 
-## Position Conversion API (*Diataxis: Reference* - API specifications)
+## Position Conversion API
 
 ```rust
 // UTF-16/UTF-8 position conversion
@@ -55,7 +55,7 @@ let byte_offset = lsp_pos_to_byte(&doc.rope, pos, PosEnc::Utf16);
 let lsp_pos = byte_to_lsp_pos(&doc.rope, byte_offset, PosEnc::Utf16);
 ```
 
-## Advanced Features (*Diataxis: Explanation* - Understanding the capabilities)
+## Advanced Features
 
 ### Line Ending Support
 - **CRLF handling**: Proper Windows line ending support with automatic detection
@@ -69,7 +69,7 @@ let lsp_pos = byte_to_lsp_pos(&doc.rope, byte_offset, PosEnc::Utf16);
 - **Incremental updates**: Only affected text ranges are re-parsed during edits
 - **Unicode safety**: All position conversions handle multibyte UTF-8 sequences correctly
 
-## Implementation Guide (*Diataxis: How-to Guide* - Step-by-step implementation tasks)
+## Implementation Guide
 
 ### Integrating Rope with LSP Providers
 
@@ -129,7 +129,7 @@ pub fn handle_document_change(
 }
 ```
 
-## Development Guidelines (*Diataxis: How-to Guide* - Development practices)
+## Development Guidelines
 
 **Where to Make Rope Improvements**:
 - **Production Code**: `/crates/perl-parser/src/` - All Rope enhancements should target this crate
@@ -143,7 +143,7 @@ pub fn handle_document_change(
 3. **Performance**: Cache position conversions when processing multiple operations on the same range
 4. **Unicode Safety**: Never assume single-byte characters - use Rope's Unicode-aware methods
 
-## Testing and Validation (*Diataxis: How-to Guide* - Testing procedures)
+## Testing and Validation
 
 ### Comprehensive Test Suite
 

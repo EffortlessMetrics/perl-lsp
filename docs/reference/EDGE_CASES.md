@@ -28,7 +28,7 @@ The Pure Rust Perl parser provides comprehensive support for most Perl construct
 
 ### Recent Improvements - Regex/Substitution Parsing
 
-**PR #124 - Single-Quote Delimiter Support (*Diataxis: Reference* - Latest parser enhancements)**:
+**PR #124 - Single-Quote Delimiter Support**:
 - ✅ **Single-Quote Substitution Delimiters**: Complete support for `s'pattern'replacement'modifiers` syntax variations
 - ✅ **Enhanced Lexical Recognition**: Intelligent parsing distinguishes single-quote delimiters from string literals
 - ✅ **Complete Operator Coverage**: Full support for `s'`, `y'`, and `tr'` with single-quote delimiters

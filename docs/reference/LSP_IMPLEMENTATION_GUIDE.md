@@ -1,4 +1,4 @@
-# LSP Implementation Technical Guide (*Diataxis: Explanation* - Understanding LSP architecture and design decisions)
+# LSP Implementation Technical Guide
 
 > This guide follows the **[Diataxis framework](https://diataxis.fr/)** for comprehensive technical documentation:
 > - **Tutorial sections**: Hands-on learning with examples
@@ -6,9 +6,9 @@
 > - **Reference sections**: Complete technical specifications
 > - **Explanation sections**: Design concepts and architectural decisions
 
-## Architecture Overview (*Diataxis: Explanation* - LSP design concepts)
+## Architecture Overview
 
-### UTF-16 Position Security Enhancement (PR #153) (*Diataxis: Explanation* - Security-first position mapping)
+### UTF-16 Position Security Enhancement (PR #153)
 
 **Critical Security Update**: PR #153 introduces comprehensive UTF-16 position conversion security enhancements that eliminate boundary violations and ensure symmetric position handling. This is important for LSP implementations processing Unicode-rich Perl code.
 
@@ -41,7 +41,7 @@
                                       └──────────────────┘
 ```
 
-## Documentation Requirements for LSP Providers (*Diataxis: How-to Guide* - Enterprise API documentation standards)
+## Documentation Requirements for LSP Providers
 
 ### Missing Documentation Infrastructure (SPEC-149) ✅ **IMPLEMENTED**
 
@@ -180,13 +180,13 @@ cargo test -p perl-parser --test missing_docs_ac_tests -- test_performance_docum
    - Dual indexing strategy usage and benefits
    - Cross-file navigation and workspace management
 
-## Secure UTF-16 Position Mapping (PR #153) (*Diataxis: Reference* - Position conversion API and security patterns)
+## Secure UTF-16 Position Mapping (PR #153)
 
 ### Security-Enhanced Position Conversion API
 
 **Critical Implementation**: All LSP position operations must use the security-enhanced conversion methods to prevent UTF-16 boundary violations and ensure correct Unicode handling.
 
-#### Core Position Conversion Methods (*Diataxis: Reference* - Secure conversion API)
+#### Core Position Conversion Methods
 
 ```rust
 impl PositionConverter {
@@ -233,7 +233,7 @@ impl PositionConverter {
 }
 ```
 
-#### Security Validation Examples (*Diataxis: Tutorial* - Implementing secure position handling)
+#### Security Validation Examples
 
 ```rust
 // SECURE PATTERN: Always validate before processing
@@ -264,7 +264,7 @@ fn handle_lsp_request_securely(
 }
 ```
 
-### Unicode Safety Implementation (*Diataxis: Explanation* - Understanding Unicode security requirements)
+### Unicode Safety Implementation
 
 **Multi-byte Character Handling**: The enhanced position mapping correctly handles Unicode edge cases that previously caused boundary violations:
 
@@ -292,7 +292,7 @@ for i in 0..=text.len() {
 - **Overflow Protection**: Safe arithmetic prevents integer overflow in position calculations
 - **Unicode Compliance**: Proper handling of multi-byte sequences and emoji
 
-### Testing Security Requirements (*Diataxis: Reference* - Security test specifications)
+### Testing Security Requirements
 
 **Mandatory Security Tests:**
 ```rust
@@ -321,11 +321,11 @@ fn test_position_conversion_security() {
 }
 ```
 
-## Enhanced Workspace Indexing (v0.8.8+) - Dual Indexing Strategy (*Diataxis: Explanation* - Understanding the dual reference approach)
+## Enhanced Workspace Indexing (v0.8.8+) - Dual Indexing Strategy
 
 The v0.8.8+ releases introduce a breakthrough dual indexing strategy for function call references that dramatically improves cross-file LSP navigation. This enhancement indexes functions under both qualified (`Package::function`) and bare (`function`) names, enabling comprehensive reference finding regardless of how functions are called.
 
-### Architectural Decision: Why Dual Indexing? (*Diataxis: Explanation* - Design rationale)
+### Architectural Decision: Why Dual Indexing?
 
 Perl's flexible function call syntax creates a fundamental challenge for static analysis:
 
@@ -345,9 +345,9 @@ process_data();          # Bare call (via import or same package)
 
 Traditional indexing approaches fail because they only index functions under one name form, missing references that use alternative calling conventions. The dual indexing strategy solves this by maintaining references under both forms.
 
-### Technical Implementation (*Diataxis: Reference* - Dual indexing algorithm)
+### Technical Implementation
 
-#### Indexing Phase (*Diataxis: Reference* - Reference storage specification)
+#### Indexing Phase
 
 When a function call is encountered during workspace indexing:
 
@@ -369,7 +369,7 @@ file_index.references.entry(qualified).or_default().push(SymbolReference {
 });
 ```
 
-#### Search Phase (*Diataxis: Reference* - Reference retrieval algorithm)
+#### Search Phase
 
 When searching for references to a qualified symbol:
 
@@ -413,7 +413,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 }
 ```
 
-#### Deduplication Strategy (*Diataxis: Reference* - Duplicate elimination)
+#### Deduplication Strategy
 
 The enhanced `find_refs` method ensures each location appears only once even when indexed under multiple name forms:
 
@@ -429,7 +429,7 @@ pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
 }
 ```
 
-### Lexer Enhancements (*Diataxis: Reference* - Package-qualified identifier support)
+### Lexer Enhancements
 
 The lexer has been enhanced to properly handle package-qualified segments:
 
@@ -441,13 +441,13 @@ while self.current_char() == Some(':') && self.peek_char(1) == Some(':') {
 }
 ```
 
-## Hash Key Context Detection (v0.8.6) - Advanced Diagnostics (*Diataxis: Explanation* - Understanding the bareword analysis breakthrough)
+## Hash Key Context Detection (v0.8.6) - Advanced Diagnostics
 
 The v0.8.6 release introduces breakthrough hash key context detection that eliminates false positives in bareword analysis under `use strict`. This represents a significant advancement in Perl static analysis.
 
-### Technical Implementation (*Diataxis: Reference* - Algorithm specifications)
+### Technical Implementation
 
-#### Core Algorithm (*Diataxis: Reference* - Implementation details)
+#### Core Algorithm
 
 ```rust
 fn is_in_hash_key_context(
@@ -606,7 +606,7 @@ print INVALID;                         // ❌ Should warn about 'INVALID'
 4. **Performance Optimized**: Fast analysis with early termination
 5. **Backward Compatible**: Existing functionality unchanged
 
-## Using the ModuleResolver Component (**Diataxis: Tutorial**)
+## Using the ModuleResolver Component
 
 ### Getting Started with ModuleResolver Integration
 
@@ -941,7 +941,7 @@ fn setup_multi_workspace_resolver(workspace_roots: Vec<String>) -> Arc<dyn Fn(&s
 
 This tutorial provides a comprehensive guide to integrating the ModuleResolver component into your LSP features, ensuring reliable and performant Perl module resolution.
 
-## Using the Thread-Safe Semantic Token API (**Diataxis: Tutorial**)
+## Using the Thread-Safe Semantic Token API
 
 ### Getting Started with Semantic Tokens
 
@@ -1188,7 +1188,7 @@ The thread-safe semantic token provider achieves exceptional performance:
 
 This makes it suitable for real-time LSP operations and high-frequency syntax highlighting updates.
 
-## Import Optimization Integration (**Diataxis: Reference**)
+## Import Optimization Integration
 
 ### Overview
 
@@ -1346,11 +1346,11 @@ print "Hello World\n";
 4. **Workspace-wide**: Can be applied across entire Perl codebases
 5. **Non-destructive**: Preview changes before applying optimizations
 
-## Enhanced LSP Cancellation System Integration (*Diataxis: Explanation* - Understanding enhanced cancellation architecture for responsive LSP operations)
+## Enhanced LSP Cancellation System Integration
 
 The Enhanced LSP Cancellation System provides cancellation capabilities across all LSP operations, ensuring responsive user interactions and optimal performance. This system integrates seamlessly with existing parser infrastructure.
 
-### Architecture Overview (*Diataxis: Explanation* - Core cancellation components)
+### Architecture Overview
 
 The cancellation system consists of four primary components working together to provide comprehensive operation cancellation:
 
@@ -1373,7 +1373,7 @@ The cancellation system consists of four primary components working together to 
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### Key Components (*Diataxis: Reference* - Cancellation system components)
+### Key Components
 
 #### 1. CancellationToken
 Thread-safe atomic token for operation cancellation with <100μs check latency:
@@ -1412,7 +1412,7 @@ pub struct ProviderCleanupContext<T> {
 }
 ```
 
-### Performance Characteristics (*Diataxis: Reference* - Production performance specifications)
+### Performance Characteristics
 
 The Enhanced LSP Cancellation System maintains consistent performance across all operations:
 
@@ -1424,7 +1424,7 @@ The Enhanced LSP Cancellation System maintains consistent performance across all
 | **Memory Overhead** | <1MB additional per 1000 operations | Baseline + cancellation infrastructure |
 | **Navigation Success Rate** | ≥98% with cancellation | Maintains dual indexing performance |
 
-### Integration with Core LSP Features (*Diataxis: Explanation* - Cancellation integration patterns)
+### Integration with Core LSP Features
 
 #### Enhanced Workspace Indexing Compatibility
 The cancellation system integrates seamlessly with the dual indexing strategy, maintaining 98% reference coverage:
@@ -1471,7 +1471,7 @@ pub fn incremental_parse_with_cancellation(
 }
 ```
 
-### Provider Integration (*Diataxis: Reference* - LSP provider cancellation patterns)
+### Provider Integration
 
 All 11 LSP providers integrate with the Enhanced Cancellation System using consistent patterns:
 
@@ -1516,7 +1516,7 @@ impl DefinitionProvider {
 }
 ```
 
-### Threading and Concurrency (*Diataxis: Explanation* - Thread-safe cancellation design)
+### Threading and Concurrency
 
 The Enhanced LSP Cancellation System integrates with Perl LSP's threading improvements (PR #140):
 
@@ -1530,7 +1530,7 @@ The Enhanced LSP Cancellation System integrates with Perl LSP's threading improv
 - **User Story Tests**: 1500s+ → 0.32s preserved with cancellation overhead
 - **Individual Workspace Tests**: 60s+ → 0.26s sustained performance
 
-### Usage Examples (*Diataxis: Tutorial* - Implementing cancellation-aware LSP operations)
+### Usage Examples
 
 #### Basic Cancellation Pattern
 ```rust
@@ -1570,7 +1570,7 @@ impl LanguageServer for PerlLspServer {
 }
 ```
 
-### Integration Testing (*Diataxis: How-to* - Testing cancellation functionality)
+### Integration Testing
 
 Comprehensive test coverage ensures reliable cancellation behavior:
 
@@ -1586,7 +1586,7 @@ cargo test -p perl-lsp --test lsp_cancellation_performance_tests
 RUST_TEST_THREADS=2 cargo test -p perl-lsp --test cancellation_thread_safety_tests
 ```
 
-### Detailed Documentation References (*Diataxis: Reference* - Complete cancellation system documentation)
+### Detailed Documentation References
 
 For comprehensive implementation details, architecture specifications, and advanced usage patterns, see the dedicated cancellation documentation:
 
@@ -1596,7 +1596,7 @@ For comprehensive implementation details, architecture specifications, and advan
 - **[LSP Cancellation Test Strategy](LSP_CANCELLATION_TEST_STRATEGY.md)** - Comprehensive testing approach and validation methods
 - **[LSP Cancellation Integration Schema](LSP_CANCELLATION_INTEGRATION_SCHEMA.md)** - Provider integration patterns and implementation schemas
 
-### Migration and Adoption (*Diataxis: How-to* - Upgrading to cancellation-aware operations)
+### Migration and Adoption
 
 #### Enabling Cancellation in Existing Code
 ```rust
@@ -1615,7 +1615,7 @@ let result = provider.provide_completion_with_cancellation(params, token);
 
 The Enhanced LSP Cancellation System improves Perl LSP responsiveness and user experience, providing cancellation capabilities while preserving performance characteristics.
 
-## Enhanced executeCommand and Code Actions Integration (*Diataxis: Explanation* - Recently Implemented LSP Features)
+## Enhanced executeCommand and Code Actions Integration
 
 ### executeCommand Method Implementation ⭐ **NEW: Issue #145**
 
@@ -1637,7 +1637,7 @@ pub static SUPPORTED_COMMANDS: &[&str] = &[
 
 #### perl.runCritic Command Integration
 
-**Dual Analyzer Strategy** (*Diataxis: How-to* - Using perlcritic with fallback):
+**Dual Analyzer Strategy**:
 ```rust
 // Comprehensive perlcritic integration with fallback
 impl ExecuteCommandProvider {
@@ -1671,7 +1671,7 @@ pub struct CriticCommandResult {
 
 #### Protocol Compliance Integration
 
-**Capability Advertisement** (*Diataxis: Reference* - Server capabilities):
+**Capability Advertisement**:
 ```json
 {
   "capabilities": {
@@ -1712,7 +1712,7 @@ The `textDocument/codeAction` LSP method now provides sophisticated refactoring 
 
 #### Code Action Categories
 
-**RefactorExtract Operations** (*Diataxis: How-to* - Extract refactoring patterns):
+**RefactorExtract Operations**:
 ```rust
 // Extract variable with intelligent naming
 pub fn create_extract_variable_action(&self, node: &Node) -> CodeAction {
@@ -1761,7 +1761,7 @@ pub fn create_organize_imports_action(&self, document_uri: &str) -> CodeAction {
 }
 ```
 
-**RefactorRewrite Operations** (*Diataxis: How-to* - Code quality improvements):
+**RefactorRewrite Operations**:
 ```rust
 // Modernize Perl patterns
 pub fn create_modernize_code_actions(&self, ast: &Node) -> Vec<CodeAction> {
@@ -1783,7 +1783,7 @@ pub fn create_modernize_code_actions(&self, ast: &Node) -> Vec<CodeAction> {
 
 #### Performance Optimization Architecture
 
-**Multi-tier Caching System** (*Diataxis: Explanation* - Performance design):
+**Multi-tier Caching System**:
 ```rust
 // Code action caching with incremental invalidation
 pub struct CodeActionCache {
@@ -1868,7 +1868,7 @@ impl ExecuteCommandProvider {
 
 #### Quality Assurance and Testing
 
-**Test-Driven Development Pattern** (*Diataxis: How-to* - Testing new LSP features):
+**Test-Driven Development Pattern**:
 ```bash
 # Comprehensive test suite for executeCommand and code actions
 cargo test -p perl-lsp --test lsp_execute_command_tests        # Execute command protocol compliance
@@ -1891,7 +1891,7 @@ cargo test -p perl-lsp --test lsp_comprehensive_e2e_test      # Full workflow va
 
 The enhanced executeCommand and code actions integration completes the advertised LSP feature set to **100% user-visible coverage (53/53)** while maintaining performance and reliability.
 
-## LSP Feature Status Matrix (*Diataxis: Reference* - Complete feature overview)
+## LSP Feature Status Matrix
 
 The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **100% protocol compliance (97/97)** with comprehensive workspace support:
 
@@ -1937,7 +1937,7 @@ The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **10
 | **Multi-root Workspace** | ✅ Complete | Full support | Scalable indexing architecture |
 | **Workspace Refactoring** | ✅ Complete | Cross-file safe | Extract variable/subroutine |
 
-### executeCommand Operations (*Diataxis: Reference* - Command specifications)
+### executeCommand Operations
 | Command | Status | Analyzer | Response Time | Integration |
 |---------|---------|----------|---------------|-------------|
 | `perl.runTests` | ✅ Complete | Native | <3s | TAP output parsing |
@@ -1946,7 +1946,7 @@ The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **10
 | `perl.debugTests` | ✅ Complete | Native | <1s | Debug adapter preparation |
 | `perl.runCritic` | ✅ Complete | Dual strategy | <2s | External perlcritic + built-in fallback |
 
-### Code Action Categories (*Diataxis: Reference* - Refactoring capabilities)
+### Code Action Categories
 | Category | Operations | Status | Performance | Cross-file Support |
 |----------|------------|---------|-------------|-------------------|
 | **RefactorExtract** | Variable, Subroutine | ✅ Complete | <50ms | ✅ Dual indexing aware |
@@ -1954,7 +1954,7 @@ The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **10
 | **SourceOrganizeImports** | Remove unused, Add missing, Sort | ✅ Complete | <100ms | ✅ Cross-file dependency tracking |
 | **QuickFix** | Syntax corrections, Policy fixes | ✅ Complete | <25ms | ✅ Integrated with diagnostics |
 
-### Performance Achievements (*Diataxis: Explanation* - PR #140 impact)
+### Performance Achievements
 | Test Category | Before PR #140 | After PR #140 |
 |---------------|-----------------|---------------|
 | **LSP Behavioral** | 1560s+ | 0.31s |
@@ -1962,7 +1962,7 @@ The Perl LSP server has achieved **100% user-visible coverage (53/53)** and **10
 | **Workspace Tests** | 60s+ | 0.26s |
 | **Overall Suite** | 60s+ | <10s |
 
-### Protocol Compliance (*Diataxis: Reference* - LSP 3.17+ support)
+### Protocol Compliance
 - ✅ **LSP 3.17+ Protocol**: Coverage is currently tracked against protocol method implementation in `features.toml`; remaining protocol parity goals are tracked in ROADMAP.md
 - ✅ **JSON-RPC 2.0**: Complete request/response/notification support
 - ✅ **UTF-16 Position Mapping**: Symmetric conversion with vulnerability fixes
@@ -2355,15 +2355,15 @@ impl LspServer {
 4. **Integration**: Clean conversion between internal types and LSP format
 5. **Extensibility**: Easy to add new refactoring operations
 
-## Enhanced Cross-File Navigation with Dual Indexing Strategy (v0.8.8+) (*Diataxis: Explanation* - Understanding advanced function call indexing)
+## Enhanced Cross-File Navigation with Dual Indexing Strategy (v0.8.8+)
 
-### Overview (*Diataxis: Explanation* - Design decisions and concepts)
+### Overview
 
 The v0.8.8+ release introduces a **production-stable dual indexing strategy** for function calls that achieves **98% reference coverage improvement** and significantly improves cross-file navigation and reference finding. This enhancement addresses the complexity of Perl's flexible function call syntax where functions can be called with bare names or fully qualified package names, ensuring comprehensive detection across all usage patterns with enhanced Unicode processing and atomic performance tracking.
 
-### Technical Implementation (*Diataxis: Reference* - Algorithm specifications)
+### Technical Implementation
 
-#### Dual Function Call Indexing (*Diataxis: Reference* - Implementation details)
+#### Dual Function Call Indexing
 
 The workspace index now maintains dual references for function calls, indexing both bare and qualified forms:
 
@@ -2404,7 +2404,7 @@ impl IndexVisitor {
 }
 ```
 
-#### Enhanced Reference Finding (*Diataxis: Reference* - Enhanced search algorithms)
+#### Enhanced Reference Finding
 
 The `find_references` method implements intelligent dual lookup with deduplication:
 
@@ -2444,7 +2444,7 @@ impl WorkspaceIndex {
 }
 ```
 
-#### Intelligent Deduplication (*Diataxis: Reference* - Reference deduplication algorithm)
+#### Intelligent Deduplication
 
 The system automatically deduplicates references while excluding definitions:
 
@@ -2475,7 +2475,7 @@ pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
 }
 ```
 
-### Benefits for LSP Users (*Diataxis: Explanation* - User experience improvements)
+### Benefits for LSP Users
 
 1. **Comprehensive Reference Finding**: Finds all references regardless of whether they use bare names (`foo()`) or qualified names (`Package::foo()`)
 2. **Smart Deduplication**: Eliminates duplicate references that occur from dual indexing
@@ -2483,7 +2483,7 @@ pub fn find_refs(&self, key: &SymbolKey) -> Vec<Location> {
 4. **Cross-File Consistency**: Maintains consistent reference finding across the entire workspace
 5. **Performance Optimized**: Uses HashSet-based deduplication for efficient processing
 
-### Testing and Validation (*Diataxis: How-to* - Testing dual indexing)
+### Testing and Validation
 
 The dual indexing strategy includes comprehensive test coverage with **98% reference coverage improvement** validation:
 
@@ -2549,7 +2549,7 @@ Unicode::Module::🚀process_data();
 }
 ```
 
-### Integration with LSP Features (*Diataxis: How-to* - Using dual indexing in LSP)
+### Integration with LSP Features
 
 The dual indexing strategy seamlessly integrates with existing LSP features, achieving **98% reference coverage improvement**:
 
@@ -2564,7 +2564,7 @@ The dual indexing strategy seamlessly integrates with existing LSP features, ach
 
 ## API Reference Documentation
 
-### CompletionProvider API Reference (**Diataxis: Reference**)
+### CompletionProvider API Reference
 
 The CompletionProvider has been enhanced with pluggable module resolver support in v0.8.8. This section provides comprehensive API documentation for the updated interface.
 
@@ -2765,7 +2765,7 @@ let provider = CompletionProvider::new_with_index_and_source(
 
 ## Complex Feature Examples
 
-### Thread-Safe Semantic Tokens Implementation (**Diataxis: Reference**)
+### Thread-Safe Semantic Tokens Implementation
 
 The semantic tokens provider has been redesigned for thread-safety with exceptional performance. The new implementation eliminates race conditions while achieving 2.826µs average performance (35x better than 100µs target).
 
@@ -2841,7 +2841,7 @@ impl<'a> TokenCollector<'a> {
 }
 ```
 
-#### Performance Characteristics (**Diataxis: Reference**)
+#### Performance Characteristics
 
 **Performance Benchmarks** (production measurements):
 - **Average execution time**: 2.826µs 
@@ -2856,7 +2856,7 @@ impl<'a> TokenCollector<'a> {
 - **Efficient Position Mapping**: Optimized byte-to-position conversion
 - **Delta Encoding**: LSP-compliant delta encoding for minimal network overhead
 
-#### LSP Server Integration (**Diataxis: How-to**)
+#### LSP Server Integration
 
 ```rust
 // In lsp_server.rs - Thread-safe semantic tokens handler
@@ -2917,7 +2917,7 @@ pub fn encode_semantic_tokens(tokens: &[SemanticToken]) -> Vec<u32> {
 }
 ```
 
-#### Thread-Safety Testing (**Diataxis: How-to**)
+#### Thread-Safety Testing
 
 The implementation includes comprehensive thread-safety testing:
 
@@ -2976,7 +2976,7 @@ fn bench_semantic_tokens_performance(b: &mut Bencher) {
 }
 ```
 
-#### Migration Guide (**Diataxis: How-to**)
+#### Migration Guide
 
 **From Legacy Implementation**:
 
@@ -2996,7 +2996,7 @@ let tokens = provider.extract(&ast); // Takes &self, safe for concurrent access
 3. No functional changes needed - same return types and behavior
 4. Significant performance improvement with thread safety
 
-#### Benefits of Thread-Safe Design (**Diataxis: Explanation**)
+#### Benefits of Thread-Safe Design
 
 1. **Eliminated Race Conditions**: No shared mutable state between calls
 2. **Exceptional Performance**: 35x better than target with 2.826µs average
@@ -3005,7 +3005,7 @@ let tokens = provider.extract(&ast); // Takes &self, safe for concurrent access
 5. **Memory Safety**: Local state prevents use-after-free and data races
 6. **Scalability**: Supports high-concurrency LSP server environments
 
-### Performance Improvements (PR #140) (**Diataxis: Explanation** - Test reliability)
+### Performance Improvements (PR #140)
 
 PR #140 delivers significant performance optimizations for test reliability and speed, maintaining 100% functional compatibility:
 
@@ -3014,11 +3014,11 @@ PR #140 delivers significant performance optimizations for test reliability and 
 - **Individual workspace tests**: 60s+ → 0.26s
 - **Overall test suite**: 60s+ → <10s
 
-### Adaptive Threading Configuration (**Diataxis: Explanation** - Enhanced thread-aware timeout management)
+### Adaptive Threading Configuration
 
 Building on these performance gains, the LSP server includes adaptive threading configuration that automatically scales timeouts and concurrency based on available system resources and environment constraints. This ensures reliable operation across diverse environments from CI runners to development workstations.
 
-#### Core Threading Architecture (**Diataxis: Reference** - Implementation details)
+#### Core Threading Architecture
 
 ```rust
 /// Get the maximum number of concurrent threads to use in tests
@@ -3063,7 +3063,7 @@ fn get_adaptive_timeout() -> Duration {
 }
 ```
 
-#### Test Infrastructure Enhancement (**Diataxis: Explanation** - PR #140 optimizations)
+#### Test Infrastructure Enhancement
 
 The PR #140 enhancements introduce multiple optimization strategies:
 
@@ -3077,7 +3077,7 @@ The PR #140 enhancements introduce multiple optimization strategies:
 - **After**: 200ms wait cycles (**5x improvement**)
 - **Adaptive polling**: Initial rapid → medium → stable polling strategy
 
-#### Enhanced Timeout Scaling Strategy (**Diataxis: Explanation** - Multi-tier approach)
+#### Enhanced Timeout Scaling Strategy
 
 The adaptive timeout system implements sophisticated scaling:
 
@@ -3092,7 +3092,7 @@ The adaptive timeout system implements sophisticated scaling:
 - **Thread Count 5-8**: **7.5-second timeouts** (1.5x multiplier) - Modern machines
 - **Thread Count >8**: **5-second timeouts** - High-performance workstations
 
-#### Thread-Aware Testing (**Diataxis: How-to** - Running tests in constrained environments)
+#### Thread-Aware Testing
 
 ```bash
 # CI environment testing with extended timeouts
@@ -3108,7 +3108,7 @@ cargo test -p perl-lsp
 LSP_TEST_TIMEOUT_MS=20000 cargo test -p perl-lsp  # Override adaptive timeouts
 ```
 
-#### Adaptive Sleep Configuration (**Diataxis: Reference** - Helper functions)
+#### Adaptive Sleep Configuration
 
 ```rust
 /// Adaptive sleep duration based on thread constraints
@@ -3126,7 +3126,7 @@ pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
 }
 ```
 
-#### CI Test Configuration (**Diataxis: How-to** - Production testing practices)
+#### CI Test Configuration
 
 **Thread Limiting for CI Reliability (v0.8.8+)**:
 
@@ -3168,7 +3168,7 @@ cargo test -p perl-lsp --test lsp_integration_tests -- --test-threads=2
 **Local Development**: Can use higher thread counts for faster feedback loops
 **CI Environments**: Should use `RUST_TEST_THREADS=2` for optimal reliability
 
-#### Environment Detection (**Diataxis: Explanation** - Automatic adaptation)
+#### Environment Detection
 
 The system automatically detects thread constraints through multiple mechanisms:
 
@@ -3178,7 +3178,7 @@ The system automatically detects thread constraints through multiple mechanisms:
 
 This ensures that LSP tests pass reliably regardless of the execution environment, from single-core CI runners to high-end development workstations.
 
-#### Performance Impact (**Diataxis: Reference** - PR #140 benchmark data)
+#### Performance Impact
 
 **Test Suite Performance Gains**:
 - **lsp_behavioral_tests.rs**: 1560s+ → 0.31s
@@ -3245,7 +3245,7 @@ vscode.commands.registerCommand('perl.extractVariable', async (args) => {
 
 ## Performance Considerations
 
-### Comprehensive LSP Performance Optimizations (v0.8.8+ with PR #140) (**Diataxis: Explanation**)
+### Comprehensive LSP Performance Optimizations (v0.8.8+ with PR #140)
 
 The v0.8.8 release enhanced by PR #140 introduces significant performance optimizations for test reliability and speed. These optimizations maintain 100% API compatibility:
 
@@ -3306,7 +3306,7 @@ pub fn search_with_limit(
 }
 ```
 
-#### Performance Testing Configuration (**Diataxis: How-to**)
+#### Performance Testing Configuration
 
 **Environment Variable Configuration**:
 ```bash
@@ -3432,11 +3432,11 @@ async fn handle_workspace_symbol_async(
 }
 ```
 
-## Text-Based Fallback Mechanisms (v0.8.8+) (*Diataxis: Explanation* - Robust LSP reliability through intelligent fallbacks)
+## Text-Based Fallback Mechanisms (v0.8.8+)
 
 The v0.8.8+ release introduces comprehensive text-based fallback mechanisms that ensure LSP functionality remains available even when AST parsing fails or encounters errors. This architectural enhancement significantly improves reliability and user experience across all LSP features.
 
-### Architecture Design (*Diataxis: Explanation* - Understanding fallback strategy)
+### Architecture Design
 
 The text-based fallback system operates on a three-tier hierarchy:
 
@@ -3461,9 +3461,9 @@ The text-based fallback system operates on a three-tier hierarchy:
 └─────────────────┘                └─────────────────┘
 ```
 
-### Feature-Specific Fallback Implementations (*Diataxis: Reference* - Complete fallback specification)
+### Feature-Specific Fallback Implementations
 
-#### 1. Workspace Symbol Fallback (*Diataxis: Reference*)
+#### 1. Workspace Symbol Fallback
 
 **Text-Based Symbol Extraction**:
 ```rust
@@ -3504,7 +3504,7 @@ fn extract_text_based_symbols(&self, text: &str, uri: &str, query: &str) -> Vec<
 - ✅ Use/require statement analysis
 - ⚠️ Limited scope analysis (no AST context)
 
-#### 2. Code Lens Fallback (*Diataxis: Reference*)
+#### 2. Code Lens Fallback
 
 **Text-Based Reference Counting**:
 ```rust
@@ -3547,7 +3547,7 @@ fn extract_text_based_code_lenses(&self, text: &str, _uri: &str) -> Vec<Value> {
 - ⚠️ Limited to text-based pattern matching
 - ⚠️ No cross-file reference detection
 
-#### 3. Document Symbol Fallback (*Diataxis: Reference*)
+#### 3. Document Symbol Fallback
 
 **Hierarchical Symbol Extraction**:
 ```rust
@@ -3601,7 +3601,7 @@ fn extract_symbols_fallback(&self, content: &str) -> Vec<Value> {
 }
 ```
 
-#### 4. Folding Range Fallback (*Diataxis: Reference*)
+#### 4. Folding Range Fallback
 
 **Syntax-Aware Folding Detection**:
 ```rust
@@ -3644,7 +3644,7 @@ fn extract_folding_fallback(&self, content: &str) -> Vec<Value> {
 }
 ```
 
-### Intelligent Degradation Patterns (*Diataxis: How-to* - Implementing graceful degradation)
+### Intelligent Degradation Patterns
 
 #### Pattern 1: AST-First with Immediate Fallback
 
@@ -3697,7 +3697,7 @@ For comprehensive testing, fallbacks can be forced using environment variables:
 }
 ```
 
-### Performance Characteristics (*Diataxis: Reference*)
+### Performance Characteristics
 
 #### Fallback Performance Metrics
 
@@ -3714,7 +3714,7 @@ For comprehensive testing, fallbacks can be forced using environment variables:
 - **Text-Based Fallback**: 850KB average (-60% reduction)
 - **Regex Compilation**: One-time 120KB overhead per pattern
 
-### Testing Fallback Mechanisms (*Diataxis: How-to*)
+### Testing Fallback Mechanisms
 
 #### Unit Testing Fallbacks
 
@@ -3783,7 +3783,7 @@ fn test_fallback_integration_comprehensive() {
 }
 ```
 
-### Error Handling and Recovery (*Diataxis: How-to*)
+### Error Handling and Recovery
 
 #### Graceful Error Recovery
 
@@ -3810,7 +3810,7 @@ impl LspServer {
 }
 ```
 
-#### Enhanced JSON-RPC Error Handling (*Diataxis: How-to* - Issue #144 Implementation)
+#### Enhanced JSON-RPC Error Handling
 
 **Malformed Frame Recovery** (*NEW: Issue #144*): The LSP server now implements comprehensive error recovery for malformed JSON-RPC frames:
 
@@ -3869,7 +3869,7 @@ echo 'Content-Length: 50\r\n\r\n{"jsonrpc":"2.0","invalid_json":}' | perl-lsp --
 // Error recovery maintains pipeline integrity at each stage
 ```
 
-### Benefits for LSP Users (*Diataxis: Explanation*)
+### Benefits for LSP Users
 
 #### Enhanced Reliability
 
@@ -3892,7 +3892,7 @@ echo 'Content-Length: 50\r\n\r\n{"jsonrpc":"2.0","invalid_json":}' | perl-lsp --
 3. **Performance Predictability**: Known performance characteristics for both modes
 4. **Scalable Architecture**: Fallbacks can be enhanced independently
 
-### Migration Guide for Custom LSP Features (*Diataxis: How-to*)
+### Migration Guide for Custom LSP Features
 
 #### Step 1: Implement Text-Based Fallback
 
@@ -3998,7 +3998,7 @@ fn test_semantic_tokens_full() {
 }
 ```
 
-## Enhanced Signature Parsing and Parameter Extraction (v0.8.8+) (**Diataxis: Explanation**)
+## Enhanced Signature Parsing and Parameter Extraction (v0.8.8+)
 
 ### Overview
 
@@ -4207,7 +4207,7 @@ fn test_nested_calls() {
 
 This enhancement significantly improves the developer experience by providing accurate, real-time parameter assistance for both built-in and user-defined functions.
 
-## ModuleResolver Architecture Benefits (**Diataxis: Explanation**)
+## ModuleResolver Architecture Benefits
 
 ### Design Rationale and Architectural Decisions
 
@@ -4554,7 +4554,7 @@ print INVALID_BAREWORD;
 4. **Backward Compatibility**: Only add logic, don't change existing behavior
 5. **Test Coverage**: Comprehensive tests for all hash key scenarios
 
-## DAP Integration Architecture (*Diataxis: Explanation* - Debug Adapter Protocol support)
+## DAP Integration Architecture
 
 ### Current Adapter Modes (Native CLI + BridgeAdapter)
 
@@ -4594,7 +4594,7 @@ The `perl-dap` crate ships a native adapter that talks directly to `perl -d` (de
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### Key Components (*Diataxis: Reference* - DAP implementation modules)
+### Key Components
 
 #### DebugAdapter (`src/debug_adapter.rs`)
 
@@ -4691,7 +4691,7 @@ let env = setup_environment(&[
 - **WSL**: Automatic path translation (`/mnt/c/Users` → `C:\Users`)
 - **macOS/Linux**: Symlink canonicalization, proper `PATH`/`PERL5LIB` separator (`:`)
 
-### Integration with LSP Workflow (*Diataxis: Explanation* - LSP + DAP unified experience)
+### Integration with LSP Workflow
 
 The DAP implementation integrates seamlessly with the existing LSP workflow:
 
@@ -4719,7 +4719,7 @@ Parse → Index → Navigate → Complete → Analyze → Debug
    - <1ms breakpoint validation on file changes
    - Leverage 70-99% node reuse efficiency
 
-### Configuration Examples (*Diataxis: How-to* - Common debugging scenarios)
+### Configuration Examples
 
 #### Basic Launch Configuration
 
@@ -4766,7 +4766,7 @@ Parse → Index → Navigate → Complete → Analyze → Debug
 }
 ```
 
-### Performance Characteristics (*Diataxis: Reference* - DAP performance metrics)
+### Performance Characteristics
 
 **Phase 1 Bridge Performance** (measured in Issue #207):
 
@@ -4782,7 +4782,7 @@ Parse → Index → Navigate → Complete → Analyze → Debug
 - Message proxying: Zero-copy stdio forwarding
 - Configuration validation: <5ms path resolution and normalization
 
-### Security Considerations (*Diataxis: Explanation* - DAP security design)
+### Security Considerations
 
 The DAP implementation follows enterprise security practices:
 
@@ -4806,7 +4806,7 @@ The DAP implementation follows enterprise security practices:
    - Default timeout prevents infinite hangs
    - Graceful cleanup on abnormal termination
 
-### Testing Strategy (*Diataxis: Reference* - DAP test coverage)
+### Testing Strategy
 
 **Comprehensive Test Suite** (71/71 tests passing):
 
@@ -4832,7 +4832,7 @@ cargo test -p perl-dap -- test_setup_environment_path_separator
 - Environment variable merging and PERL5LIB construction
 - Empty argument lists and include paths
 
-### Future Roadmap (*Diataxis: Explanation* - Phase 2/3 native implementation)
+### Future Roadmap
 
 **Phase 2: Native Rust Adapter** (Planned):
 
@@ -4855,7 +4855,7 @@ VS Code ↔ perl-dap (Rust) ↔ Devel::TSPerlDAP (Perl shim) ↔ perl -d
 - Multi-editor support (Neovim, Emacs, Helix)
 - Comprehensive security audit and fuzzing
 
-### See Also (*Diataxis: Reference* - Related documentation)
+### See Also
 
 - **[DAP User Guide](../tutorials/DAP_USER_GUIDE.md)**: Step-by-step setup and debugging tutorials
 - **[DAP Implementation Specification](DAP_IMPLEMENTATION_SPECIFICATION.md)**: Comprehensive technical specification
@@ -4980,7 +4980,7 @@ When adding LSP features involving:
 
 These security practices ensure the LSP implementation serves as a reference for secure development practices in the Perl ecosystem.
 
-## Code Formatting Implementation (*Diataxis: Explanation*)
+## Code Formatting Implementation
 
 The LSP server provides enhanced code formatting capabilities with robust external tool dependency handling. As of v0.8.8+, formatting capabilities are always advertised regardless of external tool availability, providing a consistent user experience across different development environments.
 
@@ -4993,7 +4993,7 @@ The LSP server provides enhanced code formatting capabilities with robust extern
 3. **Test Suite Robustness**: Integration tests pass reliably across CI/CD environments
 4. **Future-Proof Design**: Built-in formatters can be added without capability changes
 
-### Implementation Details (*Diataxis: Reference*)
+### Implementation Details
 
 #### Capability Advertising
 
@@ -5030,7 +5030,7 @@ let perltidy_cmd = self.find_perltidy_command();
 // 3. Fallback to built-in settings
 ```
 
-#### Error Handling and User Guidance (*Diataxis: How-to*)
+#### Error Handling and User Guidance
 
 When `perltidy` is unavailable, the server provides comprehensive installation guidance:
 
@@ -5045,7 +5045,7 @@ To install perltidy:
   - Windows: cpan Perl::Tidy
 ```
 
-### Test Suite Robustness (*Diataxis: How-to*)
+### Test Suite Robustness
 
 #### Handling Missing Dependencies
 
@@ -5071,7 +5071,7 @@ if let Some(res) = result {
 **CI/CD Environments**: Tests pass without external dependencies  
 **Production Deployments**: Clear error messages guide users to install required tools
 
-### Future Enhancements (*Diataxis: Explanation*)
+### Future Enhancements
 
 The architecture supports planned enhancements:
 
@@ -5092,7 +5092,7 @@ impl BuiltInFormatter {
 
 **Integration Path**: Future versions can seamlessly add built-in formatting without changing capability advertising or client expectations.
 
-### Configuration Options (*Diataxis: Reference*)
+### Configuration Options
 
 #### LSP Formatting Parameters
 
@@ -5117,7 +5117,7 @@ impl BuiltInFormatter {
 - Falls back to user home directory configuration
 - Uses built-in defaults when no configuration found
 
-### Performance Characteristics (*Diataxis: Reference*)
+### Performance Characteristics
 
 **Formatting Speed**: 
 - Small files (< 1KB): < 100ms including perltidy startup

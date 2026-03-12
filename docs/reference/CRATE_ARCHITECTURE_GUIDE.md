@@ -149,12 +149,12 @@
   - **`src/scanner/c_scanner.rs`**: C API compatibility wrapper that delegates to RustScanner
   - **`src/scanner/mod.rs`**: Unified scanner interface and feature flags
 
-### `/xtask/` - Development Automation (*Diataxis: Explanation* - Design decisions)
+### `/xtask/` - Development Automation
 - **Exclusion Reason**: Circular dependency with excluded crates
 - **Purpose**: Advanced testing and development tools requiring system dependencies
 - **Architecture**: Excluded from workspace to maintain clean builds while preserving functionality
 
-## xtask Architecture (*Diataxis: Explanation* - Advanced testing design)
+## xtask Architecture
 
 ### Dual-Scanner Corpus Comparison (v0.8.8+)
 
@@ -189,14 +189,14 @@ struct CorpusTestResults {
 }
 ```
 
-#### **Structural Analysis Features** (*Diataxis: Reference* - Technical capabilities)
+#### **Structural Analysis Features**
 - **Node Count Comparison**: Tracks structural differences between scanner outputs
 - **Missing Node Detection**: Identifies nodes present in C but missing in Rust output
 - **Extra Node Detection**: Identifies nodes present in Rust but missing in C output
 - **S-expression Normalization**: Whitespace-independent comparison for accurate results
 - **Diagnostic Analysis**: Detailed structural breakdown for debugging parser differences
 
-#### **Usage Pattern** (*Diataxis: How-to Guide* - Implementation approach)
+#### **Usage Pattern**
 ```bash
 # Run corpus comparison modes (requires legacy feature)
 cargo run -p xtask --features legacy -- corpus                          # Default scanner: v3
@@ -206,7 +206,7 @@ cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose
 
 ## Key Components
 
-### ModuleResolver Component (NEW v0.8.8) - (*Diataxis: Reference*)
+### ModuleResolver Component (NEW v0.8.8)
 
 The ModuleResolver provides a reusable, generic module resolution system for LSP features requiring Perl module path resolution.
 
@@ -274,13 +274,13 @@ let provider = CompletionProvider::new_with_index_and_source(
 - **Reliable**: Comprehensive error handling and timeout protection
 - **Standard Compliant**: Follows Perl module path conventions and LSP URI requirements
 
-## Unified Scanner Architecture (*Diataxis: Explanation* - Scanner design and implementation)
+## Unified Scanner Architecture
 
 ### Design Overview
 
 The scanner implementation follows a unified architecture pattern that consolidates multiple scanner interfaces into a single Rust implementation while maintaining full backward compatibility.
 
-#### Core Components (*Diataxis: Reference* - Technical architecture)
+#### Core Components
 
 **`/crates/tree-sitter-perl-rs/src/scanner/mod.rs`**:
 ```rust
@@ -320,7 +320,7 @@ impl PerlScanner for CScanner {
 }
 ```
 
-### Architecture Benefits (*Diataxis: Explanation* - Design decisions)
+### Architecture Benefits
 
 #### **Simplified Maintenance**
 - **Single Source of Truth**: One scanner implementation for all functionality
@@ -340,9 +340,9 @@ impl PerlScanner for CScanner {
 - **Simplified Feature Addition**: New token types added once, available everywhere
 - **Reduced Testing Complexity**: Test coverage for single implementation covers all interfaces
 
-### Implementation Strategy (*Diataxis: How-to Guide* - Using the unified scanner)
+### Implementation Strategy
 
-#### **For New Code** (*Diataxis: Tutorial* - Recommended approach)
+#### **For New Code**
 ```rust
 use tree_sitter_perl_rs::RustScanner;
 
@@ -350,7 +350,7 @@ let mut scanner = RustScanner::new();
 let token = scanner.scan(input)?;
 ```
 
-#### **For Legacy Code** (*Diataxis: How-to Guide* - Migration approach)
+#### **For Legacy Code**
 ```rust
 use tree_sitter_perl_rs::CScanner;  // Drop-in replacement
 
@@ -358,7 +358,7 @@ let mut scanner = CScanner::new();  // Same API as before
 let token = scanner.scan(input)?;   // Delegates to RustScanner internally
 ```
 
-#### **Feature Flag Configuration** (*Diataxis: Reference* - Build configuration)
+#### **Feature Flag Configuration**
 ```toml
 # Cargo.toml - Choose scanner interface
 [features]
@@ -367,7 +367,7 @@ rust-scanner = []           # Direct RustScanner access
 c-scanner = []              # CScanner wrapper (delegates to RustScanner)
 ```
 
-### Testing Strategy (*Diataxis: Reference* - Quality assurance)
+### Testing Strategy
 
 #### **Unified Test Coverage**
 - **`tests/rust_scanner_smoke.rs`**: Validates core scanner functionality
@@ -375,7 +375,7 @@ c-scanner = []              # CScanner wrapper (delegates to RustScanner)
 - **API Compatibility Tests**: Verifies legacy API contracts remain unchanged
 - **Performance Tests**: Confirms no performance regression from delegation pattern
 
-#### **Build Validation** (*Diataxis: How-to Guide* - Development workflow)
+#### **Build Validation**
 ```bash
 # Test both scanner interfaces
 cargo test --features rust-scanner
@@ -385,7 +385,7 @@ cargo test --features c-scanner
 cargo test -p tree-sitter-perl-rs rust_scanner_smoke
 ```
 
-### Migration Implications (*Diataxis: Explanation* - Understanding the changes)
+### Migration Implications
 
 #### **What Changed**
 - **Implementation**: `CScanner` now delegates to `RustScanner` instead of implementing separately
@@ -435,7 +435,7 @@ cargo test -p tree-sitter-perl-rs rust_scanner_smoke
 ### Cross-File Reference Resolution
 The workspace indexing system implements a dual indexing strategy for comprehensive cross-file navigation with 98% reference coverage:
 
-#### Core Architecture Pattern (*Diataxis: Reference*)
+#### Core Architecture Pattern
 ```rust
 // Dual indexing: index function calls under both forms
 let qualified = format!("{}::{}", package, bare_name);
@@ -449,7 +449,7 @@ file_index.references.entry(qualified)
     .or_default().push(symbol_ref);
 ```
 
-#### Enhanced Reference Search (*Diataxis: Reference*)
+#### Enhanced Reference Search
 ```rust
 pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
     let mut locations = Vec::new();
@@ -477,7 +477,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 - **Definition Exclusion**: Function definitions properly excluded from "Find All References" 
 - **LSP Compliance**: Results match LSP specification for reference vs definition separation
 
-#### Key Benefits (*Diataxis: Explanation*)
+#### Key Benefits
 - **98% Reference Coverage**: Handles both `Package::function` and `function` call patterns
 - **Performance Optimized**: Dual lookups with efficient HashSet deduplication
 - **Backward Compatible**: Existing code continues to work with enhanced indexing
@@ -570,13 +570,13 @@ pub fn get_code_actions(&self, ast: &Node, range: (usize, usize), diagnostics: &
 - Tree-sitter compatible error nodes and diagnostics
 - Performance optimized (<5% overhead for normal code)
 
-## Agent Ecosystem Integration (PR #153) (*Diataxis: Explanation* - Specialized workflow automation)
+## Agent Ecosystem Integration (PR #153)
 
 ### 94 Specialized Agents Architecture
 
 **Workflow Enhancement**: PR #153 introduces a comprehensive agent ecosystem with 94 specialized agents designed specifically for the tree-sitter-perl parsing ecosystem.
 
-#### Agent Directory Structure (*Diataxis: Reference* - Agent organization)
+#### Agent Directory Structure
 
 ```
 .claude/agents2/                          # 94 specialized agents (vs. 53 generic)
@@ -602,7 +602,7 @@ pub fn get_code_actions(&self, ast: &Node, range: (usize, usize), diagnostics: &
     └── workflow-orchestrator.md         # Agent coordination patterns
 ```
 
-#### Specialized Agent Capabilities (*Diataxis: Explanation* - Domain expertise integration)
+#### Specialized Agent Capabilities
 
 **Parser Ecosystem Context Integration:**
 - **Multi-crate Architecture**: Understanding of 5 published crates and their interdependencies
@@ -619,7 +619,7 @@ SecurityScanner → MutationTester → PerformanceValidator → GovernanceGate
 CodeEnhancer → TestCreator → DocGenerator → ReviewPrep
 ```
 
-#### Agent Customization Framework (*Diataxis: Reference* - Self-adapting architecture)
+#### Agent Customization Framework
 
 **Contextual Adaptation Engine:**
 ```markdown
@@ -636,7 +636,7 @@ CodeEnhancer → TestCreator → DocGenerator → ReviewPrep
 - **Security Awareness**: UTF-16 position conversion security and enterprise patterns
 - **Workflow Intelligence**: Context-aware routing between specialized agents
 
-#### Quality and Security Integration (*Diataxis: Explanation* - Enterprise-grade validation)
+#### Quality and Security Integration
 
 **Mutation Testing Coordination:**
 - **Real Bug Discovery**: Agents coordinate mutation testing that discovered UTF-16 security vulnerabilities
@@ -648,7 +648,7 @@ CodeEnhancer → TestCreator → DocGenerator → ReviewPrep
 - **Security-Performance Balance**: Enhanced security without performance regression
 - **Adaptive Threading**: CI environment optimization through intelligent agent coordination
 
-#### Integration Points (*Diataxis: Reference* - Agent ecosystem interfaces)
+#### Integration Points
 
 **Crate Integration:**
 - **`/crates/perl-parser/`**: Core parser logic enhanced by generative agents (test creation, performance optimization)
@@ -661,7 +661,7 @@ CodeEnhancer → TestCreator → DocGenerator → ReviewPrep
 - **ADRs**: Architecture decisions documented and validated by governance agents
 - **Security Guides**: Enterprise security patterns maintained by security-focused agents
 
-#### Workflow Orchestration Patterns (*Diataxis: How-to* - Agent coordination)
+#### Workflow Orchestration Patterns
 
 **Review Workflow:**
 ```bash
@@ -716,9 +716,9 @@ generative-doc-writer       # Documentation synchronization
 - **`/crates/tree-sitter-perl-rs/`**: Legacy test harnesses with outdated Rope usage
 - **Internal test infrastructure**: Focus on production code, not test utilities
 
-## Dual Indexing Architecture (v0.8.8+) (*Diataxis: Explanation* - Workspace navigation design)
+## Dual Indexing Architecture (v0.8.8+)
 
-### Problem Statement (*Diataxis: Explanation* - Why dual indexing is needed)
+### Problem Statement
 
 Perl's flexible function calling conventions create significant challenges for static analysis and IDE features:
 
@@ -741,11 +741,11 @@ Traditional LSP servers index functions under a single name form, leading to:
 - **Inconsistent go-to-definition**: Works for some call styles but not others
 - **Poor find-references coverage**: Only finds references matching the indexing style
 
-### Solution: Dual Indexing Strategy (*Diataxis: Reference* - Technical implementation)
+### Solution: Dual Indexing Strategy
 
 The dual indexing strategy solves this by indexing every function under **both** its qualified and bare name forms.
 
-#### Core Algorithm (*Diataxis: Reference* - Implementation specification)
+#### Core Algorithm
 
 **Indexing Phase** (`/crates/perl-parser/src/workspace_index.rs`):
 ```rust
@@ -798,7 +798,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 }
 ```
 
-### Performance Impact (*Diataxis: Reference* - Performance characteristics)
+### Performance Impact
 
 | Metric | Before Dual Indexing | After Dual Indexing | Change |
 |--------|---------------------|---------------------|---------|
@@ -808,7 +808,7 @@ pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
 | **Search Performance** | Fast | Fast (dual lookup) | Maintained |
 | **Go-to-Definition Success** | ~83% | ~98% | +18% |
 
-### Integration with Lexer (*Diataxis: Reference* - Supporting infrastructure)
+### Integration with Lexer
 
 The lexer enhancement in `/crates/perl-lexer/src/lib.rs` supports dual indexing by properly tokenizing package-qualified identifiers:
 
@@ -830,7 +830,7 @@ while self.current_char() == Some(':') && self.peek_char(1) == Some(':') {
 }
 ```
 
-### Benefits (*Diataxis: Explanation* - Architectural advantages)
+### Benefits
 
 1. **Comprehensive Coverage**: Finds all references regardless of calling style
 2. **Consistent Behavior**: Go-to-definition works from any reference form

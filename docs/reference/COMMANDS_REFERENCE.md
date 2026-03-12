@@ -1,8 +1,8 @@
-# Commands Reference (*Diataxis: Reference* - Complete command specifications)
+# Commands Reference
 
 *This reference provides all available commands for building, testing, and using the tree-sitter-perl ecosystem.*
 
-## Installation Commands (*Diataxis: How-to Guide* - Step-by-step installation)
+## Installation Commands
 
 ### LSP Server
 ```bash
@@ -36,7 +36,7 @@ cargo install --path crates/perl-parser --bin perl-dap
 perl-dap --stdio  # Standard DAP transport
 ```
 
-## Build Commands (*Diataxis: How-to Guide* - Development builds)
+## Build Commands
 
 ### Published Crates
 ```bash
@@ -93,7 +93,7 @@ cargo check  # Should build cleanly without system dependencies
 - **Production Focus**: Tests only published crate APIs
 - **Platform Independence**: Works without tree-sitter C toolchain
 
-### xtask Exclusion Strategy (*Diataxis: Explanation* - Design decisions)
+### xtask Exclusion Strategy
 The xtask crate is excluded from the workspace to maintain clean builds while preserving advanced functionality:
 - **Why excluded**: xtask depends on excluded crates (tree-sitter-perl-rs with libclang)
 - **How to use**: Run from xtask directory: `cd xtask && cargo run <command>`
@@ -162,7 +162,7 @@ cargo test -p perl-parser workspace_index workspace_rename
 cargo test -p perl-parser tdd_basic
 ```
 
-### WSL-Safe Local Gate (*Diataxis: How-to Guide* - Resource-constrained testing)
+### WSL-Safe Local Gate
 
 The local gate script provides a reliable test workflow for WSL, containers, and resource-constrained environments by controlling parallelism to prevent OOM crashes.
 
@@ -201,7 +201,7 @@ CARGO_BUILD_JOBS=4 RUST_TEST_THREADS=2 ./scripts/gate-local.sh
 | `RUST_TEST_THREADS` | 1 | Test parallelism (1 = serial) |
 | `GATE_RELEASE` | unset | Set to "1" for release builds |
 
-### Performance Testing (PR #140) (*Diataxis: How-to Guide* - Test reliability)
+### Performance Testing (PR #140)
 
 PR #140 delivers significant performance optimizations for test speed and reliability:
 
@@ -233,7 +233,7 @@ LSP_TEST_ECHO_STDERR=1 RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --nocapture
 RUST_LOG=debug cargo test -p perl-lsp -- --nocapture    # Monitor timeout scaling
 ```
 
-#### Performance Matrix (*Diataxis: Reference* - PR #140 achievements)
+#### Performance Matrix
 
 | Test Suite | Before PR #140 | After PR #140 |
 |------------|----------------|----------------|
@@ -243,7 +243,7 @@ RUST_LOG=debug cargo test -p perl-lsp -- --nocapture    # Monitor timeout scalin
 | **lsp_golden_tests** | 45s | 2.1s |
 | **Overall test suite** | 60s+ | <10s |
 
-#### Enhanced Thread Configuration Reference (*Diataxis: Reference* - Multi-tier timeout scaling)
+#### Enhanced Thread Configuration Reference
 
 | Environment | Thread Count | LSP Harness | Comprehensive | Idle Detection | Use Case |
 |------------|-------------|-------------|--------------|----------------|----------|
@@ -252,7 +252,7 @@ RUST_LOG=debug cargo test -p perl-lsp -- --nocapture    # Monitor timeout scalin
 | **Light Constraint** | 5-8 | 200ms | 7.5s | 200ms cycles | Modern development machines |
 | **Full Workstation** | >8 | 200ms | 5s | 200ms cycles | High-performance development |
 
-#### Thread-Aware Test Examples (*Diataxis: Tutorial* - Common testing patterns)
+#### Thread-Aware Test Examples
 
 ```bash
 # GitHub Actions CI configuration
@@ -292,7 +292,7 @@ cargo run -p perl-parser --example lsp_capabilities
 
 ## LSP Development Commands
 
-### Core LSP Testing (*Diataxis: How-to Guide* - Development workflows)
+### Core LSP Testing
 
 ```bash
 # Run LSP tests with performance optimizations (v0.8.8+)
@@ -332,7 +332,7 @@ PERL_LSP_INCREMENTAL=1 perl-lsp --stdio < test_requests.jsonrpc
 perl-lsp --stdio < test_requests.jsonrpc
 ```
 
-### LSP Testing Environment Variables (*Diataxis: Reference* - Configuration options)
+### LSP Testing Environment Variables
 
 **RUST_TEST_THREADS** (**Enhanced in PR #140**):
 ```bash
@@ -389,13 +389,13 @@ perl-lsp --stdio
 # - Enterprise-grade workspace refactoring support
 ```
 
-### LSP executeCommand Integration ⭐ **NEW: Issue #145** (*Diataxis: How-to Guide* - Execute command usage)
+### LSP executeCommand Integration ⭐ **NEW: Issue #145**
 
 The LSP server now supports comprehensive `workspace/executeCommand` functionality with integrated perlcritic analysis and advanced code actions.
 
 #### perl.runCritic Command Usage ⭐ **NEW: Issue #145**
 
-**Dual Analyzer Strategy Overview** (*Diataxis: Explanation* - Architecture design):
+**Dual Analyzer Strategy Overview**:
 
 The `perl.runCritic` command implements a sophisticated dual analyzer strategy ensuring 100% availability:
 
@@ -404,7 +404,7 @@ The `perl.runCritic` command implements a sophisticated dual analyzer strategy e
 3. **Seamless Transition**: Automatic fallback with no user intervention required
 4. **Performance Target**: <2s execution time for typical Perl files
 
-**Basic Usage** (*Diataxis: Tutorial* - Getting started with code quality analysis):
+**Basic Usage**:
 ```bash
 # Test perl.runCritic command integration
 cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_perlcritic
@@ -422,7 +422,7 @@ cargo test -p perl-parser --test execute_command_tests -- test_execute_command_r
 cargo test -p perl-parser --test execute_command_tests -- test_execute_command_run_critic_missing_file
 ```
 
-**Advanced Configuration** (*Diataxis: How-to Guide* - Optimizing perlcritic integration):
+**Advanced Configuration**:
 
 **External Perlcritic Setup**:
 ```bash
@@ -439,7 +439,7 @@ perlcritic --version                    # Check version
 cargo test -p perl-parser --test execute_command_tests -- test_command_exists_behavior
 ```
 
-**Built-in Analyzer Capabilities** (*Diataxis: Reference* - Policy coverage):
+**Built-in Analyzer Capabilities**:
 ```rust
 // Built-in analyzer policies (always available)
 - RequireUseStrict: "Missing 'use strict' pragma"
@@ -449,7 +449,7 @@ cargo test -p perl-parser --test execute_command_tests -- test_command_exists_be
 - Parse-error resilient: Continues analysis even with syntax errors
 ```
 
-**Performance Specifications** (*Diataxis: Reference* - Timing requirements):
+**Performance Specifications**:
 | Analyzer Type | File Size | Analysis Time | Policy Coverage | Availability |
 |---------------|-----------|---------------|-----------------|--------------|
 | External perlcritic | <10KB | <0.5s | 150+ policies | Requires installation |
@@ -457,7 +457,7 @@ cargo test -p perl-parser --test execute_command_tests -- test_command_exists_be
 | Built-in analyzer | <10KB | <0.1s | Core policies | 100% availability |
 | Built-in analyzer | <100KB | <0.3s | Core policies | Parse-error resilient |
 
-**Troubleshooting** (*Diataxis: How-to Guide* - Common issues and solutions):
+**Troubleshooting**:
 
 **Issue: External perlcritic not found**
 ```bash
@@ -489,7 +489,7 @@ perl -c your_file.pl                   # Check syntax separately
 cargo test -p perl-parser --test execute_command_tests # Built-in handles syntax errors
 ```
 
-**Integration with LSP Diagnostics** (*Diataxis: How-to Guide* - Diagnostic workflow):
+**Integration with LSP Diagnostics**:
 ```bash
 # Test diagnostic integration with executeCommand
 cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_perlcritic
@@ -501,7 +501,7 @@ cargo test -p perl-lsp --test lsp_comprehensive_e2e_test -- test_execute_command
 cargo test -p perl-lsp --test lsp_performance_tests -- test_execute_command_latency
 ```
 
-**LSP Protocol Integration** (*Diataxis: Reference* - executeCommand specifications):
+**LSP Protocol Integration**:
 ```json
 // Client request format for perl.runCritic
 {
@@ -536,7 +536,7 @@ cargo test -p perl-lsp --test lsp_performance_tests -- test_execute_command_late
 }
 ```
 
-#### Supported executeCommand Operations (*Diataxis: Reference* - Complete command list)
+#### Supported executeCommand Operations
 
 **Core Commands** (Available since v0.8.8+):
 ```bash
@@ -556,9 +556,9 @@ cargo test -p perl-lsp --test lsp_behavioral_tests -- test_execute_command_debug
 - ✅ `perl.debugTests` - Debug test execution with breakpoint support
 - ✅ `perl.runCritic` - **NEW**: Perl::Critic analysis with dual analyzer strategy
 
-### Advanced Code Actions Testing ⭐ **NEW: Issue #145** (*Diataxis: How-to Guide* - Code action workflows)
+### Advanced Code Actions Testing ⭐ **NEW: Issue #145**
 
-**Refactoring Operations** (*Diataxis: Tutorial* - Using code actions for refactoring):
+**Refactoring Operations**:
 ```bash
 # Test comprehensive code action integration
 cargo test -p perl-lsp --test lsp_code_actions_tests
@@ -573,7 +573,7 @@ cargo test -p perl-lsp --test lsp_code_actions_tests -- test_modernize_code_acti
 cargo test -p perl-lsp --test lsp_code_actions_tests -- test_add_missing_pragmas_action # Code modernization
 ```
 
-**Performance Testing** (*Diataxis: How-to Guide* - Code action performance validation):
+**Performance Testing**:
 ```bash
 # Validate <50ms response time requirement
 cargo test -p perl-lsp --test lsp_performance_tests -- test_code_actions_response_time
@@ -585,7 +585,7 @@ cargo test -p perl-lsp --test lsp_code_actions_tests -- test_code_action_caching
 cargo test -p perl-lsp --test lsp_code_actions_tests -- test_cross_file_extract_subroutine
 ```
 
-**LSP Protocol Compliance** (*Diataxis: Reference* - Code action specifications):
+**LSP Protocol Compliance**:
 ```json
 // Client request for code actions
 {
@@ -622,7 +622,7 @@ cargo test -p perl-lsp --test lsp_code_actions_tests -- test_cross_file_extract_
 }
 ```
 
-#### Integration Testing (*Diataxis: How-to Guide* - End-to-end validation)
+#### Integration Testing
 
 **Complete Workflow Testing**:
 ```bash
@@ -725,7 +725,7 @@ cargo test --doc                      # Documentation tests
 # cargo xtask fmt                     # xtask excluded from workspace
 ```
 
-## Dual-Scanner Corpus Comparison (*Diataxis: How-to Guide* - Testing procedures)
+## Dual-Scanner Corpus Comparison
 
 ### Running Dual-Scanner Corpus Tests (v0.8.8+)
 ```bash
@@ -745,7 +745,7 @@ cargo run -p xtask --features legacy -- corpus --scanner v2-pest-microcrate   # 
 cargo run -p xtask --features legacy -- corpus --scanner v2-parity --diagnose # v2<->v2 drift detector
 cargo run -p xtask --features legacy -- corpus --scanner v3                   # V3 parser only
 
-# Diagnostic analysis (*Diataxis: Reference* - detailed comparison)
+# Diagnostic analysis
 cargo run -p xtask --features legacy -- corpus --diagnose  # Analyze first failing test
 cargo run -p xtask --features legacy -- corpus --test      # Test current parser behavior
 
@@ -753,7 +753,7 @@ cargo run -p xtask --features legacy -- corpus --test      # Test current parser
 cargo run -p xtask --features legacy -- corpus --path tree-sitter-perl/test/corpus
 ```
 
-### Dual-Scanner Output Analysis (*Diataxis: Explanation* - Understanding results)
+### Dual-Scanner Output Analysis
 ```bash
 # Scanner mismatch tracking
 # When using --scanner both, the system tracks:
@@ -773,7 +773,7 @@ cargo run -p xtask --features legacy -- corpus --path tree-sitter-perl/test/corp
 #    corpus_file.txt: test_case_name  # Specific mismatch location
 ```
 
-### Structural Analysis Features (*Diataxis: Reference* - Analysis capabilities)
+### Structural Analysis Features
 ```bash
 # The dual-scanner system provides:
 # - Node count comparison between C and Rust scanners
@@ -792,7 +792,7 @@ cargo run -p xtask --features legacy -- corpus --path tree-sitter-perl/test/corp
 #   - different_node_type
 ```
 
-### xtask corpus Command Reference (*Diataxis: Reference* - Complete command specification)
+### xtask corpus Command Reference
 
 ```bash
 # Basic corpus command structure
@@ -835,7 +835,7 @@ both    # Compare C scanner vs V3 parser output before corpus expectation check
 #    filename: test_name
 ```
 
-### Corpus Test File Structure (*Diataxis: Reference* - Test format specification)
+### Corpus Test File Structure
 
 ```
 Test Case Name
@@ -851,9 +851,9 @@ more source code
 (expected_output)
 ```
 
-## Highlight Testing Commands (*Diataxis: Reference* - Tree-Sitter Highlight Test Runner)
+## Highlight Testing Commands
 
-### Basic Highlight Testing (*Diataxis: Tutorial* - Getting started with highlight tests)
+### Basic Highlight Testing
 
 ```bash
 # Prerequisites: Navigate to xtask directory for highlight testing
@@ -869,7 +869,7 @@ cargo run --no-default-features -- highlight --path ../crates/tree-sitter-perl/t
 cargo run --no-default-features -- highlight --scanner v3
 ```
 
-### Highlight Integration Testing (*Diataxis: How-to Guide* - Running comprehensive tests)
+### Highlight Integration Testing
 
 ```bash
 # Run perl-corpus highlight integration tests (4 comprehensive tests)
@@ -885,7 +885,7 @@ cargo test -p perl-corpus highlight_integration_test::test_highlight_performance
 cargo test -p perl-corpus highlight_integration_test::test_highlight_performance -- --nocapture
 ```
 
-### Creating Highlight Test Fixtures (*Diataxis: How-to Guide* - Adding new test cases)
+### Creating Highlight Test Fixtures
 
 ```bash
 # Navigate to highlight test fixture directory
@@ -929,7 +929,7 @@ cd ../../../../xtask
 cargo run --no-default-features -- highlight --path ../crates/tree-sitter-perl/test/highlight
 ```
 
-### Highlight Test Runner Reference (*Diataxis: Reference* - Complete command specification)
+### Highlight Test Runner Reference
 
 ```bash
 # Command structure
@@ -958,7 +958,7 @@ cd xtask && cargo run --no-default-features -- highlight [OPTIONS]
 # - Secure path handling with WalkDir max_depth protection
 ```
 
-### Highlight Test Architecture (*Diataxis: Explanation* - System design and integration)
+### Highlight Test Architecture
 
 The highlight test runner integrates deeply with the perl-parser AST generation system:
 
@@ -995,7 +995,7 @@ The highlight test runner integrates deeply with the perl-parser AST generation 
 - HashMap-based node counting for fast scope matching
 - Progress indication with `indicatif` for user feedback
 
-### Advanced Diagnostic Features (*Diataxis: Reference* - Analysis capabilities)
+### Advanced Diagnostic Features
 
 ```bash
 # Structural analysis when using --diagnose:
@@ -1020,11 +1020,11 @@ V3 scanner nodes: 14
   - literal
 ```
 
-## Scanner Architecture Testing (*Diataxis: How-to Guide* - Unified scanner validation)
+## Scanner Architecture Testing
 
 The project uses a unified scanner architecture where both `c-scanner` and `rust-scanner` features use the same Rust implementation, with `CScanner` serving as a compatibility wrapper that delegates to `RustScanner`.
 
-### Scanner Implementation Testing (*Diataxis: Reference* - Scanner validation commands)
+### Scanner Implementation Testing
 
 ```bash
 # Test core Rust scanner implementation directly
@@ -1040,7 +1040,7 @@ cargo test -p tree-sitter-perl-rs rust_scanner_smoke
 cargo test -p tree-sitter-perl-rs scanner_state
 ```
 
-### Scanner Compatibility Validation (*Diataxis: How-to Guide* - Ensuring backward compatibility)
+### Scanner Compatibility Validation
 
 ```bash
 # Verify both scanner interfaces work correctly
@@ -1054,7 +1054,7 @@ cargo bench -p tree-sitter-perl-rs --features rust-scanner
 cargo bench -p tree-sitter-perl-rs --features c-scanner
 ```
 
-### Scanner Build Configuration (*Diataxis: Reference* - Feature flag usage)
+### Scanner Build Configuration
 
 ```bash
 # Build with Rust scanner only (direct usage)
@@ -1067,7 +1067,7 @@ cargo build -p tree-sitter-perl-rs --features c-scanner
 cargo build -p tree-sitter-perl-rs --features rust-scanner,c-scanner
 ```
 
-### Understanding Scanner Architecture (*Diataxis: Explanation* - Design rationale)
+### Understanding Scanner Architecture
 
 The unified scanner architecture provides:
 

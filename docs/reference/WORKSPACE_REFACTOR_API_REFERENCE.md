@@ -1,4 +1,4 @@
-# WorkspaceRefactor API Reference (**Diataxis: Reference**)
+# WorkspaceRefactor API Reference
 
 This document provides comprehensive API reference for the WorkspaceRefactor system introduced in v0.8.8, covering all methods, types, and error handling patterns.
 
@@ -107,7 +107,7 @@ pub enum RefactorError {
 }
 ```
 
-## Enhanced Workspace Symbol Resolution (v0.8.8+) (**Diataxis: Reference** - Dual indexing API)
+## Enhanced Workspace Symbol Resolution (v0.8.8+)
 
 ### Overview
 

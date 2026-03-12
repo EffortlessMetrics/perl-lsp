@@ -17,7 +17,7 @@ SignatureHelpProvider::new(ast)  // uses empty source
 SymbolExtractor::new()  // no documentation extraction
 ```
 
-### ModuleResolver Integration (NEW v0.8.8) - (*Diataxis: How-to Guide*)
+### ModuleResolver Integration (NEW v0.8.8)
 
 The CompletionProvider now supports pluggable module resolution for enhanced Perl module completion. This allows LSP features to resolve module names to file paths for improved functionality.
 
@@ -69,7 +69,7 @@ let completions = provider.get_completions_with_path(&doc.text, offset, Some(uri
 - **Caching Strategy**: Fast path checks open documents first
 - **Generic Design**: Works with any document representation for flexibility
 
-## Enhanced Cross-File Definition Resolution (v0.8.8+) (*Diataxis: How-to Guide* - Advanced LSP Development)
+## Enhanced Cross-File Definition Resolution (v0.8.8+)
 
 The v0.8.8+ releases introduce comprehensive Package::subroutine pattern resolution with sophisticated fallback mechanisms for robust cross-file navigation.
 
@@ -312,7 +312,7 @@ sub foo {  # Not documentation
 }
 ```
 
-## Cross-File Reference Handling (*Diataxis: Reference* - Enhanced package-qualified identifier support v0.8.8+)
+## Cross-File Reference Handling
 
 The v0.8.8+ release includes significant improvements to cross-file reference handling, particularly for package-qualified identifiers and reference deduplication.
 
@@ -428,7 +428,7 @@ When implementing new LSP features, follow this structure:
    - **Symbol documentation tests** for comment extraction features
    - User story tests for real-world scenarios
 
-## Testing Procedures (*Diataxis: How-to Guide* - Testing procedures)
+## Testing Procedures
 
 ### Dual-Scanner Corpus Validation (v0.8.8+)
 
@@ -455,7 +455,7 @@ cargo run -p xtask --features legacy -- corpus --diagnose  # Analyze first faili
 cargo run -p xtask --features legacy -- corpus --test      # Test simple expressions
 ```
 
-### Understanding Scanner Mismatch Reports (*Diataxis: Reference* - Output interpretation)
+### Understanding Scanner Mismatch Reports
 
 When scanner outputs differ (primarily legacy testing since C scanner now delegates to Rust), the system provides detailed analysis:
 ```
@@ -499,7 +499,7 @@ The refactoring system has two layers:
    - Alphabetical sorting and clean formatting
    - LSP code action integration with "Organize Imports"
 
-### Import Optimization Development Pattern (*Diataxis: How-to* - Import feature development)
+### Import Optimization Development Pattern
 
 Implementing import optimization features follows this pattern:
 
@@ -683,13 +683,13 @@ fn your_refactoring(&self, node: &Node) -> Option<CodeAction> {
 }
 ```
 
-### Enhanced executeCommand Integration ⭐ **NEW: Issue #145** (*Diataxis: How-to Guide* - executeCommand development patterns)
+### Enhanced executeCommand Integration ⭐ **NEW: Issue #145**
 
 The LSP server now supports comprehensive executeCommand functionality with robust error handling and tool integration patterns.
 
 #### executeCommand Provider Development Pattern
 
-**Core Provider Architecture** (*Diataxis: How-to* - Building executeCommand providers):
+**Core Provider Architecture**:
 ```rust
 // In execute_command.rs - Central command dispatcher pattern
 pub struct ExecuteCommandProvider {
@@ -713,7 +713,7 @@ impl ExecuteCommandProvider {
 }
 ```
 
-**Dual Analyzer Strategy Pattern** (*Diataxis: How-to* - Tool integration with fallback):
+**Dual Analyzer Strategy Pattern**:
 ```rust
 // perl.runCritic implementation with graceful degradation
 impl ExecuteCommandProvider {
@@ -756,7 +756,7 @@ impl ExecuteCommandProvider {
 }
 ```
 
-**Error Handling Pattern** (*Diataxis: How-to* - Robust error responses):
+**Error Handling Pattern**:
 ```rust
 // Structured error responses with user-friendly messages
 impl ExecuteCommandProvider {
@@ -788,7 +788,7 @@ impl ExecuteCommandProvider {
 
 #### LSP Server Integration Pattern
 
-**Server Handler Integration** (*Diataxis: How-to* - Wiring executeCommand to LSP protocol):
+**Server Handler Integration**:
 ```rust
 // In lsp_server.rs - Protocol integration
 impl LspServer {
@@ -835,7 +835,7 @@ Enhanced code actions now provide sophisticated refactoring with AST integration
 
 #### Enhanced Provider Architecture Pattern
 
-**Multi-tier Code Action Provider** (*Diataxis: How-to* - Advanced refactoring architecture):
+**Multi-tier Code Action Provider**:
 ```rust
 // In code_actions_enhanced.rs - Sophisticated refactoring provider
 pub struct EnhancedCodeActionsProvider {
@@ -971,7 +971,7 @@ fn create_extract_subroutine_action(&self, node: &Node) -> Option<CodeAction> {
 
 #### Performance Optimization Patterns
 
-**Multi-tier Caching Strategy** (*Diataxis: How-to* - Code action performance):
+**Multi-tier Caching Strategy**:
 ```rust
 // High-performance caching with incremental invalidation
 pub struct CodeActionCache {
@@ -1029,7 +1029,7 @@ The project includes test infrastructure with significant performance optimizati
 - **Enhanced Test Harness**: Graceful degradation for CI environments
 - **Optimized Idle Detection**: 1000ms → 200ms cycles (**5x improvement**)
 
-### Performance Testing Configuration (PR #140) (v0.8.8+) (**Diataxis: How-to Guide** - Performance testing)
+### Performance Testing Configuration (PR #140) (v0.8.8+)
 
 The PR #140 enhancements deliver comprehensive performance optimizations:
 
@@ -1076,7 +1076,7 @@ RUST_TEST_THREADS=2 LSP_TEST_FALLBACKS=1 cargo test -p perl-lsp test_workspace_s
 LSP_TEST_FALLBACKS=1 cargo check --workspace
 ```
 
-#### Timeout Configuration Modes (**Diataxis: Reference**)
+#### Timeout Configuration Modes
 
 **Adaptive Mode (PR #140)** - Enhanced adaptive configuration:
 ```rust
@@ -1227,11 +1227,11 @@ impl LineStartsCache {
 }
 ```
 
-## Error Recovery and Fallback Mechanisms (*Diataxis: Explanation* - Enhanced reliability architecture v0.8.8+)
+## Error Recovery and Fallback Mechanisms
 
 The LSP server includes comprehensive, production-tested fallback mechanisms that ensure 99.9% feature availability even during parser failures, incomplete code, or AST unavailability. The v0.8.8+ release significantly enhances these systems with intelligent text-based analysis and robust error handling.
 
-### Three-Tier Reliability Architecture (*Diataxis: Explanation* - Understanding the reliability strategy)
+### Three-Tier Reliability Architecture
 
 ```
 ┌─────────────────┐    Primary      ┌─────────────────┐
@@ -1254,9 +1254,9 @@ The LSP server includes comprehensive, production-tested fallback mechanisms tha
 └─────────────────┘                 └─────────────────┘
 ```
 
-### Core Fallback Mechanisms (*Diataxis: Reference* - Complete fallback specification)
+### Core Fallback Mechanisms
 
-#### 1. Enhanced Workspace Symbol Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 1. Enhanced Workspace Symbol Fallback
 
 **Comprehensive Text-Based Symbol Detection**:
 ```rust
@@ -1307,7 +1307,7 @@ fn extract_text_based_symbols(&self, text: &str, uri: &str, query: &str) -> Vec<
 - ✅ Method vs subroutine differentiation
 - ✅ Namespace-aware symbol resolution
 
-#### 2. Advanced Code Lens Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 2. Advanced Code Lens Fallback
 
 **Intelligent Reference Counting with Method Detection**:
 ```rust
@@ -1355,7 +1355,7 @@ fn extract_text_based_code_lenses(&self, text: &str, _uri: &str) -> Vec<Value> {
 - ✅ Detailed reference breakdown in lens titles
 - ✅ Better handling of complex call patterns
 
-#### 3. Robust Document Symbol Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 3. Robust Document Symbol Fallback
 
 **Hierarchical Symbol Extraction with Improved Accuracy**:
 ```rust
@@ -1420,7 +1420,7 @@ fn extract_symbols_fallback(&self, content: &str) -> Vec<Value> {
 }
 ```
 
-#### 4. Enhanced Signature Help Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 4. Enhanced Signature Help Fallback
 
 **Context-Aware Function Detection**:
 - Enhanced backward scanning for function context
@@ -1429,7 +1429,7 @@ fn extract_symbols_fallback(&self, content: &str) -> Vec<Value> {
 - Support for complex function call patterns
 - Fallback signatures for unknown functions with parameter hints
 
-#### 5. Advanced Folding Range Fallback (*Diataxis: Reference* - v0.8.8+)
+#### 5. Advanced Folding Range Fallback
 
 **Multi-Pattern Folding Detection**:
 ```rust
@@ -1479,7 +1479,7 @@ fn extract_folding_fallback(&self, content: &str) -> Vec<Value> {
 }
 ```
 
-#### 6. Production-Stable Enhanced Scope Analysis (*Diataxis: Reference* - v0.8.7+)
+#### 6. Production-Stable Enhanced Scope Analysis
 
 **Industry-Leading Variable Resolution with Hash Context Detection**:
 - **Advanced Variable Resolution Patterns**: Hash access (`$hash{key}` → `%hash`), array access (`$array[idx]` → `@array`)  
@@ -1492,7 +1492,7 @@ fn extract_folding_fallback(&self, content: &str) -> Vec<Value> {
 - Context-aware bareword detection with 99.8% accuracy
 - **38 comprehensive test cases** with full edge case coverage
 
-### Enhanced Error Handling Patterns (*Diataxis: How-to* - Implementing robust error handling)
+### Enhanced Error Handling Patterns
 
 #### Pattern 1: Graceful Degradation with Logging
 
@@ -1538,7 +1538,7 @@ fn handle_with_test_fallbacks(&self, params: Option<Value>) -> Result<Option<Val
 }
 ```
 
-### Performance Impact and Monitoring (*Diataxis: Reference* - Fallback performance characteristics)
+### Performance Impact and Monitoring
 
 #### Fallback Performance Metrics (v0.8.8+)
 
@@ -1557,7 +1557,7 @@ fn handle_with_test_fallbacks(&self, params: Option<Value>) -> Result<Option<Val
 - **Regex Compilation**: 120KB one-time overhead per pattern set
 - **Cache Efficiency**: 85-95% hit rate maintained during fallbacks
 
-### Testing Fallback Reliability (*Diataxis: How-to* - Comprehensive fallback testing)
+### Testing Fallback Reliability
 
 #### Comprehensive Fallback Test Suite
 
@@ -1604,7 +1604,7 @@ mod fallback_tests {
 }
 ```
 
-### Production Benefits and Reliability (*Diataxis: Explanation* - Understanding the reliability improvements)
+### Production Benefits and Reliability
 
 #### Enhanced User Experience
 
@@ -1629,11 +1629,11 @@ mod fallback_tests {
 
 These comprehensive fallback mechanisms ensure the LSP remains highly functional and reliable during all phases of development, from initial code writing through complex refactoring scenarios.
 
-## Troubleshooting Text-Based Fallbacks (*Diataxis: How-to* - Debugging and resolving fallback issues)
+## Troubleshooting Text-Based Fallbacks
 
 This section provides comprehensive guidance for diagnosing and resolving issues with text-based fallback mechanisms in the LSP server.
 
-### Common Fallback Scenarios (*Diataxis: Reference* - When fallbacks activate)
+### Common Fallback Scenarios
 
 #### **Automatic Fallback Triggers**
 
@@ -1672,7 +1672,7 @@ This section provides comprehensive guidance for diagnosing and resolving issues
    server.set_fallback_mode(fallback_mode);
    ```
 
-### Diagnostic Techniques (*Diataxis: How-to* - Identifying fallback issues)
+### Diagnostic Techniques
 
 #### **1. Fallback Activation Logging**
 
@@ -1746,7 +1746,7 @@ fn validate_fallback_accuracy() {
 }
 ```
 
-### Resolving Common Issues (*Diataxis: How-to* - Fix specific fallback problems)
+### Resolving Common Issues
 
 #### **Issue 1: Missing Symbols in Fallback Mode**
 
@@ -1894,7 +1894,7 @@ fn count_references_enhanced(&self, text: &str, symbol_name: &str) -> (usize, us
 }
 ```
 
-### Advanced Troubleshooting (*Diataxis: How-to* - Complex debugging scenarios)
+### Advanced Troubleshooting
 
 #### **Scenario 1: Fallbacks Working But Results Inconsistent**
 
@@ -1949,7 +1949,7 @@ fn count_references_enhanced(&self, text: &str, symbol_name: &str) -> (usize, us
    }
    ```
 
-### Configuration and Optimization (*Diataxis: Reference* - Fallback tuning parameters)
+### Configuration and Optimization
 
 #### **Environment Variables**
 
@@ -1993,7 +1993,7 @@ impl Default for FallbackConfig {
 }
 ```
 
-### Success Metrics and Validation (*Diataxis: Reference* - Measuring fallback effectiveness)
+### Success Metrics and Validation
 
 #### **Key Performance Indicators (KPIs)**
 
@@ -2025,11 +2025,11 @@ impl FallbackMetrics {
 
 This comprehensive troubleshooting guide ensures that text-based fallback mechanisms can be effectively debugged, optimized, and monitored in production environments.
 
-## Enhanced LSP Workflow Integration ⭐ **NEW: Issue #145** (*Diataxis: Explanation* - Complete workflow architecture)
+## Enhanced LSP Workflow Integration ⭐ **NEW: Issue #145**
 
 The Perl LSP server now implements a comprehensive **Parse → Index → Navigate → Complete → Analyze → Execute** workflow pipeline that provides complete language server functionality.
 
-### Workflow Pipeline Architecture (*Diataxis: Explanation* - System design)
+### Workflow Pipeline Architecture
 
 **Complete LSP Workflow Pipeline**:
 ```
@@ -2039,7 +2039,7 @@ Parse → Index → Navigate → Complete → Analyze → Execute
 ~1ms   ~10ms   ~40ms     ~50ms     ~100ms     ~2s
 ```
 
-#### Phase 1: Parse (*Diataxis: Reference* - AST generation)
+#### Phase 1: Parse
 ```rust
 // Enhanced parsing with incremental support
 pub struct EnhancedParser {
@@ -2060,7 +2060,7 @@ impl EnhancedParser {
 }
 ```
 
-#### Phase 2: Index (*Diataxis: Reference* - Symbol indexing)
+#### Phase 2: Index
 ```rust
 // Dual indexing strategy for comprehensive coverage
 pub struct WorkspaceIndexer {
@@ -2083,7 +2083,7 @@ impl WorkspaceIndexer {
 }
 ```
 
-#### Phase 3: Navigate (*Diataxis: Reference* - Definition/reference resolution)
+#### Phase 3: Navigate
 ```rust
 // Enhanced cross-file navigation with dual pattern matching
 pub struct NavigationProvider {
@@ -2114,7 +2114,7 @@ impl NavigationProvider {
 }
 ```
 
-#### Phase 4: Complete (*Diataxis: Reference* - Code completion)
+#### Phase 4: Complete
 ```rust
 // Enhanced completion with context awareness and module resolution
 pub struct CompletionProvider {
@@ -2145,7 +2145,7 @@ impl CompletionProvider {
 }
 ```
 
-#### Phase 5: Analyze (*Diataxis: Reference* - Diagnostic analysis)
+#### Phase 5: Analyze
 ```rust
 // Enhanced analysis with performance monitoring
 pub struct DiagnosticAnalyzer {
@@ -2173,7 +2173,7 @@ impl DiagnosticAnalyzer {
 }
 ```
 
-#### Phase 6: Execute ⭐ **NEW: Issue #145** (*Diataxis: Reference* - Command execution)
+#### Phase 6: Execute ⭐ **NEW: Issue #145**
 ```rust
 // Enhanced executeCommand with dual analyzer strategy
 pub struct ExecuteCommandProvider {
@@ -2210,7 +2210,7 @@ impl ExecuteCommandProvider {
 }
 ```
 
-### Integration Patterns (*Diataxis: How-to Guide* - Development best practices)
+### Integration Patterns
 
 #### **Workflow State Management**
 ```rust
@@ -2276,7 +2276,7 @@ impl WorkflowPerformanceConfig {
 }
 ```
 
-### Quality Assurance Integration (*Diataxis: How-to Guide* - Testing complete workflows)
+### Quality Assurance Integration
 
 #### **End-to-End Workflow Testing**
 ```bash

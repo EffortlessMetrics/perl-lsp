@@ -1,4 +1,4 @@
-# LSP Error Handling and Monitoring How-To Guide (*Diataxis: How-to Guide*)
+# LSP Error Handling and Monitoring How-To Guide
 
 *Problem-oriented task instructions for using enhanced LSP error handling and CI monitoring capabilities implemented in Issue #144.*
 

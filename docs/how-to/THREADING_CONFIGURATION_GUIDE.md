@@ -1,4 +1,4 @@
-# Threading Configuration Guide (*Diataxis: Explanation* - Understanding adaptive threading and concurrency management)
+# Threading Configuration Guide
 
 > This guide follows the **[Diataxis framework](https://diataxis.fr/)** for comprehensive technical documentation:
 > - **Tutorial sections**: Hands-on learning with examples
@@ -6,7 +6,7 @@
 > - **Reference sections**: Complete technical specifications
 > - **Explanation sections**: Design concepts and architectural decisions
 
-## Architecture Overview (*Diataxis: Explanation* - Adaptive threading design)
+## Architecture Overview
 
 The LSP server implements sophisticated adaptive threading configuration that automatically scales timeouts and concurrency based on available system resources and environment constraints. This ensures reliable operation across diverse execution environments, from single-core CI runners to high-end development workstations.
 
@@ -29,7 +29,7 @@ The LSP server implements sophisticated adaptive threading configuration that au
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Core Implementation (*Diataxis: Reference* - Technical specifications)
+## Core Implementation
 
 ### Thread Detection and Scaling
 
@@ -52,7 +52,7 @@ pub fn max_concurrent_threads() -> usize {
 
 The adaptive timeout system uses multiple strategies based on the PR #140 revolutionary performance improvements:
 
-#### LSP Harness Adaptive Timeout (*Diataxis: Reference* - Fine-grained timeout control)
+#### LSP Harness Adaptive Timeout
 
 ```rust
 /// Get adaptive timeout based on RUST_TEST_THREADS environment variable
@@ -71,7 +71,7 @@ fn get_adaptive_timeout(&self) -> Duration {
 }
 ```
 
-#### Comprehensive Adaptive Timeout (*Diataxis: Reference* - Full test suite timeout scaling)
+#### Comprehensive Adaptive Timeout
 
 ```rust
 /// Get adaptive timeout based on thread constraints
@@ -131,7 +131,7 @@ pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
 }
 ```
 
-#### Enhanced Idle Detection (*Diataxis: Reference* - Optimized wait cycles)
+#### Enhanced Idle Detection
 
 ```rust
 /// Optimized idle detection with shorter cycles
@@ -159,9 +159,9 @@ pub fn wait_for_idle_optimized(&mut self, timeout: Duration) -> Result<(), Strin
 }
 ```
 
-## Environment Configuration (*Diataxis: How-to Guide* - Setting up different testing environments)
+## Environment Configuration
 
-### CI/CD Environment Setup (*Diataxis: Tutorial* - GitHub Actions configuration)
+### CI/CD Environment Setup
 
 ```yaml
 # .github/workflows/test.yml
@@ -182,7 +182,7 @@ jobs:
       timeout-minutes: 15
 ```
 
-### Local Development Setup (*Diataxis: How-to Guide* - Development environment configuration)
+### Local Development Setup
 
 ```bash
 # High-performance workstation (default)
@@ -198,7 +198,7 @@ RUST_TEST_THREADS=1 cargo test -p perl-lsp --test specific_test -- --nocapture
 LSP_TEST_TIMEOUT_MS=30000 cargo test -p perl-lsp  # Force 30-second timeouts
 ```
 
-### Docker Container Configuration (*Diataxis: How-to Guide* - Containerized testing)
+### Docker Container Configuration
 
 ```dockerfile
 # Dockerfile for constrained testing
@@ -213,9 +213,9 @@ ENV LSP_TEST_TIMEOUT_MS=20000
 RUN cargo test -p perl-lsp
 ```
 
-## Threading Configuration Reference (*Diataxis: Reference* - Complete configuration matrix)
+## Threading Configuration Reference
 
-### Performance Improvements (*Diataxis: Reference* - PR #140 performance gains)
+### Performance Improvements
 
 #### Before vs. After Performance Matrix
 
@@ -235,7 +235,7 @@ RUN cargo test -p perl-lsp
 | **Light Constraint** | 5-8 | 200ms | 7.5s | 1.5x | 200ms cycles | Modern development machines |
 | **Full Workstation** | >8 | 200ms | 5s | 1x | 200ms cycles | High-performance development |
 
-### Environment Variables (*Diataxis: Reference* - Configuration options)
+### Environment Variables
 
 ```bash
 # Threading Configuration
@@ -253,14 +253,14 @@ RUST_LOG=debug               # Enable debug logging for timeout analysis
 LSP_TEST_FALLBACKS=1         # Enable fast testing mode (75% timeout reduction)
 ```
 
-### Thread Detection Logic (*Diataxis: Reference* - Detection priority order)
+### Thread Detection Logic
 
 1. **RUST_TEST_THREADS**: Explicit environment variable (highest priority)
 2. **System Parallelism**: `std::thread::available_parallelism()` hardware detection
 3. **Fallback Default**: Conservative default of 8 threads
 4. **Minimum Enforcement**: Ensures at least 1 thread (`max(1)`)
 
-## Performance Impact Analysis (*Diataxis: Explanation* - Benchmarking and optimization results)
+## Performance Impact Analysis
 
 ### Before Adaptive Threading
 
@@ -282,7 +282,7 @@ CI Environment Improvements:
 - Reliability: 100% test pass rate
 ```
 
-### Performance Characteristics (*Diataxis: Reference* - Post-PR #140 benchmark data)
+### Performance Characteristics
 
 #### Performance Metrics
 
@@ -317,9 +317,9 @@ Workspace integration tests   | 60s+      | 0.26s
 - **Enhanced Test Harness**: Mock responses and graceful degradation
 - **Thread-Aware Sleep Scaling**: Sophisticated concurrency management
 
-## Troubleshooting (*Diataxis: How-to Guide* - Common issues and solutions)
+## Troubleshooting
 
-### Common Threading Issues (*Diataxis: How-to Guide* - Debugging guide)
+### Common Threading Issues
 
 #### Timeout Failures in CI
 
@@ -360,7 +360,7 @@ for threads in 1 2 4 8; do
 done
 ```
 
-## Integration with LSP Features (*Diataxis: Explanation* - How threading affects LSP functionality)
+## Integration with LSP Features
 
 ### Thread-Safe Components
 
@@ -371,7 +371,7 @@ All LSP providers are designed to be thread-safe and benefit from adaptive threa
 - **DiagnosticsProvider**: Concurrent error checking with bounded execution time
 - **WorkspaceSymbolProvider**: Thread-aware symbol indexing and search
 
-### Concurrency Patterns (*Diataxis: Reference* - Thread-safe implementation patterns)
+### Concurrency Patterns
 
 ```rust
 // Thread-safe provider pattern
@@ -404,7 +404,7 @@ impl ThreadSafeProvider {
 }
 ```
 
-## Future Enhancements (*Diataxis: Explanation* - Roadmap and planned improvements)
+## Future Enhancements
 
 ### Planned Threading Improvements
 
@@ -420,7 +420,7 @@ impl ThreadSafeProvider {
 - **Memory Efficiency**: Scale memory usage linearly with thread count
 - **Latency Optimization**: <1ms LSP response times with adaptive threading
 
-## Best Practices (*Diataxis: How-to Guide* - Recommended patterns and practices)
+## Best Practices
 
 ### For Library Users
 

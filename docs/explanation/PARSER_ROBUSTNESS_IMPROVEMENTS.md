@@ -1,6 +1,6 @@
 # Parser Robustness Improvements - PR #160 Advanced Testing Infrastructure Integration
 
-*Diataxis: Explanation & Reference* - Comprehensive documentation of parser robustness enhancements and testing infrastructure integration implemented in PR #160 (SPEC-149).
+Comprehensive documentation of parser robustness enhancements and testing infrastructure integration implemented in PR #160 (SPEC-149).
 
 ## Overview
 

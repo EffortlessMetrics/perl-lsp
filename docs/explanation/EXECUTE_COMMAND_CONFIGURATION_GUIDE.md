@@ -1,4 +1,4 @@
-# ExecuteCommand Configuration and Troubleshooting Guide (*Diataxis: How-to Guide* - Problem-oriented executeCommand solutions)
+# ExecuteCommand Configuration and Troubleshooting Guide
 
 *Comprehensive guide for configuring, troubleshooting, and optimizing executeCommand functionality in Perl LSP server. This guide provides solutions for common problems and advanced configuration scenarios.*
 
