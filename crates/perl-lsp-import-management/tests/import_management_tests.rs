@@ -48,3 +48,23 @@ fn finds_import_block_range() {
         assert_eq!(&source[start..end], "use strict;\nuse warnings;");
     }
 }
+
+#[test]
+fn finds_import_block_range_when_import_line_repeats_later() {
+    let source = "#!/usr/bin/perl\nuse strict;\nuse warnings;\nprint 'ok';\nuse warnings;\n";
+    let lines = source.lines().map(str::to_string).collect::<Vec<_>>();
+
+    let range = find_imports_range(source, &lines);
+    assert!(range.is_some());
+    if let Some((start, end)) = range {
+        assert_eq!(&source[start..end], "use strict;\nuse warnings;\nprint 'ok';\nuse warnings;");
+    }
+}
+
+#[test]
+fn returns_none_for_sources_without_imports() {
+    let source = "#!/usr/bin/perl\nmy $x = 1;\nprint $x;\n";
+    let lines = source.lines().map(str::to_string).collect::<Vec<_>>();
+
+    assert_eq!(find_imports_range(source, &lines), None);
+}

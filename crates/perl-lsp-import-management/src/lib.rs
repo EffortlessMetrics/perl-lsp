@@ -81,7 +81,7 @@ pub fn find_imports_range(source: &str, lines: &[String]) -> Option<(usize, usiz
 
     let first = source.find(imports.first()?)?;
     let last_line = imports.last()?;
-    let last = source.find(last_line)?;
+    let last = source.rfind(last_line)?;
     let last_end = last + last_line.len();
 
     Some((first, last_end))
