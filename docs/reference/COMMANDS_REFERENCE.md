@@ -1,17 +1,16 @@
 # Commands Reference (*Diataxis: Reference* - Complete command specifications)
 
-*This reference provides all available commands for building, testing, and using the tree-sitter-perl ecosystem.*
+*This reference provides common commands for building, testing, and running the perl-lsp workspace.*
 
 ## Installation Commands (*Diataxis: How-to Guide* - Step-by-step installation)
 
 ### LSP Server
 ```bash
+# Install from crates.io
+cargo install perl-lsp
+
 # Quick install (Linux/macOS)
 curl -fsSL https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.sh | bash
-
-# Homebrew (macOS)
-brew tap tree-sitter-perl/tap
-brew install perl-lsp
 
 # Build from source
 cargo build -p perl-lsp --release
@@ -26,11 +25,14 @@ perl-lsp --stdio --log  # With debug logging
 
 ### DAP Server (Debug Adapter)
 ```bash
+# Install from crates.io
+cargo install perl-dap
+
 # Build DAP server
-cargo build -p perl-parser --bin perl-dap --release
+cargo build -p perl-dap --release
 
 # Install DAP server globally
-cargo install --path crates/perl-parser --bin perl-dap
+cargo install --path crates/perl-dap
 
 # Run the DAP server (for VSCode integration)
 perl-dap --stdio  # Standard DAP transport
@@ -42,6 +44,7 @@ perl-dap --stdio  # Standard DAP transport
 ```bash
 # Install from crates.io
 cargo install perl-lsp                     # LSP server
+cargo install perl-dap                     # DAP server
 cargo add perl-parser                      # As library dependency
 cargo add perl-corpus --dev                # For testing
 
@@ -49,7 +52,7 @@ cargo add perl-corpus --dev                # For testing
 cargo build -p perl-parser --release
 cargo build -p perl-lexer --release
 cargo build -p perl-corpus --release
-cargo build -p perl-parser-pest --release  # Legacy
+cargo build -p perl-dap --release
 ```
 
 ### Native Parser (Recommended)
@@ -70,28 +73,26 @@ cargo build -p perl-parser --features incremental --release
 cargo build --all
 ```
 
-## Workspace Configuration (v0.8.8+)
+## Workspace Configuration
 
-The workspace uses an exclusion strategy to ensure reliable builds across all platforms:
+The workspace is configured so bare `cargo build` and `cargo test` work for day-to-day development:
 
 ```bash
-# Workspace tests (production crates only)
-cargo test  # Tests perl-parser, perl-lsp, perl-lexer, perl-corpus
+# Workspace tests
+cargo test --workspace --lib
 
 # Check workspace configuration
-cargo check  # Should build cleanly without system dependencies
+cargo build
 
-# Workspace status report (see WORKSPACE_TEST_REPORT.md)
-# - Excludes tree-sitter-perl-c (requires libclang/system dependencies)
-# - Excludes example crates with feature conflicts 
-# - Focuses on published crate stability
+# Local CI gate (recommended before push)
+nix develop -c just ci-gate
 ```
 
 ### Workspace Architecture Benefits
-- **Clean Builds**: No system dependency failures (libclang, parser.c)
+- **Clean Builds**: Consistent defaults via `.cargo/config.toml`
 - **CI Stability**: Consistent test results across platforms
-- **Production Focus**: Tests only published crate APIs
-- **Platform Independence**: Works without tree-sitter C toolchain
+- **Production Focus**: Easy access to workspace-level checks
+- **Platform Independence**: Same commands locally and in CI
 
 ### xtask Exclusion Strategy (*Diataxis: Explanation* - Design decisions)
 The xtask crate is excluded from the workspace to maintain clean builds while preserving advanced functionality:
