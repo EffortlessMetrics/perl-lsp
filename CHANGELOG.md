@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- _None yet._
+
+### Changed
+- _None yet._
+
+### Fixed
+- _None yet._
+
+### Security
+- _None yet._
+
 ## [0.10.0] - 2026-02-28
 
 A major release campaign spanning 60+ PRs (#845–#911) focused on build reliability,
@@ -144,3 +156,9 @@ During the alpha phase (pre-v0.15.0):
 - **Current Alpha (0.x.y)**: Active development and bug fixes.
 - **Breaking Changes**: Allowed in minor (0.x) releases.
 - **Security**: Critical patches prioritized for the latest alpha version.
+
+[Unreleased]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.9.1...v0.10.0
+[0.9.1]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/EffortlessMetrics/perl-lsp/compare/v0.8.8...v0.9.0
+[0.8.8]: https://github.com/EffortlessMetrics/perl-lsp/releases/tag/v0.8.8
