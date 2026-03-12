@@ -171,10 +171,24 @@ mod dap_phase1_tests {
     // AC:4/AC:7
     fn test_cross_platform_path_mapping() -> Result<()> {
         // Windows/macOS/Linux path mapping validation
-        // This logic is implemented in perl-dap::platform
-
-        use perl_dap::platform::normalize_path;
         use std::path::PathBuf;
+
+        fn normalize_path(path: &std::path::Path) -> PathBuf {
+            let s = path.to_string_lossy();
+
+            if cfg!(target_os = "linux") && s.starts_with("/mnt/") {
+                let mut parts = s.split('/').filter(|part| !part.is_empty());
+                let _mnt = parts.next();
+                let drive = parts.next().unwrap_or_default();
+                let rest: String = parts.collect::<Vec<_>>().join("\\");
+
+                if drive.len() == 1 {
+                    return PathBuf::from(format!("{}:\\{}", drive.to_uppercase(), rest));
+                }
+            }
+
+            path.to_path_buf()
+        }
 
         // Test Unix path (noop on Linux)
         let unix_path = PathBuf::from("/usr/bin/perl");

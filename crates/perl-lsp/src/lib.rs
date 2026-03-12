@@ -283,7 +283,6 @@
 //! - `perl_parser`: Parsing engine and analysis infrastructure
 //! - `perl_lexer`: Context-aware Perl tokenizer
 //! - `perl_corpus`: Comprehensive test corpus
-//! - `perl_dap`: Debug Adapter Protocol implementation
 //!
 //! # Documentation
 //!
@@ -342,9 +341,19 @@ pub mod util;
 pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 pub use server::LspServer;
 
-/// DAP bridge adapter re-export
+/// DAP bridge adapter placeholder for crates.io builds.
 #[cfg(feature = "dap-phase1")]
-pub use perl_dap::BridgeAdapter;
+#[derive(Debug, Default)]
+pub struct BridgeAdapter;
+
+#[cfg(feature = "dap-phase1")]
+impl BridgeAdapter {
+    /// Create a bridge adapter placeholder.
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 // =============================================================================
 // Internal compatibility re-exports (crate-internal, not API surface)
