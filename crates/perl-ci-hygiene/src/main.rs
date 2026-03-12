@@ -3768,3 +3768,59 @@ fn categorize_ignore(reason: &str, context: &str) -> String {
     }
     "other".to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn linked_marker_requires_parenthesized_issue_number() {
+        assert!(linked_marker("(#123)"));
+        assert!(linked_marker("   (#42) trailing text"));
+        assert!(!linked_marker("#123"));
+        assert!(!linked_marker("(#)"));
+        assert!(!linked_marker("(#12"));
+        assert!(!linked_marker("(ABC-12)"));
+    }
+
+    #[test]
+    fn rust_todo_detection_ignores_linked_or_url_like_comments() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(has_unlinked_todo_in_rust_line("// TODO: investigate", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line("// TODO(#123): tracked", &todo_re));
+        assert!(!has_unlinked_todo_in_rust_line("let u = \"http://TODO\";", &todo_re));
+        assert!(has_unlinked_todo_in_rust_line("/* FIXME: needs fix */", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn hash_comment_todo_detection_handles_shebang_and_inline_hashes() -> Result<()> {
+        let todo_re = Regex::new(r"TODO|FIXME")?;
+
+        assert!(!has_unlinked_todo_in_hash_line("#!/usr/bin/env bash", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("echo# TODO not a comment", &todo_re));
+        assert!(has_unlinked_todo_in_hash_line("echo hi # TODO: follow up", &todo_re));
+        assert!(!has_unlinked_todo_in_hash_line("echo hi # TODO(#77): tracked", &todo_re));
+
+        Ok(())
+    }
+
+    #[test]
+    fn categorize_ignore_maps_reasons_to_expected_buckets() {
+        assert_eq!(categorize_ignore("manual: run locally", ""), "manual");
+        assert_eq!(categorize_ignore("TODO: requires CI setup", ""), "infra");
+        assert_eq!(categorize_ignore("feature: not implemented", ""), "feature");
+        assert_eq!(categorize_ignore("placeholder", "#[ignore] // AC: parser behavior"), "feature");
+        assert_eq!(categorize_ignore("ignore", ""), "bare");
+        assert_eq!(categorize_ignore("some new reason", ""), "other");
+    }
+
+    #[test]
+    fn format_delta_adds_directional_colored_deltas() {
+        assert_eq!(format_delta(5, 5), "0");
+        assert_eq!(format_delta(7, 5), format!("{RED}+2{NC}"));
+        assert_eq!(format_delta(4, 7), format!("{GREEN}-3{NC}"));
+    }
+}
