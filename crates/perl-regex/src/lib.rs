@@ -32,6 +32,45 @@ pub struct RegexValidator {
 }
 
 impl RegexValidator {
+    fn is_brace_quantifier(pattern: &str, open_brace_idx: usize) -> bool {
+        let Some(mut rest) = pattern.get(open_brace_idx + 1..) else {
+            return false;
+        };
+
+        let mut digits = 0;
+        while let Some(ch) = rest.chars().next() {
+            if ch.is_ascii_digit() {
+                digits += 1;
+                rest = &rest[ch.len_utf8()..];
+            } else {
+                break;
+            }
+        }
+
+        if digits == 0 {
+            return false;
+        }
+
+        if rest.starts_with('}') {
+            return true;
+        }
+
+        if !rest.starts_with(',') {
+            return false;
+        }
+
+        rest = &rest[1..];
+        while let Some(ch) = rest.chars().next() {
+            if ch.is_ascii_digit() {
+                rest = &rest[ch.len_utf8()..];
+            } else {
+                break;
+            }
+        }
+
+        rest.starts_with('}')
+    }
+
     /// Create a new validator with default safety limits
     pub fn new() -> Self {
         Self {
@@ -91,7 +130,7 @@ impl RegexValidator {
         // Type: 0=other, 1=quantifier, 2=group_end
         let mut last_type = 0;
 
-        while let Some((_, ch)) = chars.next() {
+        while let Some((idx, ch)) = chars.next() {
             match ch {
                 '\\' => {
                     chars.next(); // skip escaped
@@ -123,17 +162,16 @@ impl RegexValidator {
                     }
                 }
                 '+' | '*' | '?' | '{' => {
+                    let is_quantifier = ch != '{' || Self::is_brace_quantifier(pattern, idx);
+                    if !is_quantifier {
+                        last_type = 0;
+                        continue;
+                    }
+
                     // If we just closed a group that had a quantifier inside,
                     // and now we see another quantifier, that's a nested quantifier!
                     if last_type == 2 {
-                        // Check if it's really a quantifier or literal {
-                        if ch == '{' {
-                            // Only count as quantifier if it looks like {n} or {n,m}
-                            // peek ahead... (simplified for now)
-                            return true; // Assume { is quantifier for safety heuristic
-                        } else {
-                            return true;
-                        }
+                        return true;
                     }
 
                     // Mark current group as having a quantifier

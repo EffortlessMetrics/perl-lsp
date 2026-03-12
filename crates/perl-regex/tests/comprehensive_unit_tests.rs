@@ -288,6 +288,14 @@ fn validate_rejects_brace_quantifier_on_quantified_group() -> Result<(), Box<dyn
     Ok(())
 }
 
+#[test]
+fn validate_allows_literal_braces_after_quantified_group() -> Result<(), Box<dyn std::error::Error>>
+{
+    let v = RegexValidator::new();
+    assert!(v.validate("(a+){foo}", 0).is_ok());
+    Ok(())
+}
+
 // ── detect_nested_quantifiers() direct tests ────────────────────────────
 
 #[test]
@@ -327,6 +335,13 @@ fn nested_quantifiers_escaped_paren_not_group() -> Result<(), Box<dyn std::error
 fn nested_quantifiers_non_capturing_group() -> Result<(), Box<dyn std::error::Error>> {
     let v = RegexValidator::new();
     assert!(v.detect_nested_quantifiers("(?:a+)+"));
+    Ok(())
+}
+
+#[test]
+fn nested_quantifiers_literal_brace_not_flagged() -> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    assert!(!v.detect_nested_quantifiers("(a+){foo}"));
     Ok(())
 }
 
