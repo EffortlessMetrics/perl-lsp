@@ -22,6 +22,56 @@ Most errors cascade: a single misparse triggers 10-20 downstream `ERROR` nodes.
 
 ---
 
+## Latest Local Sweep Snapshot (2026-03-12)
+
+> **Method**: `cargo run -p xtask -- parser-corpus-sweep --verbose`
+> **Dataset**: locally available `.pm` roots in this workspace/container
+
+| Metric | Value |
+|--------|-------|
+| Total .pm files scanned | 2,990 |
+| Unreadable (encoding) | 42 |
+| Clean files (0 errors) | 1,033 (34.5%) |
+| Files with errors | 1,915 |
+| Total ERROR nodes | 40,610 |
+
+### Remaining first-error buckets (top 20)
+
+| Bucket | Files |
+|--------|-------|
+| `unexpected_token_in_expr` | 336 |
+| `unclosed_brace_semicolon` | 316 |
+| `unclosed_paren_identifier` | 308 |
+| `unclosed_brace` | 158 |
+| `unexpected_arrow_expr` | 136 |
+| `unexpected_fat_arrow_expr` | 126 |
+| `unclosed_paren` | 104 |
+| `expected_variable` | 98 |
+| `catastrophic_backtracking` | 81 |
+| `expected_colon` | 40 |
+| `expected_left_brace` | 32 |
+| `unexpected_slash_expr` | 32 |
+| `unexpected_question_expr` | 29 |
+| `unclosed_bracket` | 26 |
+| `unclosed_brace_eof` | 22 |
+| `unexpected_return_expr` | 20 |
+| `expected_identifier` | 16 |
+| `expected_comma` | 8 |
+| `expected_module_name` | 8 |
+| `expected_comma_or_close_paren` | 5 |
+
+Additional long-tail buckets: 4 categories covering 14 files total.
+
+### Notes
+
+- This snapshot is environment-dependent and is expected to differ from the larger
+  7,095-file baseline above.
+- During the sweep, repeated heredoc attachment warnings were emitted
+  (`drain_pending_heredocs: ... no matching Heredoc node found in AST`), which
+  may indicate recoverable parser bookkeeping gaps worth separate investigation.
+
+---
+
 ## Wave 1 — Merged (PRs #1215-#1218)
 
 | PR | Fix | Files Fixed | Status |
