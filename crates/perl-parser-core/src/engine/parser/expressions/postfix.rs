@@ -473,10 +473,11 @@ impl<'a> Parser<'a> {
                                         }
                                         args.push(self.parse_assignment()?);
                                     }
-                                } else if name == "split"
+                                } else if matches!(name.as_str(), "split" | "grep" | "map" | "sort")
                                     && self.peek_kind() == Some(TokenKind::Slash)
                                 {
-                                    // For `split /regex/, ...`, re-lex `/` as regex delimiter
+                                    // For `split /regex/, ...` and `grep /regex/, @list`,
+                                    // re-lex `/` as regex delimiter
                                     self.tokens.relex_as_term();
                                     args.push(self.parse_ternary()?);
 

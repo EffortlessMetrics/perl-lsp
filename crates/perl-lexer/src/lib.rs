@@ -1721,7 +1721,8 @@ impl<'a> PerlLexer<'a> {
             let token_type = if is_keyword(text) {
                 // Check for special keywords that affect lexer mode
                 match text {
-                    "if" | "unless" | "while" | "until" | "for" | "foreach" => {
+                    "if" | "unless" | "while" | "until" | "for" | "foreach" | "grep" | "map"
+                    | "sort" | "split" => {
                         self.mode = LexerMode::ExpectTerm;
                     }
                     "sub" => {
@@ -2003,6 +2004,18 @@ impl<'a> PerlLexer<'a> {
                             end: self.position,
                         });
                     }
+                } else if self.position < self.input_bytes.len()
+                    && self.input_bytes[self.position] == b'='
+                {
+                    // /= division-assign operator
+                    self.position += 1; // consume =
+                    self.mode = LexerMode::ExpectTerm;
+                    return Some(Token {
+                        token_type: TokenType::Operator(Arc::from("/=")),
+                        text: Arc::from("/="),
+                        start,
+                        end: self.position,
+                    });
                 } else {
                     // Use cached string for common "/" division
                     self.mode = LexerMode::ExpectTerm;
