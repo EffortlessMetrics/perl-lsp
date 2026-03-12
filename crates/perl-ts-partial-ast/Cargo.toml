@@ -14,11 +14,11 @@ keywords = ["perl", "parser", "ast", "heredoc", "tree-sitter"]
 categories = ["parser-implementations", "development-tools"]
 
 [dependencies]
-regex = "1.12.2"
+regex = "1.12.3"
 perl-ts-heredoc-analysis = { path = "../perl-ts-heredoc-analysis" }
 perl-parser-pest = { path = "../perl-parser-pest" }
-pest = "2.8.4"
-serde_json = "1.0.148"
+pest = "2.8.6"
+serde_json = "1.0.149"
 
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }

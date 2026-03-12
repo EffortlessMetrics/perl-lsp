@@ -20,8 +20,8 @@ perl-workspace-ignore = { workspace = true }
 walkdir = "2.5.0"
 
 [dev-dependencies]
-tempfile = "3.24.0"
-proptest = "1.9.0"
+tempfile = "3.27.0"
+proptest = "1.10.0"
 
 [lints]
 workspace = true

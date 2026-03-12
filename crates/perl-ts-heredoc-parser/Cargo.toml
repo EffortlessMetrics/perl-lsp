@@ -14,7 +14,7 @@ keywords = ["perl", "heredoc", "parser", "lexer", "lsp"]
 categories = ["parsing", "development-tools", "text-processing"]
 
 [dependencies]
-regex = "1.12.2"
+regex = "1.12.3"
 perl-ts-heredoc-analysis = { path = "../perl-ts-heredoc-analysis" }
 perl-parser-pest = { path = "../perl-parser-pest" }
 

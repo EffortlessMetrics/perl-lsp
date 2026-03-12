@@ -23,7 +23,7 @@ perl-path-security = { workspace = true }
 
 [dev-dependencies]
 anyhow = "1.0.102"
-tempfile = "3.24.0"
+tempfile = "3.27.0"
 perl-tdd-support = { workspace = true }
 
 [lints]

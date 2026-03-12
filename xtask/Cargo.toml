@@ -25,12 +25,12 @@ anyhow = "1.0.102"
 perl-feature-catalog = { workspace = true }
 indicatif = "0.18.4"
 console = "0.16.2"
-chrono = { version = "0.4.43", features = ["serde"] }
+chrono = { version = "0.4.44", features = ["serde"] }
 perl-parser = { workspace = true }
 perl-parser-pest = { workspace = true, optional = true }
 tree-sitter = { workspace = true }
 tree-sitter-perl = { path = "../crates/tree-sitter-perl-rs", optional = true, features = ["c-parser"] }
-regex = "1.12.2"
+regex = "1.12.3"
 serde_yaml_ng = "0.10.0"
 bindgen = "0.72.1"
 peak_alloc = "0.3.0"
@@ -40,8 +40,8 @@ notify = "8.2.0"
 procfs = "0.18.0"
 
 [dev-dependencies]
-tempfile = "3.24.0"
-assert_cmd = "2.1.2"
+tempfile = "3.27.0"
+assert_cmd = "2.2.0"
 perl-tdd-support = { workspace = true }
 
 [features]

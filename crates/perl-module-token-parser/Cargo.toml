@@ -18,7 +18,7 @@ include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
 perl-module-token-core = { workspace = true }
 
 [dev-dependencies]
-proptest = "1.9.0"
+proptest = "1.10.0"
 perl-module-reference = { workspace = true }
 
 [lints]

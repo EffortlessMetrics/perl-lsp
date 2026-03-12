@@ -16,8 +16,8 @@ include = ["src/**", "tests/**", "examples/**", "benches/**", "README.md", "LICE
 
 [dependencies]
 # Core dependencies
-unicode-ident = "1.0.22"
-memchr = "2.7.6"
+unicode-ident = "1.0.24"
+memchr = "2.8.0"
 
 # For better error handling
 thiserror = "2.0.18"
@@ -25,9 +25,9 @@ perl-position-tracking = { workspace = true }
 perl-keywords = { workspace = true }
 
 [dev-dependencies]
-criterion = "0.8.1"
+criterion = "0.8.2"
 pretty_assertions = "1.4.1"
-proptest = "1.9.0"
+proptest = "1.10.0"
 
 [features]
 default = []

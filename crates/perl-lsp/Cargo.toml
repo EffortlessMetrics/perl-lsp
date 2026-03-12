@@ -60,19 +60,19 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 url = "2.5.8"
 anyhow = "1.0.102"
-regex = "1.12.2"
+regex = "1.12.3"
 md5 = "0.8.0"
 parking_lot = "0.12.5"
 walkdir = "2.5.0"
 
 # Core dependencies for position mapping
 ropey = { version = "1.6.1" }
-tokio = { version = "1.49.0", features = ["net", "rt-multi-thread", "macros", "io-util", "sync", "time"] }
+tokio = { version = "1.50.0", features = ["net", "rt-multi-thread", "macros", "io-util", "sync", "time"] }
 once_cell = "1.21.3"
 
 [build-dependencies]
 serde = { version = "1.0.228", features = ["derive"] }
-toml = "1.0.4"
+toml = "1.0.6"
 
 [lints]
 workspace = true
@@ -105,19 +105,19 @@ dap-phase3 = []  # DAP Phase 3: Non-regression tests (AC17)
 utf16-complete = ["perl-parser/utf16-complete"]  # Complete UTF-16 round-trip support
 
 [dev-dependencies]
-assert_cmd = "2.1.2"
-insta = { version = "1.46.1", features = ["yaml"] }
-predicates = "3.1.3"
+assert_cmd = "2.2.0"
+insta = { version = "1.46.3", features = ["yaml"] }
+predicates = "3.1.4"
 pretty_assertions = "1.4.1"
 serial_test = "3.4.0"
-tempfile = "3.24.0"
-proptest = "1.9.0"
+tempfile = "3.27.0"
+proptest = "1.10.0"
 perl-tdd-support = { workspace = true }
 perl-content-length-framing = { workspace = true }
 which = "8.0.2"
 parking_lot = "0.12.5"
-criterion = "0.8.1"
-uuid = { version = "1.21.0", features = ["v4"] }
+criterion = "0.8.2"
+uuid = { version = "1.22.0", features = ["v4"] }
 
 [[bench]]
 name = "rope_performance_benchmark"

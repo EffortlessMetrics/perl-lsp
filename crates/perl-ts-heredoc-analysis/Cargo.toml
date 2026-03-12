@@ -14,9 +14,9 @@ keywords = ["perl", "heredoc", "parser", "analysis", "lsp"]
 categories = ["parsing", "development-tools", "text-processing"]
 
 [dependencies]
-regex = "1.12.2"
+regex = "1.12.3"
 encoding_rs = "0.8.35"
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 
 [dev-dependencies]
 perl-tdd-support = { path = "../perl-tdd-support" }

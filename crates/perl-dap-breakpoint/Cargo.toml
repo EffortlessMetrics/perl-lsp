@@ -25,7 +25,7 @@ thiserror = "2.0.18"
 
 [dev-dependencies]
 perl-tdd-support = { workspace = true }
-tempfile = "3.24.0"
+tempfile = "3.27.0"
 
 [lints]
 workspace = true
