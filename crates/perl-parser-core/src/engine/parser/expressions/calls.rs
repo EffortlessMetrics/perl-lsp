@@ -200,8 +200,19 @@ impl<'a> Parser<'a> {
             let mut args = Vec::new();
 
             while s.peek_kind() != Some(TokenKind::RightParen) && !s.tokens.is_eof() {
-                // Use parse_assignment instead of parse_expression to avoid comma operator handling
-                let mut arg = s.parse_assignment()?;
+                // Variable declarations are valid call arguments in Perl, e.g. `foo(my $x)`.
+                let mut arg = if matches!(
+                    s.peek_kind(),
+                    Some(TokenKind::My)
+                        | Some(TokenKind::Our)
+                        | Some(TokenKind::Local)
+                        | Some(TokenKind::State)
+                ) {
+                    s.parse_variable_declaration()?
+                } else {
+                    // Use parse_assignment instead of parse_expression to avoid comma operator handling
+                    s.parse_assignment()?
+                };
 
                 // Check for fat arrow after the argument
                 // If we see =>, the argument should be auto-quoted if it's a bare identifier

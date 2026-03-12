@@ -151,6 +151,22 @@ fn test_qualified_function_call() {
 }
 
 #[test]
+fn test_my_declaration_in_function_call_parens() {
+    let mut parser = Parser::new("foo(my $x);");
+    let result = parser.parse();
+    assert!(result.is_ok(), "failed to parse my declaration in call parens: {:?}", result.err());
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(
+        sexp.contains("function_call") || sexp.contains("ambiguous_function_call_expression"),
+        "expected function-call-like AST node, got: {}",
+        sexp
+    );
+    assert!(sexp.contains("my_declaration") || sexp.contains("(my $x)"), "expected my declaration argument in AST, got: {}", sexp);
+}
+
+#[test]
 fn test_issue_461_variable_length_lookbehind() {
     // Variable-length lookbehind
     let code = r#"my $pattern = qr/(?<=\d{1,1000})\w+/;"#;
