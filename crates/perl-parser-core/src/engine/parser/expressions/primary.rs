@@ -587,9 +587,35 @@ impl<'a> Parser<'a> {
             | TokenKind::Class
             | TokenKind::Method
             | TokenKind::Format => {
-                // In expression context, some keywords can be used as barewords/identifiers
+                // `my/our/local/state` can also appear inside expression contexts,
+                // e.g. function call parens: `foo(my $x)`.
+                // Parse these as declarations when followed by a variable/list start.
+                if matches!(
+                    token_kind,
+                    TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State
+                ) {
+                    let next_kind = self.tokens.peek_second().ok().map(|t| t.kind);
+                    if matches!(
+                        next_kind,
+                        Some(
+                            TokenKind::LeftParen
+                                | TokenKind::ScalarSigil
+                                | TokenKind::ArraySigil
+                                | TokenKind::HashSigil
+                                | TokenKind::SubSigil
+                                | TokenKind::GlobSigil
+                                | TokenKind::Percent
+                                | TokenKind::BitwiseAnd
+                                | TokenKind::Star
+                                | TokenKind::Identifier
+                        )
+                    ) {
+                        return self.parse_variable_declaration();
+                    }
+                }
+
+                // In expression context, some keywords can be used as barewords/identifiers.
                 // This happens in hash keys, method names, etc.
-                // But NOT for statement modifiers like if, unless, while, etc.
                 let token = self.tokens.next()?;
                 Ok(Node::new(
                     NodeKind::Identifier { name: token.text.to_string() },

@@ -281,6 +281,21 @@ fn test_source_filter_detection() {
 }
 
 #[test]
+fn test_my_declaration_inside_function_call_parens() {
+    let mut parser = Parser::new("foo(my $x);");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse my declaration in call parens: {result:?}");
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(my_declaration"), "AST missing declaration: {sexp}");
+    assert!(
+        sexp.contains("(ambiguous_function_call_expression") || sexp.contains("(call foo"),
+        "AST missing function call: {sexp}"
+    );
+}
+
+#[test]
 fn test_regex_code_execution_detection() {
     // Regex with code execution
     let code = r#"my $re = qr/(?{ print "hi" })/;"#;
