@@ -57,7 +57,7 @@ Precise, complete information for lookup.
 - [Configuration](reference/CONFIG.md) — Configuration options
 - [FAQ](reference/FAQ.md) — Frequently asked questions
 - [Known Limitations](reference/KNOWN_LIMITATIONS.md) — Current constraints and workarounds
-- [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Diataxis framework and standards
+- [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Diátaxis structure and writing guidance
 
 ## Explanation — understand why
 
@@ -91,7 +91,6 @@ Process, metrics, and project health.
 | [design/](design/) | Semantic analyzer design |
 | [EDITORS/](EDITORS/) | Editor-specific setup |
 | [forensics/](forensics/) | PR archaeology |
-| [internal/](internal/) | Internal working docs |
 | [issues/](issues/) | Corpus gap tracking |
 | [semantic/](semantic/) | Semantic validation |
 | [specs/](specs/) | Specification documents |
