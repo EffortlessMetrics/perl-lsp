@@ -279,8 +279,22 @@ print $cmd, $text;
 "#;
 
         let mut parser = EnhancedFullParser::new();
-        let result = parser.parse(input);
-        assert!(result.is_ok());
+        let ast =
+            parser.parse(input).expect("enhanced parser should parse complex heredoc variants");
+
+        assert_eq!(parser.heredoc_declarations.len(), 2);
+        assert!(
+            parser.heredoc_declarations.iter().all(|decl| decl.content.is_some()),
+            "all heredoc declarations should retain their content"
+        );
+
+        let contents: Vec<&str> =
+            parser.heredoc_declarations.iter().filter_map(|decl| decl.content.as_deref()).collect();
+        assert!(contents.iter().any(|content| content.contains("Hello from shell")));
+        assert!(contents.iter().any(|content| content.contains("No $interpolation here")));
+
+        let sexp = PureRustPerlParser::new().to_sexp(&ast);
+        assert!(sexp.contains("print"));
     }
 
     #[test]
@@ -294,9 +308,14 @@ that can be read with <DATA>
 "#;
 
         let mut parser = EnhancedFullParser::new();
-        let result = parser.parse(input);
-        assert!(result.is_ok());
-        assert!(parser.data_section_start.is_some());
+        let ast = parser.parse(input).expect("parser should handle __DATA__ sections");
+
+        assert_eq!(parser.data_section_start, Some(3));
+
+        let sexp = PureRustPerlParser::new().to_sexp(&ast);
+        assert!(sexp.contains("__DATA__"));
+        assert!(sexp.contains("This is data content"));
+        assert!(sexp.contains("that can be read with <DATA>"));
     }
 
     #[test]
@@ -314,8 +333,13 @@ print "After POD\n";
 "#;
 
         let mut parser = EnhancedFullParser::new();
-        let result = parser.parse(input);
-        assert!(result.is_ok());
-        assert!(!parser.pod_sections.is_empty());
+        parser.parse(input).expect("parser should skip POD blocks and still parse valid code");
+
+        assert_eq!(parser.pod_sections.len(), 1);
+        let (start, end, pod_content) = &parser.pod_sections[0];
+        assert_eq!((*start, *end), (3, 7));
+        assert!(pod_content.contains("=head1 NAME"));
+        assert!(pod_content.contains("Test - A test module"));
+        assert!(pod_content.contains("=cut"));
     }
 }
