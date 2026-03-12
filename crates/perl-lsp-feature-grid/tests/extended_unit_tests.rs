@@ -643,8 +643,8 @@ fn duplicate_profiles_in_to_json_for_profiles_handled() -> Result<(), Box<dyn st
     let payload = to_json_for_profiles(&[FeatureProfile::All, FeatureProfile::All]);
     let value = serde_json::from_str::<Value>(&payload)?;
     let profiles = must_some(value.get("profiles").and_then(|p| p.as_array()));
-    // May have duplicates or not - both are acceptable, just ensure structure is valid
-    assert!(!profiles.is_empty());
+    assert_eq!(profiles.len(), 1, "duplicate profiles should be de-duplicated");
+    assert_eq!(profiles[0]["profile"].as_str(), Some("all"));
     Ok(())
 }
 

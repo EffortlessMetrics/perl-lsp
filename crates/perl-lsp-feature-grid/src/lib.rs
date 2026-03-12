@@ -45,7 +45,7 @@ pub fn to_json_for_profile(profile: FeatureProfile) -> String {
 
 /// BDD-compatible feature catalog JSON for an explicit profile set.
 pub fn to_json_for_profiles(profiles: &[FeatureProfile]) -> String {
-    feature_grid_payload(profiles, None).to_string()
+    feature_grid_payload(&canonical_profiles(profiles), None).to_string()
 }
 
 /// BDD-compatible feature catalog JSON with all canonical profiles.
@@ -122,6 +122,16 @@ fn feature_grid_payload(
     }
 
     payload
+}
+
+fn canonical_profiles(profiles: &[FeatureProfile]) -> Vec<FeatureProfile> {
+    let mut canonical = Vec::new();
+    for profile in profiles.iter().copied() {
+        if !canonical.contains(&profile) {
+            canonical.push(profile);
+        }
+    }
+    canonical
 }
 
 fn profile_summary(profile: FeatureProfile) -> Value {
