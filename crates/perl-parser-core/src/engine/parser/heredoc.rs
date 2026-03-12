@@ -177,7 +177,13 @@ impl<'a> Parser<'a> {
 
         // Zip 1:1 in order (collector preserves input order)
         for (decl, body) in pending.into_iter().zip(out.contents.into_iter()) {
-            let _attached = self.try_attach_heredoc_at_node(root, decl.decl_span, &body);
+            let mut attached = self.try_attach_heredoc_at_node(root, decl.decl_span, &body);
+            if !attached {
+                // Fallback: when statement recovery mutates span boundaries, the exact
+                // decl-span match may miss the placeholder node. In that case, attach to
+                // the next unresolved Heredoc node in source order.
+                attached = self.try_attach_next_unresolved_heredoc(root, &body);
+            }
 
             if !body.terminated {
                 let label = if decl.label.is_empty() { "<empty>" } else { decl.label.as_ref() };
@@ -189,7 +195,7 @@ impl<'a> Parser<'a> {
 
             // Defensive guardrail: warn if heredoc node wasn't found at expected span
             #[cfg(debug_assertions)]
-            if !_attached {
+            if !attached {
                 eprintln!(
                     "[WARNING] drain_pending_heredocs: Failed to attach heredoc content at span {}..{} - no matching Heredoc node found in AST",
                     decl.decl_span.start, decl.decl_span.end
@@ -270,6 +276,53 @@ impl<'a> Parser<'a> {
             );
         }
 
+        found
+    }
+
+    /// Fallback attachment strategy used when exact declaration-span matching fails.
+    ///
+    /// This can happen when error recovery shifts statement boundaries around the
+    /// heredoc declaration. The collector output still preserves FIFO order, so
+    /// attaching to the next unresolved Heredoc node keeps body/placeholder pairing
+    /// stable while avoiding dropped heredoc bodies.
+    fn try_attach_next_unresolved_heredoc(&self, root: &mut Node, body: &HeredocContent) -> bool {
+        self.try_attach_at_next_unresolved_node(root, body)
+    }
+
+    fn try_attach_at_next_unresolved_node(&self, node: &mut Node, body: &HeredocContent) -> bool {
+        if let NodeKind::Heredoc { content, body_span, .. } = &mut node.kind {
+            let unresolved = content.is_empty() && body_span.is_none();
+            if unresolved {
+                let mut text = String::new();
+                for (i, seg) in body.segments.iter().enumerate() {
+                    if seg.end > seg.start {
+                        let bytes = &self.src_bytes[seg.start..seg.end];
+                        text.push_str(std::str::from_utf8(bytes).unwrap_or_default());
+                    }
+                    if i + 1 < body.segments.len() {
+                        text.push('\n');
+                    }
+                }
+
+                *content = text;
+                *body_span = if body.full_span.start < body.full_span.end {
+                    Some(SourceLocation {
+                        start: body.full_span.start,
+                        end: body.full_span.end,
+                    })
+                } else {
+                    None
+                };
+                return true;
+            }
+        }
+
+        let mut found = false;
+        node.for_each_child_mut(|child| {
+            if !found && self.try_attach_at_next_unresolved_node(child, body) {
+                found = true;
+            }
+        });
         found
     }
 
