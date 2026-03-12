@@ -121,6 +121,42 @@ When implementing new LSP features:
 3. Run the test to verify the implementation
 4. Update this README to move the feature to "Implemented"
 
+## Storybooking Workflow (Improved)
+
+To keep user-story tests easy to review and maintain, use this lightweight
+"storybooking" flow before writing assertions:
+
+1. **Name the story from user intent**
+   - Prefer `test_user_story_<capability>_<outcome>`.
+   - Example: `test_user_story_navigation_goto_definition_across_packages`.
+2. **Describe the scenario in Given / When / Then comments**
+   - `Given`: workspace shape and Perl source setup.
+   - `When`: LSP request(s) issued by the editor.
+   - `Then`: exact observable protocol behavior.
+3. **Map each Then to one protocol assertion**
+   - Keep one core expectation per assertion block.
+   - Include JSON fragments only for fields under test.
+4. **Capture failure intent**
+   - Add one negative-path assertion (or sibling unhappy-path test) that proves
+     error handling for the same capability.
+5. **Record feature ownership**
+   - Add/update a short note in this README when the story moves from
+     `#[ignore]` to active coverage.
+
+### Story Template
+
+```rust
+#[test]
+fn test_user_story_<capability>_<outcome>() {
+    // Given: <workspace + source setup>
+    // When: <LSP request sequence>
+    // Then: <editor-visible expectation>
+}
+```
+
+This approach keeps user stories deterministic, reviewable, and aligned with
+real editor behavior instead of implementation details.
+
 ## Test Coverage
 
 The e2e tests ensure:
