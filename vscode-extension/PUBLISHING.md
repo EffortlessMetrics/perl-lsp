@@ -38,7 +38,7 @@ Install and test the extension locally:
 
 ```bash
 # Install the VSIX file
-code --install-extension perl-language-server-*.vsix
+code --install-extension perl-lsp-rs-*.vsix
 
 # Open test file
 code test/sample.pl

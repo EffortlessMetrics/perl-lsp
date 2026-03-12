@@ -46,7 +46,7 @@ The simplest approach for internal deployment.
 
 4. **Install extension** on developer machines:
    ```bash
-   code --install-extension perl-lsp-0.8.3.vsix
+   code --install-extension perl-lsp-rs-0.8.3.vsix
    ```
 
 ### Benefits

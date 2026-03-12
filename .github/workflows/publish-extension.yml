@@ -88,7 +88,7 @@ jobs:
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: perl-lsp-${{ env.VERSION }}.vsix
+          name: perl-lsp-rs-${{ env.VERSION }}.vsix
           path: vscode-extension/${{ env.VSIX_FILE }}
           retention-days: 30
 

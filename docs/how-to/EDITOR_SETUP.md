@@ -74,7 +74,7 @@ Create or edit `.vscode/settings.json` in your workspace:
 Install from the VS Code marketplace:
 
 ```bash
-code --install-extension effortlesssteven.perl-lsp
+code --install-extension EffortlessMetrics.perl-lsp-rs
 ```
 
 ### Recommended Settings

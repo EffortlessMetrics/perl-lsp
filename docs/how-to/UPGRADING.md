@@ -536,7 +536,7 @@ cargo clippy --workspace
 code --uninstall-extension perl-language-server
 
 # Install new extension
-code --install-extension effortlesssteven.perl-lsp
+code --install-extension EffortlessMetrics.perl-lsp-rs
 
 # Remove deprecated settings from settings.json
 # Delete: "perl-lsp.downloadBaseUrl"

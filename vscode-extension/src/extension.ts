@@ -214,7 +214,7 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
-            { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:effortlesssteven.perl-lsp'] }
+            { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] }
         ];
 
         const selection = await vscode.window.showQuickPick(items, {
@@ -335,7 +335,7 @@ function normalizeFeatureProfile(rawProfile: string): string | null {
 }
 
 function getSupportedFeatureProfiles(): string[] {
-    const extension = vscode.extensions.getExtension('effortlesssteven.perl-lsp');
+    const extension = vscode.extensions.getExtension('EffortlessMetrics.perl-lsp-rs');
     const schemaEnum =
         extension?.packageJSON?.contributes?.configuration?.properties?.['perl-lsp.featureProfile']?.enum;
 
