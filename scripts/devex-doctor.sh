@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 pass() { printf '✅ %s\n' "$1"; }
 warn() { printf '⚠️  %s\n' "$1"; }
 fail() { printf '❌ %s\n' "$1"; }
@@ -29,8 +32,26 @@ show_version() {
 }
 
 MISSING_REQUIRED=0
+MISSING_RECOMMENDED=0
 
-echo "Repository: $(pwd)"
+check_git_hook() {
+  local hook_path="$REPO_ROOT/.git/hooks/pre-push"
+  if [ -x "$hook_path" ]; then
+    pass "pre-push hook: installed ($hook_path)"
+    return 0
+  fi
+
+  warn "pre-push hook: not installed"
+  echo "   Install with: bash scripts/install-githooks.sh"
+  return 1
+}
+
+echo "Repository: $REPO_ROOT"
+
+if [ "$(pwd)" != "$REPO_ROOT" ]; then
+  warn "Running outside repo root: $(pwd)"
+  echo "   Tip: cd $REPO_ROOT"
+fi
 
 echo
 printf '== Required ==\n'
@@ -43,8 +64,12 @@ show_version "cargo" cargo --version
 echo
 printf '== Recommended ==\n'
 check_cmd just "just" || true
-check_cmd nix "nix" || true
-check_cmd cargo-audit "cargo-audit" || true
+if ! check_cmd nix "nix"; then MISSING_RECOMMENDED=1; fi
+if ! check_cmd cargo-audit "cargo-audit"; then MISSING_RECOMMENDED=1; fi
+
+echo
+printf '== Repository hygiene ==\n'
+check_git_hook || true
 
 if [ -f rust-toolchain.toml ]; then
   TOOLCHAIN=$(awk -F'"' '/channel/{print $2; exit}' rust-toolchain.toml)
@@ -59,9 +84,17 @@ fi
 
 echo
 printf '== Suggested next commands ==\n'
-echo "  just pr-fast"
+if command -v just >/dev/null 2>&1; then
+  echo "  just pr-fast"
+else
+  echo "  cargo test --workspace --lib"
+fi
 echo "  just ci-gate"
-echo "  nix develop -c just ci-gate"
+if command -v nix >/dev/null 2>&1; then
+  echo "  nix develop -c just ci-gate"
+else
+  echo "  (optional) install Nix for canonical gate: https://nixos.org/download.html"
+fi
 
 if [ "$MISSING_REQUIRED" -ne 0 ]; then
   echo
@@ -71,3 +104,7 @@ fi
 
 echo
 pass "Doctor completed: required tooling is available"
+
+if [ "$MISSING_RECOMMENDED" -ne 0 ]; then
+  warn "Doctor completed with missing recommended tools"
+fi
