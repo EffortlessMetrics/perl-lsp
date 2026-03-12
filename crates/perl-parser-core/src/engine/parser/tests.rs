@@ -151,6 +151,21 @@ fn test_qualified_function_call() {
 }
 
 #[test]
+fn test_builtin_call_with_my_declaration_in_parentheses() {
+    let mut parser = Parser::new("open(my $fh, '<', $path);");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse builtin call with my declaration");
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(
+        sexp.contains("(call open") && sexp.contains("(my_declaration"),
+        "Expected open(...) call with my declaration argument, got: {}",
+        sexp
+    );
+}
+
+#[test]
 fn test_issue_461_variable_length_lookbehind() {
     // Variable-length lookbehind
     let code = r#"my $pattern = qr/(?<=\d{1,1000})\w+/;"#;
