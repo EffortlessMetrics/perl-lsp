@@ -148,6 +148,36 @@ impl<'a> Parser<'a> {
 
     /// Parse assignment expression
     fn parse_assignment(&mut self) -> ParseResult<Node> {
+        // Perl autoquotes bareword-like keywords on the LHS of fat comma: `if => 1`
+        if matches!(self.tokens.peek_second().map(|t| t.kind), Ok(TokenKind::FatArrow)) {
+            if let Some(kind) = self.peek_kind() {
+                if matches!(
+                    kind,
+                    TokenKind::If
+                        | TokenKind::Elsif
+                        | TokenKind::Else
+                        | TokenKind::Unless
+                        | TokenKind::While
+                        | TokenKind::Until
+                        | TokenKind::For
+                        | TokenKind::Foreach
+                        | TokenKind::Return
+                        | TokenKind::Eval
+                        | TokenKind::Do
+                        | TokenKind::Try
+                        | TokenKind::Next
+                        | TokenKind::Last
+                        | TokenKind::Redo
+                ) {
+                    let token = self.tokens.next()?;
+                    return Ok(Node::new(
+                        NodeKind::String { value: token.text.to_string(), interpolated: false },
+                        SourceLocation { start: token.start, end: token.end },
+                    ));
+                }
+            }
+        }
+
         // Check if we have a 'not' operator first
         if self.peek_kind() == Some(TokenKind::WordNot) {
             return self.parse_word_not_expr();

@@ -263,13 +263,46 @@ impl<'a> Parser<'a> {
                 ))
             }
 
-            TokenKind::Eval => self.parse_eval(),
+            TokenKind::Eval => {
+                let next_kind = self.tokens.peek_second().ok().map(|t| t.kind);
+                if next_kind == Some(TokenKind::FatArrow) {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::String { value: token.text.to_string(), interpolated: false },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_eval()
+                }
+            }
 
-            TokenKind::Do => self.parse_do(),
+            TokenKind::Do => {
+                let next_kind = self.tokens.peek_second().ok().map(|t| t.kind);
+                if next_kind == Some(TokenKind::FatArrow) {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::String { value: token.text.to_string(), interpolated: false },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_do()
+                }
+            }
 
             // Note: TokenKind::Sub is handled in the keyword-as-identifier case below
             // This allows 'sub' to be used as a hash key or identifier in expressions
-            TokenKind::Try => self.parse_try(),
+            TokenKind::Try => {
+                let next_kind = self.tokens.peek_second().ok().map(|t| t.kind);
+                if next_kind == Some(TokenKind::FatArrow) {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::String { value: token.text.to_string(), interpolated: false },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_try()
+                }
+            }
 
             TokenKind::Less => {
                 // Could be diamond operator <> or <FILEHANDLE>
@@ -600,6 +633,33 @@ impl<'a> Parser<'a> {
             TokenKind::DoubleColon => {
                 // Absolute package path like ::Foo::Bar
                 self.parse_qualified_identifier()
+            }
+
+            // Statement-level keywords are normally parsed by statement handlers.
+            // In fat-comma key position (`keyword => value`), Perl autoquotes them.
+            TokenKind::If
+            | TokenKind::Elsif
+            | TokenKind::Else
+            | TokenKind::Unless
+            | TokenKind::While
+            | TokenKind::Until
+            | TokenKind::For
+            | TokenKind::Foreach
+            | TokenKind::Return
+            | TokenKind::Next
+            | TokenKind::Last
+            | TokenKind::Redo => {
+                let next_kind = self.tokens.peek_second().ok().map(|t| t.kind);
+                if next_kind == Some(TokenKind::FatArrow) {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::String { value: token.text.to_string(), interpolated: false },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    let pos = self.current_position();
+                    Err(ParseError::unexpected("expression", format!("{:?}", token_kind), pos))
+                }
             }
 
             _ => {

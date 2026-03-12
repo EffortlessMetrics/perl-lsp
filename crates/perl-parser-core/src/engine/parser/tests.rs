@@ -136,6 +136,19 @@ fn test_block_vs_hash_context() {
 }
 
 #[test]
+fn test_keyword_autoquoting_before_fat_comma() {
+    let mut parser = Parser::new("my %h = ( if => 1, return => 2, for => 3 );");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse keyword fat-comma keys: {:?}", result.err());
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(string \"if\")"), "expected autoquoted if key, got: {}", sexp);
+    assert!(sexp.contains("(string \"return\")"), "expected autoquoted return key, got: {}", sexp);
+    assert!(sexp.contains("(string \"for\")"), "expected autoquoted for key, got: {}", sexp);
+}
+
+#[test]
 fn test_qualified_function_call() {
     let mut parser = Parser::new("return Data::Dumper::Dumper($param);");
     let result = parser.parse();
