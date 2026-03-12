@@ -73,4 +73,29 @@ sub my_sub {
             sexp2
         );
     }
+
+    #[test]
+    fn test_map_grep_sort_block_plus_list_in_expression_context() {
+        let cases = [
+            "my @m = map { $_ * 2 } @list;",
+            "my @g = grep { $_ > 1 } @list;",
+            "my @s = sort { $a cmp $b } @list;",
+        ];
+
+        for code in cases {
+            let mut parser = Parser::new(code);
+            let result = parser.parse();
+            assert!(result.is_ok(), "Failed to parse: {code}");
+            let ast = must(result);
+            let sexp = ast.to_sexp();
+            assert!(
+                sexp.contains("(call map")
+                    || sexp.contains("(call grep")
+                    || sexp.contains("(call sort"),
+                "expected builtin call in AST for {code}: {sexp}"
+            );
+            assert!(sexp.contains("(block"), "expected block arg for {code}: {sexp}");
+            assert!(sexp.contains("(variable @ list)"), "expected list arg for {code}: {sexp}");
+        }
+    }
 }
