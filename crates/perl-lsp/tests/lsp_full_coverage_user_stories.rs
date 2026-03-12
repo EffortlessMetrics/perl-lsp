@@ -49,6 +49,7 @@ use support::test_helpers::assert_hover_has_text;
 struct TestContext {
     server: LspServer,
     documents: HashMap<String, String>,
+    storybook: Vec<String>,
     #[allow(dead_code)]
     workspace_root: String,
     request_id: i32,
@@ -66,9 +67,19 @@ impl TestContext {
         Self {
             server,
             documents: HashMap::new(),
+            storybook: Vec::new(),
             workspace_root: "file:///workspace".to_string(),
             request_id: 1,
         }
+    }
+
+    fn book_story(&mut self, story_name: &str) {
+        self.storybook.push(story_name.to_string());
+    }
+
+    fn story_context(&self) -> String {
+        let latest = self.storybook.last().map_or("unknown-story", std::string::String::as_str);
+        format!("story={latest} booked_stories={}", self.storybook.len())
     }
 
     fn initialize(&mut self) {
@@ -290,6 +301,7 @@ impl TestContext {
 #[test]
 fn test_user_story_debugging_workflow() {
     let mut ctx = TestContext::new();
+    ctx.book_story("debugging_workflow");
     ctx.initialize();
 
     // User story: Debug a complex Perl script with breakpoints and variable inspection
@@ -323,22 +335,27 @@ print "Fibonacci(10) = $result\n";
 
     // Get references to the function
     let refs = ctx.get_references("file:///workspace/debug_test.pl", 4, 4, true);
-    assert!(!refs.is_empty(), "Should find function references");
+    assert!(!refs.is_empty(), "Should find function references ({})", ctx.story_context());
 
     // Get code actions for adding debug statements
     let actions = ctx.get_code_actions("file:///workspace/debug_test.pl", 10, 14);
     // Should offer debug-related actions
-    assert!(actions.iter().any(|a| {
-        a.get("title")
-            .and_then(|t| t.as_str())
-            .map(|s| s.contains("Add") || s.contains("Extract"))
-            .unwrap_or(false)
-    }));
+    assert!(
+        actions.iter().any(|a| {
+            a.get("title")
+                .and_then(|t| t.as_str())
+                .map(|s| s.contains("Add") || s.contains("Extract"))
+                .unwrap_or(false)
+        }),
+        "Expected debug-oriented code actions ({})",
+        ctx.story_context()
+    );
 }
 
 #[test]
 fn test_user_story_refactoring_legacy_code() {
     let mut ctx = TestContext::new();
+    ctx.book_story("refactoring_legacy_code");
     ctx.initialize();
 
     // User story: Refactor legacy Perl code to modern best practices
@@ -373,7 +390,8 @@ foreach $item (@array) {
                 .map(|s| s.contains("strict") || s.contains("warnings"))
                 .unwrap_or(false)
         }),
-        "Should suggest adding strict/warnings"
+        "Should suggest adding strict/warnings ({})",
+        ctx.story_context()
     );
 
     // Should suggest converting to 'my' declarations
@@ -389,6 +407,7 @@ foreach $item (@array) {
 #[test]
 fn test_user_story_multi_file_project_navigation() {
     let mut ctx = TestContext::new();
+    ctx.book_story("multi_file_project_navigation");
     ctx.initialize();
 
     // User story: Navigate between modules in a large project
@@ -435,17 +454,26 @@ sub connect {
 
     // Instead test that the module shows up in document symbols
     let doc_symbols = ctx.get_document_symbols("file:///workspace/lib/MyApp/Database.pm");
-    assert!(!doc_symbols.is_empty(), "Should find symbols in Database module");
+    assert!(
+        !doc_symbols.is_empty(),
+        "Should find symbols in Database module ({})",
+        ctx.story_context()
+    );
     assert!(
         doc_symbols.iter().any(|s| {
             s.get("name").and_then(|n| n.as_str()).map(|n| n == "connect").unwrap_or(false)
         }),
-        "Should find connect method"
+        "Should find connect method ({})",
+        ctx.story_context()
     );
 
     // Test workspace symbols
     let symbols = ctx.get_workspace_symbols("Database");
-    assert!(!symbols.is_empty(), "Should find Database in workspace symbols");
+    assert!(
+        !symbols.is_empty(),
+        "Should find Database in workspace symbols ({})",
+        ctx.story_context()
+    );
     assert!(symbols.iter().any(|s| {
         s.get("name").and_then(|n| n.as_str()).map(|n| n.contains("Database")).unwrap_or(false)
     }));
