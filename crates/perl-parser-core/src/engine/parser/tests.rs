@@ -417,3 +417,65 @@ fn test_catastrophic_backtracking_detection() {
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
+
+// ===== String repetition operator `x` tests =====
+
+#[test]
+fn test_x_string_repeat_literal() {
+    let mut parser = Parser::new(r#""abc" x 3;"#);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("binary_x"), "Expected binary_x in AST: {}", sexp);
+}
+
+#[test]
+fn test_x_string_repeat_dash() {
+    let mut parser = Parser::new(r#""-" x 80;"#);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("binary_x"), "Expected binary_x in AST: {}", sexp);
+}
+
+#[test]
+fn test_x_list_repeat() {
+    let mut parser = Parser::new("my @a = (0) x 10;");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("binary_x"), "Expected binary_x in AST: {}", sexp);
+}
+
+#[test]
+fn test_x_repeat_with_variable() {
+    let mut parser = Parser::new(r#"print "ha" x $count;"#);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("binary_x"), "Expected binary_x in AST: {}", sexp);
+}
+
+#[test]
+fn test_x_repeat_in_assignment() {
+    let mut parser = Parser::new(r#"my $line = "-" x 80;"#);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Failed to parse: {:?}", result.err());
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("binary_x"), "Expected binary_x in AST: {}", sexp);
+    assert!(
+        sexp.contains("my_declaration"),
+        "Expected my_declaration in AST: {}",
+        sexp
+    );
+}

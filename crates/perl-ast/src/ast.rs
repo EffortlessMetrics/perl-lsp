@@ -2277,6 +2277,9 @@ fn format_binary_operator(op: &str) -> String {
         "%" => "binary_%".to_string(),
         "**" => "binary_**".to_string(),
 
+        // String/list repetition
+        "x" => "binary_x".to_string(),
+
         // Comparison operators
         "==" => "binary_==".to_string(),
         "!=" => "binary_!=".to_string(),

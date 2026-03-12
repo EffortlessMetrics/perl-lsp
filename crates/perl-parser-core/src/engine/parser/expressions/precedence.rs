@@ -633,6 +633,26 @@ impl<'a> Parser<'a> {
                         SourceLocation { start, end },
                     );
                 }
+                // Perl `x` string/list repetition operator (same precedence as *, /, %)
+                TokenKind::Identifier => {
+                    if self.tokens.peek()?.text.as_ref() == "x" {
+                        let op_token = self.tokens.next()?;
+                        let right = self.parse_unary()?;
+                        let start = expr.location.start;
+                        let end = right.location.end;
+
+                        expr = Node::new(
+                            NodeKind::Binary {
+                                op: op_token.text.to_string(),
+                                left: Box::new(expr),
+                                right: Box::new(right),
+                            },
+                            SourceLocation { start, end },
+                        );
+                    } else {
+                        break;
+                    }
+                }
                 _ => break,
             }
         }
