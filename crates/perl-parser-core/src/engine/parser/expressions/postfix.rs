@@ -173,6 +173,24 @@ impl<'a> Parser<'a> {
                             );
                         }
 
+                        Some(TokenKind::LeftParen) => {
+                            // Coderef invocation: $ref->(args)
+                            let args = self.parse_args()?;
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+
+                            let mut all_args = vec![expr];
+                            all_args.extend(args);
+
+                            expr = Node::new(
+                                NodeKind::FunctionCall {
+                                    name: "->()".to_string(),
+                                    args: all_args,
+                                },
+                                SourceLocation { start, end },
+                            );
+                        }
+
                         _ => {
                             // Just the arrow by itself - could be an error or incomplete
                             // For now, we'll leave expr unchanged
