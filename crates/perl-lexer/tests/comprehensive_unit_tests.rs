@@ -529,7 +529,7 @@ fn negative_number_is_operator_plus_number() -> R {
 
 #[test]
 fn float_literal() -> R {
-    for input in ["3.14", "0.5", ".25", "1.", "1e10", "2.5e-3", "1E+5"] {
+    for input in ["3.14", "0.5", ".25", "1.", "1e10", "2.5e-3", "1E+5", "1e1_0", "2.5e-1_0"] {
         let tok = first_token(input).ok_or_else(|| format!("no token for '{}'", input))?;
         match &tok.token_type {
             TokenType::Number(_) => {} // expected
