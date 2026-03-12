@@ -1,7 +1,7 @@
 {
   "name": "perl-lsp",
   "displayName": "Perl Language Server",
-  "description": "Comprehensive Perl language support powered by perl-lsp",
+  "description": "Perl language support for VS Code with LSP, diagnostics, refactoring, and debugging",
   "version": "0.11.0",
   "publisher": "effortlesssteven",
   "preview": true,
@@ -20,7 +20,11 @@
     "perl5",
     "language-server",
     "lsp",
-    "tree-sitter"
+    "tree-sitter",
+    "debugger",
+    "perltidy",
+    "code-actions",
+    "syntax-highlighting"
   ],
   "extensionKind": [
     "workspace"
