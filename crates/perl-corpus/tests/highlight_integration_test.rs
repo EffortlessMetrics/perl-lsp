@@ -51,6 +51,13 @@ fn test_complex_highlight_constructs() {
         // Use statements
         ("use strict;", "UseStatement"),
         ("use warnings;", "UseStatement"),
+        // Control flow and structural nodes
+        ("if ($ok) { return 1; }", "If"),
+        ("for (my $i = 0; $i < 3; $i = $i + 1) { print $i; }", "For"),
+        ("while ($running) { last; }", "While"),
+        // Package and declaration-level nodes
+        ("package My::Pkg;", "Package"),
+        ("sub greet { return 'hi'; }", "SubDeclaration"),
     ];
 
     for (source, expected_primary_kind) in test_cases {
@@ -184,48 +191,15 @@ fn collect_node_kinds(node: &Node, scopes: &mut HashMap<String, usize>) {
         NodeKind::Use { .. } => "UseStatement",
         NodeKind::FunctionCall { .. } => "FunctionCall",
         NodeKind::Heredoc { .. } => "HereDoc",
-        _ => "other", // Fallback for other node types
+        // Fall back to canonical AST node kind names for complete coverage.
+        _ => node.kind.kind_name(),
     }
     .to_string();
 
-    *scopes.entry(kind_name).or_insert(0) += 1;
+    *scopes.entry(kind_name).or_default() += 1;
 
-    // Manually recurse into child nodes based on NodeKind
-    match &node.kind {
-        NodeKind::Program { statements } => {
-            for stmt in statements {
-                collect_node_kinds(stmt, scopes);
-            }
-        }
-        NodeKind::ExpressionStatement { expression } => {
-            collect_node_kinds(expression, scopes);
-        }
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
-            collect_node_kinds(variable, scopes);
-            if let Some(init) = initializer {
-                collect_node_kinds(init, scopes);
-            }
-        }
-        NodeKind::Binary { left, right, .. } => {
-            collect_node_kinds(left, scopes);
-            collect_node_kinds(right, scopes);
-        }
-        NodeKind::Assignment { lhs, rhs, .. } => {
-            collect_node_kinds(lhs, scopes);
-            collect_node_kinds(rhs, scopes);
-        }
-        NodeKind::Subroutine { body, .. } => {
-            collect_node_kinds(body, scopes);
-        }
-        NodeKind::Use { .. } => {
-            // Note: module is a String, not a Node
-        }
-        NodeKind::FunctionCall { args, .. } => {
-            // Note: name is a String, not a Node
-            for arg in args {
-                collect_node_kinds(arg, scopes);
-            }
-        }
-        _ => {}
+    // Recurse through all direct children to avoid missing any NodeKind containers.
+    for child in node.children() {
+        collect_node_kinds(child, scopes);
     }
 }
