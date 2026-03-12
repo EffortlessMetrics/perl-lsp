@@ -34,6 +34,7 @@ pub fn parse_uri(s: &str) -> Uri {
 #[cfg(test)]
 mod tests {
     use super::parse_uri;
+    use lsp_types::Uri;
 
     #[test]
     fn parse_uri_returns_original_for_valid_uri() {
@@ -45,5 +46,25 @@ mod tests {
     fn parse_uri_falls_back_for_invalid_uri() {
         let uri = parse_uri("not a uri");
         assert!(!uri.as_str().is_empty());
+    }
+
+    #[test]
+    fn parse_uri_preserves_query_and_fragment_for_valid_uri() {
+        let uri = parse_uri("file:///tmp/test.pl?line=12#symbol");
+        assert_eq!(uri.as_str(), "file:///tmp/test.pl?line=12#symbol");
+    }
+
+    #[test]
+    fn parse_uri_accepts_empty_uri_reference() {
+        let uri = parse_uri("");
+        assert_eq!(uri.as_str(), "");
+        assert!(uri.as_str().parse::<Uri>().is_ok());
+    }
+
+    #[test]
+    fn parse_uri_falls_back_for_malformed_percent_encoding() {
+        let uri = parse_uri("file:///tmp/contains-%zz");
+        assert_ne!(uri.as_str(), "file:///tmp/contains-%zz");
+        assert!(uri.as_str().parse::<Uri>().is_ok());
     }
 }
