@@ -200,8 +200,18 @@ impl<'a> Parser<'a> {
             let mut args = Vec::new();
 
             while s.peek_kind() != Some(TokenKind::RightParen) && !s.tokens.is_eof() {
-                // Use parse_assignment instead of parse_expression to avoid comma operator handling
-                let mut arg = s.parse_assignment()?;
+                // Allow declaration arguments like: foo(my $x)
+                // Parse declarations as declarations instead of treating `my` as an identifier.
+                let mut arg = match s.peek_kind() {
+                    Some(TokenKind::My | TokenKind::Our | TokenKind::State) => {
+                        s.parse_variable_declaration()?
+                    }
+                    Some(TokenKind::Local) => s.parse_local_statement()?,
+                    _ => {
+                        // Use parse_assignment instead of parse_expression to avoid comma operator handling
+                        s.parse_assignment()?
+                    }
+                };
 
                 // Check for fat arrow after the argument
                 // If we see =>, the argument should be auto-quoted if it's a bare identifier

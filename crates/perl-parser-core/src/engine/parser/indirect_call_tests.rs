@@ -90,4 +90,30 @@ $method $object;
             sexp2
         );
     }
+
+    #[test]
+    fn test_function_call_accepts_my_declaration_argument() {
+        let code = "foo(my $x);";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let sexp = ast.to_sexp();
+
+        assert!(sexp.contains("function_call"), "Expected function_call in: {}", sexp);
+        assert!(sexp.contains("my_declaration"), "Expected my declaration argument in: {}", sexp);
+    }
+
+    #[test]
+    fn test_function_call_accepts_my_list_declaration_argument() {
+        let code = "foo(my ($x, $y));";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let sexp = ast.to_sexp();
+
+        assert!(sexp.contains("function_call"), "Expected function_call in: {}", sexp);
+        assert!(
+            sexp.contains("my_declaration"),
+            "Expected my list declaration argument in: {}",
+            sexp
+        );
+    }
 }
