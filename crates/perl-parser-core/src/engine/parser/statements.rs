@@ -379,7 +379,7 @@ impl<'a> Parser<'a> {
                             // For map/grep/sort, parse list arguments without requiring commas
                             if matches!(func_name.as_ref(), "map" | "grep" | "sort") {
                                 // Parse list arguments until statement boundary
-                                while !Self::is_statement_terminator(self.peek_kind())
+                                while !self.is_at_statement_end()
                                     && !self.is_statement_modifier_keyword()
                                 {
                                     // Skip optional comma

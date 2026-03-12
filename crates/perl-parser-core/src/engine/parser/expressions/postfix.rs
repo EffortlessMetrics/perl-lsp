@@ -278,17 +278,17 @@ impl<'a> Parser<'a> {
 
                                 args.push(block);
 
-                                // Parse remaining arguments
-                                while self.peek_kind() == Some(TokenKind::Comma) {
-                                    self.consume_token()?; // consume comma
+                                // Parse remaining list arguments (comma optional for these builtins)
+                                while !self.is_at_statement_end() {
+                                    // Skip optional comma
+                                    if self.peek_kind() == Some(TokenKind::Comma) {
+                                        self.consume_token()?;
+                                    }
                                     if self.is_at_statement_end() {
                                         break;
                                     }
-                                    args.push(self.parse_comma()?);
+                                    args.push(self.parse_assignment()?);
                                 }
-                            } else if matches!(name.as_str(), "sort" | "map" | "grep") {
-                                // These builtins should parse {} as blocks, not hashes
-                                args.push(self.parse_builtin_block()?);
                             } else {
                                 // Other builtins - parse {} as first argument
                                 args.push(self.parse_hash_or_block()?);
@@ -429,7 +429,7 @@ impl<'a> Parser<'a> {
                                         if self.is_at_statement_end() {
                                             break;
                                         }
-                                        args.push(self.parse_ternary()?);
+                                        args.push(self.parse_assignment()?);
                                     }
                                 } else if name == "bless"
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
