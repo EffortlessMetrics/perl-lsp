@@ -112,6 +112,32 @@ fn print_scalar_vs_indirect_object() {
 }
 
 #[test]
+fn coderef_arrow_call_parses() -> Result<(), Box<dyn std::error::Error>> {
+    let code = r#"$code->();"#;
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+    let sexp = ast.to_sexp();
+
+    assert!(
+        sexp.contains("function") || sexp.contains("function_call"),
+        "Expected coderef arrow invocation to parse as a call expression, got: {}",
+        sexp
+    );
+    assert!(
+        sexp.contains("unary_->"),
+        "Expected coderef arrow unary node in call target, got: {}",
+        sexp
+    );
+    assert!(
+        !sexp.contains("(array )"),
+        "Coderef call should not be split into a standalone empty array node: {}",
+        sexp
+    );
+
+    Ok(())
+}
+
+#[test]
 fn new_constructor_pattern() {
     assert_parses("new Class");
     assert_parses("new Class()");

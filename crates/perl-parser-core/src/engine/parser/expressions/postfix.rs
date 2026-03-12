@@ -173,6 +173,31 @@ impl<'a> Parser<'a> {
                             );
                         }
 
+                        Some(TokenKind::LeftParen) => {
+                            // Coderef invocation via arrow: $code->(...)
+                            // Represent as function_call("->", [unary("->", callee), ...args])
+                            // to preserve both call semantics and arrow operator identity.
+                            let call_args = self.parse_args()?;
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+
+                            let deref = Node::new(
+                                NodeKind::Unary {
+                                    op: "->".to_string(),
+                                    operand: Box::new(expr),
+                                },
+                                SourceLocation { start, end },
+                            );
+
+                            let mut args = vec![deref];
+                            args.extend(call_args);
+
+                            expr = Node::new(
+                                NodeKind::FunctionCall { name: "->".to_string(), args },
+                                SourceLocation { start, end },
+                            );
+                        }
+
                         _ => {
                             // Just the arrow by itself - could be an error or incomplete
                             // For now, we'll leave expr unchanged
