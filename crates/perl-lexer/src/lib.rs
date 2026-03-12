@@ -1629,6 +1629,19 @@ impl<'a> PerlLexer<'a> {
             }
 
             while let Some(ch) = self.current_char() {
+                // Single quote is usually allowed inside Perl identifiers (legacy package separator),
+                // but it can also be the delimiter for quote-like operators (q'..', qq'..', qr'..', m'..').
+                // If we've already read one of those operator words, stop before consuming the quote
+                // so the quote-operator path can handle it.
+                if ch == '\''
+                    && matches!(
+                        &self.input[start..self.position],
+                        "m" | "q" | "qq" | "qw" | "qx" | "qr"
+                    )
+                {
+                    break;
+                }
+
                 if is_perl_identifier_continue(ch) {
                     self.advance();
                 } else {

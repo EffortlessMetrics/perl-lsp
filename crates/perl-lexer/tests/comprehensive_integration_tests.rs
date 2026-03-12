@@ -362,6 +362,31 @@ fn backtick_literal() -> R {
 }
 
 #[test]
+fn quote_operators_with_single_quote_delimiter() -> R {
+    let cases = [
+        ("q'hello'", TokenType::QuoteSingle),
+        ("qq'hello'", TokenType::QuoteDouble),
+        ("qw'foo bar'", TokenType::QuoteWords),
+        ("qx'echo hi'", TokenType::QuoteCommand),
+        ("qr'foo+'", TokenType::QuoteRegex),
+        ("m'foo+'", TokenType::RegexMatch),
+    ];
+
+    for (input, expected_variant) in cases {
+        let toks = significant_tokens(input);
+        let first = toks.first().ok_or_else(|| format!("no tokens for '{input}'"))?;
+        assert!(
+            std::mem::discriminant(&first.token_type) == std::mem::discriminant(&expected_variant),
+            "input '{input}': expected {:?}, got {:?}",
+            expected_variant,
+            first.token_type
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn quote_operators_with_alternate_delimiters() -> R {
     let cases = [
         ("q<hello>", TokenType::QuoteSingle),
