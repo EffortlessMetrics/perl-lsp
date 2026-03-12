@@ -935,8 +935,10 @@ goto_statement = { "goto" ~ (goto_target | expression) ~ statement_modifier? ~ s
 
 // Statement modifiers (postfix if/unless/while/until/for/foreach)
 statement_modifier = {
-    ("if" | "unless" | "while" | "until" | "for" | "foreach") ~ expression
+    statement_modifier_keyword ~ expression
 }
+
+statement_modifier_keyword = @{ "if" | "unless" | "while" | "until" | "for" | "foreach" }
 
 // POD
 pod_section = @{ 

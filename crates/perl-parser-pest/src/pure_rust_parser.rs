@@ -578,66 +578,52 @@ impl PureRustPerlParser {
             Rule::modified_statement => {
                 let mut inner = pair.into_inner();
                 let expr_pair = inner.next().ok_or("Missing expression in modified statement")?;
-                let expr = self.build_node(expr_pair)?;
-                let modifier = inner.next().ok_or("Missing modifier in modified statement")?;
+                let expr = self
+                    .build_node(expr_pair)?
+                    .ok_or("Failed to build expression in modified statement")?;
+                let modifier_pair = inner.next().ok_or("Missing modifier in modified statement")?;
 
-                // Extract modifier type and condition from the statement_modifier
-                let modifier_str = modifier.as_str();
-                let (modifier_type, condition_expr) =
-                    if let Some(rest) = modifier_str.strip_prefix("if ") {
-                        ("if", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("unless ") {
-                        ("unless", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("while ") {
-                        ("while", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("until ") {
-                        ("until", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("for ") {
-                        ("for", rest)
-                    } else if let Some(rest) = modifier_str.strip_prefix("foreach ") {
-                        ("foreach", rest)
-                    } else {
-                        return Ok(expr);
-                    };
+                let mut modifier_inner = modifier_pair.into_inner();
+                let modifier_type = modifier_inner
+                    .next()
+                    .ok_or("Missing modifier keyword in modified statement")?
+                    .as_str();
+                let condition_pair =
+                    modifier_inner.next().ok_or("Missing condition in modified statement")?;
+                let condition = self
+                    .build_node(condition_pair)?
+                    .ok_or("Failed to build condition in modified statement")?;
 
-                // For now, create a simple identifier for the condition
-                // In a real implementation, we'd parse the condition expression
-                let condition = Some(AstNode::Identifier(Arc::from(condition_expr.trim())));
-
-                if let (Some(expr), Some(condition)) = (expr, condition) {
-                    match modifier_type {
-                        "if" => Ok(Some(AstNode::IfStatement {
-                            condition: Box::new(condition),
-                            then_block: Box::new(expr),
-                            elsif_clauses: Vec::new(),
-                            else_block: None,
-                        })),
-                        "unless" => Ok(Some(AstNode::UnlessStatement {
-                            condition: Box::new(condition),
-                            block: Box::new(expr),
-                            else_block: None,
-                        })),
-                        "while" => Ok(Some(AstNode::WhileStatement {
-                            label: None,
-                            condition: Box::new(condition),
-                            block: Box::new(expr),
-                        })),
-                        "until" => Ok(Some(AstNode::UntilStatement {
-                            label: None,
-                            condition: Box::new(condition),
-                            block: Box::new(expr),
-                        })),
-                        "for" | "foreach" => Ok(Some(AstNode::ForStatement {
-                            init: None,
-                            condition: Some(Box::new(condition)),
-                            update: None,
-                            block: Box::new(expr),
-                            label: None,
-                        })),
-                        _ => Ok(Some(AstNode::Statement(Box::new(expr)))),
-                    }
-                } else {
-                    Ok(None)
+                match modifier_type {
+                    "if" => Ok(Some(AstNode::IfStatement {
+                        condition: Box::new(condition),
+                        then_block: Box::new(expr),
+                        elsif_clauses: Vec::new(),
+                        else_block: None,
+                    })),
+                    "unless" => Ok(Some(AstNode::UnlessStatement {
+                        condition: Box::new(condition),
+                        block: Box::new(expr),
+                        else_block: None,
+                    })),
+                    "while" => Ok(Some(AstNode::WhileStatement {
+                        label: None,
+                        condition: Box::new(condition),
+                        block: Box::new(expr),
+                    })),
+                    "until" => Ok(Some(AstNode::UntilStatement {
+                        label: None,
+                        condition: Box::new(condition),
+                        block: Box::new(expr),
+                    })),
+                    "for" | "foreach" => Ok(Some(AstNode::ForStatement {
+                        init: None,
+                        condition: Some(Box::new(condition)),
+                        update: None,
+                        block: Box::new(expr),
+                        label: None,
+                    })),
+                    _ => Ok(Some(AstNode::Statement(Box::new(expr)))),
                 }
             }
             Rule::expression_statement => {
@@ -2782,5 +2768,33 @@ mod tests {
         let sexp = parser.to_sexp(&ast);
         println!("Hash assignment AST: {:?}", ast);
         println!("S-expression: {}", sexp);
+    }
+
+    #[test]
+    fn test_modified_statement_if_parses_expression_condition() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "print 'ok' if $x > 2;";
+        let ast = must(parser.parse(source));
+        let sexp = parser.to_sexp(&ast);
+
+        assert!(sexp.contains("(if_statement"), "Expected if_statement in AST: {sexp}");
+        assert!(
+            !sexp.contains("(identifier $x > 2)"),
+            "Condition should not be preserved as a raw identifier: {sexp}"
+        );
+    }
+
+    #[test]
+    fn test_modified_statement_unless_parses_expression_condition() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "print 'ok' unless $x > 2;";
+        let ast = must(parser.parse(source));
+        let sexp = parser.to_sexp(&ast);
+
+        assert!(sexp.contains("(unless_statement"), "Expected unless_statement in AST: {sexp}");
+        assert!(
+            !sexp.contains("(identifier $x > 2)"),
+            "Condition should not be preserved as a raw identifier: {sexp}"
+        );
     }
 }
