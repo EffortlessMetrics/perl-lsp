@@ -417,3 +417,68 @@ fn test_catastrophic_backtracking_detection() {
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
+
+// ===== Variable declarations inside function call argument lists =====
+// This covers a very common Perl idiom: open(my $fh, "<", $file)
+
+/// Helper: parse and assert no ERROR nodes in the AST.
+fn assert_parses_clean(code: &str) {
+    let mut parser = Parser::new(code);
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parse failed for `{}`: {:?}", code, result.err());
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(!sexp.contains("ERROR"), "Parse of `{}` produced ERROR nodes: {}", code, sexp,);
+}
+
+#[test]
+fn test_my_declaration_in_function_call_args() {
+    assert_parses_clean(r#"open(my $fh, "<", "file.txt");"#);
+}
+
+#[test]
+fn test_my_array_in_function_call_args() {
+    assert_parses_clean("push(my @arr, 1, 2, 3);");
+}
+
+#[test]
+fn test_my_in_call_args_with_outer_assignment() {
+    assert_parses_clean(r#"my $x = open(my $fh, "<", $file);"#);
+}
+
+#[test]
+fn test_our_declaration_in_function_call_args() {
+    assert_parses_clean(r#"open(our $fh, "<", "file.txt");"#);
+}
+
+#[test]
+fn test_local_declaration_in_function_call_args() {
+    assert_parses_clean(r#"open(local $fh, "<", "file.txt");"#);
+}
+
+#[test]
+fn test_state_declaration_in_function_call_args() {
+    assert_parses_clean(r#"open(state $fh, "<", "file.txt");"#);
+}
+
+#[test]
+fn test_my_with_initializer_in_call_args() {
+    assert_parses_clean("chomp(my $line = <STDIN>);");
+}
+
+#[test]
+fn test_my_declaration_in_method_call_args() {
+    assert_parses_clean(r#"$obj->method(my $x, $y);"#);
+}
+
+#[test]
+fn test_my_declaration_produces_variable_declaration_node() {
+    let mut parser = Parser::new(r#"open(my $fh, "<", "file.txt");"#);
+    let ast = must(parser.parse());
+    let sexp = ast.to_sexp();
+    assert!(
+        sexp.contains("(my"),
+        "AST should contain a variable declaration node for `my $fh`, got: {}",
+        sexp,
+    );
+}

@@ -332,6 +332,17 @@ impl<'a> Parser<'a> {
                                 SourceLocation { start, end },
                             ))
                         }
+                        Some(TokenKind::LeftParen) => {
+                            // Parenthesized argument list: builtin(args...)
+                            // Delegate to parse_args which handles my/our/local/state
+                            // declarations in argument position.
+                            let args = self.parse_args()?;
+                            let end = self.previous_position();
+                            Ok(Node::new(
+                                NodeKind::FunctionCall { name: func_name.to_string(), args },
+                                SourceLocation { start, end },
+                            ))
+                        }
                         _ => {
                             // Has arguments - parse them as a comma-separated list
                             let mut args = vec![];
@@ -342,7 +353,7 @@ impl<'a> Parser<'a> {
                             if (func_name.as_ref() == "open"
                                 || func_name.as_ref() == "pipe"
                                 || func_name.as_ref() == "socket")
-                                && (self.peek_kind() == Some(TokenKind::My) 
+                                && (self.peek_kind() == Some(TokenKind::My)
                                     || self.peek_kind() == Some(TokenKind::Our)
                                     || self.peek_kind() == Some(TokenKind::Local)
                                     || self.peek_kind() == Some(TokenKind::State))
@@ -368,9 +379,9 @@ impl<'a> Parser<'a> {
                             }
 
                             // Handle map/grep/sort { block } LIST case where no comma separates block and list
-                            if parsed_block_arg 
-                                && self.peek_kind() != Some(TokenKind::Comma) 
-                                && !self.is_at_statement_end() 
+                            if parsed_block_arg
+                                && self.peek_kind() != Some(TokenKind::Comma)
+                                && !self.is_at_statement_end()
                             {
                                 args.push(self.parse_assignment()?);
                             }
