@@ -178,6 +178,30 @@ perl-dap
 cargo run -p perl-parser -- path/to/file.pl
 ```
 
+## Contributor Quick Gate
+
+Before opening a PR, run the same baseline checks used by local CI:
+
+```bash
+# format
+cargo fmt --all
+
+# lint (workspace)
+cargo clippy --workspace
+
+# tests (library targets)
+cargo test --workspace --lib
+
+# canonical local CI gate
+nix develop -c just ci-gate
+```
+
+If you want these checks to run automatically before each push, install the pre-push hook:
+
+```bash
+bash scripts/install-githooks.sh
+```
+
 ## Published Crates
 
 | Crate | Purpose |
