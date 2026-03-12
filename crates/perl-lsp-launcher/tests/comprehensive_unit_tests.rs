@@ -310,6 +310,33 @@ fn parse_invalid_feature_profile_returns_error() {
 }
 
 #[test]
+fn parse_port_missing_value_returns_missing_value_error() {
+    let result = parse_args(["perl-lsp", "--port"]);
+    assert!(matches!(
+        result,
+        Err(LaunchParseError::MissingValue { option }) if option == "--port"
+    ));
+}
+
+#[test]
+fn parse_port_invalid_value_returns_invalid_port_error() {
+    let result = parse_args(["perl-lsp", "--port", "70000"]);
+    assert!(matches!(
+        result,
+        Err(LaunchParseError::InvalidPort { raw_port, .. }) if raw_port == "70000"
+    ));
+}
+
+#[test]
+fn parse_feature_profile_missing_value_returns_missing_value_error() {
+    let result = parse_args(["perl-lsp", "--feature-profile"]);
+    assert!(matches!(
+        result,
+        Err(LaunchParseError::MissingValue { option }) if option == "--feature-profile"
+    ));
+}
+
+#[test]
 fn parse_empty_feature_profile_returns_error() {
     let result = parse_args(["perl-lsp", "--feature-profile", ""]);
     assert!(result.is_err());
