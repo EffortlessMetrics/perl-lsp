@@ -725,6 +725,19 @@ cargo test --doc                      # Documentation tests
 # cargo xtask fmt                     # xtask excluded from workspace
 ```
 
+### Local Developer Watch Commands
+```bash
+# Install bacon once for interactive watch mode
+cargo install --locked bacon
+
+# Fast watch loop from justfile
+just dev-watch            # default: workspace check
+just dev-watch-clippy     # core clippy loop
+just dev-watch-tests      # core test loop
+```
+
+The watch recipes use `bacon.toml` with project-tuned jobs for faster local feedback loops.
+
 ## Dual-Scanner Corpus Comparison (*Diataxis: How-to Guide* - Testing procedures)
 
 ### Running Dual-Scanner Corpus Tests (v0.8.8+)

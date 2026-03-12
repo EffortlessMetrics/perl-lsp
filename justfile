@@ -115,6 +115,33 @@ fmt-check:
     cargo fmt --all -- --check
     @echo "Format check passed"
 
+# Developer watch mode using bacon (optional local DX tool)
+dev-watch:
+    @if command -v bacon >/dev/null 2>&1; then \
+        bacon; \
+    else \
+        echo "SKIP: bacon not installed (run: cargo install --locked bacon)"; \
+        exit 1; \
+    fi
+
+# Developer watch mode focused on clippy for core crates
+dev-watch-clippy:
+    @if command -v bacon >/dev/null 2>&1; then \
+        bacon clippy-core; \
+    else \
+        echo "SKIP: bacon not installed (run: cargo install --locked bacon)"; \
+        exit 1; \
+    fi
+
+# Developer watch mode focused on fast core tests
+dev-watch-tests:
+    @if command -v bacon >/dev/null 2>&1; then \
+        bacon test-core; \
+    else \
+        echo "SKIP: bacon not installed (run: cargo install --locked bacon)"; \
+        exit 1; \
+    fi
+
 # Clippy core crates only (fast, for PR iterations)
 clippy-core:
     @echo "Running clippy (core crates: perl-parser, perl-lexer)..."
