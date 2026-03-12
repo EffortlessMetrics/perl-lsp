@@ -1,4 +1,48 @@
 impl<'a> Parser<'a> {
+    fn is_autoquotable_keyword(kind: TokenKind) -> bool {
+        matches!(
+            kind,
+            TokenKind::My
+                | TokenKind::Our
+                | TokenKind::Local
+                | TokenKind::State
+                | TokenKind::Sub
+                | TokenKind::If
+                | TokenKind::Elsif
+                | TokenKind::Else
+                | TokenKind::Unless
+                | TokenKind::While
+                | TokenKind::Until
+                | TokenKind::For
+                | TokenKind::Foreach
+                | TokenKind::Return
+                | TokenKind::Package
+                | TokenKind::Use
+                | TokenKind::No
+                | TokenKind::Begin
+                | TokenKind::End
+                | TokenKind::Check
+                | TokenKind::Init
+                | TokenKind::Unitcheck
+                | TokenKind::Eval
+                | TokenKind::Do
+                | TokenKind::Given
+                | TokenKind::When
+                | TokenKind::Default
+                | TokenKind::Try
+                | TokenKind::Catch
+                | TokenKind::Finally
+                | TokenKind::Continue
+                | TokenKind::Next
+                | TokenKind::Last
+                | TokenKind::Redo
+                | TokenKind::Class
+                | TokenKind::Method
+                | TokenKind::Format
+                | TokenKind::Undef
+        )
+    }
+
     /// Check if this might be an indirect call pattern
     /// We only consider this at statement start to avoid ambiguous mid-expression cases.
     ///
@@ -200,6 +244,32 @@ impl<'a> Parser<'a> {
             let mut args = Vec::new();
 
             while s.peek_kind() != Some(TokenKind::RightParen) && !s.tokens.is_eof() {
+                let arg_kind = s.tokens.peek().ok().map(|t| t.kind);
+                let lookahead_is_fat_arrow = s
+                    .tokens
+                    .peek_second()
+                    .ok()
+                    .map(|t| t.kind == TokenKind::FatArrow)
+                    .unwrap_or(false);
+
+                if lookahead_is_fat_arrow
+                    && arg_kind.is_some_and(Self::is_autoquotable_keyword)
+                {
+                    let keyword = s.tokens.next()?;
+                    args.push(Node::new(
+                        NodeKind::String {
+                            value: keyword.text.to_string(),
+                            interpolated: false,
+                        },
+                        SourceLocation {
+                            start: keyword.start,
+                            end: keyword.end,
+                        },
+                    ));
+                    s.tokens.next()?; // consume =>
+                    continue;
+                }
+
                 // Use parse_assignment instead of parse_expression to avoid comma operator handling
                 let mut arg = s.parse_assignment()?;
 

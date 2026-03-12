@@ -417,3 +417,27 @@ fn test_catastrophic_backtracking_detection() {
         assert!(found, "Should have found specific error in: {:?}", errors);
     }
 }
+
+#[test]
+fn test_keyword_autoquoting_before_fat_arrow_in_call_args() {
+    let mut parser = Parser::new("foo(if => 1, while => 2, default => 3);");
+    let result = parser.parse();
+    assert!(result.is_ok(), "Parser should accept keywords before fat arrow in call args");
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(string \"if\")"), "Expected autoquoted 'if': {}", sexp);
+    assert!(sexp.contains("(string \"while\")"), "Expected autoquoted 'while': {}", sexp);
+    assert!(sexp.contains("(string \"default\")"), "Expected autoquoted 'default': {}", sexp);
+}
+
+#[test]
+fn test_identifier_autoquoting_before_fat_arrow_still_works() {
+    let mut parser = Parser::new("foo(key => 1);");
+    let result = parser.parse();
+    assert!(result.is_ok());
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(string \"key\")"), "Expected autoquoted identifier key: {}", sexp);
+}
