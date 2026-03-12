@@ -752,3 +752,21 @@ fn no_false_positive_lookaround_without_inner_quantifier() -> Result<(), Box<dyn
     assert!(!v.detect_nested_quantifiers("(?<!abc)+"));
     Ok(())
 }
+
+#[test]
+fn no_false_positive_brace_literals_after_quantified_group()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    assert!(!v.detect_nested_quantifiers("(a+){foo}"));
+    assert!(!v.detect_nested_quantifiers("(a+){,}"));
+    Ok(())
+}
+
+#[test]
+fn no_false_positive_quantifier_chars_inside_character_class()
+-> Result<(), Box<dyn std::error::Error>> {
+    let v = RegexValidator::new();
+    assert!(!v.detect_nested_quantifiers("([+*?{}])+"));
+    v.validate("([+*?{}])+", 0)?;
+    Ok(())
+}

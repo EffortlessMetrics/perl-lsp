@@ -91,10 +91,22 @@ impl RegexValidator {
         // Type: 0=other, 1=quantifier, 2=group_end
         let mut last_type = 0;
 
-        while let Some((_, ch)) = chars.next() {
+        while let Some((idx, ch)) = chars.next() {
             match ch {
                 '\\' => {
                     chars.next(); // skip escaped
+                    last_type = 0;
+                }
+                '[' => {
+                    // Skip character class contents so quantifier-like characters
+                    // inside [...] are not treated as real quantifiers.
+                    while let Some((_, c)) = chars.next() {
+                        if c == '\\' {
+                            chars.next();
+                        } else if c == ']' {
+                            break;
+                        }
+                    }
                     last_type = 0;
                 }
                 '(' => {
@@ -123,24 +135,24 @@ impl RegexValidator {
                     }
                 }
                 '+' | '*' | '?' | '{' => {
+                    let is_quantifier =
+                        ch != '{' || Self::looks_like_brace_quantifier(pattern, idx);
+
                     // If we just closed a group that had a quantifier inside,
                     // and now we see another quantifier, that's a nested quantifier!
-                    if last_type == 2 {
-                        // Check if it's really a quantifier or literal {
-                        if ch == '{' {
-                            // Only count as quantifier if it looks like {n} or {n,m}
-                            // peek ahead... (simplified for now)
-                            return true; // Assume { is quantifier for safety heuristic
-                        } else {
-                            return true;
-                        }
+                    if is_quantifier && last_type == 2 {
+                        return true;
                     }
 
                     // Mark current group as having a quantifier
-                    if let Some(last) = group_stack.last_mut() {
-                        *last = true;
+                    if is_quantifier {
+                        if let Some(last) = group_stack.last_mut() {
+                            *last = true;
+                        }
+                        last_type = 1;
+                    } else {
+                        last_type = 0;
                     }
-                    last_type = 1;
                 }
                 _ => {
                     last_type = 0;
@@ -148,6 +160,42 @@ impl RegexValidator {
             }
         }
         false
+    }
+
+    fn looks_like_brace_quantifier(pattern: &str, open_brace_idx: usize) -> bool {
+        let bytes = pattern.as_bytes();
+        let mut i = open_brace_idx + 1;
+        let mut has_digits_before_comma = false;
+        let mut has_digits_after_comma = false;
+
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            has_digits_before_comma = true;
+            i += 1;
+        }
+
+        if i >= bytes.len() {
+            return false;
+        }
+
+        if bytes[i] == b'}' {
+            return has_digits_before_comma;
+        }
+
+        if bytes[i] != b',' {
+            return false;
+        }
+
+        i += 1;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            has_digits_after_comma = true;
+            i += 1;
+        }
+
+        if i >= bytes.len() || bytes[i] != b'}' {
+            return false;
+        }
+
+        has_digits_before_comma || has_digits_after_comma
     }
 
     fn check_complexity(&self, pattern: &str, start_pos: usize) -> Result<(), RegexError> {
