@@ -84,4 +84,26 @@ mod tests {
         let sexp = ast.to_sexp();
         assert!(sexp.contains("binary_/"), "Should be division after nullary function: {}", sexp);
     }
+
+    #[test]
+    fn test_repetition_operator_parses_as_binary_x() {
+        let code = "'ab' x 3;";
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+        assert!(result.is_ok(), "Failed to parse repetition operator");
+        let ast = must(result);
+        let sexp = ast.to_sexp();
+        assert!(sexp.contains("binary_x"), "Should parse x as repetition operator: {}", sexp);
+    }
+
+    #[test]
+    fn test_repetition_operator_chain_left_associative() {
+        let code = "'a' x 2 x 3;";
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+        assert!(result.is_ok(), "Failed to parse chained repetition operators");
+        let ast = must(result);
+        let sexp = ast.to_sexp();
+        assert!(sexp.matches("binary_x").count() >= 2, "Should parse two x operators: {}", sexp);
+    }
 }
