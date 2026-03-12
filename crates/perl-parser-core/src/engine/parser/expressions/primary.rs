@@ -267,6 +267,12 @@ impl<'a> Parser<'a> {
 
             TokenKind::Do => self.parse_do(),
 
+            // Lexical declarations are valid expressions in Perl (e.g. if (my $x = foo()) { ... })
+            // and can appear inside function call parentheses (e.g. foo(my $x)).
+            TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State => {
+                self.parse_variable_declaration()
+            }
+
             // Note: TokenKind::Sub is handled in the keyword-as-identifier case below
             // This allows 'sub' to be used as a hash key or identifier in expressions
             TokenKind::Try => self.parse_try(),
@@ -566,11 +572,7 @@ impl<'a> Parser<'a> {
 
             // Handle keywords that can be used as identifiers in certain contexts
             // Note: Statement-level keywords (if, unless, while, return, etc.) should NOT be here
-            TokenKind::My
-            | TokenKind::Our
-            | TokenKind::Local
-            | TokenKind::State
-            | TokenKind::Package
+            TokenKind::Package
             | TokenKind::Use
             | TokenKind::No
             | TokenKind::Begin
