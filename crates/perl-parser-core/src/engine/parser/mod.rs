@@ -424,6 +424,8 @@ mod glob_assignment_tests;
 #[cfg(test)]
 mod glob_tests;
 #[cfg(test)]
+mod grep_map_sort_block_tests;
+#[cfg(test)]
 mod hash_vs_block_tests;
 #[cfg(test)]
 mod heredoc_security_tests;

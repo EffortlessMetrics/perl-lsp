@@ -278,17 +278,17 @@ impl<'a> Parser<'a> {
 
                                 args.push(block);
 
-                                // Parse remaining arguments
-                                while self.peek_kind() == Some(TokenKind::Comma) {
-                                    self.consume_token()?; // consume comma
+                                // Parse trailing list for map/grep/sort
+                                // without requiring commas (Perl: `grep BLOCK LIST`)
+                                while !self.is_at_statement_end() {
+                                    if self.peek_kind() == Some(TokenKind::Comma) {
+                                        self.consume_token()?;
+                                    }
                                     if self.is_at_statement_end() {
                                         break;
                                     }
-                                    args.push(self.parse_comma()?);
+                                    args.push(self.parse_ternary()?);
                                 }
-                            } else if matches!(name.as_str(), "sort" | "map" | "grep") {
-                                // These builtins should parse {} as blocks, not hashes
-                                args.push(self.parse_builtin_block()?);
                             } else {
                                 // Other builtins - parse {} as first argument
                                 args.push(self.parse_hash_or_block()?);
