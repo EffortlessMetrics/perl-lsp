@@ -30,7 +30,7 @@ npm install
 npm run verify:marketplace
 ```
 
-`verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates a `.vsix` package suitable for pre-release validation.
+`verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates a `.vsix` package suitable for pre-release validation. The packaging step uses `vsce --no-dependencies` to avoid environment-specific npm tree validation noise when lockfile tooling differs.
 
 ### 3. Test Locally
 

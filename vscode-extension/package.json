@@ -433,8 +433,8 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
-    "package": "npx @vscode/vsce package",
-    "publish": "npx @vscode/vsce publish",
+    "package": "npx @vscode/vsce package --no-dependencies",
+    "publish": "npx @vscode/vsce publish --no-dependencies",
     "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package"
   },
   "dependencies": {
