@@ -209,21 +209,21 @@ sub TestPackage::test_method {
 
     let lenses_array = lenses.as_array().ok_or("Expected lenses array")?;
 
-    // Code lenses may be empty if parsing failed or no test functions found
-    // Just check that we got a valid array response
-    assert!(lenses_array.is_empty() || !lenses_array.is_empty());
+    // Integration test coverage: ensure shebang-backed scripts expose an executable lens.
+    // This guards against regressions where the shebang detector is bypassed in end-to-end
+    // request handling.
+    let run_script_lens = lenses_array.iter().find(|lens| {
+        lens.get("command").and_then(|command| command.get("title")).and_then(Value::as_str)
+            == Some("▶ Run Script")
+    });
+    assert!(run_script_lens.is_some(), "expected shebang document to yield a Run Script code lens");
 
-    // Check shebang lens is first
-    if !lenses_array.is_empty() {
-        let first_lens = &lenses_array[0];
-        if let Some(cmd) = first_lens.get("command") {
-            if let Some(title) = cmd.get("title") {
-                if title.as_str() == Some("▶ Run Script") {
-                    assert_eq!(cmd["command"], "perl.runScript");
-                }
-            }
-        }
-    }
+    let run_script_command = run_script_lens
+        .and_then(|lens| lens.get("command"))
+        .and_then(|command| command.get("command"))
+        .and_then(Value::as_str)
+        .ok_or("Expected command string for shebang code lens")?;
+    assert_eq!(run_script_command, "perl.runScript");
     Ok(())
 }
 
@@ -403,10 +403,14 @@ fn test_document_updates() -> TestResult {
     let symbols = result.ok_or("Failed to get workspace symbols")?;
     let symbols_array = symbols.as_array().ok_or("Expected symbols array")?;
 
-    // Should find both new functions
+    // Should find both new functions. Ordering isn't guaranteed, so assert by set contents.
     assert_eq!(symbols_array.len(), 2);
-    assert_eq!(symbols_array[0]["name"], "new_function");
-    assert_eq!(symbols_array[1]["name"], "another_new");
+    let names: Vec<&str> = symbols_array
+        .iter()
+        .map(|symbol| symbol["name"].as_str().ok_or("Expected symbol name string"))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert!(names.contains(&"new_function"));
+    assert!(names.contains(&"another_new"));
     Ok(())
 }
 
