@@ -91,7 +91,6 @@ Process, metrics, and project health.
 | [design/](design/) | Semantic analyzer design |
 | [EDITORS/](EDITORS/) | Editor-specific setup |
 | [forensics/](forensics/) | PR archaeology |
-| [internal/](internal/) | Internal working docs |
 | [issues/](issues/) | Corpus gap tracking |
 | [semantic/](semantic/) | Semantic validation |
 | [specs/](specs/) | Specification documents |
