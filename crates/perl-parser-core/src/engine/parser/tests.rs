@@ -151,6 +151,21 @@ fn test_qualified_function_call() {
 }
 
 #[test]
+fn test_my_declaration_in_function_call_parens() {
+    let mut parser = Parser::new("open(my $fh, '<', $file);");
+    let result = parser.parse();
+    assert!(result.is_ok(), "failed to parse call with my declaration in parens");
+
+    let ast = must(result);
+    let sexp = ast.to_sexp();
+    assert!(sexp.contains("(call open"), "expected function call, got: {sexp}");
+    assert!(
+        sexp.contains("(my_declaration") || sexp.contains("(variable_declaration my"),
+        "expected variable declaration argument, got: {sexp}"
+    );
+}
+
+#[test]
 fn test_issue_461_variable_length_lookbehind() {
     // Variable-length lookbehind
     let code = r#"my $pattern = qr/(?<=\d{1,1000})\w+/;"#;

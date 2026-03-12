@@ -333,6 +333,15 @@ impl<'a> Parser<'a> {
                             ))
                         }
                         _ => {
+                            if self.peek_kind() == Some(TokenKind::LeftParen) {
+                                let args = self.parse_args()?;
+                                let end = self.previous_position();
+                                return Ok(Node::new(
+                                    NodeKind::FunctionCall { name: func_name.to_string(), args },
+                                    SourceLocation { start, end },
+                                ));
+                            }
+
                             // Has arguments - parse them as a comma-separated list
                             let mut args = vec![];
 
