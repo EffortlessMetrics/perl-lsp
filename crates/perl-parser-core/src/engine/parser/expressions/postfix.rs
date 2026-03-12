@@ -296,17 +296,24 @@ impl<'a> Parser<'a> {
 
                                 args.push(block);
 
-                                // Parse remaining arguments
+                                // Parse trailing list arguments for map/grep/sort.
+                                // In Perl, the block form does not require a comma
+                                // before the list: `grep { ... } @array`
+                                // First consume without a comma if present
+                                if !self.is_at_statement_end()
+                                    && self.peek_kind() != Some(TokenKind::Comma)
+                                {
+                                    args.push(self.parse_ternary()?);
+                                }
+
+                                // Then consume any remaining comma-separated arguments
                                 while self.peek_kind() == Some(TokenKind::Comma) {
                                     self.consume_token()?; // consume comma
                                     if self.is_at_statement_end() {
                                         break;
                                     }
-                                    args.push(self.parse_comma()?);
+                                    args.push(self.parse_ternary()?);
                                 }
-                            } else if matches!(name.as_str(), "sort" | "map" | "grep") {
-                                // These builtins should parse {} as blocks, not hashes
-                                args.push(self.parse_builtin_block()?);
                             } else {
                                 // Other builtins - parse {} as first argument
                                 args.push(self.parse_hash_or_block()?);

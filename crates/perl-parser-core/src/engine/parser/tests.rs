@@ -387,6 +387,26 @@ fn test_branch_reset_complexity() {
 }
 
 #[test]
+fn test_builtin_block_list_in_assignment_context() {
+    // Verifies that grep/map/sort with block form correctly capture trailing
+    // list arguments even when used on the RHS of an assignment.
+    let test_cases = vec![
+        ("grep block array", "my @result = grep { $_ > 5 } @array;"),
+        ("sort block hash access", r#"my @sorted = sort { $a->{name} cmp $b->{name} } @records;"#),
+        ("map block subscript", r#"my @mapped = map { $_->[0] + $_->[1] } @pairs;"#),
+        ("sort block function call", r#"my @x = sort { length($a) <=> length($b) } keys %hash;"#),
+    ];
+
+    for (name, code) in test_cases {
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+        let ast = must(result);
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "{} should not contain ERROR: {}", name, sexp);
+    }
+}
+
+#[test]
 fn test_catastrophic_backtracking_detection() {
     // Nested quantifiers (a+)+ -- now recorded as a non-fatal diagnostic
     let code = r#"qr/(a+)+/;"#;
