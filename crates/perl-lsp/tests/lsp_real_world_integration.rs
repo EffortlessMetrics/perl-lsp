@@ -3,7 +3,7 @@
 use serde_json::json;
 
 mod common;
-use common::{initialize_lsp, read_response, send_notification, send_request, start_lsp_server};
+use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 
 /// Test with a real CPAN module structure
 #[test]
@@ -96,7 +96,7 @@ This is a sample CPAN-style module for testing.
     );
 
     // Request document symbols
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -107,8 +107,6 @@ This is a sample CPAN-style module for testing.
             }
         }),
     );
-
-    let response = read_response(&mut server);
     assert!(response["result"].is_array());
 
     let symbols = response["result"].as_array().ok_or("Expected result to be an array")?;
@@ -218,7 +216,7 @@ __DATA__
     );
 
     // Test diagnostics - should have no errors
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -229,8 +227,6 @@ __DATA__
             }
         }),
     );
-
-    let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
 
     // Should parse without errors
@@ -360,7 +356,7 @@ END {
     );
 
     // Request symbols
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -371,8 +367,6 @@ END {
             }
         }),
     );
-
-    let response = read_response(&mut server);
     let symbols = response["result"].as_array().ok_or("Expected result to be an array")?;
 
     // Verify subroutines are detected
@@ -486,7 +480,7 @@ done_testing();
     );
 
     // Verify parsing succeeds
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -497,8 +491,6 @@ done_testing();
             }
         }),
     );
-
-    let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Test file should parse without errors");
 
@@ -661,7 +653,7 @@ __PACKAGE__->meta->make_immutable;
     );
 
     // Request symbols - should find all REST methods
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -672,8 +664,6 @@ __PACKAGE__->meta->make_immutable;
             }
         }),
     );
-
-    let response = read_response(&mut server);
     let symbols = response["result"].as_array().ok_or("Expected result to be an array")?;
 
     let method_names: Vec<&str> = symbols.iter().filter_map(|s| s["name"].as_str()).collect();
@@ -824,7 +814,7 @@ sub normalize_text {
     );
 
     // Should parse complex regex patterns without errors
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -835,8 +825,6 @@ sub normalize_text {
             }
         }),
     );
-
-    let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Complex regex patterns should parse correctly");
 
@@ -965,7 +953,7 @@ sub array_operations {
     );
 
     // Request symbols to verify modern constructs are recognized
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -976,8 +964,6 @@ sub array_operations {
             }
         }),
     );
-
-    let response = read_response(&mut server);
     let symbols = response["result"].as_array().ok_or("Expected result to be an array")?;
 
     // Look for class and methods
@@ -1106,7 +1092,7 @@ sub get {
     // Test cross-file references (would need actual implementation)
     // For now, just verify both files parse correctly
 
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -1117,12 +1103,10 @@ sub get {
             }
         }),
     );
-
-    let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Main script should parse without errors");
 
-    send_request(
+    let response = send_request(
         &mut server,
         json!({
             "jsonrpc": "2.0",
@@ -1133,8 +1117,6 @@ sub get {
             }
         }),
     );
-
-    let response = read_response(&mut server);
     let items = response["result"]["items"].as_array().ok_or("Expected items to be an array")?;
     assert_eq!(items.len(), 0, "Config module should parse without errors");
 
