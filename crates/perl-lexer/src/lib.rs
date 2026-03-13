@@ -2938,11 +2938,7 @@ impl<'a> PerlLexer<'a> {
                 #[cfg(debug_assertions)]
                 {
                     let text = &self.input[start..self.position];
-                    let preview = if text.len() > 50 {
-                        format!("{}...", &text[..50])
-                    } else {
-                        text.to_string()
-                    };
+                    let preview = truncate_preview(text, 50);
                     tracing::debug!(
                         limit = MAX_REGEX_PARSE_STEPS,
                         pattern_preview = %preview,
@@ -3009,6 +3005,13 @@ static EMPTY_ARC: OnceLock<Arc<str>> = OnceLock::new();
 #[inline(always)]
 fn empty_arc() -> Arc<str> {
     EMPTY_ARC.get_or_init(|| Arc::from("")).clone()
+}
+
+fn truncate_preview(text: &str, max_chars: usize) -> String {
+    match text.char_indices().nth(max_chars) {
+        Some((idx, _)) => format!("{}...", &text[..idx]),
+        None => text.to_string(),
+    }
 }
 
 #[inline(always)]

@@ -398,6 +398,23 @@ fn test_regex_parse_budget_enforcement() {
     );
 }
 
+/// Test that debug preview truncation stays UTF-8 safe when the parse budget is exceeded.
+#[test]
+fn test_regex_parse_budget_enforcement_with_unicode_prefix() {
+    let large_pattern =
+        format!("{}{}{}", "a".repeat(49), "😀", "a".repeat(MAX_REGEX_PARSE_STEPS + 1_024));
+    let input = format!("/{large_pattern}/");
+    assert!(input.len() < 64 * 1024, "Test input must remain below the byte budget");
+
+    let mut lexer = PerlLexer::new(&input);
+    let tokens: Vec<_> = lexer.collect_tokens();
+
+    assert!(
+        tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest)),
+        "Unicode-containing pattern exceeding MAX_REGEX_PARSE_STEPS should emit UnknownRest token"
+    );
+}
+
 /// Test that normal patterns stay well under the regex parse-step budget.
 #[test]
 fn test_normal_patterns_under_regex_parse_budget() {
