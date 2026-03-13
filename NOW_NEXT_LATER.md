@@ -163,14 +163,59 @@
 | Platform certification | 🔵 Future | DevOps | CI on all tier-1 platforms | v0.14.0 complete |
 | Formal deprecation policy | 🔵 Future | Governance | N-2 release support minimum | v0.14.0 complete |
 
+### v0.16.0 — Performance Hardening
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| P99 latency optimization | 🔵 Future | Performance Team | <100ms for all LSP operations | v0.15.0 complete |
+| Memory optimization | 🔵 Future | Core Team | <500MB for 1000-file workspaces | v0.15.0 complete |
+| Incremental parsing optimization | 🔵 Future | Parser Team | <2ms for multi-line changes | v0.15.0 complete |
+| Workspace indexing speedup | 🔵 Future | Workspace Team | <5s initial index for large projects | v0.15.0 complete |
+
+### v0.17.0 — Security Hardening
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| Security audit remediation | 🔵 Future | Security Team | All findings addressed | v0.16.0 complete |
+| Input validation coverage | 🔵 Future | Security Team | 100% external inputs validated | v0.16.0 complete |
+| Security documentation | 🔵 Future | Docs Team | Threat model, security policy, ADRs | v0.16.0 complete |
+| Vulnerability scanning automation | 🔵 Future | DevOps | Automated CI pipeline with alerts | v0.16.0 complete |
+
+### v0.18.0 — API Stabilization
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| Public API freeze | 🔵 Future | Architecture | No breaking changes to stable APIs | v0.17.0 complete |
+| Deprecation warnings | 🔵 Future | Release Team | All unstable APIs clearly marked | v0.17.0 complete |
+| Migration guides | 🔵 Future | Docs Team | Comprehensive v0.x → v1.0 guides | v0.17.0 complete |
+| Stability markers | 🔵 Future | Docs Team | Stability markers on all public items | v0.17.0 complete |
+
+### v0.19.0 — Documentation Complete
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| ADR completion | 🔵 Future | Architecture | 30+ architecture decisions documented | v0.18.0 complete |
+| User guides | 🔵 Future | Docs Team | Complete guides for all personas | v0.18.0 complete |
+| API documentation | 🔵 Future | Docs Team | 100% public API documented with examples | v0.18.0 complete |
+| Video tutorials | 🔵 Future | Community | Onboarding video series | v0.18.0 complete |
+
+### v0.20.0 — Release Candidate
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| Feature freeze | 🔵 Future | Release Team | No new features, bug fixes only | v0.19.0 complete |
+| Final bug fixes | 🔵 Future | All Teams | Zero P0/P1 issues | v0.19.0 complete |
+| Performance validation | 🔵 Future | Performance Team | All SLOs validated at scale | v0.19.0 complete |
+| Early adopter feedback | 🔵 Future | Community | Feedback incorporated | v0.19.0 complete |
+
 ### v1.0.0 — General Availability
 
 | Item | Status | Owner | Success Criteria | Dependencies |
 |------|--------|-------|------------------|--------------|
-| Zero P0/P1 issues | 🔵 Future | All Teams | Production-ready stability | v0.15.0 complete |
-| LSP 3.18 full compliance | 🔵 Future | LSP Team | 100% specification coverage | v0.15.0 complete |
-| CPAN metadata integration | 🔵 Future | Ecosystem Team | Dependency resolution from META.json | v0.15.0 complete |
-| Enterprise documentation | 🔵 Future | Docs Team | Complete API reference with stability markers | v0.15.0 complete |
+| Zero P0/P1 issues | 🔵 Future | All Teams | Production-ready stability | v0.20.0 complete |
+| LSP 3.18 full compliance | 🔵 Future | LSP Team | 100% specification coverage | v0.20.0 complete |
+| CPAN metadata integration | 🔵 Future | Ecosystem Team | Dependency resolution from META.json | v0.20.0 complete |
+| LTS commitment | 🔵 Future | Governance | 2 years support guaranteed | v0.20.0 complete |
 
 ### Perl 7 Preparation
 
@@ -268,7 +313,12 @@ graph TD
     subgraph LATER
         B1 --> C1[v0.14.0 Refactoring Suite]
         C1 --> C2[v0.15.0 Stability Contract]
-        C2 --> C3[v1.0.0 GA Release]
+        C2 --> D1[v0.16.0 Performance Hardening]
+        D1 --> D2[v0.17.0 Security Hardening]
+        D2 --> D3[v0.18.0 API Stabilization]
+        D3 --> D4[v0.19.0 Documentation Complete]
+        D4 --> D5[v0.20.0 Release Candidate]
+        D5 --> C3[v1.0.0 GA Release]
         C3 --> C4[Perl 7 Preparation]
         C3 --> C5[Plugin Architecture]
         C3 --> C6[Enterprise Features]
@@ -299,13 +349,15 @@ graph TD
 
 ### Target State (v1.0.0)
 
-| Metric | Current | v0.12.0 | v0.15.0 | v1.0.0 |
-|--------|---------|---------|---------|--------|
-| Mutation Score | 87% | 90% | 95% | 95%+ |
-| Full Parse Time | ~200µs | <200µs | <150µs | <100µs |
-| Completion Response | <50ms | <50ms | <30ms | <30ms |
-| Workspace Index | ~370µs | <350µs | <300µs | <250µs |
-| ADR Coverage | 0% | 50% | 80% | 100% |
+| Metric | Current | v0.15.0 | v0.18.0 | v0.20.0 | v1.0.0 |
+|--------|---------|---------|---------|---------|--------|
+| Mutation Score | 87% | 90% | 93% | 95% | 95%+ |
+| Full Parse Time | ~200µs | <150µs | <120µs | <100µs | <100µs |
+| Completion Response (p95) | <50ms | <50ms | <40ms | <30ms | <30ms |
+| Completion Response (p99) | N/A | <100ms | <80ms | <60ms | <50ms |
+| Workspace Index | ~370µs | <300µs | <275µs | <250µs | <250µs |
+| ADR Coverage | 0% | 50% | 80% | 95% | 100% |
+| Security Audit Findings | 0 P0/P1 | 0 P0/P1 | 0 P0/P1 | 0 P0/P1 | 0 P0/P1 |
 
 ---
 

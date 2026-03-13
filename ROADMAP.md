@@ -150,25 +150,116 @@ Enterprise-ready stability guarantees and API lockdown.
 
 ---
 
-### v1.0.0 — General Availability (Target: Q2 2027)
+### v0.16.0 — Performance Hardening (Target: Q2 2027)
+
+Optimize for production workloads and large workspaces.
+
+**Goals**:
+- P99 latency < 100ms for all LSP operations
+- Memory optimization for large workspaces (1000+ files)
+- Incremental parsing optimization for complex files
+- Workspace indexing performance improvements
+
+**Success Criteria**:
+- [ ] P99 latency: <100ms for completion, hover, definition
+- [ ] Memory footprint: <500MB for 1000-file workspaces
+- [ ] Incremental parsing: <2ms for multi-line changes
+- [ ] Workspace index: <5s for initial index of large projects
+
+---
+
+### v0.17.0 — Security Hardening (Target: Q3 2027)
+
+Complete security audit remediation and hardening.
+
+**Goals**:
+- Complete security audit remediation
+- Enhanced input validation for all external inputs
+- Security documentation complete
+- Dependency vulnerability scanning automation
+
+**Success Criteria**:
+- [ ] Security audit: all findings remediated
+- [ ] Input validation: 100% coverage of external inputs
+- [ ] Security documentation: threat model, security policy, ADRs
+- [ ] Vulnerability scanning: automated CI pipeline with alerts
+
+---
+
+### v0.18.0 — API Stabilization (Target: Q4 2027)
+
+Public API freeze and migration preparation.
+
+**Goals**:
+- Public API freeze for all stable interfaces
+- Deprecation warnings for unstable APIs
+- Migration guides published for breaking changes
+- API stability markers in documentation
+
+**Success Criteria**:
+- [ ] API freeze: no breaking changes to stable APIs
+- [ ] Deprecation warnings: all unstable APIs clearly marked
+- [ ] Migration guides: comprehensive guides for v0.x → v1.0
+- [ ] Documentation: stability markers on all public items
+
+---
+
+### v0.19.0 — Documentation Complete (Target: Q1 2028)
+
+Comprehensive documentation for all user personas.
+
+**Goals**:
+- All ADRs documented (30+ total)
+- User guides complete for all features
+- API documentation 100% coverage
+- Video tutorials for common workflows
+
+**Success Criteria**:
+- [ ] ADRs: 30+ architecture decisions documented
+- [ ] User guides: complete guides for beginners, advanced, enterprise
+- [ ] API docs: 100% public API documented with examples
+- [ ] Tutorials: video series for onboarding
+
+---
+
+### v0.20.0 — Release Candidate (Target: Q2 2028)
+
+Final stabilization before general availability.
+
+**Goals**:
+- Feature freeze for v1.0.0
+- Final bug fixes and polish
+- Performance validation at scale
+- Release candidate testing with early adopters
+
+**Success Criteria**:
+- [ ] Feature freeze: no new features, bug fixes only
+- [ ] Bug count: zero P0/P1 issues
+- [ ] Performance: all SLOs validated at scale
+- [ ] Early adopter feedback: incorporated into final release
+
+---
+
+### v1.0.0 — General Availability (Target: Q3 2028)
 
 Production-ready release for enterprise adoption.
 
 **Goals**:
-- Stability Contract enforcement
+- Stable API guarantee with long-term support commitment
+- Enterprise readiness certification
 - Complete DAP native implementation
 - Full CPAN integration
-- Enterprise documentation and support channels
 
 **Success Criteria**:
 - [ ] Zero known P0/P1 issues
 - [ ] 100% LSP 3.18 compliance
 - [ ] Native DAP replacing bridge entirely
 - [ ] CPAN metadata integration for dependencies
+- [ ] LTS commitment: 2 years of support guaranteed
 
 ---
 
-### v1.1.0+ — Post-GA Evolution (Target: Q3 2027+)
+### v1.1.0+ — Post-GA Evolution (Target: Q4 2028+)
 
 Continuous improvement and ecosystem expansion.
 
@@ -361,15 +452,49 @@ Q2 2026 (Apr-Jun)          Q3 2026 (Jul-Sep)          Q4 2026 (Oct-Dec)
 ### 2027 Quarterly Milestones
 
 ```
-Q1 2027 (Jan-Mar)          Q2 2027 (Apr-Jun)          Q3+ 2027
+Q1 2027 (Jan-Mar)          Q2 2027 (Apr-Jun)          Q3 2027 (Jul-Sep)
 ┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
-│ v0.15.0 Stability   │    │ v1.0.0 GA           │    │ v1.1.0+ Evolution   │
+│ v0.15.0 Stability   │    │ v0.16.0 Perf Harden │    │ v0.17.0 Sec Harden  │
 ├─────────────────────┤    ├─────────────────────┤    ├─────────────────────┤
-│ • API stability     │    │ • Production ready  │    │ • Perl 7 preview    │
-│ • Protocol lock     │    │ • Full CPAN integ   │    │ • Multi-root WS     │
-│ • Platform certify  │    │ • Enterprise docs   │    │ • AI integration    │
-│ • Deprecation pol   │    │ • Support channels  │    │ • Raku exploration  │
+│ • API stability     │    │ • P99 <100ms        │    │ • Security audit    │
+│ • Protocol lock     │    │ • Memory optimize   │    │ • Input validation  │
+│ • Platform certify  │    │ • Incremental opt   │    │ • Security docs     │
+│ • Deprecation pol   │    │ • WS index perf     │    │ • Vuln scanning     │
 └─────────────────────┘    └─────────────────────┘    └─────────────────────┘
+
+Q4 2027 (Oct-Dec)
+┌─────────────────────┐
+│ v0.18.0 API Stable  │
+├─────────────────────┤
+│ • API freeze        │
+│ • Deprecation warn  │
+│ • Migration guides  │
+│ • Stability markers │
+└─────────────────────┘
+```
+
+### 2028 Quarterly Milestones
+
+```
+Q1 2028 (Jan-Mar)          Q2 2028 (Apr-Jun)          Q3 2028 (Jul-Sep)
+┌─────────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
+│ v0.19.0 Docs Done   │    │ v0.20.0 RC          │    │ v1.0.0 GA           │
+├─────────────────────┤    ├─────────────────────┤    ├─────────────────────┤
+│ • 30+ ADRs          │    │ • Feature freeze    │    │ • Production ready  │
+│ • User guides       │    │ • Final bug fixes   │    │ • LTS commitment    │
+│ • API docs 100%     │    │ • Perf validation   │    │ • Enterprise cert   │
+│ • Video tutorials   │    │ • Early adopter FB  │    │ • Full CPAN integ   │
+└─────────────────────┘    └─────────────────────┘    └─────────────────────┘
+
+Q4 2028+
+┌─────────────────────┐
+│ v1.1.0+ Evolution   │
+├─────────────────────┤
+│ • Perl 7 preview    │
+│ • Multi-root WS     │
+│ • AI integration    │
+│ • Raku exploration  │
+└─────────────────────┘
 ```
 
 ---
@@ -378,32 +503,35 @@ Q1 2027 (Jan-Mar)          Q2 2027 (Apr-Jun)          Q3+ 2027
 
 ### Quality Metrics
 
-| Metric | Current | v0.12.0 | v0.15.0 | v1.0.0 |
-|--------|---------|---------|---------|--------|
-| LSP Coverage | 100% | 100% | 100% | 100% |
-| Protocol Compliance | 100% | 100% | 100% | 100% |
-| Mutation Score | 87% | 90% | 95% | 95%+ |
-| Parser Coverage | ~100% | 100% | 100% | 100% |
-| Documentation Coverage | High | Complete | Complete | Complete |
+| Metric | Current | v0.15.0 | v0.18.0 | v0.20.0 | v1.0.0 |
+|--------|---------|---------|---------|---------|--------|
+| LSP Coverage | 100% | 100% | 100% | 100% | 100% |
+| Protocol Compliance | 100% | 100% | 100% | 100% | 100% |
+| Mutation Score | 87% | 90% | 93% | 95% | 95%+ |
+| Parser Coverage | ~100% | 100% | 100% | 100% | 100% |
+| Documentation Coverage | High | Complete | Complete | Complete | Complete |
+| Security Audit Findings | 0 P0/P1 | 0 P0/P1 | 0 P0/P1 | 0 P0/P1 | 0 P0/P1 |
 
 ### Performance Metrics
 
-| Metric | Current | v0.12.0 | v0.15.0 | v1.0.0 |
-|--------|---------|---------|---------|--------|
-| Incremental Parse | <1ms | <1ms | <1ms | <1ms |
-| Full Parse (2.5KB) | ~200µs | <200µs | <150µs | <100µs |
-| Completion Response | <50ms | <50ms | <30ms | <30ms |
-| Workspace Index | ~370µs | <350µs | <300µs | <250µs |
-| Memory per Document | Low | Low | Optimized | Optimized |
+| Metric | Current | v0.16.0 | v0.18.0 | v0.20.0 | v1.0.0 |
+|--------|---------|---------|---------|---------|--------|
+| Incremental Parse | <1ms | <1ms | <1ms | <1ms | <1ms |
+| Full Parse (2.5KB) | ~200µs | <150µs | <120µs | <100µs | <100µs |
+| Completion Response (p95) | <50ms | <50ms | <40ms | <30ms | <30ms |
+| Completion Response (p99) | N/A | <100ms | <80ms | <60ms | <50ms |
+| Workspace Index | ~370µs | <300µs | <275µs | <250µs | <250µs |
+| Memory per Document | Low | Optimized | Optimized | Optimized | Optimized |
+| Memory (1000-file WS) | N/A | <500MB | <400MB | <350MB | <300MB |
 
 ### Adoption Metrics
 
-| Metric | Current | v0.15.0 | v1.0.0 |
-|--------|---------|---------|--------|
-| VS Code Installs | Growing | 1,000+ | 10,000+ |
-| crates.io Downloads | Active | 5,000+ | 50,000+ |
-| GitHub Stars | Growing | 500+ | 2,000+ |
-| Community Contributors | Active | 20+ | 50+ |
+| Metric | Current | v0.15.0 | v0.18.0 | v0.20.0 | v1.0.0 |
+|--------|---------|---------|---------|---------|--------|
+| VS Code Installs | Growing | 1,000+ | 3,000+ | 5,000+ | 10,000+ |
+| crates.io Downloads | Active | 5,000+ | 15,000+ | 30,000+ | 50,000+ |
+| GitHub Stars | Growing | 500+ | 1,000+ | 1,500+ | 2,000+ |
+| Community Contributors | Active | 20+ | 30+ | 40+ | 50+ |
 
 ---
 
