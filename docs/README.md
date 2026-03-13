@@ -80,6 +80,15 @@ Process, metrics, and project health.
 - [CI](project/CI.md) — Continuous integration setup
 - [CI Test Lanes](project/CI_TEST_LANES.md) — Test lane configuration
 
+## Strategic Documents — planning and direction
+
+High-level planning documents for project direction.
+
+- [Strategic Documentation Index](STRATEGIC_DOCUMENTATION.md) — Navigation hub for all strategic docs
+- [Technical Vision](../TECHNICAL_VISION.md) — Long-term technical direction (3-5 years)
+- [Roadmap](../ROADMAP.md) — Version milestones and deliverables
+- [Now/Next/Later](../NOW_NEXT_LATER.md) — Current quarter priorities
+
 ## Other directories
 
 | Directory | Purpose |

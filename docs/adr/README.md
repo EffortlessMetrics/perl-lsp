@@ -23,6 +23,26 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-006](ADR_006_LSP_CANCELLATION_INFRASTRUCTURE.md) | Draft | 2026-01-28 | LSP Cancellation | Cancellation infrastructure for responsive editor interactions |
 | [ADR-007](ADR_007_SUBSTITUTION_OPERATOR_PARSING.md) | Accepted | 2025-01-20 | Substitution Parsing | Comprehensive s/// parsing with all modifiers |
 
+### Architecture Series (0008–0022)
+
+| ADR | Status | Date | Title | Description |
+|-----|--------|------|-------|-------------|
+| [ADR-0008](0008-microcrate-architecture.md) | Accepted | 2025-01-15 | Microcrate Architecture (SRP) | 80+ small crates following Single Responsibility Principle for parallel compilation |
+| [ADR-0009](0009-dual-indexing-strategy.md) | Accepted | 2025-02-15 | Dual Indexing Strategy | Index functions under both qualified and bare names for 98% reference coverage |
+| [ADR-0010](0010-incremental-parsing-architecture.md) | Accepted | 2025-03-01 | Incremental Parsing | Node reuse strategy with less than 1ms update target for responsive LSP |
+| [ADR-0011](0011-dap-bridge-mode-architecture.md) | Accepted | 2025-06-15 | DAP Bridge Mode | Debug Adapter Protocol bridge translating DAP to Perl debugger |
+| [ADR-0012](0012-error-handling-strategy.md) | Accepted | 2025-01-10 | Error Handling (No Panics) | Ban unwrap/expect/panic in production code for server reliability |
+| [ADR-0013](0013-utf16-position-tracking.md) | Accepted | 2025-01-20 | UTF-16 Position Tracking | Symmetric conversion with boundary validation for LSP protocol compliance |
+| [ADR-0014](0014-mode-aware-lexer.md) | Accepted | 2025-01-15 | Mode-Aware Lexer | State machine for slash disambiguation enabling pure Rust parsing |
+| [ADR-0015](0015-supply-chain-security.md) | Accepted | 2025-02-01 | Supply Chain Security | SBOM generation and SLSA Level 2 provenance for artifact verification |
+| [ADR-0016](0016-feature-governance.md) | Accepted | 2025-02-15 | Feature Governance | 8-crate subsystem for enterprise-grade LSP capability management |
+| [ADR-0017](0017-workspace-exclusion-strategy.md) | Accepted | 2025-02-15 | Workspace Exclusion Strategy | Exclude crates with C dependencies from main workspace for cross-platform builds |
+| [ADR-0018](0018-adaptive-threading-tests.md) | Accepted | 2025-02-15 | Adaptive Threading for Tests | Thread-aware timeout scaling with environment validation for reliable CI |
+| [ADR-0019](0019-security-first-dap.md) | Accepted | 2025-06-15 | Security-First DAP | Enterprise-grade security with path traversal prevention and safe evaluation |
+| [ADR-0020](0020-rope-document-management.md) | Accepted | 2025-01-20 | Rope Document Management | O(log n) position lookups with ropey::Rope for sub-millisecond conversions |
+| [ADR-0021](0021-lsp-capability-contract.md) | Accepted | 2025-02-15 | LSP Capability Contract | Contract-driven capability advertisement with lsp-ga-lock feature option |
+| [ADR-0022](0022-scope-analyzer-hash-context.md) | Accepted | 2025-02-15 | Scope Analyzer Hash Context | Pointer-based AST traversal for accurate hash key context detection |
+
 ## About ADRs
 
 Architecture Decision Records (ADRs) capture important architectural decisions along with their context and consequences. Each ADR includes:
