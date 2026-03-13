@@ -100,7 +100,6 @@ vali
 
 /// Test cross-file package member completion with qualified names
 #[test]
-#[ignore = "feature: cross-file qualified completion not yet wired to workspace index"]
 fn test_completion_cross_file_qualified() -> Result<(), Box<dyn std::error::Error>> {
     let mut server = start_lsp_server();
     initialize_lsp(&mut server);
@@ -167,7 +166,8 @@ my $result = DataProcessor::
             "method": "textDocument/completion",
             "params": {
                 "textDocument": { "uri": script_uri },
-                "position": { "line": 3, "character": 33 }
+                // Cursor just after `DataProcessor::`
+                "position": { "line": 3, "character": 28 }
             }
         }),
     );
