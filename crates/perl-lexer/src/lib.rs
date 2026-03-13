@@ -94,6 +94,7 @@
 //! - **MAX_REGEX_BYTES**: 64KB maximum for regex patterns
 //! - **MAX_HEREDOC_BYTES**: 256KB maximum for heredoc bodies
 //! - **MAX_DELIM_NEST**: 128 levels maximum nesting depth for delimiters
+//! - **MAX_REGEX_PARSE_STEPS**: 32K maximum scan iterations for regex literals
 //!
 //! When limits are exceeded, the lexer emits an `UnknownRest` token preserving
 //! all previously parsed symbols, allowing continued analysis.
@@ -174,6 +175,18 @@ const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
 const MAX_DELIM_NEST: usize = 128; // Max nesting depth for delimiters
 const MAX_HEREDOC_DEPTH: usize = 100; // Max nesting depth for heredocs
 const HEREDOC_TIMEOUT_MS: u64 = 5000; // 5 seconds timeout for heredoc parsing
+
+/// Maximum scan iterations for a single regex literal.
+/// This is a lexer parse budget, not regex-engine backtracking detection.
+///
+/// When the lexer encounters a regex literal that requires more than this
+/// number of loop iterations, it
+/// will emit an UnknownRest token for graceful degradation rather than
+/// potentially hanging on pathological input.
+///
+/// The limit intentionally stays below `MAX_REGEX_BYTES` so this guard remains
+/// reachable before the byte budget for very large but still bounded literals.
+pub const MAX_REGEX_PARSE_STEPS: usize = 32 * 1024;
 
 /// Configuration for the lexer
 #[derive(Debug, Clone)]
@@ -610,12 +623,13 @@ impl<'a> PerlLexer<'a> {
         }
 
         // Slow path: budget exceeded - graceful degradation
-        // Note: In production LSP, this event could be logged/metered for monitoring
         #[cfg(debug_assertions)]
         {
-            eprintln!(
-                "Budget exceeded: bytes={}, depth={}, at position={}",
-                bytes_consumed, depth, self.position
+            tracing::debug!(
+                bytes_consumed,
+                depth,
+                position = self.position,
+                "Lexer budget exceeded"
             );
         }
 
@@ -2005,8 +2019,8 @@ impl<'a> PerlLexer<'a> {
         //    - After identifier/number/closing paren → ExpectOperator → division
         //    - After operator/keyword/opening paren → ExpectTerm → regex
         //
-        // 3. **Timeout Protection**:
-        //    - Regex parsing has budget guard: MAX_REGEX_BYTES (64KB)
+        // 3. **Budget Protection**:
+        //    - Regex parsing has a parse-step budget and byte budget
         //    - Budget exceeded → emit UnknownRest token (graceful degradation)
         //    - See `parse_regex()` and `budget_guard()` for implementation
         //
@@ -2903,9 +2917,10 @@ impl<'a> PerlLexer<'a> {
 
     /// Parse a regex literal starting with `/`
     ///
-    /// **Timeout Protection (Issue #422)**:
-    /// - Budget guard prevents infinite loops on pathological input
-    /// - MAX_REGEX_BYTES limit (64KB) ensures bounded execution time
+    /// **Budget Protection (Issue #422)**:
+    /// - Budget guards prevent runaway scanning on pathological input
+    /// - `MAX_REGEX_PARSE_STEPS` bounds literal scanning before the byte budget
+    /// - `MAX_REGEX_BYTES` bounds total bytes consumed in a single regex literal
     /// - Graceful degradation: emit UnknownRest token if budget exceeded
     ///
     /// **Performance**:
@@ -2915,7 +2930,30 @@ impl<'a> PerlLexer<'a> {
     fn parse_regex(&mut self, start: usize) -> Option<Token> {
         self.advance(); // Skip opening /
 
+        let mut regex_parse_steps: usize = 0;
+
         while let Some(ch) = self.current_char() {
+            regex_parse_steps += 1;
+            if regex_parse_steps > MAX_REGEX_PARSE_STEPS {
+                #[cfg(debug_assertions)]
+                {
+                    let text = &self.input[start..self.position];
+                    let preview = truncate_preview(text, 50);
+                    tracing::debug!(
+                        limit = MAX_REGEX_PARSE_STEPS,
+                        pattern_preview = %preview,
+                        "Regex parse step budget exceeded"
+                    );
+                }
+                self.position = self.input.len();
+                return Some(Token {
+                    token_type: TokenType::UnknownRest,
+                    text: empty_arc(),
+                    start,
+                    end: self.position,
+                });
+            }
+
             // Budget guard: prevent timeout on pathological input (Issue #422)
             // If exceeded, returns UnknownRest token for graceful degradation
             if let Some(token) = self.budget_guard(start, 0) {
@@ -2967,6 +3005,13 @@ static EMPTY_ARC: OnceLock<Arc<str>> = OnceLock::new();
 #[inline(always)]
 fn empty_arc() -> Arc<str> {
     EMPTY_ARC.get_or_init(|| Arc::from("")).clone()
+}
+
+fn truncate_preview(text: &str, max_chars: usize) -> String {
+    match text.char_indices().nth(max_chars) {
+        Some((idx, _)) => format!("{}...", &text[..idx]),
+        None => text.to_string(),
+    }
 }
 
 #[inline(always)]
