@@ -59,7 +59,7 @@ Key terms:
 <!-- END: STATUS_METRICS_TABLE -->
 | **Parser Coverage** | ~100% | 100% | Complete |
 | **Semantic Analyzer** | Phase 1, 2, 3 Complete (100%) | Complete | All NodeKind handlers |
-| **Mutation Score** | 87% | 87%+ | Target met |
+| **Mutation Score** | 87% | 90%+ | Ratchet to 90% |
 | **Documentation** | perl-parser missing_docs = 0 (baseline 0) | 0 | Ratchet |
 
 ---
