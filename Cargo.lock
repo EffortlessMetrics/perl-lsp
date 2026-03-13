@@ -1766,6 +1766,7 @@ dependencies = [
  "pretty_assertions",
  "proptest",
  "thiserror",
+ "tracing",
  "unicode-ident",
 ]
 

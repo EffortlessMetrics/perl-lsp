@@ -18,6 +18,7 @@ include = ["src/**", "tests/**", "examples/**", "benches/**", "README.md", "LICE
 # Core dependencies
 unicode-ident = "1.0.22"
 memchr = "2.7.6"
+tracing = "0.1.44"
 
 # For better error handling
 thiserror = "2.0.18"

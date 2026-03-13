@@ -1,17 +1,16 @@
-//! Tests for Issue #424: Fix catastrophic regex backtracking timeout risk
+//! Tests for regex literal parse-budget hardening on pathological inputs.
 //!
-//! This test suite validates that the lexer handles potentially catastrophic regex
-//! patterns without timeout or exponential parsing time. Patterns like `(a+)+b` can
-//! cause exponential backtracking in some regex engines, but our lexer should handle
-//! them safely by limiting iteration count and pattern complexity.
+//! These cases are known to trigger catastrophic backtracking in regex engines, but
+//! the lexer only needs to scan the literal safely. The contract here is that
+//! scanning stays bounded via parse-step, byte, and nesting budgets.
 //!
 //! # Mitigation Strategy
 //!
 //! The lexer implements multiple defense layers:
-//! 1. **Byte limits**: MAX_REGEX_BYTES (64KB) prevents processing excessively large patterns
-//! 2. **Depth limits**: MAX_DELIM_NEST (128) prevents deeply nested delimiter structures
-//! 3. **Budget guards**: Fast-path checks in hot loops detect budget exhaustion
-//! 4. **Error tokens**: Budget exhaustion returns UnknownRest token instead of hanging
+//! 1. **Parse-step limits**: `MAX_REGEX_PARSE_STEPS` bounds regex literal scans
+//! 2. **Byte limits**: `MAX_REGEX_BYTES` prevents processing excessively large patterns
+//! 3. **Depth limits**: `MAX_DELIM_NEST` prevents deeply nested delimiter structures
+//! 4. **Error tokens**: Budget exhaustion returns `UnknownRest` instead of hanging
 //!
 //! # Key Areas Protected
 //!
@@ -21,13 +20,13 @@
 //! - Transliteration parsing (tr/pattern/replacement/)
 //! - Quote-like operators (qr/pattern/)
 //!
-//! # Performance Guarantees
+//! # Execution Guarantees
 //!
-//! - Normal regex patterns: <1ms tokenization time
-//! - Pathological patterns: <100ms with budget guard triggering
-//! - Budget exhaustion: Clean error token with no hang
+//! - Normal regex patterns stay below the parse budget
+//! - Pathological patterns degrade to `UnknownRest`
+//! - Budget exhaustion leaves the lexer responsive
 
-use perl_lexer::{PerlLexer, TokenType};
+use perl_lexer::{MAX_REGEX_PARSE_STEPS, PerlLexer, TokenType};
 
 /// Test that nested quantifiers are handled safely
 #[test]
@@ -374,4 +373,94 @@ fn test_pattern_only_quantifiers() {
             input
         );
     }
+}
+
+/// Test `MAX_REGEX_PARSE_STEPS` is exported with a value below the byte budget.
+#[test]
+fn test_max_regex_parse_steps_constant() {
+    assert_eq!(MAX_REGEX_PARSE_STEPS, 32 * 1024, "MAX_REGEX_PARSE_STEPS should stay at 32K");
+}
+
+/// Test that the regex parse-step budget fires before the byte budget.
+#[test]
+fn test_regex_parse_budget_enforcement() {
+    let large_pattern = "a".repeat(MAX_REGEX_PARSE_STEPS + 1_024);
+    let input = format!("/{large_pattern}/");
+    assert!(input.len() < 64 * 1024, "Test input must remain below the byte budget");
+
+    let mut lexer = PerlLexer::new(&input);
+    let tokens: Vec<_> = lexer.collect_tokens();
+
+    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    assert!(
+        has_unknown_rest,
+        "Pattern exceeding MAX_REGEX_PARSE_STEPS should emit UnknownRest token"
+    );
+}
+
+/// Test that normal patterns stay well under the regex parse-step budget.
+#[test]
+fn test_normal_patterns_under_regex_parse_budget() {
+    let test_cases = vec![
+        r"/^(a+)+b$/",       // Nested quantifiers (classic backtracking risk)
+        r"/(x|xy)+(y|yz)+/", // Overlapping alternation
+        r"/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", // Email pattern
+        r"/\d{3}-\d{3}-\d{4}/", // Phone number
+        r"/^https?:\/\/[^\s]+$/", // URL pattern
+    ];
+
+    for input in test_cases {
+        let mut lexer = PerlLexer::new(input);
+        let tokens: Vec<_> = lexer.collect_tokens();
+
+        let has_unknown_rest =
+            tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+        assert!(
+            !has_unknown_rest,
+            "Normal pattern should not trigger regex parse budget: {}",
+            input
+        );
+
+        let has_regex = tokens.iter().any(|t| {
+            matches!(
+                t.token_type,
+                TokenType::RegexMatch | TokenType::Substitution | TokenType::QuoteRegex
+            )
+        });
+        assert!(has_regex, "Normal pattern should produce regex token: {}", input);
+    }
+}
+
+/// Test that a literal just below the parse-step budget still parses normally.
+#[test]
+fn test_boundary_regex_parse_budget() {
+    let medium_pattern = "a".repeat(MAX_REGEX_PARSE_STEPS - 1);
+    let input = format!("/{medium_pattern}/");
+    assert!(input.len() < 64 * 1024, "Boundary test must remain below the byte budget");
+
+    let mut lexer = PerlLexer::new(&input);
+    let tokens: Vec<_> = lexer.collect_tokens();
+
+    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    assert!(!has_unknown_rest, "Pattern just under MAX_REGEX_PARSE_STEPS should parse normally");
+
+    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(has_regex, "Pattern under MAX_REGEX_PARSE_STEPS should parse successfully");
+}
+
+/// Test the current parse-step semantics for escaped atoms.
+#[test]
+fn test_escape_sequences_under_regex_parse_budget() {
+    // Each loop iteration consumes one escaped atom, so this stays below the parse budget.
+    let escape_pattern: String = (0..(MAX_REGEX_PARSE_STEPS / 2)).map(|_| r"\d").collect();
+    let input = format!("/{}a/", escape_pattern);
+
+    let mut lexer = PerlLexer::new(&input);
+    let tokens: Vec<_> = lexer.collect_tokens();
+
+    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    assert!(
+        !has_unknown_rest,
+        "Pattern with escape sequences under MAX_REGEX_PARSE_STEPS should parse successfully"
+    );
 }
