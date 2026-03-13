@@ -58,15 +58,20 @@ Recursive descent parsers naturally use the call stack to track parsing state. E
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| Depth Constant | [`parser/mod.rs:106`](../../../../../../crates/perl-parser-core/src/engine/parser/mod.rs:106) | `MAX_RECURSION_DEPTH = 128` |
-| Depth Check | [`parser/helpers.rs:41`](../../../../../../crates/perl-parser-core/src/engine/parser/helpers.rs:41) | `check_recursion()` |
-| Guard Pattern | [`parser/helpers.rs:62`](../../../../../../crates/perl-parser-core/src/engine/parser/helpers.rs:62) | `with_recursion_guard()` |
-| Error Type | [`perl-error/src/`](../../../../../../crates/perl-error/src/) | `ParseError::NestingTooDeep` |
+| Depth Constant | [`crates/perl-parser-core/src/engine/parser/mod.rs:106`](../../../../../../crates/perl-parser-core/src/engine/parser/mod.rs) | `MAX_RECURSION_DEPTH = 128` |
+| Depth Check | [`crates/perl-parser-core/src/engine/parser/helpers.rs:41`](../../../../../../crates/perl-parser-core/src/engine/parser/helpers.rs) | `check_recursion()` |
+| Exit Recursion | [`crates/perl-parser-core/src/engine/parser/helpers.rs:53`](../../../../../../crates/perl-parser-core/src/engine/parser/helpers.rs) | `exit_recursion()` |
+| Guard Pattern | [`crates/perl-parser-core/src/engine/parser/helpers.rs:65`](../../../../../../crates/perl-parser-core/src/engine/parser/helpers.rs) | `with_recursion_guard()` |
+| Error Type | [`crates/perl-error/src/`](../../../../../../crates/perl-error/src/) | `ParseError::NestingTooDeep` |
 
 ### Current Implementation
 
+From [`crates/perl-parser-core/src/engine/parser/mod.rs:79-106`](../../../../../../crates/perl-parser-core/src/engine/parser/mod.rs):
+
 ```rust
-// From crates/perl-parser-core/src/engine/parser/mod.rs
+/// Current recursion depth for overflow protection during complex Perl script parsing
+recursion_depth: usize,
+
 // Recursion limit is set conservatively to prevent stack overflow
 // before the limit triggers. The actual stack usage depends on the
 // number of function frames between recursion checks (about 20-30
@@ -75,8 +80,9 @@ Recursive descent parsers naturally use the call stack to track parsing state. E
 const MAX_RECURSION_DEPTH: usize = 128;
 ```
 
+From [`crates/perl-parser-core/src/engine/parser/helpers.rs:40-55`](../../../../../../crates/perl-parser-core/src/engine/parser/helpers.rs):
+
 ```rust
-// From crates/perl-parser-core/src/engine/parser/helpers.rs
 #[inline(always)]
 fn check_recursion(&mut self) -> ParseResult<()> {
     self.recursion_depth += 1;
@@ -89,7 +95,39 @@ fn check_recursion(&mut self) -> ParseResult<()> {
     }
     Ok(())
 }
+
+fn exit_recursion(&mut self) {
+    self.recursion_depth = self.recursion_depth.saturating_sub(1);
+}
 ```
+
+### Guard Pattern Implementation
+
+From [`crates/perl-parser-core/src/engine/parser/helpers.rs:58-75`](../../../../../../crates/perl-parser-core/src/engine/parser/helpers.rs):
+
+```rust
+/// Execute a closure with recursion guard (RAII pattern)
+///
+/// - `check_recursion()` increments depth (and may error)
+/// - depth is decremented on scope exit (even on early return / panic)
+fn with_recursion_guard<T>(
+    &mut self,
+    f: impl FnOnce(&mut Self) -> ParseResult<T>,
+) -> ParseResult<T> {
+    self.check_recursion()?;
+    // ... execute closure
+    // exit_recursion() called on drop
+}
+```
+
+### Recursion Check Points
+
+The recursion check is called at strategic points in the parser:
+
+| Location | File | Purpose |
+|----------|------|---------|
+| Hash/Block parsing | [`expressions/hashes.rs:34`](../../../../../../crates/perl-parser-core/src/engine/parser/expressions/hashes.rs) | `parse_hash_or_block_inner()` |
+| Function call parsing | [`expressions/calls.rs:145`](../../../../../../crates/perl-parser-core/src/engine/parser/expressions/calls.rs) | Indirect call nesting |
 
 ## Examples
 
@@ -167,15 +205,40 @@ sub payload {
 # Result: my $x = (((((((...(((((1)))))...))))));
 ```
 
+### Real-World Deep Nesting Scenarios
+
+```perl
+# Deeply nested data structures
+my $data = {
+    level1 => {
+        level2 => {
+            level3 => {
+                # ... continues 100+ levels
+            }
+        }
+    }
+};
+
+# Deeply nested subroutine calls
+my $result = func1(func2(func3(func4(
+    # ... 100+ nested calls
+))));
+
+# Deeply nested ternary operators
+my $value = $a ? $b : $c ? $d : $e ? $f :
+    # ... 100+ ternary conditions
+    $final;
+```
+
 ## Current Mitigation
 
 ### Implemented Protections
 
 | Protection | Value | Location |
 |------------|-------|----------|
-| `MAX_RECURSION_DEPTH` | 128 | [`parser/mod.rs:106`](../../../../../../crates/perl-parser-core/src/engine/parser/mod.rs:106) |
+| `MAX_RECURSION_DEPTH` | 128 | [`parser/mod.rs:106`](../../../../../../crates/perl-parser-core/src/engine/parser/mod.rs) |
 | Error type | `NestingTooDeep` | [`perl-error/`](../../../../../../crates/perl-error/) |
-| Guard pattern | `with_recursion_guard()` | [`parser/helpers.rs:62`](../../../../../../crates/perl-parser-core/src/engine/parser/helpers.rs:62) |
+| Guard pattern | `with_recursion_guard()` | [`parser/helpers.rs:65`](../../../../../../crates/perl-parser-core/src/engine/parser/helpers.rs) |
 
 ### How It Works
 
@@ -183,7 +246,7 @@ sub payload {
 2. **Increment on Entry**: Each nested construct increments depth
 3. **Limit Check**: `check_recursion()` fails if depth > 128
 4. **Graceful Error**: Returns `ParseError::NestingTooDeep` with details
-5. **Automatic Decrement**: `with_recursion_guard()` ensures cleanup
+5. **Automatic Decrement**: `with_recursion_guard()` ensures cleanup via RAII
 
 ### Error Response
 
@@ -199,6 +262,21 @@ ParseError::NestingTooDeep {
 This produces a user-friendly error message:
 ```
 Nesting too deep: 129 levels exceeds maximum of 128
+```
+
+### Stack Safety Calculation
+
+The limit of 128 is calculated based on:
+
+```
+Typical stack frames between checks: ~20-30 (precedence parsing chain)
+Maximum safe depth: 128 * 30 = ~3840 frames
+OS stack limit: typically 1-8MB
+Frame size: ~1-2KB
+Safe frames: ~500-4000
+
+128 was chosen to be well within safety margin while allowing
+reasonable code complexity.
 ```
 
 ### Test Coverage
@@ -219,7 +297,7 @@ Nesting too deep: 129 levels exceeds maximum of 128
 
 ## Proposed Solutions
 
-### Option 1: Comprehensive Nesting Protection (Current Implementation)
+### Option 1: Comprehensive Nesting Protection (Current Implementation) ✅ Implemented
 
 **Status**: ✅ Implemented
 
@@ -248,6 +326,24 @@ Nesting too deep: 129 levels exceeds maximum of 128
 - Major parser rewrite required
 - More complex implementation
 - May be slower for normal cases
+
+**Implementation Sketch**:
+```rust
+struct ParserStack {
+    frames: Vec<ParseFrame>,
+}
+
+enum ParseFrame {
+    Block { depth: usize },
+    Expression { precedence: u8 },
+    Statement { kind: StmtKind },
+}
+
+fn parse_iterative(&mut self) -> ParseResult<Node> {
+    let mut stack = ParserStack::new();
+    // Explicit stack management instead of recursion
+}
+```
 
 ### Option 3: Configurable Limits
 
@@ -291,12 +387,26 @@ impl Parser {
 - More complex
 - May have false positives on slow systems
 
+**Implementation**:
+```rust
+pub struct ParserConfig {
+    /// Maximum parse time in milliseconds (default: 5000)
+    pub timeout_ms: u64,
+}
+
+fn parse_with_timeout(&mut self) -> ParseResult<Node> {
+    let start = Instant::now();
+    // ... check elapsed time periodically
+}
+```
+
 ## Testing
 
 ### Existing Test Cases
 
+From [`parser_boundary_validation_tests.rs`](../../../../../../crates/perl-parser/tests/parser_boundary_validation_tests.rs):
+
 ```rust
-// From parser_boundary_validation_tests.rs
 const MAX_RECURSION_DEPTH: usize = 128;
 
 #[test]
@@ -311,6 +421,54 @@ fn test_recursion_depth_boundary() {
     let result = parse(&above_limit_code);
     assert!(result.is_err(), "Should fail above limit");
 }
+
+fn generate_nested_code(depth: usize) -> String {
+    let mut code = String::new();
+    for _ in 0..depth {
+        code.push('(');
+    }
+    code.push_str("42");
+    for _ in 0..depth {
+        code.push(')');
+    }
+    code
+}
+```
+
+From [`hang_risk_deep_nesting_tests.rs`](../../../../../../crates/perl-parser/tests/hang_risk_deep_nesting_tests.rs):
+
+```rust
+#[test]
+fn parser_hang_risk_nested_blocks_exceed_limit() {
+    let depth = 300;
+    let mut code = String::new();
+    for _ in 0..depth {
+        code.push_str("{ ");
+    }
+    code.push_str("my $x = 1;");
+    for _ in 0..depth {
+        code.push_str("} ");
+    }
+    
+    let result = parse(&code);
+    assert!(result.is_err(), "Expected RecursionLimit error for {} nested blocks", depth);
+}
+
+#[test]
+fn parser_hang_risk_no_hang_on_extreme_nesting() {
+    use std::time::Duration;
+    
+    let depth = 1000;
+    let code = generate_nested_code(depth);
+    
+    let start = Instant::now();
+    let result = parse(&code);
+    let elapsed = start.elapsed();
+    
+    // Should fail quickly, not hang
+    assert!(elapsed < Duration::from_secs(2), "Should fail within 2 seconds");
+    assert!(result.is_err(), "Parser should reject extremely deep nesting");
+}
 ```
 
 ### Required Test Coverage
@@ -320,8 +478,36 @@ fn test_recursion_depth_boundary() {
 - [x] Above limit returns `NestingTooDeep` error
 - [x] Error message includes depth information
 - [x] Parser recovers after hitting limit
-- [ ] Performance: fails within 2 seconds
+- [x] Performance: fails within 2 seconds
 - [ ] Memory: bounded usage at extreme depths
+
+### Test Patterns to Cover
+
+```rust
+// Nested blocks
+{ { { { ... } } } }
+
+// Nested parentheses
+((((...))))
+
+// Nested arrays
+[[[...]]]
+
+// Nested hashes
+{ a => { b => { c => ... } } }
+
+// Mixed nesting
+{ ( [ { ( [ ... ] ) } ] ) }
+
+// Control flow nesting
+if (1) { if (1) { if (1) { ... } } }
+
+// Loop nesting
+for (;;) { for (;;) { for (;;) { ... } } }
+
+// Subroutine nesting
+sub { sub { sub { ... } } }
+```
 
 ## Related Issues
 
@@ -333,8 +519,7 @@ fn test_recursion_depth_boundary() {
 ### Internal Documentation
 
 - [Crate Architecture Guide](../../../../reference/CRATE_ARCHITECTURE_GUIDE.md)
-- [Error Handling Strategy](../../../../explanation/ERROR_HANDLING_STRATEGY.md)
-- [Security Development Guide](../../../../how-to/SECURITY_DEVELOPMENT_GUIDE.md)
+- [Error Handling Strategy ADR](../../../../adr/0012-error-handling-strategy.md)
 
 ### Source Code
 
@@ -348,8 +533,10 @@ fn test_recursion_depth_boundary() {
 - [`crates/perl-parser/tests/parser_resource_exhaustion_tests.rs`](../../../../../../crates/perl-parser/tests/parser_resource_exhaustion_tests.rs)
 - [`crates/perl-parser/tests/hang_risk_deep_nesting_tests.rs`](../../../../../../crates/perl-parser/tests/hang_risk_deep_nesting_tests.rs)
 - [`crates/perl-parser/tests/parser_depth_limit_test.rs`](../../../../../../crates/perl-parser/tests/parser_depth_limit_test.rs)
+- [`crates/perl-parser/tests/parser_hardening_tests.rs`](../../../../../../crates/perl-parser/tests/parser_hardening_tests.rs)
 
 ### External References
 
 - [RFC 7230 - Security Considerations for Parsers](https://tools.ietf.org/html/rfc7230)
 - [OWASP - Denial of Service](https://owasp.org/www-community/attacks/Denial_of_Service)
+- [CWE-674: Uncontrolled Recursion](https://cwe.mitre.org/data/definitions/674.html)

@@ -18,6 +18,21 @@ Catastrophic backtracking occurs when the regex engine must explore an exponenti
 
 The time complexity can be O(2^n) where n is the input length, making even modest inputs (100 characters) cause millions of backtracking steps.
 
+### Exponential Time Complexity Explained
+
+```
+Pattern: (a+)+b
+Input:   aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac
+
+Step 1: Outer + tries to match all 'a's
+Step 2: Inner + tries different distributions
+Step 3: On failure, backtrack and retry
+Step 4: Exponential combinations explored
+
+For n=30 characters: ~1 billion backtracking steps
+For n=40 characters: ~1 trillion backtracking steps
+```
+
 ## Impact Assessment
 
 | Aspect | Details |
@@ -44,6 +59,13 @@ The time complexity can be O(2^n) where n is the input length, making even modes
 | `(a+)+b` on "aaa...aac" | 50 chars | ~100 seconds |
 | `(a|aa|aaa)+` on "aaa..." | 30 chars | Exponential |
 
+### Attack Classification
+
+This is a form of **ReDoS (Regular Expression Denial of Service)**, classified as:
+
+- **CWE-1333**: Inefficient Regular Expression Complexity
+- **OWASP Category**: Denial of Service
+
 ## Technical Details
 
 ### Root Cause
@@ -59,19 +81,43 @@ Regex backtracking occurs when the engine tries different ways to match a patter
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| Regex Byte Limit | [`lexer/lib.rs:172`](../../../../../../crates/perl-lexer/src/lib.rs:172) | `MAX_REGEX_BYTES = 64KB` |
-| Delimiter Nesting | [`lexer/lib.rs:174`](../../../../../../crates/perl-lexer/src/lib.rs:174) | `MAX_DELIM_NEST = 128` |
-| Heredoc Timeout | [`lexer/lib.rs:176`](../../../../../../crates/perl-lexer/src/lib.rs:176) | `HEREDOC_TIMEOUT_MS = 5000` |
-| Lexer Implementation | [`lexer/lib.rs`](../../../../../../crates/perl-lexer/src/lib.rs) | Regex tokenization |
+| Regex Byte Limit | [`crates/perl-lexer/src/lib.rs:172`](../../../../../../crates/perl-lexer/src/lib.rs) | `MAX_REGEX_BYTES = 64KB` |
+| Heredoc Byte Limit | [`crates/perl-lexer/src/lib.rs:173`](../../../../../../crates/perl-lexer/src/lib.rs) | `MAX_HEREDOC_BYTES = 256KB` |
+| Delimiter Nesting | [`crates/perl-lexer/src/lib.rs:174`](../../../../../../crates/perl-lexer/src/lib.rs) | `MAX_DELIM_NEST = 128` |
+| Heredoc Depth | [`crates/perl-lexer/src/lib.rs:175`](../../../../../../crates/perl-lexer/src/lib.rs) | `MAX_HEREDOC_DEPTH = 100` |
+| Lexer Implementation | [`crates/perl-lexer/src/lib.rs`](../../../../../../crates/perl-lexer/src/lib.rs) | Regex tokenization |
 
 ### Current Implementation
 
+From [`crates/perl-lexer/src/lib.rs:171-175`](../../../../../../crates/perl-lexer/src/lib.rs):
+
 ```rust
-// From crates/perl-lexer/src/lib.rs
-const MAX_REGEX_BYTES: usize = 64 * 1024; // 64KB max for regex patterns
-const MAX_DELIM_NEST: usize = 128;        // Max nesting depth for delimiters
-const MAX_HEREDOC_DEPTH: usize = 100;     // Max nesting depth for heredocs
-const HEREDOC_TIMEOUT_MS: u64 = 5000;     // 5 seconds timeout for heredoc parsing
+// Limits to prevent timeout/hang on pathological input
+const MAX_REGEX_BYTES: usize = 64 * 1024;  // 64KB max for regex patterns
+const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
+const MAX_DELIM_NEST: usize = 128;         // Max nesting depth for delimiters
+const MAX_HEREDOC_DEPTH: usize = 100;      // Max nesting depth for heredocs
+```
+
+### Budget Guard Implementation
+
+From [`crates/perl-lexer/src/lib.rs:589-609`](../../../../../../crates/perl-lexer/src/lib.rs):
+
+```rust
+/// **Limits**:
+/// - `MAX_REGEX_BYTES` (64KB): Maximum bytes in a single regex literal
+/// - `MAX_DELIM_NEST` (128): Maximum delimiter nesting depth
+fn try_regex_with_budget(&mut self) -> Option<Token> {
+    let start = self.position;
+    // ... parsing logic
+    
+    let bytes_consumed = self.position - start;
+    if bytes_consumed <= MAX_REGEX_BYTES && depth <= MAX_DELIM_NEST {
+        return None; // Within budget
+    }
+    
+    // Budget exceeded - emit UnknownRest for graceful degradation
+}
 ```
 
 ## Examples
@@ -124,6 +170,16 @@ if ($string =~ /^(?>a+)+b$/) { }  # Atomic grouping prevents backtracking
 if ($string =~ /^a+b$/) { }       # Simple, linear time
 ```
 
+### Pathological Patterns to Detect
+
+| Pattern | Risk Level | Time Complexity |
+|---------|------------|-----------------|
+| `(a+)+` | Critical | O(2^n) |
+| `(a*)*` | Critical | O(2^n) |
+| `(a|aa)+` | High | O(2^n) |
+| `(a?){n}` | High | O(2^n) |
+| `(.*)\1` | Medium | O(n^2) |
+
 ## Current Mitigation
 
 ### Implemented Protections
@@ -133,23 +189,22 @@ if ($string =~ /^a+b$/) { }       # Simple, linear time
 | `MAX_REGEX_BYTES` | 64KB | Limits regex pattern size |
 | `MAX_DELIM_NEST` | 128 | Limits delimiter nesting depth |
 | `MAX_HEREDOC_DEPTH` | 100 | Limits heredoc nesting |
-| `HEREDOC_TIMEOUT_MS` | 5000ms | Timeout for heredoc parsing |
+| `MAX_HEREDOC_BYTES` | 256KB | Limits heredoc body size |
 
 ### How Protections Work
 
 1. **Byte Limit**: Regex patterns exceeding 64KB are truncated or rejected
 2. **Nesting Limit**: Delimiter nesting beyond 128 levels fails
-3. **Timeout**: Heredoc parsing times out after 5 seconds
+3. **Graceful Degradation**: Emits `UnknownRest` token instead of hanging
 
 ### Lexer Implementation
 
+From [`crates/perl-lexer/src/lib.rs:2907-2909`](../../../../../../crates/perl-lexer/src/lib.rs):
+
 ```rust
-// From perl-lexer/src/lib.rs
-// Timeout protection (Issue #443)
-if self.start_time.elapsed().as_millis() > HEREDOC_TIMEOUT_MS as u128 {
-    self.pending_heredocs.remove(0);
-    // ... error handling
-}
+/// - Budget guard prevents infinite loops on pathological input
+/// - MAX_REGEX_BYTES limit (64KB) ensures bounded execution time
+/// - Graceful degradation: emit UnknownRest token if budget exceeded
 ```
 
 ### Limitations
@@ -165,12 +220,18 @@ if self.start_time.elapsed().as_millis() > HEREDOC_TIMEOUT_MS as u128 {
 | [`lexer_catastrophic_regex_test.rs`](../../../../../../crates/perl-lexer/tests/lexer_catastrophic_regex_test.rs) | Catastrophic backtracking tests |
 | [`hang_risk_regex_literal_tests.rs`](../../../../../../crates/perl-lexer/tests/hang_risk_regex_literal_tests.rs) | Regex literal hang risks |
 
+From [`lexer_catastrophic_regex_test.rs`](../../../../../../crates/perl-lexer/tests/lexer_catastrophic_regex_test.rs):
+
 ```rust
-// From lexer_catastrophic_regex_test.rs
-// Tests verify:
-// 1. Byte limits: MAX_REGEX_BYTES (64KB) prevents processing excessively large patterns
-// 2. Depth limits: MAX_DELIM_NEST (128) prevents deeply nested delimiter structures
-// 3. Budget guards: Fast-path checks in hot loops detect budget exhaustion
+//! Tests for Issue #424: Fix catastrophic regex backtracking timeout risk
+//!
+//! This test suite validates that the lexer handles potentially catastrophic regex
+//! patterns without timeout or exponential parsing time. Patterns like `(a+)+b` can
+//! cause exponential backtracking in some regex engines, but our lexer should handle
+//! them safely by limiting iteration count and pattern complexity.
+//!
+//! - Normal regex patterns: <1ms tokenization time
+//! - Pathological patterns: <100ms with budget guard triggering
 ```
 
 ## Proposed Solutions
@@ -191,19 +252,31 @@ if self.start_time.elapsed().as_millis() > HEREDOC_TIMEOUT_MS as u128 {
 
 **Implementation**:
 ```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RegexRisk {
+    Low,      // Safe pattern
+    Medium,   // Some risk, warn user
+    High,     // Dangerous, reject or truncate
+}
+
 fn analyze_regex_risk(pattern: &str) -> RegexRisk {
-    // Detect nested quantifiers
+    // Detect nested quantifiers: (a+)+, (a*)*, etc.
     if NESTED_QUANTIFIER_REGEX.is_match(pattern) {
         return RegexRisk::High;
     }
     
-    // Detect overlapping alternatives
+    // Detect overlapping alternatives: (a|aa|aaa)+
     if has_overlapping_alternatives(pattern) {
         return RegexRisk::Medium;
     }
     
     RegexRisk::Low
 }
+
+// Pattern to detect nested quantifiers
+static NESTED_QUANTIFIER_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"\([^)]*[+*][^)]*\)[+*]").unwrap()
+});
 ```
 
 ### Option 2: Timeout-Based Protection
@@ -228,7 +301,10 @@ fn parse_regex_with_timeout(&mut self) -> ParseResult<Token> {
     let start = Instant::now();
     // ... parsing logic
     if start.elapsed().as_millis() > REGEX_PARSE_TIMEOUT_MS {
-        return Err(ParseError::Timeout);
+        return Err(ParseError::Timeout {
+            operation: "regex parsing".to_string(),
+            elapsed_ms: start.elapsed().as_millis() as u64,
+        });
     }
 }
 ```
@@ -247,7 +323,7 @@ fn parse_regex_with_timeout(&mut self) -> ParseResult<Token> {
 - May need configuration
 - Not applicable to lexer (only runtime)
 
-**Implementation**:
+**Implementation** (Perl side):
 ```perl
 # In Perl, you can set backtracking limit
 use re 'eval';
@@ -277,6 +353,8 @@ fn check_regex_pattern(&self, pattern: &str) -> Vec<Diagnostic> {
         diagnostics.push(Diagnostic {
             message: "Regex pattern may cause catastrophic backtracking".to_string(),
             severity: DiagnosticSeverity::Warning,
+            code: Some("redundant-nested-quantifier".to_string()),
+            source: Some("perl-lsp".to_string()),
             ..Default::default()
         });
     }
@@ -289,8 +367,9 @@ fn check_regex_pattern(&self, pattern: &str) -> Vec<Diagnostic> {
 
 ### Existing Test Cases
 
+From [`lexer_catastrophic_regex_test.rs`](../../../../../../crates/perl-lexer/tests/lexer_catastrophic_regex_test.rs):
+
 ```rust
-// From lexer_catastrophic_regex_test.rs
 #[test]
 fn test_deeply_nested_delimiters_budget_guard() {
     // Create a pattern with deeply nested delimiters beyond MAX_DELIM_NEST (128)
@@ -300,13 +379,32 @@ fn test_deeply_nested_delimiters_budget_guard() {
     }
     // Should fail gracefully, not hang
 }
+
+#[test]
+fn test_pathological_patterns_complete_quickly() {
+    let pathological = vec![
+        (r"/(a+)+$/", "Nested quantifiers"),
+        (r"/(a*)*$/", "Nested star quantifiers"),
+        (r"/(a|aa|aaa)+$/", "Overlapping alternatives"),
+    ];
+    
+    for (pattern, desc) in pathological {
+        let start = Instant::now();
+        let mut lexer = PerlLexer::new(pattern);
+        let tokens: Vec<_> = lexer.collect();
+        let elapsed = start.elapsed();
+        
+        assert!(elapsed < Duration::from_millis(100),
+            "{}: should complete in <100ms, took {:?}", desc, elapsed);
+    }
+}
 ```
 
 ### Required Test Coverage
 
 - [x] Byte limit enforcement (64KB)
 - [x] Delimiter nesting limit (128)
-- [x] Heredoc timeout (5 seconds)
+- [x] Heredoc depth limit (100)
 - [ ] Pattern analysis for nested quantifiers
 - [ ] Timeout on pathological patterns
 - [ ] Performance: rejection within 100ms
@@ -316,15 +414,25 @@ fn test_deeply_nested_delimiters_budget_guard() {
 
 ```perl
 # These patterns should be detected/handled
-^(a+)+$# Nested quantifiers
-^(a*)*$# Nested quantifiers
-^(a|aa|aaa)+$ # Overlapping alternatives
-^(.)\1+$ # Back-reference with quantifier
-^(.?){25}$ # Exponential paths
+^(a+)+$        # Nested quantifiers
+^(a*)*$        # Nested quantifiers
+^(a|aa|aaa)+$  # Overlapping alternatives
+^(.)\1+$       # Back-reference with quantifier
+^(.?){25}$     # Exponential paths
 ```
+
+### Performance Benchmarks
+
+| Pattern | Input Size | Expected Time |
+|---------|------------|---------------|
+| Simple `/abc/` | Any | <1ms |
+| Complex `/[a-z]+/` | 1KB | <10ms |
+| Nested `/(a+)+/` | 100 chars | <100ms (budget guard) |
+| Deep nesting `/(a{1}){128}/` | Any | <100ms (limit hit) |
 
 ## Related Issues
 
+- Issue #424: Fix catastrophic regex backtracking timeout risk
 - Issue #443: Heredoc timeout protection
 - Related to overall parser hardening efforts
 
@@ -333,15 +441,17 @@ fn test_deeply_nested_delimiters_budget_guard() {
 ### Internal Documentation
 
 - [Crate Architecture Guide](../../../../reference/CRATE_ARCHITECTURE_GUIDE.md)
-- [Performance SLO](../../../../reference/PERFORMANCE_SLO.md)
+- [Error Handling Strategy ADR](../../../../adr/0012-error-handling-strategy.md)
 
 ### Source Code
 
 - [`crates/perl-lexer/src/lib.rs`](../../../../../../crates/perl-lexer/src/lib.rs) - Lexer implementation
 - [`crates/perl-lexer/tests/lexer_catastrophic_regex_test.rs`](../../../../../../crates/perl-lexer/tests/lexer_catastrophic_regex_test.rs) - Test coverage
+- [`crates/perl-lexer/tests/hang_risk_regex_literal_tests.rs`](../../../../../../crates/perl-lexer/tests/hang_risk_regex_literal_tests.rs) - Hang risk tests
 
 ### External References
 
 - [Runaway Regular Expressions: Catastrophic Backtracking](https://www.regular-expressions.info/catastrophic.html)
 - [OWASP ReDoS](https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS)
 - [Perl re pragma](https://perldoc.perl.org/re)
+- [CWE-1333: Inefficient Regular Expression Complexity](https://cwe.mitre.org/data/definitions/1333.html)

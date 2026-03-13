@@ -54,9 +54,29 @@ The disambiguation requires looking at the **preceding token**:
 
 | Component | Location | Purpose |
 |-----------|----------|---------|
-| Lexer | [`crates/perl-lexer/src/lib.rs`](../../../../../../crates/perl-lexer/src/lib.rs) | Slash tokenization |
+| Lexer Mode | [`crates/perl-lexer/src/mode.rs:36-69`](../../../../../../crates/perl-lexer/src/mode.rs) | `LexerMode` enum for context tracking |
+| Slash Disambiguation | [`crates/perl-lexer/src/lib.rs:1999-2070`](../../../../../../crates/perl-lexer/src/lib.rs) | `try_operator()` slash handling |
 | Parser Core | [`crates/perl-parser-core/src/engine/parser/mod.rs`](../../../../../../crates/perl-parser-core/src/engine/parser/mod.rs) | Expression parsing |
 | Expression Parser | [`crates/perl-parser-core/src/engine/parser/expressions/`](../../../../../../crates/perl-parser-core/src/engine/parser/expressions/) | Term/operator handling |
+
+### Lexer Mode Tracking System
+
+The lexer uses a state machine with two primary modes:
+
+```rust
+// From crates/perl-lexer/src/mode.rs
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LexerMode {
+    /// Expecting a term (value) - slash starts a regex
+    ExpectTerm,
+    /// Expecting an operator - slash is division
+    ExpectOperator,
+}
+```
+
+**Mode Transitions**:
+- After identifier/number/closing paren → `ExpectOperator` → slash is division
+- After operator/keyword/opening paren → `ExpectTerm` → slash is regex
 
 ### Perl's Disambiguation Rules
 
@@ -64,13 +84,37 @@ Perl uses the following heuristic (simplified):
 
 ```perl
 # Division - follows a term
-my $result = $a / $b;# term / term
-my $calc = (1 + 2) / 3;    # ) /
+my $result = $a / $b;        # term / term
+my $calc = (1 + 2) / 3;      # ) /
 
 # Regex - follows operator or is statement start
-if (/pattern/) { }        # if (/
-my $match = $x =~ /pat/;   # =~ /
-print if /pattern/;        # if /
+if (/pattern/) { }           # if (/
+my $match = $x =~ /pat/;     # =~ /
+print if /pattern/;          # if /
+```
+
+### Implementation Details
+
+From [`crates/perl-lexer/src/lib.rs:1999-2070`](../../../../../../crates/perl-lexer/src/lib.rs):
+
+```rust
+// 2. **Slash Disambiguation**:
+//    - `LexerMode::ExpectTerm` → `/` starts a regex
+//      Examples: `if (/pattern/)`, `=~ /test/`, `( /regex/`
+//    - `LexerMode::ExpectOperator` → `/` is division or `//`
+//      Examples: `$x / 2`, `$x // $y`, `) / 3`
+
+if self.current_char() == Some('/') {
+    if self.mode == LexerMode::ExpectTerm {
+        // Mode indicates we're expecting a term → `/` starts a regex
+        // Examples: `if (/pattern/)`, `=~ /test/`, `while (/match/)`
+        return self.try_regex();
+    } else {
+        // Mode indicates we're expecting an operator → `/` is division or `//`
+        // Examples: `$x / 2`, `$x // $y`, `10 / 3`
+        // ... handle division or defined-or
+    }
+}
 ```
 
 ## Examples
@@ -116,6 +160,14 @@ my $result = 100 / length($&); # Division by result of regex
 # Substitution with division in replacement
 my $str = "100";
 $str =~ s/(\d+)/$1 \/ 2/e; # Division in replacement
+
+# Defined-or vs empty regex
+my $val = $x // $y;         # Defined-or operator
+my $match = $x =~ //;       # Empty regex match
+
+# Division assignment vs regex
+$x /= 2;                    # Division assignment
+$x =~ s/foo/bar/;           # Substitution
 ```
 
 ## Current Mitigation
@@ -131,16 +183,33 @@ The parser implements context-aware slash disambiguation:
 | Match operator `=~` | ✅ Implemented | `$x =~ /pat/` |
 | Statement-start regex | ✅ Implemented | `if (/pat/) { }` |
 | Implicit match | ✅ Implemented | `print if /pat/` |
+| Defined-or `//` | ✅ Implemented | `$x // $y` |
+| Division assignment `/=` | ✅ Implemented | `$x /= 2` |
 
-### Lexer Context Tracking
+### Budget Guards
 
-The lexer tracks parsing state to determine slash context:
+From [`crates/perl-lexer/src/lib.rs:172-175`](../../../../../../crates/perl-lexer/src/lib.rs):
 
 ```rust
-// From perl-lexer/src/lib.rs
-// The lexer uses state machine to track whether we expect:
-// - A term (variable, literal, regex)
-// - An operator (including division)
+const MAX_REGEX_BYTES: usize = 64 * 1024;  // 64KB max for regex patterns
+const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
+const MAX_DELIM_NEST: usize = 128;         // Max nesting depth for delimiters
+```
+
+### Timeout Protection
+
+From [`crates/perl-lexer/src/lib.rs:2008-2021`](../../../../../../crates/perl-lexer/src/lib.rs):
+
+```rust
+// 3. **Timeout Protection**:
+//    - Regex parsing has budget guard: MAX_REGEX_BYTES (64KB)
+//    - Budget exceeded → emit UnknownRest token (graceful degradation)
+//
+// 4. **Graceful Degradation**:
+//    - If regex parsing exceeds budget, emit UnknownRest token
+//    - Parser continues instead of hanging
+//    - LSP diagnostics generated for truncated regexes
+//    - Test coverage: lexer_slash_timeout_tests.rs (21 test cases)
 ```
 
 ### Limitations
@@ -151,7 +220,7 @@ The lexer tracks parsing state to determine slash context:
 
 ## Proposed Solutions
 
-### Option 1: Enhanced Context Tracking (Recommended)
+### Option 1: Enhanced Context Tracking (Recommended) ✅ Implemented
 
 **Approach**: Maintain explicit parser state for expected token type
 
@@ -164,17 +233,20 @@ The lexer tracks parsing state to determine slash context:
 - More complex implementation
 - Requires careful state management
 
-**Implementation**:
+**Implementation** (already in place):
 ```rust
-enum Expecting {
-    Term,     // Next should be value/regex
-    Operator, // Next should be operator
+enum LexerMode {
+    ExpectTerm,     // Next should be value/regex
+    ExpectOperator, // Next should be operator
 }
 
-fn parse_slash(&mut self, expecting: Expecting) -> ParseResult<Node> {
-    match expecting {
-        Expecting::Term => self.parse_regex(),
-        Expecting::Operator => self.parse_division(),
+fn try_operator(&mut self) -> Option<Token> {
+    if self.current_char() == Some('/') {
+        if self.mode == LexerMode::ExpectTerm {
+            return self.try_regex();
+        } else {
+            // Handle division or defined-or
+        }
     }
 }
 ```
@@ -209,24 +281,75 @@ fn parse_slash(&mut self, expecting: Expecting) -> ParseResult<Node> {
 
 | Test File | Coverage |
 |-----------|----------|
-| `crates/perl-lexer/tests/` | Lexer slash handling |
-| `crates/perl-parser/tests/` | Parser expression tests |
+| [`crates/perl-lexer/tests/lexer_slash_timeout_tests.rs`](../../../../../../crates/perl-lexer/tests/lexer_slash_timeout_tests.rs) | 21 test cases for slash disambiguation |
+| [`crates/perl-lexer/tests/hang_risk_slash_ambiguity_tests.rs`](../../../../../../crates/perl-lexer/tests/hang_risk_slash_ambiguity_tests.rs) | Comprehensive slash ambiguity tests |
+| [`crates/perl-lexer/tests/comprehensive_unit_tests.rs`](../../../../../../crates/perl-lexer/tests/comprehensive_unit_tests.rs) | Context-sensitive slash disambiguation |
+
+### Test Cases from Implementation
+
+```rust
+// From lexer_slash_timeout_tests.rs
+#[test]
+fn test_slash_after_identifier_is_division() {
+    let mut lexer = PerlLexer::new("$x / 2");
+    lexer.next_token(); // $x
+    let token = lexer.next_token();
+    assert_eq!(token.token_type, TokenType::Division);
+}
+
+#[test]
+fn test_slash_after_operator_is_regex() {
+    let mut lexer = PerlLexer::new("=~ /pattern/");
+    lexer.next_token(); // =~
+    let token = lexer.next_token();
+    assert_eq!(token.token_type, TokenType::RegexMatch);
+}
+```
 
 ### Required Test Cases
 
-- [ ] Simple division: `$a / $b`
-- [ ] Simple regex: `/pattern/`
-- [ ] Chained division: `$a / $b / $c`
-- [ ] Regex with division-like content: `/\//`
-- [ ] Match operator: `$x =~ /pat/`
-- [ ] Substitution: `$x =~ s/old/new/`
-- [ ] Implicit match: `print if /pat/`
-- [ ] Division after function call: `func() / 2`
-- [ ] Edge case: `time / 86400` vs `time /pattern/`
+- [x] Simple division: `$a / $b`
+- [x] Simple regex: `/pattern/`
+- [x] Chained division: `$a / $b / $c`
+- [x] Regex with division-like content: `/\//`
+- [x] Match operator: `$x =~ /pat/`
+- [x] Substitution: `$x =~ s/old/new/`
+- [x] Implicit match: `print if /pat/`
+- [x] Division after function call: `func() / 2`
+- [x] Edge case: `time / 86400` vs `time /pattern/`
+- [x] Defined-or: `$x // $y`
+- [x] Division assignment: `$x /= 2`
+- [x] Empty regex: `$x =~ //`
+- [x] Performance: no hang on pathological input
+
+### Performance Test
+
+```rust
+// From hang_risk_slash_ambiguity_tests.rs
+#[test]
+fn lexer_slash_ambiguity_no_hang_on_pathological_input() {
+    use std::sync::{Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
+
+    let code = Arc::new("$a / $b / $c / $d / $e / $f / $g / $h".repeat(1000));
+    let result = Arc::new(Mutex::new(None));
+
+    let handle = thread::spawn(move || {
+        let mut lexer = PerlLexer::new(&code);
+        let tokens: Vec<_> = lexer.collect();
+        *result.lock().unwrap() = Some(tokens);
+    });
+
+    // Wait max 2 seconds for lexer to complete
+    let completed = handle.join().is_ok();
+    assert!(completed, "Lexer should complete within timeout");
+}
+```
 
 ## Related Issues
 
-- No open GitHub issues for this specific problem
+- Issue #422: Fix ambiguous slash (division vs regex) timeout risk
 - Related to overall Perl parsing correctness
 
 ## References
@@ -234,13 +357,20 @@ fn parse_slash(&mut self, expecting: Expecting) -> ParseResult<Node> {
 ### Internal Documentation
 
 - [Crate Architecture Guide](../../../../reference/CRATE_ARCHITECTURE_GUIDE.md)
-- [Parser Comparison](../../../../reference/PARSER_COMPARISON.md)
+- [Mode-aware Lexer ADR](../../../../adr/0014-mode-aware-lexer.md)
 
 ### Source Code
 
+- [`crates/perl-lexer/src/mode.rs`](../../../../../../crates/perl-lexer/src/mode.rs) - Lexer mode tracking
 - [`crates/perl-lexer/src/lib.rs`](../../../../../../crates/perl-lexer/src/lib.rs) - Lexer implementation
 - [`crates/perl-parser-core/src/engine/parser/mod.rs`](../../../../../../crates/perl-parser-core/src/engine/parser/mod.rs) - Parser core
 - [`crates/perl-parser-core/src/engine/parser/expressions/`](../../../../../../crates/perl-parser-core/src/engine/parser/expressions/) - Expression parsing
+
+### Test Files
+
+- [`crates/perl-lexer/tests/lexer_slash_timeout_tests.rs`](../../../../../../crates/perl-lexer/tests/lexer_slash_timeout_tests.rs)
+- [`crates/perl-lexer/tests/hang_risk_slash_ambiguity_tests.rs`](../../../../../../crates/perl-lexer/tests/hang_risk_slash_ambiguity_tests.rs)
+- [`crates/perl-lexer/tests/comprehensive_unit_tests.rs`](../../../../../../crates/perl-lexer/tests/comprehensive_unit_tests.rs)
 
 ### External References
 
