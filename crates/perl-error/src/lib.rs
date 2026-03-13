@@ -427,6 +427,23 @@ pub enum ParseError {
         /// Maximum allowed depth
         max_depth: usize,
     },
+
+    /// Regex backtracking limit exceeded during pattern parsing
+    ///
+    /// This error occurs when the lexer encounters a regex pattern that requires
+    /// excessive backtracking steps to parse, which could indicate a pathological
+    /// pattern that would cause catastrophic backtracking at runtime.
+    ///
+    /// Recovery strategy: emit UnknownRest token and continue parsing; the partial
+    /// pattern is preserved for diagnostic purposes.
+    #[error("Regex backtracking limit exceeded: {limit} steps (pattern: {pattern_preview})")]
+    RegexBacktrackLimit {
+        /// The backtracking limit that was exceeded
+        limit: usize,
+        /// Preview of the pattern that caused the limit to be exceeded
+        /// (truncated to prevent excessive error message size)
+        pattern_preview: String,
+    },
 }
 
 /// Error classification and diagnostic generation for parsed Perl code.

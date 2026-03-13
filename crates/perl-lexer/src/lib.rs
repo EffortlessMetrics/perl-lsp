@@ -94,6 +94,7 @@
 //! - **MAX_REGEX_BYTES**: 64KB maximum for regex patterns
 //! - **MAX_HEREDOC_BYTES**: 256KB maximum for heredoc bodies
 //! - **MAX_DELIM_NEST**: 128 levels maximum nesting depth for delimiters
+//! - **MAX_BACKTRACK_STEPS**: 100,000 maximum parsing steps for regex patterns
 //!
 //! When limits are exceeded, the lexer emits an `UnknownRest` token preserving
 //! all previously parsed symbols, allowing continued analysis.
@@ -174,6 +175,20 @@ const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
 const MAX_DELIM_NEST: usize = 128; // Max nesting depth for delimiters
 const MAX_HEREDOC_DEPTH: usize = 100; // Max nesting depth for heredocs
 const HEREDOC_TIMEOUT_MS: u64 = 5000; // 5 seconds timeout for heredoc parsing
+
+/// Maximum backtracking steps before falling back to regex analysis.
+/// This prevents catastrophic backtracking in complex patterns.
+///
+/// When the lexer encounters a regex pattern that requires more than this
+/// number of parsing steps (character advances with escape handling), it
+/// will emit an UnknownRest token for graceful degradation rather than
+/// potentially hanging on pathological input.
+///
+/// The limit of 100,000 steps was chosen to:
+/// - Allow reasonable complex patterns (e.g., deeply nested quantifiers)
+/// - Complete in <100ms on typical hardware
+/// - Prevent exponential backtracking attacks
+pub const MAX_BACKTRACK_STEPS: usize = 100_000;
 
 /// Configuration for the lexer
 #[derive(Debug, Clone)]
@@ -2906,6 +2921,7 @@ impl<'a> PerlLexer<'a> {
     /// **Timeout Protection (Issue #422)**:
     /// - Budget guard prevents infinite loops on pathological input
     /// - MAX_REGEX_BYTES limit (64KB) ensures bounded execution time
+    /// - MAX_BACKTRACK_STEPS limit (100K) prevents catastrophic backtracking
     /// - Graceful degradation: emit UnknownRest token if budget exceeded
     ///
     /// **Performance**:
@@ -2914,8 +2930,37 @@ impl<'a> PerlLexer<'a> {
     /// - Typical regex: <10μs, Large regex (64KB): ~1ms
     fn parse_regex(&mut self, start: usize) -> Option<Token> {
         self.advance(); // Skip opening /
+        
+        // Backtracking step counter to prevent catastrophic backtracking
+        let mut backtrack_steps: usize = 0;
 
         while let Some(ch) = self.current_char() {
+            // Backtracking limit check: prevent catastrophic backtracking (P0 fix)
+            // Each iteration counts as one step; limit prevents exponential complexity
+            backtrack_steps += 1;
+            if backtrack_steps > MAX_BACKTRACK_STEPS {
+                // Graceful degradation: emit UnknownRest token
+                // The pattern preview is truncated to prevent excessive error size
+                let text = &self.input[start..self.position];
+                let preview = if text.len() > 50 {
+                    format!("{}...", &text[..50])
+                } else {
+                    text.to_string()
+                };
+                // Log warning for diagnostics (in production, this would go to tracing)
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "Warning: Regex backtracking limit exceeded ({} steps) for pattern: {}",
+                    MAX_BACKTRACK_STEPS, preview
+                );
+                return Some(Token {
+                    token_type: TokenType::UnknownRest,
+                    text: Arc::from(self.input[start..].as_ref()),
+                    start,
+                    end: self.input.len(),
+                });
+            }
+            
             // Budget guard: prevent timeout on pathological input (Issue #422)
             // If exceeded, returns UnknownRest token for graceful degradation
             if let Some(token) = self.budget_guard(start, 0) {

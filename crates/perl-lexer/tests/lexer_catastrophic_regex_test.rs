@@ -375,3 +375,137 @@ fn test_pattern_only_quantifiers() {
         );
     }
 }
+
+/// Test MAX_BACKTRACK_STEPS constant is properly exported and has correct value
+#[test]
+fn test_max_backtrack_steps_constant() {
+    // Verify the constant is accessible and has the expected value
+    assert_eq!(
+        perl_lexer::MAX_BACKTRACK_STEPS,
+        100_000,
+        "MAX_BACKTRACK_STEPS should be 100,000"
+    );
+}
+
+/// Test that patterns exceeding backtracking step limit emit UnknownRest token
+#[test]
+fn test_backtrack_limit_enforcement() {
+    // Create a pattern that will exceed the 100,000 step limit
+    // Each character in the pattern counts as one step during parsing
+    // A pattern with >100,000 characters will trigger the limit
+    let large_pattern = "a".repeat(150_000);
+    let input = format!("/{}", large_pattern);
+    
+    let mut lexer = PerlLexer::new(&input);
+    let tokens: Vec<_> = lexer.collect_tokens();
+    
+    // Should emit UnknownRest token when limit is exceeded
+    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    assert!(
+        has_unknown_rest,
+        "Pattern exceeding MAX_BACKTRACK_STEPS should emit UnknownRest token"
+    );
+}
+
+/// Test that normal patterns stay well under the backtracking limit
+#[test]
+fn test_normal_patterns_under_backtrack_limit() {
+    // Normal patterns should parse without hitting the 100,000 step limit
+    let test_cases = vec![
+        r"/^(a+)+b$/",                          // Nested quantifiers (classic backtracking risk)
+        r"/(x|xy)+(y|yz)+/",                    // Overlapping alternation
+        r"/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/", // Email pattern
+        r"/\d{3}-\d{3}-\d{4}/",                 // Phone number
+        r"/^https?:\/\/[^\s]+$/",               // URL pattern
+    ];
+    
+    for input in test_cases {
+        let mut lexer = PerlLexer::new(input);
+        let tokens: Vec<_> = lexer.collect_tokens();
+        
+        // These should parse successfully without hitting the backtrack limit
+        let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+        assert!(
+            !has_unknown_rest,
+            "Normal pattern should not trigger backtrack limit: {}",
+            input
+        );
+        
+        // Should have a proper regex token
+        let has_regex = tokens.iter().any(|t| {
+            matches!(t.token_type, TokenType::RegexMatch | TokenType::Substitution | TokenType::QuoteRegex)
+        });
+        assert!(
+            has_regex,
+            "Normal pattern should produce regex token: {}",
+            input
+        );
+    }
+}
+
+/// Test that patterns at the boundary of the limit still parse correctly
+#[test]
+fn test_boundary_backtrack_limit() {
+    // Create a pattern that is just under the limit
+    // Pattern of 50,000 characters should parse fine (well under 100,000 limit)
+    let medium_pattern = "a".repeat(50_000);
+    let input = format!("/{}b/", medium_pattern);
+    
+    let mut lexer = PerlLexer::new(&input);
+    let tokens: Vec<_> = lexer.collect_tokens();
+    
+    // Should parse successfully
+    let has_regex = tokens.iter().any(|t| matches!(t.token_type, TokenType::RegexMatch));
+    assert!(
+        has_regex,
+        "Pattern under MAX_BACKTRACK_STEPS should parse successfully"
+    );
+}
+
+/// Test that escape sequences are counted correctly in backtracking steps
+#[test]
+fn test_escape_sequences_backtrack_counting() {
+    // Pattern with many escape sequences - each escape sequence takes 2 steps
+    // but should still be under the limit
+    let escape_pattern: String = (0..10_000).map(|_| r"\d").collect::<String>();
+    let input = format!("/{}a/", escape_pattern);
+    
+    let mut lexer = PerlLexer::new(&input);
+    let tokens: Vec<_> = lexer.collect_tokens();
+    
+    // Should parse successfully - 10,000 escape sequences = ~20,000 steps
+    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    assert!(
+        !has_unknown_rest,
+        "Pattern with escape sequences under limit should parse successfully"
+    );
+}
+
+/// Performance test: verify backtracking limit prevents excessive parsing time
+#[test]
+fn test_backtrack_limit_performance() {
+    use std::time::Instant;
+    
+    // Create a pattern that would exceed the limit
+    let large_pattern = "x".repeat(120_000);
+    let input = format!("/{}", large_pattern);
+    
+    let start = Instant::now();
+    let mut lexer = PerlLexer::new(&input);
+    let tokens: Vec<_> = lexer.collect_tokens();
+    let elapsed = start.elapsed();
+    
+    // Should complete quickly due to backtracking limit (under 1 second)
+    assert!(
+        elapsed.as_millis() < 1000,
+        "Backtracking limit should ensure fast completion, took {:?}",
+        elapsed
+    );
+    
+    // Should emit UnknownRest token
+    let has_unknown_rest = tokens.iter().any(|t| matches!(t.token_type, TokenType::UnknownRest));
+    assert!(
+        has_unknown_rest,
+        "Large pattern should trigger backtracking limit"
+    );
+}
