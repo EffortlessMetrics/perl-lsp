@@ -56,6 +56,26 @@
 | Mutation score improvement | 🟡 Planned | QA Team | 87% → 90% mutation score | None |
 | CI pipeline optimization | 🟢 Active | DevOps | Build time <15 min | None |
 
+### Architecture Decision Records (ADRs) — Critical
+
+*High-priority ADRs identified from codebase investigations*
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| Security ADRs (6 total) | 🟢 Active | Security Team | Path normalization, timeout policy, file size limits, UTF-16 fix, dependency management, unsafe code budget documented | None |
+| Parser/Lexer ADRs (6 total) | 🟢 Active | Parser Team | include! macro, FIFO heredoc, hash vs block, recursion depth, AST v2, statement modifiers documented | None |
+| LSP Server ADRs (10 total) | 🟡 Planned | LSP Team | Dual representation, lifecycle routing, deadline enforcement, and 7 others documented | None |
+
+### Known Limitations Documentation
+
+*Document known issues and limitations discovered during investigations*
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| DAP parser hang workaround | 🟢 Active | DAP Team | GitHub issue created, workaround documented in ADR | None |
+| `use lib` limitation | 🟡 Planned | Module Team | Limitation documented with workaround guidance | None |
+| Lexer mode transitions | 🟡 Planned | Parser Team | Mode transition diagram and edge cases documented | None |
+
 ---
 
 ## NEXT — Next Quarter (Q2/Q3 2026)
@@ -96,6 +116,28 @@
 | Safe rename across workspace | 🔵 Future | LSP Team | No cross-package collisions | v0.12.0 complete |
 | Extract Method refactoring | 🔵 Future | LSP Team | Semantics preserved | v0.12.0 complete |
 | Extract Variable refactoring | 🔵 Future | LSP Team | Single-expression extraction | v0.12.0 complete |
+
+### Architecture Decision Records (ADRs) — Complete Coverage
+
+*Remaining ADRs from codebase investigations*
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| DAP ADRs (5 total) | 🟡 Planned | DAP Team | Bridge vs native, timeout values, parser hang workaround, marker framing, poison-safe mutex documented | None |
+| Module Resolution ADRs (3 total) | 🟡 Planned | Module Team | Module resolution architecture, legacy separator handling, static vs dynamic resolution documented | None |
+| Test Infrastructure ADRs (5 total) | 🟡 Planned | QA Team | Sentinel values, mutation hardening, zero quarantine, proptest regression, BDD grid documented | None |
+| CI/CD ADRs (4 total) | 🟡 Planned | DevOps | Receipt-based gates, topological sort, four-tier CI, multi-platform Docker documented | None |
+
+### Documentation Guides
+
+*Missing guides identified during investigations*
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| Testing Guide | 🟡 Planned | QA Team | Comprehensive testing guide covering mutation testing, proptest, BDD patterns | None |
+| CI/CD Architecture Guide | 🟡 Planned | DevOps | Complete CI/CD architecture documentation with receipt system explanation | None |
+| Performance Targets Documentation | 🟡 Planned | Performance Team | Document all performance SLOs and measurement methodology | None |
+| Quote Operator Parsing Guide | 🟡 Planned | Parser Team | Document quote operator parsing edge cases and resolution | None |
 
 ---
 
@@ -172,6 +214,27 @@
 | CPAN index integration | 🔵 Future | Ecosystem Team | Offline CPAN index for module info | v1.0.0 complete |
 | Dist::Zilla integration | 🔵 Future | Ecosystem Team | Build system awareness | CPAN index integration |
 
+### Advanced Documentation
+
+*Strategic documentation initiatives from investigation findings*
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| Threat Model Documentation | 🔵 Future | Security Team | Complete threat model with attack vectors and mitigations | Security ADRs complete |
+| Performance Contracts | 🔵 Future | Performance Team | Formal performance SLOs with measurement methodology | Performance targets documented |
+| ADR Index & Cross-References | 🔵 Future | Architecture | Searchable ADR index with dependency tracking | All ADRs complete |
+| Decision Log Automation | 🔵 Future | DevOps | Automated ADR generation from PR templates | ADR index complete |
+
+### Tooling Improvements
+
+*Future tooling enhancements from investigation insights*
+
+| Item | Status | Owner | Success Criteria | Dependencies |
+|------|--------|-------|------------------|--------------|
+| ADR Linting & Validation | 🔵 Future | DevOps | CI checks for ADR completeness and format | ADR templates defined |
+| Documentation Coverage Metrics | 🔵 Future | Docs Team | Automated tracking of documentation coverage | None |
+| Investigation-to-ADR Pipeline | 🔵 Future | Architecture | Streamlined process from investigation findings to ADRs | None |
+
 ---
 
 ## Dependency Graph
@@ -183,6 +246,9 @@ graph TD
         A2 --> A3[Moo/Moose Attributes]
         A2 --> A4[Cross-file Types]
         A2 --> A5[Export Lists]
+        A6[Critical ADRs] --> A7[Security ADRs]
+        A6 --> A8[Parser ADRs]
+        A9[Known Limitations] --> A10[DAP Hang Workaround]
     end
 
     subgraph NEXT
@@ -191,6 +257,12 @@ graph TD
         B1 --> B3[Dead Code Detection]
         A2 --> B4[Performance Optimization]
         A2 --> B5[Distribution Expansion]
+        B6[Complete ADR Coverage] --> B7[DAP ADRs]
+        B6 --> B8[Module Resolution ADRs]
+        B6 --> B9[Test Infrastructure ADRs]
+        B6 --> B10[CI/CD ADRs]
+        B11[Documentation Guides] --> B12[Testing Guide]
+        B11 --> B13[CI/CD Architecture Guide]
     end
 
     subgraph LATER
@@ -200,6 +272,11 @@ graph TD
         C3 --> C4[Perl 7 Preparation]
         C3 --> C5[Plugin Architecture]
         C3 --> C6[Enterprise Features]
+        C7[Advanced Documentation] --> C8[Threat Model]
+        C7 --> C9[Performance Contracts]
+        C7 --> C10[ADR Index]
+        C11[Tooling Improvements] --> C12[ADR Linting]
+        C11 --> C13[Doc Coverage Metrics]
     end
 ```
 
@@ -218,6 +295,7 @@ graph TD
 | Incremental Parsing | <1ms | <5ms | ✅ |
 | Reference Coverage | 98% | 95%+ | ✅ |
 | Workspace Crates | 115+ | Scalable | ✅ |
+| Documented ADRs | 0/39 | 39 | 🟡 In Progress |
 
 ### Target State (v1.0.0)
 
@@ -227,6 +305,7 @@ graph TD
 | Full Parse Time | ~200µs | <200µs | <150µs | <100µs |
 | Completion Response | <50ms | <50ms | <30ms | <30ms |
 | Workspace Index | ~370µs | <350µs | <300µs | <250µs |
+| ADR Coverage | 0% | 50% | 80% | 100% |
 
 ---
 

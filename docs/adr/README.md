@@ -42,6 +42,14 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0020](0020-rope-document-management.md) | Accepted | 2025-01-20 | Rope Document Management | O(log n) position lookups with ropey::Rope for sub-millisecond conversions |
 | [ADR-0021](0021-lsp-capability-contract.md) | Accepted | 2025-02-15 | LSP Capability Contract | Contract-driven capability advertisement with lsp-ga-lock feature option |
 | [ADR-0022](0022-scope-analyzer-hash-context.md) | Accepted | 2025-02-15 | Scope Analyzer Hash Context | Pointer-based AST traversal for accurate hash key context detection |
+| [ADR-0023](0023-include-macro-architecture.md) | Accepted | 2025-02-20 | include! Macro Architecture | Rust include! macro for parser composition with tight coupling |
+| [ADR-0024](0024-fifo-heredoc-queue.md) | Accepted | 2025-02-20 | FIFO Heredoc Queue | VecDeque queue for single-pass heredoc content collection |
+| [ADR-0025](0025-dual-document-representation.md) | Accepted | 2025-02-20 | Dual Document Representation | Rope + String for O(log n) edits with O(1) access |
+| [ADR-0026](0026-lifecycle-index-routing.md) | Accepted | 2025-02-20 | Lifecycle Index Routing | State machine with Building/Ready/Degraded for graceful degradation |
+| [ADR-0027](0027-dap-bridge-native.md) | Accepted | 2025-02-20 | DAP Bridge vs Native | Phased approach with bridge mode for immediate value |
+| [ADR-0028](0028-safe-eval-timeout.md) | Accepted | 2025-02-20 | Safe Eval Timeout | 5-second default and 300-second max for DoS prevention |
+| [ADR-0029](0029-mutation-sentinel-values.md) | Accepted | 2025-02-20 | Mutation Sentinel Values | Sentinel values like xyzzy for mutation testing detection |
+| [ADR-0030](0030-receipt-gate-system.md) | Accepted | 2025-02-20 | Receipt Gate System | Machine-readable receipts for CI gate verification |
 
 ## About ADRs
 
