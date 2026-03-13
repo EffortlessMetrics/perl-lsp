@@ -2930,7 +2930,7 @@ impl<'a> PerlLexer<'a> {
     /// - Typical regex: <10μs, Large regex (64KB): ~1ms
     fn parse_regex(&mut self, start: usize) -> Option<Token> {
         self.advance(); // Skip opening /
-        
+
         // Backtracking step counter to prevent catastrophic backtracking
         let mut backtrack_steps: usize = 0;
 
@@ -2942,11 +2942,8 @@ impl<'a> PerlLexer<'a> {
                 // Graceful degradation: emit UnknownRest token
                 // The pattern preview is truncated to prevent excessive error size
                 let text = &self.input[start..self.position];
-                let preview = if text.len() > 50 {
-                    format!("{}...", &text[..50])
-                } else {
-                    text.to_string()
-                };
+                let preview =
+                    if text.len() > 50 { format!("{}...", &text[..50]) } else { text.to_string() };
                 // Log warning for diagnostics (in production, this would go to tracing)
                 #[cfg(debug_assertions)]
                 eprintln!(
@@ -2960,7 +2957,7 @@ impl<'a> PerlLexer<'a> {
                     end: self.input.len(),
                 });
             }
-            
+
             // Budget guard: prevent timeout on pathological input (Issue #422)
             // If exceeded, returns UnknownRest token for graceful degradation
             if let Some(token) = self.budget_guard(start, 0) {
