@@ -47,21 +47,23 @@ The mode-aware lexer fully implements slash disambiguation with comprehensive te
 
 **Status**: ⚠️ NEARLY COMPLETE
 
-The `MAX_RECURSION_DEPTH =128` limit is implemented with RAII guard pattern. Most test coverage is in place.
+The `MAX_RECURSION_DEPTH = 128` limit is implemented with RAII guard pattern. Most test coverage is in place.
 
 **Remaining Work**:
+
 - Add memory bounded usage test
 - Audit all recursive parsing paths
 
 ### 3. Catastrophic Regex Backtracking
 
-**Status**: ⚠️ PARTIAL IMPLEMENTATION
+**Status**: ⚠️ PHASE 1 COMPLETE
 
-Byte limits (64KB) and nesting limits (128) are in place, but critical gaps remain:
+Byte limits (64KB), nesting limits (128), and the lexer parse budget are in place, but critical gaps remain:
 
 **Missing Protections**:
-- No backtracking step limit
+
 - No pattern analysis for pathological patterns
+- No diagnostics for regex-engine catastrophic backtracking risk
 - No timeout protection
 
 **Priority**: This is the highest priority issue requiring immediate attention.
@@ -72,19 +74,19 @@ Byte limits (64KB) and nesting limits (128) are in place, but critical gaps rema
 
 | # | Action | Issue | Effort |
 |---|--------|-------|--------|
-| 1 | Add `MAX_BACKTRACK_STEPS` constant | Regex Backtracking | Small |
-| 2 | Implement step counter in regex parsing | Regex Backtracking | Medium |
-| 3 | Add `RegexBacktrackLimit` error type | Regex Backtracking | Small |
-| 4 | Create backtracking limit test | Regex Backtracking | Small |
+| 1 | Create `regex_analysis.rs` module | Regex Backtracking | Medium |
+| 2 | Implement nested quantifier detection | Regex Backtracking | Medium |
+| 3 | Add LSP diagnostics for risky patterns | Regex Backtracking | Medium |
+| 4 | Add risk-analysis regression coverage | Regex Backtracking | Small |
 | 5 | Add memory bounded usage test | Deep Nesting | Small |
 
 ### Short-term Actions (Recommended)
 
 | # | Action | Issue | Effort |
 |---|--------|-------|--------|
-| 6 | Create `regex_analysis.rs` module | Regex Backtracking | Medium |
-| 7 | Implement nested quantifier detection | Regex Backtracking | Medium |
-| 8 | Add LSP diagnostic for risky patterns | Regex Backtracking | Medium |
+| 6 | Implement overlapping alternative detection | Regex Backtracking | Medium |
+| 7 | Evaluate timeout protection as defense-in-depth | Regex Backtracking | Medium |
+| 8 | Add telemetry for repeated parse-budget hits | Regex Backtracking | Medium |
 | 9 | Audit all recursive parsing paths | Deep Nesting | Medium |
 | 10 | Complete ADR documentation | Ambiguous Slash | Small |
 

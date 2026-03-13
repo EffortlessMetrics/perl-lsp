@@ -3,6 +3,7 @@
 ## Issue Summary
 
 The slash `/` character has dual meaning in Perl, creating a fundamental parsing ambiguity:
+
 - **Division operator**: `$a / $b`
 - **Regex delimiter**: `/pattern/`
 
@@ -14,10 +15,10 @@ This ambiguity requires context-aware tokenization to correctly interpret the sl
 
 | Feature | Status | Location |
 |---------|--------|----------|
-| Mode-aware lexer | ✅ Implemented | [`crates/perl-lexer/src/mode.rs:36-69`](../../../../crates/perl-lexer/src/mode.rs) |
-| Slash disambiguation | ✅ Implemented | [`crates/perl-lexer/src/lib.rs:1999-2070`](../../../../crates/perl-lexer/src/lib.rs) |
-| Budget guards | ✅ Implemented | `MAX_REGEX_BYTES =64KB` |
-| Test coverage | ✅ 21 test cases | [`crates/perl-lexer/tests/lexer_slash_timeout_tests.rs`](../../../../crates/perl-lexer/tests/lexer_slash_timeout_tests.rs) |
+| Mode-aware lexer | ✅ Implemented | [`crates/perl-lexer/src/mode.rs`](../../../crates/perl-lexer/src/mode.rs) |
+| Slash disambiguation | ✅ Implemented | [`crates/perl-lexer/src/lib.rs`](../../../crates/perl-lexer/src/lib.rs) |
+| Budget guards | ✅ Implemented | `MAX_REGEX_BYTES = 64KB` |
+| Test coverage | ✅ 21 test cases | [`crates/perl-lexer/tests/lexer_slash_timeout_tests.rs`](../../../crates/perl-lexer/tests/lexer_slash_timeout_tests.rs) |
 
 ### LexerMode Tracking System
 
@@ -64,7 +65,7 @@ The ambiguous slash issue is **fully implemented** with comprehensive test cover
 ### Remaining Tasks
 
 1. **Complete ADR Documentation**
-   - Location: [`docs/adr/0014-mode-aware-lexer.md`](../../../../adr/0014-mode-aware-lexer.md)
+   - Location: [`docs/adr/0014-mode-aware-lexer.md`](../../adr/0014-mode-aware-lexer.md)
    - Action: Document the design decision and implementation details
 
 2. **Add Fuzz Testing**
@@ -77,9 +78,9 @@ The ambiguous slash issue is **fully implemented** with comprehensive test cover
 
 | Test File | Coverage |
 |-----------|----------|
-| [`lexer_slash_timeout_tests.rs`](../../../../crates/perl-lexer/tests/lexer_slash_timeout_tests.rs) | 21 test cases for slash disambiguation |
-| [`hang_risk_slash_ambiguity_tests.rs`](../../../../crates/perl-lexer/tests/hang_risk_slash_ambiguity_tests.rs) | Comprehensive slash ambiguity tests |
-| [`comprehensive_unit_tests.rs`](../../../../crates/perl-lexer/tests/comprehensive_unit_tests.rs) | Context-sensitive slash disambiguation |
+| [`lexer_slash_timeout_tests.rs`](../../../crates/perl-lexer/tests/lexer_slash_timeout_tests.rs) | 21 test cases for slash disambiguation |
+| [`hang_risk_slash_ambiguity_tests.rs`](../../../crates/perl-lexer/tests/hang_risk_slash_ambiguity_tests.rs) | Comprehensive slash ambiguity tests |
+| [`comprehensive_unit_tests.rs`](../../../crates/perl-lexer/tests/comprehensive_unit_tests.rs) | Context-sensitive slash disambiguation |
 
 ### Validation Steps
 
@@ -106,5 +107,5 @@ None - implementation is complete.
 ## References
 
 - [Issue Documentation](../corpus/gaps/timeout-hang-risks/ambiguous-slash-division-regex.md)
-- [Lexer Mode Implementation](../../../../crates/perl-lexer/src/mode.rs)
-- [Slash Disambiguation Logic](../../../../crates/perl-lexer/src/lib.rs)
+- [Lexer Mode Implementation](../../../crates/perl-lexer/src/mode.rs)
+- [Slash Disambiguation Logic](../../../crates/perl-lexer/src/lib.rs)

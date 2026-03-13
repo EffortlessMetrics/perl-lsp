@@ -14,9 +14,9 @@ Deep nesting constructs pose a **P0 critical risk** for parser stack overflow. W
 
 | Protection | Value | Location |
 |------------|-------|----------|
-| `MAX_RECURSION_DEPTH` | 128 | [`crates/perl-parser-core/src/engine/parser/mod.rs:106`](../../../../crates/perl-parser-core/src/engine/parser/mod.rs) |
-| Error type | `NestingTooDeep` | [`crates/perl-error/`](../../../../crates/perl-error/) |
-| Guard pattern | `with_recursion_guard()` | [`crates/perl-parser-core/src/engine/parser/helpers.rs:65`](../../../../crates/perl-parser-core/src/engine/parser/helpers.rs) |
+| `MAX_RECURSION_DEPTH` | 128 | [`crates/perl-parser-core/src/engine/parser/mod.rs`](../../../crates/perl-parser-core/src/engine/parser/mod.rs) |
+| Error type | `NestingTooDeep` | [`crates/perl-error/`](../../../crates/perl-error/) |
+| Guard pattern | `with_recursion_guard()` | [`crates/perl-parser-core/src/engine/parser/helpers.rs`](../../../crates/perl-parser-core/src/engine/parser/helpers.rs) |
 
 ### Implementation Details
 
@@ -47,7 +47,7 @@ fn with_recursion_guard<T>(
 
 ### Stack Safety Calculation
 
-```
+```text
 Typical stack frames between checks: ~20-30 (precedence parsing chain)
 Maximum safe depth: 128 * 30 = ~3840 frames
 OS stack limit: typically 1-8MB
@@ -85,6 +85,7 @@ Safe frames: ~500-4000
 **Objective**: Add missing memory bounded usage test
 
 **Tasks**:
+
 1. Create test for memory usage at extreme nesting depths
 2. Verify parser memory stays bounded when hitting limit
 3. Add assertion for maximum heap allocation
@@ -108,7 +109,7 @@ fn parser_hang_risk_memory_bounded_at_extreme_depth() {
     
     // Memory should not grow significantly even at extreme depths
     let memory_growth = memory_after.saturating_sub(memory_before);
-    assert!(memory_growth <1024*1024, // <1MB growth
+    assert!(memory_growth < 1024 * 1024, // <1MB growth
         "Memory should be bounded: grew by {} bytes", memory_growth);
     
     assert!(result.is_err(), "Should fail at extreme depth");
@@ -120,6 +121,7 @@ fn parser_hang_risk_memory_bounded_at_extreme_depth() {
 **Objective**: Ensure all parsing paths increment depth counter
 
 **Tasks**:
+
 1. Audit all recursive parsing functions
 2. Add `with_recursion_guard()` to any missing paths
 3. Add tests for each nesting type
@@ -128,16 +130,17 @@ fn parser_hang_risk_memory_bounded_at_extreme_depth() {
 
 | File | Functions to Check |
 |------|-------------------|
-| [`expressions/hashes.rs`](../../../../crates/perl-parser-core/src/engine/parser/expressions/hashes.rs) | `parse_hash_or_block_inner()` |
-| [`expressions/calls.rs`](../../../../crates/perl-parser-core/src/engine/parser/expressions/calls.rs) | Indirect call nesting |
-| [`expressions/arrays.rs`](../../../../crates/perl-parser-core/src/engine/parser/expressions/arrays.rs) | Array nesting |
-| [`statements.rs`](../../../../crates/perl-parser-core/src/engine/parser/statements.rs) | Statement nesting |
+| [`expressions/hashes.rs`](../../../crates/perl-parser-core/src/engine/parser/expressions/hashes.rs) | `parse_hash_or_block_inner()` |
+| [`expressions/calls.rs`](../../../crates/perl-parser-core/src/engine/parser/expressions/calls.rs) | Indirect call nesting |
+| [`expressions/arrays.rs`](../../../crates/perl-parser-core/src/engine/parser/expressions/arrays.rs) | Array nesting |
+| [`statements.rs`](../../../crates/perl-parser-core/src/engine/parser/statements.rs) | Statement nesting |
 
 ### Phase 3: Configurable Limits (Optional)
 
 **Objective**: Allow users to configure `MAX_RECURSION_DEPTH`
 
 **Tasks**:
+
 1. Add `ParserConfig` struct with configurable limits
 2. Update parser initialization to accept config
 3. Add LSP configuration option for limit
@@ -172,11 +175,11 @@ impl Parser {
 
 | Test File | Purpose |
 |-----------|---------|
-| [`parser_boundary_validation_tests.rs`](../../../../crates/perl-parser/tests/parser_boundary_validation_tests.rs) | Tests limit at exactly 128 |
-| [`parser_resource_exhaustion_tests.rs`](../../../../crates/perl-parser/tests/parser_resource_exhaustion_tests.rs) | Tests behavior above limit |
-| [`hang_risk_deep_nesting_tests.rs`](../../../../crates/perl-parser/tests/hang_risk_deep_nesting_tests.rs) | Security-focused nesting tests |
-| [`parser_depth_limit_test.rs`](../../../../crates/perl-parser/tests/parser_depth_limit_test.rs) | Depth limit validation |
-| [`parser_hardening_tests.rs`](../../../../crates/perl-parser/tests/parser_hardening_tests.rs) | General hardening tests |
+| [`parser_boundary_validation_tests.rs`](../../../crates/perl-parser/tests/parser_boundary_validation_tests.rs) | Tests limit at exactly 128 |
+| [`parser_resource_exhaustion_tests.rs`](../../../crates/perl-parser/tests/parser_resource_exhaustion_tests.rs) | Tests behavior above limit |
+| [`hang_risk_deep_nesting_tests.rs`](../../../crates/perl-parser/tests/hang_risk_deep_nesting_tests.rs) | Security-focused nesting tests |
+| [`parser_depth_limit_test.rs`](../../../crates/perl-parser/tests/parser_depth_limit_test.rs) | Depth limit validation |
+| [`parser_hardening_tests.rs`](../../../crates/perl-parser/tests/parser_hardening_tests.rs) | General hardening tests |
 
 ### New Tests Required
 
@@ -235,29 +238,29 @@ sub { sub { sub { ... } } }
 
 ### Immediate (Required)
 
-1. [ ] Add memory bounded usage test to [`hang_risk_deep_nesting_tests.rs`](../../../../crates/perl-parser/tests/hang_risk_deep_nesting_tests.rs)
+1. [ ] Add memory bounded usage test to [`hang_risk_deep_nesting_tests.rs`](../../../crates/perl-parser/tests/hang_risk_deep_nesting_tests.rs)
 2. [ ] Run full test suite: `cargo test -p perl-parser --test hang_risk_deep_nesting_tests`
 3. [ ] Verify all nesting patterns are covered
 
 ### Short-term (Recommended)
 
-4. [ ] Audit all recursive parsing functions for depth tracking
-5. [ ] Add test cases for each nesting type
-6. [ ] Document stack safety calculation in code comments
+1. [ ] Audit all recursive parsing functions for depth tracking
+2. [ ] Add test cases for each nesting type
+3. [ ] Document stack safety calculation in code comments
 
 ### Long-term (Optional)
 
-7. [ ] Implement configurable limits via `ParserConfig`
-8. [ ] Add LSP configuration option for recursion limit
-9. [ ] Consider iterative parsing for extreme cases
+1. [ ] Implement configurable limits via `ParserConfig`
+2. [ ] Add LSP configuration option for recursion limit
+3. [ ] Consider iterative parsing for extreme cases
 
 ## Conclusion
 
-**Status: MOSTLY COMPLETE** - Core protection is implemented and tested. Missing only memory bounded usage test. The `MAX_RECURSION_DEPTH =128` limit provides strong protection against stack overflow attacks.
+**Status: MOSTLY COMPLETE** - Core protection is implemented and tested. Missing only memory bounded usage test. The `MAX_RECURSION_DEPTH = 128` limit provides strong protection against stack overflow attacks.
 
 ## References
 
 - [Issue Documentation](../corpus/gaps/timeout-hang-risks/deep-nesting-stack-overflow.md)
-- [Parser Core Implementation](../../../../crates/perl-parser-core/src/engine/parser/mod.rs)
-- [Recursion Guard Helpers](../../../../crates/perl-parser-core/src/engine/parser/helpers.rs)
+- [Parser Core Implementation](../../../crates/perl-parser-core/src/engine/parser/mod.rs)
+- [Recursion Guard Helpers](../../../crates/perl-parser-core/src/engine/parser/helpers.rs)
 - [CWE-674: Uncontrolled Recursion](https://cwe.mitre.org/data/definitions/674.html)

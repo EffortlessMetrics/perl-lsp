@@ -19,16 +19,18 @@ Complex regex patterns pose a **P0 critical risk** for catastrophic backtracking
 
 | Protection | Value | Location |
 |------------|-------|----------|
-| `MAX_REGEX_BYTES` | 64KB | [`crates/perl-lexer/src/lib.rs:172`](../../../../crates/perl-lexer/src/lib.rs) |
-| `MAX_DELIM_NEST` | 128 | [`crates/perl-lexer/src/lib.rs:174`](../../../../crates/perl-lexer/src/lib.rs) |
-| `MAX_HEREDOC_DEPTH` | 100 | [`crates/perl-lexer/src/lib.rs:175`](../../../../crates/perl-lexer/src/lib.rs) |
-| `MAX_HEREDOC_BYTES` | 256KB | [`crates/perl-lexer/src/lib.rs:173`](../../../../crates/perl-lexer/src/lib.rs) |
+| `MAX_REGEX_BYTES` | 64KB | [`crates/perl-lexer/src/lib.rs`](../../../crates/perl-lexer/src/lib.rs) |
+| `MAX_REGEX_PARSE_STEPS` | 32K | [`crates/perl-lexer/src/lib.rs`](../../../crates/perl-lexer/src/lib.rs) |
+| `MAX_DELIM_NEST` | 128 | [`crates/perl-lexer/src/lib.rs`](../../../crates/perl-lexer/src/lib.rs) |
+| `MAX_HEREDOC_DEPTH` | 100 | [`crates/perl-lexer/src/lib.rs`](../../../crates/perl-lexer/src/lib.rs) |
+| `MAX_HEREDOC_BYTES` | 256KB | [`crates/perl-lexer/src/lib.rs`](../../../crates/perl-lexer/src/lib.rs) |
 
 ### Current Implementation
 
 ```rust
-// From crates/perl-lexer/src/lib.rs:171-175
+// From crates/perl-lexer/src/lib.rs
 const MAX_REGEX_BYTES: usize = 64 * 1024;  // 64KB max for regex patterns
+pub const MAX_REGEX_PARSE_STEPS: usize = 32 * 1024;
 const MAX_HEREDOC_BYTES: usize = 256 * 1024; // 256KB max for heredoc bodies
 const MAX_DELIM_NEST: usize = 128;         // Max nesting depth for delimiters
 const MAX_HEREDOC_DEPTH: usize = 100;      // Max nesting depth for heredocs
@@ -46,19 +48,20 @@ const MAX_HEREDOC_DEPTH: usize = 100;      // Max nesting depth for heredocs
 
 | Gap | Severity | Description |
 |-----|----------|-------------|
-| No backtracking limit | **High** | No limit on backtracking steps during parsing |
-| No pattern analysis | **High** | Cannot detect pathological patterns like `(a+)+` |
-| No timeout protection | Medium | No time-based limit for regex parsing |
-| No user warnings | Medium | No LSP diagnostics for risky patterns |
+| No pattern analysis | **High** | The lexer does not statically detect risky patterns such as nested quantifiers |
+| No engine-risk diagnostics | **High** | Users do not get warnings about regex-engine catastrophic backtracking risks |
+| No timeout protection | Medium | There is no separate time-based defense-in-depth budget |
+| No user warnings | Medium | No LSP diagnostics surface risky regex constructs yet |
 
 ### Test Coverage Status
 
 - [x] Byte limit enforcement (64KB)
+- [x] Parse-step budget enforcement (32K)
 - [x] Delimiter nesting limit (128)
 - [x] Heredoc depth limit (100)
+- [x] Graceful degradation to `UnknownRest`
 - [ ] **Pattern analysis for nested quantifiers**
-- [ ] **Timeout on pathological patterns**
-- [ ] **Performance: rejection within 100ms**
+- [ ] **Risk diagnostics for pathological patterns**
 - [ ] **Memory bounded during parsing**
 
 ### Pathological Patterns to Detect
@@ -67,56 +70,54 @@ const MAX_HEREDOC_DEPTH: usize = 100;      // Max nesting depth for heredocs
 |---------|------------|-----------------|
 | `(a+)+` | Critical | O(2^n) |
 | `(a*)*` | Critical | O(2^n) |
-| `(a|aa)+` | High | O(2^n) |
+| `(a or aa)+` | High | O(2^n) |
 | `(a?){n}` | High | O(2^n) |
 | `(.*)\1` | Medium | O(n^2) |
 
 ## Proposed Solution
 
-### Phase 1: Backtracking Step Limit (Required)
+### Phase 1: Lexer Parse Budget Hardening (Delivered)
 
-**Objective**: Implement a step-based limit for regex parsing operations
+**Objective**: Bound regex literal scanning in the lexer before the byte budget trips
 
-**Rationale**: The current byte-size limit (64KB) doesn't prevent exponential backtracking on small but pathological patterns. A step counter provides deterministic protection.
+**Rationale**: The lexer now enforces a parse-step budget that is reachable before the 64KB byte ceiling, which prevents runaway literal scanning without pretending to solve regex-engine runtime backtracking.
 
 **Tasks**:
 
-1. Add `MAX_BACKTRACK_STEPS` constant
-2. Implement step counter in regex parsing loop
-3. Return error when limit exceeded
-4. Add test coverage
+1. Add `MAX_REGEX_PARSE_STEPS`
+2. Enforce the parse-step guard in `parse_regex()`
+3. Degrade to `UnknownRest` when the budget is exceeded
+4. Add sub-64KB tests that prove the guard triggers before the byte budget
 
 **Implementation**:
 
 ```rust
-// Add to crates/perl-lexer/src/lib.rs
-const MAX_BACKTRACK_STEPS: usize = 100_000; // 100K steps max
+pub const MAX_REGEX_PARSE_STEPS: usize = 32 * 1024;
 
-struct RegexParser {
-    steps: Cell<usize>,
-}
+while let Some(ch) = self.current_char() {
+    regex_parse_steps += 1;
+    if regex_parse_steps > MAX_REGEX_PARSE_STEPS {
+        self.position = self.input.len();
+        return Some(Token {
+            token_type: TokenType::UnknownRest,
+            text: empty_arc(),
+            start,
+            end: self.position,
+        });
+    }
 
-impl RegexParser {
-    fn step(&self) -> ParseResult<()> {
-        let steps = self.steps.get() + 1;
-        if steps > MAX_BACKTRACK_STEPS {
-            return Err(ParseError::RegexBacktrackLimit {
-                steps,
-                max_steps: MAX_BACKTRACK_STEPS,
-            });
-        }
-        self.steps.set(steps);
-        Ok(())
+    if let Some(token) = self.budget_guard(start, 0) {
+        return Some(token);
     }
 }
 ```
 
-**Files to Modify**:
+**Files Updated in Phase 1**:
 
 | File | Changes |
 |------|---------|
-| [`crates/perl-lexer/src/lib.rs`](../../../../crates/perl-lexer/src/lib.rs) | Add constant and step counter |
-| [`crates/perl-error/src/lib.rs`](../../../../crates/perl-error/src/lib.rs) | Add `RegexBacktrackLimit` error type |
+| [`crates/perl-lexer/src/lib.rs`](../../../crates/perl-lexer/src/lib.rs) | Add `MAX_REGEX_PARSE_STEPS` and enforce the parse budget |
+| [`crates/perl-lexer/tests/lexer_catastrophic_regex_test.rs`](../../../crates/perl-lexer/tests/lexer_catastrophic_regex_test.rs) | Add sub-64KB parse-budget tests |
 
 ### Phase 2: Pattern Analysis (Recommended)
 
@@ -176,8 +177,8 @@ impl RegexAnalyzer {
 
 | File | Action |
 |------|--------|
-| [`crates/perl-lexer/src/regex_analysis.rs`](../../../../crates/perl-lexer/src/regex_analysis.rs) | Create new module |
-| [`crates/perl-lexer/src/lib.rs`](../../../../crates/perl-lexer/src/lib.rs) | Import and use analyzer |
+| [`crates/perl-lexer/src/regex_analysis.rs`](../../../crates/perl-lexer/src/regex_analysis.rs) | Create new module |
+| [`crates/perl-lexer/src/lib.rs`](../../../crates/perl-lexer/src/lib.rs) | Import and use analyzer |
 
 ### Phase 3: Timeout Protection (Optional)
 
@@ -251,17 +252,16 @@ fn check_regex_pattern(&self, pattern: &str) -> Vec<Diagnostic> {
 
 | Test File | Purpose |
 |-----------|---------|
-| [`lexer_catastrophic_regex_test.rs`](../../../../crates/perl-lexer/tests/lexer_catastrophic_regex_test.rs) | Catastrophic backtracking tests |
-| [`hang_risk_regex_literal_tests.rs`](../../../../crates/perl-lexer/tests/hang_risk_regex_literal_tests.rs) | Regex literal hang risks |
+| [`lexer_catastrophic_regex_test.rs`](../../../crates/perl-lexer/tests/lexer_catastrophic_regex_test.rs) | Regex parse-budget enforcement tests |
+| [`hang_risk_regex_literal_tests.rs`](../../../crates/perl-lexer/tests/hang_risk_regex_literal_tests.rs) | Regex literal hang risks |
 
 ### New Tests Required
 
 | Test | Purpose | Priority |
 |------|---------|----------|
-| `backtrack_limit_enforced` | Verify step limit works | High |
 | `nested_quantifier_detected` | Verify pattern analysis | High |
 | `timeout_protection_works` | Verify timeout limit | Medium |
-| `performance_rejection_100ms` | Verify fast rejection | High |
+| `risk_diagnostics_emitted` | Verify risky patterns surface diagnostics | High |
 
 ### Test Patterns to Cover
 
@@ -300,9 +300,10 @@ cargo test -p perl-lexer -- --test-threads=1 regex
 
 | Dependency | Status | Notes |
 |------------|--------|-------|
+| `MAX_REGEX_PARSE_STEPS` | ✅ Exists | Phase 1 lexer hardening is merged separately |
 | `regex` crate | ✅ Available | For pattern analysis |
 | `Instant` | ✅ Available | For timeout protection |
-| `ParseError` enum | ✅ Exists | May need new variants |
+| LSP diagnostics pipeline | ✅ Exists | Needed to surface regex warnings |
 
 ## Risk Assessment
 
@@ -317,24 +318,23 @@ cargo test -p perl-lexer -- --test-threads=1 regex
 
 ### Immediate (Required)
 
-1. [ ] Add `MAX_BACKTRACK_STEPS` constant to [`lib.rs`](../../../../crates/perl-lexer/src/lib.rs)
-2. [ ] Implement step counter in regex parsing loop
-3. [ ] Add `RegexBacktrackLimit` error type to [`perl-error`](../../../../crates/perl-error/src/lib.rs)
-4. [ ] Create test for backtracking limit enforcement
+1. [ ] Create [`regex_analysis.rs`](../../../crates/perl-lexer/src/regex_analysis.rs) module
+2. [ ] Implement nested quantifier detection
+3. [ ] Add LSP diagnostics for high-risk patterns
+4. [ ] Add risk-analysis regression coverage
 
 ### Short-term (Recommended)
 
-5. [ ] Create [`regex_analysis.rs`](../../../../crates/perl-lexer/src/regex_analysis.rs) module
-6. [ ] Implement nested quantifier detection
-7. [ ] Add LSP diagnostic for high-risk patterns
-8. [ ] Add performance test for100ms rejection
+1. [ ] Implement overlapping alternative detection
+2. [ ] Evaluate timeout protection as defense-in-depth
+3. [ ] Add documentation for regex best practices
+4. [ ] Add telemetry for repeated parse-budget hits
 
 ### Long-term (Optional)
 
-9. [ ] Implement timeout protection
-10. [ ] Add overlapping alternative detection
-11. [ ] Create configuration options for limits
-12. [ ] Add documentation for regex best practices
+1. [ ] Create configuration options for diagnostics and limits
+2. [ ] Consider deeper regex-engine risk modeling
+3. [ ] Add user-facing suppressions for intentional high-risk patterns
 
 ## Implementation Priority
 
@@ -352,12 +352,12 @@ flowchart TD
 
 ## Conclusion
 
-**Status: PARTIAL IMPLEMENTATION** - Byte and nesting limits are in place, but backtracking step limit and pattern analysis are missing. The most critical gap is the lack of a backtracking step limit, which should be implemented first.
+**Status: PHASE 1 COMPLETE** - Byte, nesting, and parse-step budgets are in place for lexer safety. The remaining gap is static analysis and diagnostics for regex-engine catastrophic backtracking risk.
 
 ## References
 
 - [Issue Documentation](../corpus/gaps/timeout-hang-risks/catastrophic-regex-backtracking.md)
-- [Lexer Implementation](../../../../crates/perl-lexer/src/lib.rs)
+- [Lexer Implementation](../../../crates/perl-lexer/src/lib.rs)
 - [CWE-1333: Inefficient Regular Expression Complexity](https://cwe.mitre.org/data/definitions/1333.html)
 - [OWASP ReDoS](https://owasp.org/www-community/attacks/Regular_expression_Denial_of_Service_-_ReDoS)
 - [Runaway Regular Expressions](https://www.regular-expressions.info/catastrophic.html)
