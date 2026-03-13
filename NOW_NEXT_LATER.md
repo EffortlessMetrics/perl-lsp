@@ -53,7 +53,7 @@
 | Item | Status | Owner | Success Criteria | Dependencies |
 |------|--------|-------|------------------|--------------|
 | Security audit follow-ups | 🟢 Active | Security | All findings addressed | None |
-| Mutation score improvement | 🟡 Planned | QA Team | 87% → 90% mutation score | None |
+| Mutation score improvement | 🟡 Planned | QA Team | 87% → 90% mutation score (target ratcheted) | None |
 | CI pipeline optimization | 🟢 Active | DevOps | Build time <15 min | None |
 
 ### Architecture Decision Records (ADRs) — Critical
@@ -291,7 +291,7 @@ graph TD
 | LSP User-Visible Coverage | 100% (53/53) | 100% | ✅ |
 | Protocol Compliance | 100% (97/97) | 100% | ✅ |
 | Perl 5 Syntax Coverage | ~100% | 100% | ✅ |
-| Mutation Score | 87% | 87%+ | ✅ |
+| Mutation Score | 87% | 90%+ | 🟡 In Progress |
 | Incremental Parsing | <1ms | <5ms | ✅ |
 | Reference Coverage | 98% | 95%+ | ✅ |
 | Workspace Crates | 115+ | Scalable | ✅ |

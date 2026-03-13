@@ -1,192 +1,248 @@
 # Issue: Ambiguous Slash Division vs Regex
 
-## Problem Description
+## Problem Statement
 
-### What We Found
+The slash `/` character has dual meaning in Perl, creating a fundamental parsing ambiguity:
 
-The slash `/` character has dual meaning in Perl:
 1. **Division operator**: `$a / $b` - divides `$a` by `$b`
 2. **Regex delimiter**: `/pattern/` - matches a regex pattern
 
-This creates a **P0 critical parsing ambiguity**:
-- No clear disambiguation rules for slash context
-- Parser may incorrectly parse division as regex
-- No test coverage for ambiguous slash scenarios
-- Potential for incorrect AST generation
+This ambiguity is **inherent to Perl's syntax** and cannot be resolved without context analysis. The parser must determine the correct interpretation based on surrounding tokens, which creates:
 
-This represents a **critical correctness and stability risk** that could cause incorrect parsing, incorrect semantic analysis, and wrong LSP diagnostics
+- **Parsing complexity**: Context-dependent tokenization required
+- **Correctness risk**: Incorrect interpretation leads to wrong AST
+- **LSP impact**: Diagnostics, hover, and navigation depend on correct parsing
 
-### Minimal Reproduction
+### Why This Causes Timeout/Hang Risk
+
+While not a direct timeout risk like deep nesting, ambiguous slash parsing can lead to:
+
+1. **Exponential parse attempts**: Parser may try multiple interpretations
+2. **Incorrect error recovery**: Misinterpreted slashes cause cascading errors
+3. **Semantic analysis failures**: Wrong AST leads to infinite loops in analysis
+
+## Impact Assessment
+
+| Aspect | Details |
+|--------|---------|
+| **Severity** | P0 Critical |
+| **Category** | Correctness / Stability |
+| **Affected Features** | Parsing, Semantic Analysis, Diagnostics, Navigation |
+| **User Impact** | Incorrect syntax highlighting, wrong error messages, broken go-to-definition |
+| **Attack Vector** | Crafted code with ambiguous slash usage |
+
+### Affected LSP Features
+
+- **Diagnostics**: May report false positives or miss real errors
+- **Hover**: May show wrong information for operators
+- **Go-to-definition**: May fail to navigate to correct targets
+- **Semantic Highlighting**: May highlight division as regex or vice versa
+
+## Technical Details
+
+### Root Cause
+
+Perl's grammar allows `/` to be either:
+- A binary division operator following an expression
+- The start of a match operator `m/pattern/` (with optional `m`)
+
+The disambiguation requires looking at the **preceding token**:
+- After a term (variable, literal, `)`, `]`, `}`): `/` is division
+- After an operator or statement start: `/` begins a regex
+
+### Code Locations
+
+| Component | Location | Purpose |
+|-----------|----------|---------|
+| Lexer | [`crates/perl-lexer/src/lib.rs`](../../../../../../crates/perl-lexer/src/lib.rs) | Slash tokenization |
+| Parser Core | [`crates/perl-parser-core/src/engine/parser/mod.rs`](../../../../../../crates/perl-parser-core/src/engine/parser/mod.rs) | Expression parsing |
+| Expression Parser | [`crates/perl-parser-core/src/engine/parser/expressions/`](../../../../../../crates/perl-parser-core/src/engine/parser/expressions/) | Term/operator handling |
+
+### Perl's Disambiguation Rules
+
+Perl uses the following heuristic (simplified):
 
 ```perl
-# Ambiguous slash - division vs regex
-my $result = $a / $b;  # Division
-my $match = $a =~ /$b/;  # Regex match
+# Division - follows a term
+my $result = $a / $b;# term / term
+my $calc = (1 + 2) / 3;    # ) /
 
-# Another ambiguous case
-my $complex = $x / $y / $z;
-my $regex = /$x/$y/$z/;
+# Regex - follows operator or is statement start
+if (/pattern/) { }        # if (/
+my $match = $x =~ /pat/;   # =~ /
+print if /pattern/;        # if /
 ```
 
-### Current Behavior
+## Examples
 
-The parser may:
-- Parse `/` as division in all contexts
-- Parse `/` as regex delimiter in all contexts
-- Not provide context-aware parsing
-- Generate incorrect AST structure
-- Return incorrect parse errors or no errors
+### Clear Division Cases
 
-### Expected Behavior
+```perl
+my $quotient = $x / $y;
+my $avg = ($a + $b) / 2;
+my $ratio = calculate_total() / $count;
+```
 
-The parser should:
-- Disambiguate slash based on context:
-  - Division: `$a / $b` when used in arithmetic context
-  - Regex: `/pattern/` when used in string matching or substitution
-  - Provide clear error messages for ambiguous cases
-- Generate correct AST structure
-- Handle edge cases correctly
+### Clear Regex Cases
 
-### Fix Surface
+```perl
+if (/pattern/) { match() }
+my $found = $string =~ /search/;
+my $replaced = $str =~ s/old/new/;
+print if /warning/;
+```
 
-**Parser Module**: `/crates/perl-parser/src/parser.rs` - Main parser logic
-- **Lexer Module**: `/crates/perl-lexer/src/lib.rs` - Tokenization with slash handling
-- **Test Location**: `/test_corpus/` or `/crates/perl-corpus/src/gen/` - Test fixtures for ambiguous slash
+### Ambiguous Cases
 
-### Acceptance Criteria
+```perl
+# Context-dependent - requires full parsing
+my $result = time / 86400;  # Division (time() returns epoch seconds)
+my $match = time /pattern/; # Regex match against $_
 
-1. **Parser Implementation**:
-   - [ ] Context-aware slash parsing based on preceding/following tokens
-   - [ ] Proper disambiguation rules for division vs regex
-   - [ ] Clear error messages for ambiguous cases
-   - [ ] Correct AST generation for both division and regex
-   - [ ] Handle edge cases correctly
+# Multiple slashes
+my $complex = $a / $b / $c; # ($a / $b) / $c - left-to-right division
+my $regex = /$a/$b/;        # Syntax error or unusual regex
+```
 
-2. **Test Coverage**:
-   - [ ] At least 6 test cases covering:
-     - [ ] Simple division: `$a / $b`
-     - [ ] Simple regex: `/pattern/`
-     - [ ] Ambiguous arithmetic: `$x / $y / $z`
-     - [ ] Ambiguous regex: `/pattern/` in arithmetic context
-     - [ ] Nested expressions with multiple slashes
-     - [ ] Edge cases: empty strings, whitespace
-     - [ ] All tests pass
+### Edge Cases
 
-3. **LSP Integration**:
-   - [ ] Correct diagnostics for ambiguous slash usage
-   - [ ] Hover provides context-aware information
-   - [ ] Go-to-definition works correctly for both division and regex
-   - [ ] Code completion suggests appropriate slash usage
+```perl
+# Spaced regex (valid Perl)
+my $match = / pattern /;    # Regex with whitespace in pattern
 
-4. **Documentation**:
-   - [ ] Slash disambiguation rules documented
-   - [ ] Examples of ambiguous cases and resolution
-   - [ ] API documentation updated with slash handling
+# Division with regex on right
+my $result = 100 / length($&); # Division by result of regex
 
-### Solution Options
+# Substitution with division in replacement
+my $str = "100";
+$str =~ s/(\d+)/$1 \/ 2/e; # Division in replacement
+```
 
-#### Option 1: Context-Aware Parsing (Recommended)
+## Current Mitigation
+
+### Implementation Status
+
+The parser implements context-aware slash disambiguation:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Basic division parsing | ✅ Implemented | `$a / $b` |
+| Basic regex parsing | ✅ Implemented | `/pattern/` |
+| Match operator `=~` | ✅ Implemented | `$x =~ /pat/` |
+| Statement-start regex | ✅ Implemented | `if (/pat/) { }` |
+| Implicit match | ✅ Implemented | `print if /pat/` |
+
+### Lexer Context Tracking
+
+The lexer tracks parsing state to determine slash context:
+
+```rust
+// From perl-lexer/src/lib.rs
+// The lexer uses state machine to track whether we expect:
+// - A term (variable, literal, regex)
+// - An operator (including division)
+```
+
+### Limitations
+
+1. **Complex expressions**: May require look-ahead beyond current token
+2. **Error recovery**: Incorrect disambiguation can cascade
+3. **Edge cases**: Unusual Perl idioms may not parse correctly
+
+## Proposed Solutions
+
+### Option 1: Enhanced Context Tracking (Recommended)
+
+**Approach**: Maintain explicit parser state for expected token type
 
 **Pros**:
-- Comprehensive solution covering all cases
-- Clear disambiguation rules
-- Recommended approach
+- Handles all cases correctly
+- Aligns with Perl's parsing behavior
+- Enables better error messages
 
 **Cons**:
 - More complex implementation
-- Requires significant parser changes
+- Requires careful state management
 
 **Implementation**:
 ```rust
-// Add context tracking to parser
-enum SlashContext {
-    Arithmetic,
-    Regex,
-    Unknown,
+enum Expecting {
+    Term,     // Next should be value/regex
+    Operator, // Next should be operator
 }
 
-// Determine slash context based on preceding tokens
-fn determine_slash_context(tokens: &[Token]) -> SlashContext {
-    // Look at previous token to determine context
-    // If previous token is variable or number, likely division
-    // If previous token is string or pattern, likely regex
+fn parse_slash(&mut self, expecting: Expecting) -> ParseResult<Node> {
+    match expecting {
+        Expecting::Term => self.parse_regex(),
+        Expecting::Operator => self.parse_division(),
+    }
 }
 ```
 
-#### Option 2: Conservative Fallback
+### Option 2: Look-ahead Disambiguation
+
+**Approach**: Look ahead to find closing `/` to identify regex
 
 **Pros**:
-- Simpler implementation
-- Less risk of breaking existing behavior
+- Simpler state management
+- Works for most cases
 
 **Cons**:
-- May not handle all edge cases
-- Could still have ambiguity in some cases
+- Can be fooled by `/` in regex pattern
+- May require full pattern parsing
 
-**Implementation**:
-```rust
-// Default to division when ambiguous
-fn parse_slash() -> Node {
-    // Always parse as division unless clear regex context
-    parse_division()
-}
-```
+### Option 3: Error on Ambiguity
 
-#### Option 3: Explicit Disambiguation
+**Approach**: Emit diagnostic when slash context is ambiguous
 
 **Pros**:
-- Clearer intent
-- Easier to understand for users
+- Explicit user feedback
+- Encourages clearer code
 
 **Cons**:
-- Requires changes to Perl syntax
-- May not be backward compatible
+- May report false positives
+- Could annoy users
 
-**Implementation**:
-```perl
-// Perl could add explicit operators like:
-my $result = $a div $b;  # Explicit division
-my $match = $a m/ $b;    # Explicit regex match
-```
+## Testing
 
-### Path Forward
+### Existing Test Coverage
 
-**Recommended**: Option 1 (Context-Aware Parsing)
+| Test File | Coverage |
+|-----------|----------|
+| `crates/perl-lexer/tests/` | Lexer slash handling |
+| `crates/perl-parser/tests/` | Parser expression tests |
 
-**Rationale**:
-- Most comprehensive solution
-- Handles all edge cases correctly
-- Provides best user experience
-- Aligns with Perl's actual parsing behavior
+### Required Test Cases
 
-**Implementation Steps**:
-1. Add `SlashContext` enum to track context
-2. Implement context determination logic in lexer/parser
-3. Update slash parsing to use context
-4. Add test cases for ambiguous scenarios
-5. Update LSP providers to handle new slash nodes
-6. Document slash disambiguation rules
-7. Validate with existing corpus and real-world code
-8. Validate with existing corpus and real-world code
+- [ ] Simple division: `$a / $b`
+- [ ] Simple regex: `/pattern/`
+- [ ] Chained division: `$a / $b / $c`
+- [ ] Regex with division-like content: `/\//`
+- [ ] Match operator: `$x =~ /pat/`
+- [ ] Substitution: `$x =~ s/old/new/`
+- [ ] Implicit match: `print if /pat/`
+- [ ] Division after function call: `func() / 2`
+- [ ] Edge case: `time / 86400` vs `time /pattern/`
 
-**Timeline Estimate**: 5-7 days for implementation + 2 days for testing
+## Related Issues
 
-### References
+- No open GitHub issues for this specific problem
+- Related to overall Perl parsing correctness
 
-- **Parser Architecture**: [Crate Architecture Guide](../../../../reference/CRATE_ARCHITECTURE_GUIDE.md)
-- **Lexer Implementation**: `/crates/perl-lexer/src/lib.rs`
-- **Parser Implementation**: `/crates/perl-parser/src/parser.rs`
-- **LSP Providers**: `/crates/perl-parser/src/features.rs`
-- **Corpus Analysis**: Review corpus coverage analysis results
-- **Related Issues**: None currently open
-- **GA Feature Alignment**: GA feature for slash/division disambiguation
+## References
 
-### References
+### Internal Documentation
 
-- **Parser Architecture**: [Crate Architecture Guide](../../../../reference/CRATE_ARCHITECTURE_GUIDE.md)
-- **Lexer Implementation**: `/crates/perl-lexer/src/lib.rs`
-- **Parser Implementation**: `/crates/perl-parser/src/parser.rs`
-- **LSP Providers**: `/crates/perl-parser/src/features.rs`
-- **Corpus Analysis**: Review corpus coverage analysis results
-- **Related Issues**: None currently open
-- **GA Feature Alignment**: GA feature for slash/division disambiguation
+- [Crate Architecture Guide](../../../../reference/CRATE_ARCHITECTURE_GUIDE.md)
+- [Parser Comparison](../../../../reference/PARSER_COMPARISON.md)
+
+### Source Code
+
+- [`crates/perl-lexer/src/lib.rs`](../../../../../../crates/perl-lexer/src/lib.rs) - Lexer implementation
+- [`crates/perl-parser-core/src/engine/parser/mod.rs`](../../../../../../crates/perl-parser-core/src/engine/parser/mod.rs) - Parser core
+- [`crates/perl-parser-core/src/engine/parser/expressions/`](../../../../../../crates/perl-parser-core/src/engine/parser/expressions/) - Expression parsing
+
+### External References
+
+- [Perl Documentation: perlop](https://perldoc.perl.org/perlop) - Operator precedence and regex quotes
+- [Perl Documentation: perlre](https://perldoc.perl.org/perlre) - Regular expressions
