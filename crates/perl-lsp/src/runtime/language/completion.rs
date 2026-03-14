@@ -37,6 +37,63 @@ fn get_snippet_simple_regex() -> Option<&'static Regex> {
 }
 
 impl LspServer {
+    fn workspace_symbol_qualified_name(symbol: &crate::workspace_index::WorkspaceSymbol) -> String {
+        symbol
+            .qualified_name
+            .clone()
+            .or_else(|| {
+                symbol
+                    .container_name
+                    .as_ref()
+                    .map(|container| format!("{container}::{}", symbol.name))
+            })
+            .unwrap_or_else(|| symbol.name.clone())
+    }
+
+    fn workspace_symbol_documentation(
+        symbol: &crate::workspace_index::WorkspaceSymbol,
+    ) -> Option<String> {
+        symbol.documentation.clone().or_else(|| {
+            let qualified_name = Self::workspace_symbol_qualified_name(symbol);
+
+            Some(match symbol.kind {
+                crate::workspace_index::SymbolKind::Package => {
+                    format!("Package `{qualified_name}` available in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Subroutine => {
+                    format!("Subroutine `{qualified_name}` defined in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Variable(_) => {
+                    format!("Variable `{qualified_name}` declared in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Class => {
+                    format!("Class `{qualified_name}` defined in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Method => {
+                    format!("Method `{qualified_name}` defined in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Constant => {
+                    format!("Constant `{qualified_name}` declared in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Role => {
+                    format!("Role `{qualified_name}` defined in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Import => {
+                    format!("Imported module `{qualified_name}` used in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Export => {
+                    format!("Exported function `{qualified_name}` available in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Label => {
+                    format!("Label `{qualified_name}` declared in the workspace.")
+                }
+                crate::workspace_index::SymbolKind::Format => {
+                    format!("Format `{qualified_name}` declared in the workspace.")
+                }
+            })
+        })
+    }
+
     /// Format type information concisely for completion detail
     pub(crate) fn format_type_for_detail(t: &crate::type_inference::PerlType) -> String {
         use perl_parser::type_inference::PerlType;
@@ -236,14 +293,17 @@ impl LspServer {
                                     }
                                 };
 
+                                let documentation = Self::workspace_symbol_documentation(&symbol);
+                                let label = symbol.name.clone();
+
                                 completions.push(crate::completion::CompletionItem {
-                                    label: symbol.name.clone(),
+                                    label: label.clone(),
                                     kind,
                                     detail: symbol.qualified_name,
-                                    insert_text: Some(symbol.name),
+                                    insert_text: Some(label),
                                     sort_text: None,
                                     filter_text: None,
-                                    documentation: None,
+                                    documentation,
                                     additional_edits: Vec::new(),
                                     text_edit_range: None, // Workspace completions don't need precise text edit
                                 });
@@ -303,6 +363,13 @@ impl LspServer {
                                 insert_text = Self::degrade_snippet_to_plaintext(&insert_text);
                             }
                             item["insertText"] = json!(insert_text);
+                        }
+
+                        if let Some(documentation) = c.documentation {
+                            item["documentation"] = json!({
+                                "kind": "markdown",
+                                "value": documentation
+                            });
                         }
 
                         // Only add commit characters for functions and variables, not keywords
@@ -473,6 +540,12 @@ impl LspServer {
                         }
                         if let Some(insert_text) = c.insert_text {
                             item["insertText"] = json!(insert_text);
+                        }
+                        if let Some(documentation) = c.documentation {
+                            item["documentation"] = json!({
+                                "kind": "markdown",
+                                "value": documentation
+                            });
                         }
 
                         Some(item)

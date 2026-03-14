@@ -46,7 +46,6 @@ $cou
         }
         }),
     );
-
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
@@ -103,7 +102,6 @@ my @data = qw(a b c);
         }
         }),
     );
-
     let items = completion_items(&response);
     assert!(items.len() >= 2, "Should have at least 2 completions");
 
@@ -714,6 +712,17 @@ MyModule::"#
     // Package member completion should return available subroutines
     assert!(!items.is_empty(), "Package member completion should not be empty");
     assert!(items.iter().any(|i| i["label"] == "public_method"), "Should suggest public_method");
+    let public_method = items
+        .iter()
+        .find(|i| i["label"] == "public_method")
+        .ok_or("public_method completion should be present to verify documentation")?;
+    let documentation = public_method["documentation"]["value"]
+        .as_str()
+        .ok_or("public_method should include markdown documentation")?;
+    assert!(
+        documentation.contains("MyModule::public_method"),
+        "package member documentation should mention the qualified symbol, got: {documentation:?}"
+    );
 
     Ok(())
 }
