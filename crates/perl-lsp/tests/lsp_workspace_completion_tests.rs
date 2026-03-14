@@ -187,6 +187,17 @@ my $result = DataProcessor::
         "Should suggest transform_data. Got: {:?}",
         labels
     );
+    let process_data = items
+        .iter()
+        .find(|item| item["label"].as_str() == Some("process_data"))
+        .ok_or("process_data completion should be present to verify documentation")?;
+    let documentation = process_data["documentation"]["value"]
+        .as_str()
+        .ok_or("process_data should include markdown documentation")?;
+    assert!(
+        documentation.contains("DataProcessor::process_data"),
+        "cross-file package completion should expose a qualified documentation snippet, got: {documentation:?}"
+    );
 
     Ok(())
 }
