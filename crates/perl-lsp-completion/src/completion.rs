@@ -995,14 +995,12 @@ sub internal_sub { }
             completions.iter().any(|c| c.label == "exported_sub"),
             "should suggest exported_sub"
         );
-        let exported_sub = completions
-            .iter()
-            .find(|completion| completion.label == "exported_sub")
-            .expect("expected exported_sub completion to be present");
-        let documentation = exported_sub
-            .documentation
-            .as_deref()
-            .expect("expected package member completion to include documentation");
+        let exported_sub = must_some(
+            completions
+                .iter()
+                .find(|completion| completion.label == "exported_sub"),
+        );
+        let documentation = must_some(exported_sub.documentation.as_deref());
         assert!(
             documentation.contains("MyModule::exported_sub"),
             "expected package member doc to mention qualified symbol, got: {documentation:?}"

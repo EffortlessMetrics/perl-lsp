@@ -142,11 +142,6 @@ pub fn add_package_completions(
     context: &CompletionContext,
     workspace_index: &Option<Arc<WorkspaceIndex>>,
 ) {
-    // Only proceed if we have a workspace index to query
-    let Some(index) = workspace_index else {
-        return;
-    };
-
     // Split the prefix into package name and member prefix
     let mut parts: Vec<&str> = context.prefix.split("::").collect();
     if parts.len() < 2 {
@@ -155,58 +150,67 @@ pub fn add_package_completions(
     let member_prefix = parts.pop().unwrap_or("");
     let package_name = parts.join("::");
 
-    // Query workspace index for members of the package
-    let members = index.get_package_members(&package_name);
-    for symbol in members {
-        match symbol.kind {
-            WsSymbolKind::Export | WsSymbolKind::Subroutine | WsSymbolKind::Method => {
-                if symbol.name.starts_with(member_prefix) {
-                    completions.push(CompletionItem {
-                        label: symbol.name.clone(),
-                        kind: CompletionItemKind::Function,
-                        detail: Some(package_name.clone()),
-                        documentation: package_member_documentation(&package_name, &symbol),
-                        insert_text: Some(symbol.name.clone()),
-                        sort_text: Some(format!("1_{}", symbol.name)),
-                        filter_text: Some(symbol.name.clone()),
-                        additional_edits: vec![],
-                        text_edit_range: Some((context.prefix_start, context.position)),
-                    });
+    // Query workspace index for members of the package (if available)
+    let mut workspace_member_count = 0;
+    if let Some(index) = workspace_index {
+        let members = index.get_package_members(&package_name);
+        for symbol in members {
+            match symbol.kind {
+                WsSymbolKind::Export | WsSymbolKind::Subroutine | WsSymbolKind::Method => {
+                    if symbol.name.starts_with(member_prefix) {
+                        workspace_member_count += 1;
+                        completions.push(CompletionItem {
+                            label: symbol.name.clone(),
+                            kind: CompletionItemKind::Function,
+                            detail: Some(package_name.clone()),
+                            documentation: package_member_documentation(&package_name, &symbol),
+                            insert_text: Some(symbol.name.clone()),
+                            sort_text: Some(format!("1_{}", symbol.name)),
+                            filter_text: Some(symbol.name.clone()),
+                            additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
+                        });
+                    }
                 }
-            }
-            WsSymbolKind::Variable(_) => {
-                if symbol.name.starts_with(member_prefix) {
-                    completions.push(CompletionItem {
-                        label: symbol.name.clone(),
-                        kind: CompletionItemKind::Variable,
-                        detail: Some(package_name.clone()),
-                        documentation: package_member_documentation(&package_name, &symbol),
-                        insert_text: Some(symbol.name.clone()),
-                        sort_text: Some(format!("1_{}", symbol.name)),
-                        filter_text: Some(symbol.name.clone()),
-                        additional_edits: vec![],
-                        text_edit_range: Some((context.prefix_start, context.position)),
-                    });
+                WsSymbolKind::Variable(_) => {
+                    if symbol.name.starts_with(member_prefix) {
+                        workspace_member_count += 1;
+                        completions.push(CompletionItem {
+                            label: symbol.name.clone(),
+                            kind: CompletionItemKind::Variable,
+                            detail: Some(package_name.clone()),
+                            documentation: package_member_documentation(&package_name, &symbol),
+                            insert_text: Some(symbol.name.clone()),
+                            sort_text: Some(format!("1_{}", symbol.name)),
+                            filter_text: Some(symbol.name.clone()),
+                            additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
+                        });
+                    }
                 }
-            }
-            WsSymbolKind::Constant => {
-                if symbol.name.starts_with(member_prefix) {
-                    completions.push(CompletionItem {
-                        label: symbol.name.clone(),
-                        kind: CompletionItemKind::Constant,
-                        detail: Some(package_name.clone()),
-                        documentation: package_member_documentation(&package_name, &symbol),
-                        insert_text: Some(symbol.name.clone()),
-                        sort_text: Some(format!("1_{}", symbol.name)),
-                        filter_text: Some(symbol.name.clone()),
-                        additional_edits: vec![],
-                        text_edit_range: Some((context.prefix_start, context.position)),
-                    });
+                WsSymbolKind::Constant => {
+                    if symbol.name.starts_with(member_prefix) {
+                        workspace_member_count += 1;
+                        completions.push(CompletionItem {
+                            label: symbol.name.clone(),
+                            kind: CompletionItemKind::Constant,
+                            detail: Some(package_name.clone()),
+                            documentation: package_member_documentation(&package_name, &symbol),
+                            insert_text: Some(symbol.name.clone()),
+                            sort_text: Some(format!("1_{}", symbol.name)),
+                            filter_text: Some(symbol.name.clone()),
+                            additional_edits: vec![],
+                            text_edit_range: Some((context.prefix_start, context.position)),
+                        });
+                    }
                 }
+                _ => {}
             }
-            _ => {}
         }
     }
 
-    add_known_core_module_completions(completions, context, &package_name, member_prefix);
+    // Only add core module completions if workspace didn't provide any
+    if workspace_member_count == 0 {
+        add_known_core_module_completions(completions, context, &package_name, member_prefix);
+    }
 }
