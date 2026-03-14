@@ -258,7 +258,10 @@ impl SignatureHelpProvider {
                 .collect();
 
             for part in parts {
-                params.push(ParameterInfo { label: part.to_string(), documentation: None });
+                params.push(ParameterInfo {
+                    label: part.to_string(),
+                    documentation: builtin_parameter_documentation(part),
+                });
             }
         }
 
@@ -400,6 +403,38 @@ impl SignatureHelpProvider {
 
         actual_comma_count
     }
+}
+
+fn builtin_parameter_documentation(label: &str) -> Option<String> {
+    let doc = match label {
+        "SOCKET" => "Socket handle to create or operate on",
+        "SOCKET1" => "First socket handle in the connected pair",
+        "SOCKET2" => "Second socket handle in the connected pair",
+        "NEWSOCKET" => "Socket handle that receives the accepted connection",
+        "GENERICSOCKET" => "Listening socket that accepts the incoming connection",
+        "DOMAIN" => "Socket domain such as AF_INET or AF_UNIX",
+        "TYPE" => "Socket type such as SOCK_STREAM or SOCK_DGRAM",
+        "PROTOCOL" => "Protocol number, often 0 for the default",
+        "NAME" => "Packed socket address for the peer or local endpoint",
+        "QUEUESIZE" => "Maximum number of pending incoming connections",
+        "HOW" => "Shutdown mode: 0 for reads, 1 for writes, 2 for both",
+        "MSG" => "Message buffer to send",
+        "FLAGS" => "Bitmask of send or receive flags",
+        "TO" => "Optional packed destination socket address",
+        "SCALAR" => "Scalar buffer or value passed to the builtin",
+        "LENGTH" => "Number of bytes to read or receive",
+        "LEVEL" => "Socket option level such as SOL_SOCKET",
+        "OPTNAME" => "Socket option name constant",
+        "OPTVAL" => "Packed socket option value",
+        "LABEL" => "Optional label to resume execution from",
+        "EXPR" => "Expression controlling the builtin operation",
+        "HASH" => "Hash variable tied to the DBM file",
+        "DBNAME" => "DBM database file name",
+        "MASK" => "File permission mask for the DBM file",
+        _ => return None,
+    };
+
+    Some(doc.to_string())
 }
 
 /// Context of a function call

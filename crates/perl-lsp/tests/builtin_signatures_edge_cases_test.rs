@@ -575,3 +575,81 @@ fn test_builtin_count_threshold() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+#[test]
+fn test_socket_signature_help_docs_quality() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "socket($sock, ";
+    let ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
+    let provider = SignatureHelpProvider::new(&ast);
+
+    let help =
+        provider.get_signature_help(code, code.len()).ok_or("No signature help for socket")?;
+    let signature = help.signatures.first().ok_or("Missing socket signature")?;
+
+    assert!(
+        signature
+            .documentation
+            .as_deref()
+            .is_some_and(|doc| doc.contains("Returns") && doc.contains("perldoc -f socket")),
+        "socket documentation should include return details and perldoc reference"
+    );
+    assert_eq!(signature.parameters.first().map(|p| p.label.as_str()), Some("SOCKET"));
+    assert!(
+        signature
+            .parameters
+            .first()
+            .and_then(|p| p.documentation.as_deref())
+            .is_some_and(|doc| doc.contains("Socket handle")),
+        "socket parameter documentation should describe the socket handle"
+    );
+    assert_eq!(signature.parameters.get(1).map(|p| p.label.as_str()), Some("DOMAIN"));
+    assert!(
+        signature
+            .parameters
+            .get(1)
+            .and_then(|p| p.documentation.as_deref())
+            .is_some_and(|doc| doc.contains("AF_INET") || doc.contains("AF_UNIX")),
+        "socket parameter documentation should describe the socket domain"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_deprecated_signature_help_docs_quality() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Parser::new("").parse()?;
+    let provider = SignatureHelpProvider::new(&ast);
+
+    let dump_sig = provider.get_builtin_signature("dump").ok_or("Missing dump signature")?;
+    assert!(
+        dump_sig.documentation.contains("Does not return normally")
+            && dump_sig.documentation.contains("perldoc -f dump"),
+        "dump documentation should include return behavior and perldoc reference"
+    );
+
+    let code = "reset($pattern";
+    let reset_ast = Parser::new(code).parse().or_else(|_| Parser::new("").parse())?;
+    let reset_provider = SignatureHelpProvider::new(&reset_ast);
+    let help =
+        reset_provider.get_signature_help(code, code.len()).ok_or("No signature help for reset")?;
+    let signature = help.signatures.first().ok_or("Missing reset signature")?;
+
+    assert!(
+        signature
+            .documentation
+            .as_deref()
+            .is_some_and(|doc| doc.contains("Returns") && doc.contains("perldoc -f reset")),
+        "reset documentation should include return details and perldoc reference"
+    );
+    assert_eq!(signature.parameters.first().map(|p| p.label.as_str()), Some("EXPR"));
+    assert!(
+        signature
+            .parameters
+            .first()
+            .and_then(|p| p.documentation.as_deref())
+            .is_some_and(|doc| doc.contains("Expression")),
+        "reset parameter documentation should describe the controlling expression"
+    );
+
+    Ok(())
+}
