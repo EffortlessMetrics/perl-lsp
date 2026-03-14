@@ -727,6 +727,112 @@ MyModule::"#
     Ok(())
 }
 
+/// Test package completion for known core modules outside the workspace index
+#[test]
+fn test_core_module_package_completion() -> Result<(), Box<dyn std::error::Error>> {
+    let mut server = start_lsp_server();
+    initialize_lsp(&mut server);
+
+    let uri = "file:///test.pl";
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"use List::Util qw(max min sum);
+
+List::Util::"#
+                }
+            }
+        }),
+    );
+
+    let response = send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 2, "character": 12 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    assert!(items.iter().any(|i| i["label"] == "max"), "Should suggest List::Util::max");
+    assert!(items.iter().any(|i| i["label"] == "min"), "Should suggest List::Util::min");
+    assert!(items.iter().any(|i| i["label"] == "sum"), "Should suggest List::Util::sum");
+
+    let max_item = items
+        .iter()
+        .find(|i| i["label"] == "max")
+        .ok_or("max completion should be present to verify documentation")?;
+    let documentation = max_item["documentation"]["value"]
+        .as_str()
+        .ok_or("max should include markdown documentation")?;
+    assert!(
+        documentation.contains("List::Util::max"),
+        "core module package completion should expose a qualified documentation snippet, got: {documentation:?}"
+    );
+    assert!(
+        documentation.contains("perldoc List::Util"),
+        "core module package completion should include a module docs reference, got: {documentation:?}"
+    );
+
+    Ok(())
+}
+
+/// Test package completion for additional known core module exports
+#[test]
+fn test_core_module_package_completion_additional_module() -> Result<(), Box<dyn std::error::Error>>
+{
+    let mut server = start_lsp_server();
+    initialize_lsp(&mut server);
+
+    let uri = "file:///test.pl";
+    send_notification(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/didOpen",
+            "params": {
+                "textDocument": {
+                    "uri": uri,
+                    "languageId": "perl",
+                    "version": 1,
+                    "text": r#"use Cwd qw(getcwd abs_path);
+
+Cwd::"#
+                }
+            }
+        }),
+    );
+
+    let response = send_request(
+        &mut server,
+        json!({
+            "jsonrpc": "2.0",
+            "method": "textDocument/completion",
+            "params": {
+                "textDocument": { "uri": uri },
+                "position": { "line": 2, "character": 5 }
+            }
+        }),
+    );
+
+    let items = completion_items(&response);
+    assert!(items.iter().any(|i| i["label"] == "getcwd"), "Should suggest Cwd::getcwd");
+    assert!(items.iter().any(|i| i["label"] == "abs_path"), "Should suggest Cwd::abs_path");
+
+    Ok(())
+}
+
 /// Test snippet expansion in completions
 #[test]
 fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
