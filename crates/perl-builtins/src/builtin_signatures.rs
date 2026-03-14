@@ -1007,7 +1007,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "socket",
             BuiltinSignature {
                 signatures: vec!["socket SOCKET, DOMAIN, TYPE, PROTOCOL"],
-                documentation: "Creates a socket",
+                documentation:
+                    "Creates a socket. Returns true on success or undef on failure. See perldoc -f socket",
             },
         );
 
@@ -1015,7 +1016,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "bind",
             BuiltinSignature {
                 signatures: vec!["bind SOCKET, NAME"],
-                documentation: "Binds address to socket",
+                documentation:
+                    "Binds a packed address to a socket. Returns true on success or false on failure. See perldoc -f bind",
             },
         );
 
@@ -1023,7 +1025,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "listen",
             BuiltinSignature {
                 signatures: vec!["listen SOCKET, QUEUESIZE"],
-                documentation: "Listens for connections",
+                documentation:
+                    "Marks a socket as accepting incoming connections. Returns true on success or false on failure. See perldoc -f listen",
             },
         );
 
@@ -1031,7 +1034,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "accept",
             BuiltinSignature {
                 signatures: vec!["accept NEWSOCKET, GENERICSOCKET"],
-                documentation: "Accepts socket connection",
+                documentation:
+                    "Accepts an incoming socket connection. Returns the packed peer address on success or false on failure. See perldoc -f accept",
             },
         );
 
@@ -1039,7 +1043,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "connect",
             BuiltinSignature {
                 signatures: vec!["connect SOCKET, NAME"],
-                documentation: "Connects to socket",
+                documentation:
+                    "Connects a socket to a packed peer address. Returns true on success or false on failure. See perldoc -f connect",
             },
         );
 
@@ -1047,7 +1052,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "shutdown",
             BuiltinSignature {
                 signatures: vec!["shutdown SOCKET, HOW"],
-                documentation: "Shuts down socket",
+                documentation:
+                    "Disables reads, writes, or both on a socket. Returns true on success or false on failure. See perldoc -f shutdown",
             },
         );
 
@@ -1055,7 +1061,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "send",
             BuiltinSignature {
                 signatures: vec!["send SOCKET, MSG, FLAGS, TO", "send SOCKET, MSG, FLAGS"],
-                documentation: "Sends message on socket",
+                documentation:
+                    "Sends a message on a socket. Returns the number of bytes sent or undef on failure. See perldoc -f send",
             },
         );
 
@@ -1063,7 +1070,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "recv",
             BuiltinSignature {
                 signatures: vec!["recv SOCKET, SCALAR, LENGTH, FLAGS"],
-                documentation: "Receives message from socket",
+                documentation:
+                    "Receives a message from a socket into a scalar buffer. Returns the sender address or an empty string at end of stream. See perldoc -f recv",
             },
         );
 
@@ -1071,7 +1079,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "getsockopt",
             BuiltinSignature {
                 signatures: vec!["getsockopt SOCKET, LEVEL, OPTNAME"],
-                documentation: "Gets socket options",
+                documentation:
+                    "Reads a socket option value. Returns the packed option value or undef on failure. See perldoc -f getsockopt",
             },
         );
 
@@ -1079,7 +1088,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "setsockopt",
             BuiltinSignature {
                 signatures: vec!["setsockopt SOCKET, LEVEL, OPTNAME, OPTVAL"],
-                documentation: "Sets socket options",
+                documentation:
+                    "Sets a socket option value. Returns true on success or false on failure. See perldoc -f setsockopt",
             },
         );
 
@@ -1087,7 +1097,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "socketpair",
             BuiltinSignature {
                 signatures: vec!["socketpair SOCKET1, SOCKET2, DOMAIN, TYPE, PROTOCOL"],
-                documentation: "Creates a pair of connected sockets",
+                documentation:
+                    "Creates a pair of connected sockets. Returns true on success or false on failure. See perldoc -f socketpair",
             },
         );
 
@@ -1607,7 +1618,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "reset",
             BuiltinSignature {
                 signatures: vec!["reset EXPR", "reset"],
-                documentation: "Resets variables and searches",
+                documentation:
+                    "Resets one-character variables and search state. Returns the reset expression. See perldoc -f reset",
             },
         );
 
@@ -1674,7 +1686,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "dump",
             BuiltinSignature {
                 signatures: vec!["dump LABEL", "dump"],
-                documentation: "Creates core dump",
+                documentation:
+                    "Creates an immediate core dump and resumes at an optional label when possible. Does not return normally. See perldoc -f dump",
             },
         );
 
@@ -1682,7 +1695,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "dbmopen",
             BuiltinSignature {
                 signatures: vec!["dbmopen HASH, DBNAME, MASK"],
-                documentation: "Opens DBM file (deprecated, use tie instead)",
+                documentation:
+                    "Opens a DBM file and ties it to a hash. Returns true on success or false on failure. Deprecated; see perldoc -f dbmopen",
             },
         );
 
@@ -1690,7 +1704,8 @@ pub fn create_builtin_signatures() -> &'static HashMap<&'static str, BuiltinSign
             "dbmclose",
             BuiltinSignature {
                 signatures: vec!["dbmclose HASH"],
-                documentation: "Closes DBM file (deprecated, use untie instead)",
+                documentation:
+                    "Closes a DBM file previously opened with dbmopen. Returns true on success or false on failure. Deprecated; see perldoc -f dbmclose",
             },
         );
 
