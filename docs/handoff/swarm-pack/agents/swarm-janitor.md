@@ -73,7 +73,7 @@ for f in .ops/handoffs/*.md; do
 done
 ```
 
-### 5. Prune
+### 6. Prune
 ```bash
 git worktree remove <worktree-path>
 git branch --merged master | grep -v 'master\|backup/\|release/' | xargs git branch -d
