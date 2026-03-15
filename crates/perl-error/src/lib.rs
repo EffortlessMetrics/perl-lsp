@@ -343,7 +343,7 @@ pub enum ParseError {
     ///
     /// Common during Analyze stage when Perl scripts contain syntax variations or encoding issues.
     /// Recovery strategy: skip problematic tokens and attempt continued parsing with relaxed rules.
-    #[error("Unexpected token: expected {expected}, found {found} at {location}")]
+    #[error("expected {expected}, found {found} at position {location}")]
     UnexpectedToken {
         /// Token type that was expected during Perl script parsing
         expected: String,
@@ -599,21 +599,41 @@ impl ParseError {
     /// Generate a fix suggestion based on the error type
     pub fn suggestion(&self) -> Option<String> {
         match self {
-            ParseError::UnexpectedToken { expected, .. } => {
+            ParseError::UnexpectedToken { expected, found, .. } => {
                 // Check for common missing delimiters
-                if expected.contains("Semicolon") || expected.contains(';') {
-                    return Some("Add a semicolon ';' at the end of the statement".to_string());
+                if expected.contains(';') {
+                    return Some("add a semicolon ';' at the end of the statement".to_string());
                 }
-                if expected.contains("RightBrace") || expected.contains('}') {
-                    return Some("Add a closing brace '}' to end the block".to_string());
+                if expected.contains('}') {
+                    return Some("add a closing brace '}' to end the block".to_string());
                 }
-                if expected.contains("RightParen") || expected.contains(')') {
-                    return Some("Add a closing parenthesis ')'".to_string());
+                if expected.contains(')') {
+                    return Some("add a closing parenthesis ')' to end the group".to_string());
+                }
+                if expected.contains(']') {
+                    return Some("add a closing bracket ']' to end the array".to_string());
+                }
+                // Fat arrow found where expression expected — likely a missing value
+                // before a hash pair separator
+                if expected.contains("expression") && found.contains("=>") {
+                    return Some(
+                        "'=>' (fat arrow) is not valid here; \
+                         did you forget a value before it?"
+                            .to_string(),
+                    );
+                }
+                // Arrow found where expression expected
+                if expected.contains("expression") && found.contains("->") {
+                    return Some(
+                        "'->' (arrow) is not valid here; \
+                         did you forget the object or reference before it?"
+                            .to_string(),
+                    );
                 }
                 None
             }
             ParseError::UnclosedDelimiter { delimiter } => {
-                Some(format!("Add closing '{}' to complete the literal", delimiter))
+                Some(format!("add closing '{}' to complete the literal", delimiter))
             }
             _ => None,
         }
@@ -826,7 +846,7 @@ mod tests {
     fn test_error_context_enrichment() {
         let source = "line1\nline2;\nline3";
         // 'e' of line1 is at 4. 5 is newline.
-        let errors = vec![ParseError::unexpected("Semicolon", "newline", 5)];
+        let errors = vec![ParseError::unexpected("';'", "newline", 5)];
 
         let contexts = get_error_contexts(&errors, source);
         assert_eq!(contexts.len(), 1);

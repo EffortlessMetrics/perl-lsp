@@ -717,7 +717,7 @@ impl<'a> Parser<'a> {
             _ => {
                 // Get position before consuming
                 let pos = self.current_position();
-                Err(ParseError::unexpected("expression", format!("{:?}", token_kind), pos))
+                Err(ParseError::unexpected("expression", token_kind.display_name(), pos))
             }
         }
     }

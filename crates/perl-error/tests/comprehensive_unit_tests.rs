@@ -172,7 +172,7 @@ fn test_location_returns_none_for_other_variants() -> Result<(), Box<dyn std::er
 
 #[test]
 fn test_suggestion_semicolon() -> Result<(), Box<dyn std::error::Error>> {
-    let err = ParseError::unexpected("Semicolon", "newline", 10);
+    let err = ParseError::unexpected("';'", "newline", 10);
     let s = must_some(err.suggestion());
     assert!(s.contains("semicolon"), "got: {s}");
     Ok(())

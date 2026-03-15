@@ -32,11 +32,13 @@ impl<'a> Parser<'a> {
                     let error_location = self.current_position();
                     let error_msg = format!("{}", e);
                     // Collect peek_kind before mutable borrow in recover_from_error
-                    let peek_kind = format!("{:?}", self.peek_kind());
+                    let peek_display = self.peek_kind()
+                        .map(|k| k.display_name())
+                        .unwrap_or("end of input");
                     let error_node = self.recover_from_error(
                         error_msg,
                         "statement".to_string(),
-                        peek_kind,
+                        peek_display.to_string(),
                         error_location
                     );
                     statements.push(error_node);
@@ -620,11 +622,13 @@ impl<'a> Parser<'a> {
                         let error_location = s.current_position();
                         let error_msg = format!("{}", e);
                         // Collect peek_kind before mutable borrow in recover_from_error
-                        let peek_kind = format!("{:?}", s.peek_kind());
+                        let peek_display = s.peek_kind()
+                            .map(|k| k.display_name())
+                            .unwrap_or("end of input");
                         let error_node = s.recover_from_error(
                             error_msg,
                             "statement".to_string(),
-                            peek_kind,
+                            peek_display.to_string(),
                             error_location
                         );
                         statements.push(error_node);
