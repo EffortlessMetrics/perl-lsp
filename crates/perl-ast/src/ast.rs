@@ -2357,6 +2357,10 @@ fn format_binary_operator(op: &str) -> String {
         "{}" => "binary_{}".to_string(),
         "[]" => "binary_[]".to_string(),
 
+        // Arrow hash/array dereference
+        "->{}" => "arrow_hash_deref".to_string(),
+        "->[]" => "arrow_array_deref".to_string(),
+
         // Default case for unknown operators
         _ => format!("binary_{}", op.replace(' ', "_")),
     }
