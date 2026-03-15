@@ -465,3 +465,29 @@ fn test_valid_regex_patterns_no_false_positive() {
         );
     }
 }
+
+#[test]
+fn test_debug_paren_regex_binding() {
+    // Quick diagnostic test
+    let test_cases = vec![
+        ("simple =~", "$text =~ s/foo/bar/;"),
+        ("paren assign =~", "(my $x = $y) =~ s/foo/bar/;"),
+        ("paren assign tr", "($str = $input) =~ tr/a-z/A-Z/;"),
+        ("paren assign chomp", "(my $line = <STDIN>) =~ s/\\n$//;"),
+        ("paren with if modifier", "(my $x = $input) =~ s/foo/bar/ if $cond;"),
+        ("paren assign !~", "(my $x = $y) !~ /pattern/;"),
+        ("paren assign regex match", "(my $x = $y) =~ /pattern/;"),
+        ("paren assign regex global", "(my $x = $y) =~ s/foo/bar/g;"),
+        ("nested paren", "((my $x = $y)) =~ s/foo/bar/;"),
+        ("paren list assign split if", "(my @parts = split /,/, $str) if $cond;"),
+    ];
+
+    for (name, code) in test_cases {
+        let mut parser = Parser::new(code);
+        let result = parser.parse();
+        let ast = must(result);
+        let sexp = ast.to_sexp();
+        println!("{}: {}", name, sexp);
+        assert!(!sexp.contains("ERROR"), "{} should not contain ERROR: {}", name, sexp);
+    }
+}

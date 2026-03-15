@@ -1053,6 +1053,7 @@ fn sexp_match_and_substitution() -> Result<(), Box<dyn std::error::Error>> {
             pattern: "foo".to_string(),
             modifiers: "i".to_string(),
             has_embedded_code: false,
+            negated: false,
         },
         loc(0, 15),
     );
@@ -1063,6 +1064,7 @@ fn sexp_match_and_substitution() -> Result<(), Box<dyn std::error::Error>> {
             replacement: "new".to_string(),
             modifiers: "g".to_string(),
             has_embedded_code: false,
+            negated: false,
         },
         loc(0, 20),
     );
@@ -1079,6 +1081,7 @@ fn sexp_transliteration() -> Result<(), Box<dyn std::error::Error>> {
             search: "a-z".to_string(),
             replace: "A-Z".to_string(),
             modifiers: "".to_string(),
+            negated: false,
         },
         loc(0, 15),
     );

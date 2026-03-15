@@ -678,10 +678,12 @@ impl Node {
                 format!("(regex {:?} {:?} {:?}{})", pattern, replacement, modifiers, risk_marker)
             }
 
-            NodeKind::Match { expr, pattern, modifiers, has_embedded_code } => {
+            NodeKind::Match { expr, pattern, modifiers, has_embedded_code, negated } => {
                 let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
+                let op = if *negated { "not_match" } else { "match" };
                 format!(
-                    "(match {} (regex {:?} {:?}{}))",
+                    "({} {} (regex {:?} {:?}{}))",
+                    op,
                     expr.to_sexp(),
                     pattern,
                     modifiers,
@@ -689,25 +691,36 @@ impl Node {
                 )
             }
 
-            NodeKind::Substitution { expr, pattern, replacement, modifiers, has_embedded_code } => {
+            NodeKind::Substitution {
+                expr,
+                pattern,
+                replacement,
+                modifiers,
+                has_embedded_code,
+                negated,
+            } => {
                 let risk_marker = if *has_embedded_code { " (risk:code)" } else { "" };
+                let neg_marker = if *negated { " (negated)" } else { "" };
                 format!(
-                    "(substitution {} {:?} {:?} {:?}{})",
+                    "(substitution {} {:?} {:?} {:?}{}{})",
                     expr.to_sexp(),
                     pattern,
                     replacement,
                     modifiers,
-                    risk_marker
+                    risk_marker,
+                    neg_marker
                 )
             }
 
-            NodeKind::Transliteration { expr, search, replace, modifiers } => {
+            NodeKind::Transliteration { expr, search, replace, modifiers, negated } => {
+                let neg_marker = if *negated { " (negated)" } else { "" };
                 format!(
-                    "(transliteration {} {:?} {:?} {:?})",
+                    "(transliteration {} {:?} {:?} {:?}{})",
                     expr.to_sexp(),
                     search,
                     replace,
-                    modifiers
+                    modifiers,
+                    neg_marker
                 )
             }
 
@@ -1872,7 +1885,7 @@ pub enum NodeKind {
         has_embedded_code: bool,
     },
 
-    /// Match operation: `$str =~ /pattern/modifiers`
+    /// Match operation: `$str =~ /pattern/modifiers` or `$str !~ /pattern/modifiers`
     Match {
         /// Expression to match against
         expr: Box<Node>,
@@ -1882,6 +1895,8 @@ pub enum NodeKind {
         modifiers: String,
         /// Whether the regex contains embedded code `(?{...})`
         has_embedded_code: bool,
+        /// Whether the binding operator was `!~` (negated match)
+        negated: bool,
     },
 
     /// Substitution operation: `$str =~ s/pattern/replacement/modifiers`
@@ -1896,6 +1911,8 @@ pub enum NodeKind {
         modifiers: String,
         /// Whether the regex contains embedded code `(?{...})`
         has_embedded_code: bool,
+        /// Whether the binding operator was `!~` (negated match)
+        negated: bool,
     },
 
     /// Transliteration operation: `$str =~ tr/search/replace/` or `y///`
@@ -1908,6 +1925,8 @@ pub enum NodeKind {
         replace: String,
         /// Transliteration modifiers (c, d, s, r)
         modifiers: String,
+        /// Whether the binding operator was `!~` (negated match)
+        negated: bool,
     },
 
     // Package system
@@ -2529,6 +2548,7 @@ mod tests {
                 pattern: String::new(),
                 modifiers: String::new(),
                 has_embedded_code: false,
+                negated: false,
             },
             NodeKind::Substitution {
                 expr: Box::new(dummy_node()),
@@ -2536,12 +2556,14 @@ mod tests {
                 replacement: String::new(),
                 modifiers: String::new(),
                 has_embedded_code: false,
+                negated: false,
             },
             NodeKind::Transliteration {
                 expr: Box::new(dummy_node()),
                 search: String::new(),
                 replace: String::new(),
                 modifiers: String::new(),
+                negated: false,
             },
             NodeKind::Package { name: String::new(), name_span: loc, block: None },
             NodeKind::Use { module: String::new(), args: vec![], has_filter_risk: false },

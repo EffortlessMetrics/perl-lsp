@@ -446,6 +446,7 @@ impl<'a> Parser<'a> {
                         if let NodeKind::Substitution { pattern, replacement, modifiers, has_embedded_code, .. } =
                             &right.kind
                         {
+                            let negated = matches!(op_token.kind, TokenKind::NotMatch);
                             // Update the expression in the substitution
                             expr = Node::new(
                                 NodeKind::Substitution {
@@ -454,6 +455,7 @@ impl<'a> Parser<'a> {
                                     replacement: replacement.clone(),
                                     modifiers: modifiers.clone(),
                                     has_embedded_code: *has_embedded_code,
+                                    negated,
                                 },
                                 SourceLocation { start, end },
                             );
@@ -461,6 +463,7 @@ impl<'a> Parser<'a> {
                             search, replace, modifiers, ..
                         } = &right.kind
                         {
+                            let negated = matches!(op_token.kind, TokenKind::NotMatch);
                             // Update the expression in the transliteration
                             expr = Node::new(
                                 NodeKind::Transliteration {
@@ -468,12 +471,14 @@ impl<'a> Parser<'a> {
                                     search: search.clone(),
                                     replace: replace.clone(),
                                     modifiers: modifiers.clone(),
+                                    negated,
                                 },
                                 SourceLocation { start, end },
                             );
                         } else if let NodeKind::Regex { pattern, replacement, modifiers, has_embedded_code } =
                             &right.kind
                         {
+                            let negated = matches!(op_token.kind, TokenKind::NotMatch);
                             if let Some(replacement) = replacement {
                                 let pat = if pattern.len() >= 2 {
                                     pattern[1..pattern.len() - 1].to_string()
@@ -487,6 +492,7 @@ impl<'a> Parser<'a> {
                                         replacement: replacement.clone(),
                                         modifiers: modifiers.clone(),
                                         has_embedded_code: *has_embedded_code,
+                                        negated,
                                     },
                                     SourceLocation { start, end },
                                 );
@@ -497,6 +503,7 @@ impl<'a> Parser<'a> {
                                         pattern: pattern.clone(),
                                         modifiers: modifiers.clone(),
                                         has_embedded_code: *has_embedded_code,
+                                        negated,
                                     },
                                     SourceLocation { start, end },
                                 );
