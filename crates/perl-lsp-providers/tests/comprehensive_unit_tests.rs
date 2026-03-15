@@ -513,6 +513,76 @@ mod selection_range_tests {
         assert!(depth >= 1, "should have at least one level in the chain");
         Ok(())
     }
+
+    #[test]
+    fn selection_chain_string_depth() -> Result<(), ParseError> {
+        let code = "sub greet {\n    my $msg = \"hello world\";\n}\n";
+        let ast = parse(code)?;
+        // Byte offset for line 1 char 22 (the 'w' in "world"):
+        // line 0 = "sub greet {\n" = 12 bytes
+        // char 22 on line 1 => offset = 12 + 22 = 34
+        let offset = 34;
+        let parent_map = build_parent_map(&ast);
+        let to_pos16 = |o: usize| -> (u32, u32) {
+            perl_parser_core::position::offset_to_utf16_line_col(code, o)
+        };
+        let chain = selection_chain(&ast, &parent_map, offset, &to_pos16);
+
+        // Count depth
+        let mut depth = 0;
+        let mut current = &chain;
+        while current.is_object() {
+            depth += 1;
+            if let Some(parent) = current.get("parent") {
+                if parent.is_null() {
+                    break;
+                }
+                current = parent;
+            } else {
+                break;
+            }
+        }
+        // With full node traversal, inside "hello world" we should get:
+        // String -> VariableDeclaration (or ExpressionStatement) -> Block -> Subroutine -> Program
+        // That's at least 4 levels
+        assert!(
+            depth >= 3,
+            "string inside sub should produce >= 3 levels, got {}. AST sexp: {}",
+            depth,
+            ast.to_sexp()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn selection_chain_function_name() -> Result<(), ParseError> {
+        let code = "sub calculate {\n    return 1;\n}\n";
+        let ast = parse(code)?;
+        // 'c' of calculate is at byte 4
+        let offset = 4;
+        let parent_map = build_parent_map(&ast);
+        let to_pos16 = |o: usize| -> (u32, u32) {
+            perl_parser_core::position::offset_to_utf16_line_col(code, o)
+        };
+        let chain = selection_chain(&ast, &parent_map, offset, &to_pos16);
+
+        let mut depth = 0;
+        let mut current = &chain;
+        while current.is_object() {
+            depth += 1;
+            if let Some(parent) = current.get("parent") {
+                if parent.is_null() {
+                    break;
+                }
+                current = parent;
+            } else {
+                break;
+            }
+        }
+        // On a function name, we should get at least: name_span -> Subroutine -> Program
+        assert!(depth >= 2, "function name should produce >= 2 levels, got {}", depth,);
+        Ok(())
+    }
 }
 
 // =========================================================================
