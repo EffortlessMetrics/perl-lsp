@@ -311,6 +311,7 @@ pub fn caps_from_feature_ids(features: &[&str]) -> ServerCapabilities {
 mod tests {
     use lsp_types::{ColorProviderCapability, ServerCapabilities};
 
+    use super::*;
     use super::{LSP_COLOR, LSP_DOCUMENT_COLOR, caps_from_feature_ids, feature_ids_from_caps};
 
     #[test]
@@ -333,5 +334,156 @@ mod tests {
     fn caps_from_feature_ids_accepts_canonical_color_id() {
         let caps = caps_from_feature_ids(&[LSP_DOCUMENT_COLOR]);
         assert!(caps.color_provider.is_some());
+    }
+
+    // ── Round-trip tests ────────────────────────────────────────────
+
+    #[test]
+    fn round_trip_single_feature_completion() {
+        let caps = caps_from_feature_ids(&[LSP_COMPLETION]);
+        let ids = feature_ids_from_caps(&caps);
+        assert!(ids.contains(&LSP_COMPLETION));
+    }
+
+    #[test]
+    fn round_trip_single_feature_hover() {
+        let caps = caps_from_feature_ids(&[LSP_HOVER]);
+        let ids = feature_ids_from_caps(&caps);
+        assert!(ids.contains(&LSP_HOVER));
+    }
+
+    #[test]
+    fn round_trip_preserves_all_mappable_features() {
+        // Every feature that caps_from_feature_ids can set should survive a round trip.
+        let all_mappable: &[&str] = &[
+            LSP_COMPLETION,
+            LSP_HOVER,
+            LSP_SIGNATURE_HELP,
+            LSP_DEFINITION,
+            LSP_DECLARATION,
+            LSP_NOTEBOOK_DOCUMENT_SYNC,
+            LSP_TYPE_DEFINITION,
+            LSP_IMPLEMENTATION,
+            LSP_REFERENCES,
+            LSP_DOCUMENT_HIGHLIGHT,
+            LSP_DOCUMENT_SYMBOL,
+            LSP_CODE_ACTION,
+            LSP_CODE_LENS,
+            LSP_DOCUMENT_LINK,
+            LSP_DOCUMENT_COLOR,
+            LSP_FORMATTING,
+            LSP_RANGE_FORMATTING,
+            LSP_ON_TYPE_FORMATTING,
+            LSP_RENAME,
+            LSP_FOLDING_RANGE,
+            LSP_SELECTION_RANGE,
+            LSP_LINKED_EDITING_RANGE,
+            LSP_CALL_HIERARCHY,
+            LSP_SEMANTIC_TOKENS,
+            LSP_MONIKER,
+            LSP_INLINE_VALUE,
+            LSP_INLAY_HINT,
+            LSP_PULL_DIAGNOSTICS,
+            LSP_WORKSPACE_SYMBOL,
+            LSP_EXECUTE_COMMAND,
+        ];
+
+        let caps = caps_from_feature_ids(all_mappable);
+        let extracted = feature_ids_from_caps(&caps);
+
+        for &feature in all_mappable {
+            assert!(extracted.contains(&feature), "round-trip lost feature '{feature}'");
+        }
+    }
+
+    // ── Empty / default cases ───────────────────────────────────────
+
+    #[test]
+    fn empty_caps_yields_no_features() {
+        let caps = ServerCapabilities::default();
+        assert!(feature_ids_from_caps(&caps).is_empty());
+    }
+
+    #[test]
+    fn empty_feature_list_yields_default_caps() {
+        let caps = caps_from_feature_ids(&[]);
+        assert!(caps.completion_provider.is_none());
+        assert!(caps.hover_provider.is_none());
+    }
+
+    #[test]
+    fn unknown_feature_id_is_ignored() {
+        let caps = caps_from_feature_ids(&["lsp.nonexistent_feature"]);
+        // Should produce default (empty) caps without panicking
+        assert!(feature_ids_from_caps(&caps).is_empty());
+    }
+
+    // ── Output is sorted and deduplicated ───────────────────────────
+
+    #[test]
+    fn feature_ids_from_caps_are_sorted() {
+        let caps = caps_from_feature_ids(&[LSP_RENAME, LSP_COMPLETION, LSP_HOVER, LSP_DEFINITION]);
+        let ids = feature_ids_from_caps(&caps);
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        assert_eq!(ids, sorted, "feature_ids_from_caps output must be sorted");
+    }
+
+    #[test]
+    fn duplicate_input_features_produce_no_duplicate_caps() {
+        let caps = caps_from_feature_ids(&[LSP_HOVER, LSP_HOVER, LSP_HOVER]);
+        let ids = feature_ids_from_caps(&caps);
+        assert_eq!(ids.iter().filter(|&&id| id == LSP_HOVER).count(), 1);
+    }
+
+    // ── Individual capability mapping spot checks ───────────────────
+
+    #[test]
+    fn caps_from_completion_has_trigger_characters() {
+        let caps = caps_from_feature_ids(&[LSP_COMPLETION]);
+        let provider = caps.completion_provider.as_ref();
+        assert!(provider.is_some());
+        let triggers = provider.and_then(|p| p.trigger_characters.as_ref());
+        assert!(triggers.is_some());
+        let triggers = triggers.map(|t| t.len()).unwrap_or(0);
+        assert!(triggers > 0, "completion should have trigger characters");
+    }
+
+    #[test]
+    fn caps_from_signature_help_has_trigger_characters() {
+        let caps = caps_from_feature_ids(&[LSP_SIGNATURE_HELP]);
+        assert!(caps.signature_help_provider.is_some());
+    }
+
+    #[test]
+    fn caps_from_semantic_tokens_has_legend() {
+        let caps = caps_from_feature_ids(&[LSP_SEMANTIC_TOKENS]);
+        assert!(caps.semantic_tokens_provider.is_some());
+    }
+
+    #[test]
+    fn caps_from_pull_diagnostics_has_identifier() {
+        let caps = caps_from_feature_ids(&[LSP_PULL_DIAGNOSTICS]);
+        assert!(caps.diagnostic_provider.is_some());
+    }
+
+    #[test]
+    fn caps_from_code_lens_has_resolve_provider() {
+        let caps = caps_from_feature_ids(&[LSP_CODE_LENS]);
+        let lens = caps.code_lens_provider.as_ref();
+        assert!(lens.is_some());
+    }
+
+    #[test]
+    fn caps_from_execute_command_has_commands() {
+        let caps = caps_from_feature_ids(&[LSP_EXECUTE_COMMAND]);
+        let exec = caps.execute_command_provider.as_ref();
+        assert!(exec.is_some());
+    }
+
+    #[test]
+    fn caps_from_notebook_sync_has_selector() {
+        let caps = caps_from_feature_ids(&[LSP_NOTEBOOK_DOCUMENT_SYNC]);
+        assert!(caps.notebook_document_sync.is_some());
     }
 }

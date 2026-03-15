@@ -151,7 +151,7 @@ pub fn catalog_advertised_feature_ids(profile: FeatureProfile) -> Vec<&'static s
 
 #[cfg(test)]
 mod tests {
-    use super::FeatureProfile;
+    use super::*;
 
     #[test]
     fn profile_labels_are_stable() {
@@ -170,5 +170,190 @@ mod tests {
         assert!(supported.contains(&"prod"));
         assert!(supported.contains(&"production"));
         assert!(supported.contains(&"all"));
+    }
+
+    // ── from_kind round-trip ────────────────────────────────────────
+
+    #[test]
+    fn from_kind_preserves_all_variants() {
+        assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::GaLock), FeatureProfile::GaLock,);
+        assert_eq!(
+            FeatureProfile::from_kind(FeatureProfileKind::Production),
+            FeatureProfile::Production,
+        );
+        assert_eq!(FeatureProfile::from_kind(FeatureProfileKind::All), FeatureProfile::All,);
+    }
+
+    // ── from_ga_lock_enabled ────────────────────────────────────────
+
+    #[test]
+    fn from_ga_lock_enabled_true_is_ga_lock() {
+        assert_eq!(FeatureProfile::from_ga_lock_enabled(true), FeatureProfile::GaLock);
+    }
+
+    #[test]
+    fn from_ga_lock_enabled_false_is_production() {
+        assert_eq!(FeatureProfile::from_ga_lock_enabled(false), FeatureProfile::Production);
+    }
+
+    // ── from_cli_argument ───────────────────────────────────────────
+
+    #[test]
+    fn from_cli_argument_resolves_known_tokens() {
+        assert_eq!(FeatureProfile::from_cli_argument("ga-lock"), FeatureProfile::GaLock);
+        assert_eq!(FeatureProfile::from_cli_argument("prod"), FeatureProfile::Production);
+        assert_eq!(FeatureProfile::from_cli_argument("all"), FeatureProfile::All);
+    }
+
+    #[test]
+    fn from_cli_argument_falls_back_for_unknown() {
+        let result = FeatureProfile::from_cli_argument("bogus");
+        assert_eq!(result, FeatureProfile::current());
+    }
+
+    // ── parse_profile ───────────────────────────────────────────────
+
+    #[test]
+    fn parse_profile_returns_none_for_unknown() {
+        assert!(FeatureProfile::parse_profile("nope").is_none());
+    }
+
+    #[test]
+    fn parse_profile_returns_some_for_valid() {
+        assert_eq!(FeatureProfile::parse_profile("all"), Some(FeatureProfile::All));
+    }
+
+    // ── build_flags and profile shapes ──────────────────────────────
+
+    #[test]
+    fn build_flags_returns_ga_lock_for_ga_lock_profile() {
+        let flags = FeatureProfile::GaLock.build_flags();
+        let expected = BuildFlags::ga_lock();
+        assert_eq!(flags, expected);
+    }
+
+    #[test]
+    fn build_flags_returns_production_for_production_profile() {
+        let flags = FeatureProfile::Production.build_flags();
+        let expected = BuildFlags::production();
+        assert_eq!(flags, expected);
+    }
+
+    #[test]
+    fn build_flags_returns_all_for_all_profile() {
+        let flags = FeatureProfile::All.build_flags();
+        let expected = BuildFlags::all();
+        assert_eq!(flags, expected);
+    }
+
+    // ── runtime_flags with perltidy ─────────────────────────────────
+
+    #[test]
+    fn runtime_flags_enables_formatting_when_perltidy_available() {
+        let flags = FeatureProfile::Production.runtime_flags(true);
+        assert!(flags.formatting, "formatting should be enabled with perltidy");
+        assert!(flags.range_formatting, "range_formatting should be enabled with perltidy");
+    }
+
+    #[test]
+    fn runtime_flags_preserves_disabled_formatting_without_perltidy() {
+        let flags = FeatureProfile::Production.runtime_flags(false);
+        assert!(!flags.formatting, "formatting should remain off without perltidy");
+        assert!(!flags.range_formatting, "range_formatting should remain off without perltidy");
+    }
+
+    // ── flags_for_profile / flags_for_runtime ───────────────────────
+
+    #[test]
+    fn flags_for_profile_matches_build_flags() {
+        for profile in FeatureProfile::all() {
+            assert_eq!(
+                flags_for_profile(*profile),
+                profile.build_flags(),
+                "flags_for_profile({}) should match build_flags()",
+                profile.as_str(),
+            );
+        }
+    }
+
+    #[test]
+    fn flags_for_runtime_matches_runtime_flags() {
+        for &has_perltidy in &[true, false] {
+            for profile in FeatureProfile::all() {
+                assert_eq!(
+                    flags_for_runtime(*profile, has_perltidy),
+                    profile.runtime_flags(has_perltidy),
+                );
+            }
+        }
+    }
+
+    // ── advertised_features ─────────────────────────────────────────
+
+    #[test]
+    fn advertised_features_reflects_build_flags() {
+        let adv = FeatureProfile::Production.advertised_features();
+        assert!(adv.completion);
+        assert!(adv.hover);
+        assert!(!adv.formatting, "production does not advertise formatting without perltidy");
+    }
+
+    #[test]
+    fn runtime_advertised_features_with_perltidy() {
+        let adv = FeatureProfile::Production.runtime_advertised_features(true);
+        assert!(adv.formatting, "production should advertise formatting with perltidy");
+    }
+
+    // ── catalog_advertised_feature_ids ──────────────────────────────
+
+    #[test]
+    fn catalog_advertised_ids_are_non_empty_for_all_profiles() {
+        for profile in FeatureProfile::all() {
+            let ids = catalog_advertised_feature_ids(*profile);
+            assert!(
+                !ids.is_empty(),
+                "catalog_advertised_feature_ids({}) should not be empty",
+                profile.as_str(),
+            );
+        }
+    }
+
+    #[test]
+    fn catalog_advertised_ids_all_superset_of_ga_lock() {
+        let all_ids = catalog_advertised_feature_ids(FeatureProfile::All);
+        let ga_ids = catalog_advertised_feature_ids(FeatureProfile::GaLock);
+        for id in &ga_ids {
+            assert!(all_ids.contains(id), "'all' advertised IDs should contain ga-lock ID '{id}'");
+        }
+    }
+
+    #[test]
+    fn catalog_advertised_ids_only_contain_catalog_known_ids() {
+        let catalog_ids = advertised_features();
+        for profile in FeatureProfile::all() {
+            let ids = catalog_advertised_feature_ids(*profile);
+            for id in &ids {
+                assert!(
+                    catalog_ids.contains(id),
+                    "profile '{}' emitted non-catalog ID '{id}'",
+                    profile.as_str(),
+                );
+            }
+        }
+    }
+
+    // ── all() profiles ──────────────────────────────────────────────
+
+    #[test]
+    fn all_profiles_returns_three() {
+        assert_eq!(FeatureProfile::all().len(), 3);
+    }
+
+    // ── feature_ids_from_flags ──────────────────────────────────────
+
+    #[test]
+    fn feature_ids_from_flags_for_default_is_empty() {
+        let ids = feature_ids_from_flags(&BuildFlags::default());
+        assert!(ids.is_empty());
     }
 }
