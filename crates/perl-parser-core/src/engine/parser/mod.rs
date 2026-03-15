@@ -444,6 +444,8 @@ mod regex_delimiter_tests;
 #[cfg(test)]
 mod slash_ambiguity_tests;
 #[cfg(test)]
+mod statement_modifier_tests;
+#[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tie_tests;
