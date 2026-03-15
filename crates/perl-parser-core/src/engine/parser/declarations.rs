@@ -350,7 +350,7 @@ impl<'a> Parser<'a> {
                 first_token.text.to_string()
             } else {
                 return Err(ParseError::syntax(
-                    format!("Expected module name or version, found {:?}", first_token.kind),
+                    format!("Expected module name or version, found {}", first_token.kind.display_name()),
                     first_token.start,
                 ));
             }
