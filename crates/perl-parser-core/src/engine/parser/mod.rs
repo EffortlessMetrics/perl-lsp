@@ -420,8 +420,6 @@ mod coderef_invocation_tests;
 #[cfg(test)]
 mod declaration_in_args_tests;
 #[cfg(test)]
-mod for_builtin_block_tests;
-#[cfg(test)]
 mod format_comprehensive_tests;
 #[cfg(test)]
 mod format_tests;

@@ -275,8 +275,26 @@ impl<'a> Parser<'a> {
                                     args.push(self.parse_comma()?);
                                 }
                             } else if matches!(name.as_str(), "sort" | "map" | "grep") {
-                                // Parse block (may contain multiple statements) as first argument
-                                args.push(self.parse_builtin_block()?);
+                                // Parse block expression as first argument
+                                let block_start = self.current_position();
+                                self.expect(TokenKind::LeftBrace)?;
+
+                                // Parse the expression inside the block (if any)
+                                let mut statements = Vec::new();
+                                if self.peek_kind() != Some(TokenKind::RightBrace) {
+                                    statements.push(self.parse_expression()?);
+                                }
+
+                                self.expect(TokenKind::RightBrace)?;
+                                let block_end = self.previous_position();
+
+                                // Wrap the expression in a block node
+                                let block = Node::new(
+                                    NodeKind::Block { statements },
+                                    SourceLocation { start: block_start, end: block_end },
+                                );
+
+                                args.push(block);
 
                                 // Parse trailing list arguments for map/grep/sort.
                                 // In Perl, the block form does not require a comma
@@ -414,8 +432,26 @@ impl<'a> Parser<'a> {
                                 if matches!(name.as_str(), "sort" | "map" | "grep")
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
-                                    // Parse block (may contain multiple statements) as first argument
-                                    args.push(self.parse_builtin_block()?);
+                                    // Parse block expression as first argument
+                                    let block_start = self.current_position();
+                                    self.expect(TokenKind::LeftBrace)?;
+
+                                    // Parse the expression inside the block (if any)
+                                    let mut statements = Vec::new();
+                                    if self.peek_kind() != Some(TokenKind::RightBrace) {
+                                        statements.push(self.parse_expression()?);
+                                    }
+
+                                    self.expect(TokenKind::RightBrace)?;
+                                    let block_end = self.previous_position();
+
+                                    // Wrap the expression in a block node
+                                    let block = Node::new(
+                                        NodeKind::Block { statements },
+                                        SourceLocation { start: block_start, end: block_end },
+                                    );
+
+                                    args.push(block);
 
                                     // Parse remaining arguments for map/grep/sort without requiring commas
                                     // But respect statement boundaries including ] and )
