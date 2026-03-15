@@ -711,7 +711,7 @@ ci-policy:
     @echo "⚖️  Checking project policies..."
     just ci-check-todos
     @bash ./.ci/scripts/check-from-raw.sh
-    @python3 scripts/update-current-status.py --check
+    @cargo run -p xtask -- update-status --check
 
 # Check for machine-specific paths in documentation
 ci-doc-paths:
@@ -719,13 +719,13 @@ ci-doc-paths:
     @bash ci/check_doc_paths.sh docs
     @echo "✅ Documentation paths check passed"
 
-# Update derived metrics in CURRENT_STATUS.md
+# Update derived metrics in CURRENT_STATUS.md and ROADMAP.md
 status-update:
-    @python3 scripts/update-current-status.py --write
+    @cargo run -p xtask -- update-status --write
 
 # Verify CURRENT_STATUS.md derived metrics are up-to-date
 status-check:
-    @python3 scripts/update-current-status.py --check
+    @cargo run -p xtask -- update-status --check
 
 # ============================================================================
 # Corpus Audit Commands
