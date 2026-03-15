@@ -575,7 +575,7 @@ impl ScopeAnalyzer {
                         if let NodeKind::Binary { op, left, .. } = &parent.kind {
                             // Only check if this node is the LEFT side of the access
                             if std::ptr::eq(left.as_ref(), node) {
-                                if op == "{}" {
+                                if op == "{}" || op == "->{}" {
                                     // Check if the corresponding hash exists
                                     let (hash_used, hash_init) =
                                         scope.use_variable_parts("%", name);
@@ -583,7 +583,7 @@ impl ScopeAnalyzer {
                                         variable_used = true;
                                         is_initialized = hash_init;
                                     }
-                                } else if op == "[]" {
+                                } else if op == "[]" || op == "->[]" {
                                     // Check if the corresponding array exists
                                     let (array_used, array_init) =
                                         scope.use_variable_parts("@", name);

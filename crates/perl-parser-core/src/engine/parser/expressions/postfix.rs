@@ -191,6 +191,44 @@ impl<'a> Parser<'a> {
                             );
                         }
 
+                        Some(TokenKind::LeftBracket) => {
+                            // Arrow array dereference: $ref->[index]
+                            self.tokens.next()?; // consume [
+                            let index = self.parse_expression()?;
+                            self.expect(TokenKind::RightBracket)?;
+
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+
+                            expr = Node::new(
+                                NodeKind::Binary {
+                                    op: "->[]".to_string(),
+                                    left: Box::new(expr),
+                                    right: Box::new(index),
+                                },
+                                SourceLocation { start, end },
+                            );
+                        }
+
+                        Some(TokenKind::LeftBrace) => {
+                            // Arrow hash dereference: $ref->{key}
+                            self.tokens.next()?; // consume {
+                            let key = self.parse_expression()?;
+                            self.expect(TokenKind::RightBrace)?;
+
+                            let start = expr.location.start;
+                            let end = self.previous_position();
+
+                            expr = Node::new(
+                                NodeKind::Binary {
+                                    op: "->{}".to_string(),
+                                    left: Box::new(expr),
+                                    right: Box::new(key),
+                                },
+                                SourceLocation { start, end },
+                            );
+                        }
+
                         _ => {
                             // Just the arrow by itself - could be an error or incomplete
                             // For now, we'll leave expr unchanged
