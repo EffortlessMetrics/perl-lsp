@@ -12,6 +12,7 @@ mod types;
 mod utils;
 use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
+use tasks::targeted_checks::CheckMode;
 use tasks::*;
 use types::TestSuite;
 #[cfg(any(feature = "legacy", feature = "parser-tasks"))]
@@ -537,6 +538,21 @@ enum Commands {
         #[arg(long, short)]
         verbose: bool,
     },
+
+    /// Run targeted clippy/test checks for crates changed since a base ref
+    ///
+    /// Detects which crates have changed since the given base git ref
+    /// and runs clippy and/or tests only for those crates. This gives
+    /// fast feedback during active development.
+    TargetedChecks {
+        /// Base git reference for diff (default: origin/master)
+        #[arg(long, default_value = "origin/master")]
+        base: String,
+
+        /// Check mode: clippy, test, or all (default: all)
+        #[arg(long, value_enum, default_value = "all")]
+        mode: CheckMode,
+    },
 }
 
 #[derive(Subcommand)]
@@ -799,5 +815,6 @@ fn main() -> Result<()> {
             parallel,
             verbose,
         }),
+        Commands::TargetedChecks { base, mode } => targeted_checks::run(base, mode),
     }
 }
