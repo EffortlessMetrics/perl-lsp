@@ -38,6 +38,11 @@ pub struct Diagnostic {
     pub related_information: Vec<RelatedInformation>,
     /// Tags for categorizing the diagnostic.
     pub tags: Vec<DiagnosticTag>,
+    /// Optional short suggestion for how to fix the issue.
+    ///
+    /// This is a concise, actionable fix description separate from
+    /// the related information. IDEs can surface this as a quick-fix hint.
+    pub suggestion: Option<String>,
 }
 
 /// Related information for a diagnostic.

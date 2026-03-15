@@ -16,6 +16,22 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
         _ => 0,
     };
 
+    let suggestion = match error {
+        ParseError::UnexpectedToken { expected, found, .. } => {
+            if expected.contains(';') || expected.contains("semicolon") {
+                Some("Add a ';' at the end of the statement".to_string())
+            } else if found == ";" {
+                Some(format!("A {} is required here", expected))
+            } else {
+                None
+            }
+        }
+        ParseError::UnexpectedEof => {
+            Some("Check for unclosed delimiters or missing semicolons".to_string())
+        }
+        _ => None,
+    };
+
     Diagnostic {
         range: (location, location + 1),
         severity: DiagnosticSeverity::Error,
@@ -23,5 +39,6 @@ pub fn parse_error_to_diagnostic(error: &ParseError) -> Diagnostic {
         message,
         related_information: Vec::new(),
         tags: Vec::new(),
+        suggestion,
     }
 }

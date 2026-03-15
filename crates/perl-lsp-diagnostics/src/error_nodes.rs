@@ -38,7 +38,7 @@ pub fn check_error_nodes(
 
             // Build related information with suggestion and explanation
             let mut related_info = Vec::new();
-            if let Some(sugg) = suggestion {
+            if let Some(ref sugg) = suggestion {
                 related_info.push(RelatedInformation {
                     location: (start, end),
                     message: format!("💡 {}", sugg),
@@ -58,6 +58,7 @@ pub fn check_error_nodes(
                 message: full_message,
                 related_information: related_info,
                 tags: Vec::new(),
+                suggestion,
             });
         }
     });

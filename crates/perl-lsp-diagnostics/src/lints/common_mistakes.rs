@@ -35,12 +35,13 @@ pub fn check_common_mistakes(
                         range: (n.location.start, n.location.end),
                         severity: DiagnosticSeverity::Warning,
                         code: Some("numeric-undef".to_string()),
-                        message: format!("Using '{}' with potentially undefined value", op),
+                        message: format!("Using '{}' with potentially undefined value -- use 'defined()' to check first", op),
                         related_information: vec![RelatedInformation {
                             location: (n.location.start, n.location.end),
                             message: "Consider using 'defined' check or '//' operator".to_string(),
                         }],
                         tags: Vec::new(),
+                        suggestion: Some("Guard with 'defined($var)' or use the '//' (defined-or) operator".to_string()),
                     });
                 }
             }
@@ -70,6 +71,7 @@ fn check_assignment_in_condition(condition: &Node, diagnostics: &mut Vec<Diagnos
                     }
                 ],
                 tags: Vec::new(),
+                suggestion: Some("Replace '=' with '==' for numeric comparison or 'eq' for string comparison".to_string()),
             });
         }
         NodeKind::Assignment { .. } => {
@@ -89,6 +91,7 @@ fn check_assignment_in_condition(condition: &Node, diagnostics: &mut Vec<Diagnos
                     }
                 ],
                 tags: Vec::new(),
+                suggestion: Some("Replace '=' with '==' for numeric comparison or 'eq' for string comparison".to_string()),
             });
         }
         _ => {}

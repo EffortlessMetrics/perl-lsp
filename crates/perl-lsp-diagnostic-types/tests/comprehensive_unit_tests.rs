@@ -162,6 +162,7 @@ fn make_diagnostic() -> Diagnostic {
         message: "syntax error".to_string(),
         related_information: vec![],
         tags: vec![],
+        suggestion: None,
     }
 }
 
@@ -186,6 +187,7 @@ fn diagnostic_no_code() -> Result<(), Box<dyn std::error::Error>> {
         message: "unused variable".to_string(),
         related_information: vec![],
         tags: vec![DiagnosticTag::Unnecessary],
+        suggestion: None,
     };
     assert!(d.code.is_none());
     assert_eq!(d.tags.len(), 1);
@@ -204,6 +206,7 @@ fn diagnostic_with_related_information() -> Result<(), Box<dyn std::error::Error
             RelatedInformation { location: (200, 220), message: "defined here".to_string() },
         ],
         tags: vec![],
+        suggestion: None,
     };
     assert_eq!(d.related_information.len(), 2);
     assert_eq!(d.related_information[0].message, "did you mean 'foo'?");
@@ -220,6 +223,7 @@ fn diagnostic_with_multiple_tags() -> Result<(), Box<dyn std::error::Error>> {
         message: "deprecated and unused".to_string(),
         related_information: vec![],
         tags: vec![DiagnosticTag::Unnecessary, DiagnosticTag::Deprecated],
+        suggestion: None,
     };
     assert_eq!(d.tags.len(), 2);
     assert!(d.tags.contains(&DiagnosticTag::Unnecessary));
@@ -252,6 +256,7 @@ fn diagnostic_clone() -> Result<(), Box<dyn std::error::Error>> {
             message: "related".to_string(),
         }],
         tags: vec![DiagnosticTag::Deprecated],
+        suggestion: None,
     };
     let cloned = d.clone();
     assert_eq!(d, cloned);
@@ -334,6 +339,7 @@ fn diagnostic_zero_width_range() -> Result<(), Box<dyn std::error::Error>> {
         message: "zero-width".to_string(),
         related_information: vec![],
         tags: vec![],
+        suggestion: None,
     };
     assert_eq!(d.range.0, d.range.1);
     Ok(())
@@ -348,6 +354,7 @@ fn diagnostic_large_range() -> Result<(), Box<dyn std::error::Error>> {
         message: "whole file".to_string(),
         related_information: vec![],
         tags: vec![],
+        suggestion: None,
     };
     assert_eq!(d.range.1, usize::MAX);
     Ok(())
@@ -362,6 +369,7 @@ fn diagnostic_unicode_message() -> Result<(), Box<dyn std::error::Error>> {
         message: "未定義の変数 — café ñ 日本語".to_string(),
         related_information: vec![],
         tags: vec![],
+        suggestion: None,
     };
     assert!(d.message.contains("未定義"));
     assert!(d.message.contains("café"));
@@ -377,6 +385,7 @@ fn diagnostic_empty_message() -> Result<(), Box<dyn std::error::Error>> {
         message: String::new(),
         related_information: vec![],
         tags: vec![],
+        suggestion: None,
     };
     assert!(d.message.is_empty());
     Ok(())
@@ -391,6 +400,7 @@ fn diagnostic_empty_code_string() -> Result<(), Box<dyn std::error::Error>> {
         message: "has empty code".to_string(),
         related_information: vec![],
         tags: vec![],
+        suggestion: None,
     };
     assert_eq!(d.code.as_deref(), Some(""));
     Ok(())
@@ -410,6 +420,7 @@ fn diagnostics_can_be_collected_in_vec() -> Result<(), Box<dyn std::error::Error
             message: format!("warning {i}"),
             related_information: vec![],
             tags: vec![],
+            suggestion: None,
         })
         .collect();
     assert_eq!(diagnostics.len(), 3);
@@ -427,6 +438,7 @@ fn severity_can_be_used_as_sort_key() -> Result<(), Box<dyn std::error::Error>> 
             message: "hint".to_string(),
             related_information: vec![],
             tags: vec![],
+            suggestion: None,
         },
         Diagnostic {
             range: (0, 1),
@@ -435,6 +447,7 @@ fn severity_can_be_used_as_sort_key() -> Result<(), Box<dyn std::error::Error>> 
             message: "error".to_string(),
             related_information: vec![],
             tags: vec![],
+            suggestion: None,
         },
     ];
     diagnostics.sort_by_key(|d| d.severity);
@@ -452,6 +465,7 @@ fn tags_can_be_filtered() -> Result<(), Box<dyn std::error::Error>> {
         message: "tagged".to_string(),
         related_information: vec![],
         tags: vec![DiagnosticTag::Unnecessary, DiagnosticTag::Deprecated],
+        suggestion: None,
     };
     let deprecated: Vec<_> = d.tags.iter().filter(|t| **t == DiagnosticTag::Deprecated).collect();
     assert_eq!(deprecated.len(), 1);

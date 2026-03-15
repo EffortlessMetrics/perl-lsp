@@ -116,19 +116,86 @@ pub fn scope_issues_to_diagnostics(issues: Vec<ScopeIssue>) -> Vec<Diagnostic> {
             ],
         };
 
+        let suggestion = build_scope_suggestion(&issue);
+
         diagnostics.push(Diagnostic {
             range: issue.range,
             severity,
             code: Some(code.to_string()),
-            message: issue.description.clone(),
+            message: build_enhanced_scope_message(&issue),
             related_information: related_info,
             tags: if matches!(issue.kind, IssueKind::UnusedVariable | IssueKind::UnusedParameter) {
                 vec![DiagnosticTag::Unnecessary]
             } else {
                 Vec::new()
             },
+            suggestion,
         });
     }
 
     diagnostics
+}
+
+/// Build an enhanced, more helpful message for a scope issue.
+///
+/// Augments the analyzer's raw description with the variable name and
+/// actionable context so users immediately understand what went wrong.
+fn build_enhanced_scope_message(issue: &ScopeIssue) -> String {
+    let name = &issue.variable_name;
+    match issue.kind {
+        IssueKind::UndeclaredVariable => {
+            format!(
+                "Variable '{}' is used but not declared -- add 'my {}' to declare it in this scope",
+                name, name
+            )
+        }
+        IssueKind::UnusedVariable => {
+            format!(
+                "Variable '{}' is declared but never used -- prefix with '_' or remove it",
+                name
+            )
+        }
+        IssueKind::UnusedParameter => {
+            format!(
+                "Parameter '{}' is never used -- prefix with '_' (e.g., $_{}) to suppress this warning",
+                name,
+                name.trim_start_matches('$')
+            )
+        }
+        IssueKind::VariableShadowing => {
+            format!(
+                "Variable '{}' shadows an outer declaration -- consider renaming to avoid confusion",
+                name
+            )
+        }
+        IssueKind::VariableRedeclaration => {
+            format!(
+                "Variable '{}' is declared again in the same scope -- remove the duplicate 'my'",
+                name
+            )
+        }
+        IssueKind::UninitializedVariable => {
+            format!(
+                "Variable '{}' is used before being initialized -- assign a value when declaring it",
+                name
+            )
+        }
+        // Fall back to the analyzer's original description for other kinds
+        _ => issue.description.clone(),
+    }
+}
+
+/// Build a short actionable fix suggestion for a scope issue.
+fn build_scope_suggestion(issue: &ScopeIssue) -> Option<String> {
+    let name = &issue.variable_name;
+    match issue.kind {
+        IssueKind::UndeclaredVariable => Some(format!("Add 'my {};' before this line", name)),
+        IssueKind::UnusedVariable => Some(format!("Prefix as '_{}'", name.trim_start_matches('$'))),
+        IssueKind::UnusedParameter => {
+            Some(format!("Rename to '$_{}'", name.trim_start_matches('$')))
+        }
+        IssueKind::VariableRedeclaration => Some("Remove the duplicate 'my' keyword".to_string()),
+        IssueKind::UninitializedVariable => Some(format!("Initialize: my {} = ...;", name)),
+        _ => None,
+    }
 }

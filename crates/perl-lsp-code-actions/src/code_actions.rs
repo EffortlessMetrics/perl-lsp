@@ -173,6 +173,7 @@ mod tests {
             message: msg.to_string(),
             related_information: Vec::new(),
             tags: Vec::new(),
+            suggestion: None,
         }
     }
 

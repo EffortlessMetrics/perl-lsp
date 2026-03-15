@@ -56,6 +56,8 @@ impl DiagnosticsProvider {
             let range_start = location.min(source_len);
             let range_end = range_start.saturating_add(1).min(source_len.saturating_add(1));
 
+            let suggestion = build_parse_error_suggestion(error);
+
             diagnostics.push(Diagnostic {
                 range: (range_start, range_end),
                 severity: DiagnosticSeverity::Error,
@@ -63,6 +65,7 @@ impl DiagnosticsProvider {
                 message,
                 related_information: Vec::new(),
                 tags: Vec::new(),
+                suggestion,
             });
         }
 
@@ -81,5 +84,36 @@ fn format_found_token(found: &str) -> String {
         "end of input".to_string()
     } else {
         format!("`{found}`")
+    }
+}
+
+/// Build a contextual suggestion for a parse error based on the expected/found tokens.
+fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
+    match error {
+        ParseError::UnexpectedToken { expected, found, .. } => {
+            // Missing semicolon: parser expected ';' or found something when ';' was expected
+            if expected.contains(';') || expected.contains("semicolon") {
+                return Some("Add a ';' at the end of the statement".to_string());
+            }
+            // Found ';' when expecting something else often means missing expression
+            if found == ";" {
+                return Some(format!(
+                    "A {expected} is required here -- the statement appears incomplete"
+                ));
+            }
+            // Unexpected closing brace/paren
+            if found == "}" || found == ")" || found == "]" {
+                return Some(format!("Check for a missing {expected} before '{found}'"));
+            }
+            None
+        }
+        ParseError::UnexpectedEof => Some(
+            "The file ended unexpectedly -- check for unclosed delimiters or missing semicolons"
+                .to_string(),
+        ),
+        ParseError::UnclosedDelimiter { delimiter } => {
+            Some(format!("Add a matching closing '{delimiter}'"))
+        }
+        _ => None,
     }
 }
