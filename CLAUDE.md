@@ -207,6 +207,7 @@ These directories are excluded from the default workspace (require special build
 | CPAN distribution list | `.ci/cpan-top-1000-distributions.txt` |
 | CPAN corpus ratchet floor | `.ci/cpan-corpus-manifest.txt` |
 | CPAN corpus task impl | `xtask/src/tasks/cpan_corpus.rs` |
+| Slash command definitions | `.claude/commands/` |
 
 ## Architecture Patterns
 
@@ -294,3 +295,26 @@ Metrics in this project are **computed, not hand-edited**:
 | CLI enhancements | `/crates/perl-lsp/src/` |
 | DAP features | `/crates/perl-dap/src/` |
 | Tests | `/crates/*/tests/` |
+
+## Slash Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/pr-create` | Create a well-structured PR from current branch |
+| `/pr-cleanup` | Clean up current branch for review |
+| `/worktree-pr` | PR a worktree's changes (validate, branch, commit, push, PR) |
+| `/parser-fix` | TDD parser fix (failing test, fix, verify, PR) |
+| `/bulk-pr` | PR all agent worktrees with uncommitted changes |
+| `/wave` | Launch parallel agent wave for codebase improvement |
+| `/corpus-ratchet` | Run corpus sweep and update baselines |
+| `/changelog` | Generate changelog entries |
+
+## Agent Swarm Development
+
+Agents run in isolated git worktrees (`isolation: "worktree"`) so multiple fixes can proceed in parallel without conflicts. Typical workflow:
+
+1. **Launch a wave** -- `/wave parser-fixes` spawns parallel agents, each targeting a separate parser issue.
+2. **PR the results** -- `/bulk-pr` after a wave completes to open PRs for every worktree with uncommitted changes.
+3. **Update baselines** -- `/corpus-ratchet` after merges to sweep the test corpus and ratchet baselines forward.
+
+See [docs/project/AGENT_SWARM_WORKFLOW.md](docs/project/AGENT_SWARM_WORKFLOW.md) for details.
