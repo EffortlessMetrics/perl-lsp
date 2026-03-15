@@ -67,9 +67,39 @@ impl LspServer {
                             _ => "Symbol",
                         };
 
-                        // Add sigil if applicable
-                        let sigil = symbol_info.kind.sigil().unwrap_or("");
-                        let full_name = format!("{}{}", sigil, symbol_info.name);
+                        // For subroutines, try to extract parameter info for a
+                        // richer signature display
+                        let display_name = if symbol_info.kind
+                            == crate::symbol::SymbolKind::Subroutine
+                        {
+                            let mut params = Vec::new();
+                            if let Some(sub_node) =
+                                self.find_subroutine_definition(ast, &symbol_info.name)
+                            {
+                                if let NodeKind::Subroutine { signature: sub_sig, body, .. } =
+                                    &sub_node.kind
+                                {
+                                    if let Some(sig) = sub_sig {
+                                        if let NodeKind::Signature { parameters } = &sig.kind {
+                                            for param in parameters {
+                                                self.extract_signature_params(param, &mut params);
+                                            }
+                                        }
+                                    } else {
+                                        self.extract_params_from_body(body, &mut params);
+                                    }
+                                }
+                            }
+                            if params.is_empty() {
+                                format!("sub {}", symbol_info.name)
+                            } else {
+                                format!("sub {}({})", symbol_info.name, params.join(", "))
+                            }
+                        } else {
+                            // Add sigil if applicable
+                            let sigil = symbol_info.kind.sigil().unwrap_or("");
+                            format!("{}{}", sigil, symbol_info.name)
+                        };
 
                         // Add declaration type if available
                         let decl_info = symbol_info
@@ -98,7 +128,7 @@ impl LspServer {
                                 "kind": "markdown",
                                 "value": format!("**{}**\n\n`{}`{}{}{}",
                                     kind_str,
-                                    full_name,
+                                    display_name,
                                     decl_info,
                                     attrs_info,
                                     doc_info
@@ -107,10 +137,27 @@ impl LspServer {
                         })));
                     }
 
-                    // Fall back to simple token display
+                    // Fall back to simple token display, with builtin docs
                     let hover_text = self.get_token_at_position(&doc.text, offset);
 
                     if !hover_text.is_empty() {
+                        // Strip sigil to check for builtin name
+                        let bare = hover_text.trim_start_matches(['$', '@', '%']);
+                        // Check if this is a builtin function and show rich docs
+                        if let Some(builtin_doc) = crate::semantic::get_builtin_documentation(bare)
+                        {
+                            return Ok(Some(json!({
+                                "contents": {
+                                    "kind": "markdown",
+                                    "value": format!(
+                                        "**Built-in Function**\n\n```\n{}\n```\n\n{}",
+                                        builtin_doc.signature,
+                                        builtin_doc.description
+                                    ),
+                                },
+                            })));
+                        }
+
                         return Ok(Some(json!({
                             "contents": {
                                 "kind": "markdown",
