@@ -228,13 +228,23 @@ impl<'a> Parser<'a> {
 
     /// Parse ternary conditional expression
     /// Right-associative: `$a ? $b ? $c : $d : $e` parses as `$a ? ($b ? $c : $d) : $e`
+    ///
+    /// In Perl the colon `:` acts as a delimiter for the then-branch, so the
+    /// expression between `?` and `:` may contain assignment operators
+    /// (e.g. `$a ? $b = 1 : $c`).  The then-branch therefore uses
+    /// `parse_assignment` which recurses into `parse_ternary` for nested
+    /// conditionals.  The else-branch uses `parse_ternary` directly so that
+    /// chained ternaries (`$a ? $b : $c ? $d : $e`) are right-associative
+    /// without accidentally capturing a surrounding assignment.
     fn parse_ternary(&mut self) -> ParseResult<Node> {
         let mut expr = self.parse_or()?;
 
         if self.peek_kind() == Some(TokenKind::Question) {
             self.tokens.next()?; // consume ?
-            // Allow nested ternary in then-branch for right associativity
-            let then_expr = self.parse_ternary()?;
+            // The then-branch (between ? and :) allows full assignment
+            // expressions because : acts as a terminator.  parse_assignment
+            // calls parse_ternary internally, so nested ternaries still work.
+            let then_expr = self.parse_assignment()?;
             self.expect(TokenKind::Colon)?;
             let else_expr = self.parse_ternary()?;
 
