@@ -448,4 +448,6 @@ mod tests;
 #[cfg(test)]
 mod tie_tests;
 #[cfg(test)]
+mod use_overload_tests;
+#[cfg(test)]
 mod x_repetition_tests;
