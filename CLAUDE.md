@@ -299,48 +299,81 @@ Metrics in this project are **computed, not hand-edited**:
 | DAP features | `/crates/perl-dap/src/` |
 | Tests | `/crates/*/tests/` |
 
-## Agent Swarm Development
+## Continuous Swarm Development
 
-This project uses parallel agent swarms for large-scale codebase improvements.
+This project uses continuous agent swarms with agent teams for parallel codebase improvement. 50 agents, 18 skills, GitHub-native tracking.
 
-### Slash Commands
+### Quick Start
 
-| Command | Purpose |
-|---------|---------|
-| `/pr-create` | Create a well-structured PR from current branch |
-| `/pr-cleanup` | Clean up current branch for review |
-| `/worktree-pr` | PR a worktree's changes (validate, branch, commit, push, PR) |
-| `/parser-fix` | TDD parser fix (failing test, fix, verify, PR) |
-| `/bulk-pr` | PR all agent worktrees with uncommitted changes |
-| `/wave` | Launch parallel agent wave for codebase improvement |
-| `/corpus-ratchet` | Run corpus sweep and update baselines |
-| `/changelog` | Generate changelog entries |
+```bash
+/swarm all          # Start continuous swarm (agent teams)
+/swarm-status       # Check current state
+/swarm-report       # Daily summary
+```
 
-### Wave Categories
+### Core Skills
 
-| Category | What it does |
-|----------|-------------|
-| `parser-fixes` | Launch agents per error bucket from `.ci/parser-corpus-baseline.json` |
-| `test-coverage` | Agents per crate: parser-core, lexer, semantic-analyzer, workspace-index, refactoring, LSP, DAP |
-| `doc-updates` | Agents per doc gap: COMMANDS_REFERENCE, CLAUDE.md, CONTRIBUTING, README, new project docs |
-| `cleanup` | Agents for: `cargo machete`, clippy, dead code, obsolete scripts, .gitignore |
+| Skill | Purpose |
+|-------|---------|
+| `/swarm` | Start continuous swarm with agent teams |
+| `/swarm-protocol` | Load behavioral rules (autonomy, messaging, learning) |
+| `/swarm-status` | Show PRs, issues, metrics, queue depth |
+| `/swarm-report` | Generate daily check-in summary |
+| `/coding-standards` | Load project coding standards |
+| `/queue-scout` | Launch scouts to find work |
+| `/green-merge` | Merge all passing PRs |
+| `/rebase-open` | Rebase conflicted PRs |
+| `/status-drift` | Fix computed metric drift |
+| `/bootstrap-agents` | Discover codebase, generate domain agents |
 
-### Workflow Pattern
+### PR/Worktree Skills
 
-1. **Plan**: Identify improvement areas, read baselines
-2. **Wave**: `/wave <category>` -- launches 10-30 agents in worktrees
-3. **Monitor**: Agents report completions with changes
-4. **PR**: `/bulk-pr` -- validates and publishes each worktree
-5. **Fix**: Check CI status, dispatch fix agents for failures
-6. **Merge**: Sequential merge, then `/corpus-ratchet` to update baselines
-7. **Repeat**: Next wave targets remaining gaps
+| Skill | Purpose |
+|-------|---------|
+| `/pr-create` | Create a PR from current branch |
+| `/pr-cleanup` | Clean up branch for review |
+| `/worktree-pr` | PR a worktree's changes |
+| `/bulk-pr` | PR all worktrees with changes |
+| `/salvage-worktrees` | Save dirty worktrees before cleanup |
+| `/parser-fix` | TDD parser fix |
+| `/wave` | Launch parallel agent wave |
+| `/corpus-ratchet` | Corpus sweep and baseline update |
+
+### Architecture
+
+Thin coordinator teammates + thick subagent fanout + worktree isolation:
+- 7-9 coordinator teammates manage lanes (scout, build, review, fix, merge, improve, janitor)
+- Each spawns 3-8 fresh focused subagents in parallel
+- Every coding subagent gets `isolation: "worktree"`
+- ~20% of capacity always goes to background improvement (docs, tests, devex, infra)
+
+### Key Files
+
+| What | Where |
+|------|-------|
+| Agent definitions (50) | `.claude/agents/` |
+| Swarm protocol | `/swarm-protocol` skill |
+| Coding standards | `/coding-standards` skill |
+| Handoff files | `.ops-perl-lsp/handoffs/` |
+| Known pitfalls | `.ops-perl-lsp/known-pitfalls.md` |
+| Completed slices (dedup) | `.ops-perl-lsp/completed-slices.md` |
+| Discovered issues | `.ops-perl-lsp/discovered-issues.md` |
+| Swarm metrics | `.ops-perl-lsp/swarm-metrics.jsonl` |
+| Agent self-improvement | `.ops-perl-lsp/agent-patches/` |
+| Design doc | `docs/handoff/SWARM_DESIGN.md` |
+| Portable pack | `docs/handoff/swarm-pack/` |
+
+### GitHub Labels
+
+PRs: `swarm-core`, `swarm-improve-{docs,tests,devex,infra}`
+Issues: `swarm-discovered`, `swarm-architectural`
 
 ### Key Patterns
 
-- Always use `isolation: "worktree"` for code changes
-- Use `run_in_background: true` for parallel dispatch
-- Name agents descriptively: `pr2-pkg-subscripts`, `fix-clippy-warnings`
-- Orchestrator thread coordinates only -- never writes code directly
-- PR before cleanup -- ship work first, tidy later
-
-See [docs/project/AGENT_SWARM_WORKFLOW.md](docs/project/AGENT_SWARM_WORKFLOW.md) for details.
+- Invoke `/swarm-protocol` for behavioral rules (all agents)
+- Invoke `/coding-standards` for project standards (builders, reviewers)
+- Agents create GitHub issues (`--label swarm-discovered`) for out-of-scope discoveries
+- Handoff files carry condensed context between agents (scout → builder → reviewer)
+- Skills over file reads — invoke `/skill` instead of `Read .claude/file`
+- Agents message each other directly, not through the lead
+- User is an observer — check in with `/swarm-report`

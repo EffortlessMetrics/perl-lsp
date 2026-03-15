@@ -40,6 +40,10 @@ scripts/__pycache__/
 # agents2/, agents3/, agents4/ etc. are version-tracked.
 /.claude/agents/
 
+# Swarm ops — ignore the entire directory (contains repo mirror artifacts),
+# but force-track the specific knowledge files we need.
+.ops-perl-lsp/
+
 # Mutation testing artifacts
 mutants.out/
 mutants.out.old/

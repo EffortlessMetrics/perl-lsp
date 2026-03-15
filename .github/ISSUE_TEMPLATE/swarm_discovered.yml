@@ -1,0 +1,51 @@
+name: Swarm Discovered Issue
+description: Issue found by a swarm agent during other work
+labels: ["swarm-discovered"]
+body:
+  - type: input
+    id: agent
+    attributes:
+      label: Discovering Agent
+      description: Which agent type found this?
+      placeholder: "e.g. swarm-builder working on fix/parser-heredoc"
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What was found and why it matters. Include enough detail that a fresh agent can act without re-investigating.
+      placeholder: "While implementing heredoc parsing, noticed that..."
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Relevant Files
+      description: File paths with line numbers
+      placeholder: |
+        - crates/perl-parser-core/src/engine/parser/heredoc.rs:45-60
+        - crates/perl-lexer/src/lib.rs:120
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: Suggested Approach
+      description: If you have a fix strategy, describe it
+    validations:
+      required: false
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - bug-fix
+        - test-gap
+        - docs
+        - devex
+        - infra
+        - security
+        - performance
+    validations:
+      required: true
