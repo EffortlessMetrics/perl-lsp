@@ -5127,3 +5127,50 @@ impl BuiltInFormatter {
 **Memory Usage**: Minimal overhead beyond perltidy process execution
 
 **Error Recovery**: Fast fallback with immediate user feedback for missing tools
+
+## Agent-Driven Feature Development
+
+### Adding a New LSP Feature via Agent Swarm
+
+When implementing a new LSP feature (e.g., a new completion provider, hover enhancement, or code action):
+
+1. **Create issue**: Describe the feature with acceptance criteria
+2. **Launch spec agent**: `Agent(prompt: "Create spec for <feature>", isolation: "worktree")`
+3. **Launch test agent**: `Agent(prompt: "Write failing tests for <feature>", isolation: "worktree")`
+4. **Launch impl agent**: `Agent(prompt: "Implement <feature> to pass tests", isolation: "worktree")`
+5. **Launch PR agent**: `/worktree-pr <worktree-path>`
+
+### Agent Task Templates
+
+**Parser fix** (TDD):
+```
+/parser-fix "<description of bug>"
+```
+Launches agent in worktree: find root cause -> write failing test -> fix -> verify -> PR.
+
+**Test coverage wave**:
+```
+/wave test-coverage
+```
+Launches agents per crate to add regression tests.
+
+**Documentation wave**:
+```
+/wave doc-updates
+```
+Launches agents to update COMMANDS_REFERENCE, CLAUDE.md, CONTRIBUTING, README.
+
+### Integration with CI
+
+- Each agent's PR triggers CI independently
+- PRs merge sequentially to maintain baseline integrity
+- After merge: `/corpus-ratchet` updates baselines
+- Ratchet ensures quality only goes up
+
+### Feature Governance Integration
+
+New LSP features must:
+1. Be registered in `features.toml` (see `docs/project/FEATURE_GOVERNANCE.md`)
+2. Have feature ID in `perl-lsp-feature-ids`
+3. Have capability mapping in `perl-lsp-capability-map`
+4. Pass `cargo xtask features verify`
