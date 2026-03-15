@@ -384,6 +384,28 @@ enum Commands {
         command: CpanCorpusCommand,
     },
 
+    /// Generate canonical receipts (test summary, doc metrics, consolidated state)
+    ///
+    /// Runs workspace tests and doc builds, parses output, and produces
+    /// JSON artifacts in the artifacts/ directory. Replaces scripts/generate-receipts.sh.
+    Receipts {
+        /// Only generate test receipts (skip doc build)
+        #[arg(long)]
+        tests_only: bool,
+
+        /// Only generate doc receipts (skip test run)
+        #[arg(long)]
+        docs_only: bool,
+
+        /// Output directory for artifacts (default: artifacts/)
+        #[arg(long)]
+        output_dir: Option<PathBuf>,
+
+        /// Number of test threads (default: 2)
+        #[arg(long, default_value = "2")]
+        test_threads: u32,
+    },
+
     /// Manage feature catalog and LSP compliance
     Features {
         #[command(subcommand)]
@@ -654,6 +676,14 @@ fn main() -> Result<()> {
                     cpan_corpus::ratchet(&config)
                 }
             }
+        }
+        Commands::Receipts { tests_only, docs_only, output_dir, test_threads } => {
+            receipts::run(receipts::ReceiptsConfig {
+                tests_only,
+                docs_only,
+                output_dir,
+                test_threads,
+            })
         }
         Commands::Features { command } => match command {
             FeaturesCommand::SyncDocs => features::sync_docs(),
