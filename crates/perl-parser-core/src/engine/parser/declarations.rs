@@ -569,6 +569,22 @@ impl<'a> Parser<'a> {
                 match self.peek_kind() {
                     Some(TokenKind::String) => {
                         args.push(self.consume_token()?.text.to_string());
+
+                        // Handle fat arrow after string key (e.g. use overload '""' => \&stringify)
+                        match self.peek_kind() {
+                            Some(TokenKind::Comma) => {
+                                self.consume_token()?; // consume comma
+                                // Continue to parse next argument
+                            }
+                            Some(TokenKind::FatArrow) => {
+                                self.consume_token()?; // consume =>
+                                // Consume the value after =>
+                                self.consume_use_import_value(&mut args)?;
+                            }
+                            _ => {
+                                // No separator, just continue
+                            }
+                        }
                     }
                     Some(TokenKind::QuoteWords) => {
                         // Handle qw(...) in use statements
@@ -623,33 +639,8 @@ impl<'a> Parser<'a> {
                             }
                             Some(TokenKind::FatArrow) => {
                                 self.consume_token()?; // consume =>
-                                // Parse the value as a simple expression
-                                // But check if an identifier is followed by => (making it a key, not a value)
-                                match self.peek_kind() {
-                                    Some(TokenKind::Number | TokenKind::String) => {
-                                        args.push(self.consume_token()?.text.to_string());
-                                    }
-                                    Some(TokenKind::Identifier) => {
-                                        // Peek ahead to see if this identifier is followed by =>
-                                        // If so, it's actually a key for the next pair, not a value
-                                        if self.tokens.peek_second().map(|t| t.kind)
-                                            == Ok(TokenKind::FatArrow)
-                                        {
-                                            // Don't consume - let the outer loop handle it as a key
-                                        } else {
-                                            args.push(self.consume_token()?.text.to_string());
-                                        }
-                                    }
-                                    _ => {
-                                        // For more complex expressions, just consume tokens until semicolon
-                                        while !Self::is_statement_terminator(self.peek_kind())
-                                            && self.peek_kind() != Some(TokenKind::Comma)
-                                            && self.peek_kind() != Some(TokenKind::FatArrow)
-                                        {
-                                            args.push(self.consume_token()?.text.to_string());
-                                        }
-                                    }
-                                }
+                                // Consume the value after =>
+                                self.consume_use_import_value(&mut args)?;
                             }
                             _ => {
                                 // No separator, just continue
@@ -907,4 +898,63 @@ impl<'a> Parser<'a> {
         Ok(Node::new(NodeKind::No { module, args, has_filter_risk }, SourceLocation { start, end }))
     }
 
+    /// Consume a value expression on the right-hand side of `=>` inside a `use`
+    /// import list.  The value may be a simple literal, a code reference
+    /// (`\&name`), an anonymous sub (`sub { ... }`), or a more complex
+    /// expression which is consumed token-by-token until a comma or statement
+    /// terminator is reached.
+    fn consume_use_import_value(&mut self, args: &mut Vec<String>) -> ParseResult<()> {
+        match self.peek_kind() {
+            Some(TokenKind::Number | TokenKind::String) => {
+                args.push(self.consume_token()?.text.to_string());
+            }
+            Some(TokenKind::Identifier) => {
+                // Peek ahead to see if this identifier is followed by =>
+                // If so, it is actually a key for the next pair, not a value.
+                if self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::FatArrow) {
+                    // Don't consume - let the outer loop handle it as a key
+                } else {
+                    args.push(self.consume_token()?.text.to_string());
+                }
+            }
+            Some(TokenKind::Sub) => {
+                // Anonymous sub value: sub { ... }
+                // Consume tokens including the entire block
+                args.push(self.consume_token()?.text.to_string()); // 'sub'
+                if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                    let mut depth: usize = 0;
+                    loop {
+                        match self.peek_kind() {
+                            Some(TokenKind::LeftBrace) => {
+                                depth += 1;
+                                args.push(self.consume_token()?.text.to_string());
+                            }
+                            Some(TokenKind::RightBrace) => {
+                                args.push(self.consume_token()?.text.to_string());
+                                depth = depth.saturating_sub(1);
+                                if depth == 0 {
+                                    break;
+                                }
+                            }
+                            None => break,
+                            _ if self.tokens.is_eof() => break,
+                            _ => {
+                                args.push(self.consume_token()?.text.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {
+                // For complex expressions (e.g. \&name), consume tokens until ',' or ';'
+                while !Self::is_statement_terminator(self.peek_kind())
+                    && self.peek_kind() != Some(TokenKind::Comma)
+                    && self.peek_kind() != Some(TokenKind::FatArrow)
+                {
+                    args.push(self.consume_token()?.text.to_string());
+                }
+            }
+        }
+        Ok(())
+    }
 }
