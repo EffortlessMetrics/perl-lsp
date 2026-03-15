@@ -224,6 +224,7 @@ impl<'a> TokenStream<'a> {
                 "next" => TokenKind::Next,
                 "last" => TokenKind::Last,
                 "redo" => TokenKind::Redo,
+                "goto" => TokenKind::Goto,
                 "class" => TokenKind::Class,
                 "method" => TokenKind::Method,
                 "format" => TokenKind::Format,

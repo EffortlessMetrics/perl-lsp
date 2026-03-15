@@ -577,6 +577,9 @@ where
             }
         }
         NodeKind::LoopControl { .. } => {} // No children
+        NodeKind::Goto { target } => {
+            find_nodes_recursive(target, predicate, results);
+        }
         NodeKind::Tie { variable, package, args } => {
             find_nodes_recursive(variable, predicate, results);
             find_nodes_recursive(package, predicate, results);

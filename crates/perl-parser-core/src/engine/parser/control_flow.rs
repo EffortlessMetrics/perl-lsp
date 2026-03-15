@@ -421,6 +421,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parse goto statement: `goto LABEL`, `goto &sub`, `goto EXPR`
+    fn parse_goto(&mut self) -> ParseResult<Node> {
+        let start = self.consume_token()?.start; // consume 'goto'
+        self.mark_not_stmt_start();
+
+        // Parse the target as an assignment-level expression (not full comma
+        // expression) to avoid consuming surrounding list separators.
+        let target = self.parse_assignment()?;
+        let end = target.location.end;
+        Ok(Node::new(
+            NodeKind::Goto { target: Box::new(target) },
+            SourceLocation { start, end },
+        ))
+    }
+
     /// Parse try/catch/finally block
     fn parse_try(&mut self) -> ParseResult<Node> {
         let start = self.consume_token()?.start; // consume 'try'

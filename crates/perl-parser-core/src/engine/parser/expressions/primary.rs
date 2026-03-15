@@ -697,7 +697,8 @@ impl<'a> Parser<'a> {
             | TokenKind::While
             | TokenKind::Until
             | TokenKind::For
-            | TokenKind::Foreach => {
+            | TokenKind::Foreach
+            | TokenKind::Goto => {
                 // In expression context, keywords are used as barewords/identifiers
                 // This happens in hash keys, method names, etc.
                 let token = self.tokens.next()?;

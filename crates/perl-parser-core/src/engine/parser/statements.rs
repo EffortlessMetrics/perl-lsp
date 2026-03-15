@@ -188,6 +188,9 @@ impl<'a> Parser<'a> {
             // Return statement
             TokenKind::Return => self.parse_return(),
 
+            // Goto statement
+            TokenKind::Goto => self.parse_goto(),
+
             // Block
             TokenKind::LeftBrace => self.parse_block(),
 
@@ -441,6 +444,10 @@ impl<'a> Parser<'a> {
 
                     // Otherwise parse as regular expression
                     self.parse_expression()
+                }
+                "goto" => {
+                    // goto LABEL | goto &sub | goto $expr
+                    self.parse_goto()
                 }
                 // Generic builtin functions that can take arguments without parens.
                 // Uses the canonical builtin registry in `perl-builtins-phf`.

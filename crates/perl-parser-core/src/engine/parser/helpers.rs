@@ -93,6 +93,8 @@ impl<'a> Parser<'a> {
             "my" | "our" | "local" | "state" // variable declarations
                 | "use" // pragma handling
                 | "tie" | "untie" // dedicated AST nodes (matched before guard)
+                | "eval" | "do" // dedicated keyword tokens with own parsers
+                | "goto" // dedicated keyword token with parse_goto handler
         )
     }
 
@@ -176,6 +178,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Next
                 | TokenKind::Last
                 | TokenKind::Redo
+                | TokenKind::Goto
                 // Subroutines and OOP
                 | TokenKind::Sub
                 | TokenKind::Class
