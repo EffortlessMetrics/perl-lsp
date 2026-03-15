@@ -1170,6 +1170,80 @@ cd tree-sitter-perl
 npx tree-sitter generate
 ```
 
+## CPAN Corpus Commands (*Diataxis: Reference* - CPAN top-1000 parser validation)
+
+The CPAN corpus workflow validates parser coverage against the top-1000 most-downloaded CPAN distributions. The pipeline has four stages: fetch the distribution list, install the modules locally, sweep (parse) them to measure error rates, and ratchet newly-clean modules into a tracked manifest.
+
+### Justfile Recipes
+
+```bash
+# Fetch CPAN top-1000 distribution list from MetaCPAN
+just cpan-corpus-fetch              # Writes .ci/cpan-top1000.txt
+
+# Install CPAN top-1000 distributions locally via cpanm
+just cpan-corpus-install            # Installs into target/cpan-corpus/
+
+# Sweep CPAN corpus and print parser error rates
+just cpan-corpus-sweep              # Parse all .pm files, report clean rate
+
+# Check CPAN corpus against manifest (fails on regression)
+just cpan-corpus-check              # Generates report, enforces baseline
+
+# Auto-add newly-clean CPAN modules to manifest
+just cpan-corpus-ratchet            # Appends to .ci/cpan-corpus-manifest.txt
+```
+
+### xtask Subcommands
+
+```bash
+# Fetch distribution list from MetaCPAN (aggregation of top 1000 by favorites)
+cargo xtask cpan-corpus fetch-list
+cargo xtask cpan-corpus fetch-list --output custom-path.txt
+
+# Install distributions locally using cpanm --notest --local-lib
+cargo xtask cpan-corpus install
+cargo xtask cpan-corpus install --dist-list .ci/cpan-top1000.txt --install-dir target/cpan-corpus
+
+# Sweep installed CPAN corpus with the v3 parser
+cargo xtask cpan-corpus sweep
+cargo xtask cpan-corpus sweep --verbose                    # Per-file details
+cargo xtask cpan-corpus sweep --output cpan-report.json    # JSON report
+
+# Auto-ratchet: append newly-clean modules to manifest
+cargo xtask cpan-corpus ratchet
+cargo xtask cpan-corpus ratchet --manifest .ci/cpan-corpus-manifest.txt
+```
+
+### Typical Workflow
+
+```bash
+# First-time setup
+just cpan-corpus-fetch        # Download distribution list
+just cpan-corpus-install      # Install modules (takes a while)
+
+# Ongoing validation (after parser changes)
+just cpan-corpus-sweep        # Check current error rates
+just cpan-corpus-ratchet      # Lock in improvements
+
+# CI regression check
+just cpan-corpus-check        # Fails if clean-file count drops
+```
+
+### Prerequisites
+
+- **curl** -- required for `fetch-list` (MetaCPAN API calls)
+- **cpanm** -- required for `install` (App::cpanminus)
+- **perl** -- required at runtime for module installation
+
+### Key Paths
+
+| What | Where |
+|------|-------|
+| Distribution list | `.ci/cpan-top1000.txt` |
+| Known-clean manifest | `.ci/cpan-corpus-manifest.txt` |
+| Local install directory | `target/cpan-corpus/` |
+| Sweep JSON report | `target/cpan-corpus-report.json` (when using `--output`) |
+
 ## Common Development Tasks
 
 ### Adding a New Perl Feature
