@@ -7,6 +7,7 @@ pub mod uri;
 
 use lsp_types::Position;
 use perl_module_reference::extract_module_reference as extract_module_reference_at_cursor;
+use perl_module_reference::extract_module_reference_extended as extract_module_reference_extended_at_cursor;
 
 // Re-export engine utilities
 pub use perl_parser::util::{code_slice, find_data_marker_byte_lexed};
@@ -354,6 +355,14 @@ pub fn get_text_around_offset(content: &str, offset: usize, radius: usize) -> St
 /// Extract module reference from text (e.g., from "use Module::Name" or "require Module::Name")
 pub fn extract_module_reference(text: &str, cursor_pos: usize) -> Option<String> {
     extract_module_reference_at_cursor(text, cursor_pos)
+}
+
+/// Extract module reference including `use parent`/`use base` argument modules.
+///
+/// This extends [`extract_module_reference`] to also resolve quoted module names
+/// inside `use parent 'Module::Name'` and `use base qw(Module::Name)` statements.
+pub fn extract_module_reference_extended(text: &str, cursor_pos: usize) -> Option<String> {
+    extract_module_reference_extended_at_cursor(text, cursor_pos)
 }
 
 /// Convert an LSP position to a byte offset in the text (UTF-16 aware, CRLF safe)
