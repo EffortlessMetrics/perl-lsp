@@ -1,4 +1,6 @@
-# perl-lsp
+<p align="center">
+  <img src="icon/perl-lsp-logo-lockup.svg" alt="perl-lsp" width="400">
+</p>
 
 ![CI](https://github.com/EffortlessMetrics/perl-lsp/actions/workflows/ci.yml/badge.svg)
 [![crates.io](https://img.shields.io/crates/v/perl-lsp.svg)](https://crates.io/crates/perl-lsp)
