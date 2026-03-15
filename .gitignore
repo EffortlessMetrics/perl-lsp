@@ -31,12 +31,10 @@ SHA256SUMS
 
 # Property test regression files
 **/tests/_proptest-regressions/
-scripts/__pycache__/
 
 # Python cache files
 scripts/__pycache__/
 *.pyc
-releases/
 
 # Claude — agents/ is gitignored to allow swapping the active agents symlink.
 # agents2/, agents3/, agents4/ etc. are version-tracked.
