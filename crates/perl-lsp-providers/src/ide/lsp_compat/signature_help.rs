@@ -407,6 +407,33 @@ impl SignatureHelpProvider {
 
 fn builtin_parameter_documentation(label: &str) -> Option<String> {
     let doc = match label {
+        // Common parameter types
+        "ARRAY" => "Array variable to operate on",
+        "LIST" => "List of values",
+        "BLOCK" => "Code block evaluated for each element",
+        "PATTERN" | "/PATTERN/" => "Regular expression or string pattern to match against",
+        "LIMIT" => "Maximum number of fields to split into",
+        "FILEHANDLE" => "Filehandle for I/O operations",
+        "FILENAME" => "File path or name",
+        "MODE" => "File open mode (e.g., '<', '>', '>>')",
+        "OFFSET" => "Numeric offset position",
+        "REPLACEMENT" => "Replacement string for the removed portion",
+        "SUBNAME" => "Name of a comparison subroutine",
+        "VARIABLE" => "Variable to modify in place",
+        "FORMAT" => "Format string with conversion specifiers",
+        "STR" => "String to search within",
+        "SUBSTR" => "Substring to search for",
+        "POSITION" => "Starting position for the search",
+        "WHENCE" => "Seek reference point: 0 (start), 1 (current), 2 (end)",
+        "LAYER" => "PerlIO layer such as ':utf8' or ':raw'",
+        "REF" => "Reference to bless into a class",
+        "CLASSNAME" => "Package name for the object class",
+        "VERSION" => "Required minimum version",
+        "MODULE" => "Module name to load",
+        "TEMPLATE" => "Pack/unpack template string",
+        "NUMBER" => "Numeric value",
+        "VALUE" => "Numeric or string value",
+        // Network parameter types
         "SOCKET" => "Socket handle to create or operate on",
         "SOCKET1" => "First socket handle in the connected pair",
         "SOCKET2" => "Second socket handle in the connected pair",
@@ -428,9 +455,18 @@ fn builtin_parameter_documentation(label: &str) -> Option<String> {
         "OPTVAL" => "Packed socket option value",
         "LABEL" => "Optional label to resume execution from",
         "EXPR" => "Expression controlling the builtin operation",
-        "HASH" => "Hash variable tied to the DBM file",
+        "HASH" => "Hash variable to operate on",
         "DBNAME" => "DBM database file name",
         "MASK" => "File permission mask for the DBM file",
+        // Process parameter types
+        "PROGRAM" => "Program name or path to execute",
+        "SIGNAL" => "Signal name or number to send",
+        "PID" => "Process ID",
+        "SECONDS" => "Number of seconds",
+        "UID" => "User ID",
+        "GID" => "Group ID",
+        // Directory parameter types
+        "DIRHANDLE" => "Directory handle for readdir operations",
         _ => return None,
     };
 

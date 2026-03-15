@@ -289,7 +289,48 @@ pub static BUILTIN_FULL_SIGS: phf::Map<&'static str, &'static [&'static str]> = 
     "substr" => &["substr EXPR, OFFSET, LENGTH, REPLACEMENT", "substr EXPR, OFFSET, LENGTH", "substr EXPR, OFFSET"],
     "splice" => &["splice ARRAY, OFFSET, LENGTH, LIST", "splice ARRAY, OFFSET, LENGTH", "splice ARRAY, OFFSET", "splice ARRAY"],
     "split" => &["split PATTERN, EXPR, LIMIT", "split PATTERN, EXPR", "split PATTERN", "split"],
-    // Add more as needed for detailed signatures
+    "push" => &["push ARRAY, LIST"],
+    "pop" => &["pop ARRAY", "pop"],
+    "shift" => &["shift ARRAY", "shift"],
+    "unshift" => &["unshift ARRAY, LIST"],
+    "map" => &["map BLOCK LIST", "map EXPR, LIST"],
+    "grep" => &["grep BLOCK LIST", "grep EXPR, LIST"],
+    "sort" => &["sort BLOCK LIST", "sort SUBNAME LIST", "sort LIST"],
+    "join" => &["join EXPR, LIST"],
+    "reverse" => &["reverse LIST"],
+    "chomp" => &["chomp VARIABLE", "chomp LIST", "chomp"],
+    "chop" => &["chop VARIABLE", "chop"],
+    "index" => &["index STR, SUBSTR, POSITION", "index STR, SUBSTR"],
+    "rindex" => &["rindex STR, SUBSTR, POSITION", "rindex STR, SUBSTR"],
+    "sprintf" => &["sprintf FORMAT, LIST"],
+    "die" => &["die LIST"],
+    "warn" => &["warn LIST"],
+    "eval" => &["eval EXPR", "eval BLOCK"],
+    "each" => &["each HASH", "each ARRAY"],
+    "keys" => &["keys HASH", "keys ARRAY"],
+    "values" => &["values HASH", "values ARRAY"],
+    "delete" => &["delete EXPR"],
+    "exists" => &["exists EXPR"],
+    "defined" => &["defined EXPR"],
+    "ref" => &["ref EXPR"],
+    "bless" => &["bless REF, CLASSNAME", "bless REF"],
+    "read" => &["read FILEHANDLE, SCALAR, LENGTH, OFFSET", "read FILEHANDLE, SCALAR, LENGTH"],
+    "seek" => &["seek FILEHANDLE, POSITION, WHENCE"],
+    "tell" => &["tell FILEHANDLE", "tell"],
+    "eof" => &["eof FILEHANDLE", "eof"],
+    "binmode" => &["binmode FILEHANDLE, LAYER", "binmode FILEHANDLE"],
+    "chmod" => &["chmod MODE, LIST"],
+    "chown" => &["chown UID, GID, LIST"],
+    "mkdir" => &["mkdir FILENAME, MODE", "mkdir FILENAME", "mkdir"],
+    "rmdir" => &["rmdir FILENAME", "rmdir"],
+    "unlink" => &["unlink LIST"],
+    "rename" => &["rename OLDNAME, NEWNAME"],
+    "stat" => &["stat FILEHANDLE", "stat EXPR"],
+    "opendir" => &["opendir DIRHANDLE, EXPR"],
+    "readdir" => &["readdir DIRHANDLE"],
+    "closedir" => &["closedir DIRHANDLE"],
+    "system" => &["system PROGRAM, LIST", "system PROGRAM"],
+    "exec" => &["exec PROGRAM, LIST", "exec PROGRAM"],
 };
 
 /// Get parameter names for a builtin function
@@ -309,7 +350,7 @@ pub fn builtin_count() -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{builtin_count, get_param_names, is_builtin};
+    use super::{BUILTIN_FULL_SIGS, builtin_count, get_param_names, is_builtin};
 
     #[test]
     fn exposes_common_builtins() {
@@ -321,5 +362,105 @@ mod tests {
     fn returns_open_param_names() {
         assert_eq!(get_param_names("open"), ["FILEHANDLE", "MODE", "FILENAME"]);
         assert!(builtin_count() > 150);
+    }
+
+    #[test]
+    fn full_sigs_cover_target_builtins() {
+        let targets =
+            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        for name in &targets {
+            assert!(
+                BUILTIN_FULL_SIGS.contains_key(name),
+                "BUILTIN_FULL_SIGS should contain '{}'",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn full_sigs_have_nonempty_variants() {
+        let targets =
+            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        for name in &targets {
+            let sigs = BUILTIN_FULL_SIGS.get(name);
+            assert!(sigs.is_some(), "BUILTIN_FULL_SIGS should have entry for '{}'", name);
+            let sigs = sigs.copied().unwrap_or(&[]);
+            assert!(!sigs.is_empty(), "'{}' should have at least one full signature", name);
+        }
+    }
+
+    #[test]
+    fn full_sigs_push_has_correct_variants() {
+        let sigs = BUILTIN_FULL_SIGS.get("push").copied().unwrap_or(&[]);
+        assert_eq!(sigs.len(), 1);
+        assert_eq!(sigs[0], "push ARRAY, LIST");
+    }
+
+    #[test]
+    fn full_sigs_pop_has_correct_variants() {
+        let sigs = BUILTIN_FULL_SIGS.get("pop").copied().unwrap_or(&[]);
+        assert_eq!(sigs.len(), 2);
+        assert_eq!(sigs[0], "pop ARRAY");
+        assert_eq!(sigs[1], "pop");
+    }
+
+    #[test]
+    fn full_sigs_map_has_correct_variants() {
+        let sigs = BUILTIN_FULL_SIGS.get("map").copied().unwrap_or(&[]);
+        assert_eq!(sigs.len(), 2);
+        assert_eq!(sigs[0], "map BLOCK LIST");
+        assert_eq!(sigs[1], "map EXPR, LIST");
+    }
+
+    #[test]
+    fn full_sigs_grep_has_correct_variants() {
+        let sigs = BUILTIN_FULL_SIGS.get("grep").copied().unwrap_or(&[]);
+        assert_eq!(sigs.len(), 2);
+        assert_eq!(sigs[0], "grep BLOCK LIST");
+        assert_eq!(sigs[1], "grep EXPR, LIST");
+    }
+
+    #[test]
+    fn full_sigs_sort_has_correct_variants() {
+        let sigs = BUILTIN_FULL_SIGS.get("sort").copied().unwrap_or(&[]);
+        assert_eq!(sigs.len(), 3);
+        assert_eq!(sigs[0], "sort BLOCK LIST");
+        assert_eq!(sigs[1], "sort SUBNAME LIST");
+        assert_eq!(sigs[2], "sort LIST");
+    }
+
+    #[test]
+    fn full_sigs_join_has_correct_variants() {
+        let sigs = BUILTIN_FULL_SIGS.get("join").copied().unwrap_or(&[]);
+        assert_eq!(sigs.len(), 1);
+        assert_eq!(sigs[0], "join EXPR, LIST");
+    }
+
+    #[test]
+    fn full_sigs_splice_has_four_variants() {
+        let sigs = BUILTIN_FULL_SIGS.get("splice").copied().unwrap_or(&[]);
+        assert_eq!(sigs.len(), 4);
+    }
+
+    #[test]
+    fn full_sigs_split_has_four_variants() {
+        let sigs = BUILTIN_FULL_SIGS.get("split").copied().unwrap_or(&[]);
+        assert_eq!(sigs.len(), 4);
+    }
+
+    #[test]
+    fn full_sigs_additional_builtins() {
+        // Verify we also added some commonly needed extras
+        let extras = [
+            "chomp", "chop", "index", "rindex", "die", "warn", "eval", "each", "keys", "values",
+            "bless", "defined",
+        ];
+        for name in &extras {
+            assert!(
+                BUILTIN_FULL_SIGS.contains_key(name),
+                "BUILTIN_FULL_SIGS should contain '{}'",
+                name
+            );
+        }
     }
 }
