@@ -363,6 +363,46 @@ impl<'a> Parser<'a> {
         Ok(Node::new(NodeKind::Return { value }, SourceLocation { start, end }))
     }
 
+    /// Parse return in expression context (e.g. ternary branches, short-circuit).
+    ///
+    /// Unlike `parse_return` (statement level), this variant is aware of
+    /// expression boundaries such as `:` (ternary colon), `)`, `]`, and `,`
+    /// so it does not greedily consume tokens that belong to the enclosing
+    /// expression.
+    fn parse_return_expr(&mut self) -> ParseResult<Node> {
+        let start = self.current_position();
+        self.tokens.next()?; // consume 'return'
+
+        // Determine whether there is a return value.
+        // Stop at all expression-level boundaries as well as statement-level ones.
+        let value = if Self::is_statement_terminator(self.peek_kind())
+            || matches!(
+                self.peek_kind(),
+                Some(TokenKind::RightBrace)
+                    | Some(TokenKind::RightParen)
+                    | Some(TokenKind::RightBracket)
+                    | Some(TokenKind::Colon)
+                    | Some(TokenKind::Comma)
+            )
+            || matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k))
+        {
+            None
+        } else {
+            // Parse the return value at assignment precedence so we do not
+            // accidentally consume a surrounding comma list or ternary colon.
+            Some(Box::new(self.parse_assignment()?))
+        };
+
+        let end = value
+            .as_ref()
+            .map(|v| v.location.end)
+            .unwrap_or(self.previous_position());
+        Ok(Node::new(
+            NodeKind::Return { value },
+            SourceLocation { start, end },
+        ))
+    }
+
     /// Parse eval expression/block
     fn parse_eval(&mut self) -> ParseResult<Node> {
         let start = self.consume_token()?.start; // consume 'eval'

@@ -695,11 +695,7 @@ impl<'a> Parser<'a> {
             | TokenKind::While
             | TokenKind::Until
             | TokenKind::For
-            | TokenKind::Foreach
-            | TokenKind::Return
-            | TokenKind::Next
-            | TokenKind::Last
-            | TokenKind::Redo => {
+            | TokenKind::Foreach => {
                 // In expression context, keywords are used as barewords/identifiers
                 // This happens in hash keys, method names, etc.
                 let token = self.tokens.next()?;
@@ -707,6 +703,34 @@ impl<'a> Parser<'a> {
                     NodeKind::Identifier { name: token.text.to_string() },
                     SourceLocation { start: token.start, end: token.end },
                 ))
+            }
+
+            // return / next / last / redo — when followed by `=>` they are
+            // autoquoted hash keys (e.g. `return => 1`).  Otherwise they are
+            // real control-flow expressions that can appear inside ternary
+            // branches, short-circuit operators, etc.
+            TokenKind::Return => {
+                if self.is_keyword_before_fat_arrow() {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_return_expr()
+                }
+            }
+
+            TokenKind::Next | TokenKind::Last | TokenKind::Redo => {
+                if self.is_keyword_before_fat_arrow() {
+                    let token = self.tokens.next()?;
+                    Ok(Node::new(
+                        NodeKind::Identifier { name: token.text.to_string() },
+                        SourceLocation { start: token.start, end: token.end },
+                    ))
+                } else {
+                    self.parse_loop_control()
+                }
             }
 
             TokenKind::DoubleColon => {

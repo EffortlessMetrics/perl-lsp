@@ -420,6 +420,8 @@ mod chained_deref_method_tests;
 #[cfg(test)]
 mod coderef_invocation_tests;
 #[cfg(test)]
+mod control_flow_expr_tests;
+#[cfg(test)]
 mod declaration_in_args_tests;
 #[cfg(test)]
 mod for_builtin_block_tests;
