@@ -3226,6 +3226,124 @@ mod line_index_extended_tests {
         Ok(())
     }
 
+    // ---- Wave 2C+: split /regex/ in expression contexts (not just statement start) ----
+
+    #[test]
+    fn wave2c_split_regex_in_assignment_comma_pattern() -> Result<(), Box<dyn std::error::Error>> {
+        // split with a single-char regex pattern containing comma
+        let mut parser = Parser::new("my @p = split /,/, $s;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "my @p = split /,/, $s should parse cleanly, got: {sexp}");
+        assert!(sexp.contains("regex"), "should contain a regex node, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_after_return() -> Result<(), Box<dyn std::error::Error>> {
+        // return split /regex/, $var — split in expression context after return
+        let mut parser = Parser::new("return split /\\s+/, $line;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "return split /\\s+/, $line should parse cleanly, got: {sexp}"
+        );
+        assert!(sexp.contains("regex"), "should contain a regex node, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_inside_push_args() -> Result<(), Box<dyn std::error::Error>> {
+        // push @r, split /;/, $v — split as argument to another builtin
+        let mut parser = Parser::new("push @r, split /;/, $v;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "push @r, split /;/, $v should parse cleanly, got: {sexp}"
+        );
+        assert!(sexp.contains("regex"), "should contain a regex node, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_in_for_list() -> Result<(), Box<dyn std::error::Error>> {
+        // split in for loop list context
+        let mut parser = Parser::new("for my $x (split /,/, $s) { }");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "for my $x (split /,/, $s) should parse cleanly, got: {sexp}"
+        );
+        assert!(sexp.contains("regex"), "should contain a regex node, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_in_ternary() -> Result<(), Box<dyn std::error::Error>> {
+        // split in ternary expression
+        let mut parser = Parser::new("my @r = $flag ? split(/,/, $a) : split(/;/, $b);");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "ternary with split should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_chained() -> Result<(), Box<dyn std::error::Error>> {
+        // join of split — split as argument inside another function call
+        let mut parser = Parser::new("my $x = join('-', split /\\s+/, $input);");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "join('-', split /\\s+/, $input) should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_in_array_ref() -> Result<(), Box<dyn std::error::Error>> {
+        // split result stored in an anonymous array ref
+        let mut parser = Parser::new("my $r = [split /,/, $s];");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "[split /,/, $s] should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_conditional_or() -> Result<(), Box<dyn std::error::Error>> {
+        // split in || expression
+        let mut parser = Parser::new("my @r = split(/,/, $s) || die;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "split(/,/, $s) || die should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_three_args() -> Result<(), Box<dyn std::error::Error>> {
+        // split with limit argument
+        let mut parser = Parser::new("my @p = split /,/, $s, 3;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "split /,/, $s, 3 should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2c_split_regex_no_parens_method_chain() -> Result<(), Box<dyn std::error::Error>> {
+        // using scalar result of split
+        let mut parser = Parser::new("my $count = scalar(split /,/, $s);");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "scalar(split /,/, $s) should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
     // ---- Wave 2D: Postfix modifiers after complex expressions ----
 
     #[test]
