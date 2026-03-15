@@ -108,7 +108,7 @@ irm https://raw.githubusercontent.com/EffortlessMetrics/perl-lsp/master/install.
 
 ### VS Code
 
-Install the **Perl Language Server** extension (`effortlesssteven.perl-lsp`) from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=effortlesssteven.perl-lsp), or build from [source](vscode-extension/).
+Install the **Perl Language Server** extension (`effortlessmetrics.perl-lsp-rs`) from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=effortlessmetrics.perl-lsp-rs), or build from [source](vscode-extension/).
 
 ### Neovim (nvim-lspconfig)
 
