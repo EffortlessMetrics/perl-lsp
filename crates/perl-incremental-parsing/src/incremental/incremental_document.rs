@@ -100,12 +100,20 @@ impl IncrementalDocument {
         let reusable_subtrees = self.find_reusable_subtrees(affected_range, &edit);
 
         // Incrementally parse with subtree reuse
-        let new_root = self.incremental_parse(&new_source, &edit, reusable_subtrees)?;
+        let (new_root, used_fast_path) =
+            self.incremental_parse(&new_source, &edit, reusable_subtrees)?;
 
         // Update state
         self.source = new_source;
         self.root = Arc::new(new_root);
-        self.cache_subtrees();
+
+        // Only rebuild the full subtree cache when the fast path was NOT used.
+        // The fast path only mutates a single token node in-place, so the
+        // existing cache entries (keyed by byte range) are mostly still valid,
+        // whereas a full cache rebuild walks the entire tree and is O(n).
+        if !used_fast_path {
+            self.cache_subtrees();
+        }
 
         self.metrics.last_parse_time_ms = start.elapsed().as_secs_f64() * 1000.0;
 
@@ -234,23 +242,28 @@ impl IncrementalDocument {
         reusable
     }
 
-    /// Incrementally parse with subtree reuse
+    /// Incrementally parse with subtree reuse.
+    ///
+    /// Returns `(new_root, used_fast_path)` -- the boolean indicates whether
+    /// the fast token-update path was used so the caller can skip a full
+    /// cache rebuild.
     fn incremental_parse(
         &mut self,
         source: &str,
         edit: &IncrementalEdit,
         _reusable: Vec<Arc<Node>>,
-    ) -> ParseResult<Node> {
+    ) -> ParseResult<(Node, bool)> {
         // For small edits within a single token, try fast path
         if self.is_single_token_edit(edit) {
             if let Some(node) = self.fast_token_update(source, edit) {
                 self.metrics.nodes_reparsed = 1;
-                return Ok(node);
+                return Ok((node, true));
             }
         }
 
         // Otherwise use partial parsing with reuse
-        self.parse_with_reuse(source, _reusable)
+        let node = self.parse_with_reuse(source, _reusable)?;
+        Ok((node, false))
     }
 
     /// Check if edit affects only a single token
@@ -359,11 +372,73 @@ impl IncrementalDocument {
                     }
                 }
             }
-            NodeKind::Binary { left, right, .. } => {
+            NodeKind::Binary { left, right, .. }
+            | NodeKind::Assignment { lhs: left, rhs: right, .. } => {
                 if self.update_token_in_tree(left, source, edit) {
                     return true;
                 }
                 if self.update_token_in_tree(right, source, edit) {
+                    return true;
+                }
+            }
+            NodeKind::Subroutine { body, .. } => {
+                if self.update_token_in_tree(body, source, edit) {
+                    return true;
+                }
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                if self.update_token_in_tree(expression, source, edit) {
+                    return true;
+                }
+            }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                if self.update_token_in_tree(variable, source, edit) {
+                    return true;
+                }
+                if let Some(init) = initializer {
+                    if self.update_token_in_tree(init, source, edit) {
+                        return true;
+                    }
+                }
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                if self.update_token_in_tree(condition, source, edit) {
+                    return true;
+                }
+                if self.update_token_in_tree(then_branch, source, edit) {
+                    return true;
+                }
+                for (cond, branch) in elsif_branches {
+                    if self.update_token_in_tree(cond, source, edit) {
+                        return true;
+                    }
+                    if self.update_token_in_tree(branch, source, edit) {
+                        return true;
+                    }
+                }
+                if let Some(else_b) = else_branch {
+                    if self.update_token_in_tree(else_b, source, edit) {
+                        return true;
+                    }
+                }
+            }
+            NodeKind::While { condition, body, .. } => {
+                if self.update_token_in_tree(condition, source, edit) {
+                    return true;
+                }
+                if self.update_token_in_tree(body, source, edit) {
+                    return true;
+                }
+            }
+            NodeKind::FunctionCall { args, .. } => {
+                for arg in args {
+                    if self.update_token_in_tree(arg, source, edit) {
+                        return true;
+                    }
+                }
+            }
+            NodeKind::Unary { operand, .. } => {
+                if self.update_token_in_tree(operand, source, edit) {
                     return true;
                 }
             }
@@ -417,6 +492,83 @@ impl IncrementalDocument {
                     return true;
                 }
             }
+            NodeKind::Subroutine { body, .. } => {
+                if self.insert_reusable(body, reusable) {
+                    return true;
+                }
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                if self.insert_reusable(expression, reusable) {
+                    return true;
+                }
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                if self.insert_reusable(condition, reusable) {
+                    return true;
+                }
+                if self.insert_reusable(then_branch, reusable) {
+                    return true;
+                }
+                for (cond, branch) in elsif_branches {
+                    if self.insert_reusable(cond, reusable) {
+                        return true;
+                    }
+                    if self.insert_reusable(branch, reusable) {
+                        return true;
+                    }
+                }
+                if let Some(else_b) = else_branch {
+                    if self.insert_reusable(else_b, reusable) {
+                        return true;
+                    }
+                }
+            }
+            NodeKind::While { condition, body, .. } => {
+                if self.insert_reusable(condition, reusable) {
+                    return true;
+                }
+                if self.insert_reusable(body, reusable) {
+                    return true;
+                }
+            }
+            NodeKind::For { init, condition, update, body, .. } => {
+                if let Some(i) = init {
+                    if self.insert_reusable(i, reusable) {
+                        return true;
+                    }
+                }
+                if let Some(c) = condition {
+                    if self.insert_reusable(c, reusable) {
+                        return true;
+                    }
+                }
+                if let Some(u) = update {
+                    if self.insert_reusable(u, reusable) {
+                        return true;
+                    }
+                }
+                if self.insert_reusable(body, reusable) {
+                    return true;
+                }
+            }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                if self.insert_reusable(variable, reusable) {
+                    return true;
+                }
+                if let Some(init) = initializer {
+                    if self.insert_reusable(init, reusable) {
+                        return true;
+                    }
+                }
+            }
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                if self.insert_reusable(lhs, reusable) {
+                    return true;
+                }
+                if self.insert_reusable(rhs, reusable) {
+                    return true;
+                }
+            }
             _ => {}
         }
 
@@ -424,10 +576,21 @@ impl IncrementalDocument {
     }
 
     /// Adjust node positions after an edit
+    ///
+    /// Returns `None` if the adjustment would produce an invalid (negative) position,
+    /// which can happen when a deletion shrinks the source and a node's original
+    /// position is inside the deleted range.
     fn adjust_node_position(&self, node: &Node, delta: isize) -> Option<Node> {
         let mut adjusted = node.clone();
-        adjusted.location.start = (adjusted.location.start as isize + delta) as usize;
-        adjusted.location.end = (adjusted.location.end as isize + delta) as usize;
+
+        // Checked conversion to prevent underflow when delta is negative
+        let new_start = adjusted.location.start as isize + delta;
+        let new_end = adjusted.location.end as isize + delta;
+        if new_start < 0 || new_end < 0 {
+            return None;
+        }
+        adjusted.location.start = new_start as usize;
+        adjusted.location.end = new_end as usize;
 
         // Recursively adjust children
         match &mut adjusted.kind {
@@ -439,6 +602,49 @@ impl IncrementalDocument {
             NodeKind::Binary { left, right, .. } => {
                 **left = self.adjust_node_position(left, delta)?;
                 **right = self.adjust_node_position(right, delta)?;
+            }
+            NodeKind::Subroutine { body, .. } => {
+                **body = self.adjust_node_position(body, delta)?;
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                **expression = self.adjust_node_position(expression, delta)?;
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                **condition = self.adjust_node_position(condition, delta)?;
+                **then_branch = self.adjust_node_position(then_branch, delta)?;
+                for (cond, branch) in elsif_branches {
+                    **cond = self.adjust_node_position(cond, delta)?;
+                    **branch = self.adjust_node_position(branch, delta)?;
+                }
+                if let Some(else_b) = else_branch {
+                    **else_b = self.adjust_node_position(else_b, delta)?;
+                }
+            }
+            NodeKind::While { condition, body, .. } => {
+                **condition = self.adjust_node_position(condition, delta)?;
+                **body = self.adjust_node_position(body, delta)?;
+            }
+            NodeKind::For { init, condition, update, body, .. } => {
+                if let Some(i) = init {
+                    **i = self.adjust_node_position(i, delta)?;
+                }
+                if let Some(c) = condition {
+                    **c = self.adjust_node_position(c, delta)?;
+                }
+                if let Some(u) = update {
+                    **u = self.adjust_node_position(u, delta)?;
+                }
+                **body = self.adjust_node_position(body, delta)?;
+            }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                **variable = self.adjust_node_position(variable, delta)?;
+                if let Some(init) = initializer {
+                    **init = self.adjust_node_position(init, delta)?;
+                }
+            }
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                **lhs = self.adjust_node_position(lhs, delta)?;
+                **rhs = self.adjust_node_position(rhs, delta)?;
             }
             _ => {}
         }
@@ -462,11 +668,73 @@ impl IncrementalDocument {
                         }
                     }
                 }
-                NodeKind::Binary { left, right, .. } => {
+                NodeKind::Binary { left, right, .. }
+                | NodeKind::Assignment { lhs: left, rhs: right, .. } => {
                     if let Some(found) = self.find_in_node(left, pos) {
                         return Some(found);
                     }
                     if let Some(found) = self.find_in_node(right, pos) {
+                        return Some(found);
+                    }
+                }
+                NodeKind::Subroutine { body, .. } => {
+                    if let Some(found) = self.find_in_node(body, pos) {
+                        return Some(found);
+                    }
+                }
+                NodeKind::ExpressionStatement { expression } => {
+                    if let Some(found) = self.find_in_node(expression, pos) {
+                        return Some(found);
+                    }
+                }
+                NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                    if let Some(found) = self.find_in_node(variable, pos) {
+                        return Some(found);
+                    }
+                    if let Some(init) = initializer {
+                        if let Some(found) = self.find_in_node(init, pos) {
+                            return Some(found);
+                        }
+                    }
+                }
+                NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                    if let Some(found) = self.find_in_node(condition, pos) {
+                        return Some(found);
+                    }
+                    if let Some(found) = self.find_in_node(then_branch, pos) {
+                        return Some(found);
+                    }
+                    for (cond, branch) in elsif_branches {
+                        if let Some(found) = self.find_in_node(cond, pos) {
+                            return Some(found);
+                        }
+                        if let Some(found) = self.find_in_node(branch, pos) {
+                            return Some(found);
+                        }
+                    }
+                    if let Some(else_b) = else_branch {
+                        if let Some(found) = self.find_in_node(else_b, pos) {
+                            return Some(found);
+                        }
+                    }
+                }
+                NodeKind::While { condition, body, .. } => {
+                    if let Some(found) = self.find_in_node(condition, pos) {
+                        return Some(found);
+                    }
+                    if let Some(found) = self.find_in_node(body, pos) {
+                        return Some(found);
+                    }
+                }
+                NodeKind::FunctionCall { args, .. } => {
+                    for arg in args {
+                        if let Some(found) = self.find_in_node(arg, pos) {
+                            return Some(found);
+                        }
+                    }
+                }
+                NodeKind::Unary { operand, .. } => {
+                    if let Some(found) = self.find_in_node(operand, pos) {
                         return Some(found);
                     }
                 }
@@ -610,6 +878,73 @@ impl IncrementalDocument {
                 count += self.count_nodes(left);
                 count += self.count_nodes(right);
             }
+            NodeKind::Subroutine { body, .. } => {
+                count += self.count_nodes(body);
+            }
+            NodeKind::ExpressionStatement { expression } => {
+                count += self.count_nodes(expression);
+            }
+            NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+                count += self.count_nodes(condition);
+                count += self.count_nodes(then_branch);
+                for (cond, branch) in elsif_branches {
+                    count += self.count_nodes(cond);
+                    count += self.count_nodes(branch);
+                }
+                if let Some(else_b) = else_branch {
+                    count += self.count_nodes(else_b);
+                }
+            }
+            NodeKind::While { condition, body, .. } => {
+                count += self.count_nodes(condition);
+                count += self.count_nodes(body);
+            }
+            NodeKind::For { init, condition, update, body, .. } => {
+                if let Some(i) = init {
+                    count += self.count_nodes(i);
+                }
+                if let Some(c) = condition {
+                    count += self.count_nodes(c);
+                }
+                if let Some(u) = update {
+                    count += self.count_nodes(u);
+                }
+                count += self.count_nodes(body);
+            }
+            NodeKind::Foreach { variable, list, body, continue_block } => {
+                count += self.count_nodes(variable);
+                count += self.count_nodes(list);
+                count += self.count_nodes(body);
+                if let Some(cb) = continue_block {
+                    count += self.count_nodes(cb);
+                }
+            }
+            NodeKind::VariableDeclaration { variable, initializer, .. } => {
+                count += self.count_nodes(variable);
+                if let Some(init) = initializer {
+                    count += self.count_nodes(init);
+                }
+            }
+            NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+                for var in variables {
+                    count += self.count_nodes(var);
+                }
+                if let Some(init) = initializer {
+                    count += self.count_nodes(init);
+                }
+            }
+            NodeKind::Assignment { lhs, rhs, .. } => {
+                count += self.count_nodes(lhs);
+                count += self.count_nodes(rhs);
+            }
+            NodeKind::FunctionCall { args, .. } => {
+                for arg in args {
+                    count += self.count_nodes(arg);
+                }
+            }
+            NodeKind::Unary { operand, .. } => {
+                count += self.count_nodes(operand);
+            }
             _ => {}
         }
 
@@ -690,7 +1025,7 @@ impl SubtreeCache {
                 debug!(
                     "Evicting cache entry with hash {} (priority: {:?})",
                     hash,
-                    self.critical_symbols.get(&hash).unwrap_or(&SymbolPriority::Low)
+                    self.critical_symbols.get(&hash).copied().unwrap_or(SymbolPriority::Low)
                 );
                 self.by_content.remove(&hash);
                 self.critical_symbols.remove(&hash);
@@ -707,25 +1042,31 @@ impl SubtreeCache {
         }
     }
 
-    /// Find the least important cache entry for eviction
-    /// Prioritizes removing low-priority symbols first, then oldest entries
+    /// Find the least important cache entry for eviction.
+    ///
+    /// Uses a single pass over the LRU queue (O(n)) instead of sorting all
+    /// candidates and doing O(n) position lookups per candidate (which was
+    /// O(n^2) overall). LRU order inherently encodes age: earlier entries
+    /// are older.
     fn find_least_important_entry(&self) -> Option<u64> {
-        let mut candidates: Vec<(u64, SymbolPriority)> =
-            self.critical_symbols.iter().map(|(&hash, priority)| (hash, *priority)).collect();
+        let mut best: Option<(u64, SymbolPriority)> = None;
 
-        // Sort by priority (ascending), then by LRU position (oldest first)
-        candidates.sort_by(|a, b| {
-            let priority_cmp = a.1.cmp(&b.1);
-            if priority_cmp != std::cmp::Ordering::Equal {
-                return priority_cmp;
+        for &hash in &self.lru {
+            let priority = self.critical_symbols.get(&hash).copied().unwrap_or(SymbolPriority::Low);
+
+            match best {
+                None => best = Some((hash, priority)),
+                Some((_, best_priority)) => {
+                    if priority < best_priority {
+                        // Lower priority wins (should be evicted first)
+                        best = Some((hash, priority));
+                    }
+                    // If same priority, keep the first (oldest) we found in LRU order
+                }
             }
-            // If same priority, prefer entries that appear earlier in LRU (older)
-            let a_pos = self.lru.iter().position(|&h| h == a.0).unwrap_or(usize::MAX);
-            let b_pos = self.lru.iter().position(|&h| h == b.0).unwrap_or(usize::MAX);
-            a_pos.cmp(&b_pos)
-        });
+        }
 
-        candidates.first().map(|(hash, _)| *hash)
+        best.map(|(hash, _)| hash)
     }
 
     fn set_max_size(&mut self, max_size: usize) {

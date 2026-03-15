@@ -421,6 +421,9 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
     let old_end_byte = edit.old_end_byte.min(state.source.len());
     let start_byte = edit.start_byte.min(state.source.len());
 
+    // Compute the byte shift caused by this edit
+    let byte_shift: isize = edit.new_text.len() as isize - (old_end_byte - start_byte) as isize;
+
     let mut new_source = String::with_capacity(
         state.source.len() - (old_end_byte - start_byte) + edit.new_text.len(),
     );
@@ -448,8 +451,19 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
     let start_idx =
         state.tokens.iter().position(|t| t.start >= checkpoint.byte).unwrap_or(state.tokens.len());
 
+    // Build a lookup of old tokens past the edit for synchronisation.
+    // Once a newly-lexed token matches an old token (shifted by the byte delta),
+    // we can stop re-lexing and reuse the remaining old tokens with adjusted positions.
+    let edit_end_in_new = start_byte + edit.new_text.len();
+
+    // Find the first old-token index whose start >= old_end_byte (i.e. fully past the edit)
+    let old_sync_start =
+        state.tokens.iter().position(|t| t.start >= old_end_byte).unwrap_or(state.tokens.len());
+
     let mut new_tokens = Vec::new();
     let mut last_token_end = checkpoint.byte;
+    let mut synced = false;
+    let mut sync_old_idx = state.tokens.len();
     loop {
         match lexer.next_token() {
             Some(token) => {
@@ -457,9 +471,47 @@ fn apply_single_edit(state: &mut IncrementalState, edit: &Edit) -> Result<Range<
                     break;
                 }
                 last_token_end = token.end;
-                new_tokens.push(token);
+
+                // Once we are past the edit region, check if the new token matches
+                // an old token (shifted by byte_shift). If so, we can stop re-lexing
+                // and reuse the rest of the old tokens with position adjustment.
+                if token.start >= edit_end_in_new {
+                    let mut found_sync = false;
+                    for (idx_offset, old_tok) in state.tokens[old_sync_start..].iter().enumerate() {
+                        let shifted_start = (old_tok.start as isize + byte_shift) as usize;
+                        let shifted_end = (old_tok.end as isize + byte_shift) as usize;
+                        if token.start == shifted_start
+                            && token.end == shifted_end
+                            && token.token_type == old_tok.token_type
+                        {
+                            // Token synchronised -- reuse the rest
+                            found_sync = true;
+                            sync_old_idx = old_sync_start + idx_offset + 1;
+                            break;
+                        }
+                    }
+                    // Push the token regardless (it's valid either way)
+                    new_tokens.push(token);
+                    if found_sync {
+                        synced = true;
+                        break;
+                    }
+                } else {
+                    new_tokens.push(token);
+                }
             }
             None => break,
+        }
+    }
+
+    // If we synchronised, append remaining old tokens with shifted positions
+    if synced {
+        for old_tok in &state.tokens[sync_old_idx..] {
+            let mut adjusted = old_tok.clone();
+            adjusted.start = (adjusted.start as isize + byte_shift) as usize;
+            adjusted.end = (adjusted.end as isize + byte_shift) as usize;
+            last_token_end = adjusted.end;
+            new_tokens.push(adjusted);
         }
     }
 
