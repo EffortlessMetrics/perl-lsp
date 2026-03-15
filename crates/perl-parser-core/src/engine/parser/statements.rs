@@ -671,7 +671,17 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            s.expect(TokenKind::RightBrace)?;
+            // Handle unclosed block at EOF: emit error but return partial block
+            if s.peek_kind() == Some(TokenKind::RightBrace) {
+                s.expect(TokenKind::RightBrace)?;
+            } else {
+                // Missing closing brace (EOF or recovery break)
+                let pos = s.current_position();
+                s.errors.push(ParseError::syntax(
+                    "Unclosed block: expected '}' but reached end of input",
+                    pos,
+                ));
+            }
             let end = s.previous_position();
 
             Ok(Node::new(NodeKind::Block { statements }, SourceLocation { start, end }))
