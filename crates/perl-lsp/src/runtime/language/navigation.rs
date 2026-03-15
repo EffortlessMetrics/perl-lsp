@@ -281,9 +281,10 @@ impl LspServer {
                     let text_around = self.get_text_around_offset(&doc.text, offset, radius);
                     let cursor_in_text = offset - text_start;
 
-                    // Check for patterns like "use Module::Name", "require Module::Name"
+                    // Check for patterns like "use Module::Name", "require Module::Name",
+                    // and also "use parent 'Module::Name'", "use base qw(Module::Name)"
                     if let Some(module_name) =
-                        self.extract_module_reference(&text_around, cursor_in_text)
+                        self.extract_module_reference_extended(&text_around, cursor_in_text)
                     {
                         Some((module_name, text_around.clone()))
                     } else {

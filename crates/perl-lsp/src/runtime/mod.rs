@@ -73,8 +73,9 @@ use crate::{
     transport::{ContentLengthMessageReader, frame, log_response, write_message},
     // Import text processing helpers
     util::{
-        byte_to_line_col, byte_to_utf16_col, extract_module_reference, get_text_around_offset,
-        offset_to_position, position_to_offset,
+        byte_to_line_col, byte_to_utf16_col, extract_module_reference,
+        extract_module_reference_extended, get_text_around_offset, offset_to_position,
+        position_to_offset,
     },
 };
 use lsp_types::Location;
@@ -1430,6 +1431,15 @@ impl LspServer {
     /// Extract module reference from text (e.g., from "use Module::Name" or "require Module::Name")
     pub(crate) fn extract_module_reference(&self, text: &str, cursor_pos: usize) -> Option<String> {
         extract_module_reference(text, cursor_pos)
+    }
+
+    /// Extract module reference including `use parent`/`use base` argument modules.
+    pub(crate) fn extract_module_reference_extended(
+        &self,
+        text: &str,
+        cursor_pos: usize,
+    ) -> Option<String> {
+        extract_module_reference_extended(text, cursor_pos)
     }
 
     /// Get buffer text for a URI
