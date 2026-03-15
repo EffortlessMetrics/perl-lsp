@@ -139,7 +139,7 @@ just semver-check-package <name>      # Check specific package
 just semver-diff <name>               # Show API diff for package
 ```
 
-### CPAN Corpus
+### CPAN Corpus Management
 
 ```bash
 just cpan-corpus-fetch                # Fetch top 1000 from MetaCPAN
@@ -208,6 +208,9 @@ These directories are excluded from the default workspace (require special build
 | CPAN corpus ratchet floor | `.ci/cpan-corpus-manifest.txt` |
 | CPAN corpus task impl | `xtask/src/tasks/cpan_corpus.rs` |
 | Slash command definitions | `.claude/commands/` |
+| Agent swarm methodology | `docs/project/AGENT_SWARM_WORKFLOW.md` |
+| CPAN top-1000 corpus effort | `docs/project/CPAN_CORPUS_STRATEGY.md` |
+| Portable agent workflow templates | `docs/handoff/` |
 
 ## Architecture Patterns
 
@@ -296,7 +299,11 @@ Metrics in this project are **computed, not hand-edited**:
 | DAP features | `/crates/perl-dap/src/` |
 | Tests | `/crates/*/tests/` |
 
-## Slash Commands
+## Agent Swarm Development
+
+This project uses parallel agent swarms for large-scale codebase improvements.
+
+### Slash Commands
 
 | Command | Purpose |
 |---------|---------|
@@ -309,12 +316,31 @@ Metrics in this project are **computed, not hand-edited**:
 | `/corpus-ratchet` | Run corpus sweep and update baselines |
 | `/changelog` | Generate changelog entries |
 
-## Agent Swarm Development
+### Wave Categories
 
-Agents run in isolated git worktrees (`isolation: "worktree"`) so multiple fixes can proceed in parallel without conflicts. Typical workflow:
+| Category | What it does |
+|----------|-------------|
+| `parser-fixes` | Launch agents per error bucket from `.ci/parser-corpus-baseline.json` |
+| `test-coverage` | Agents per crate: parser-core, lexer, semantic-analyzer, workspace-index, refactoring, LSP, DAP |
+| `doc-updates` | Agents per doc gap: COMMANDS_REFERENCE, CLAUDE.md, CONTRIBUTING, README, new project docs |
+| `cleanup` | Agents for: `cargo machete`, clippy, dead code, obsolete scripts, .gitignore |
 
-1. **Launch a wave** -- `/wave parser-fixes` spawns parallel agents, each targeting a separate parser issue.
-2. **PR the results** -- `/bulk-pr` after a wave completes to open PRs for every worktree with uncommitted changes.
-3. **Update baselines** -- `/corpus-ratchet` after merges to sweep the test corpus and ratchet baselines forward.
+### Workflow Pattern
+
+1. **Plan**: Identify improvement areas, read baselines
+2. **Wave**: `/wave <category>` -- launches 10-30 agents in worktrees
+3. **Monitor**: Agents report completions with changes
+4. **PR**: `/bulk-pr` -- validates and publishes each worktree
+5. **Fix**: Check CI status, dispatch fix agents for failures
+6. **Merge**: Sequential merge, then `/corpus-ratchet` to update baselines
+7. **Repeat**: Next wave targets remaining gaps
+
+### Key Patterns
+
+- Always use `isolation: "worktree"` for code changes
+- Use `run_in_background: true` for parallel dispatch
+- Name agents descriptively: `pr2-pkg-subscripts`, `fix-clippy-warnings`
+- Orchestrator thread coordinates only -- never writes code directly
+- PR before cleanup -- ship work first, tidy later
 
 See [docs/project/AGENT_SWARM_WORKFLOW.md](docs/project/AGENT_SWARM_WORKFLOW.md) for details.
