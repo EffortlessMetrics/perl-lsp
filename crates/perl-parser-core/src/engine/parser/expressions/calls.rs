@@ -207,11 +207,16 @@ impl<'a> Parser<'a> {
     /// properly constructed and its initializer uses `parse_assignment()`
     /// (not `parse_expression()`), preventing commas from being absorbed
     /// into the initializer.  Otherwise, falls back to `parse_assignment()`.
+    ///
+    /// Exception: when the declaration keyword is followed by `=>` (fat
+    /// arrow), it is a bareword hash key, not a declaration.  For example:
+    /// `(my => "value")` should autoquote `my` as a string.
     fn parse_assignment_or_declaration(&mut self) -> ParseResult<Node> {
         if matches!(
             self.peek_kind(),
             Some(TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State)
-        ) {
+        ) && !self.is_keyword_before_fat_arrow()
+        {
             self.parse_declaration_arg()
         } else {
             self.parse_assignment()
