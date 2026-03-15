@@ -1096,4 +1096,221 @@ mod tests {
         let roots = default_base_roots();
         assert_eq!(roots.len(), 3);
     }
+
+    // ── normalize_error_bucket edge cases ──────────────────────────────
+
+    #[test]
+    fn test_normalize_error_bucket_empty_string() {
+        // Empty input should pass through as-is
+        assert_eq!(normalize_error_bucket(""), "");
+    }
+
+    #[test]
+    fn test_normalize_error_bucket_unknown_passthrough() {
+        // The default value used when first_message is None
+        assert_eq!(normalize_error_bucket("unknown"), "unknown");
+    }
+
+    #[test]
+    fn test_normalize_error_bucket_syntax_pos_with_trailing_at() {
+        // "Invalid syntax at position N:" strips outer wrapper first,
+        // so inner trailing " at N" is NOT stripped by the second regex
+        // (the first regex branch succeeds, so RE_TRAILING_AT is skipped).
+        let result = normalize_error_bucket(
+            "Invalid syntax at position 42: expected Semicolon, found Eof at 99",
+        );
+        assert_eq!(result, "expected_semicolon");
+    }
+
+    #[test]
+    fn test_normalize_error_bucket_only_position_suffix() {
+        // Message that is essentially only a trailing position marker
+        assert_eq!(normalize_error_bucket("at 42"), "at 42");
+        // A more realistic message with " at N" trimmed leaving a short string
+        assert_eq!(normalize_error_bucket("oops at 7"), "oops");
+    }
+
+    #[test]
+    fn test_normalize_error_bucket_multiple_at_suffixes() {
+        // Only the last " at N" should be stripped by RE_TRAILING_AT
+        assert_eq!(
+            normalize_error_bucket("something at 10 and more at 20"),
+            "something at 10 and more",
+        );
+    }
+
+    #[test]
+    fn test_normalize_error_bucket_syntax_pos_no_semantic_match() {
+        // Strip "Invalid syntax at position N:" wrapper, but inner message
+        // doesn't match any semantic bucket -- should pass through stripped.
+        assert_eq!(
+            normalize_error_bucket("Invalid syntax at position 500: some rare exotic error"),
+            "some rare exotic error",
+        );
+    }
+
+    #[test]
+    fn test_normalize_error_bucket_whitespace_preserved() {
+        // Ensure leading/trailing whitespace in the message is preserved
+        // (no implicit trimming)
+        let result = normalize_error_bucket("  expected Semicolon, found Eof  ");
+        assert_eq!(result, "expected_semicolon");
+    }
+
+    #[test]
+    fn test_normalize_error_bucket_all_semantic_buckets_reachable() {
+        // Verify that every entry in SEMANTIC_BUCKETS can be triggered
+        for &(substring, bucket_name) in SEMANTIC_BUCKETS {
+            let result = normalize_error_bucket(substring);
+            assert_eq!(
+                result, bucket_name,
+                "Direct substring '{}' should map to bucket '{}'",
+                substring, bucket_name,
+            );
+        }
+    }
+
+    #[test]
+    fn test_normalize_error_bucket_first_match_wins() {
+        // "expected expression, found Return" should match the specific
+        // Return bucket, not the generic "unexpected_token_in_expr"
+        assert_eq!(
+            normalize_error_bucket("expected expression, found Return"),
+            "unexpected_return_expr",
+        );
+        // "expected RightBrace, found Semicolon" should match the specific
+        // semicolon bucket, not the generic "unclosed_brace"
+        assert_eq!(
+            normalize_error_bucket("expected RightBrace, found Semicolon"),
+            "unclosed_brace_semicolon",
+        );
+    }
+
+    // ── parse_manifest edge cases ──────────────────────────────────────
+
+    #[test]
+    fn test_parse_manifest_whitespace_only() {
+        let dir = std::env::temp_dir().join("test_parse_manifest_ws_only");
+        let _ = fs::create_dir_all(&dir);
+        let manifest = dir.join("ws-only.txt");
+        fs::write(&manifest, "   \n\t\n  \n").expect("write manifest");
+        let modules = parse_manifest(&manifest).expect("parse manifest");
+        assert!(modules.is_empty(), "Whitespace-only manifest should yield no modules");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_parse_manifest_whitespace_and_comments_only() {
+        let dir = std::env::temp_dir().join("test_parse_manifest_ws_comments");
+        let _ = fs::create_dir_all(&dir);
+        let manifest = dir.join("ws-comments.txt");
+        fs::write(&manifest, "  \n# comment 1\n  \t  \n# comment 2\n\n").expect("write manifest");
+        let modules = parse_manifest(&manifest).expect("parse manifest");
+        assert!(modules.is_empty(), "Whitespace+comments-only manifest should yield no modules");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_parse_manifest_trailing_whitespace_on_names() {
+        let dir = std::env::temp_dir().join("test_parse_manifest_trailing_ws");
+        let _ = fs::create_dir_all(&dir);
+        let manifest = dir.join("trailing-ws.txt");
+        fs::write(&manifest, "Exporter   \nCarp\t\n  File::Find  \n").expect("write manifest");
+        let modules = parse_manifest(&manifest).expect("parse manifest");
+        // parse_manifest calls .trim() so trailing whitespace should be stripped
+        assert_eq!(modules, vec!["Exporter", "Carp", "File::Find"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_parse_manifest_leading_whitespace_on_names() {
+        let dir = std::env::temp_dir().join("test_parse_manifest_leading_ws");
+        let _ = fs::create_dir_all(&dir);
+        let manifest = dir.join("leading-ws.txt");
+        fs::write(&manifest, "  Exporter\n\tCarp\n").expect("write manifest");
+        let modules = parse_manifest(&manifest).expect("parse manifest");
+        assert_eq!(modules, vec!["Exporter", "Carp"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_parse_manifest_nonexistent_file() {
+        let result = parse_manifest(Path::new("/nonexistent/path/manifest.txt"));
+        assert!(result.is_err(), "Should error on nonexistent manifest file");
+    }
+
+    #[test]
+    fn test_parse_manifest_inline_comments_not_stripped() {
+        // Verify that `#` in the middle of a line is NOT treated as a comment
+        // (only lines starting with `#` after trimming are skipped)
+        let dir = std::env::temp_dir().join("test_parse_manifest_inline_comment");
+        let _ = fs::create_dir_all(&dir);
+        let manifest = dir.join("inline-comment.txt");
+        fs::write(&manifest, "Module::Name # not a comment\n").expect("write manifest");
+        let modules = parse_manifest(&manifest).expect("parse manifest");
+        assert_eq!(modules, vec!["Module::Name # not a comment"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // ── enforce_strict_clean edge cases ────────────────────────────────
+
+    #[test]
+    fn test_enforce_strict_clean_all_three_violations() {
+        let report = test_report(5, 3, 7, 2, BTreeMap::from([("unclosed_brace".to_string(), 3)]));
+        let violations = enforce_strict_clean(&report);
+        assert_eq!(
+            violations.len(),
+            3,
+            "Expected violations for unreadable + errors + error_nodes"
+        );
+        let metrics: Vec<&str> = violations.iter().map(|v| v.metric.as_str()).collect();
+        assert!(metrics.contains(&"files_unreadable"));
+        assert!(metrics.contains(&"files_with_errors"));
+        assert!(metrics.contains(&"total_error_nodes"));
+    }
+
+    // ── enforce_ratchet edge cases ─────────────────────────────────────
+
+    #[test]
+    fn test_enforce_ratchet_improvement_no_violations() {
+        let baseline =
+            test_report(80, 20, 30, 2, BTreeMap::from([("unclosed_brace".to_string(), 10)]));
+        let report = SweepReport {
+            clean_files: 90,                                                          // improved
+            files_with_errors: 10,                                                    // improved
+            total_error_nodes: 15,                                                    // improved
+            files_unreadable: 1,                                                      // improved
+            first_error_buckets: BTreeMap::from([("unclosed_brace".to_string(), 5)]), // improved
+            ..baseline.clone()
+        };
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(violations.is_empty(), "Improvements should not trigger violations");
+    }
+
+    #[test]
+    fn test_enforce_ratchet_bucket_disappeared() {
+        // A bucket that existed in the baseline but is absent in current
+        // should NOT be a violation (it means the errors were fixed)
+        let baseline = test_report(
+            80,
+            20,
+            20,
+            0,
+            BTreeMap::from([("unclosed_brace".to_string(), 10), ("unclosed_paren".to_string(), 5)]),
+        );
+        let report = SweepReport {
+            first_error_buckets: BTreeMap::from([("unclosed_brace".to_string(), 10)]),
+            ..baseline.clone()
+        };
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(violations.is_empty(), "Disappeared bucket should not be a violation");
+    }
+
+    #[test]
+    fn test_enforce_ratchet_empty_baselines() {
+        let baseline = test_report(0, 0, 0, 0, BTreeMap::new());
+        let report = baseline.clone();
+        let violations = enforce_ratchet(&report, &baseline);
+        assert!(violations.is_empty(), "Empty baselines should have no violations");
+    }
 }
