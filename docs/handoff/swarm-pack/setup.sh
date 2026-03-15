@@ -212,6 +212,9 @@ else
     echo "Creating .claude/settings.json..."
     cat > "$SETTINGS" <<SETTINGSEOF
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
     "allow": [
       "Bash(gh:*)",
