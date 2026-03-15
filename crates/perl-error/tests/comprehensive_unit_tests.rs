@@ -180,7 +180,7 @@ fn test_suggestion_semicolon() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_suggestion_right_brace() -> Result<(), Box<dyn std::error::Error>> {
-    let err = ParseError::unexpected("RightBrace", "eof", 10);
+    let err = ParseError::unexpected("'}'", "eof", 10);
     let s = must_some(err.suggestion());
     assert!(s.contains('}'), "got: {s}");
     Ok(())
@@ -188,7 +188,7 @@ fn test_suggestion_right_brace() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_suggestion_right_paren() -> Result<(), Box<dyn std::error::Error>> {
-    let err = ParseError::unexpected("RightParen", "eof", 10);
+    let err = ParseError::unexpected("')'", "eof", 10);
     let s = must_some(err.suggestion());
     assert!(s.contains(')'), "got: {s}");
     Ok(())
@@ -290,7 +290,7 @@ fn test_error_contexts_empty_source() -> Result<(), Box<dyn std::error::Error>> 
 #[test]
 fn test_error_contexts_preserves_suggestion() -> Result<(), Box<dyn std::error::Error>> {
     let source = "my $x = 1";
-    let errors = vec![ParseError::unexpected("Semicolon", "eof", 0)];
+    let errors = vec![ParseError::unexpected("';'", "eof", 0)];
     let ctxs = get_error_contexts(&errors, source);
     assert_eq!(ctxs.len(), 1);
     assert!(ctxs[0].suggestion.is_some());
