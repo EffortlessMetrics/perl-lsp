@@ -47,7 +47,7 @@ done
 | ✅ | **Diagnostics** | Real-time error detection and reporting |
 | ✅ | **Hover** | Documentation and type information on hover |
 | ✅ | **Debug Adapter** | Breakpoints, stepping, variable inspection via DAP bridge |
-| ✅ | **Comprehensive Perl 5 Syntax** | ~100% Perl 5.8-5.40 coverage: heredocs, regex, quotes, formats, all constructs |
+| ✅ | **Comprehensive Perl 5 Syntax** | Broad Perl 5.8-5.40 coverage: heredocs, regex, quotes, formats, all constructs |
 | ✅ | **Blazing Fast** | Sub-millisecond incremental parsing (<1ms updates) |
 | ✅ | **Zero Perl Dependency** | Pure Rust — no Perl runtime needed for parsing or LSP |
 | ✅ | **Cross-File Navigation** | Dual indexing with 98% reference coverage |
@@ -60,6 +60,26 @@ done
 - **Debug Adapter** -- breakpoints, stepping, variable inspection via DAP bridge to `perl -d`
 - **Parser** -- v3 native recursive-descent parser with error recovery, heredoc/regex/quote support, and S-expression output
 - **Fast** -- pure Rust, sub-millisecond incremental parsing, no runtime dependencies on Perl for parsing or LSP
+
+## Parser Coverage
+
+The parser is tested continuously against real-world Perl code to drive coverage improvements:
+
+- **System Perl corpus sweep** -- the parser is benchmarked against all `.pm` and `.pl` files found in the system Perl installation. Current parse rates are tracked in [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) and the baseline file (`.ci/parser-corpus-baseline.json`).
+- **Common-files gate** -- a curated set of core modules that must parse with zero errors on every PR (`.ci/common-corpus-manifest.txt`).
+- **Ratcheting CI gate** -- the overall parse rate can only go up, never down. Regressions fail the build.
+- **CPAN top 1000 goal** -- the long-term target is for 90%+ of the most-downloaded CPAN distributions to parse cleanly, driving parser improvements toward real-world Perl idioms.
+
+### Corpus Commands
+
+```bash
+just corpus-sweep          # Sweep system Perl corpus and print results
+just corpus-sweep-check    # Check against baseline (fails on regression)
+just corpus-sweep-update   # Update baseline with current results
+just common-corpus-check   # Check pinned modules parse cleanly (PR gate)
+```
+
+See [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for the latest computed metrics.
 
 ## Install
 
