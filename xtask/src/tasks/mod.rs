@@ -16,6 +16,7 @@ pub mod corpus;
 pub mod corpus_audit;
 pub mod dev;
 pub mod doc;
+pub mod e2e_validate;
 pub mod edge_cases;
 pub mod features;
 pub mod fmt;

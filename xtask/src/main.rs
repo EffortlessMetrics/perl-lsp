@@ -394,6 +394,33 @@ enum Commands {
     /// Validate memory profiling functionality
     ValidateMemoryProfiler,
 
+    /// Run end-to-end validation sweep
+    ///
+    /// Tests core crates in release mode, runs a large workspace smoke
+    /// test against the LSP server, checks benchmark compilation, and
+    /// produces an optional JSON report.
+    E2eValidate {
+        /// Number of Perl files to generate for the workspace smoke test
+        #[arg(long, default_value = "200")]
+        workspace_size: usize,
+
+        /// Write a JSON report to this path
+        #[arg(long)]
+        report: Option<PathBuf>,
+
+        /// Skip the large-workspace smoke test
+        #[arg(long)]
+        skip_workspace: bool,
+
+        /// Skip the benchmark compilation check
+        #[arg(long)]
+        skip_bench: bool,
+
+        /// Show verbose output from test runs
+        #[arg(long, short)]
+        verbose: bool,
+    },
+
     /// Run CI gates with receipt generation
     ///
     /// Executes gates defined in .ci/gate-policy.yaml and generates
@@ -561,6 +588,15 @@ fn main() -> Result<()> {
         },
         Commands::SrpMicrocrates { output } => srp_microcrates::run(output),
         Commands::ValidateMemoryProfiler => compare::validate_memory_profiling(),
+        Commands::E2eValidate { workspace_size, report, skip_workspace, skip_bench, verbose } => {
+            e2e_validate::run(e2e_validate::E2eConfig {
+                workspace_size,
+                report_path: report,
+                skip_workspace,
+                skip_bench,
+                verbose,
+            })
+        }
         Commands::Gates {
             tier,
             gate,
