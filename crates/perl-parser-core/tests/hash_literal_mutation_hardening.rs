@@ -32,9 +32,10 @@ fn hash_literal_with_fat_arrow_is_not_parsed_as_block() -> Result<(), Box<dyn st
 
     if let NodeKind::HashLiteral { pairs } = initializer.kind {
         assert_eq!(pairs.len(), 2, "expected two hash pairs");
+        // Fat arrow auto-quotes barewords: `foo =>` produces a String node
         assert!(
-            matches!(pairs[0].0.kind, NodeKind::Identifier { .. }),
-            "first key should be an identifier"
+            matches!(pairs[0].0.kind, NodeKind::Identifier { .. } | NodeKind::String { .. }),
+            "first key should be an identifier or auto-quoted string"
         );
         assert!(
             matches!(pairs[0].1.kind, NodeKind::Number { .. }),
