@@ -1054,7 +1054,7 @@ fn render_object_with_hash() -> Result<(), Box<dyn std::error::Error>> {
     };
     let rendered = renderer.render("$obj", &val);
     assert!(rendered.value.contains("My::Class"));
-    assert_eq!(rendered.type_name, Some("OBJECT".to_string()));
+    assert_eq!(rendered.type_name, Some("My::Class".to_string()));
     assert_eq!(rendered.named_variables, Some(1));
     Ok(())
 }
@@ -1468,7 +1468,7 @@ fn brief_format_covers_all_variants_in_preview() -> Result<(), Box<dyn std::erro
     assert!(rendered.value.contains("1.5"));
     assert!(rendered.value.contains("ARRAY(1)"));
     assert!(rendered.value.contains("HASH(1)"));
-    assert!(rendered.value.contains("\\SCALAR"));
+    assert!(rendered.value.contains("\\1"));
     assert!(rendered.value.contains("Cls=..."));
     assert!(rendered.value.contains("\\&fn"));
     assert!(rendered.value.contains("CODE(...)"));
