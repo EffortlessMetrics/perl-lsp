@@ -510,6 +510,7 @@ impl SymbolExtractor {
                 let old_package = self.table.current_package.clone();
                 self.table.current_package = name.clone();
 
+                let documentation = self.extract_package_documentation(name, node.location);
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: name.clone(),
@@ -517,7 +518,7 @@ impl SymbolExtractor {
                     location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
-                    documentation: None,
+                    documentation,
                     attributes: vec![],
                 };
 
@@ -735,6 +736,7 @@ impl SymbolExtractor {
             }
 
             NodeKind::Class { name, body } => {
+                let documentation = self.extract_leading_comment(node.location.start);
                 let symbol = Symbol {
                     name: name.clone(),
                     qualified_name: name.clone(),
@@ -742,7 +744,7 @@ impl SymbolExtractor {
                     location: node.location,
                     scope_id: self.table.current_scope(),
                     declaration: None,
-                    documentation: None,
+                    documentation,
                     attributes: vec![],
                 };
                 self.table.add_symbol(symbol);
@@ -1694,6 +1696,67 @@ impl SymbolExtractor {
             }
             Some(result)
         }
+    }
+
+    /// Extract documentation for a package declaration.
+    ///
+    /// Looks for:
+    /// 1. A POD `=head1 NAME` section that mentions the package name
+    /// 2. Leading comments immediately before the `package` statement
+    /// 3. An `=head1 DESCRIPTION` section as fallback
+    fn extract_package_documentation(
+        &self,
+        package_name: &str,
+        location: SourceLocation,
+    ) -> Option<String> {
+        // First try leading comments (cheapest check)
+        let leading = self.extract_leading_comment(location.start);
+        if leading.is_some() {
+            return leading;
+        }
+
+        // Then search for POD NAME section in the source text
+        if self.source.is_empty() {
+            return None;
+        }
+
+        // Look for =head1 NAME section anywhere in the file
+        let mut in_name_section = false;
+        let mut name_lines: Vec<&str> = Vec::new();
+
+        for line in self.source.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("=head1") {
+                if in_name_section {
+                    // We hit the next =head1, stop collecting
+                    break;
+                }
+                let heading = trimmed.strip_prefix("=head1").map(|s| s.trim());
+                if heading == Some("NAME") {
+                    in_name_section = true;
+                    continue;
+                }
+            } else if trimmed.starts_with("=cut") && in_name_section {
+                break;
+            } else if trimmed.starts_with('=') && in_name_section {
+                // Any other POD directive ends the NAME section
+                break;
+            } else if in_name_section && !trimmed.is_empty() {
+                name_lines.push(trimmed);
+            }
+        }
+
+        if !name_lines.is_empty() {
+            let name_doc = name_lines.join(" ");
+            // Only return if the NAME section actually references this package
+            if name_doc.contains(package_name)
+                || name_doc.contains(&package_name.replace("::", "-"))
+            {
+                return Some(name_doc);
+            }
+        }
+
+        None
     }
 
     /// Handle variable declaration
