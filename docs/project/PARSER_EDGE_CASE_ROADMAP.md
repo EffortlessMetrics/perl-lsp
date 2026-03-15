@@ -37,7 +37,11 @@ Most errors cascade: a single misparse triggers 10-20 downstream `ERROR` nodes.
 
 ## Wave 2 — High-Impact Single Fixes (~500 files)
 
+> **Updated**: 2026-03-14 (agent swarm session results)
+
 ### 2A. Package-Qualified Array/Hash Subscript (261 files)
+
+**Status**: ALREADY WORKING (PR #1481 — 9 regression tests added)
 
 **Error**: `expected RightBracket, found Identifier`
 
@@ -45,13 +49,11 @@ Most errors cascade: a single misparse triggers 10-20 downstream `ERROR` nodes.
 
 **Example**: `$Text::Unidecode::Char[0xff] = [...]` (256 files from Text::Unidecode alone)
 
-**Root cause**: The parser resolves `$Text::Unidecode::Char` as a qualified variable name but then doesn't recognize `[0xff]` as an array subscript because it expects the variable to end after the qualified name.
-
-**Fix location**: Variable parsing — after resolving a package-qualified variable, check for `[` (array subscript) or `{` (hash subscript) and parse accordingly.
-
-**Impact**: Single fix, 261 files — the largest single-fix win remaining.
+**Investigation result**: The parser's `parse_postfix()` loop already handles `[...]` and `{...}` after qualified variables correctly. The 261 file count may stem from a different root cause (e.g., cascading errors from other parse failures). Re-analyze after Wave 2B/2C merges to determine the true remaining impact.
 
 ### 2B. Fat Arrow (`=>`) as General Separator (91 files)
+
+**Status**: FIXED (PR #1484 — 3 code paths + 6 tests)
 
 **Error**: `expected expression, found FatArrow`
 
@@ -64,11 +66,11 @@ bless \%opts => $class;         # bless with =>
 push @attrs => (key => $val);   # nested fat arrows
 ```
 
-**Root cause**: Certain builtins/contexts expect `,`-separated lists but don't accept `=>` as an equivalent separator.
-
-**Fix location**: Expression list parsing — treat `=>` as list separator in function argument contexts.
+**Root cause**: Three code paths in `statements.rs` where `=>` was not accepted as a list separator: (1) `tie` argument lists, (2) `map`/`grep`/`sort` block-then-list parsing, (3) remaining-args loop after initial arguments. All three fixed.
 
 ### 2C. `split /regex/` — Slash After Builtin (22 files)
+
+**Status**: ALREADY FIXED (commit `88e325ee`, PR #1468 — 19 regression tests added)
 
 **Error**: `expected expression, found Slash`
 
@@ -81,11 +83,11 @@ split /\s+/, $cmd;
 split /;/, $ENV{LIB};
 ```
 
-**Root cause**: After `split`, `/` is treated as division operator rather than regex delimiter.
-
-**Fix location**: `parse_simple_statement()` — when parsing `split`, expect a regex as first argument.
+**Investigation result**: Commit `88e325ee` already handles `relex_as_term()` in both statement and expression contexts. The slash-after-builtin disambiguation was resolved prior to this session.
 
 ### 2D. Statement Modifiers After Complex Expressions (41 files)
+
+**Status**: ALREADY WORKING (PR #1485 — 35 regression tests added)
 
 **Error**: `expected RightBrace, found Identifier`
 
@@ -97,9 +99,18 @@ push @{$found{$type}}, $item;  # then } if/unless/while
 $cflags{$_} ||= '';            # then if/for modifier
 ```
 
-**Root cause**: After parsing a complex expression with braces, the parser consumes the closing `}` but doesn't check for trailing statement modifiers.
+**Investigation result**: The parser's `is_at_statement_end()` correctly includes modifier keywords as statement boundaries. The 41 file count was likely from cascading errors rather than a genuine modifier-parsing gap.
 
-**After Wave 2**: measured after landing
+### Wave 2 Summary
+
+| Item | Original Estimate | Outcome | PR |
+|------|------------------|---------|----|
+| 2A | 261 files | Already working; needs re-count | #1481 |
+| 2B | 91 files | Fixed (3 code paths) | #1484 |
+| 2C | 22 files | Already fixed | #1468 |
+| 2D | 41 files | Already working; needs re-count | #1485 |
+
+**After Wave 2**: Re-run `just corpus-sweep` after merging all PRs to measure actual improvement. Many of the original file counts may have been from cascading errors now resolved by other fixes.
 
 ---
 
@@ -140,9 +151,11 @@ exists $me->{login}
 
 ### 3E. Chained `->method()` After Certain Constructs (~41 files)
 
+**Status**: FIXED (PR #1474)
+
 **Error**: `expected expression, found Arrow`
 
-**Root cause**: After certain expression types (hash/array dereference), the parser doesn't recognize `->` as a method call continuation.
+**Root cause**: Arrow deref subscripts (`->[]`, `->{}`) did not properly continue the postfix chain, so subsequent `->method()` calls after a deref were rejected. Fixed to allow the postfix loop to continue after arrow-deref subscripts.
 
 ### 3F. Complex List/Hash Construction in Args (~45 files)
 
@@ -156,14 +169,27 @@ exists $me->{login}
 
 ## Wave 4 — Long Tail (~150 files)
 
-| Category | Files | Example |
-|----------|-------|---------|
-| `return` in expression context | ~9 | `return $x if $cond` edge cases |
-| `next`/`last` with complex expressions | ~10 | `next unless length $var` |
-| `eval` block edge cases | ~5 | Nested eval with complex error handling |
-| `goto` in expression context | ~3 | `goto &subroutine` |
-| `RightBrace at Eof` (unclosed blocks) | ~30 | Cascade from earlier errors |
-| Miscellaneous (each <5 files) | ~90 | Various rare constructs |
+> **Updated**: 2026-03-14 (agent swarm session results)
+
+| Category | Files | Example | Status |
+|----------|-------|---------|--------|
+| 4A. Control flow in expressions | ~19 | `return`/`next`/`last`/`redo` in ternary/short-circuit | FIXED (PR #1483) |
+| `eval` block edge cases | ~5 | Nested eval with complex error handling | Open |
+| `goto` in expression context | ~3 | `goto &subroutine` | Open |
+| 4C. Unclosed block recovery | ~30 | `RightBrace at Eof` cascade | IMPROVED (PR #1487) |
+| Miscellaneous (each <5 files) | ~90 | Various rare constructs | Open |
+
+### 4A. Control Flow in Expressions (~19 files)
+
+**Status**: FIXED (PR #1483)
+
+`return`, `next`, `last`, and `redo` now parse correctly as expressions inside ternary branches (`? return $x : $y`) and short-circuit operators (`$ok || return`). Previously these were only recognized as statement-level constructs.
+
+### 4C. Unclosed Block Recovery (~30 files)
+
+**Status**: IMPROVED (PR #1487)
+
+Parser now returns a partial AST when encountering a missing `}` at EOF instead of failing entirely. This reduces cascading errors from unclosed blocks and improves diagnostics for incomplete code.
 
 **After Wave 4**: measured after landing
 
@@ -189,11 +215,19 @@ cargo run -p xtask -- parser-corpus-sweep --verbose
 
 ## Priority Ordering
 
-| Wave | Effort | Impact | Clean Rate |
-|------|--------|--------|------------|
-| 1 (done) | 4 merged PRs (#1215-#1218) | baseline | 51.1% |
-| 2 (next) | 4 targeted fixes | +500 files | measured |
-| 3 | 6 expression fixes | +300 files | measured |
-| 4 | Long tail cleanup | +150 files | measured |
+| Wave | Effort | Impact | Clean Rate | Status |
+|------|--------|--------|------------|--------|
+| 1 (done) | 4 merged PRs (#1215-#1218) | baseline | 51.1% | Merged |
+| 2 | 1 fix + 3 already working | re-count needed | pending sweep | PRs #1468, #1481, #1484, #1485 |
+| 3 | 6 expression fixes (1 fixed) | +300 files | pending sweep | PR #1474 (3E) |
+| 4 | Long tail (2 fixed/improved) | +150 files | pending sweep | PRs #1483 (4A), #1487 (4C) |
 
-Wave 2 is the sweet spot: 4 fixes for ~500 files, with item 2A alone worth 261 files.
+### Session Summary (2026-03-14)
+
+The agent swarm session investigated all 4 Wave 2 items plus additional edge cases. Key findings:
+
+- **3 of 4 Wave 2 items were already working** — the original file counts were likely inflated by cascading errors from other parse failures
+- **1 Wave 2 item (2B) had a genuine bug** fixed across 3 code paths
+- **3 additional fixes** landed from Waves 3 and 4 (chained deref, control flow expressions, unclosed block recovery)
+- **Total PRs from session**: 7 (#1468, #1474, #1481, #1483, #1484, #1485, #1487)
+- **Next step**: After merging, run `just corpus-sweep` to get updated clean file counts and reassess remaining work
