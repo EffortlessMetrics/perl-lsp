@@ -14,10 +14,6 @@ A fast, native **Perl language server** and **parser toolkit** written in Rust �
 
 > **Full LSP coverage** · **fast incremental parsing** · **zero runtime Perl dependency**
 
-## Origins
-
-This project was initially forked on July 15th, 2025 (Q3 2025) from [tree-sitter-perl-better](https://github.com/tree-sitter-perl/tree-sitter-perl) (the current official tree-sitter repository). Since then, it has evolved into a native Rust implementation focused on LSP and DAP performance.
-
 ## Workspace Snapshot (current)
 
 - **Crate directories**: 121 (under `crates/`)
@@ -337,6 +333,10 @@ For project direction, planning, and architectural decisions:
 | [ADR-0010](docs/adr/0010-incremental-parsing-architecture.md) | Incremental Parsing | <1ms update target |
 | [ADR-0015](docs/adr/0015-supply-chain-security.md) | Supply Chain Security | SBOM + SLSA Level 2 |
 | [ADR-0019](docs/adr/0019-security-first-dap.md) | Security-First DAP | Enterprise-grade debugger security |
+
+## History
+
+This project began as a fork of [tree-sitter-perl](https://github.com/tree-sitter-perl/tree-sitter-perl) in July 2025. It has since been rewritten as a native Rust recursive-descent parser and grown into a full-featured LSP/DAP toolkit with over 115 crates.
 
 ## License
 
