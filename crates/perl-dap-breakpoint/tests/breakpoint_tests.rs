@@ -72,8 +72,13 @@ fn validation_reason_display() -> Result<(), Box<dyn std::error::Error>> {
         ValidationReason::HeredocInterior.to_string(),
         "Breakpoint set inside heredoc content"
     );
+    assert_eq!(ValidationReason::PodLine.to_string(), "Breakpoint set inside POD documentation");
     assert_eq!(ValidationReason::LineOutOfRange.to_string(), "Line number exceeds file length");
     assert_eq!(ValidationReason::ParseError.to_string(), "Unable to parse source file");
+    assert_eq!(
+        ValidationReason::InvalidCondition.to_string(),
+        "Conditional breakpoint expression is invalid"
+    );
     Ok(())
 }
 
@@ -387,6 +392,10 @@ fn validation_reason_clone_copy_eq() -> Result<(), Box<dyn std::error::Error>> {
     assert_eq!(r2, r3); // Eq
     assert_eq!(r, ValidationReason::BlankLine);
     assert_ne!(r, ValidationReason::CommentLine);
+    assert_ne!(r, ValidationReason::PodLine);
+    assert_ne!(r, ValidationReason::InvalidCondition);
+    assert_eq!(ValidationReason::PodLine, ValidationReason::PodLine);
+    assert_eq!(ValidationReason::InvalidCondition, ValidationReason::InvalidCondition);
     Ok(())
 }
 
