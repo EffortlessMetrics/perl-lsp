@@ -27,15 +27,19 @@ Perl LSP is currently in **Public Alpha**. Version 0.11.0 represents a substanti
 | **perl-dap** | Preview (Native + Bridge) | `cargo test -p perl-dap --features dap-phase2,dap-phase3` | Native adapter foundations with BridgeAdapter fallback |
 | **perl-parser-pest** (v2) | Legacy | N/A | Optional legacy crate |
 | **Semantic Analyzer** | Phase 2-6 Complete | `just ci-gate` | Full semantic analysis pipeline |
+| **Parser Coverage** | 51.1% system corpus (3,627/7,095) | 90%+ CPAN top 1000 | Wave 2-4 in progress |
 
 ---
 
 ## Now / Next / Later (Summary)
 
-**Now (Release Preparation)**
+**Now (Release Preparation + Parser Coverage)**
 - Release preparation: crates.io publish validation, VS Code marketplace packaging
 - Documentation cleanup and alignment for launch (article series, workspace snapshots)
 - Final CI validation and release-blocker fixes (rustdoc, clippy, crate metadata)
+- CPAN top-1000 corpus tooling (PR #1469 — `cargo xtask cpan-corpus`)
+- Parser fix PRs for Wave 2-4 error buckets
+- Merge and ratchet parser coverage baseline
 - Keep close-out receipts green (`just ci-gate`)
 
 **Next (v0.11.0)**
@@ -43,6 +47,9 @@ Perl LSP is currently in **Public Alpha**. Version 0.11.0 represents a substanti
 - Cross-file type inference via `use parent`/`use base`
 - Native DAP enhancements (variables/evaluate)
 - Stability goal refinement: define requirements for v0.15.0 contract
+- CPAN corpus: achieve 90%+ clean parse rate on top 1000 distributions
+- Expand common corpus manifest as parser fixes land
+- Error bucket reduction: target <500 files with errors (from 3,420)
 
 **Later (Targeting v0.15.0 for Stability Contract)**
 - **Stability Contract**: Formal API stability and contract-locked wire protocol
