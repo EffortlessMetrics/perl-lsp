@@ -442,6 +442,8 @@ mod indirect_object_tests;
 #[cfg(test)]
 mod loop_control_tests;
 #[cfg(test)]
+mod qualified_variable_subscript_tests;
+#[cfg(test)]
 mod regex_delimiter_tests;
 #[cfg(test)]
 mod slash_ambiguity_tests;
