@@ -2052,6 +2052,7 @@ version = "0.11.0"
 name = "perl-lsp-inlay-hints"
 version = "0.11.0"
 dependencies = [
+ "perl-builtins",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-semantic-analyzer",

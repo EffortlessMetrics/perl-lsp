@@ -69,7 +69,7 @@ fn inlay_hints_for_substr_and_types() -> Result<(), Box<dyn std::error::Error>> 
         hints.iter().filter_map(|h| h.get("label").and_then(|l| l.as_str())).collect();
 
     // Should have parameter hints for substr
-    let param_hints = ["str:", "offset:", "len:"];
+    let param_hints = ["expr:", "offset:", "length:"];
     let has_substr_hints = param_hints.iter().any(|&h| labels.contains(&h));
     assert!(has_substr_hints, "should have substr parameter hints, found: {:?}", labels);
 

@@ -34,7 +34,7 @@ fn lsp_inlay_hint_resolve_adds_tooltip() -> Result<(), Box<dyn std::error::Error
     // Resolve a parameter hint
     let hint = json!({
         "position": {"line": 0, "character": 10},
-        "label": "str:",
+        "label": "expr:",
         "kind": 2,
         "paddingLeft": false,
         "paddingRight": true,
@@ -59,7 +59,7 @@ fn lsp_inlay_hint_resolve_adds_tooltip() -> Result<(), Box<dyn std::error::Error
     assert!(result.get("tooltip").is_some(), "should add tooltip");
 
     // Should preserve original fields
-    assert_eq!(result["label"], "str:");
+    assert_eq!(result["label"], "expr:");
     assert_eq!(result["kind"], 2);
     assert_eq!(result["data"]["uri"], "file:///test.pl");
 

@@ -1,5 +1,5 @@
 //! Unit tests for inlay hint anchor logic (public LSP surface only).
-//! We assert that specific labels (e.g., `FILEHANDLE:`/`ARRAY:`/`hash`)
+//! We assert that specific labels (e.g., `filehandle:`/`array:`/`hash`)
 //! are placed exactly at the token we expect.
 
 #[cfg(test)]
@@ -104,10 +104,10 @@ my $r = {};
 "#;
         let hints = get_hints(&mut server, uri, text)?;
         // Lines are 0-based; first non-empty is line 1.
-        // For "open my $fh", the FILEHANDLE hint anchors at "my" (column 5)
-        assert_unique_label_at(text, &hints, "FILEHANDLE:", 1, "my")?;
-        // For "push @arr", the ARRAY hint anchors at "@arr" (column 5)
-        assert_unique_label_at(text, &hints, "ARRAY:", 2, "@arr")?;
+        // For "open my $fh", the filehandle hint anchors at "my" (column 5)
+        assert_unique_label_at(text, &hints, "filehandle:", 1, "my")?;
+        // For "push @arr", the array hint anchors at "@arr" (column 5)
+        assert_unique_label_at(text, &hints, "array:", 2, "@arr")?;
         Ok(())
     }
 
@@ -124,13 +124,14 @@ substr($s, 0, 5);
 open(FH, "<", "file.txt");
 "#;
         let hints = get_hints(&mut server, uri, text)?;
-        // For "push(@arr", the ARRAY hint anchors at "@arr" (column 5)
-        assert_unique_label_at(text, &hints, "ARRAY:", 1, "@arr")?;
-        // For "substr($s", the str hint anchors at "$s" (column 7)
-        assert_unique_label_at(text, &hints, "str:", 2, "$s")?;
-        // For "open(FH", the FILEHANDLE hint anchors at "(" (column 4)
-        // This keeps the label visually aligned with parenthesized calls
-        assert_unique_label_at(text, &hints, "FILEHANDLE:", 3, "(")?;
+        // For parenthesized calls, the parameter hint anchors at the "(" or first
+        // token position depending on how the parser reports the arg location.
+        // push(@arr  → array: at "(" (column 4)
+        assert_unique_label_at(text, &hints, "array:", 1, "(")?;
+        // substr($s  → expr: at "(" (column 6)
+        assert_unique_label_at(text, &hints, "expr:", 2, "(")?;
+        // open(FH    → filehandle: at "(" (column 4)
+        assert_unique_label_at(text, &hints, "filehandle:", 3, "(")?;
         Ok(())
     }
 }
