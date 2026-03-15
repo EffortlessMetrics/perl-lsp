@@ -1040,6 +1040,81 @@ sub greet {
     }
 
     #[test]
+    fn test_moo_accessor_completion_shows_isa_type() {
+        let code = r#"
+package Example::User;
+use Moo;
+
+has 'name' => (is => 'ro', isa => 'Str');
+has 'age'  => (is => 'rw', isa => 'Int');
+
+sub greet {
+    my $self = shift;
+    $self->
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let pos = must_some(code.find("$self->")) + "$self->".len();
+        let completions = provider.get_completions(code, pos);
+
+        // name accessor should appear with isa type in documentation
+        let name_item = must_some(completions.iter().find(|c| c.label == "name"));
+        let name_doc = must_some(name_item.documentation.as_deref());
+        assert!(
+            name_doc.contains("Str"),
+            "expected `Str` type in name accessor documentation, got: {name_doc:?}"
+        );
+
+        // age accessor should appear with isa type in documentation
+        let age_item = must_some(completions.iter().find(|c| c.label == "age"));
+        let age_doc = must_some(age_item.documentation.as_deref());
+        assert!(
+            age_doc.contains("Int"),
+            "expected `Int` type in age accessor documentation, got: {age_doc:?}"
+        );
+
+        // detail should indicate it's a Moo/Moose accessor, not just "method"
+        let name_detail = must_some(name_item.detail.as_deref());
+        assert!(
+            name_detail.contains("accessor"),
+            "expected 'accessor' in detail for Moo attribute, got: {name_detail:?}"
+        );
+    }
+
+    #[test]
+    fn test_moose_accessor_completion_shows_isa_type() {
+        let code = r#"
+package Example::Animal;
+use Moose;
+
+has 'species' => (is => 'ro', isa => 'Str', required => 1);
+
+sub describe {
+    my $self = shift;
+    $self->
+}
+"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+
+        let pos = must_some(code.find("$self->")) + "$self->".len();
+        let completions = provider.get_completions(code, pos);
+
+        let species_item = must_some(completions.iter().find(|c| c.label == "species"));
+        let species_doc = must_some(species_item.documentation.as_deref());
+        assert!(
+            species_doc.contains("Str"),
+            "expected `Str` type in species accessor documentation, got: {species_doc:?}"
+        );
+    }
+
+    #[test]
     fn test_moo_has_option_key_completion() {
         let code = r#"
 use Moo;

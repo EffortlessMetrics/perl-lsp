@@ -76,6 +76,48 @@ pub fn infer_receiver_type(context: &CompletionContext, source: &str) -> Option<
     None
 }
 
+/// Build rich documentation for a Moo/Moose accessor from its symbol attributes.
+///
+/// Attributes are stored as `key=value` strings (e.g. `"is=ro"`, `"isa=Str"`).
+/// This function formats them into a human-readable documentation string that
+/// surfaces the type constraint and access mode prominently.
+fn moo_accessor_documentation(name: &str, attributes: &[String]) -> String {
+    let mut isa_value: Option<&str> = None;
+    let mut is_value: Option<&str> = None;
+    let mut extra_parts: Vec<&str> = Vec::new();
+
+    for attr in attributes {
+        if let Some((key, value)) = attr.split_once('=') {
+            match key {
+                "isa" => isa_value = Some(value),
+                "is" => is_value = Some(value),
+                _ => extra_parts.push(attr),
+            }
+        }
+    }
+
+    let mut doc = format!("Moo/Moose accessor `{name}`");
+
+    if let Some(isa) = isa_value {
+        doc.push_str(&format!("\n\n**Type**: `{isa}`"));
+    }
+    if let Some(is) = is_value {
+        let mode = match is {
+            "ro" => "read-only",
+            "rw" => "read-write",
+            "rwp" => "read-write private",
+            "lazy" => "lazy",
+            other => other,
+        };
+        doc.push_str(&format!("\n\n**Access**: {mode}"));
+    }
+    if !extra_parts.is_empty() {
+        doc.push_str(&format!("\n\n**Options**: {}", extra_parts.join(", ")));
+    }
+
+    doc
+}
+
 /// Add method completions
 pub fn add_method_completions(
     completions: &mut Vec<CompletionItem>,
@@ -99,12 +141,27 @@ pub fn add_method_completions(
             continue;
         }
 
-        let documentation = symbols.iter().find_map(|symbol| symbol.documentation.clone());
+        // Check if this is a synthesized Moo/Moose accessor (declaration == "has")
+        let callable_symbol = symbols
+            .iter()
+            .find(|symbol| matches!(symbol.kind, SymbolKind::Subroutine | SymbolKind::Method));
+
+        let is_moo_accessor =
+            callable_symbol.and_then(|s| s.declaration.as_deref()).is_some_and(|d| d == "has");
+
+        let (detail, documentation) = if is_moo_accessor {
+            let attrs = callable_symbol.map(|s| s.attributes.as_slice()).unwrap_or(&[]);
+            ("Moo/Moose accessor".to_string(), Some(moo_accessor_documentation(name, attrs)))
+        } else {
+            let doc = symbols.iter().find_map(|symbol| symbol.documentation.clone());
+            ("method".to_string(), doc)
+        };
+
         if seen.insert(name.clone()) {
             completions.push(CompletionItem {
                 label: name.clone(),
                 kind: crate::completion::items::CompletionItemKind::Function,
-                detail: Some("method".to_string()),
+                detail: Some(detail),
                 documentation,
                 insert_text: Some(format!("{}()", name)),
                 sort_text: Some(format!("1_{}", name)),
