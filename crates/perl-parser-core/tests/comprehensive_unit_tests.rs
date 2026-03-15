@@ -3094,6 +3094,85 @@ mod line_index_extended_tests {
         Ok(())
     }
 
+    #[test]
+    fn wave2b_unshift_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("unshift @arr => $val;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "unshift @arr => $val should parse cleanly, got: {sexp}");
+        assert!(sexp.contains("call unshift"), "should be a function call");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_splice_mixed_comma_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
+        // `splice @a, 0, 1 => @replacement` — the `=>` after `1` is consumed by
+        // the builtin argument loop as a separator, exactly like a comma.
+        let mut parser = Parser::new("splice @a, 0, 1 => @replacement;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "splice @a, 0, 1 => @replacement should parse cleanly, got: {sexp}"
+        );
+        // splice uses the generic builtin path; the sexp uses ambiguous_function_call_expression
+        assert!(
+            sexp.contains("function_call_expression") || sexp.contains("call splice"),
+            "should be a function call, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_tie_fat_arrow_in_args() -> Result<(), Box<dyn std::error::Error>> {
+        // tie uses a dedicated AST handler; fat arrow must work in trailing args
+        let mut parser = Parser::new("tie %hash, 'MyModule' => @args;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "tie %hash, 'MyModule' => @args should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_map_fat_arrow_separator() -> Result<(), Box<dyn std::error::Error>> {
+        // map with block then fat arrow before list
+        let mut parser = Parser::new("map { $_ * 2 } => @list;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "map {{ $_ * 2 }} => @list should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_grep_fat_arrow_separator() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("grep { defined } => @list;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "grep {{ defined }} => @list should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_sort_fat_arrow_separator() -> Result<(), Box<dyn std::error::Error>> {
+        let mut parser = Parser::new("sort { $a <=> $b } => @list;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "sort {{ $a <=> $b }} => @list should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
     // ---- Wave 2C: split /regex/ ----
 
     #[test]
