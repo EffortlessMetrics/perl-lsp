@@ -29,6 +29,11 @@ pub fn collect_inline_values(source: &str, start_line: i64, end_line: i64) -> Ve
         end_idx = lines.len() - 1;
     }
 
+    // If start is beyond the file, there are no values to collect
+    if start_idx > end_idx {
+        return Vec::new();
+    }
+
     let Some(re) = SCALAR_VAR_RE.as_ref() else {
         return Vec::new(); // No regex available - graceful degradation
     };
