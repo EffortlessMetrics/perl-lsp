@@ -237,8 +237,8 @@ impl FoldingRangeExtractor {
 
             // POD is typically inside strings or special constructs, not a separate NodeKind
             NodeKind::Heredoc { .. } => {
-                // Heredocs are always foldable
-                self.add_range_from_node(node, None);
+                // Heredocs are always foldable as regions
+                self.add_range_from_node(node, Some(FoldingRangeKind::Region));
             }
 
             NodeKind::StatementModifier { statement, modifier: _, condition } => {
