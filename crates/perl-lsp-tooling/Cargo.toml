@@ -24,10 +24,8 @@ lsp-compat = ["dep:lsp-types"]
 perl-subprocess-runtime = { workspace = true }
 perl-tdd-support = { workspace = true }
 perl-parser-core = { workspace = true }
-perl-symbol-index = { workspace = true }
 perl-lsp-performance = { workspace = true }
 perl-lsp-critic-parser = { workspace = true }
-moka = { version = "0.12", features = ["sync"] }
 lsp-types = { version = "0.97.0", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }
 
