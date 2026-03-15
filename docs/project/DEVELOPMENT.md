@@ -131,6 +131,87 @@ For complex Perl edge cases:
 
 ---
 
+## Agent-Driven Development Workflow
+
+The project uses an orchestrator-agent pattern for large improvements. Multiple
+agents work in parallel across isolated worktrees, each tackling a focused task,
+while a central orchestrator plans, monitors, and coordinates merges.
+
+### Roles
+
+| Role | Scope | Typical work |
+|------|-------|-------------|
+| **Orchestrator** (main thread) | Plans work, launches agents, monitors PRs, coordinates merges | Reading baselines, triaging errors, launching waves |
+| **Worker agents** (worktrees) | Focused work in isolation | Parser fix, test addition, doc update, cleanup |
+| **PR agents** | Validate and publish each worktree's changes | Running `ci-gate`, creating PRs, fixing CI failures |
+
+### Daily Development Pattern
+
+#### 1. Check current state
+```bash
+just health
+just corpus-sweep  # parser coverage baseline
+```
+
+#### 2. Identify work items
+```bash
+# Read .ci/parser-corpus-baseline.json for error buckets
+# Read docs/project/PARSER_EDGE_CASE_ROADMAP.md for known issues
+```
+
+#### 3. Launch a wave
+```bash
+/wave parser-fixes   # or: test-coverage, doc-updates, cleanup
+```
+
+Each wave creates one worktree per task and starts a worker agent inside it.
+
+#### 4. Monitor and PR
+```bash
+/bulk-pr             # PR all completed worktrees
+```
+
+#### 5. Fix CI failures
+```bash
+# Check open PR status:
+gh pr list --state open --json number,statusCheckRollup
+
+# Launch an agent per failing PR to diagnose and fix
+```
+
+#### 6. Merge and ratchet
+Merge PRs sequentially, then lock the new baselines:
+```bash
+/corpus-ratchet      # update baselines
+```
+
+### Task Lists for Agent Coordination
+
+Use TodoWrite/TaskCreate to track:
+- Which agents are launched and their worktree paths
+- Which PRs are created and their CI status
+- Which worktrees still need PRing
+- Post-merge ratchet tasks
+
+### Merge Order
+
+Parser fix PRs should merge in dependency order:
+
+1. **Infrastructure** PRs (xtask, CI tooling) first
+2. **Parser fixes** (may unlock each other)
+3. **Test additions** (no conflicts between test-only PRs)
+4. **Documentation** (no code conflicts)
+5. **Cleanup** (after all code changes merged)
+
+After each parser fix merge, re-measure and lock the new baseline:
+```bash
+just corpus-sweep        # measure improvement
+just corpus-sweep-update # lock new baseline
+just common-corpus-check # verify pinned modules still clean
+```
+
+---
+
 ## 📝 Code Style
 
 ### Rust Guidelines
