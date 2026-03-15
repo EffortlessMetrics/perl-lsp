@@ -307,63 +307,31 @@ mod tests {
         // my %h = (my => "value", use => "something")
         // `my` before `=>` should be autoquoted as a string, not parsed as a declaration
         let sexp = parse_ok(r#"my %h = (my => "value", use => "something");"#);
-        assert!(
-            sexp.contains("\"my\""),
-            "my should be autoquoted: {}",
-            sexp
-        );
-        assert!(
-            sexp.contains("\"use\""),
-            "use should be autoquoted: {}",
-            sexp
-        );
+        assert!(sexp.contains("\"my\""), "my should be autoquoted: {}", sexp);
+        assert!(sexp.contains("\"use\""), "use should be autoquoted: {}", sexp);
     }
 
     #[test]
     fn our_keyword_autoquoted_as_hash_key_in_parens() {
         // (our => 1, local => 2, state => 3)
         let sexp = parse_ok("my %h = (our => 1, local => 2, state => 3);");
-        assert!(
-            sexp.contains("\"our\""),
-            "our should be autoquoted: {}",
-            sexp
-        );
-        assert!(
-            sexp.contains("\"local\""),
-            "local should be autoquoted: {}",
-            sexp
-        );
-        assert!(
-            sexp.contains("\"state\""),
-            "state should be autoquoted: {}",
-            sexp
-        );
+        assert!(sexp.contains("\"our\""), "our should be autoquoted: {}", sexp);
+        assert!(sexp.contains("\"local\""), "local should be autoquoted: {}", sexp);
+        assert!(sexp.contains("\"state\""), "state should be autoquoted: {}", sexp);
     }
 
     #[test]
     fn my_keyword_autoquoted_in_function_call_args() {
         // foo(my => 1, our => 2)
         let sexp = parse_ok("foo(my => 1, our => 2);");
-        assert!(
-            !sexp.contains("ERROR"),
-            "should parse without errors: {}",
-            sexp
-        );
-        assert!(
-            sexp.contains("\"my\""),
-            "my should be autoquoted in function args: {}",
-            sexp
-        );
+        assert!(!sexp.contains("ERROR"), "should parse without errors: {}", sexp);
+        assert!(sexp.contains("\"my\""), "my should be autoquoted in function args: {}", sexp);
     }
 
     #[test]
     fn my_keyword_autoquoted_in_brace_hash() {
         // { my => 1, our => 2 }
         let sexp = parse_ok("my $h = {my => 1, our => 2};");
-        assert!(
-            !sexp.contains("ERROR"),
-            "should parse without errors: {}",
-            sexp
-        );
+        assert!(!sexp.contains("ERROR"), "should parse without errors: {}", sexp);
     }
 }
