@@ -1429,27 +1429,27 @@ changelog-append:
 # Run dead code detection (local check)
 dead-code:
     @echo "🔍 Running dead code detection..."
-    @bash scripts/dead-code-check.sh check
+    @cargo xtask dead-code check
 
 # Generate dead code baseline
 dead-code-baseline:
     @echo "📝 Generating dead code baseline..."
-    @bash scripts/dead-code-check.sh baseline
+    @cargo xtask dead-code baseline
 
 # Generate dead code report (JSON)
 dead-code-report:
     @echo "📊 Generating dead code report..."
-    @bash scripts/dead-code-check.sh report
+    @cargo xtask dead-code report
 
 # Run dead code detection in strict mode (fail on any increase)
 dead-code-strict:
     @echo "🔍 Running dead code detection (strict mode)..."
-    @DEAD_CODE_STRICT=true bash scripts/dead-code-check.sh check
+    @cargo xtask dead-code check --strict
 
 # CI gate: fail if dead code exceeds baseline
 ci-dead-code:
     @echo "🔍 Checking dead code baseline..."
-    @bash scripts/dead-code-check.sh check
+    @cargo xtask dead-code check
 
 # ============================================================================
 # CI Gate Execution with Receipt Generation (Issue #210)
