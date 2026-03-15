@@ -14,6 +14,7 @@ pub mod compare_parsers;
 #[cfg(feature = "legacy")]
 pub mod corpus;
 pub mod corpus_audit;
+pub mod cpan_corpus;
 pub mod dev;
 pub mod doc;
 pub mod edge_cases;

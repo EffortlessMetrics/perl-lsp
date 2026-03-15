@@ -378,6 +378,12 @@ enum Commands {
         receipt: bool,
     },
 
+    /// Manage CPAN top-1000 corpus acquisition, sweep, and ratchet
+    CpanCorpus {
+        #[command(subcommand)]
+        command: CpanCorpusCommand,
+    },
+
     /// Manage feature catalog and LSP compliance
     Features {
         #[command(subcommand)]
@@ -438,6 +444,65 @@ enum Commands {
         /// Verbose output (include quarantined gates)
         #[arg(long, short)]
         verbose: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum CpanCorpusCommand {
+    /// Fetch top N distributions from MetaCPAN by reverse dependency count
+    FetchList {
+        /// Number of distributions to fetch (default: 1000)
+        #[arg(long, default_value = "1000")]
+        top_n: usize,
+
+        /// Output path for distribution list
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Install distributions from the list via cpanm
+    Install {
+        /// Path to distribution list file
+        #[arg(long)]
+        dist_list: Option<PathBuf>,
+
+        /// Local install directory
+        #[arg(long)]
+        install_dir: Option<PathBuf>,
+
+        /// Verbose output
+        #[arg(long)]
+        verbose: bool,
+    },
+
+    /// Run parser corpus sweep against installed CPAN modules
+    Sweep {
+        /// Write JSON report to file
+        #[arg(long)]
+        output: Option<PathBuf>,
+
+        /// Return nonzero if regression detected
+        #[arg(long)]
+        enforce: bool,
+
+        /// Verbose output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Local install directory containing CPAN modules
+        #[arg(long)]
+        install_dir: Option<PathBuf>,
+    },
+
+    /// Auto-append newly-clean modules to the CPAN manifest
+    Ratchet {
+        /// Verbose output
+        #[arg(long)]
+        verbose: bool,
+
+        /// Local install directory containing CPAN modules
+        #[arg(long)]
+        install_dir: Option<PathBuf>,
     },
 }
 
@@ -553,6 +618,42 @@ fn main() -> Result<()> {
                 verbose,
                 receipt,
             })
+        }
+        Commands::CpanCorpus { command } => {
+            let mut config = cpan_corpus::CpanCorpusConfig::default();
+            match command {
+                CpanCorpusCommand::FetchList { top_n, output } => {
+                    config.top_n = top_n;
+                    if let Some(out) = output {
+                        config.dist_list = out;
+                    }
+                    cpan_corpus::fetch_list(&config)
+                }
+                CpanCorpusCommand::Install { dist_list, install_dir, verbose } => {
+                    if let Some(dl) = dist_list {
+                        config.dist_list = dl;
+                    }
+                    if let Some(id) = install_dir {
+                        config.install_dir = id;
+                    }
+                    config.verbose = verbose;
+                    cpan_corpus::install(&config)
+                }
+                CpanCorpusCommand::Sweep { output, enforce, verbose, install_dir } => {
+                    if let Some(id) = install_dir {
+                        config.install_dir = id;
+                    }
+                    config.verbose = verbose;
+                    cpan_corpus::sweep(&config, output, enforce)
+                }
+                CpanCorpusCommand::Ratchet { verbose, install_dir } => {
+                    if let Some(id) = install_dir {
+                        config.install_dir = id;
+                    }
+                    config.verbose = verbose;
+                    cpan_corpus::ratchet(&config)
+                }
+            }
         }
         Commands::Features { command } => match command {
             FeaturesCommand::SyncDocs => features::sync_docs(),

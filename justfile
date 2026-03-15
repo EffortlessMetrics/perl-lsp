@@ -1558,6 +1558,30 @@ corpus-sweep-update:
     cargo run -p xtask -- parser-corpus-sweep \
         --output .ci/parser-corpus-baseline.json
 
+# ============================================================================
+# CPAN Corpus Management
+# ============================================================================
+
+# Fetch CPAN top 1000 distribution list from MetaCPAN
+cpan-corpus-fetch:
+    cargo run -p xtask -- cpan-corpus fetch-list
+
+# Install CPAN top 1000 distributions locally
+cpan-corpus-install:
+    cargo run -p xtask -- cpan-corpus install
+
+# Sweep CPAN corpus and print results
+cpan-corpus-sweep:
+    cargo run -p xtask -- cpan-corpus sweep
+
+# Check CPAN corpus against manifest (fails on regression)
+cpan-corpus-check:
+    cargo run -p xtask -- cpan-corpus sweep --enforce
+
+# Auto-add newly-clean CPAN modules to manifest
+cpan-corpus-ratchet:
+    cargo run -p xtask -- cpan-corpus ratchet
+
 # Tier C: full suite (nightly, all integration tests)
 lsp-tier-c:
     @echo "Running LSP Tier C (full suite)..."
