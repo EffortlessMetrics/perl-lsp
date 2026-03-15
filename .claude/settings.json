@@ -6,7 +6,7 @@
     "symlinkDirectories": ["target"]
   },
   "permissions": {
-    "defaultMode": "auto",
+    "defaultMode": "bypassPermissions",
     "allow": [
       "Bash(gh:*)",
       "Bash(git:*)",
