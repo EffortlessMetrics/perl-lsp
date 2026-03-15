@@ -120,54 +120,55 @@ for src_file in "${SCRIPT_DIR}"/hooks/*.sh; do
     fi
 done
 
-# --- Create queue artifact ----------------------------------------------------
+# --- Create tracked knowledge files (.claude/swarm-state/) --------------------
+# These are tracked in git — they persist across sessions and developers.
 
-QUEUE="${REPO_ROOT}/${OPS_DIR}/swarm-queue.json"
-if [ -f "$QUEUE" ]; then
-    echo ""
-    echo "SKIP: ${OPS_DIR}/swarm-queue.json (exists)"
-else
-    echo ""
-    echo "Creating ${OPS_DIR}/swarm-queue.json..."
-    cat > "$QUEUE" <<'QUEUEEOF'
-{
-  "_comment": "Machine-facing swarm queue. Coordinators read/write this to track active slices and prevent overlap.",
-  "slices": [],
-  "hot_files": []
-}
-QUEUEEOF
-    echo "  Created queue artifact"
-fi
+SWARM_STATE="${CLAUDE_DIR}/swarm-state"
+mkdir -p "${SWARM_STATE}"
 
-# --- Create knowledge files ---------------------------------------------------
-
-PITFALLS="${REPO_ROOT}/${OPS_DIR}/known-pitfalls.md"
-if [ ! -f "$PITFALLS" ]; then
-    echo "Creating ${OPS_DIR}/known-pitfalls.md..."
-    cat > "$PITFALLS" <<'PITEOF'
+for artifact in swarm-queue.json known-pitfalls.md completed-slices.md discovered-issues.md; do
+    dest="${SWARM_STATE}/${artifact}"
+    if [ -f "$dest" ]; then
+        echo "  SKIP: swarm-state/${artifact} (exists)"
+    else
+        case "$artifact" in
+            swarm-queue.json)
+                cat > "$dest" <<'ARTEOF'
+{"_comment":"Overlap tracking for swarm coordinators","slices":[],"hot_files":[]}
+ARTEOF
+                ;;
+            known-pitfalls.md)
+                cat > "$dest" <<'ARTEOF'
 # Known Pitfalls
-
-Accumulated lessons from fixer agents and failed builds. Scouts and builders read this to avoid repeating known mistakes.
-
-<!-- Agents append new entries below this line -->
-PITEOF
-    echo "  Created known-pitfalls.md"
-fi
-
-COMPLETED="${REPO_ROOT}/${OPS_DIR}/completed-slices.md"
-if [ ! -f "$COMPLETED" ]; then
-    echo "Creating ${OPS_DIR}/completed-slices.md..."
-    cat > "$COMPLETED" <<'COMPEOF'
+Accumulated lessons from fixer agents. Scouts and builders read this to avoid repeating known mistakes.
+<!-- Agents append below -->
+ARTEOF
+                ;;
+            completed-slices.md)
+                cat > "$dest" <<'ARTEOF'
 # Completed Slices
-
 Scouts check this before creating tasks to avoid rediscovering finished work.
+Format: `- <branch> | <category> | <packages> | <status> | <description>`
+<!-- Agents append below -->
+ARTEOF
+                ;;
+            discovered-issues.md)
+                cat > "$dest" <<'ARTEOF'
+# Discovered Issues
+Any agent can append here when they notice something outside their scope.
+<!-- Agents append below -->
+ARTEOF
+                ;;
+        esac
+        echo "  CREATED: swarm-state/${artifact}"
+    fi
+done
 
-Format: `- <branch> | <category> | <packages> | <status: merged|in-progress|abandoned> | <description>`
+# --- Create ephemeral runtime dirs (.ops/) ------------------------------------
+# These are gitignored — per-session runtime data only.
 
-<!-- Agents append new entries below this line -->
-COMPEOF
-    echo "  Created completed-slices.md"
-fi
+echo ""
+echo "Creating ephemeral runtime directories (gitignored)..."
 
 # --- Create GitHub labels (if gh is available) --------------------------------
 
@@ -175,7 +176,6 @@ if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
     echo ""
     echo "Creating GitHub labels..."
     for label in "swarm-core:0E8A16:Primary swarm task" \
-                 "swarm-side-fix:FEF2C0:Adjacent fix found during other work" \
                  "swarm-improve-docs:C5DEF5:Documentation improvement" \
                  "swarm-improve-tests:C5DEF5:Test quality improvement" \
                  "swarm-improve-devex:C5DEF5:Developer experience improvement" \
@@ -258,14 +258,14 @@ echo " Swarm Pack — Setup Complete"
 echo "========================================================================"
 echo ""
 AGENT_COUNT=$(ls -1 "${CLAUDE_DIR}/agents"/*.md 2>/dev/null | wc -l)
+SKILL_COUNT=$(ls -1 "${CLAUDE_DIR}/commands"/*.md 2>/dev/null | wc -l)
 echo " Installed:"
 echo "   - ${AGENT_COUNT} agent definitions in .claude/agents/"
-echo "   - 6 slash commands in .claude/commands/"
+echo "   - ${SKILL_COUNT} skills in .claude/commands/"
 echo "   - 2 hooks in .claude/hooks/"
-echo "   - ${OPS_DIR}/swarm-queue.json  — overlap tracking"
-echo "   - ${OPS_DIR}/known-pitfalls.md — failure knowledge base"
-echo "   - ${OPS_DIR}/completed-slices.md — scout dedup log"
-echo "   - ${OPS_DIR}/handoffs/       — agent handoff files (ephemeral)"
+echo "   - .claude/swarm-state/  — tracked knowledge (pitfalls, slices, discoveries, queue)"
+echo "   - ${OPS_DIR}/           — ephemeral runtime (handoffs, metrics, patches, salvage)"
+echo "   - GitHub labels (7)"
 echo ""
 echo " Next steps — customize for your project:"
 echo ""

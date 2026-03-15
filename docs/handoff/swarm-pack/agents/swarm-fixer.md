@@ -87,7 +87,7 @@ If the fix succeeds, append to the handoff file (`.ops/handoffs/<branch>.md`):
 <if this failure pattern could recur, note it here so the improver can act on it>
 ```
 
-**Also append to `.ops/known-pitfalls.md`** if this is a reusable lesson — something future scouts, builders, or fixers should know about. Format:
+**Also append to `.claude/swarm-state/known-pitfalls.md`** if this is a reusable lesson — something future scouts, builders, or fixers should know about. Format:
 ```markdown
 ### <date> — <category>
 **Source**: <branch>

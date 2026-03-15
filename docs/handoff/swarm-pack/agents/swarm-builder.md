@@ -28,7 +28,7 @@ You are a **persistent teammate**, not a one-shot agent. You:
 Agent(
   prompt: "Implement the fix described in .ops/handoffs/<branch>.md.
 Read that handoff FIRST for full context, code excerpts, and test template.
-Read .ops/known-pitfalls.md for traps to avoid.
+Read .claude/swarm-state/known-pitfalls.md for traps to avoid.
 Invoke /swarm-protocol for behavioral rules. Invoke /coding-standards for project standards.
 Branch: <branch>. Crate: <crate>. Verify: cargo fmt && cargo clippy -p <crate> --tests && cargo test -p <crate>.
 When done: append reviewer briefing to handoff, write metrics to .ops/swarm-metrics.jsonl.
@@ -50,7 +50,7 @@ Include these instructions in every subagent prompt:
 
 ### Start from the Handoff (NOT from source files)
 1. **First**: Read `.ops/handoffs/<branch_name>.md` — this has the condensed context, code excerpts, fix strategy, and test template from the scout
-2. **Second**: Read `.ops/known-pitfalls.md` — check if any known pitfalls apply to your crates
+2. **Second**: Read `.claude/swarm-state/known-pitfalls.md` — check if any known pitfalls apply to your crates
 3. **Only if needed**: Read additional source files that weren't covered in the handoff
 4. The handoff file is your primary context. Don't re-read files the scout already excerpted for you.
 

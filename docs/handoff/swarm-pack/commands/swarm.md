@@ -34,7 +34,7 @@ done
 
 ### Check for pending work from previous sessions
 - Agent patches: `ls .ops/agent-patches/*.md 2>/dev/null`
-- In-progress slices: `grep "in-progress" .ops/completed-slices.md 2>/dev/null`
+- In-progress slices: `grep "in-progress" .claude/swarm-state/completed-slices.md 2>/dev/null`
 - Discovered issues: `gh issue list --label swarm-discovered --state open`
 - Stale worktrees: `git worktree list`
 
@@ -75,7 +75,7 @@ Each teammate gets a focused prompt that tells them to:
 Invoke /swarm-protocol and /coding-standards.
 You are scout-1. Domain: parser error buckets, corpus improvements.
 Read .ci/parser-corpus-baseline.json for error buckets.
-Read .ops/discovered-issues.md and completed-slices.md for dedup.
+Read .claude/swarm-state/discovered-issues.md and completed-slices.md for dedup.
 Launch 5-8 Explore subagents per round. Write handoff files. Use TaskCreate for each slice.
 Message builder-1 and builder-2 when tasks are ready.
 ```
@@ -85,7 +85,7 @@ Message builder-1 and builder-2 when tasks are ready.
 Invoke /swarm-protocol and /coding-standards.
 You are scout-2. Domain: DAP test gaps, open issues, dead code, unused deps, ignored tests.
 Check: gh issue list --label swarm-discovered --state open (pre-investigated leads).
-Check: .ops/discovered-issues.md (agent-flagged leads).
+Check: .claude/swarm-state/discovered-issues.md (agent-flagged leads).
 Launch 5-8 Explore subagents per round. Write handoff files. Use TaskCreate for each slice.
 Message builder-1 and builder-2 when tasks are ready.
 ```
@@ -96,7 +96,7 @@ Invoke /swarm-protocol and /coding-standards.
 You are builder-N. Claim tasks, spawn build subagents with isolation: "worktree".
 Subagent prompt pattern (minimal — 7 lines):
   "Read .ops/handoffs/<branch>.md for context and test template.
-   Read .ops/known-pitfalls.md for traps.
+   Read .claude/swarm-state/known-pitfalls.md for traps.
    Invoke /swarm-protocol and /coding-standards.
    Branch: <X>. Crate: <Y>. Verify: cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>.
    Append reviewer briefing to handoff. Write metrics. gh issue create --label swarm-discovered for out-of-scope finds."
@@ -121,7 +121,7 @@ Use SendMessage({to: "improver-docs"}) when you see patterns across PRs that nee
 ```
 Invoke /swarm-protocol.
 You are merger. Merge green PRs sequentially. Use gh pr merge --squash --delete-branch.
-After each merge, update .ops/completed-slices.md status to "merged".
+After each merge, update .claude/swarm-state/completed-slices.md status to "merged".
 Monitor CI: gh run list --limit 10 --json status,conclusion,headBranch.
 After ~5 merges: invoke /status-drift --commit.
 When queue is low: SendMessage({to: "scout-1"}) and SendMessage({to: "scout-2"}) requesting more slices.
@@ -136,7 +136,7 @@ Invoke /swarm-protocol and /coding-standards.
 You are fixer. Receive failures from reviewer and merger.
 Spawn fix subagents (2-3 parallel). One failure per subagent.
 Monitor CI failures: gh run list --status failure --limit 10.
-Append to .ops/known-pitfalls.md for reusable lessons.
+Append to .claude/swarm-state/known-pitfalls.md for reusable lessons.
 Write .ops/agent-patches/<agent>.md when agent definitions need improvement.
 If fix >30 lines: create issue with gh issue create --label swarm-discovered.
 Use SendMessage({to: "merger"}) when fixes land.

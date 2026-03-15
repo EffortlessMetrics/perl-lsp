@@ -59,9 +59,9 @@
 | File | Purpose | Writers | Readers |
 |------|---------|---------|---------|
 | `.ops/handoffs/<branch>.md` | Context transfer | scout, builder, fixer | builder, reviewer, improvers |
-| `.ops/known-pitfalls.md` | Failure knowledge | fixer | scout, builder |
-| `.ops/completed-slices.md` | Dedup log | scout, merger | scout, improvers |
-| `.ops/discovered-issues.md` | Agent-flagged leads | all agents | scout |
+| `.claude/swarm-state/known-pitfalls.md` | Failure knowledge | fixer | scout, builder |
+| `.claude/swarm-state/completed-slices.md` | Dedup log | scout, merger | scout, improvers |
+| `.claude/swarm-state/discovered-issues.md` | Agent-flagged leads | all agents | scout |
 | `.ops/swarm-metrics.jsonl` | Performance data | all agents | strategist, merger |
 | `.ops/agent-patches/` | Self-improvement | fixer, any agent | bootstrapper |
 

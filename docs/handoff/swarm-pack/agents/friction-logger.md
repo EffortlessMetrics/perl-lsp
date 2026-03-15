@@ -9,7 +9,7 @@ You maintain the friction log.
 
 ## Sources
 - Handoff files: `.ops/handoffs/*.md` — fixer "Lesson Learned", builder struggles
-- Known pitfalls: `.ops/known-pitfalls.md`
+- Known pitfalls: `.claude/swarm-state/known-pitfalls.md`
 - Recent agent failures
 
 ## Entry Format

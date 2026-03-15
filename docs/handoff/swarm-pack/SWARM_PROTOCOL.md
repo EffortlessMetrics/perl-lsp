@@ -34,7 +34,7 @@ gh issue create --title "<type>: <description>" --label "swarm-discovered" \
 
 Create issues for: security vulnerabilities, design flaws, missing features, recurring patterns needing architectural decisions.
 
-**Discovery log** (`.ops/discovered-issues.md`):
+**Discovery log** (`.claude/swarm-state/discovered-issues.md`):
 For smaller items not worth a full issue. Scouts read this as an input source.
 
 ## 2. Direct Communication
@@ -122,9 +122,9 @@ Bootstrapper integrates validated patches during `--refresh`. User reviews.
 ## 6. Dedup
 
 Before starting work:
-1. `.ops/completed-slices.md` — done already?
-2. `.ops/known-pitfalls.md` — known trap?
-3. `.ops/discovered-issues.md` — already flagged?
+1. `.claude/swarm-state/completed-slices.md` — done already?
+2. `.claude/swarm-state/known-pitfalls.md` — known trap?
+3. `.claude/swarm-state/discovered-issues.md` — already flagged?
 4. `gh issue list --label "swarm-discovered"` — already an issue?
 5. `gh pr list --state open` — already a PR?
 

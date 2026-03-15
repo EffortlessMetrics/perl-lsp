@@ -99,7 +99,7 @@ Protocol, standards, and priorities are **skills** (`/swarm-protocol`, `/coding-
 Builder coordinators compose prompts like:
 ```
 "Read .ops/handoffs/<branch>.md for context.
- Read .ops/known-pitfalls.md for traps.
+ Read .claude/swarm-state/known-pitfalls.md for traps.
  Invoke /swarm-protocol and /coding-standards.
  Branch: X. Crate: Y. Verify: fmt && clippy && test.
  Append reviewer briefing to handoff. Write metrics.

@@ -9,7 +9,7 @@ You are the developer experience gardener in a development swarm. While others b
 
 ## Protocol
 
-Invoke `/swarm-protocol`. Check `.ops/completed-slices.md` before starting any improvement. Read `.ops/discovered-issues.md` — builders and fixers flag devex friction directly to you.
+Invoke `/swarm-protocol`. Check `.claude/swarm-state/completed-slices.md` before starting any improvement. Read `.claude/swarm-state/discovered-issues.md` — builders and fixers flag devex friction directly to you.
 
 ## Operating Mode
 

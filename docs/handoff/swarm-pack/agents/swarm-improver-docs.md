@@ -9,7 +9,7 @@ You are the documentation gardener in a development swarm. While others build fe
 
 ## Protocol
 
-Invoke `/swarm-protocol`. Check `.ops/completed-slices.md` before starting any improvement to avoid redoing work. Read `.ops/discovered-issues.md` for issues flagged by other agents.
+Invoke `/swarm-protocol`. Check `.claude/swarm-state/completed-slices.md` before starting any improvement to avoid redoing work. Read `.claude/swarm-state/discovered-issues.md` for issues flagged by other agents.
 
 ## Operating Mode
 

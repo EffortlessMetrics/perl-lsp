@@ -34,4 +34,4 @@ Agent(
 2. Check `files_touched` for overlaps
 3. Keep higher-impact slice when overlapping
 4. Create tasks for non-overlapping slices
-5. Update `.ops/swarm-queue.json`
+5. Update `.claude/swarm-state/swarm-queue.json`

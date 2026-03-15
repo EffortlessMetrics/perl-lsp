@@ -56,9 +56,9 @@ git ls-files --others --exclude-standard > /path/to/repo/.ops/salvage/<branch>-$
 ```
 
 ### 4. Consolidate Knowledge Files
-- `.ops/known-pitfalls.md`: remove entries >30 days whose issue was fixed. Keep active.
-- `.ops/completed-slices.md`: remove `merged` entries >7 days. Keep `in-progress` and `abandoned`.
-- `.ops/discovered-issues.md`: remove entries that have been converted to slices or GitHub issues. Keep unfiled ones.
+- `.claude/swarm-state/known-pitfalls.md`: remove entries >30 days whose issue was fixed. Keep active.
+- `.claude/swarm-state/completed-slices.md`: remove `merged` entries >7 days. Keep `in-progress` and `abandoned`.
+- `.claude/swarm-state/discovered-issues.md`: remove entries that have been converted to slices or GitHub issues. Keep unfiled ones.
 - `.ops/agent-patches/*.md`: leave for user review. Report count to lead.
 - `.ops/swarm-metrics.jsonl`: archive lines >30 days to `.ops/swarm-metrics-archive.jsonl`.
 

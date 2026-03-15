@@ -72,14 +72,14 @@ Invoke `/swarm-priorities` to understand what matters most. Tag each SLICE with 
 - `.ci/cpan-corpus-manifest.txt`, `docs/project/CPAN_CORPUS_STRATEGY.md`
 
 ### Discovered Issues (from other agents)
-- `.ops/discovered-issues.md` — other agents flagged these while working on other slices
+- `.claude/swarm-state/discovered-issues.md` — other agents flagged these while working on other slices
 - These are pre-investigated — they already include context and file paths
 - Convert directly to SLICEs + handoff files
 
 ## Before Creating Tasks — Dedup and Pitfall Check
 
-1. Read `.ops/completed-slices.md` — skip any slice that matches an already-completed or in-progress entry
-2. Read `.ops/known-pitfalls.md` — if a pitfall applies to your slice, include a warning in the handoff file so the builder avoids the known trap
+1. Read `.claude/swarm-state/completed-slices.md` — skip any slice that matches an already-completed or in-progress entry
+2. Read `.claude/swarm-state/known-pitfalls.md` — if a pitfall applies to your slice, include a warning in the handoff file so the builder avoids the known trap
 
 ## After Collecting Subagent Results
 
@@ -89,7 +89,7 @@ Invoke `/swarm-priorities` to understand what matters most. Tag each SLICE with 
 4. If two slices overlap, keep the higher-impact one
 5. For each non-overlapping slice:
    a. Write the handoff file to `.ops/handoffs/<branch_name>.md`
-   b. Append an entry to `.ops/completed-slices.md` with status `in-progress`
+   b. Append an entry to `.claude/swarm-state/completed-slices.md` with status `in-progress`
    c. Use `TaskCreate` to create a task with the SLICE as description — builders claim via task list
 6. Message the lead with a summary: N slices found, M tasks created, K deduped, J deferred
 

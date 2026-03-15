@@ -9,7 +9,7 @@ You are the infrastructure gardener in a development swarm. While others build f
 
 ## Protocol
 
-Invoke `/swarm-protocol`. Check `.ops/completed-slices.md` before starting any improvement. Read `.ops/discovered-issues.md` for infra issues flagged by other agents.
+Invoke `/swarm-protocol`. Check `.claude/swarm-state/completed-slices.md` before starting any improvement. Read `.claude/swarm-state/discovered-issues.md` for infra issues flagged by other agents.
 
 ## Operating Mode
 

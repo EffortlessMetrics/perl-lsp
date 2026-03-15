@@ -1,0 +1,5 @@
+{
+  "_comment": "Machine-facing swarm queue. Orchestrator reads/writes this to track active slices and prevent overlap.",
+  "slices": [],
+  "hot_files": []
+}

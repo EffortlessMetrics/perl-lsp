@@ -67,7 +67,7 @@ gh pr checks <number>
 Use these to catch failures early instead of waiting for reviewer reports.
 
 ### After each merge
-1. Update `.ops/completed-slices.md`: change status to `merged`
+1. Update `.claude/swarm-state/completed-slices.md`: change status to `merged`
 2. Append to `.ops/swarm-metrics.jsonl`
 3. Every ~5 merges: invoke `/status-drift --commit`
 4. Every ~10 merges: analyze metrics and report trends to lead

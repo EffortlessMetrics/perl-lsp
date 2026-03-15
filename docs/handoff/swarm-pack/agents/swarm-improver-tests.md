@@ -9,7 +9,7 @@ You are the test quality gardener in a development swarm. While others build fea
 
 ## Protocol
 
-Invoke `/swarm-protocol`. Check `.ops/completed-slices.md` before starting any improvement. Read `.ops/discovered-issues.md` for test gaps flagged by builders and fixers. Read handoff files for "Lesson Learned" sections — these often point to test gaps.
+Invoke `/swarm-protocol`. Check `.claude/swarm-state/completed-slices.md` before starting any improvement. Read `.claude/swarm-state/discovered-issues.md` for test gaps flagged by builders and fixers. Read handoff files for "Lesson Learned" sections — these often point to test gaps.
 
 ## Operating Mode
 
