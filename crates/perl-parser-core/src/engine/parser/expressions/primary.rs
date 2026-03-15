@@ -215,6 +215,7 @@ impl<'a> Parser<'a> {
                         replacement,
                         modifiers,
                         has_embedded_code,
+                        negated: false,
                     },
                     SourceLocation { start: token.start, end: token.end },
                 ))
@@ -235,6 +236,7 @@ impl<'a> Parser<'a> {
                         search,
                         replace,
                         modifiers,
+                        negated: false,
                     },
                     SourceLocation { start: token.start, end: token.end },
                 ))

@@ -340,6 +340,7 @@ fn for_each_child_mut_visits_match_node() {
             pattern: "foo".to_string(),
             modifiers: "i".to_string(),
             has_embedded_code: false,
+            negated: false,
         },
         loc(0, 10),
     );
@@ -357,6 +358,7 @@ fn for_each_child_mut_visits_substitution_node() {
             replacement: "bar".to_string(),
             modifiers: "g".to_string(),
             has_embedded_code: false,
+            negated: false,
         },
         loc(0, 15),
     );
@@ -373,6 +375,7 @@ fn for_each_child_mut_visits_transliteration_node() {
             search: "a-z".to_string(),
             replace: "A-Z".to_string(),
             modifiers: "".to_string(),
+            negated: false,
         },
         loc(0, 15),
     );
