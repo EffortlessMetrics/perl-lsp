@@ -1,0 +1,3 @@
+# CPAN top 1000 distributions by reverse dependency count
+# Populate by running: cargo xtask cpan-corpus fetch-list
+# Source: https://fastapi.metacpan.org/v1/release/_search
