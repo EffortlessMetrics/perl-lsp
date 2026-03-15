@@ -193,3 +193,89 @@ fn test_modifier_after_chomp_with_parens() -> Result<(), Box<dyn std::error::Err
     assert_has_modifier(r#"chomp(my $line = <STDIN>) if $flag;"#, "if");
     Ok(())
 }
+
+// ---- Tests for expressions that are NOT builtins (general expression path) ----
+
+#[test]
+fn test_modifier_after_user_function_with_hash_arg() -> Result<(), Box<dyn std::error::Error>> {
+    // foo($hash{$k}) if $cond;
+    assert_has_modifier(r#"foo($hash{$k}) if $cond;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_complex_assignment_chain() -> Result<(), Box<dyn std::error::Error>> {
+    // $a = $b = $c if $d;
+    assert_has_modifier(r#"$a = $b = $c if $d;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_ternary() -> Result<(), Box<dyn std::error::Error>> {
+    // $x = $a ? $b : $c if $d;
+    assert_has_modifier(r#"$x = $a ? $b : $c if $d;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_regex_match() -> Result<(), Box<dyn std::error::Error>> {
+    // $text =~ s/foo/bar/g if $text;
+    assert_has_modifier(r#"$text =~ s/foo/bar/g if $text;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_string_concat() -> Result<(), Box<dyn std::error::Error>> {
+    // $str .= "suffix" unless $done;
+    assert_has_modifier(r#"$str .= "suffix" unless $done;"#, "unless");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_complex_deref_chain() -> Result<(), Box<dyn std::error::Error>> {
+    // $self->{cache}{$key} = $val if defined $val;
+    assert_has_modifier(r#"$self->{cache}{$key} = $val if defined $val;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_array_slice() -> Result<(), Box<dyn std::error::Error>> {
+    // @result = @array[0..2] if @array;
+    assert_has_modifier(r#"@result = @array[0..2] if @array;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_die() -> Result<(), Box<dyn std::error::Error>> {
+    // die "error" if $bad;
+    assert_has_modifier(r#"die "error" if $bad;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_warn() -> Result<(), Box<dyn std::error::Error>> {
+    // warn "oops" unless $quiet;
+    assert_has_modifier(r#"warn "oops" unless $quiet;"#, "unless");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_return() -> Result<(), Box<dyn std::error::Error>> {
+    // return $val if defined $val;
+    assert_has_modifier(r#"return $val if defined $val;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_next_in_loop() -> Result<(), Box<dyn std::error::Error>> {
+    // next if $skip;
+    assert_has_modifier(r#"next if $skip;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_last_in_loop() -> Result<(), Box<dyn std::error::Error>> {
+    // last unless $continue;
+    assert_has_modifier(r#"last unless $continue;"#, "unless");
+    Ok(())
+}
