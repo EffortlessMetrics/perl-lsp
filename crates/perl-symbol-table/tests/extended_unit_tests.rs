@@ -266,7 +266,7 @@ fn add_symbol_inserts_into_scope_symbols() {
     let sym = make_symbol("bar", "main::bar", SymbolKind::Subroutine, 0, 0, 5);
     table.add_symbol(sym);
     let scope = table.get_scope(0);
-    assert!(scope.map_or(false, |s| s.symbols.contains("bar")));
+    assert!(scope.is_some_and(|s| s.symbols.contains("bar")));
 }
 
 #[test]
@@ -286,7 +286,7 @@ fn add_symbol_to_inner_scope() {
     let sym = make_symbol("local_var", "main::local_var", SymbolKind::scalar(), sid, 5, 15);
     table.add_symbol(sym);
     let scope = table.get_scope(sid);
-    assert!(scope.map_or(false, |s| s.symbols.contains("local_var")));
+    assert!(scope.is_some_and(|s| s.symbols.contains("local_var")));
 }
 
 #[test]
