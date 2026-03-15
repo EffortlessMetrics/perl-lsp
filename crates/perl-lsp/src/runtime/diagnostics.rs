@@ -85,6 +85,7 @@ impl LspServer {
                         message: violation.description,
                         related_information: Vec::new(),
                         tags: Vec::new(),
+                        suggestion: None,
                     });
                 }
 

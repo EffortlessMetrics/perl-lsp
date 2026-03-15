@@ -25,6 +25,7 @@ fn make_diag(start: usize, end: usize, code: &str, msg: &str) -> Diagnostic {
         message: msg.to_string(),
         related_information: Vec::new(),
         tags: Vec::new(),
+        suggestion: None,
     }
 }
 
@@ -495,6 +496,7 @@ fn diagnostic_without_code_produces_no_quick_fix() {
         message: "Something".to_string(),
         related_information: Vec::new(),
         tags: Vec::new(),
+        suggestion: None,
     }];
     let mut parser = Parser::new(src);
     let ast = must(parser.parse());

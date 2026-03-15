@@ -45,6 +45,7 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
             ],
             tags: Vec::new(),
+            suggestion: Some("Add 'use strict;' at the top of the file".to_string()),
         });
     }
 
@@ -65,6 +66,7 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
                 }
             ],
             tags: Vec::new(),
+            suggestion: Some("Add 'use warnings;' at the top of the file".to_string()),
         });
     }
 }

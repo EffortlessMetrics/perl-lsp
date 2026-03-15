@@ -214,13 +214,19 @@ impl PullDiagnosticsProvider {
             to_lsp_related_information(uri, text, &diagnostic.related_information);
         let tags = to_lsp_tags(&diagnostic.tags);
 
+        // Append the suggestion to the message when present so users see it inline
+        let message = match diagnostic.suggestion {
+            Some(ref suggestion) => format!("{}\nSuggestion: {}", diagnostic.message, suggestion),
+            None => diagnostic.message,
+        };
+
         LspDiagnostic {
             range,
             severity,
             code,
             code_description: None,
             source: Some("perl-lsp".to_string()),
-            message: diagnostic.message,
+            message,
             related_information,
             tags,
             data: None,

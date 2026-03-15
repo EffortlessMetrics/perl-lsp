@@ -560,6 +560,7 @@ mod tests {
             message: "Variable '$x' is undefined".to_string(),
             related_information: vec![],
             tags: vec![],
+            suggestion: None,
         };
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
@@ -580,6 +581,7 @@ mod tests {
             message: "Variable '$unused' is declared but never used".to_string(),
             related_information: vec![],
             tags: vec![],
+            suggestion: None,
         };
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
@@ -600,6 +602,7 @@ mod tests {
             message: "Missing semicolon".to_string(),
             related_information: vec![],
             tags: vec![],
+            suggestion: Some("Add a ';' at the end of the statement".to_string()),
         };
 
         let actions = provider.get_actions_for_diagnostic(&diagnostic);
