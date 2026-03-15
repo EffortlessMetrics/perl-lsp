@@ -893,6 +893,18 @@ health-detail:
     @echo "📁 Largest source files (by lines):"
     @find crates/*/src -name '*.rs' -exec wc -l {} \; 2>/dev/null | sort -nr | head -10 || echo "  None found"
 
+# Show ignored test counts (categorised summary with baseline delta)
+ignored-tests:
+    cargo run -p xtask -- ignored-tests
+
+# Show ignored test counts with per-test detail
+ignored-tests-verbose:
+    cargo run -p xtask -- ignored-tests --verbose
+
+# Update ignored test baseline after intentional changes
+ignored-tests-update:
+    cargo run -p xtask -- ignored-tests --update
+
 # ============================================================================
 # Milestone Verification
 # ============================================================================
