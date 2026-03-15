@@ -146,7 +146,24 @@ The user is an **observer** who checks in every few hours or daily.
 - When user checks in, lead summarizes: PRs merged, issues created, blockers, trends, patches pending.
 - If genuinely ambiguous, create an issue labeled `swarm-architectural` and move on.
 
-## 8. Handoff Efficiency
+## 8. Research (Don't Guess — Look It Up)
+
+When you need external facts — Perl syntax rules, LSP protocol details, crate APIs, CPAN module behavior — spawn a research agent instead of guessing or spending your own context on web searches:
+
+```
+Agent(prompt: "Research: <specific question>", run_in_background: true, name: "research-<topic>")
+Agent(prompt: "Look up docs: <API or protocol section>", run_in_background: true, name: "docs-<topic>")
+Agent(prompt: "Verify: <claim to cross-check>", run_in_background: true, name: "verify-<topic>")
+```
+
+Three research agents:
+- **research-web** — general web search → condensed answer with sources
+- **research-docs** — fetch upstream docs (docs.rs, perldoc, LSP/DAP spec)
+- **research-verify** — cross-check a specific claim against authoritative sources
+
+These run in background. You get a condensed answer without polluting your context with search results. Use them aggressively — verified facts are always better than assumptions.
+
+## 9. Handoff Efficiency
 
 Each stage reads the PREVIOUS stage's output, not the original source:
 - Builder reads handoff (not 10 source files)
@@ -159,12 +176,13 @@ Include in handoffs: code excerpts, error messages, decision rationale, file:lin
 
 The swarm writes to four persistence layers, each with different lifetimes:
 
-| Layer | Lifetime | What goes here |
-|-------|----------|---------------|
-| **Handoffs** (`.ops/handoffs/`) | Until merge | Context transfer: scout→builder→reviewer |
-| **Ops files** (known-pitfalls, completed-slices, metrics) | Current cycle | Failure patterns, dedup, performance data |
-| **GitHub** (issues, PRs, labels) | Permanent, visible | Work items, discoveries, architectural decisions |
-| **Claude Code memory** | Across sessions | Critical lessons that future sessions need |
+| Layer | Lifetime | Location | What |
+|-------|----------|----------|------|
+| **Handoffs** | Until merge | `.ops/handoffs/` | Context transfer: scout→builder→reviewer |
+| **Runtime** | Current session | `.ops/` | metrics, agent-patches, salvage |
+| **Knowledge** | Across sessions | `.claude/swarm-state/` | known-pitfalls, completed-slices, discovered-issues, queue |
+| **GitHub** | Permanent | Issues, PRs, labels | Work items, discoveries, architectural decisions |
+| **Memory** | Across sessions | Claude Code memories | Critical lessons future sessions need |
 
 ### When to write Claude Code memories
 

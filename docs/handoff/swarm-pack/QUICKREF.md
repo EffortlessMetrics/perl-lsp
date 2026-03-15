@@ -54,16 +54,33 @@
 | strategist | Priority alignment | scouts (steering) |
 | fixer | CI failures | merger |
 
-## Ops Files
+## State Files
+
+### Tracked (`.claude/swarm-state/` — committed, persists across sessions)
 
 | File | Purpose | Writers | Readers |
 |------|---------|---------|---------|
-| `.ops/handoffs/<branch>.md` | Context transfer | scout, builder, fixer | builder, reviewer, improvers |
-| `.claude/swarm-state/known-pitfalls.md` | Failure knowledge | fixer | scout, builder |
-| `.claude/swarm-state/completed-slices.md` | Dedup log | scout, merger | scout, improvers |
-| `.claude/swarm-state/discovered-issues.md` | Agent-flagged leads | all agents | scout |
-| `.ops/swarm-metrics.jsonl` | Performance data | all agents | strategist, merger |
-| `.ops/agent-patches/` | Self-improvement | fixer, any agent | bootstrapper |
+| `known-pitfalls.md` | Failure knowledge | fixer | scout, builder |
+| `completed-slices.md` | Dedup log | scout, merger | scout, improvers |
+| `discovered-issues.md` | Agent-flagged leads | all agents | scout |
+| `swarm-queue.json` | Overlap tracking | scout, lead | scout, lead |
+
+### Ephemeral (`.ops/` — gitignored, per-session runtime)
+
+| File | Purpose | Writers | Readers |
+|------|---------|---------|---------|
+| `handoffs/<branch>.md` | Context transfer | scout, builder, fixer | builder, reviewer, improvers |
+| `swarm-metrics.jsonl` | Performance data | all agents | strategist, merger |
+| `agent-patches/` | Self-improvement | fixer, any agent | bootstrapper |
+| `salvage/` | Emergency worktree dumps | janitor | user |
+
+## Research Agents (spawn from any agent)
+
+```
+Agent(prompt: "Research: <question>", run_in_background: true, name: "research-<topic>")
+Agent(prompt: "Look up docs: <API>", run_in_background: true, name: "docs-<topic>")
+Agent(prompt: "Verify: <claim>", run_in_background: true, name: "verify-<topic>")
+```
 
 ## GitHub Labels
 
