@@ -21,13 +21,9 @@ perl-parser-core = { workspace = true }
 lsp-types = { version = "0.97.0" }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-url = "2.5.8"
 perl-position-tracking = { workspace = true }
-perl-module-path = { workspace = true }
-perl-module-import = { workspace = true }
 perl-qualified-name = { workspace = true }
 perl-lsp-document-links = { workspace = true }
-perl-lsp-symbol-query = { workspace = true }
 perl-lsp-workspace-symbols = { workspace = true }
 
 [features]

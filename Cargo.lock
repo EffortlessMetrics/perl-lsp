@@ -1956,7 +1956,6 @@ dependencies = [
  "lsp-types",
  "perl-feature-catalog",
  "perl-lsp-capability-map",
- "perl-lsp-feature-ids",
  "perl-tdd-support",
  "serde",
  "serde_json",
@@ -2096,17 +2095,13 @@ version = "0.11.0"
 dependencies = [
  "lsp-types",
  "perl-lsp-document-links",
- "perl-lsp-symbol-query",
  "perl-lsp-workspace-symbols",
- "perl-module-import",
- "perl-module-path",
  "perl-parser-core",
  "perl-position-tracking",
  "perl-qualified-name",
  "perl-tdd-support",
  "serde",
  "serde_json",
- "url",
 ]
 
 [[package]]
@@ -2536,7 +2531,6 @@ dependencies = [
  "perl-workspace-index",
  "regex",
  "rustc-hash",
- "serde",
 ]
 
 [[package]]
