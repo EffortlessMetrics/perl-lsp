@@ -57,4 +57,20 @@ Agent(
 
 ## After wave completes
 
+### Batch mode (default)
 Run `/bulk-pr` to create PRs for all worktrees with changes.
+
+### Continuous mode (`--continuous`)
+Instead of bulk-PR after wave ends, feed finished builders directly into reviewers:
+1. As each builder finishes, launch a `swarm-reviewer` agent on its worktree
+2. Reviewer creates PR immediately if merge-ready
+3. Keep `/green-merge` running to drain merged PRs
+4. Keep launching new scouts via `/queue-scout` as capacity frees up
+5. Run `/status-drift` after every ~5 merges
+
+Related commands:
+- `/queue-scout` — launch scouts to find new slices
+- `/green-merge` — merge all passing PRs
+- `/rebase-open` — rebase conflicted PRs
+- `/status-drift` — fix computed metric drift
+- `/salvage-worktrees` — clean up finished worktrees
