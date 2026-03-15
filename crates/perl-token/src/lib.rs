@@ -368,6 +368,7 @@ impl TokenKind {
             TokenKind::Next => "'next'",
             TokenKind::Last => "'last'",
             TokenKind::Redo => "'redo'",
+            TokenKind::Goto => "'goto'",
             TokenKind::Class => "'class'",
             TokenKind::Method => "'method'",
             TokenKind::Format => "'format'",
