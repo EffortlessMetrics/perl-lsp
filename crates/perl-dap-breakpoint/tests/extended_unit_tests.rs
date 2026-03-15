@@ -29,8 +29,10 @@ fn validation_reason_all_variants_have_distinct_display() -> Result<(), Box<dyn 
         ValidationReason::BlankLine,
         ValidationReason::CommentLine,
         ValidationReason::HeredocInterior,
+        ValidationReason::PodLine,
         ValidationReason::LineOutOfRange,
         ValidationReason::ParseError,
+        ValidationReason::InvalidCondition,
     ];
 
     let strings: Vec<_> = reasons.iter().map(|r| r.to_string()).collect();
@@ -72,8 +74,10 @@ fn validation_rejected_all_reasons() -> Result<(), Box<dyn std::error::Error>> {
         ValidationReason::BlankLine,
         ValidationReason::CommentLine,
         ValidationReason::HeredocInterior,
+        ValidationReason::PodLine,
         ValidationReason::LineOutOfRange,
         ValidationReason::ParseError,
+        ValidationReason::InvalidCondition,
     ] {
         let v = BreakpointValidation::rejected(5, *reason);
         assert!(!v.verified);
@@ -98,8 +102,10 @@ fn validation_adjusted_all_reasons() -> Result<(), Box<dyn std::error::Error>> {
         ValidationReason::BlankLine,
         ValidationReason::CommentLine,
         ValidationReason::HeredocInterior,
+        ValidationReason::PodLine,
         ValidationReason::LineOutOfRange,
         ValidationReason::ParseError,
+        ValidationReason::InvalidCondition,
     ] {
         let v = BreakpointValidation::adjusted(7, *reason);
         assert!(v.verified);
