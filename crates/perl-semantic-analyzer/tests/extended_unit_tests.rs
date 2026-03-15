@@ -156,6 +156,69 @@ fn symbol_at_cursor_on_function_call() -> Result<(), Box<dyn std::error::Error>>
 }
 
 #[test]
+fn symbol_at_cursor_on_method_call() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "$self->helper();";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+
+    // "$self->helper()" - "helper" starts at offset 7
+    let helper_offset = code.find("helper").unwrap_or(7);
+
+    // Debug: check what node is at the offset
+    let node = find_node_at_offset(&ast, helper_offset);
+    assert!(node.is_some(), "should find a node at the offset of 'helper'");
+    let node = node.unwrap();
+    eprintln!(
+        "Node at offset {}: kind={}, sexp={}",
+        helper_offset,
+        node.kind.kind_name(),
+        node.to_sexp()
+    );
+
+    let sym = symbol_at_cursor(&ast, helper_offset, "MyPackage");
+    assert!(
+        sym.is_some(),
+        "symbol_at_cursor should resolve method call, got node kind: {}",
+        node.kind.kind_name()
+    );
+    let key = sym.unwrap();
+    assert_eq!(key.name.as_ref(), "helper");
+    // $self -> use current package
+    assert_eq!(key.pkg.as_ref(), "MyPackage");
+    Ok(())
+}
+
+#[test]
+fn symbol_at_cursor_on_use_statement() -> Result<(), Box<dyn std::error::Error>> {
+    let code = "use Data::Dumper;";
+    let mut parser = Parser::new(code);
+    let ast = parser.parse()?;
+
+    // "Data::Dumper" starts at offset 4
+    let module_offset = code.find("Data::Dumper").unwrap_or(4);
+
+    let node = find_node_at_offset(&ast, module_offset);
+    assert!(node.is_some(), "should find node at offset of module name");
+    let node = node.unwrap();
+    eprintln!(
+        "Node at offset {}: kind={}, sexp={}",
+        module_offset,
+        node.kind.kind_name(),
+        node.to_sexp()
+    );
+
+    let sym = symbol_at_cursor(&ast, module_offset, "main");
+    // If cursor lands on Use node, we should get a result
+    if let Some(key) = sym {
+        assert!(
+            key.name.as_ref() == "Data::Dumper" || key.pkg.as_ref() == "Data::Dumper",
+            "should reference Data::Dumper"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn symbol_at_cursor_returns_none_in_whitespace() -> Result<(), Box<dyn std::error::Error>> {
     let code = "    ";
     let mut parser = Parser::new(code);

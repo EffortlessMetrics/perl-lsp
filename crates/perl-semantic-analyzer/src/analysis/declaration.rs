@@ -1071,6 +1071,36 @@ pub fn symbol_at_cursor(ast: &Node, offset: usize, current_pkg: &str) -> Option<
             };
             Some(SymbolKey { pkg: pkg.into(), name: bare.into(), sigil: None, kind: SymKind::Sub })
         }
+        NodeKind::MethodCall { object, method, .. } => {
+            // Resolve the package for the method call:
+            // - If object is an Identifier (e.g., Package->method), use it as the package
+            // - If object is a Variable named "self"/"this", use current_pkg
+            // - Otherwise, use current_pkg as best-effort fallback
+            let pkg = match &object.kind {
+                NodeKind::Identifier { name } => name.as_str(),
+                NodeKind::Variable { name, .. }
+                    if name == "self" || name == "this" || name == "class" =>
+                {
+                    current_pkg
+                }
+                _ => current_pkg,
+            };
+            Some(SymbolKey {
+                pkg: pkg.into(),
+                name: method.clone().into(),
+                sigil: None,
+                kind: SymKind::Sub,
+            })
+        }
+        NodeKind::Use { module, .. } => {
+            // When cursor is on a `use Module::Name` statement, resolve to the package
+            Some(SymbolKey {
+                pkg: module.clone().into(),
+                name: module.clone().into(),
+                sigil: None,
+                kind: SymKind::Pack,
+            })
+        }
         _ => None,
     }
 }
@@ -1208,22 +1238,7 @@ pub fn find_node_at_offset(node: &Node, offset: usize) -> Option<&Node> {
 /// println!("Node has {} children", children.len());
 /// ```
 pub fn get_node_children(node: &Node) -> Vec<&Node> {
-    match &node.kind {
-        NodeKind::Program { statements } => statements.iter().collect(),
-        NodeKind::VariableDeclaration { variable, initializer, .. } => {
-            let mut children = vec![variable.as_ref()];
-            if let Some(init) = initializer {
-                children.push(init.as_ref());
-            }
-            children
-        }
-        NodeKind::Assignment { lhs, rhs, .. } => vec![lhs.as_ref(), rhs.as_ref()],
-        NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
-        NodeKind::FunctionCall { args, .. } => args.iter().collect(),
-        NodeKind::Subroutine { body, .. } => {
-            vec![body.as_ref()]
-        }
-        NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
-        _ => vec![],
-    }
+    // Delegate to the AST node's own comprehensive children() method,
+    // which handles all node kinds including Block, Package, MethodCall, etc.
+    node.children()
 }

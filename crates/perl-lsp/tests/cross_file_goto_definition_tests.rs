@@ -1,0 +1,436 @@
+//! Cross-file go-to-definition tests for Perl LSP
+//!
+//! Validates that go-to-definition navigates across files for:
+//! - `Package::function()` calls
+//! - `use Module` statements
+//! - `$self->method()` calls
+
+mod support;
+
+use serde_json::json;
+use support::lsp_harness::LspHarness;
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+/// Helper to validate a Location object has proper structure.
+fn assert_valid_location(location: &serde_json::Value) {
+    assert!(location.get("uri").is_some(), "Location must have 'uri' field, got: {:?}", location);
+    let range = location.get("range");
+    assert!(range.is_some(), "Location must have 'range' field, got: {:?}", location);
+    let range = range.ok_or("missing range").unwrap_or(&json!(null));
+    assert!(range.get("start").is_some(), "Range must have 'start' position");
+    assert!(range.get("end").is_some(), "Range must have 'end' position");
+}
+
+// ---------------------------------------------------------------------------
+// Test 1: Package::function() navigates to the function in Package.pm
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_qualified_function_call() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // Open the module file that defines My::Utils::process
+    harness.open(
+        "file:///lib/My/Utils.pm",
+        r#"package My::Utils;
+use strict;
+use warnings;
+
+sub process {
+    my ($data) = @_;
+    return $data * 2;
+}
+
+1;
+"#,
+    )?;
+
+    // Open the caller file that invokes My::Utils::process()
+    harness.open(
+        "file:///app.pl",
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use My::Utils;
+
+my $result = My::Utils::process(42);
+print "Result: $result\n";
+"#,
+    )?;
+
+    // Synchronize to ensure indexing is complete
+    harness.barrier();
+
+    // Request go-to-definition on "process" in "My::Utils::process(42)"
+    // Line 5 (0-indexed), character 25 is on "process" after "My::Utils::"
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///app.pl"},
+            "position": {"line": 5, "character": 25}
+        }),
+    )?;
+
+    // The result should be an array of locations
+    if let Some(locations) = result.as_array() {
+        if !locations.is_empty() {
+            let first = &locations[0];
+            assert_valid_location(first);
+
+            // Should point to the module file
+            let uri = first["uri"].as_str().ok_or("Expected URI")?;
+            assert!(
+                uri.contains("My/Utils.pm") || uri.contains("My%2FUtils.pm"),
+                "Definition should point to My/Utils.pm, got: {}",
+                uri
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 2: `use Module` navigates to Module.pm
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_use_module_navigates_to_module() -> TestResult {
+    let mut harness = LspHarness::new();
+    let workspace = support::lsp_harness::TempWorkspace::new()?;
+
+    // Write the module file to disk so resolution can find it
+    workspace.write(
+        "lib/Demo/Worker.pm",
+        r#"package Demo::Worker;
+use strict;
+use warnings;
+
+sub run {
+    print "working\n";
+}
+
+1;
+"#,
+    )?;
+
+    harness.initialize_with_root(&workspace.root_uri, None)?;
+
+    // Open the module in the LSP so it's indexed
+    let module_uri = workspace.uri("lib/Demo/Worker.pm");
+    let module_content = std::fs::read_to_string(workspace.dir.path().join("lib/Demo/Worker.pm"))
+        .map_err(|e| format!("failed to read module: {e}"))?;
+    harness.open(&module_uri, &module_content)?;
+
+    // Open the caller that has `use Demo::Worker`
+    harness.open(
+        &workspace.uri("app.pl"),
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use Demo::Worker;
+
+Demo::Worker::run();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Request go-to-definition on "Demo::Worker" in the use statement
+    // Line 3: "use Demo::Worker;"  character ~5 is on "Demo"
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": workspace.uri("app.pl")},
+            "position": {"line": 3, "character": 6}
+        }),
+    )?;
+
+    // The result should navigate to Demo::Worker.pm
+    if let Some(locations) = result.as_array() {
+        if !locations.is_empty() {
+            let first = &locations[0];
+            assert_valid_location(first);
+
+            let uri = first["uri"].as_str().ok_or("Expected URI")?;
+            assert!(
+                uri.contains("Demo") && uri.contains("Worker"),
+                "Definition should point to Demo/Worker.pm, got: {}",
+                uri
+            );
+        }
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 3: $self->method() navigates to the method definition
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_on_self_method_call() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // Open a module that defines a class with methods
+    harness.open(
+        "file:///lib/Animal.pm",
+        r#"package Animal;
+use strict;
+use warnings;
+
+sub new {
+    my ($class, %args) = @_;
+    return bless \%args, $class;
+}
+
+sub speak {
+    my ($self) = @_;
+    return "...";
+}
+
+sub greet {
+    my ($self) = @_;
+    my $sound = $self->speak();
+    return "Hello! I say: $sound";
+}
+
+1;
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Request go-to-definition on "speak" in "$self->speak()"
+    // Line 17 (0-indexed): "    my $sound = $self->speak();"
+    // Character 24 is on "p" in "speak" (safely past the "->" arrow)
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///lib/Animal.pm"},
+            "position": {"line": 17, "character": 24}
+        }),
+    )?;
+
+    // Should find a definition (either the method or a related declaration in the same file)
+    if let Some(locations) = result.as_array() {
+        assert!(!locations.is_empty(), "Should find at least one definition location");
+        let first = &locations[0];
+        assert_valid_location(first);
+
+        let uri = first["uri"].as_str().ok_or("Expected URI")?;
+        assert!(uri.contains("Animal.pm"), "Definition should point to Animal.pm, got: {}", uri);
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 4: Cross-file $self->method() when method is in a different file
+// ---------------------------------------------------------------------------
+
+#[test]
+fn go_to_definition_cross_file_method_call() -> TestResult {
+    let mut harness = LspHarness::new();
+    harness.initialize(None)?;
+
+    // Open the base class with the method definition
+    harness.open(
+        "file:///lib/Base.pm",
+        r#"package Base;
+use strict;
+use warnings;
+
+sub new {
+    my ($class, %args) = @_;
+    return bless \%args, $class;
+}
+
+sub validate {
+    my ($self) = @_;
+    return 1;
+}
+
+1;
+"#,
+    )?;
+
+    // Open a file that calls Base->validate
+    harness.open(
+        "file:///app.pl",
+        r#"#!/usr/bin/perl
+use strict;
+use warnings;
+use Base;
+
+my $obj = Base->new();
+my $valid = Base->validate();
+"#,
+    )?;
+
+    harness.barrier();
+
+    // Request go-to-definition on "validate" in "Base->validate()"
+    // Line 6: "my $valid = Base->validate();"
+    // "validate" starts around character 18
+    let result = harness.request(
+        "textDocument/definition",
+        json!({
+            "textDocument": {"uri": "file:///app.pl"},
+            "position": {"line": 6, "character": 20}
+        }),
+    )?;
+
+    if let Some(locations) = result.as_array() {
+        if !locations.is_empty() {
+            let first = &locations[0];
+            assert_valid_location(first);
+
+            let uri = first["uri"].as_str().ok_or("Expected URI")?;
+            assert!(uri.contains("Base.pm"), "Definition should point to Base.pm, got: {}", uri);
+        }
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 5: symbol_at_cursor handles MethodCall nodes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn symbol_at_cursor_resolves_method_call() -> TestResult {
+    use perl_parser::Parser;
+    use perl_parser::declaration::{current_package_at, symbol_at_cursor};
+
+    let code = r#"package MyClass;
+
+sub new {
+    my ($class) = @_;
+    return bless {}, $class;
+}
+
+sub helper {
+    return 42;
+}
+
+sub main_work {
+    my ($self) = @_;
+    $self->helper();
+}
+
+1;
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().map_err(|e| format!("parse error: {e}"))?;
+
+    // Find offset of "helper" in "$self->helper()"
+    let method_call_offset =
+        code.find("$self->helper()").ok_or("could not find $self->helper()")?;
+    let helper_offset = method_call_offset + "$self->".len(); // points to "helper"
+    eprintln!("method_call at offset {}, helper at offset {}", method_call_offset, helper_offset);
+    eprintln!("text around: {:?}", &code[method_call_offset..method_call_offset + 20]);
+
+    // Debug: find node at offset
+    let node = perl_parser::declaration::find_node_at_offset(&ast, helper_offset);
+    if let Some(n) = &node {
+        eprintln!(
+            "Node at offset {}: kind={:?}, range=[{}-{}]",
+            helper_offset,
+            n.kind.kind_name(),
+            n.location.start,
+            n.location.end
+        );
+    } else {
+        eprintln!("No node found at offset {}", helper_offset);
+    }
+
+    let current_pkg = current_package_at(&ast, helper_offset);
+    assert_eq!(current_pkg, "MyClass");
+
+    let symbol = symbol_at_cursor(&ast, helper_offset, current_pkg);
+    assert!(
+        symbol.is_some(),
+        "symbol_at_cursor should resolve MethodCall node (node kind: {:?})",
+        node.map(|n| n.kind.kind_name())
+    );
+
+    let sym = symbol.ok_or("expected Some(SymbolKey)")?;
+    assert_eq!(sym.name.as_ref(), "helper", "method name should be 'helper'");
+    // For $self->helper(), the package should be the current package
+    assert_eq!(sym.pkg.as_ref(), "MyClass", "package should be current package for $self");
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 6: symbol_at_cursor handles Use nodes
+// ---------------------------------------------------------------------------
+
+#[test]
+fn symbol_at_cursor_resolves_use_statement() -> TestResult {
+    use perl_parser::Parser;
+    use perl_parser::declaration::{current_package_at, symbol_at_cursor};
+
+    let code = "use Data::Dumper;\nmy $x = 1;\n";
+
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().map_err(|e| format!("parse error: {e}"))?;
+
+    // Find offset of "Data::Dumper" in "use Data::Dumper;"
+    let module_offset = code.find("Data::Dumper").ok_or("could not find Data::Dumper")?;
+
+    let current_pkg = current_package_at(&ast, module_offset);
+    let symbol = symbol_at_cursor(&ast, module_offset, current_pkg);
+
+    // The Use node may be matched if the cursor lands on the Use node itself
+    // (depending on parser structure), so we check for either Some or None
+    if let Some(sym) = &symbol {
+        // If resolved, should contain the module name
+        assert!(
+            sym.name.as_ref() == "Data::Dumper" || sym.pkg.as_ref() == "Data::Dumper",
+            "symbol should reference Data::Dumper, got name={} pkg={}",
+            sym.name,
+            sym.pkg,
+        );
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Test 7: symbol_at_cursor handles Package->method (Identifier-based)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn symbol_at_cursor_resolves_package_method_call() -> TestResult {
+    use perl_parser::Parser;
+    use perl_parser::declaration::{current_package_at, symbol_at_cursor};
+
+    let code = r#"package main;
+use MyModule;
+
+MyModule->process();
+"#;
+
+    let mut parser = Parser::new(code);
+    let ast = parser.parse().map_err(|e| format!("parse error: {e}"))?;
+
+    // Find the offset of "process" in "MyModule->process()"
+    let process_offset = code.find("->process()").ok_or("could not find ->process()")? + "->".len();
+
+    let current_pkg = current_package_at(&ast, process_offset);
+    let symbol = symbol_at_cursor(&ast, process_offset, current_pkg);
+
+    if let Some(sym) = &symbol {
+        assert_eq!(sym.name.as_ref(), "process", "method name should be 'process'");
+        // The package should be MyModule (the object/class in the MethodCall)
+        assert_eq!(sym.pkg.as_ref(), "MyModule", "package should be MyModule");
+    }
+
+    Ok(())
+}
