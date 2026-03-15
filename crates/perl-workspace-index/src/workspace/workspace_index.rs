@@ -2321,6 +2321,11 @@ impl WorkspaceIndex {
             // It's a variable
             let var_name = format!("{}{}", sigil, key.name);
             self.find_definition(&var_name)
+        } else if key.kind == SymKind::Pack {
+            // It's a package lookup (e.g., from `use Module::Name`)
+            // Search for the package declaration by name
+            self.find_definition(key.pkg.as_ref())
+                .or_else(|| self.find_definition(key.name.as_ref()))
         } else {
             // It's a subroutine or package
             let qualified_name = format!("{}::{}", key.pkg, key.name);

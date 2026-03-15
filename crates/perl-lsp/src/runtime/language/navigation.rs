@@ -24,6 +24,9 @@ static ARROW_METHOD_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock:
 static PACKAGE_ARROW_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
 
 #[cfg(feature = "workspace")]
+static VAR_METHOD_RE: OnceLock<Result<regex::Regex, regex::Error>> = OnceLock::new();
+
+#[cfg(feature = "workspace")]
 fn get_fqn_regex() -> Result<&'static regex::Regex, JsonRpcError> {
     FQN_RE
         .get_or_init(|| regex::Regex::new(r"([A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*)"))
@@ -61,6 +64,23 @@ fn get_package_arrow_regex() -> Result<&'static regex::Regex, JsonRpcError> {
         .map_err(|err| {
             crate::protocol::internal_error(&format!(
                 "Failed to initialize package navigation regex: {err}"
+            ))
+        })
+}
+
+/// Get regex for matching `$var->method` patterns (variable-based method calls).
+///
+/// Captures: group 1 = variable name (without sigil), group 2 = method name.
+#[cfg(feature = "workspace")]
+fn get_var_method_regex() -> Result<&'static regex::Regex, JsonRpcError> {
+    VAR_METHOD_RE
+        .get_or_init(|| {
+            regex::Regex::new(r"\$([A-Za-z_][A-Za-z0-9_]*)\s*->\s*([A-Za-z_][A-Za-z0-9_]*)")
+        })
+        .as_ref()
+        .map_err(|err| {
+            crate::protocol::internal_error(&format!(
+                "Failed to initialize variable method-call regex: {err}"
             ))
         })
 }
@@ -362,6 +382,42 @@ impl LspServer {
                                     return Ok(Some(result));
                                 }
                                 // Partial/None: fall through to same-file resolution
+                                break;
+                            }
+                        }
+                    }
+
+                    // Attempt to resolve $var->method() calls (e.g., $self->method())
+                    // For $self/$this/$class, resolve using the current package context
+                    let var_method_re = get_var_method_regex()?;
+                    for cap in var_method_re.captures_iter(&text_around) {
+                        if let (Some(var_match), Some(method_match)) = (cap.get(1), cap.get(2)) {
+                            if cursor_in_text >= method_match.start()
+                                && cursor_in_text <= method_match.end()
+                            {
+                                let var_name = var_match.as_str();
+                                let method_name = method_match.as_str();
+
+                                // For $self/$this/$class, resolve using current package
+                                if var_name == "self" || var_name == "this" || var_name == "class" {
+                                    if let Some(ref ast) = doc.ast {
+                                        let byte_offset =
+                                            self.pos16_to_offset(doc, line, character);
+                                        let current_package =
+                                            crate::declaration::current_package_at(
+                                                ast,
+                                                byte_offset,
+                                            );
+                                        if let Some(result) = lookup_workspace_definition(
+                                            self.coordinator(),
+                                            current_package,
+                                            method_name,
+                                        ) {
+                                            return Ok(Some(result));
+                                        }
+                                    }
+                                }
+                                // Fall through for non-self variables
                                 break;
                             }
                         }
