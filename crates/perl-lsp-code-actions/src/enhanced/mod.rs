@@ -186,6 +186,12 @@ impl EnhancedCodeActionsProvider {
                 self.collect_actions_for_range(condition, range, actions);
                 self.collect_actions_for_range(body, range, actions);
             }
+            NodeKind::MethodCall { object, args, .. } => {
+                self.collect_actions_for_range(object, range, actions);
+                for arg in args {
+                    self.collect_actions_for_range(arg, range, actions);
+                }
+            }
             NodeKind::Subroutine { body, prototype, signature, .. } => {
                 self.collect_actions_for_range(body, range, actions);
                 if let Some(proto) = prototype {
@@ -346,5 +352,140 @@ mod tests {
         let actions = provider.get_enhanced_refactoring_actions(&ast, (0, source.len()));
 
         assert!(actions.iter().any(|a| a.title.contains("postfix")));
+    }
+}
+
+#[cfg(test)]
+mod extract_variable_tests {
+    use super::*;
+    use perl_parser_core::Parser;
+    use perl_tdd_support::must;
+
+    #[test]
+    fn test_extract_hash_access_to_variable() {
+        // Use assignment so hash access is in the RHS, not a print argument
+        let source = "my $x = $hash{$key};";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        // Select the range covering $hash{$key} (bytes 8..19)
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 19));
+
+        let extract_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("Extract")).collect();
+
+        assert!(
+            !extract_actions.is_empty(),
+            "Expected an Extract action for hash access, got: {:?}",
+            actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+        );
+
+        // Verify the action produces a declaration with `my $val`
+        let action = &extract_actions[0];
+        let decl_edit = &action.edit.changes[0];
+        assert!(
+            decl_edit.new_text.contains("my $val"),
+            "Expected variable name '$val' for hash access, got: {}",
+            decl_edit.new_text
+        );
+    }
+
+    #[test]
+    fn test_extract_method_call_to_variable() {
+        let source = "print $obj->method();";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        // Select the range covering $obj->method()
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (6, 20));
+
+        let extract_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("Extract")).collect();
+
+        assert!(
+            !extract_actions.is_empty(),
+            "Expected an Extract action for method call, got: {:?}",
+            actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+        );
+
+        // Verify the action produces a declaration with `my $result`
+        let action = &extract_actions[0];
+        let decl_edit = &action.edit.changes[0];
+        assert!(
+            decl_edit.new_text.contains("my $result"),
+            "Expected variable name '$result' for method call, got: {}",
+            decl_edit.new_text
+        );
+
+        // Verify the replacement edit uses $result
+        let replace_edit = &action.edit.changes[1];
+        assert!(
+            replace_edit.new_text.contains("$result"),
+            "Expected replacement with '$result', got: {}",
+            replace_edit.new_text
+        );
+    }
+
+    #[test]
+    fn test_extract_method_call_new_suggests_instance() {
+        let source = "my $x = Foo->new();";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 18));
+
+        let extract_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("Extract")).collect();
+
+        assert!(
+            !extract_actions.is_empty(),
+            "Expected an Extract action for constructor call, got: {:?}",
+            actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+        );
+
+        // Constructor call ->new() should suggest $instance
+        let action = &extract_actions[0];
+        let decl_edit = &action.edit.changes[0];
+        assert!(
+            decl_edit.new_text.contains("my $instance"),
+            "Expected variable name '$instance' for ->new(), got: {}",
+            decl_edit.new_text
+        );
+    }
+
+    #[test]
+    fn test_extract_variable_edit_structure() {
+        let source = "my $x = $obj->get();";
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+
+        let provider = EnhancedCodeActionsProvider::new(source.to_string());
+        let actions = provider.get_enhanced_refactoring_actions(&ast, (8, 19));
+
+        let extract_actions: Vec<_> =
+            actions.iter().filter(|a| a.title.contains("Extract")).collect();
+
+        assert!(!extract_actions.is_empty(), "Expected at least one extract action");
+
+        let action = &extract_actions[0];
+        assert_eq!(action.edit.changes.len(), 2, "Expected exactly 2 edits (insert + replace)");
+
+        // First edit: insertion of variable declaration
+        let insert_edit = &action.edit.changes[0];
+        assert!(
+            insert_edit.new_text.starts_with("my $"),
+            "First edit should be a variable declaration"
+        );
+        assert!(insert_edit.new_text.ends_with(";\n"), "Declaration should end with semicolon");
+
+        // Second edit: replacement of expression with variable reference
+        let replace_edit = &action.edit.changes[1];
+        assert!(
+            replace_edit.new_text.starts_with('$'),
+            "Second edit should be a variable reference"
+        );
     }
 }

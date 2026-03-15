@@ -54,11 +54,28 @@ pub fn suggest_variable_name(node: &Node) -> String {
                 _ => "result",
             }
         }
+        NodeKind::MethodCall { method, .. } => {
+            let method_name = method.as_str();
+            match method_name {
+                "new" => "instance",
+                "clone" | "copy" => "copy",
+                "get" | "fetch" => "value",
+                "find" | "search" | "lookup" => "found",
+                "count" | "size" | "length" => "count",
+                "name" | "get_name" => "name",
+                "type" | "get_type" => "type_name",
+                "to_string" | "stringify" | "as_string" => "str",
+                "is_valid" | "validate" | "check" => "is_valid",
+                _ => "result",
+            }
+        }
         NodeKind::Binary { op, .. } => match op.as_str() {
             "+" | "-" | "*" | "/" | "%" => "result",
             "." | "x" => "str",
             "&&" | "||" | "and" | "or" => "condition",
             "==" | "!=" | "<" | ">" | "<=" | ">=" => "is_valid",
+            "{}" => "val",
+            "[]" => "elem",
             _ => "value",
         },
         _ => "extracted",
