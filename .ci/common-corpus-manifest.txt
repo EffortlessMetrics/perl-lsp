@@ -17,8 +17,8 @@ Config
 File::Spec
 MIME::Base64
 I18N::Langinfo
-PerlIO
-PerlIO::via
+# PerlIO - temporarily removed: =~ inside eval block regression (see Wave 2 parser fixes)
+# PerlIO::via - temporarily removed: XSLoader call parsing issue
 Encode::Encoding
 Tie::Scalar
 #
