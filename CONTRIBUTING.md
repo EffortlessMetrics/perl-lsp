@@ -361,16 +361,26 @@ sudo apt-get install libclang-dev
 cargo build -p tree-sitter-perl --features bindings,c-parser
 ```
 
-### Testing
+### Key Paths
 
-
-- **`crates/perl-parser/`** - Core parser implementation and LSP providers
-- **`crates/perl-lsp/`** - LSP server binary and CLI
-- **`crates/perl-dap/`** - Debug Adapter Protocol implementation
-- **`crates/perl-lexer/`** - Tokenization and lexical analysis
-- **`crates/perl-corpus/`** - Test corpus and property-based testing
-- **`xtask/`** - Advanced testing and development tools
-- **`docs/`** - Comprehensive project documentation
+| What | Where |
+|------|-------|
+| Parser source | `crates/perl-parser/src/` |
+| LSP providers | `crates/perl-lsp-*/src/` |
+| LSP server binary | `crates/perl-lsp/src/` |
+| DAP server | `crates/perl-dap/src/` |
+| Lexer / tokenizer | `crates/perl-lexer/src/` |
+| Test corpus | `test_corpus/`, `tree-sitter-perl/test/corpus/` |
+| Tests | `crates/*/tests/` |
+| Fuzz targets | `fuzz/fuzz_targets/` |
+| VSCode extension | `vscode-extension/` |
+| Documentation | `docs/` |
+| Features catalog | `features.toml` |
+| CI gate policy | `.ci/gate-policy.yaml` |
+| Technical debt ledger | `.ci/debt-ledger.yaml` |
+| CPAN corpus manifest | `.ci/common-corpus-manifest.txt` |
+| Corpus baseline | `.ci/parser-corpus-baseline.json` |
+| Build tooling | `xtask/` |
 
 ### SemVer Compliance
 
