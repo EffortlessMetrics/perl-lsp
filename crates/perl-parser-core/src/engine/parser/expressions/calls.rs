@@ -128,6 +128,15 @@ impl<'a> Parser<'a> {
                         if matches!(third.kind, TokenKind::Comma | TokenKind::FatArrow) {
                             return false;
                         }
+                        // A closing brace/paren/bracket means the call is the
+                        // last expression inside a block or parenthesised list,
+                        // e.g. `grep { defined $v }` — not an indirect call.
+                        if matches!(
+                            third.kind,
+                            TokenKind::RightBrace | TokenKind::RightParen | TokenKind::RightBracket
+                        ) {
+                            return false;
+                        }
                         return true;
                     }
                     return true;
