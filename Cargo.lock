@@ -1592,7 +1592,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1874,7 +1873,6 @@ dependencies = [
  "perl-lsp-rename",
  "perl-lsp-text-utils",
  "perl-parser-core",
- "perl-source-editing",
  "perl-tdd-support",
 ]
 
@@ -1882,7 +1880,6 @@ dependencies = [
 name = "perl-lsp-completion"
 version = "0.11.0"
 dependencies = [
- "lsp-types",
  "perl-keywords",
  "perl-lsp-completion-item",
  "perl-parser-core",
@@ -2192,12 +2189,10 @@ version = "0.11.0"
 dependencies = [
  "criterion",
  "lsp-types",
- "moka",
  "perl-lsp-critic-parser",
  "perl-lsp-performance",
  "perl-parser-core",
  "perl-subprocess-runtime",
- "perl-symbol-index",
  "perl-tdd-support",
  "serde",
  "serde_json",
@@ -2427,17 +2422,12 @@ dependencies = [
 name = "perl-parser-pest"
 version = "0.11.0"
 dependencies = [
- "lazy_static",
- "once_cell",
  "perl-tdd-support",
  "pest",
  "pest_derive",
- "postcard",
- "regex",
  "serde",
  "stacker",
  "thiserror",
- "unicode-ident",
 ]
 
 [[package]]
@@ -2619,13 +2609,10 @@ version = "0.11.0"
 dependencies = [
  "perl-parser-pest",
  "perl-tdd-support",
- "perl-ts-heredoc-analysis",
  "perl-ts-heredoc-parser",
- "perl-ts-partial-ast",
  "pest",
  "regex",
  "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -3912,10 +3899,8 @@ dependencies = [
  "chumsky",
  "clap",
  "criterion",
- "encoding_rs",
  "lazy_static",
  "logos",
- "once_cell",
  "perl-lexer",
  "perl-parser",
  "perl-parser-pest",

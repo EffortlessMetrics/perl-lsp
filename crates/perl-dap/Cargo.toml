@@ -36,7 +36,6 @@ serde_json = "1.0.149"
 
 # Error handling
 anyhow = "1.0.102"
-thiserror = "2.0.18"
 
 # Regex for parsing debugger output
 regex = "1.12.2"

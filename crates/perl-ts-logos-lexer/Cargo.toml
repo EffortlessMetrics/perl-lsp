@@ -13,6 +13,9 @@ documentation = "https://docs.rs/perl-ts-logos-lexer"
 keywords = ["perl", "lexer", "logos", "tokenizer", "parser"]
 categories = ["parsing", "text-processing", "development-tools"]
 
+[package.metadata.cargo-machete]
+ignored = ["regex"]  # Used by logos #[regex(...)] proc-macro attributes
+
 [dependencies]
 logos = "0.16.0"
 regex = "1.12.2"
