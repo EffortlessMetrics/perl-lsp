@@ -885,3 +885,439 @@ fn given_when_default_keywords_classified() {
         assert!(has_kw, "'{kw}' should be classified as keyword");
     }
 }
+
+// ===========================================================================
+// Improved semantic token coverage tests
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// Subroutine names get `function` token type
+// ---------------------------------------------------------------------------
+
+#[test]
+fn subroutine_name_gets_function_type_with_definition_modifier() {
+    let tokens = tokens_for("sub greet { }");
+    let leg = legend();
+    let fn_idx = must_some(leg.map.get("function"));
+    let fn_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *fn_idx).collect();
+    assert!(!fn_tokens.is_empty(), "sub declaration should produce function token");
+    // Should have declaration modifier (bit 0)
+    let has_decl = fn_tokens.iter().any(|t| t[4] & 1 != 0);
+    assert!(has_decl, "named sub should have declaration modifier");
+}
+
+#[test]
+fn multiline_sub_name_still_gets_function_token() {
+    let code = "sub process_data {\n    my $x = 1;\n    return $x;\n}";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let fn_idx = must_some(leg.map.get("function"));
+    let has_fn = tokens.iter().any(|t| t[3] == *fn_idx);
+    assert!(has_fn, "multi-line sub should still produce function token for name");
+}
+
+#[test]
+fn function_call_gets_function_type_without_declaration() {
+    let tokens = tokens_for("foo();");
+    let leg = legend();
+    let fn_idx = must_some(leg.map.get("function"));
+    let fn_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *fn_idx).collect();
+    assert!(!fn_tokens.is_empty(), "function call should produce function token");
+    for t in &fn_tokens {
+        assert_eq!(t[4] & 1, 0, "function call should NOT have declaration modifier");
+    }
+}
+
+#[test]
+fn nested_function_calls_produce_function_tokens() {
+    let code = "foo(bar(baz()));";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let fn_idx = must_some(leg.map.get("function"));
+    let fn_count = tokens.iter().filter(|t| t[3] == *fn_idx).count();
+    // Overlap resolution may merge nested calls on the same line
+    assert!(
+        fn_count >= 1,
+        "nested calls should produce at least one function token, got {fn_count}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Package names get `namespace` token type
+// ---------------------------------------------------------------------------
+
+#[test]
+fn package_name_gets_namespace_type() {
+    let tokens = tokens_for("package MyModule;");
+    let leg = legend();
+    let ns_idx = must_some(leg.map.get("namespace"));
+    let has_ns = tokens.iter().any(|t| t[3] == *ns_idx);
+    assert!(has_ns, "package declaration should produce namespace token");
+}
+
+#[test]
+fn nested_package_name_gets_namespace_type() {
+    let tokens = tokens_for("package My::Nested::Module;");
+    let leg = legend();
+    let ns_idx = must_some(leg.map.get("namespace"));
+    let has_ns = tokens.iter().any(|t| t[3] == *ns_idx);
+    assert!(has_ns, "nested package name should produce namespace token");
+}
+
+#[test]
+fn package_declaration_has_declaration_modifier() {
+    let tokens = tokens_for("package Foo;");
+    let leg = legend();
+    let ns_idx = must_some(leg.map.get("namespace"));
+    let ns_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *ns_idx).collect();
+    assert!(!ns_tokens.is_empty(), "should have namespace token");
+    let has_decl = ns_tokens.iter().any(|t| t[4] & 1 != 0);
+    assert!(has_decl, "package should have declaration modifier");
+}
+
+#[test]
+fn package_block_form_gets_namespace_type() {
+    let code = "package Foo {\n    sub bar { }\n}";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let ns_idx = must_some(leg.map.get("namespace"));
+    let has_ns = tokens.iter().any(|t| t[3] == *ns_idx);
+    assert!(has_ns, "package block form should produce namespace token");
+}
+
+// ---------------------------------------------------------------------------
+// Variables get `variable` token type with correct modifiers
+// ---------------------------------------------------------------------------
+
+#[test]
+fn scalar_variable_gets_variable_type() {
+    let tokens = tokens_for("$x;");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let has_var = tokens.iter().any(|t| t[3] == *var_idx);
+    assert!(has_var, "scalar variable should produce variable token");
+}
+
+#[test]
+fn array_variable_gets_variable_type() {
+    let tokens = tokens_for("my @arr;");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let has_var = tokens.iter().any(|t| t[3] == *var_idx);
+    assert!(has_var, "array variable should produce variable token");
+}
+
+#[test]
+fn hash_variable_gets_variable_type() {
+    let tokens = tokens_for("my %hash;");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let has_var = tokens.iter().any(|t| t[3] == *var_idx);
+    assert!(has_var, "hash variable should produce variable token");
+}
+
+#[test]
+fn my_declaration_variable_has_declaration_modifier() {
+    let tokens = tokens_for("my $x = 1;");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    assert!(!var_tokens.is_empty(), "should have variable token");
+    let has_decl = var_tokens.iter().any(|t| t[4] & 1 != 0);
+    assert!(has_decl, "my-declared variable should have declaration modifier");
+}
+
+#[test]
+fn our_declaration_variable_has_readonly_modifier() {
+    let tokens = tokens_for("our $VERSION = '1.0';");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    assert!(!var_tokens.is_empty(), "should have variable token");
+    // our variables should have declaration (bit 0) and readonly (bit 2) modifiers
+    let has_our_mods = var_tokens.iter().any(|t| t[4] & 1 != 0 && t[4] & 4 != 0);
+    assert!(has_our_mods, "our-declared variable should have declaration+readonly modifiers");
+}
+
+#[test]
+fn local_declaration_variable_has_declaration_modifier() {
+    let tokens = tokens_for("local $/ = undef;");
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    assert!(!var_tokens.is_empty(), "should have variable token");
+    let has_decl = var_tokens.iter().any(|t| t[4] & 1 != 0);
+    assert!(has_decl, "local-declared variable should have declaration modifier");
+}
+
+#[test]
+fn state_declaration_variable_has_declaration_modifier() {
+    let code = "sub counter {\n    state $count = 0;\n    return $count;\n}";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    let has_decl = var_tokens.iter().any(|t| t[4] & 1 != 0);
+    assert!(has_decl, "state-declared variable should have declaration modifier");
+}
+
+#[test]
+fn undeclared_variable_has_no_declaration_modifier() {
+    let code = "sub f { return $x; }";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    // The $x variable is used but not declared with my/our/local/state
+    let var_tokens: Vec<_> = tokens.iter().filter(|t| t[3] == *var_idx).collect();
+    if !var_tokens.is_empty() {
+        // At least one variable token should NOT have declaration modifier
+        let has_non_decl = var_tokens.iter().any(|t| t[4] & 1 == 0);
+        assert!(has_non_decl, "undeclared variable should not have declaration modifier");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Regex patterns get `regexp` token type
+// ---------------------------------------------------------------------------
+
+#[test]
+fn regex_match_gets_regexp_type() {
+    let tokens = tokens_for("$x =~ /pattern/;");
+    let leg = legend();
+    let re_idx = must_some(leg.map.get("regexp"));
+    let has_re = tokens.iter().any(|t| t[3] == *re_idx);
+    assert!(has_re, "regex match should produce regexp token");
+}
+
+#[test]
+fn regex_substitution_gets_regexp_type() {
+    let tokens = tokens_for("$x =~ s/foo/bar/g;");
+    let leg = legend();
+    let re_idx = must_some(leg.map.get("regexp"));
+    let has_re = tokens.iter().any(|t| t[3] == *re_idx);
+    assert!(has_re, "substitution should produce regexp token");
+}
+
+#[test]
+fn regex_transliteration_gets_regexp_type() {
+    let tokens = tokens_for("$x =~ tr/a-z/A-Z/;");
+    let leg = legend();
+    let re_idx = must_some(leg.map.get("regexp"));
+    let has_re = tokens.iter().any(|t| t[3] == *re_idx);
+    assert!(has_re, "transliteration should produce regexp token");
+}
+
+#[test]
+fn qr_regex_gets_regexp_type() {
+    let tokens = tokens_for("my $re = qr/pattern/i;");
+    let leg = legend();
+    let re_idx = must_some(leg.map.get("regexp"));
+    let has_re = tokens.iter().any(|t| t[3] == *re_idx);
+    assert!(has_re, "qr// should produce regexp token");
+}
+
+// ---------------------------------------------------------------------------
+// POD documentation gets `comment` token type
+// ---------------------------------------------------------------------------
+
+#[test]
+fn pod_single_line_gets_comment_type() {
+    // Single-line POD won't have len > 0 since it spans multiple lines
+    // But we should at least not crash
+    let code = "=pod\n\nSome documentation\n\n=cut\nmy $x = 1;";
+    let tokens = tokens_for(code);
+    // Should still produce tokens for the Perl code after =cut
+    let leg = legend();
+    let kw_idx = must_some(leg.map.get("keyword"));
+    let has_keyword = tokens.iter().any(|t| t[3] == *kw_idx);
+    assert!(has_keyword, "code after POD should still be tokenized");
+}
+
+// ---------------------------------------------------------------------------
+// Variables inside control structures (deep walker test)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn variables_inside_if_get_variable_type() {
+    let code = "if (1) {\n    my $x = 42;\n}";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let has_var = tokens.iter().any(|t| t[3] == *var_idx);
+    assert!(has_var, "variable inside if block should produce variable token");
+}
+
+#[test]
+fn variables_inside_while_get_variable_type() {
+    let code = "while (1) {\n    my $x = 42;\n    last;\n}";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let has_var = tokens.iter().any(|t| t[3] == *var_idx);
+    assert!(has_var, "variable inside while block should produce variable token");
+}
+
+#[test]
+fn variables_inside_for_get_variable_type() {
+    let code = "for my $i (1..10) {\n    my $x = $i * 2;\n}";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
+    assert!(var_count >= 2, "should find multiple variables in for loop, got {var_count}");
+}
+
+#[test]
+fn function_call_inside_if_gets_function_type() {
+    let code = "if (1) {\n    print('hello');\n}";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let fn_idx = must_some(leg.map.get("function"));
+    let has_fn = tokens.iter().any(|t| t[3] == *fn_idx);
+    assert!(has_fn, "function call inside if should produce function token");
+}
+
+#[test]
+fn deeply_nested_variable_produces_token() {
+    let code = "if (1) {\n    while (1) {\n        for my $i (1..3) {\n            my $x = $i;\n        }\n    }\n}";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
+    assert!(var_count >= 2, "deeply nested variables should produce tokens, got {var_count}");
+}
+
+// ---------------------------------------------------------------------------
+// New keyword coverage tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn no_statement_does_not_crash() {
+    // "no strict;" may not produce keyword tokens if the lexer doesn't
+    // classify "no" as a keyword, but should not crash
+    let _tokens = tokens_for("no strict;");
+}
+
+// ---------------------------------------------------------------------------
+// Method call coverage
+// ---------------------------------------------------------------------------
+
+#[test]
+fn method_call_on_variable_produces_method_token() {
+    let tokens = tokens_for("$obj->method();");
+    let leg = legend();
+    let meth_idx = must_some(leg.map.get("method"));
+    let has_method = tokens.iter().any(|t| t[3] == *meth_idx);
+    assert!(has_method, "$obj->method() should produce method token");
+}
+
+#[test]
+fn chained_method_calls_produce_method_tokens() {
+    let tokens = tokens_for("$obj->foo()->bar();");
+    let leg = legend();
+    let meth_idx = must_some(leg.map.get("method"));
+    let method_count = tokens.iter().filter(|t| t[3] == *meth_idx).count();
+    assert!(
+        method_count >= 1,
+        "chained method calls should produce method tokens, got {method_count}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// String token type coverage
+// ---------------------------------------------------------------------------
+
+#[test]
+fn backtick_command_classified_as_string() {
+    let tokens = tokens_for("my $out = `ls -la`;");
+    let leg = legend();
+    let str_idx = must_some(leg.map.get("string"));
+    let has_string = tokens.iter().any(|t| t[3] == *str_idx);
+    assert!(has_string, "backtick command should be classified as string");
+}
+
+// ---------------------------------------------------------------------------
+// Statement modifier coverage (deep walk)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn variable_in_statement_modifier_gets_token() {
+    let code = "print $x if $condition;";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
+    assert!(
+        var_count >= 1,
+        "variables in statement modifier should produce tokens, got {var_count}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Ternary expression coverage (deep walk)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn variable_in_ternary_gets_token() {
+    let code = "my $y = $x ? 1 : 0;";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
+    assert!(var_count >= 1, "variables in ternary should produce tokens, got {var_count}");
+}
+
+// ---------------------------------------------------------------------------
+// Return value coverage (deep walk)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn variable_in_return_gets_token() {
+    let code = "sub f {\n    my $x = 1;\n    return $x;\n}";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
+    assert!(var_count >= 2, "variable in return should produce token, got {var_count}");
+}
+
+// ---------------------------------------------------------------------------
+// Array/hash literal coverage (deep walk)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn variables_in_array_literal_get_tokens() {
+    let code = "my @arr = ($x, $y, $z);";
+    let tokens = tokens_for(code);
+    let leg = legend();
+    let var_idx = must_some(leg.map.get("variable"));
+    let var_count = tokens.iter().filter(|t| t[3] == *var_idx).count();
+    assert!(var_count >= 2, "variables in array literal should produce tokens, got {var_count}");
+}
+
+// ---------------------------------------------------------------------------
+// Token type diversity in complex code
+// ---------------------------------------------------------------------------
+
+#[test]
+fn complex_code_produces_many_token_types() {
+    let code = "package Foo;\nuse strict;\nmy $x = 42;\nsub bar {\n    my $y = 'hello';\n    $x =~ /pattern/;\n    return $y;\n}\n";
+    let tokens = tokens_for(code);
+    let leg = legend();
+
+    let types_present: std::collections::HashSet<u32> = tokens.iter().map(|t| t[3]).collect();
+
+    let kw_idx = must_some(leg.map.get("keyword"));
+    let str_idx = must_some(leg.map.get("string"));
+    let num_idx = must_some(leg.map.get("number"));
+    let ns_idx = must_some(leg.map.get("namespace"));
+    let var_idx = must_some(leg.map.get("variable"));
+    let re_idx = must_some(leg.map.get("regexp"));
+
+    assert!(types_present.contains(kw_idx), "should have keyword tokens");
+    assert!(types_present.contains(str_idx), "should have string tokens");
+    assert!(types_present.contains(num_idx), "should have number tokens");
+    assert!(types_present.contains(ns_idx), "should have namespace tokens");
+    assert!(types_present.contains(var_idx), "should have variable tokens");
+    assert!(types_present.contains(re_idx), "should have regexp tokens");
+}

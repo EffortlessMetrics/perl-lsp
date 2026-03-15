@@ -19,7 +19,6 @@ doctest = false
 [dependencies]
 perl-parser-core = { workspace = true }
 perl-lexer = { workspace = true }
-perl-semantic-analyzer = { workspace = true }
 rustc-hash = "2.1.1"
 
 [dev-dependencies]

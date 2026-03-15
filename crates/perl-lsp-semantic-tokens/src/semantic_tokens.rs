@@ -241,7 +241,9 @@ pub fn collect_semantic_tokens(
                     "my" | "our" | "local" | "state" | "sub" | "package" | "use" | "require"
                     | "if" | "else" | "elsif" | "for" | "foreach" | "while" | "until" | "do"
                     | "return" | "next" | "last" | "redo" | "goto" | "eval" | "given" | "when"
-                    | "default" | "break" | "continue" | "unless" => "keyword",
+                    | "default" | "break" | "continue" | "unless" | "no" | "BEGIN" | "END"
+                    | "CHECK" | "INIT" | "UNITCHECK" | "class" | "method" | "try" | "catch"
+                    | "finally" => "keyword",
                     _ => continue,
                 }
             }
@@ -250,6 +252,9 @@ pub fn collect_semantic_tokens(
             | TokenType::QuoteSingle
             | TokenType::QuoteDouble
             | TokenType::QuoteWords
+            | TokenType::QuoteCommand
+            | TokenType::HeredocStart
+            | TokenType::HeredocBody(_)
             | TokenType::InterpolatedString(_) => "string",
 
             TokenType::Number(_) => "number",
@@ -265,6 +270,9 @@ pub fn collect_semantic_tokens(
             | TokenType::FatComma => "operator",
 
             TokenType::Comment(_) => "comment",
+
+            // POD documentation blocks
+            TokenType::Pod => "comment",
             _ => continue,
         };
 
@@ -273,19 +281,132 @@ pub fn collect_semantic_tokens(
         }
     }
 
-    // 2) AST overlays: package/sub/variable (prefer identifier spans if you track them)
-    walk_ast(ast, &mut |node| {
+    // 2a) Collect variable declaration spans for modifier tagging
+    let mut decl_spans: Vec<(usize, usize, bool)> = Vec::new(); // (start, end, is_our)
+    walk_ast_full(ast, &mut |node| {
+        if let NodeKind::VariableDeclaration { declarator, variable, .. } = &node.kind {
+            let is_our = declarator == "our";
+            decl_spans.push((variable.location.start, variable.location.end, is_our));
+        }
+        if let NodeKind::VariableListDeclaration { declarator, variables, .. } = &node.kind {
+            let is_our = declarator == "our";
+            for v in variables {
+                decl_spans.push((v.location.start, v.location.end, is_our));
+            }
+        }
+        true
+    });
+
+    // 2b) AST overlays: package/sub/variable with precise spans where available
+    walk_ast_full(ast, &mut |node| {
+        // For nodes with name_span, use the precise span for better highlighting
+        match &node.kind {
+            NodeKind::Package { name_span, .. } => {
+                let (sl, sc) = to_pos16(name_span.start);
+                let (el, ec) = to_pos16(name_span.end);
+                let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                if len > 0 {
+                    raw_tokens.push((
+                        sl,
+                        sc,
+                        len,
+                        kind_idx(&leg, "namespace"),
+                        1, /*declaration*/
+                    ));
+                }
+                return true;
+            }
+            NodeKind::Subroutine { name: Some(_), name_span: Some(span), .. } => {
+                let (sl, sc) = to_pos16(span.start);
+                let (el, ec) = to_pos16(span.end);
+                let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                if len > 0 {
+                    raw_tokens.push((
+                        sl,
+                        sc,
+                        len,
+                        kind_idx(&leg, "function"),
+                        1 | 2, /*declaration|definition*/
+                    ));
+                }
+                return true;
+            }
+            NodeKind::Subroutine { name: Some(_), .. } => {
+                let (sl, sc) = to_pos16(node.location.start);
+                let (el, ec) = to_pos16(node.location.end);
+                let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                if len > 0 {
+                    raw_tokens.push((
+                        sl,
+                        sc,
+                        len,
+                        kind_idx(&leg, "function"),
+                        1, /*declaration*/
+                    ));
+                }
+                return true;
+            }
+            NodeKind::Method { .. } => {
+                let (sl, sc) = to_pos16(node.location.start);
+                let (el, ec) = to_pos16(node.location.end);
+                let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                if len > 0 {
+                    raw_tokens.push((
+                        sl,
+                        sc,
+                        len,
+                        kind_idx(&leg, "method"),
+                        1 | 2, /*declaration|definition*/
+                    ));
+                }
+                return true;
+            }
+            NodeKind::Class { .. } => {
+                let (sl, sc) = to_pos16(node.location.start);
+                let (el, ec) = to_pos16(node.location.end);
+                let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                if len > 0 {
+                    raw_tokens.push((sl, sc, len, kind_idx(&leg, "class"), 1 /*declaration*/));
+                }
+                return true;
+            }
+            NodeKind::PhaseBlock { phase_span: Some(span), .. } => {
+                let (sl, sc) = to_pos16(span.start);
+                let (el, ec) = to_pos16(span.end);
+                let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
+                if len > 0 {
+                    raw_tokens.push((sl, sc, len, kind_idx(&leg, "macro"), 0));
+                }
+                return true;
+            }
+            _ => {}
+        }
+
         let (s, e) = (node.location.start, node.location.end);
         let (sl, sc) = to_pos16(s);
         let (el, ec) = to_pos16(e);
         let len = if sl == el { ec.saturating_sub(sc) } else { 0 };
 
         let (kind, mods): (&str, u32) = match &node.kind {
-            NodeKind::Package { .. } => ("namespace", 0),
-            NodeKind::Subroutine { name: Some(_), .. } => ("function", 1 /*declaration*/),
-            NodeKind::FunctionCall { .. } => ("function", 0),
+            NodeKind::FunctionCall { name, .. } => {
+                // Skip builtins that should remain as keywords from the lexer pass
+                match name.as_str() {
+                    "eval" | "do" | "use" | "no" | "return" | "my" | "our" | "local" | "state"
+                    | "next" | "last" | "redo" | "goto" => return true,
+                    _ => ("function", 0),
+                }
+            }
             NodeKind::MethodCall { .. } => ("method", 0),
-            NodeKind::Variable { .. } => ("variable", 0),
+            NodeKind::Variable { .. } => {
+                let (vs, ve) = (node.location.start, node.location.end);
+                let decl_info = decl_spans.iter().find(|(ds, de, _)| *ds <= vs && ve <= *de);
+                let mods = match decl_info {
+                    Some((_, _, true)) => 1 | 4, // declaration | readonly (our)
+                    Some((_, _, false)) => 1,    // declaration (my/local/state)
+                    None => 0,
+                };
+                ("variable", mods)
+            }
             _ => return true,
         };
 
@@ -366,7 +487,8 @@ fn encode_raw_tokens_to_deltas(
     out
 }
 
-fn walk_ast<F>(node: &Node, visitor: &mut F) -> bool
+/// Comprehensive AST walker for semantic token extraction.
+fn walk_ast_full<F>(node: &Node, visitor: &mut F) -> bool
 where
     F: FnMut(&Node) -> bool,
 {
@@ -374,8 +496,181 @@ where
         return false;
     }
 
-    for child in perl_semantic_analyzer::analysis::declaration::get_node_children(node) {
-        if !walk_ast(child, visitor) {
+    let children: Vec<&Node> = match &node.kind {
+        NodeKind::Program { statements } | NodeKind::Block { statements } => {
+            statements.iter().collect()
+        }
+        NodeKind::ExpressionStatement { expression } => vec![expression.as_ref()],
+        NodeKind::VariableDeclaration { variable, initializer, .. } => {
+            let mut c = vec![variable.as_ref()];
+            if let Some(init) = initializer {
+                c.push(init.as_ref());
+            }
+            c
+        }
+        NodeKind::VariableListDeclaration { variables, initializer, .. } => {
+            let mut c: Vec<&Node> = variables.iter().collect();
+            if let Some(init) = initializer {
+                c.push(init.as_ref());
+            }
+            c
+        }
+        NodeKind::Assignment { lhs, rhs, .. } => vec![lhs.as_ref(), rhs.as_ref()],
+        NodeKind::Binary { left, right, .. } => vec![left.as_ref(), right.as_ref()],
+        NodeKind::Ternary { condition, then_expr, else_expr } => {
+            vec![condition.as_ref(), then_expr.as_ref(), else_expr.as_ref()]
+        }
+        NodeKind::Unary { operand, .. } => vec![operand.as_ref()],
+        NodeKind::FunctionCall { args, .. } => args.iter().collect(),
+        NodeKind::MethodCall { object, args, .. } => {
+            let mut c = vec![object.as_ref()];
+            c.extend(args.iter());
+            c
+        }
+        NodeKind::IndirectCall { object, args, .. } => {
+            let mut c = vec![object.as_ref()];
+            c.extend(args.iter());
+            c
+        }
+        NodeKind::Subroutine { prototype, signature, body, .. } => {
+            let mut c = Vec::new();
+            if let Some(proto) = prototype {
+                c.push(proto.as_ref());
+            }
+            if let Some(sig) = signature {
+                c.push(sig.as_ref());
+            }
+            c.push(body.as_ref());
+            c
+        }
+        NodeKind::Method { signature, body, .. } => {
+            let mut c = Vec::new();
+            if let Some(sig) = signature {
+                c.push(sig.as_ref());
+            }
+            c.push(body.as_ref());
+            c
+        }
+        NodeKind::Signature { parameters } => parameters.iter().collect(),
+        NodeKind::MandatoryParameter { variable }
+        | NodeKind::SlurpyParameter { variable }
+        | NodeKind::NamedParameter { variable } => {
+            vec![variable.as_ref()]
+        }
+        NodeKind::OptionalParameter { variable, default_value } => {
+            vec![variable.as_ref(), default_value.as_ref()]
+        }
+        NodeKind::If { condition, then_branch, elsif_branches, else_branch } => {
+            let mut c = vec![condition.as_ref(), then_branch.as_ref()];
+            for (cond, body) in elsif_branches {
+                c.push(cond.as_ref());
+                c.push(body.as_ref());
+            }
+            if let Some(eb) = else_branch {
+                c.push(eb.as_ref());
+            }
+            c
+        }
+        NodeKind::While { condition, body, continue_block } => {
+            let mut c = vec![condition.as_ref(), body.as_ref()];
+            if let Some(cb) = continue_block {
+                c.push(cb.as_ref());
+            }
+            c
+        }
+        NodeKind::For { init, condition, update, body, continue_block } => {
+            let mut c = Vec::new();
+            if let Some(i) = init {
+                c.push(i.as_ref());
+            }
+            if let Some(cond) = condition {
+                c.push(cond.as_ref());
+            }
+            if let Some(upd) = update {
+                c.push(upd.as_ref());
+            }
+            c.push(body.as_ref());
+            if let Some(cb) = continue_block {
+                c.push(cb.as_ref());
+            }
+            c
+        }
+        NodeKind::Foreach { variable, list, body, continue_block } => {
+            let mut c = vec![variable.as_ref(), list.as_ref(), body.as_ref()];
+            if let Some(cb) = continue_block {
+                c.push(cb.as_ref());
+            }
+            c
+        }
+        NodeKind::Package { block, .. } => {
+            let mut c = Vec::new();
+            if let Some(b) = block {
+                c.push(b.as_ref());
+            }
+            c
+        }
+        NodeKind::Class { body, .. } => vec![body.as_ref()],
+        NodeKind::Eval { block } | NodeKind::Do { block } => vec![block.as_ref()],
+        NodeKind::Try { body, catch_blocks, finally_block } => {
+            let mut c = vec![body.as_ref()];
+            for (_var, handler) in catch_blocks {
+                c.push(handler.as_ref());
+            }
+            if let Some(fb) = finally_block {
+                c.push(fb.as_ref());
+            }
+            c
+        }
+        NodeKind::StatementModifier { statement, condition, .. } => {
+            vec![statement.as_ref(), condition.as_ref()]
+        }
+        NodeKind::Return { value } => {
+            let mut c = Vec::new();
+            if let Some(v) = value {
+                c.push(v.as_ref());
+            }
+            c
+        }
+        NodeKind::ArrayLiteral { elements } => elements.iter().collect(),
+        NodeKind::HashLiteral { pairs } => {
+            let mut c = Vec::new();
+            for (k, v) in pairs {
+                c.push(k);
+                c.push(v);
+            }
+            c
+        }
+        NodeKind::LabeledStatement { statement, .. } => vec![statement.as_ref()],
+        NodeKind::Given { expr, body } | NodeKind::When { condition: expr, body } => {
+            vec![expr.as_ref(), body.as_ref()]
+        }
+        NodeKind::Default { body } => vec![body.as_ref()],
+        NodeKind::PhaseBlock { block, .. } => vec![block.as_ref()],
+        NodeKind::VariableWithAttributes { variable, .. } => vec![variable.as_ref()],
+        NodeKind::Match { expr, .. }
+        | NodeKind::Substitution { expr, .. }
+        | NodeKind::Transliteration { expr, .. } => {
+            vec![expr.as_ref()]
+        }
+        NodeKind::Tie { variable, package, args } => {
+            let mut c = vec![variable.as_ref(), package.as_ref()];
+            c.extend(args.iter());
+            c
+        }
+        NodeKind::Untie { variable } => vec![variable.as_ref()],
+        NodeKind::Error { partial, .. } => {
+            let mut c = Vec::new();
+            if let Some(p) = partial {
+                c.push(p.as_ref());
+            }
+            c
+        }
+        // Leaf nodes with no children
+        _ => vec![],
+    };
+
+    for child in children {
+        if !walk_ast_full(child, visitor) {
             return false;
         }
     }
