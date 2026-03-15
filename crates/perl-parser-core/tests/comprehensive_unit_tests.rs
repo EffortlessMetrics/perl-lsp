@@ -1930,7 +1930,7 @@ mod catastrophic_parse_error_tests {
 
     #[test]
     fn suggestion_for_semicolon() -> Result<(), Box<dyn std::error::Error>> {
-        let err = CatastrophicParseError::unexpected("Semicolon", "newline", 5);
+        let err = CatastrophicParseError::unexpected("';'", "newline", 5);
         let suggestion = err.suggestion().unwrap_or_default();
         assert!(suggestion.contains("semicolon"));
         Ok(())
@@ -2018,10 +2018,10 @@ mod error_context_tests {
     #[test]
     fn error_context_with_suggestion() -> Result<(), Box<dyn std::error::Error>> {
         let source = "my $x = 1";
-        let errors = vec![CatastrophicParseError::unexpected("Semicolon", "EOF", 9)];
+        let errors = vec![CatastrophicParseError::unexpected("';'", "EOF", 9)];
         let contexts = get_error_contexts(&errors, source);
         assert_eq!(contexts.len(), 1);
-        // The suggestion should be present since expected contains "Semicolon"
+        // The suggestion should be present since expected contains "';'"
         let suggestion = contexts[0].suggestion.as_deref().unwrap_or("");
         assert!(suggestion.contains("semicolon"));
         Ok(())
