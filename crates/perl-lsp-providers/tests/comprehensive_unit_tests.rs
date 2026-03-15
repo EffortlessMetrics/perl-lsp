@@ -692,6 +692,382 @@ mod signature_help_tests {
             assert_eq!(h.active_parameter, Some(0));
         }
     }
+
+    // -----------------------------------------------------------------
+    // Comprehensive builtin signature help tests for 10 common builtins
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn signature_help_open_first_arg() {
+        let code = "open(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert!(!help.signatures.is_empty());
+        assert_eq!(help.active_parameter, Some(0));
+        // open has 3 signature variants
+        assert!(help.signatures.len() >= 2, "open should have multiple variants");
+    }
+
+    #[test]
+    fn signature_help_open_second_arg() {
+        let code = "open($fh, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(1));
+    }
+
+    #[test]
+    fn signature_help_open_third_arg() {
+        let code = "open($fh, '<', ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(2));
+    }
+
+    #[test]
+    fn signature_help_open_has_documentation() {
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let sig = must_some(provider.get_builtin_signature("open"));
+        assert!(!sig.documentation.is_empty(), "open should have documentation");
+    }
+
+    #[test]
+    fn signature_help_print_first_arg() {
+        let code = "print(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert!(!help.signatures.is_empty());
+        assert_eq!(help.active_parameter, Some(0));
+        // print has 4 signature variants
+        assert!(help.signatures.len() >= 2, "print should have multiple variants");
+    }
+
+    #[test]
+    fn signature_help_print_with_filehandle_and_list() {
+        let code = "print($fh, @data, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(2));
+    }
+
+    #[test]
+    fn signature_help_push_first_arg() {
+        let code = "push(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert!(!help.signatures.is_empty());
+        assert_eq!(help.active_parameter, Some(0));
+        // First parameter should be ARRAY
+        assert!(!help.signatures[0].parameters.is_empty());
+        assert_eq!(help.signatures[0].parameters[0].label, "ARRAY");
+    }
+
+    #[test]
+    fn signature_help_push_second_arg() {
+        let code = "push(@arr, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(1));
+    }
+
+    #[test]
+    fn signature_help_push_has_array_param_doc() {
+        let code = "push(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        let first_param = &help.signatures[0].parameters[0];
+        assert_eq!(first_param.label, "ARRAY");
+        assert!(first_param.documentation.is_some(), "ARRAY param should have documentation");
+    }
+
+    #[test]
+    fn signature_help_pop_no_args() {
+        let code = "pop(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert!(!help.signatures.is_empty());
+        assert_eq!(help.active_parameter, Some(0));
+        // pop has two variants: pop ARRAY and pop
+        assert!(help.signatures.len() >= 2, "pop should have at least 2 variants");
+    }
+
+    #[test]
+    fn signature_help_pop_with_array() {
+        let code = "pop(@arr";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert_eq!(help.active_parameter, Some(0));
+    }
+
+    #[test]
+    fn signature_help_splice_all_args() {
+        let code = "splice(@arr, 0, 2, @new, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        // 4 commas means we are on 5th element (index 4)
+        assert_eq!(help.active_parameter, Some(4));
+        // splice has 4 variants
+        assert!(help.signatures.len() >= 3, "splice should have multiple variants");
+    }
+
+    #[test]
+    fn signature_help_splice_offset_only() {
+        let code = "splice(@arr, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(1));
+    }
+
+    #[test]
+    fn signature_help_splice_offset_length() {
+        let code = "splice(@arr, 0, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(2));
+    }
+
+    #[test]
+    fn signature_help_map_first_arg() {
+        let code = "map(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert!(!help.signatures.is_empty());
+        assert_eq!(help.active_parameter, Some(0));
+        // map has two variants: map BLOCK LIST and map EXPR, LIST
+        assert!(help.signatures.len() >= 2, "map should have at least 2 variants");
+    }
+
+    #[test]
+    fn signature_help_map_second_arg() {
+        let code = "map({ $_ * 2 }, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        // After the closing paren of the inner block, then comma
+        // The outer call to map is detected
+        let help = provider.get_signature_help(code, code.len() - 1);
+        if let Some(h) = help {
+            // Should be on the LIST parameter
+            assert!(h.active_parameter.is_some());
+        }
+    }
+
+    #[test]
+    fn signature_help_grep_first_arg() {
+        let code = "grep(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert!(!help.signatures.is_empty());
+        assert_eq!(help.active_parameter, Some(0));
+        assert!(help.signatures.len() >= 2, "grep should have at least 2 variants");
+    }
+
+    #[test]
+    fn signature_help_grep_with_expr() {
+        let code = "grep($test, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(1));
+    }
+
+    #[test]
+    fn signature_help_sort_first_arg() {
+        let code = "sort(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert!(!help.signatures.is_empty());
+        assert_eq!(help.active_parameter, Some(0));
+        // sort has three variants
+        assert!(help.signatures.len() >= 2, "sort should have multiple variants");
+    }
+
+    #[test]
+    fn signature_help_sort_with_block() {
+        let code = "sort({ $a <=> $b }, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = provider.get_signature_help(code, code.len() - 1);
+        if let Some(h) = help {
+            assert!(h.active_parameter.is_some());
+        }
+    }
+
+    #[test]
+    fn signature_help_join_first_arg() {
+        let code = "join(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert!(!help.signatures.is_empty());
+        assert_eq!(help.active_parameter, Some(0));
+    }
+
+    #[test]
+    fn signature_help_join_second_arg() {
+        let code = "join($sep, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(1));
+    }
+
+    #[test]
+    fn signature_help_join_param_labels() {
+        let code = "join(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        let sig = &help.signatures[0];
+        assert!(sig.parameters.len() >= 2, "join should have at least EXPR and LIST params");
+        assert_eq!(sig.parameters[0].label, "EXPR");
+        assert_eq!(sig.parameters[1].label, "LIST");
+    }
+
+    #[test]
+    fn signature_help_split_first_arg() {
+        let code = "split(";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len()));
+        assert!(!help.signatures.is_empty());
+        assert_eq!(help.active_parameter, Some(0));
+        // split has 4 variants
+        assert!(help.signatures.len() >= 3, "split should have multiple variants");
+    }
+
+    #[test]
+    fn signature_help_split_second_arg() {
+        let code = "split($pat, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(1));
+    }
+
+    #[test]
+    fn signature_help_split_third_arg() {
+        let code = "split($pat, $str, ";
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let help = must_some(provider.get_signature_help(code, code.len() - 1));
+        assert_eq!(help.active_parameter, Some(2));
+    }
+
+    // -----------------------------------------------------------------
+    // All 10 builtins are recognized
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn all_target_builtins_recognized() {
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let targets =
+            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        for name in &targets {
+            assert!(provider.has_builtin(name), "builtin '{}' should be recognized", name);
+        }
+    }
+
+    #[test]
+    fn all_target_builtins_have_signatures() {
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let targets =
+            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        for name in &targets {
+            let sig = provider.get_builtin_signature(name);
+            assert!(sig.is_some(), "builtin '{}' should have a signature", name);
+            let sig = sig.map(|s| &s.signatures);
+            assert!(
+                sig.map_or(false, |s| !s.is_empty()),
+                "builtin '{}' should have at least one signature variant",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn all_target_builtins_have_documentation() {
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let targets =
+            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        for name in &targets {
+            let sig = must_some(provider.get_builtin_signature(name));
+            assert!(
+                !sig.documentation.is_empty(),
+                "builtin '{}' should have non-empty documentation",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn all_target_builtins_provide_help_at_open_paren() {
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let targets =
+            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        for name in &targets {
+            let code = format!("{}(", name);
+            let help = provider.get_signature_help(&code, code.len());
+            assert!(
+                help.is_some(),
+                "builtin '{}' should provide signature help at open paren",
+                name
+            );
+            let h = help.as_ref();
+            assert!(
+                h.map_or(false, |h| !h.signatures.is_empty()),
+                "builtin '{}' should have non-empty signatures in help response",
+                name
+            );
+            assert_eq!(
+                h.and_then(|h| h.active_parameter),
+                Some(0),
+                "builtin '{}' should start at parameter 0",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn signature_help_parameters_have_labels() {
+        let ast = must(parse(""));
+        let provider = SignatureHelpProvider::new(&ast);
+        let targets =
+            ["open", "print", "push", "pop", "splice", "map", "grep", "sort", "join", "split"];
+        for name in &targets {
+            let code = format!("{}(", name);
+            let help = must_some(provider.get_signature_help(&code, code.len()));
+            for sig in &help.signatures {
+                for param in &sig.parameters {
+                    assert!(
+                        !param.label.is_empty(),
+                        "parameter label in '{}' should not be empty",
+                        name
+                    );
+                }
+            }
+        }
+    }
 }
 
 // =========================================================================
