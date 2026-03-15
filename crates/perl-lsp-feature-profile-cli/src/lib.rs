@@ -62,10 +62,11 @@ impl std::error::Error for UnsupportedFeatureProfileError {}
 #[cfg(test)]
 mod tests {
     use super::{
-        FeatureProfile, feature_profile_supported_tokens, parse_feature_profile_arg,
+        FeatureProfile, UnsupportedFeatureProfileError, feature_profile_label,
+        feature_profile_supported_tokens, parse_feature_profile_arg,
         parse_feature_profile_arg_or_current,
     };
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_err};
 
     #[test]
     fn parse_feature_profile_accepts_known_aliases() {
@@ -92,5 +93,67 @@ mod tests {
         assert!(supported.contains(&"ga"));
         assert!(supported.contains(&"prod"));
         assert!(supported.contains(&"all"));
+    }
+
+    // ── Error diagnostics ───────────────────────────────────────────
+
+    #[test]
+    fn parse_feature_profile_arg_returns_error_for_unknown() {
+        let err = must_err(parse_feature_profile_arg("bogus"));
+        assert!(err.raw_profile == "bogus", "error should capture the raw profile token");
+    }
+
+    #[test]
+    fn unsupported_error_message_contains_raw_token() {
+        let err = UnsupportedFeatureProfileError { raw_profile: "xyzzy".to_string() };
+        let msg = err.message();
+        assert!(msg.contains("xyzzy"), "error message should contain the raw token");
+    }
+
+    #[test]
+    fn unsupported_error_message_lists_supported_tokens() {
+        let err = UnsupportedFeatureProfileError { raw_profile: "bad".to_string() };
+        let msg = err.message();
+        assert!(msg.contains("auto"), "error message should list 'auto'");
+        assert!(msg.contains("prod"), "error message should list 'prod'");
+        assert!(msg.contains("all"), "error message should list 'all'");
+    }
+
+    #[test]
+    fn unsupported_error_display_matches_message() {
+        let err = UnsupportedFeatureProfileError { raw_profile: "nope".to_string() };
+        let display = format!("{err}");
+        assert_eq!(display, err.message());
+    }
+
+    #[test]
+    fn unsupported_error_is_std_error() {
+        let err: Box<dyn std::error::Error> =
+            Box::new(UnsupportedFeatureProfileError { raw_profile: "test".to_string() });
+        let msg = format!("{err}");
+        assert!(msg.contains("test"));
+    }
+
+    // ── feature_profile_label ───────────────────────────────────────
+
+    #[test]
+    fn feature_profile_label_returns_canonical_name() {
+        assert_eq!(feature_profile_label(FeatureProfile::GaLock), "ga-lock");
+        assert_eq!(feature_profile_label(FeatureProfile::Production), "production");
+        assert_eq!(feature_profile_label(FeatureProfile::All), "all");
+    }
+
+    // ── parse_feature_profile_arg_or_current with valid input ───────
+
+    #[test]
+    fn parse_feature_profile_arg_or_current_accepts_valid() {
+        let profile = parse_feature_profile_arg_or_current("all");
+        assert_eq!(profile, FeatureProfile::All);
+    }
+
+    #[test]
+    fn parse_feature_profile_arg_or_current_with_whitespace() {
+        let profile = parse_feature_profile_arg_or_current("  ga  ");
+        assert_eq!(profile, FeatureProfile::GaLock);
     }
 }

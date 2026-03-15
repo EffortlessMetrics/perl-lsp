@@ -147,4 +147,181 @@ mod tests {
         assert_eq!(LSP_INLINE_COMPLETION, "lsp.inline_completion");
         assert_eq!(DAP_CORE, "dap.core");
     }
+
+    #[test]
+    fn all_lsp_ids_start_with_lsp_prefix() {
+        let lsp_ids: &[&str] = &[
+            LSP_COMPLETION,
+            LSP_HOVER,
+            LSP_SIGNATURE_HELP,
+            LSP_DEFINITION,
+            LSP_DECLARATION,
+            LSP_EXECUTE_COMMAND,
+            LSP_TYPE_DEFINITION,
+            LSP_IMPLEMENTATION,
+            LSP_REFERENCES,
+            LSP_DOCUMENT_SYMBOL,
+            LSP_WORKSPACE_SYMBOL,
+            LSP_CODE_ACTION,
+            LSP_CODE_LENS,
+            LSP_FORMATTING,
+            LSP_RANGE_FORMATTING,
+            LSP_RANGES_FORMATTING,
+            LSP_ON_TYPE_FORMATTING,
+            LSP_RENAME,
+            LSP_DOCUMENT_LINK,
+            LSP_FOLDING_RANGE,
+            LSP_SELECTION_RANGE,
+            LSP_INLAY_HINT,
+            LSP_SEMANTIC_TOKENS,
+            LSP_TYPE_HIERARCHY,
+            LSP_CALL_HIERARCHY,
+            LSP_PULL_DIAGNOSTICS,
+            LSP_INLINE_COMPLETION,
+            LSP_INLINE_VALUE,
+            LSP_DOCUMENT_COLOR,
+            LSP_COLOR,
+            LSP_LINKED_EDITING_RANGE,
+            LSP_MONIKER,
+            LSP_INLINE_VALUES,
+            LSP_NOTEBOOK_DOCUMENT_SYNC,
+            LSP_NOTEBOOK_CELL_EXECUTION,
+            LSP_PROGRESS,
+            LSP_SHOW_MESSAGE,
+            LSP_LOG_MESSAGE,
+            LSP_WORK_DONE_PROGRESS,
+            LSP_TEXT_DOCUMENT_SYNC,
+            LSP_DID_SAVE,
+            LSP_WILL_SAVE,
+            LSP_WILL_SAVE_WAIT_UNTIL,
+            LSP_DOCUMENT_HIGHLIGHT,
+            LSP_PREPARE_RENAME,
+            LSP_COLOR_PRESENTATION,
+            LSP_COMPLETION_ITEM_RESOLVE,
+            LSP_CODE_ACTION_RESOLVE,
+            LSP_CODE_LENS_RESOLVE,
+            LSP_DOCUMENT_LINK_RESOLVE,
+            LSP_INLAY_HINT_RESOLVE,
+            LSP_WORKSPACE_SYMBOL_RESOLVE,
+            LSP_CODE_LENS_REFRESH,
+            LSP_SEMANTIC_TOKENS_REFRESH,
+            LSP_INLAY_HINT_REFRESH,
+            LSP_INLINE_VALUE_REFRESH,
+            LSP_DIAGNOSTIC_REFRESH,
+            LSP_FOLDING_RANGE_REFRESH,
+        ];
+        for id in lsp_ids {
+            assert!(id.starts_with("lsp."), "LSP feature ID '{id}' should start with 'lsp.'");
+        }
+    }
+
+    #[test]
+    fn all_dap_ids_start_with_dap_prefix() {
+        let dap_ids: &[&str] = &[DAP_CORE, DAP_INLINE_VALUES, DAP_BREAKPOINTS_BASIC];
+        for id in dap_ids {
+            assert!(id.starts_with("dap."), "DAP feature ID '{id}' should start with 'dap.'");
+        }
+    }
+
+    #[test]
+    fn no_duplicate_ids_in_constants() {
+        let all_ids: &[&str] = &[
+            LSP_COMPLETION,
+            LSP_HOVER,
+            LSP_SIGNATURE_HELP,
+            LSP_DEFINITION,
+            LSP_DECLARATION,
+            LSP_EXECUTE_COMMAND,
+            LSP_TYPE_DEFINITION,
+            LSP_IMPLEMENTATION,
+            LSP_REFERENCES,
+            LSP_DOCUMENT_SYMBOL,
+            LSP_WORKSPACE_SYMBOL,
+            LSP_CODE_ACTION,
+            LSP_CODE_LENS,
+            LSP_FORMATTING,
+            LSP_RANGE_FORMATTING,
+            LSP_RANGES_FORMATTING,
+            LSP_ON_TYPE_FORMATTING,
+            LSP_RENAME,
+            LSP_DOCUMENT_LINK,
+            LSP_FOLDING_RANGE,
+            LSP_SELECTION_RANGE,
+            LSP_INLAY_HINT,
+            LSP_SEMANTIC_TOKENS,
+            LSP_TYPE_HIERARCHY,
+            LSP_CALL_HIERARCHY,
+            LSP_PULL_DIAGNOSTICS,
+            LSP_INLINE_COMPLETION,
+            LSP_INLINE_VALUE,
+            LSP_DOCUMENT_COLOR,
+            LSP_COLOR,
+            LSP_LINKED_EDITING_RANGE,
+            LSP_MONIKER,
+            LSP_INLINE_VALUES,
+            LSP_NOTEBOOK_DOCUMENT_SYNC,
+            LSP_NOTEBOOK_CELL_EXECUTION,
+            LSP_PROGRESS,
+            LSP_SHOW_MESSAGE,
+            LSP_LOG_MESSAGE,
+            LSP_WORK_DONE_PROGRESS,
+            LSP_TEXT_DOCUMENT_SYNC,
+            LSP_DID_SAVE,
+            LSP_WILL_SAVE,
+            LSP_WILL_SAVE_WAIT_UNTIL,
+            LSP_DOCUMENT_HIGHLIGHT,
+            LSP_PREPARE_RENAME,
+            LSP_COLOR_PRESENTATION,
+            LSP_COMPLETION_ITEM_RESOLVE,
+            LSP_CODE_ACTION_RESOLVE,
+            LSP_CODE_LENS_RESOLVE,
+            LSP_DOCUMENT_LINK_RESOLVE,
+            LSP_INLAY_HINT_RESOLVE,
+            LSP_WORKSPACE_SYMBOL_RESOLVE,
+            LSP_CODE_LENS_REFRESH,
+            LSP_SEMANTIC_TOKENS_REFRESH,
+            LSP_INLAY_HINT_REFRESH,
+            LSP_INLINE_VALUE_REFRESH,
+            LSP_DIAGNOSTIC_REFRESH,
+            LSP_FOLDING_RANGE_REFRESH,
+            DAP_CORE,
+            DAP_INLINE_VALUES,
+            DAP_BREAKPOINTS_BASIC,
+        ];
+        let mut sorted = all_ids.to_vec();
+        sorted.sort_unstable();
+        for window in sorted.windows(2) {
+            assert_ne!(window[0], window[1], "duplicate feature ID constant: '{}'", window[0]);
+        }
+    }
+
+    #[test]
+    fn resolve_route_ids_follow_naming_convention() {
+        let resolve_ids = &[
+            LSP_COMPLETION_ITEM_RESOLVE,
+            LSP_CODE_ACTION_RESOLVE,
+            LSP_CODE_LENS_RESOLVE,
+            LSP_DOCUMENT_LINK_RESOLVE,
+            LSP_INLAY_HINT_RESOLVE,
+            LSP_WORKSPACE_SYMBOL_RESOLVE,
+        ];
+        for id in resolve_ids {
+            assert!(id.ends_with("_resolve"), "resolve route ID '{id}' should end with '_resolve'");
+        }
+    }
+
+    #[test]
+    fn refresh_route_ids_follow_naming_convention() {
+        let refresh_ids = &[
+            LSP_CODE_LENS_REFRESH,
+            LSP_SEMANTIC_TOKENS_REFRESH,
+            LSP_INLAY_HINT_REFRESH,
+            LSP_INLINE_VALUE_REFRESH,
+            LSP_DIAGNOSTIC_REFRESH,
+            LSP_FOLDING_RANGE_REFRESH,
+        ];
+        for id in refresh_ids {
+            assert!(id.ends_with("_refresh"), "refresh route ID '{id}' should end with '_refresh'");
+        }
+    }
 }
