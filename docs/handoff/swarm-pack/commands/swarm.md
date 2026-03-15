@@ -73,8 +73,8 @@ Each teammate gets a focused prompt that tells them to:
 **scout-1**:
 ```
 Invoke /swarm-protocol and /coding-standards.
-You are scout-1. Domain: parser error buckets, corpus improvements.
-Read .ci/parser-corpus-baseline.json for error buckets.
+You are scout-1. Domain: $SCOUT_1_DOMAIN (e.g., error baselines, core feature gaps).
+Read $ERROR_BASELINE_FILE for gap sources.
 Read .claude/swarm-state/discovered-issues.md and completed-slices.md for dedup.
 Launch 5-8 Explore subagents per round. Write handoff files. Use TaskCreate for each slice.
 Message builder-1 and builder-2 when tasks are ready.
@@ -83,7 +83,7 @@ Message builder-1 and builder-2 when tasks are ready.
 **scout-2**:
 ```
 Invoke /swarm-protocol and /coding-standards.
-You are scout-2. Domain: DAP test gaps, open issues, dead code, unused deps, ignored tests.
+You are scout-2. Domain: $SCOUT_2_DOMAIN (e.g., test gaps, open issues, dead code, deps).
 Check: gh issue list --label swarm-discovered --state open (pre-investigated leads).
 Check: .claude/swarm-state/discovered-issues.md (agent-flagged leads).
 Launch 5-8 Explore subagents per round. Write handoff files. Use TaskCreate for each slice.
@@ -98,7 +98,7 @@ Subagent prompt pattern (minimal — 7 lines):
   "Read .ops/handoffs/<branch>.md for context and test template.
    Read .claude/swarm-state/known-pitfalls.md for traps.
    Invoke /swarm-protocol and /coding-standards.
-   Branch: <X>. Crate: <Y>. Verify: cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>.
+   Branch: <X>. Package: <Y>. Verify: $FMT_CMD && $LINT_CMD <Y> && $TEST_CMD <Y>.
    Append reviewer briefing to handoff. Write metrics. gh issue create --label swarm-discovered for out-of-scope finds."
 Use SendMessage({to: "reviewer"}) when builds complete.
 Use SendMessage({to: "improver-docs"}) or SendMessage({to: "improver-tests"}) when you notice gaps.
@@ -158,7 +158,7 @@ Write Claude Code memories when architectural decisions crystallize.
 ```
 Invoke /swarm-protocol and /coding-standards.
 You are improver-tests. Always running alongside core work.
-Check mutation testing results, flaky tests (.ci/debt-ledger.yaml), coverage gaps.
+Check mutation testing results, flaky tests ($DEBT_TRACKER), coverage gaps.
 Read .ops/handoffs/*.md for test-related "Lesson Learned" sections.
 Spawn subagents (2-4 parallel, isolation: "worktree") for: mutant killing, flaky fixes, coverage.
 Also handle infra: dep-cleaner, dead-code, security-audit subagents.
@@ -171,9 +171,9 @@ Enable auto-merge: gh pr merge <N> --auto --squash --delete-branch.
 Invoke /swarm-protocol.
 You are validator. After merges, verify work actually helped.
 Receive merge notifications from merger with PR category and crates.
-Parser fix → just corpus-sweep (did clean count increase?)
-Test addition → cargo mutants -p <crate> (is mutant killed?)
-LSP change → RUST_TEST_THREADS=2 cargo test -p perl-lsp (all pass?)
+Bug fix → $BASELINE_CHECK_CMD (did metrics improve?)
+Test addition → $MUTATION_CMD (is target mutant killed?)
+Feature change → $INTEGRATION_TEST_CMD (all pass?)
 Any merge → cargo clippy --workspace --lib (no new warnings?)
 If regression: gh issue create --label swarm-discovered --label priority:high.
 SendMessage({to: "fixer"}) for regressions.
