@@ -279,12 +279,15 @@ impl<'a> Parser<'a> {
                     self.consume_token()?; // consume comma
                 }
 
-                // Check for end of expression
+                // Check for end of expression (includes statement modifier
+                // keywords so that trailing-comma before a modifier does not
+                // try to parse the modifier as another comma element).
                 match self.peek_kind() {
                     Some(TokenKind::Semicolon)
                     | Some(TokenKind::RightParen)
                     | Some(TokenKind::RightBrace)
                     | Some(TokenKind::RightBracket) => break,
+                    Some(k) if Self::is_stmt_modifier_kind(k) => break,
                     _ => {}
                 }
 
@@ -316,6 +319,7 @@ impl<'a> Parser<'a> {
                         | Some(TokenKind::RightParen)
                         | Some(TokenKind::RightBrace)
                         | Some(TokenKind::RightBracket) => break,
+                        Some(k) if Self::is_stmt_modifier_kind(k) => break,
                         _ => expressions.push(self.parse_assignment()?),
                     }
                 } else {

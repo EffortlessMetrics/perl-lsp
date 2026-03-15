@@ -279,3 +279,83 @@ fn test_modifier_after_last_in_loop() -> Result<(), Box<dyn std::error::Error>> 
     assert_has_modifier(r#"last unless $continue;"#, "unless");
     Ok(())
 }
+
+// ---- Tests for comma expressions and multi-arrow derefs with modifiers ----
+
+#[test]
+fn test_modifier_after_chained_method_calls() -> Result<(), Box<dyn std::error::Error>> {
+    // $obj->foo->bar if $cond;
+    assert_has_modifier(r#"$obj->foo->bar if $cond;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_deep_arrow_deref() -> Result<(), Box<dyn std::error::Error>> {
+    // $self->{data}->[$i] = $v for @items;
+    assert_has_modifier(r#"$self->{data}->[$i] = $v for @items;"#, "for");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_scalar_deref() -> Result<(), Box<dyn std::error::Error>> {
+    // ${$ref} = 1 if $flag;
+    assert_has_modifier(r#"${$ref} = 1 if $flag;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_nested_hash_access() -> Result<(), Box<dyn std::error::Error>> {
+    // $hash{a}{b}{c} = 1 unless $done;
+    assert_has_modifier(r#"$hash{a}{b}{c} = 1 unless $done;"#, "unless");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_local_sig_handler() -> Result<(), Box<dyn std::error::Error>> {
+    // local $SIG{__WARN__} = sub {} if $quiet;
+    assert_has_modifier(r#"local $SIG{__WARN__} = sub {} if $quiet;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_postfix_deref_push() -> Result<(), Box<dyn std::error::Error>> {
+    // push @{$data->{list}}, map { $_ * 2 } @vals if @vals;
+    assert_has_modifier(r#"push @{$data->{list}}, map { $_ * 2 } @vals if @vals;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_complex_lhs_or_assign() -> Result<(), Box<dyn std::error::Error>> {
+    // $cache->{$key} ||= compute($key) if $use_cache;
+    assert_has_modifier(r#"$cache->{$key} ||= compute($key) if $use_cache;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_substr_assign() -> Result<(), Box<dyn std::error::Error>> {
+    // substr($str, 0, 3) = "abc" if length($str) >= 3;
+    assert_has_modifier(r#"substr($str, 0, 3) = "abc" if length($str) >= 3;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_comma_expression() -> Result<(), Box<dyn std::error::Error>> {
+    // ($a, $b) = (1, 2) if $cond;
+    assert_has_modifier(r#"($a, $b) = (1, 2) if $cond;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_open_with_three_args() -> Result<(), Box<dyn std::error::Error>> {
+    // open my $fh, '<', $file or die if -e $file;
+    // Note: this is `open(my $fh, '<', $file) or die` with `if -e $file` modifier
+    assert_has_modifier(r#"open my $fh, '<', $file or die if -e $file;"#, "if");
+    Ok(())
+}
+
+#[test]
+fn test_modifier_after_push_with_map() -> Result<(), Box<dyn std::error::Error>> {
+    // push @result, map { $_->{name} } @items unless $skip;
+    assert_has_modifier(r#"push @result, map { $_->{name} } @items unless $skip;"#, "unless");
+    Ok(())
+}
