@@ -1306,6 +1306,15 @@ impl SemanticAnalyzer {
                 });
             }
 
+            NodeKind::Goto { target } => {
+                self.semantic_tokens.push(SemanticToken {
+                    location: node.location,
+                    token_type: SemanticTokenType::KeywordControl,
+                    modifiers: vec![],
+                });
+                self.analyze_node(target, scope_id);
+            }
+
             NodeKind::MissingExpression
             | NodeKind::MissingStatement
             | NodeKind::MissingIdentifier
@@ -1348,6 +1357,11 @@ impl SemanticAnalyzer {
                     details: vec![],
                 };
                 self.hover_info.insert(node.location, hover);
+            }
+
+            NodeKind::Goto { target } => {
+                // Recurse into the goto target expression
+                self.analyze_node(target, scope_id);
             }
 
             NodeKind::Error { .. } | NodeKind::UnknownRest => {

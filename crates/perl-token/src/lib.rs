@@ -123,6 +123,8 @@ pub enum TokenKind {
     Last,
     /// Loop control: `redo`
     Redo,
+    /// Goto statement: `goto LABEL`, `goto &sub`, `goto EXPR`
+    Goto,
     /// Class declaration (5.38+): `class Foo`
     Class,
     /// Method declaration (5.38+): `method foo`

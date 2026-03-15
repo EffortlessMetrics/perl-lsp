@@ -621,6 +621,10 @@ impl Node {
                 }
             }
 
+            NodeKind::Goto { target } => {
+                format!("(goto {})", target.to_sexp())
+            }
+
             NodeKind::MethodCall { object, method, args } => {
                 let args_str = args.iter().map(|a| a.to_sexp()).collect::<Vec<_>>().join(" ");
                 format!("(method_call {} {} ({}))", object.to_sexp(), method, args_str)
@@ -989,6 +993,7 @@ impl Node {
                     f(v);
                 }
             }
+            NodeKind::Goto { target } => f(target),
             NodeKind::Signature { parameters } => {
                 for param in parameters {
                     f(param);
@@ -1237,6 +1242,7 @@ impl Node {
                     f(v);
                 }
             }
+            NodeKind::Goto { target } => f(target),
             NodeKind::Signature { parameters } => {
                 for param in parameters {
                     f(param);
@@ -1845,6 +1851,12 @@ pub enum NodeKind {
         label: Option<String>,
     },
 
+    /// Goto statement: `goto LABEL`, `goto &sub`, or `goto $expr`
+    Goto {
+        /// The target of the goto (label identifier, sub reference, or expression)
+        target: Box<Node>,
+    },
+
     /// Method call: `$obj->method(@args)` or `$obj->method`
     MethodCall {
         /// Object or class expression
@@ -2108,6 +2120,7 @@ impl NodeKind {
             NodeKind::Method { .. } => "Method",
             NodeKind::Return { .. } => "Return",
             NodeKind::LoopControl { .. } => "LoopControl",
+            NodeKind::Goto { .. } => "Goto",
             NodeKind::MethodCall { .. } => "MethodCall",
             NodeKind::FunctionCall { .. } => "FunctionCall",
             NodeKind::IndirectCall { .. } => "IndirectCall",
@@ -2156,6 +2169,7 @@ impl NodeKind {
         "FunctionCall",
         "Given",
         "Glob",
+        "Goto",
         "HashLiteral",
         "Heredoc",
         "Identifier",
@@ -2526,6 +2540,7 @@ mod tests {
             },
             NodeKind::Return { value: None },
             NodeKind::LoopControl { op: String::new(), label: None },
+            NodeKind::Goto { target: Box::new(dummy_node()) },
             NodeKind::MethodCall {
                 object: Box::new(dummy_node()),
                 method: String::new(),
