@@ -213,7 +213,13 @@ impl PerlVariableRenderer {
     /// Formats a scalar string value with quoting and truncation.
     fn format_string(&self, s: &str) -> String {
         let truncated = if s.len() > self.max_string_length {
-            format!("{}...", &s[..self.max_string_length])
+            // Find a char boundary at or before max_string_length to avoid
+            // panicking on multi-byte UTF-8 sequences.
+            let mut end = self.max_string_length;
+            while end > 0 && !s.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{}...", &s[..end])
         } else {
             s.to_string()
         };
@@ -271,6 +277,67 @@ impl PerlVariableRenderer {
         format!("{{{}{}}}", preview.join(", "), suffix)
     }
 
+    /// Returns the chain of backslash prefixes for nested references.
+    ///
+    /// For `\\\42` (ref to ref to ref to scalar) this returns `"\\\\"` (three backslashes).
+    /// Stops counting after 10 levels to avoid runaway recursion on cyclic-like structures.
+    fn ref_prefix_chain(&self, value: &PerlValue) -> String {
+        let mut depth = 0u32;
+        let mut current = value;
+        while let PerlValue::Reference(inner) = current {
+            depth += 1;
+            current = inner;
+            if depth >= 10 {
+                break;
+            }
+        }
+        "\\".repeat(depth as usize)
+    }
+
+    /// Formats the ultimate target of a reference chain briefly.
+    ///
+    /// Skips intermediate `Reference` wrappers to show the leaf value.
+    fn format_deref_target_brief(&self, value: &PerlValue) -> String {
+        let mut current = value;
+        let mut safety = 0u32;
+        while let PerlValue::Reference(inner) = current {
+            current = inner;
+            safety += 1;
+            if safety >= 10 {
+                break;
+            }
+        }
+        match current {
+            PerlValue::Reference(_) => "REF(...)".to_string(),
+            other => self.format_non_ref_brief(other),
+        }
+    }
+
+    /// Formats the ultimate target of a reference chain fully.
+    fn format_deref_target(&self, value: &PerlValue) -> String {
+        let mut current = value;
+        let mut safety = 0u32;
+        while let PerlValue::Reference(inner) = current {
+            current = inner;
+            safety += 1;
+            if safety >= 10 {
+                break;
+            }
+        }
+        match current {
+            PerlValue::Reference(_) => "REF(...)".to_string(),
+            other => self.format_value(other),
+        }
+    }
+
+    /// Formats a non-reference value briefly (used by deref target formatting).
+    fn format_non_ref_brief(&self, value: &PerlValue) -> String {
+        match value {
+            PerlValue::Reference(_) => "REF".to_string(),
+            other => self.format_value_brief(other),
+        }
+    }
+
     /// Formats a value briefly (for use in previews).
     fn format_value_brief(&self, value: &PerlValue) -> String {
         match value {
@@ -280,7 +347,10 @@ impl PerlVariableRenderer {
             PerlValue::Integer(i) => i.to_string(),
             PerlValue::Array(elements) => format!("ARRAY({})", elements.len()),
             PerlValue::Hash(pairs) => format!("HASH({})", pairs.len()),
-            PerlValue::Reference(inner) => format!("\\{}", inner.type_name()),
+            PerlValue::Reference(inner) => {
+                let prefix = self.ref_prefix_chain(value);
+                format!("{}{}", prefix, self.format_deref_target_brief(inner))
+            }
             PerlValue::Object { class, .. } => format!("{}=...", class),
             PerlValue::Code { name } => {
                 name.as_ref().map_or_else(|| "CODE(...)".to_string(), |n| format!("\\&{}", n))
@@ -303,7 +373,8 @@ impl PerlVariableRenderer {
             PerlValue::Array(elements) => self.format_array_preview(elements),
             PerlValue::Hash(pairs) => self.format_hash_preview(pairs),
             PerlValue::Reference(inner) => {
-                format!("\\{}", self.format_value_brief(inner))
+                let prefix = self.ref_prefix_chain(value);
+                format!("{}{}", prefix, self.format_deref_target(inner))
             }
             PerlValue::Object { class, value } => {
                 format!("{}={}", class, self.format_value_brief(value))
@@ -347,9 +418,16 @@ impl VariableRenderer for PerlVariableRenderer {
             PerlValue::Hash(pairs) => {
                 rendered.named_variables = Some(pairs.len() as i64);
             }
-            PerlValue::Object { value: inner, .. } => {
-                if let PerlValue::Hash(pairs) = inner.as_ref() {
-                    rendered.named_variables = Some(pairs.len() as i64);
+            PerlValue::Object { class, value: inner } => {
+                rendered.type_name = Some(class.clone());
+                match inner.as_ref() {
+                    PerlValue::Hash(pairs) => {
+                        rendered.named_variables = Some(pairs.len() as i64);
+                    }
+                    PerlValue::Array(elements) => {
+                        rendered.indexed_variables = Some(elements.len() as i64);
+                    }
+                    _ => {}
                 }
             }
             _ => {}
@@ -513,7 +591,7 @@ mod tests {
 
         assert_eq!(rendered.name, "$obj");
         assert!(rendered.value.contains("My::Class"));
-        assert_eq!(rendered.type_name, Some("OBJECT".to_string()));
+        assert_eq!(rendered.type_name, Some("My::Class".to_string()));
         assert_eq!(rendered.named_variables, Some(1));
     }
 

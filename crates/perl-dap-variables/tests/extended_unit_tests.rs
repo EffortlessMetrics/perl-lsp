@@ -652,7 +652,8 @@ fn renderer_format_reference_to_array() -> Result<(), Box<dyn std::error::Error>
     let val = PerlValue::reference(PerlValue::Array(vec![PerlValue::Integer(1)]));
     let rendered = renderer.render("$aref", &val);
     assert!(rendered.value.contains("\\"));
-    assert!(rendered.value.contains("ARRAY"));
+    // Full format now shows the array content preview instead of the opaque "ARRAY"
+    assert!(rendered.value.contains("[1]"));
     Ok(())
 }
 
