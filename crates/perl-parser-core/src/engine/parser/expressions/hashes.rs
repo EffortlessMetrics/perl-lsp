@@ -1,15 +1,23 @@
 impl<'a> Parser<'a> {
     /// Parse block specifically for builtin functions (map, grep, sort)
-    /// These always parse {} as blocks, never as hashes
+    /// These always parse {} as blocks, never as hashes.
+    ///
+    /// The block may contain multiple statements separated by semicolons,
+    /// e.g. `map { my $y = uc $_; $y } @list`.
     fn parse_builtin_block(&mut self) -> ParseResult<Node> {
         self.with_recursion_guard(|s| {
             let start_token = s.tokens.next()?; // consume {
             let start = start_token.start;
 
-            // Parse the expression inside the block (if any)
             let mut statements = Vec::new();
-            if s.peek_kind() != Some(TokenKind::RightBrace) {
-                statements.push(s.parse_expression()?);
+
+            while s.peek_kind() != Some(TokenKind::RightBrace) && !s.tokens.is_eof() {
+                statements.push(s.parse_statement()?);
+
+                // Swallow stray semicolons between statements
+                while s.peek_kind() == Some(TokenKind::Semicolon) {
+                    s.consume_token()?;
+                }
             }
 
             s.expect(TokenKind::RightBrace)?;
