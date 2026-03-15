@@ -44,29 +44,52 @@ pub fn matches_query(name: &str, query: &str) -> bool {
 
 /// Compares two symbol names by query relevance.
 ///
-/// Ordering:
-/// 1. Exact match first
-/// 2. Prefix match second
-/// 3. Lexicographic name order
+/// Ordering (highest to lowest relevance):
+/// 1. Exact match (case-insensitive)
+/// 2. Prefix match
+/// 3. Contains (substring) match
+/// 4. Fuzzy/subsequence match
+///
+/// Within the same tier, shorter names rank higher (closer to the query
+/// length), with lexicographic order as the final tiebreaker.
 #[must_use]
 pub fn compare_names_by_query(a: &str, b: &str, query: &str) -> Ordering {
     let query_lower = query.to_lowercase();
     let a_lower = a.to_lowercase();
     let b_lower = b.to_lowercase();
 
-    let a_exact = a_lower == query_lower;
-    let b_exact = b_lower == query_lower;
-    let a_prefix = a_lower.starts_with(&query_lower);
-    let b_prefix = b_lower.starts_with(&query_lower);
+    let a_tier = match_tier(&a_lower, &query_lower);
+    let b_tier = match_tier(&b_lower, &query_lower);
 
-    match (a_exact, b_exact) {
-        (true, false) => Ordering::Less,
-        (false, true) => Ordering::Greater,
-        _ => match (a_prefix, b_prefix) {
-            (true, false) => Ordering::Less,
-            (false, true) => Ordering::Greater,
-            _ => a.cmp(b),
-        },
+    // Lower tier number = better match
+    match a_tier.cmp(&b_tier) {
+        Ordering::Equal => {
+            // Within the same tier, prefer shorter names (closer to the query)
+            match a.len().cmp(&b.len()) {
+                Ordering::Equal => a.cmp(b),
+                len_ord => len_ord,
+            }
+        }
+        tier_ord => tier_ord,
+    }
+}
+
+/// Assigns a numeric tier to a symbol name based on how well it matches the query.
+///
+/// Lower tier = better match:
+/// - 0: exact match
+/// - 1: prefix match
+/// - 2: contains (substring) match
+/// - 3: fuzzy/subsequence or no match (fallback)
+fn match_tier(name_lower: &str, query_lower: &str) -> u8 {
+    if name_lower == query_lower {
+        0
+    } else if name_lower.starts_with(query_lower) {
+        1
+    } else if name_lower.contains(query_lower) {
+        2
+    } else {
+        3
     }
 }
 
@@ -111,5 +134,46 @@ mod tests {
         names.sort_by(|a, b| compare_names_by_query(a, b, "foo"));
 
         assert_eq!(names, ["foo", "foobar", "alpha", "foxtrot"]);
+    }
+
+    #[test]
+    fn contains_matches_rank_above_fuzzy_matches() {
+        // "get_bar" contains "bar" (tier 2)
+        // "baz_art" has "bar" as subsequence b-a-z-a-r-t: b..a..r (tier 3)
+        let mut names = ["baz_art", "get_bar"];
+        names.sort_by(|a, b| compare_names_by_query(a, b, "bar"));
+
+        assert_eq!(names[0], "get_bar", "substring match should rank above fuzzy");
+    }
+
+    #[test]
+    fn exact_match_beats_everything() {
+        let mut names = ["get_log", "getLogger", "log", "logging"];
+        names.sort_by(|a, b| compare_names_by_query(a, b, "log"));
+
+        assert_eq!(names[0], "log", "exact match should be first");
+    }
+
+    #[test]
+    fn shorter_names_preferred_within_same_tier() {
+        // Both are prefix matches (tier 1), shorter should come first
+        let mut names = ["foobarqux", "foobar"];
+        names.sort_by(|a, b| compare_names_by_query(a, b, "foo"));
+
+        assert_eq!(names[0], "foobar");
+        assert_eq!(names[1], "foobarqux");
+    }
+
+    #[test]
+    fn four_tier_ranking_order() {
+        // exact=0, prefix=1, contains=2, fuzzy=3
+        // "lxoxg" is a fuzzy match for "log" (l..o..g subsequence)
+        let mut names = ["get_log", "lxoxg", "log", "logger"];
+        names.sort_by(|a, b| compare_names_by_query(a, b, "log"));
+
+        assert_eq!(names[0], "log", "tier 0: exact");
+        assert_eq!(names[1], "logger", "tier 1: prefix");
+        assert_eq!(names[2], "get_log", "tier 2: contains");
+        assert_eq!(names[3], "lxoxg", "tier 3: fuzzy");
     }
 }
