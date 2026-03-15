@@ -130,6 +130,10 @@ required-features = ["incremental"]
 name = "scope_benchmark"
 harness = false
 
+[[bench]]
+name = "cpan_patterns_benchmark"
+harness = false
+
 [[example]]
 name = "test_incremental_v2"
 required-features = ["incremental"]
