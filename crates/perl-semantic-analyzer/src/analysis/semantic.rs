@@ -1359,11 +1359,6 @@ impl SemanticAnalyzer {
                 self.hover_info.insert(node.location, hover);
             }
 
-            NodeKind::Goto { target } => {
-                // Recurse into the goto target expression
-                self.analyze_node(target, scope_id);
-            }
-
             NodeKind::Error { .. } | NodeKind::UnknownRest => {
                 // No semantic tokens for error nodes
             }
