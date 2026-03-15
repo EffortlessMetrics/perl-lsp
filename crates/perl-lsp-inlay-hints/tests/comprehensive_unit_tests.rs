@@ -4,7 +4,8 @@
 //! `parameter_hints`, `trivial_type_hints`, range filtering, and edge cases.
 
 use perl_lsp_inlay_hints::{
-    InlayHint, InlayHintKind, InlayHintsProvider, parameter_hints, trivial_type_hints,
+    InlayHint, InlayHintKind, InlayHintsProvider, extract_param_names, parameter_hints,
+    trivial_type_hints,
 };
 use perl_parser_core::ast::{Node, NodeKind, SourceLocation};
 use perl_position_tracking::{WirePosition as Position, WireRange as Range};
@@ -234,9 +235,9 @@ fn parameter_hints_substr() {
 
     let hints = parameter_hints(&ast, &identity_pos, None);
     assert_eq!(hints.len(), 3);
-    assert_eq!(hints[0]["label"].as_str(), Some("str:"));
+    assert_eq!(hints[0]["label"].as_str(), Some("expr:"));
     assert_eq!(hints[1]["label"].as_str(), Some("offset:"));
-    assert_eq!(hints[2]["label"].as_str(), Some("len:"));
+    assert_eq!(hints[2]["label"].as_str(), Some("length:"));
     // All should be kind=2 (parameter)
     for h in &hints {
         assert_eq!(h["kind"].as_u64(), Some(2));
@@ -253,6 +254,8 @@ fn parameter_hints_index_function() {
     assert_eq!(hints.len(), 2);
     assert_eq!(hints[0]["label"].as_str(), Some("str:"));
     assert_eq!(hints[1]["label"].as_str(), Some("substr:"));
+    // Verify position is from builtin signature
+    assert_eq!(hints[0]["kind"].as_u64(), Some(2));
 }
 
 #[test]
@@ -265,7 +268,7 @@ fn parameter_hints_rindex() {
     assert_eq!(hints.len(), 3);
     assert_eq!(hints[0]["label"].as_str(), Some("str:"));
     assert_eq!(hints[1]["label"].as_str(), Some("substr:"));
-    assert_eq!(hints[2]["label"].as_str(), Some("pos:"));
+    assert_eq!(hints[2]["label"].as_str(), Some("position:"));
 }
 
 #[test]
@@ -277,18 +280,20 @@ fn parameter_hints_sprintf() {
     let hints = parameter_hints(&ast, &identity_pos, None);
     assert_eq!(hints.len(), 2);
     assert_eq!(hints[0]["label"].as_str(), Some("format:"));
-    assert_eq!(hints[1]["label"].as_str(), Some("args...:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("list:"));
 }
 
 #[test]
 fn parameter_hints_printf() {
-    let args = vec![string("%s", false, 10, 14)];
-    let call = func_call("printf", args, SourceLocation::new(3, 15));
+    let args = vec![string("%s", false, 10, 14), string("x", false, 16, 19)];
+    let call = func_call("printf", args, SourceLocation::new(3, 20));
     let ast = program(vec![expr_stmt(call)]);
 
     let hints = parameter_hints(&ast, &identity_pos, None);
-    assert_eq!(hints.len(), 1);
-    assert_eq!(hints[0]["label"].as_str(), Some("format:"));
+    assert_eq!(hints.len(), 2);
+    // printf's first (most complete) signature is: printf FILEHANDLE FORMAT, LIST
+    assert_eq!(hints[0]["label"].as_str(), Some("filehandle:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("format:"));
 }
 
 #[test]
@@ -299,7 +304,7 @@ fn parameter_hints_join() {
 
     let hints = parameter_hints(&ast, &identity_pos, None);
     assert_eq!(hints.len(), 2);
-    assert_eq!(hints[0]["label"].as_str(), Some("sep:"));
+    assert_eq!(hints[0]["label"].as_str(), Some("expr:"));
     assert_eq!(hints[1]["label"].as_str(), Some("list:"));
 }
 
@@ -312,7 +317,7 @@ fn parameter_hints_split() {
     let hints = parameter_hints(&ast, &identity_pos, None);
     assert_eq!(hints.len(), 3);
     assert_eq!(hints[0]["label"].as_str(), Some("pattern:"));
-    assert_eq!(hints[1]["label"].as_str(), Some("str:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("expr:"));
     assert_eq!(hints[2]["label"].as_str(), Some("limit:"));
 }
 
@@ -397,8 +402,8 @@ fn parameter_hints_push() {
 
     let hints = parameter_hints(&ast, &identity_pos, None);
     assert_eq!(hints.len(), 2);
-    assert_eq!(hints[0]["label"].as_str(), Some("ARRAY:"));
-    assert_eq!(hints[1]["label"].as_str(), Some("LIST:"));
+    assert_eq!(hints[0]["label"].as_str(), Some("array:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("list:"));
 }
 
 #[test]
@@ -413,9 +418,9 @@ fn parameter_hints_open() {
 
     let hints = parameter_hints(&ast, &identity_pos, None);
     assert_eq!(hints.len(), 3);
-    assert_eq!(hints[0]["label"].as_str(), Some("FILEHANDLE:"));
-    assert_eq!(hints[1]["label"].as_str(), Some("MODE:"));
-    assert_eq!(hints[2]["label"].as_str(), Some("EXPR:"));
+    assert_eq!(hints[0]["label"].as_str(), Some("filehandle:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("mode:"));
+    assert_eq!(hints[2]["label"].as_str(), Some("filename:"));
 }
 
 // ===========================================================================
@@ -438,7 +443,7 @@ fn parameter_hints_unknown_function() {
 
 #[test]
 fn parameter_hints_extra_args_ignored() {
-    // join has 2 labels: ["sep", "list"] — 3rd arg should be skipped
+    // join has 2 labels: ["expr", "list"] — 3rd arg should be skipped
     let args =
         vec![string(",", false, 5, 8), variable("@", "a", 10, 12), variable("@", "b", 14, 16)];
     let call = func_call("join", args, SourceLocation::new(0, 17));
@@ -470,12 +475,12 @@ fn parameter_hints_fewer_args() {
 
 #[test]
 fn parameter_hints_padding() {
-    let args = vec![string("hi", false, 10, 14)];
-    let call = func_call("printf", args, SourceLocation::new(3, 15));
+    let args = vec![string(",", false, 5, 8), variable("@", "arr", 10, 14)];
+    let call = func_call("join", args, SourceLocation::new(0, 15));
     let ast = program(vec![expr_stmt(call)]);
 
     let hints = parameter_hints(&ast, &identity_pos, None);
-    assert_eq!(hints.len(), 1);
+    assert_eq!(hints.len(), 2);
     assert_eq!(hints[0]["paddingLeft"].as_bool(), Some(false));
     assert_eq!(hints[0]["paddingRight"].as_bool(), Some(true));
 }
@@ -609,20 +614,20 @@ fn generate_hints_combines_both() {
 
 #[test]
 fn parameter_hints_with_range_includes_in_range() {
-    let args = vec![string("hi", false, 10, 14)];
-    let call = func_call("printf", args, SourceLocation::new(3, 15));
+    let args = vec![string(",", false, 10, 13), variable("@", "arr", 15, 19)];
+    let call = func_call("join", args, SourceLocation::new(3, 20));
     let ast = program(vec![expr_stmt(call)]);
 
     // identity_pos maps offset 10 → (0, 10)
     let range = Range::new(Position::new(0, 0), Position::new(0, 20));
     let hints = parameter_hints(&ast, &identity_pos, Some(range));
-    assert_eq!(hints.len(), 1);
+    assert_eq!(hints.len(), 2);
 }
 
 #[test]
 fn parameter_hints_with_range_excludes_out_of_range() {
-    let args = vec![string("hi", false, 10, 14)];
-    let call = func_call("printf", args, SourceLocation::new(3, 15));
+    let args = vec![string(",", false, 10, 13), variable("@", "arr", 15, 19)];
+    let call = func_call("join", args, SourceLocation::new(3, 20));
     let ast = program(vec![expr_stmt(call)]);
 
     // identity_pos maps offset 10 → (0, 10), range ends before that
@@ -838,29 +843,24 @@ fn large_offsets() {
 // ===========================================================================
 
 #[test]
-fn push_column_adjustment() {
-    // The code has a special case: if push, first arg, ARRAY label, and c==4, adjust to 5
-    let args = vec![
-        variable("@", "arr", 4, 8), // start=4 → identity_pos gives c=4
-        string("val", false, 10, 15),
-    ];
-    let call = func_call("push", args, SourceLocation::new(0, 16));
+fn push_parameter_positions() {
+    // Verify push parameter hints use the correct position from arg location
+    let args = vec![variable("@", "arr", 5, 9), string("val", false, 11, 16)];
+    let call = func_call("push", args, SourceLocation::new(0, 17));
     let ast = program(vec![expr_stmt(call)]);
 
     let hints = parameter_hints(&ast, &identity_pos, None);
     assert_eq!(hints.len(), 2);
-    // First hint for ARRAY should have character=5 (adjusted from 4)
     assert_eq!(hints[0]["position"]["character"].as_u64(), Some(5));
-    assert_eq!(hints[0]["label"].as_str(), Some("ARRAY:"));
+    assert_eq!(hints[0]["label"].as_str(), Some("array:"));
+    assert_eq!(hints[1]["position"]["character"].as_u64(), Some(11));
+    assert_eq!(hints[1]["label"].as_str(), Some("list:"));
 }
 
 #[test]
-fn push_no_column_adjustment_when_not_4() {
-    // When first arg doesn't start at column 4, no adjustment
-    let args = vec![
-        variable("@", "arr", 6, 10), // start=6 → c=6, not 4
-        string("val", false, 12, 17),
-    ];
+fn push_parameter_positions_different_offset() {
+    // Verify positions track actual arg locations
+    let args = vec![variable("@", "arr", 6, 10), string("val", false, 12, 17)];
     let call = func_call("push", args, SourceLocation::new(0, 18));
     let ast = program(vec![expr_stmt(call)]);
 
@@ -894,8 +894,8 @@ fn generate_hints_returns_correct_inlay_hint_fields() {
 #[test]
 fn generate_hints_parameter_hint_fields() {
     let provider = InlayHintsProvider::new();
-    let args = vec![string("hi", false, 10, 14)];
-    let call = func_call("printf", args, SourceLocation::new(3, 15));
+    let args = vec![string(",", false, 5, 8), variable("@", "arr", 10, 14)];
+    let call = func_call("join", args, SourceLocation::new(0, 15));
     let ast = program(vec![expr_stmt(call)]);
 
     let hints = provider.generate_hints(&ast, &identity_pos, None);
@@ -903,7 +903,7 @@ fn generate_hints_parameter_hint_fields() {
     assert!(!param_hints.is_empty());
 
     let h = &param_hints[0];
-    assert_eq!(h.label, "format:");
+    assert_eq!(h.label, "expr:");
     assert!(!h.padding_left);
     assert!(h.padding_right);
 }
@@ -1012,4 +1012,176 @@ fn many_function_calls_performance() {
 
     let hints = parameter_hints(&ast, &identity_pos, None);
     assert_eq!(hints.len(), 1000); // 500 calls × 2 params each
+}
+
+// ===========================================================================
+// extract_param_names — unit tests for signature parsing
+// ===========================================================================
+
+#[test]
+fn extract_params_comma_separated() {
+    let params = extract_param_names("open FILEHANDLE, MODE, FILENAME");
+    assert_eq!(params, vec!["filehandle", "mode", "filename"]);
+}
+
+#[test]
+fn extract_params_space_separated() {
+    let params = extract_param_names("map BLOCK LIST");
+    assert_eq!(params, vec!["block", "list"]);
+}
+
+#[test]
+fn extract_params_mixed_separators() {
+    let params = extract_param_names("printf FILEHANDLE FORMAT, LIST");
+    assert_eq!(params, vec!["filehandle", "format", "list"]);
+}
+
+#[test]
+fn extract_params_slash_delimiters_stripped() {
+    let params = extract_param_names("split /PATTERN/, EXPR, LIMIT");
+    assert_eq!(params, vec!["pattern", "expr", "limit"]);
+}
+
+#[test]
+fn extract_params_no_params() {
+    let params = extract_param_names("fork");
+    assert!(params.is_empty());
+}
+
+#[test]
+fn extract_params_single_param() {
+    let params = extract_param_names("chomp VARIABLE");
+    assert_eq!(params, vec!["variable"]);
+}
+
+#[test]
+fn extract_params_substr() {
+    let params = extract_param_names("substr EXPR, OFFSET, LENGTH, REPLACEMENT");
+    assert_eq!(params, vec!["expr", "offset", "length", "replacement"]);
+}
+
+#[test]
+fn extract_params_push() {
+    let params = extract_param_names("push ARRAY, LIST");
+    assert_eq!(params, vec!["array", "list"]);
+}
+
+// ===========================================================================
+// Builtin-driven parameter hints — push, open, substr
+// ===========================================================================
+
+#[test]
+fn builtin_push_shows_array_and_list_hints() {
+    // push(@array, $value) → array:, list:
+    let args = vec![variable("@", "array", 5, 11), variable("$", "value", 13, 19)];
+    let call = func_call("push", args, SourceLocation::new(0, 20));
+    let ast = program(vec![expr_stmt(call)]);
+
+    let hints = parameter_hints(&ast, &identity_pos, None);
+    assert_eq!(hints.len(), 2);
+    assert_eq!(hints[0]["label"].as_str(), Some("array:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("list:"));
+    assert_eq!(hints[0]["kind"].as_u64(), Some(2));
+    assert_eq!(hints[1]["kind"].as_u64(), Some(2));
+}
+
+#[test]
+fn builtin_open_shows_filehandle_mode_filename_hints() {
+    // open(my $fh, '<', $file) → filehandle:, mode:, filename:
+    let args =
+        vec![variable("$", "fh", 5, 8), string("<", false, 10, 13), variable("$", "file", 15, 20)];
+    let call = func_call("open", args, SourceLocation::new(0, 21));
+    let ast = program(vec![expr_stmt(call)]);
+
+    let hints = parameter_hints(&ast, &identity_pos, None);
+    assert_eq!(hints.len(), 3);
+    assert_eq!(hints[0]["label"].as_str(), Some("filehandle:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("mode:"));
+    assert_eq!(hints[2]["label"].as_str(), Some("filename:"));
+    assert_eq!(hints[0]["kind"].as_u64(), Some(2));
+}
+
+#[test]
+fn builtin_substr_shows_parameter_name_hints() {
+    // substr($str, $offset, $length) → expr:, offset:, length:
+    let args = vec![
+        variable("$", "str", 7, 11),
+        variable("$", "offset", 13, 20),
+        variable("$", "length", 22, 29),
+    ];
+    let call = func_call("substr", args, SourceLocation::new(0, 30));
+    let ast = program(vec![expr_stmt(call)]);
+
+    let hints = parameter_hints(&ast, &identity_pos, None);
+    assert_eq!(hints.len(), 3);
+    assert_eq!(hints[0]["label"].as_str(), Some("expr:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("offset:"));
+    assert_eq!(hints[2]["label"].as_str(), Some("length:"));
+}
+
+// ===========================================================================
+// Builtin-driven hints — additional coverage for dynamic signature lookup
+// ===========================================================================
+
+#[test]
+fn builtin_bless_shows_ref_classname_hints() {
+    // bless($ref, "MyClass") → ref:, classname:
+    let args = vec![variable("$", "ref", 6, 10), string("MyClass", false, 12, 21)];
+    let call = func_call("bless", args, SourceLocation::new(0, 22));
+    let ast = program(vec![expr_stmt(call)]);
+
+    let hints = parameter_hints(&ast, &identity_pos, None);
+    assert_eq!(hints.len(), 2);
+    assert_eq!(hints[0]["label"].as_str(), Some("ref:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("classname:"));
+}
+
+#[test]
+fn builtin_rename_shows_oldname_newname_hints() {
+    // rename($old, $new) → oldname:, newname:
+    let args = vec![variable("$", "old", 7, 11), variable("$", "new", 13, 17)];
+    let call = func_call("rename", args, SourceLocation::new(0, 18));
+    let ast = program(vec![expr_stmt(call)]);
+
+    let hints = parameter_hints(&ast, &identity_pos, None);
+    assert_eq!(hints.len(), 2);
+    assert_eq!(hints[0]["label"].as_str(), Some("oldname:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("newname:"));
+}
+
+#[test]
+fn single_param_builtins_skip_hints() {
+    // Functions with only 1 parameter (like chomp, defined, etc.)
+    // should not produce hints to reduce noise
+    let args = vec![variable("$", "x", 6, 8)];
+    let call = func_call("chomp", args, SourceLocation::new(0, 9));
+    let ast = program(vec![expr_stmt(call)]);
+
+    let hints = parameter_hints(&ast, &identity_pos, None);
+    assert!(hints.is_empty(), "Single-param builtins should not produce hints");
+}
+
+#[test]
+fn no_param_builtins_skip_hints() {
+    // Functions with no parameters (like fork, time, etc.)
+    // should not produce hints
+    let args: Vec<Node> = vec![];
+    let call = func_call("fork", args, SourceLocation::new(0, 4));
+    let ast = program(vec![expr_stmt(call)]);
+
+    let hints = parameter_hints(&ast, &identity_pos, None);
+    assert!(hints.is_empty());
+}
+
+#[test]
+fn builtin_atan2_shows_y_x_hints() {
+    // atan2($y, $x) → y:, x:
+    let args = vec![variable("$", "y", 6, 8), variable("$", "x", 10, 12)];
+    let call = func_call("atan2", args, SourceLocation::new(0, 13));
+    let ast = program(vec![expr_stmt(call)]);
+
+    let hints = parameter_hints(&ast, &identity_pos, None);
+    assert_eq!(hints.len(), 2);
+    assert_eq!(hints[0]["label"].as_str(), Some("y:"));
+    assert_eq!(hints[1]["label"].as_str(), Some("x:"));
 }

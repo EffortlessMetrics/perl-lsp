@@ -18,6 +18,7 @@
 //! Follows the inlay hint protocol for range-scoped responses and stable hint
 //! ordering per the LSP specification.
 
+use perl_builtins::builtin_signatures::create_builtin_signatures;
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_position_tracking::{WirePosition as Position, WireRange as Range};
 use perl_semantic_analyzer::declaration::get_node_children;
@@ -150,10 +151,47 @@ fn pos_in_range(pos: Position, range: Range) -> bool {
     true
 }
 
+/// Extracts parameter names from a builtin signature string.
+///
+/// Signature strings follow the Perl perldoc convention, e.g.:
+/// - `"open FILEHANDLE, MODE, FILENAME"` → `["filehandle", "mode", "filename"]`
+/// - `"push ARRAY, LIST"` → `["array", "list"]`
+/// - `"split /PATTERN/, EXPR, LIMIT"` → `["pattern", "expr", "limit"]`
+/// - `"map BLOCK LIST"` → `["block", "list"]`
+///
+/// The function name prefix is stripped, comma-separated groups are split,
+/// and within each group space-separated tokens are treated as individual
+/// parameters. Slash delimiters (e.g. `/PATTERN/`) are removed and all names
+/// are lowercased.
+pub fn extract_param_names(signature: &str) -> Vec<String> {
+    // Strip function name prefix (first word)
+    let rest = match signature.find(' ') {
+        Some(idx) => &signature[idx + 1..],
+        None => return Vec::new(),
+    };
+
+    let mut params = Vec::new();
+    // Split on ", " to get comma-separated groups
+    for group in rest.split(", ") {
+        // Within each group, split on space for space-separated params
+        for token in group.split(' ') {
+            if token.is_empty() {
+                continue;
+            }
+            // Strip slash delimiters from patterns like /PATTERN/
+            let cleaned = token.trim_matches('/');
+            params.push(cleaned.to_lowercase());
+        }
+    }
+    params
+}
+
 /// Generates inlay hints for function and method parameters.
 ///
 /// This function traverses the AST and identifies function calls, adding inlay
-/// hints for parameter names based on a predefined list of common Perl functions.
+/// hints for parameter names based on the builtin signatures database from the
+/// `perl-builtins` crate. Any builtin with a known signature will produce
+/// parameter name hints for its arguments.
 ///
 /// # Arguments
 ///
@@ -169,39 +207,29 @@ pub fn parameter_hints(
     to_pos16: &impl Fn(usize) -> (u32, u32),
     range: Option<Range>,
 ) -> Vec<Value> {
+    let sigs = create_builtin_signatures();
     let mut out = Vec::new();
     walk_ast(ast, &mut |node| {
-        if let NodeKind::FunctionCall { name, args } = &node.kind {
-            let labels: Option<&[&str]> = match name.as_str() {
-                "substr" => Some(&["str", "offset", "len"]),
-                "index" => Some(&["str", "substr", "pos"]),
-                "rindex" => Some(&["str", "substr", "pos"]),
-                "sprintf" => Some(&["format", "args..."]),
-                "printf" => Some(&["format", "args..."]),
-                "join" => Some(&["sep", "list"]),
-                "split" => Some(&["pattern", "str", "limit"]),
-                "splice" => Some(&["array", "offset", "length", "list"]),
-                "unpack" => Some(&["template", "expr"]),
-                "pack" => Some(&["template", "list"]),
-                "grep" => Some(&["block", "list"]),
-                "map" => Some(&["block", "list"]),
-                "sort" => Some(&["block", "list"]),
-                "push" => Some(&["ARRAY", "LIST"]),
-                "open" => Some(&["FILEHANDLE", "MODE", "EXPR"]),
-                _ => None,
-            };
-            if let Some(sig) = labels {
+        if let NodeKind::FunctionCall { name, args } = &node.kind
+            && let Some(builtin) = sigs.get(name.as_str())
+        {
+            // Use the first (most complete) signature variant to extract
+            // parameter names, since it lists all possible parameters.
+            if let Some(first_sig) = builtin.signatures.first() {
+                let param_names = extract_param_names(first_sig);
+
+                // Skip functions with only a single parameter -- hints
+                // for e.g. `chomp($x)` showing `variable:` add noise
+                // rather than clarity.
+                if param_names.len() <= 1 {
+                    return true;
+                }
+
                 for (i, arg) in args.iter().enumerate() {
-                    if i >= sig.len() {
+                    if i >= param_names.len() {
                         break;
                     }
-                    let (l, mut c) = to_pos16(arg.location.start);
-
-                    // Handle positioning adjustment for parenthesized calls
-                    // For push(@arr, "x") we want the hint at @arr (column 5), not at ( (column 4)
-                    if name == "push" && i == 0 && sig[i] == "ARRAY" && c == 4 {
-                        c = 5;
-                    }
+                    let (l, c) = to_pos16(arg.location.start);
 
                     // Filter by range if specified
                     if let Some(filter_range) = range {
@@ -213,7 +241,7 @@ pub fn parameter_hints(
 
                     out.push(json!({
                         "position": { "line": l, "character": c },
-                        "label": format!("{}:", sig[i]),
+                        "label": format!("{}:", param_names[i]),
                         "kind": 2, // parameter
                         "paddingLeft": false,
                         "paddingRight": true
