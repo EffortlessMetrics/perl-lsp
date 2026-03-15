@@ -275,8 +275,8 @@ impl<'a> Parser<'a> {
         let token = self.tokens.next()?;
         if token.kind != kind {
             return Err(ParseError::unexpected(
-                format!("{:?}", kind),
-                format!("{:?}", token.kind),
+                kind.display_name(),
+                token.kind.display_name(),
                 token.start,
             ));
         }
