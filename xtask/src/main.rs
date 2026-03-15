@@ -435,6 +435,28 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Show technical debt report from debt ledger
+    ///
+    /// Reads `.ci/debt-ledger.yaml` and reports on quarantined tests,
+    /// known issues, and technical debt items with budget tracking.
+    DebtReport {
+        /// CI gate mode: exit 1 if over budget or expired quarantines
+        #[arg(long)]
+        check: bool,
+
+        /// Output JSON format for receipt integration
+        #[arg(long)]
+        json: bool,
+
+        /// Show only expired quarantines
+        #[arg(long)]
+        expired: bool,
+
+        /// Path to debt ledger (default: .ci/debt-ledger.yaml)
+        #[arg(long)]
+        ledger: Option<PathBuf>,
+    },
+
     /// Manage feature catalog and LSP compliance
     Features {
         #[command(subcommand)]
@@ -774,6 +796,9 @@ fn main() -> Result<()> {
         }
         Commands::IgnoredTests { update, check, verbose } => {
             ignored_tests::run(update, check, verbose)
+        }
+        Commands::DebtReport { check, json, expired, ledger } => {
+            debt_report::run(debt_report::DebtReportConfig { check, json, expired, ledger })
         }
         Commands::Features { command } => match command {
             FeaturesCommand::SyncDocs => features::sync_docs(),

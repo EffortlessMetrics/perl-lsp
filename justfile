@@ -1110,21 +1110,20 @@ coverage-summary:
 
 # Show current debt status report
 debt-report:
-    @echo "📊 Technical Debt Report"
-    @python3 scripts/debt-report.py
+    @cargo xtask debt-report
 
 # CI gate: fail if debt budget exceeded or quarantines expired
 debt-check:
     @echo "🔍 Checking debt budget compliance..."
-    @python3 scripts/debt-report.py --check
+    @cargo xtask debt-report --check
 
 # Show only expired quarantines (quick check)
 debt-expired:
-    @python3 scripts/debt-report.py --expired
+    @cargo xtask debt-report --expired
 
 # Output debt report as JSON (for receipt integration)
 debt-json:
-    @python3 scripts/debt-report.py --json
+    @cargo xtask debt-report --json
 
 # Add a flaky test to quarantine (interactive helper)
 debt-quarantine name issue days="14":
@@ -1162,7 +1161,7 @@ debt-unquarantine name:
 debt-pr-summary:
     @echo "## Technical Debt Status"
     @echo ""
-    @python3 scripts/debt-report.py --json | python3 scripts/debt-pr-summary.py
+    @cargo xtask debt-report --json | python3 scripts/debt-pr-summary.py
 
 # ============================================================================
 # CI Guardrail Tests (Issue #364)
