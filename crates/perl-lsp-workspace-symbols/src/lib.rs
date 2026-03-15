@@ -555,6 +555,219 @@ my $top_level_var = 42;
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Cross-file search: function names across multiple files
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn search_function_name_across_multiple_files() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let source_a = "package FileA;\nsub process_data { 1 }\nsub helper { 2 }\n";
+        let source_b = "package FileB;\nsub process_data { 3 }\nsub render { 4 }\n";
+        let source_c = "package FileC;\nsub unrelated { 5 }\n";
+
+        for (uri, src) in
+            [("file:///a.pm", source_a), ("file:///b.pm", source_b), ("file:///c.pm", source_c)]
+        {
+            source_map.insert(uri.to_string(), src.to_string());
+            let mut parser = Parser::new(src);
+            let ast = must(parser.parse());
+            provider.index_document(uri, &ast, src);
+        }
+
+        let results = provider.search("process_data", &source_map);
+        assert_eq!(results.len(), 2, "process_data should appear in two files");
+
+        let uris: Vec<&str> = results.iter().map(|r| r.location.uri.as_str()).collect();
+        assert!(uris.contains(&"file:///a.pm"), "should find in file A");
+        assert!(uris.contains(&"file:///b.pm"), "should find in file B");
+    }
+
+    // -----------------------------------------------------------------------
+    // Package name search
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn search_package_name_returns_package_definition() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let source = "package My::Web::Controller;\nsub index { 1 }\n";
+        source_map.insert("file:///controller.pm".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        provider.index_document("file:///controller.pm", &ast, source);
+
+        let results = provider.search("Controller", &source_map);
+        let pkg = results
+            .iter()
+            .find(|s| s.name.contains("Controller") && s.kind == 2) // 2 = Module/Package
+            .expect("should find Controller package symbol");
+
+        assert_eq!(pkg.kind, 2, "Package should have Module kind (2)");
+    }
+
+    // -----------------------------------------------------------------------
+    // Fuzzy / subsequence matching
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn fuzzy_match_camel_case_subsequence() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let source = "sub getLogger { 1 }\nsub go_live { 2 }\nsub unrelated { 3 }\n";
+        source_map.insert("file:///log.pl".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        provider.index_document("file:///log.pl", &ast, source);
+
+        // "gL" should fuzzy-match "getLogger" (g..e..t..L) and "go_live" (g..o.._..l)
+        // but NOT "unrelated"
+        let results = provider.search("gL", &source_map);
+        let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
+
+        assert!(names.contains(&"getLogger"), "gL should fuzzy-match getLogger, got: {names:?}");
+        assert!(!names.contains(&"unrelated"), "gL should not match unrelated");
+    }
+
+    // -----------------------------------------------------------------------
+    // Symbol kinds are correctly set
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn symbol_kinds_are_correct() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let source = r#"
+package Animal;
+sub new { bless {}, shift }
+sub speak { print "generic\n" }
+use constant MAX_AGE => 100;
+my $count = 0;
+"#;
+        source_map.insert("file:///animal.pm".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        provider.index_document("file:///animal.pm", &ast, source);
+
+        let all = provider.search("", &source_map); // empty query => all symbols
+
+        // Package "Animal" should be Module kind (2)
+        if let Some(pkg) = all.iter().find(|s| s.name == "Animal") {
+            assert_eq!(pkg.kind, 2, "Package should be Module kind (2)");
+        }
+
+        // Subroutines should be Function kind (12)
+        for name in ["new", "speak"] {
+            if let Some(sub) = all.iter().find(|s| s.name == name) {
+                assert_eq!(sub.kind, 12, "{name} should be Function kind (12)");
+            }
+        }
+
+        // Constants should be Constant kind (14)
+        if let Some(constant) = all.iter().find(|s| s.name == "MAX_AGE") {
+            assert_eq!(constant.kind, 14, "Constant should be Constant kind (14)");
+        }
+
+        // Variables should be Variable kind (13)
+        if let Some(var) = all.iter().find(|s| s.name.contains("count")) {
+            assert_eq!(var.kind, 13, "Variable should be Variable kind (13)");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Ranking: exact matches above substrings above fuzzy
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn exact_match_ranks_above_substring_and_fuzzy() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let source = r#"
+sub log { 1 }
+sub logger { 2 }
+sub get_log { 3 }
+"#;
+        source_map.insert("file:///rank.pl".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        provider.index_document("file:///rank.pl", &ast, source);
+
+        let results = provider.search("log", &source_map);
+        let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
+
+        assert!(names.len() >= 3, "should match log, logger, get_log");
+
+        // Exact match "log" must be first
+        assert_eq!(names[0], "log", "exact match should be first");
+
+        // Prefix match "logger" should come before substring "get_log"
+        let logger_pos = names.iter().position(|n| *n == "logger");
+        let get_log_pos = names.iter().position(|n| *n == "get_log");
+        if let (Some(lp), Some(gp)) = (logger_pos, get_log_pos) {
+            assert!(lp < gp, "prefix match 'logger' should rank above substring 'get_log'");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Remove document removes symbols from results
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn remove_document_clears_its_symbols() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let source = "sub ephemeral { 1 }\n";
+        source_map.insert("file:///tmp.pl".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        provider.index_document("file:///tmp.pl", &ast, source);
+
+        assert!(!provider.search("ephemeral", &source_map).is_empty());
+
+        provider.remove_document("file:///tmp.pl");
+        assert!(
+            provider.search("ephemeral", &source_map).is_empty(),
+            "symbols should be gone after remove_document"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // search_with_candidates filters to candidate set
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn search_with_candidates_filters_results() {
+        let mut provider = WorkspaceSymbolsProvider::new();
+        let mut source_map = HashMap::new();
+
+        let source = "sub alpha { 1 }\nsub apex { 2 }\nsub beta { 3 }\n";
+        source_map.insert("file:///cand.pl".to_string(), source.to_string());
+
+        let mut parser = Parser::new(source);
+        let ast = must(parser.parse());
+        provider.index_document("file:///cand.pl", &ast, source);
+
+        // Only include "alpha" in candidates - "apex" should be excluded
+        let candidates = vec!["alpha".to_string()];
+        let results = provider.search_with_candidates("a", &source_map, &candidates);
+        let names: Vec<&str> = results.iter().map(|s| s.name.as_str()).collect();
+
+        assert!(names.contains(&"alpha"), "alpha is a candidate match");
+        assert!(!names.contains(&"apex"), "apex is not in candidate set");
+    }
+
     #[test]
     fn test_ambiguous_symbol_resolution() {
         let mut provider = WorkspaceSymbolsProvider::new();
