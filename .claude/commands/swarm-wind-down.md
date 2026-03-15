@@ -47,7 +47,7 @@ The user has some time. Wind down cleanly over ~15-30 minutes. Context: **$ARGUM
 echo "=== Remaining open PRs ==="
 gh pr list --state open --json number,title,labels
 echo "=== Remaining in-progress slices ==="
-grep "in-progress" .ops-perl-lsp/completed-slices.md
+grep "in-progress" .claude/swarm-state/completed-slices.md
 echo "=== Agent patches pending review ==="
 ls .ops-perl-lsp/agent-patches/*.md 2>/dev/null
 echo "=== Discovered issues ==="
@@ -59,8 +59,8 @@ gh issue list --label swarm-discovered --state open
 
 ## What Gets Preserved for Next Session
 
-- `.ops-perl-lsp/known-pitfalls.md` — failure knowledge
-- `.ops-perl-lsp/completed-slices.md` — with in-progress items for resumption
+- `.claude/swarm-state/known-pitfalls.md` — failure knowledge
+- `.claude/swarm-state/completed-slices.md` — with in-progress items for resumption
 - `.ops-perl-lsp/swarm-metrics.jsonl` — performance history
 - `.ops-perl-lsp/agent-patches/` — pending improvements
 - GitHub issues labeled `swarm-discovered` — persistent backlog

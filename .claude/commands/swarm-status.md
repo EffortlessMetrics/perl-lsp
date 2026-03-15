@@ -23,8 +23,8 @@ echo "=== Recent Merges (last 24h) ==="
 gh pr list --state merged --limit 20 --json number,title,mergedAt
 
 echo "=== Queue Depth ==="
-grep -c "in-progress" .ops-perl-lsp/completed-slices.md 2>/dev/null || echo "0 in-progress"
-wc -l < .ops-perl-lsp/discovered-issues.md 2>/dev/null || echo "0 discoveries"
+grep -c "in-progress" .claude/swarm-state/completed-slices.md 2>/dev/null || echo "0 in-progress"
+wc -l < .claude/swarm-state/discovered-issues.md 2>/dev/null || echo "0 discoveries"
 ls .ops-perl-lsp/handoffs/*.md 2>/dev/null | wc -l || echo "0 active handoffs"
 
 echo "=== Agent Patches Pending Review ==="
@@ -39,7 +39,7 @@ echo "=== Metrics (last 50 entries) ==="
 tail -50 .ops-perl-lsp/swarm-metrics.jsonl 2>/dev/null
 
 echo "=== Known Pitfalls ==="
-cat .ops-perl-lsp/known-pitfalls.md 2>/dev/null
+cat .claude/swarm-state/known-pitfalls.md 2>/dev/null
 
 echo "=== Worktrees ==="
 git worktree list

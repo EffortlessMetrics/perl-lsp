@@ -47,4 +47,4 @@ Agent(
 2. Check `files_touched` fields for overlaps
 3. If two slices overlap, keep the higher-impact one, defer the other
 4. Feed non-overlapping slices to swarm-builder agents
-5. Update `.ops-perl-lsp/swarm-queue.json` with active slices
+5. Update `.claude/swarm-state/swarm-queue.json` with active slices
