@@ -217,8 +217,8 @@ fn load_ledger(ledger_path: &PathBuf) -> Result<Ledger> {
         });
     }
 
-    let content =
-        fs::read_to_string(ledger_path).with_context(|| format!("reading {}", ledger_path.display()))?;
+    let content = fs::read_to_string(ledger_path)
+        .with_context(|| format!("reading {}", ledger_path.display()))?;
     let ledger: Ledger = serde_yaml_ng::from_str(&content)
         .with_context(|| format!("parsing YAML from {}", ledger_path.display()))?;
     Ok(ledger)
@@ -285,8 +285,10 @@ fn generate_report(ledger: &Ledger, today: NaiveDate) -> Report {
     let warn = budgets.warning_threshold_percent;
     let crit = budgets.critical_threshold_percent;
 
-    let q_pct = if max_q > 0 { f64::from(quarantined_count) / f64::from(max_q) * 100.0 } else { 0.0 };
-    let i_pct = if max_i > 0 { f64::from(known_issues_count) / f64::from(max_i) * 100.0 } else { 0.0 };
+    let q_pct =
+        if max_q > 0 { f64::from(quarantined_count) / f64::from(max_q) * 100.0 } else { 0.0 };
+    let i_pct =
+        if max_i > 0 { f64::from(known_issues_count) / f64::from(max_i) * 100.0 } else { 0.0 };
     let d_pct = if max_d > 0 { f64::from(tech_debt_count) / f64::from(max_d) * 100.0 } else { 0.0 };
 
     let expired_quarantines: Vec<&FlakyTest> =
@@ -319,10 +321,7 @@ fn generate_report(ledger: &Ledger, today: NaiveDate) -> Report {
     let issue_statuses = ["accepted", "deferred", "monitoring", "wontfix"];
     let mut by_status = BTreeMap::new();
     for s in &issue_statuses {
-        let c = count_by_field(
-            known_issues.iter().filter_map(|ki| ki.status.as_deref()),
-            s,
-        );
+        let c = count_by_field(known_issues.iter().filter_map(|ki| ki.status.as_deref()), s);
         by_status.insert((*s).to_string(), c);
     }
 
@@ -330,10 +329,7 @@ fn generate_report(ledger: &Ledger, today: NaiveDate) -> Report {
     let priorities = ["critical", "high", "medium", "low"];
     let mut by_priority = BTreeMap::new();
     for p in &priorities {
-        let c = count_by_field(
-            technical_debt.iter().filter_map(|td| td.priority.as_deref()),
-            p,
-        );
+        let c = count_by_field(technical_debt.iter().filter_map(|td| td.priority.as_deref()), p);
         by_priority.insert((*p).to_string(), c);
     }
 
@@ -438,7 +434,9 @@ fn format_console_report(report: &Report) -> String {
     let q = &summary.quarantined_tests;
     lines.push(format!(
         "Quarantined Tests: {}/{} ({}%) [{}]",
-        q.count, q.budget, q.percent,
+        q.count,
+        q.budget,
+        q.percent,
         status_color(&q.status)
     ));
     if q.expired > 0 {
@@ -448,25 +446,20 @@ fn format_console_report(report: &Report) -> String {
         ));
     }
     if q.expiring_soon > 0 {
-        lines.push(format!(
-            "  \x1b[33mExpiring soon: {} within 7 days\x1b[0m",
-            q.expiring_soon
-        ));
+        lines.push(format!("  \x1b[33mExpiring soon: {} within 7 days\x1b[0m", q.expiring_soon));
     }
 
     // Known issues
     let k = &summary.known_issues;
     lines.push(format!(
         "Known Issues: {}/{} ({}%) [{}]",
-        k.count, k.budget, k.percent,
+        k.count,
+        k.budget,
+        k.percent,
         status_color(&k.status)
     ));
-    let status_parts: Vec<String> = k
-        .by_status
-        .iter()
-        .filter(|(_, c)| **c > 0)
-        .map(|(s, c)| format!("{s}: {c}"))
-        .collect();
+    let status_parts: Vec<String> =
+        k.by_status.iter().filter(|(_, c)| **c > 0).map(|(s, c)| format!("{s}: {c}")).collect();
     if !status_parts.is_empty() {
         lines.push(format!("  {}", status_parts.join(", ")));
     }
@@ -475,15 +468,13 @@ fn format_console_report(report: &Report) -> String {
     let t = &summary.technical_debt;
     lines.push(format!(
         "Technical Debt: {}/{} ({}%) [{}]",
-        t.count, t.budget, t.percent,
+        t.count,
+        t.budget,
+        t.percent,
         status_color(&t.status)
     ));
-    let priority_parts: Vec<String> = t
-        .by_priority
-        .iter()
-        .filter(|(_, c)| **c > 0)
-        .map(|(p, c)| format!("{p}: {c}"))
-        .collect();
+    let priority_parts: Vec<String> =
+        t.by_priority.iter().filter(|(_, c)| **c > 0).map(|(p, c)| format!("{p}: {c}")).collect();
     if !priority_parts.is_empty() {
         lines.push(format!("  {}", priority_parts.join(", ")));
     }
@@ -524,7 +515,8 @@ fn format_console_report(report: &Report) -> String {
 
     lines.push(String::new());
     lines.push(sep.clone());
-    lines.push("Run `cargo xtask debt-report --check` to verify debt budget compliance".to_string());
+    lines
+        .push("Run `cargo xtask debt-report --check` to verify debt budget compliance".to_string());
     lines.push("Edit `.ci/debt-ledger.yaml` to add/remove tracked items".to_string());
     lines.push(sep);
 
@@ -577,10 +569,7 @@ pub fn run(config: DebtReportConfig) -> Result<()> {
         let mut failures: Vec<String> = Vec::new();
 
         if summary.quarantined_tests.expired > 0 {
-            failures.push(format!(
-                "{} expired quarantine(s)",
-                summary.quarantined_tests.expired
-            ));
+            failures.push(format!("{} expired quarantine(s)", summary.quarantined_tests.expired));
         }
         if summary.quarantined_tests.status == "critical" {
             failures.push("quarantined tests at critical level".to_string());
