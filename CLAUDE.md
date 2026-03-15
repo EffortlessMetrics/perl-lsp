@@ -139,6 +139,16 @@ just semver-check-package <name>      # Check specific package
 just semver-diff <name>               # Show API diff for package
 ```
 
+### CPAN Corpus
+
+```bash
+just cpan-corpus-fetch                # Fetch top 1000 from MetaCPAN
+just cpan-corpus-install              # Install via cpanm
+just cpan-corpus-sweep                # Sweep and report
+just cpan-corpus-check                # Enforce manifest (fails on regression)
+just cpan-corpus-ratchet              # Auto-add clean modules to manifest
+```
+
 ## Development Workflow
 
 **Local-first development** - all gates run locally before CI:
@@ -194,6 +204,9 @@ These directories are excluded from the default workspace (require special build
 | Dependabot config | `.github/dependabot.yml` |
 | Supply chain security | `deny.toml`, `docs/reference/SUPPLY_CHAIN_SECURITY.md` |
 | Build tooling | `xtask/` |
+| CPAN distribution list | `.ci/cpan-top-1000-distributions.txt` |
+| CPAN corpus ratchet floor | `.ci/cpan-corpus-manifest.txt` |
+| CPAN corpus task impl | `xtask/src/tasks/cpan_corpus.rs` |
 
 ## Architecture Patterns
 
