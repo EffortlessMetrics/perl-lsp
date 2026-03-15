@@ -30,3 +30,4 @@ pub mod release;
 pub mod srp_microcrates;
 pub mod test;
 pub mod test_lsp;
+pub mod update_status;
