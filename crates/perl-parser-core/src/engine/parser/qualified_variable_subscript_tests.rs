@@ -296,4 +296,254 @@ mod tests {
             ),
         }
     }
+
+    // ---------------------------------------------------------------
+    // Expression index on qualified array
+    // Perl: $Pkg::Var[$i + 1]
+    // ---------------------------------------------------------------
+    #[test]
+    fn qualified_expression_index() {
+        let code = "$Pkg::Var[$i + 1];";
+        assert_no_errors(code);
+
+        let expr = first_expr(code);
+        match &expr.kind {
+            NodeKind::Binary { op, left, right } => {
+                assert_eq!(op, "[]");
+                match &left.kind {
+                    NodeKind::Variable { sigil, name } => {
+                        assert_eq!(sigil, "$");
+                        assert_eq!(name, "Pkg::Var");
+                    }
+                    _ => panic!("Expected Variable node, got: {}", left.kind.kind_name()),
+                }
+                // The index should be a binary + expression
+                match &right.kind {
+                    NodeKind::Binary { op: inner_op, .. } => {
+                        assert_eq!(inner_op, "+", "Expected + operator in index expression");
+                    }
+                    _ => panic!(
+                        "Expected Binary + expression in index, got: {}",
+                        right.kind.kind_name()
+                    ),
+                }
+            }
+            _ => panic!(
+                "Expected Binary subscript, got: {} (sexp: {})",
+                expr.kind.kind_name(),
+                expr.to_sexp()
+            ),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Variable key in qualified hash subscript
+    // Perl: $Pkg::Var{$key}
+    // ---------------------------------------------------------------
+    #[test]
+    fn qualified_hash_variable_key() {
+        let code = "$Pkg::Var{$key};";
+        assert_no_errors(code);
+
+        let expr = first_expr(code);
+        match &expr.kind {
+            NodeKind::Binary { op, left, right } => {
+                assert_eq!(op, "{}");
+                match &left.kind {
+                    NodeKind::Variable { sigil, name } => {
+                        assert_eq!(sigil, "$");
+                        assert_eq!(name, "Pkg::Var");
+                    }
+                    _ => panic!("Expected Variable as target, got: {}", left.kind.kind_name()),
+                }
+                // The key should be a variable $key
+                match &right.kind {
+                    NodeKind::Variable { sigil, name } => {
+                        assert_eq!(sigil, "$");
+                        assert_eq!(name, "key");
+                    }
+                    _ => panic!("Expected Variable as key, got: {}", right.kind.kind_name()),
+                }
+            }
+            _ => panic!(
+                "Expected Binary subscript, got: {} (sexp: {})",
+                expr.kind.kind_name(),
+                expr.to_sexp()
+            ),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Subscript followed by arrow dereference
+    // Perl: $Pkg::Var[0]->{key}
+    // ---------------------------------------------------------------
+    #[test]
+    fn qualified_subscript_then_arrow_deref() {
+        let code = "$Pkg::Var[0]->{key};";
+        assert_no_errors(code);
+
+        let expr = first_expr(code);
+        // Outermost should be arrow hash deref: ->{}
+        match &expr.kind {
+            NodeKind::Binary { op, left, .. } => {
+                assert_eq!(op, "->{}", "Expected ->{{}} arrow deref, got: {op}");
+                // Left should be the [] subscript
+                match &left.kind {
+                    NodeKind::Binary { op: inner_op, left: inner_left, .. } => {
+                        assert_eq!(inner_op, "[]");
+                        match &inner_left.kind {
+                            NodeKind::Variable { sigil, name } => {
+                                assert_eq!(sigil, "$");
+                                assert_eq!(name, "Pkg::Var");
+                            }
+                            _ => panic!("Expected Variable, got: {}", inner_left.kind.kind_name()),
+                        }
+                    }
+                    _ => panic!("Expected Binary [], got: {}", left.kind.kind_name()),
+                }
+            }
+            _ => panic!(
+                "Expected Binary arrow deref, got: {} (sexp: {})",
+                expr.kind.kind_name(),
+                expr.to_sexp()
+            ),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Qualified subscript in arithmetic expression
+    // Perl: $Pkg::Var[0] + $Pkg::Var{key}
+    // ---------------------------------------------------------------
+    #[test]
+    fn qualified_subscript_in_arithmetic() {
+        let code = "$Pkg::Var[0] + $Pkg::Var{key};";
+        assert_no_errors(code);
+
+        let expr = first_expr(code);
+        match &expr.kind {
+            NodeKind::Binary { op, left, right } => {
+                assert_eq!(op, "+");
+                // Left: $Pkg::Var[0]
+                match &left.kind {
+                    NodeKind::Binary { op: l_op, .. } => assert_eq!(l_op, "[]"),
+                    _ => panic!("Expected Binary [] on left, got: {}", left.kind.kind_name()),
+                }
+                // Right: $Pkg::Var{key}
+                match &right.kind {
+                    NodeKind::Binary { op: r_op, .. } => assert_eq!(r_op, "{}"),
+                    _ => panic!("Expected Binary {{}} on right, got: {}", right.kind.kind_name()),
+                }
+            }
+            _ => panic!(
+                "Expected Binary +, got: {} (sexp: {})",
+                expr.kind.kind_name(),
+                expr.to_sexp()
+            ),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Postfix increment on qualified subscripted variable
+    // Perl: $Pkg::Count{hits}++
+    // ---------------------------------------------------------------
+    #[test]
+    fn qualified_subscript_postfix_increment() {
+        let code = "$Pkg::Count{hits}++;";
+        assert_no_errors(code);
+    }
+
+    // ---------------------------------------------------------------
+    // Qualified subscript in conditional
+    // Perl: if ($Config::opt{verbose}) { ... }
+    // ---------------------------------------------------------------
+    #[test]
+    fn qualified_subscript_in_conditional() {
+        let code = "if ($Config::opt{verbose}) { 1; }";
+        assert_no_errors(code);
+    }
+
+    // ---------------------------------------------------------------
+    // Deeply qualified with string key
+    // Perl: $Config::Config{'osname'}
+    // ---------------------------------------------------------------
+    #[test]
+    fn deeply_qualified_string_key() {
+        let code = "$Config::Config{'osname'};";
+        assert_no_errors(code);
+
+        let expr = first_expr(code);
+        match &expr.kind {
+            NodeKind::Binary { op, left, .. } => {
+                assert_eq!(op, "{}");
+                match &left.kind {
+                    NodeKind::Variable { sigil, name } => {
+                        assert_eq!(sigil, "$");
+                        assert_eq!(name, "Config::Config");
+                    }
+                    _ => panic!("Expected Variable, got: {}", left.kind.kind_name()),
+                }
+            }
+            _ => panic!(
+                "Expected Binary subscript, got: {} (sexp: {})",
+                expr.kind.kind_name(),
+                expr.to_sexp()
+            ),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Hex index on deeply qualified variable (real-world pattern)
+    // Perl: $Text::Unidecode::Char[0xff] (verified structure)
+    // ---------------------------------------------------------------
+    #[test]
+    fn deeply_qualified_hex_index_structure() {
+        let code = "$Text::Unidecode::Char[0xff];";
+        assert_no_errors(code);
+
+        let expr = first_expr(code);
+        match &expr.kind {
+            NodeKind::Binary { op, left, right } => {
+                assert_eq!(op, "[]");
+                match &left.kind {
+                    NodeKind::Variable { sigil, name } => {
+                        assert_eq!(sigil, "$");
+                        assert_eq!(name, "Text::Unidecode::Char");
+                    }
+                    _ => panic!("Expected Variable, got: {}", left.kind.kind_name()),
+                }
+                // Index should be a hex number
+                match &right.kind {
+                    NodeKind::Number { value } => {
+                        assert_eq!(value, "0xff", "Expected hex literal 0xff, got: {value}");
+                    }
+                    _ => panic!("Expected Number, got: {}", right.kind.kind_name()),
+                }
+            }
+            _ => panic!(
+                "Expected Binary subscript, got: {} (sexp: {})",
+                expr.kind.kind_name(),
+                expr.to_sexp()
+            ),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // Qualified subscript used as return value
+    // Perl: return $Pkg::cache{$key};
+    // ---------------------------------------------------------------
+    #[test]
+    fn qualified_subscript_in_return() {
+        let code = "return $Pkg::cache{$key};";
+        assert_no_errors(code);
+    }
+
+    // ---------------------------------------------------------------
+    // Multiple qualified subscripts in a list
+    // Perl: ($Pkg::a[0], $Pkg::b{x})
+    // ---------------------------------------------------------------
+    #[test]
+    fn qualified_subscripts_in_list() {
+        let code = "my @list = ($Pkg::a[0], $Pkg::b{x});";
+        assert_no_errors(code);
+    }
 }
