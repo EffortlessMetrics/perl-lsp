@@ -10,6 +10,7 @@ use std::path::PathBuf;
 mod tasks;
 mod types;
 mod utils;
+use tasks::dead_code::{DeadCodeConfig, DeadCodeMode};
 use tasks::gates::{GateTier, OutputFormat};
 use tasks::*;
 use types::TestSuite;
@@ -190,6 +191,20 @@ enum Commands {
         /// Clean all artifacts including target
         #[arg(long)]
         all: bool,
+    },
+
+    /// Detect dead code, unused dependencies, and unused imports
+    ///
+    /// Combines cargo-machete/cargo-udeps with clippy dead_code lints.
+    /// Supports check (against baseline), baseline generation, and JSON report modes.
+    DeadCode {
+        /// Mode: check (default), baseline, or report
+        #[arg(value_enum, default_value = "check")]
+        mode: DeadCodeMode,
+
+        /// Strict mode: fail on any regression above baseline
+        #[arg(long)]
+        strict: bool,
     },
 
     /// Generate bindings
@@ -609,6 +624,7 @@ fn main() -> Result<()> {
         #[cfg(feature = "parser-tasks")]
         Commands::Highlight { path, scanner } => highlight::run(path, scanner),
         Commands::Clean { all } => clean::run(all),
+        Commands::DeadCode { mode, strict } => dead_code::run(DeadCodeConfig { mode, strict }),
         #[cfg(feature = "parser-tasks")]
         Commands::Bindings { header, output } => bindings::run(header, output),
         Commands::Dev { watch, port } => dev::run(watch, port),

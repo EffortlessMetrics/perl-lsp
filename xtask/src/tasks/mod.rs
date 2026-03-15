@@ -15,6 +15,7 @@ pub mod compare_parsers;
 pub mod corpus;
 pub mod corpus_audit;
 pub mod cpan_corpus;
+pub mod dead_code;
 pub mod dev;
 pub mod doc;
 pub mod e2e_validate;
