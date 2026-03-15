@@ -421,6 +421,19 @@ enum Commands {
         test_threads: u32,
     },
 
+    /// Track ignored tests and enforce gate policy
+    IgnoredTests {
+        /// Write current counts back to baseline
+        #[arg(long)]
+        update: bool,
+        /// CI gate mode: fail when ignored count increases
+        #[arg(long)]
+        check: bool,
+        /// Print detailed per-category breakdown
+        #[arg(long, short)]
+        verbose: bool,
+    },
+
     /// Manage feature catalog and LSP compliance
     Features {
         #[command(subcommand)]
@@ -727,6 +740,9 @@ fn main() -> Result<()> {
                 output_dir,
                 test_threads,
             })
+        }
+        Commands::IgnoredTests { update, check, verbose } => {
+            ignored_tests::run(update, check, verbose)
         }
         Commands::Features { command } => match command {
             FeaturesCommand::SyncDocs => features::sync_docs(),

@@ -25,6 +25,7 @@ pub mod fmt;
 pub mod gates;
 #[cfg(feature = "parser-tasks")]
 pub mod highlight;
+pub mod ignored_tests;
 pub mod parse_rust;
 pub mod parser_corpus_sweep;
 pub mod publish;
