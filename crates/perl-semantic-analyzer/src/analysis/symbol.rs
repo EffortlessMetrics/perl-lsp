@@ -1214,6 +1214,9 @@ impl SymbolExtractor {
             });
         }
 
+        // Build accessor documentation that includes the isa type when available.
+        let accessor_doc = Self::moo_accessor_doc(&option_map);
+
         for method_name in generated_methods {
             self.table.add_symbol(Symbol {
                 name: method_name.clone(),
@@ -1222,7 +1225,7 @@ impl SymbolExtractor {
                 location: has_location,
                 scope_id,
                 declaration: Some("has".to_string()),
-                documentation: Some("Generated accessor from Moo/Moose `has`".to_string()),
+                documentation: Some(accessor_doc.clone()),
                 attributes: metadata.clone(),
             });
         }
@@ -1367,6 +1370,31 @@ impl SymbolExtractor {
             }
         }
         metadata
+    }
+
+    /// Build a documentation string for a generated Moo/Moose accessor method.
+    ///
+    /// Includes the `isa` type constraint and access mode when present in the
+    /// option map, producing hover-friendly documentation such as:
+    ///
+    /// ```text
+    /// Moo/Moose accessor (isa: Str, ro)
+    /// ```
+    fn moo_accessor_doc(option_map: &HashMap<String, String>) -> String {
+        let mut parts = Vec::new();
+
+        if let Some(isa) = option_map.get("isa") {
+            parts.push(format!("isa: {isa}"));
+        }
+        if let Some(is) = option_map.get("is") {
+            parts.push(is.clone());
+        }
+
+        if parts.is_empty() {
+            "Generated accessor from Moo/Moose `has`".to_string()
+        } else {
+            format!("Moo/Moose accessor ({})", parts.join(", "))
+        }
     }
 
     /// Compute accessor method names for a Moo/Moose `has` declaration.
