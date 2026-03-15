@@ -212,6 +212,25 @@ else
     echo "Creating .claude/settings.json..."
     cat > "$SETTINGS" <<SETTINGSEOF
 {
+  "permissions": {
+    "allow": [
+      "Bash(gh:*)",
+      "Bash(git:*)",
+      "Bash(${FMT_CMD%% *}:*)",
+      "Bash(${TEST_CMD%% *}:*)",
+      "Bash(bash:*)",
+      "Bash(python3:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(echo:*)",
+      "Bash(chmod:*)",
+      "Bash(find:*)",
+      "WebFetch",
+      "WebSearch"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {

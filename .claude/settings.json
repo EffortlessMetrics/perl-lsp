@@ -1,4 +1,34 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(gh:*)",
+      "Bash(git:*)",
+      "Bash(cargo:*)",
+      "Bash(just:*)",
+      "Bash(python3:*)",
+      "Bash(bash:*)",
+      "Bash(sed:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(rm:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(sort:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(echo:*)",
+      "Bash(date:*)",
+      "Bash(chmod:*)",
+      "Bash(diff:*)",
+      "Bash(find:*)",
+      "Bash(for:*)",
+      "WebFetch",
+      "WebSearch"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
