@@ -386,12 +386,25 @@ impl<'a> Parser<'a> {
                         Box::new(self.parse_assignment()?)
                     };
 
-                    self.expect(TokenKind::Comma)?;
+                    // Accept comma or fat arrow between variable and package
+                    // (Perl treats `=>` as a synonym for `,`)
+                    match self.peek_kind() {
+                        Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {
+                            self.consume_token()?;
+                        }
+                        _ => {
+                            return Err(ParseError::unexpected(
+                                "Comma".to_string(),
+                                format!("{:?}", self.peek_kind()),
+                                self.current_position(),
+                            ));
+                        }
+                    }
                     let package = Box::new(self.parse_assignment()?);
 
                     let mut args = vec![];
-                    while self.peek_kind() == Some(TokenKind::Comma) {
-                        self.consume_token()?; // consume ,
+                    while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                        self.consume_token()?; // consume , or =>
                         args.push(self.parse_assignment()?);
                     }
 
@@ -503,12 +516,16 @@ impl<'a> Parser<'a> {
                                 args.push(self.parse_assignment_or_declaration()?);
                             }
 
-                            // Handle map/grep/sort { block } LIST case where no comma separates block and list
-                            if parsed_block_arg 
-                                && self.peek_kind() != Some(TokenKind::Comma) 
-                                && !self.is_at_statement_end() 
-                            {
-                                args.push(self.parse_assignment()?);
+                            // Handle map/grep/sort { block } LIST case where no comma separates block and list.
+                            // Also skip an optional fat arrow (`=>`) which Perl treats as a comma synonym.
+                            if parsed_block_arg && !self.is_at_statement_end() {
+                                // Skip optional comma or fat arrow before the list
+                                if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    self.consume_token()?;
+                                }
+                                if !self.is_at_statement_end() {
+                                    args.push(self.parse_assignment()?);
+                                }
                             }
 
                             // Parse remaining arguments
@@ -518,8 +535,8 @@ impl<'a> Parser<'a> {
                                 while !Self::is_statement_terminator(self.peek_kind())
                                     && !self.is_statement_modifier_keyword()
                                 {
-                                    // Skip optional comma
-                                    if self.peek_kind() == Some(TokenKind::Comma) {
+                                    // Skip optional comma or fat arrow
+                                    if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                         self.consume_token()?;
                                     }
                                     args.push(self.parse_assignment()?);
