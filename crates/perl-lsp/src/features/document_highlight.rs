@@ -52,7 +52,9 @@ impl DocumentHighlightProvider {
 
         // Get the symbol name and kind
         let symbol_info = if let Some(ref node) = target_node {
-            self.extract_symbol_info(node, source)
+            // Check if this variable is inside a subscript operation and normalize
+            // the sigil accordingly (e.g., $array[0] -> @array, $hash{k} -> %hash)
+            self.extract_symbol_info_with_context(node, source, ast, byte_offset)
         } else {
             // Fallback: check for synthetic positions (e.g., catch parameters)
             self.extract_symbol_at_offset(ast, source, byte_offset)
@@ -390,6 +392,100 @@ impl DocumentHighlightProvider {
         }
     }
 
+    /// Extract symbol info with AST context awareness.
+    ///
+    /// When the cursor is on a variable inside a subscript operation, this
+    /// normalizes the sigil to the canonical container type:
+    /// - `$array[0]` -> canonical sigil `@` (array access)
+    /// - `$hash{key}` -> canonical sigil `%` (hash access)
+    /// - `$#array` -> canonical sigil `@` (array last index)
+    fn extract_symbol_info_with_context(
+        &self,
+        node: &Node,
+        source: &str,
+        ast: &Node,
+        byte_offset: usize,
+    ) -> Option<SymbolInfo> {
+        let base_info = self.extract_symbol_info(node, source)?;
+
+        // Only normalize when we have a $ sigil variable
+        if base_info.sigil.as_deref() != Some("$") {
+            return Some(base_info);
+        }
+
+        // Handle $#array -> normalize to @array
+        if let Some(bare_name) = base_info.name.strip_prefix('#') {
+            if !bare_name.is_empty() {
+                return Some(SymbolInfo {
+                    name: bare_name.to_string(),
+                    sigil: Some("@".to_string()),
+                    is_method: false,
+                    is_function: false,
+                });
+            }
+        }
+
+        // Check if this $var is the left child of a Binary { op: "[]" | "{}" }
+        if let Some(parent_op) = self.find_subscript_parent(ast, byte_offset) {
+            match parent_op.as_str() {
+                "[]" => {
+                    return Some(SymbolInfo {
+                        name: base_info.name,
+                        sigil: Some("@".to_string()),
+                        is_method: false,
+                        is_function: false,
+                    });
+                }
+                "{}" => {
+                    return Some(SymbolInfo {
+                        name: base_info.name,
+                        sigil: Some("%".to_string()),
+                        is_method: false,
+                        is_function: false,
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        Some(base_info)
+    }
+
+    /// Find the subscript operator of a Binary node that is the parent of the
+    /// variable at the given offset, but only if the variable is the `left` child
+    /// (the container being subscripted, not the index/key).
+    fn find_subscript_parent(&self, node: &Node, offset: usize) -> Option<String> {
+        if offset < node.location.start || offset >= node.location.end {
+            return None;
+        }
+
+        // If this is a Binary subscript and the offset falls inside the left child
+        if let NodeKind::Binary { op, left, .. } = &node.kind {
+            if (op == "[]" || op == "{}")
+                && offset >= left.location.start
+                && offset < left.location.end
+            {
+                // Verify the left child is a Variable with $ sigil
+                if let NodeKind::Variable { sigil, .. } = &left.kind {
+                    if sigil == "$" {
+                        return Some(op.clone());
+                    }
+                }
+            }
+        }
+
+        // Recurse into children
+        if let Some(children) = self.get_children(node) {
+            for child in children {
+                if let Some(op) = self.find_subscript_parent(child, offset) {
+                    return Some(op);
+                }
+            }
+        }
+
+        None
+    }
+
     /// Collect all highlights for a symbol
     fn collect_highlights(
         &self,
@@ -417,20 +513,20 @@ impl DocumentHighlightProvider {
             highlights.push(DocumentHighlight { location: node.location, kind });
         }
 
-        // Cross-sigil matching: %hash <-> $hash{key}, @array <-> $array[idx]
+        // Cross-sigil matching for variables that refer to the same underlying
+        // container but use a different sigil due to Perl's context rules:
+        //   %hash  <-> $hash{key}   (hash element access)
+        //   %hash  <-> @hash{@keys} (hash slice)
+        //   @array <-> $array[idx]  (array element access)
+        //   @array <-> $#array      (array last index)
         if let NodeKind::Variable { sigil, name } = &node.kind {
-            if name == &target.name && !self.node_matches_symbol(node, source, target) {
+            if !self.node_matches_symbol(node, source, target) {
                 if let Some(target_sigil) = &target.sigil {
-                    if let Some(parent_node) = parent {
-                        if let NodeKind::Binary { op, .. } = &parent_node.kind {
-                            let cross_match = (target_sigil == "%" && sigil == "$" && op == "{}")
-                                || (target_sigil == "@" && sigil == "$" && op == "[]");
-                            if cross_match {
-                                let kind = self.determine_highlight_kind_with_parent(node, parent);
-                                highlights
-                                    .push(DocumentHighlight { location: node.location, kind });
-                            }
-                        }
+                    let cross_match =
+                        self.is_cross_sigil_match(sigil, name, target_sigil, &target.name, parent);
+                    if cross_match {
+                        let kind = self.determine_highlight_kind_with_parent(node, parent);
+                        highlights.push(DocumentHighlight { location: node.location, kind });
                     }
                 }
             }
@@ -519,6 +615,62 @@ impl DocumentHighlightProvider {
         }
     }
 
+    /// Check whether a variable occurrence with `(sigil, name)` is a cross-sigil
+    /// match for the target `(target_sigil, target_name)`.
+    ///
+    /// Cross-sigil relationships in Perl:
+    /// - `$hash{key}` accesses `%hash` -> `$` + `{}` parent = `%`
+    /// - `@hash{qw(a b)}` slices `%hash` -> `@` + `{}` parent = `%`
+    /// - `$array[idx]` accesses `@array` -> `$` + `[]` parent = `@`
+    /// - `$#array` is the last index of `@array` -> name `#foo` maps to `@foo`
+    fn is_cross_sigil_match(
+        &self,
+        sigil: &str,
+        name: &str,
+        target_sigil: &str,
+        target_name: &str,
+        parent: Option<&Node>,
+    ) -> bool {
+        // Handle $#array <-> @array
+        // $#array is Variable { sigil: "$", name: "#array" }
+        if target_sigil == "@" && sigil == "$" {
+            if let Some(bare) = name.strip_prefix('#') {
+                if bare == target_name {
+                    return true;
+                }
+            }
+        }
+        // Reverse: target is $#array (normalized to @array), node is @array
+        // This case is handled by the normal sigil matching since we normalized
+        // the target sigil in extract_symbol_info_with_context.
+
+        // Same-name checks with subscript context
+        if name != target_name {
+            return false;
+        }
+
+        if let Some(parent_node) = parent {
+            if let NodeKind::Binary { op, .. } = &parent_node.kind {
+                // $hash{key} when target is %hash
+                if target_sigil == "%" && sigil == "$" && op == "{}" {
+                    return true;
+                }
+                // @hash{@keys} (hash slice) when target is %hash
+                if target_sigil == "%" && sigil == "@" && op == "{}" {
+                    return true;
+                }
+                // $array[idx] when target is @array
+                if target_sigil == "@" && sigil == "$" && op == "[]" {
+                    return true;
+                }
+                // @array[0,1] (array slice) when target is @array
+                // This is already matched by normal sigil matching since both are @.
+            }
+        }
+
+        false
+    }
+
     /// Check if a node matches the target symbol
     fn node_matches_symbol(&self, node: &Node, source: &str, target: &SymbolInfo) -> bool {
         match &node.kind {
@@ -577,7 +729,7 @@ impl DocumentHighlightProvider {
                                 DocumentHighlightKind::Read
                             }
                         }
-                        // Left side of assignment is write
+                        // Left side of assignment is write (includes compound assignments)
                         NodeKind::Assignment { lhs, .. } => {
                             if std::ptr::eq(lhs.as_ref(), node) {
                                 DocumentHighlightKind::Write
@@ -588,6 +740,31 @@ impl DocumentHighlightProvider {
                         // Increment/decrement operations are writes
                         NodeKind::Unary { op, operand, .. } => {
                             if (op == "++" || op == "--") && std::ptr::eq(operand.as_ref(), node) {
+                                DocumentHighlightKind::Write
+                            } else {
+                                DocumentHighlightKind::Read
+                            }
+                        }
+                        // Foreach loop variable is a write (iterator binding)
+                        NodeKind::Foreach { variable, .. } => {
+                            if std::ptr::eq(variable.as_ref(), node) {
+                                DocumentHighlightKind::Write
+                            } else {
+                                DocumentHighlightKind::Read
+                            }
+                        }
+                        // Signature parameters are writes (value binding on call)
+                        NodeKind::MandatoryParameter { variable }
+                        | NodeKind::SlurpyParameter { variable }
+                        | NodeKind::NamedParameter { variable } => {
+                            if std::ptr::eq(variable.as_ref(), node) {
+                                DocumentHighlightKind::Write
+                            } else {
+                                DocumentHighlightKind::Read
+                            }
+                        }
+                        NodeKind::OptionalParameter { variable, .. } => {
+                            if std::ptr::eq(variable.as_ref(), node) {
                                 DocumentHighlightKind::Write
                             } else {
                                 DocumentHighlightKind::Read
@@ -619,35 +796,258 @@ mod tests {
     use super::*;
     use crate::Parser;
 
-    #[test]
-    fn test_highlight_scalar_variable() -> Result<(), Box<dyn std::error::Error>> {
-        let code = r#"my $foo = 42;
-print $foo;
-$foo = 100;"#;
+    /// Helper to parse code and find highlights at a given byte offset.
+    fn highlights_at(
+        code: &str,
+        byte_offset: usize,
+    ) -> Result<Vec<DocumentHighlight>, Box<dyn std::error::Error>> {
         let mut parser = Parser::new(code);
         let ast = parser.parse()?;
         let provider = DocumentHighlightProvider::new();
+        Ok(provider.find_highlights(&ast, code, byte_offset))
+    }
 
-        // Position on first $foo (byte offset around 3)
-        let highlights = provider.find_highlights(&ast, code, 3);
+    // ---------------------------------------------------------------
+    // Scalar variable highlighting
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_highlight_scalar_variable() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my $foo = 42;\nprint $foo;\n$foo = 100;";
+        let highlights = highlights_at(code, 3)?; // on $foo
 
         assert!(!highlights.is_empty());
         Ok(())
     }
 
     #[test]
+    fn scalar_all_occurrences() -> Result<(), Box<dyn std::error::Error>> {
+        //              0         1         2         3
+        //              0123456789012345678901234567890123456
+        let code = "my $foo = 1;\nprint $foo;\n$foo = $foo + 1;";
+        let highlights = highlights_at(code, 3)?; // first $foo
+
+        // 4 occurrences: declaration, print arg, assignment lhs, addition operand
+        assert_eq!(
+            highlights.len(),
+            4,
+            "Expected 4 highlights for $foo, found {}: {:?}",
+            highlights.len(),
+            highlights
+        );
+        Ok(())
+    }
+
+    // ---------------------------------------------------------------
+    // Array variable cross-sigil highlighting
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn array_cross_sigil_from_at() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor on @array should highlight @array, $array[0], $#array
+        let code = "my @array = (1,2,3);\nmy $x = $array[0];\nmy $len = $#array;";
+        // @array starts at offset 3
+        let highlights = highlights_at(code, 3)?;
+
+        // Should find: @array (decl), $array (in $array[0]), $#array
+        assert!(
+            highlights.len() >= 3,
+            "Expected at least 3 highlights for @array (got {}): {:?}",
+            highlights.len(),
+            highlights
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn array_cross_sigil_from_dollar_subscript() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor on $array in $array[0] should highlight @array too
+        let code = "my @array = (1,2,3);\nmy $x = $array[0];\nmy $len = $#array;";
+        // $array in "$array[0]" starts after "my @array = (1,2,3);\nmy $x = "
+        let offset = code.find("$array[0]").ok_or("test setup")?;
+        let highlights = highlights_at(code, offset)?;
+
+        // Should find: @array (decl), $array (in $array[0]), $#array
+        assert!(
+            highlights.len() >= 3,
+            "Expected at least 3 highlights from $array[0] cursor (got {}): {:?}",
+            highlights.len(),
+            highlights
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn array_cross_sigil_dollar_hash() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor on $#array should highlight @array too
+        let code = "my @array = (1,2,3);\nmy $len = $#array;";
+        let offset = code.find("$#array").ok_or("test setup")?;
+        let highlights = highlights_at(code, offset)?;
+
+        // Should find: @array (decl), $#array
+        assert!(
+            highlights.len() >= 2,
+            "Expected at least 2 highlights from $#array cursor (got {}): {:?}",
+            highlights.len(),
+            highlights
+        );
+        Ok(())
+    }
+
+    // ---------------------------------------------------------------
+    // Hash variable cross-sigil highlighting
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn hash_cross_sigil_from_percent() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor on %hash should highlight %hash, $hash{key}
+        let code = "my %hash = (a => 1);\n$hash{b} = 2;\nmy $v = $hash{a};";
+        let highlights = highlights_at(code, 3)?; // on %hash
+
+        // Should find: %hash (decl), $hash (in $hash{b}), $hash (in $hash{a})
+        assert!(
+            highlights.len() >= 3,
+            "Expected at least 3 highlights for %%hash (got {}): {:?}",
+            highlights.len(),
+            highlights
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn hash_cross_sigil_from_dollar_brace() -> Result<(), Box<dyn std::error::Error>> {
+        // Cursor on $hash in $hash{key} should highlight %hash too
+        let code = "my %hash = (a => 1);\nmy $v = $hash{a};";
+        let offset = code.find("$hash{a}").ok_or("test setup")?;
+        let highlights = highlights_at(code, offset)?;
+
+        // Should find: %hash (decl), $hash (in $hash{a})
+        assert!(
+            highlights.len() >= 2,
+            "Expected at least 2 highlights from $hash{{a}} cursor (got {}): {:?}",
+            highlights.len(),
+            highlights
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn hash_slice_cross_sigil() -> Result<(), Box<dyn std::error::Error>> {
+        // @hash{@keys} should match %hash
+        let code = "my %hash = (a => 1, b => 2);\nmy @vals = @hash{qw(a b)};";
+        let highlights = highlights_at(code, 3)?; // on %hash
+
+        // Should find: %hash (decl), @hash (in @hash{qw(a b)})
+        assert!(
+            highlights.len() >= 2,
+            "Expected at least 2 highlights for %%hash with slice (got {}): {:?}",
+            highlights.len(),
+            highlights
+        );
+        Ok(())
+    }
+
+    // ---------------------------------------------------------------
+    // Write vs Read highlighting
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn write_vs_read_declaration() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my $foo = 42;\nprint $foo;";
+        let highlights = highlights_at(code, 3)?;
+
+        assert!(highlights.len() >= 2, "Expected at least 2 highlights");
+
+        // First highlight (declaration) should be Write
+        let decl_highlight = highlights.iter().find(|h| h.location.start == 3);
+        assert!(
+            decl_highlight.is_some_and(|h| h.kind == DocumentHighlightKind::Write),
+            "Declaration should be Write"
+        );
+
+        // Second highlight (print usage) should be Read
+        let print_offset = code.find("print $foo").ok_or("test setup")? + 6;
+        let read_highlight = highlights.iter().find(|h| h.location.start == print_offset);
+        assert!(
+            read_highlight.is_some_and(|h| h.kind == DocumentHighlightKind::Read),
+            "Usage in print should be Read"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn write_vs_read_assignment() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my $x = 1;\n$x = 2;\nprint $x;";
+        let highlights = highlights_at(code, 3)?;
+
+        assert!(highlights.len() >= 3, "Expected at least 3 highlights");
+
+        // Declaration is Write
+        assert_eq!(highlights[0].kind, DocumentHighlightKind::Write);
+
+        // Assignment is Write
+        let assign_offset = code.find("\n$x = 2").ok_or("test setup")? + 1;
+        let assign_highlight = highlights.iter().find(|h| h.location.start == assign_offset);
+        assert!(
+            assign_highlight.is_some_and(|h| h.kind == DocumentHighlightKind::Write),
+            "Assignment LHS should be Write"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn write_vs_read_increment() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my $x = 0;\n$x++;\nprint $x;";
+        let highlights = highlights_at(code, 3)?;
+
+        assert!(highlights.len() >= 3, "Expected at least 3 highlights");
+
+        // Increment should be Write
+        let incr_offset = code.find("\n$x++").ok_or("test setup")? + 1;
+        let incr_highlight = highlights.iter().find(|h| h.location.start == incr_offset);
+        assert!(
+            incr_highlight.is_some_and(|h| h.kind == DocumentHighlightKind::Write),
+            "Increment should be Write"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn write_vs_read_foreach_variable() -> Result<(), Box<dyn std::error::Error>> {
+        let code = "my @items = (1,2,3);\nfor my $item (@items) {\n    print $item;\n}";
+        // Find the offset of "$item" in "for my $item"
+        let item_offset = code.find("$item").ok_or("test setup")?;
+        let highlights = highlights_at(code, item_offset)?;
+
+        assert!(
+            highlights.len() >= 2,
+            "Expected at least 2 highlights for $item (got {}): {:?}",
+            highlights.len(),
+            highlights
+        );
+
+        // The loop variable declaration should be Write
+        let decl_highlight = highlights.iter().find(|h| h.location.start == item_offset);
+        assert!(
+            decl_highlight.is_some_and(|h| h.kind == DocumentHighlightKind::Write),
+            "Foreach loop variable should be Write"
+        );
+
+        Ok(())
+    }
+
+    // ---------------------------------------------------------------
+    // Existing tests (preserved)
+    // ---------------------------------------------------------------
+
+    #[test]
     fn test_highlight_function_call() -> Result<(), Box<dyn std::error::Error>> {
-        let code = r#"sub hello { print "Hello" }
-hello();
-hello();"#;
-        let mut parser = Parser::new(code);
-        let ast = parser.parse()?;
-        let provider = DocumentHighlightProvider::new();
+        let code = "sub hello { print \"Hello\" }\nhello();\nhello();";
+        let highlights = highlights_at(code, 29)?; // first hello() call
 
-        // Position on first hello() call (byte offset 29)
-        let highlights = provider.find_highlights(&ast, code, 29);
-
-        // Should find both hello() calls (fixed in Issue #191)
         assert!(
             highlights.len() >= 2,
             "Expected at least 2 highlights for function calls, found {}",
@@ -658,13 +1058,8 @@ hello();"#;
 
     #[test]
     fn test_no_highlights_for_non_symbol() -> Result<(), Box<dyn std::error::Error>> {
-        let code = r#"my $x = "Hello World";"#;
-        let mut parser = Parser::new(code);
-        let ast = parser.parse()?;
-        let provider = DocumentHighlightProvider::new();
-
-        // Position on string literal (byte offset 12 is in "Hello")
-        let highlights = provider.find_highlights(&ast, code, 12);
+        let code = "my $x = \"Hello World\";";
+        let highlights = highlights_at(code, 12)?; // inside string "Hello"
 
         assert_eq!(highlights.len(), 0);
         Ok(())
@@ -672,17 +1067,9 @@ hello();"#;
 
     #[test]
     fn test_highlight_statement_modifier() -> Result<(), Box<dyn std::error::Error>> {
-        // Test statement modifiers with new AST structure (Issue #191)
-        let code = r#"my $x = 5;
-print $x if $x > 0;"#;
-        let mut parser = Parser::new(code);
-        let ast = parser.parse()?;
-        let provider = DocumentHighlightProvider::new();
+        let code = "my $x = 5;\nprint $x if $x > 0;";
+        let highlights = highlights_at(code, 3)?; // first $x
 
-        // Position on first $x
-        let highlights = provider.find_highlights(&ast, code, 3);
-
-        // Should find all 3 occurrences of $x
         assert!(
             highlights.len() >= 3,
             "Expected at least 3 highlights for $x, found {}",
