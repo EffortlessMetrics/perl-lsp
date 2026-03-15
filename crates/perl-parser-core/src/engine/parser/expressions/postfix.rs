@@ -304,9 +304,9 @@ impl<'a> Parser<'a> {
                             if name == "bless" {
                                 args.push(self.parse_hash_or_block()?);
 
-                                // Parse remaining arguments separated by commas
-                                while self.peek_kind() == Some(TokenKind::Comma) {
-                                    self.consume_token()?; // consume comma
+                                // Parse remaining arguments separated by commas or fat arrows
+                                while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    self.consume_token()?; // consume comma or fat arrow
                                     if self.is_at_statement_end() {
                                         break;
                                     }
@@ -319,16 +319,16 @@ impl<'a> Parser<'a> {
                                 // Parse trailing list arguments for map/grep/sort.
                                 // In Perl, the block form does not require a comma
                                 // before the list: `grep { ... } @array`
-                                // First consume without a comma if present
+                                // First consume without a comma/fat arrow if present
                                 if !self.is_at_statement_end()
-                                    && self.peek_kind() != Some(TokenKind::Comma)
+                                    && !matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow))
                                 {
                                     args.push(self.parse_ternary()?);
                                 }
 
-                                // Then consume any remaining comma-separated arguments
-                                while self.peek_kind() == Some(TokenKind::Comma) {
-                                    self.consume_token()?; // consume comma
+                                // Then consume any remaining comma/fat-arrow-separated arguments
+                                while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    self.consume_token()?; // consume comma or fat arrow
                                     if self.is_at_statement_end() {
                                         break;
                                     }
@@ -338,9 +338,9 @@ impl<'a> Parser<'a> {
                                 // Other builtins - parse {} as first argument
                                 args.push(self.parse_hash_or_block()?);
 
-                                // Parse remaining arguments separated by commas
-                                while self.peek_kind() == Some(TokenKind::Comma) {
-                                    self.consume_token()?; // consume comma
+                                // Parse remaining arguments separated by commas or fat arrows
+                                while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                    self.consume_token()?; // consume comma or fat arrow
                                     if self.is_at_statement_end() {
                                         break;
                                     }
@@ -458,11 +458,11 @@ impl<'a> Parser<'a> {
                                     // Parse remaining arguments for map/grep/sort without requiring commas
                                     // But respect statement boundaries including ] and )
                                     while !self.is_at_statement_end() {
-                                        // Skip comma if present
-                                        if self.peek_kind() == Some(TokenKind::Comma) {
+                                        // Skip comma or fat arrow if present
+                                        if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                             self.consume_token()?;
                                         }
-                                        // Check again after potential comma
+                                        // Check again after potential comma/fat arrow
                                         if self.is_at_statement_end() {
                                             break;
                                         }
@@ -474,9 +474,9 @@ impl<'a> Parser<'a> {
                                     // Special handling for bless {} - parse it as a hash
                                     args.push(self.parse_hash_or_block()?);
 
-                                    // Parse remaining arguments separated by commas
-                                    while self.peek_kind() == Some(TokenKind::Comma) {
-                                        self.consume_token()?; // consume comma
+                                    // Parse remaining arguments separated by commas or fat arrows
+                                    while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
+                                        self.consume_token()?; // consume comma or fat arrow
                                         if self.is_at_statement_end() {
                                             break;
                                         }
@@ -490,8 +490,8 @@ impl<'a> Parser<'a> {
                                     self.tokens.relex_as_term();
                                     args.push(self.parse_ternary()?);
 
-                                    // Parse remaining arguments separated by commas
-                                    while self.peek_kind() == Some(TokenKind::Comma) {
+                                    // Parse remaining arguments separated by commas or fat arrows
+                                    while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                         self.consume_token()?;
                                         if self.is_at_statement_end() {
                                             break;

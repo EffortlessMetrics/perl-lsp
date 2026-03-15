@@ -3173,6 +3173,122 @@ mod line_index_extended_tests {
         Ok(())
     }
 
+    // ---- Wave 2B-ext: Fat arrow in postfix builtin paths ----
+
+    #[test]
+    fn wave2b_bless_hash_literal_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
+        // bless {} => $class  —  exercises the bless-with-LeftBrace path in postfix.rs
+        let mut parser = Parser::new("bless {} => $class;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "bless {{}} => $class should parse cleanly, got: {sexp}");
+        assert!(sexp.contains("call bless"), "should be a bless call, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_bless_hash_with_entries_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
+        // bless { key => 1 } => $class
+        let mut parser = Parser::new("bless { key => 1 } => $class;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "bless {{ key => 1 }} => $class should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_split_regex_fat_arrow() -> Result<(), Box<dyn std::error::Error>> {
+        // split /,/ => @parts  —  exercises the split-with-Slash path in postfix.rs
+        let mut parser = Parser::new("split /,/ => @parts;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "split /,/ => @parts should parse cleanly, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_unshift_fat_arrow_multiple() -> Result<(), Box<dyn std::error::Error>> {
+        // unshift @arr => 1, 2, 3  —  fat arrow then commas
+        let mut parser = Parser::new("unshift @arr => 1, 2, 3;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "unshift @arr => 1, 2, 3 should parse cleanly, got: {sexp}"
+        );
+        assert!(sexp.contains("call unshift"), "should be an unshift call, got: {sexp}");
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_grep_block_fat_arrow_list() -> Result<(), Box<dyn std::error::Error>> {
+        // grep { defined } => @list  —  exercises the sort/map/grep block path in postfix.rs
+        // (when reached via postfix, e.g. inside an expression context)
+        let mut parser = Parser::new("my @r = grep { defined } => @list;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "grep {{ defined }} => @list in assignment should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_bless_hash_fat_arrow_in_assignment() -> Result<(), Box<dyn std::error::Error>> {
+        // my $obj = bless {} => $class  —  in assignment, goes through postfix.rs bless path
+        let mut parser = Parser::new("my $obj = bless {} => $class;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "bless {{}} => $class in assignment should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_split_regex_fat_arrow_in_assignment() -> Result<(), Box<dyn std::error::Error>> {
+        // my @parts = split /,/ => $str  —  in assignment, goes through postfix.rs split path
+        let mut parser = Parser::new("my @parts = split /,/ => $str;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "split /,/ => $str in assignment should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_sort_block_fat_arrow_in_assignment() -> Result<(), Box<dyn std::error::Error>> {
+        // my @s = sort { $a <=> $b } => @list  —  in assignment, goes through postfix.rs
+        let mut parser = Parser::new("my @s = sort { $a <=> $b } => @list;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "sort {{ $a <=> $b }} => @list in assignment should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn wave2b_map_block_fat_arrow_in_assignment() -> Result<(), Box<dyn std::error::Error>> {
+        // my @r = map { $_ * 2 } => @list
+        let mut parser = Parser::new("my @r = map { $_ * 2 } => @list;");
+        let ast = parser.parse()?;
+        let sexp = ast.to_sexp();
+        assert!(
+            !sexp.contains("ERROR"),
+            "map {{ $_ * 2 }} => @list in assignment should parse cleanly, got: {sexp}"
+        );
+        Ok(())
+    }
+
     // ---- Wave 2C: split /regex/ ----
 
     #[test]
