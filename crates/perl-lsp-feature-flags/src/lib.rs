@@ -410,7 +410,7 @@ impl BuildFlags {
 
 #[cfg(test)]
 mod tests {
-    use super::BuildFlags;
+    use super::{AdvertisedFeatures, BuildFlags};
     use perl_lsp_feature_contracts::all_features;
     use perl_lsp_feature_ids::LSP_DOCUMENT_COLOR;
 
@@ -490,5 +490,179 @@ mod tests {
                 declaration: true
             }
         );
+    }
+
+    // ── ga_lock profile shape ───────────────────────────────────────
+
+    #[test]
+    fn ga_lock_has_expected_profile_shape() {
+        let ga = BuildFlags::ga_lock();
+        assert!(ga.completion);
+        assert!(ga.hover);
+        assert!(ga.definition);
+        assert!(ga.formatting, "ga-lock should include formatting");
+        assert!(ga.range_formatting, "ga-lock should include range_formatting");
+        assert!(!ga.inline_values, "ga-lock should exclude inline_values");
+    }
+
+    // ── all() profile enables everything ────────────────────────────
+
+    #[test]
+    fn all_profile_enables_every_flag() {
+        let all = BuildFlags::all();
+        assert!(all.completion);
+        assert!(all.hover);
+        assert!(all.definition);
+        assert!(all.type_definition);
+        assert!(all.implementation);
+        assert!(all.references);
+        assert!(all.document_symbol);
+        assert!(all.workspace_symbol);
+        assert!(all.inlay_hints);
+        assert!(all.pull_diagnostics);
+        assert!(all.workspace_symbol_resolve);
+        assert!(all.semantic_tokens);
+        assert!(all.code_actions);
+        assert!(all.execute_command);
+        assert!(all.rename);
+        assert!(all.document_links);
+        assert!(all.selection_ranges);
+        assert!(all.on_type_formatting);
+        assert!(all.code_lens);
+        assert!(all.call_hierarchy);
+        assert!(all.type_hierarchy);
+        assert!(all.linked_editing);
+        assert!(all.inline_completion);
+        assert!(all.inline_values);
+        assert!(all.notebook_document_sync);
+        assert!(all.notebook_cell_execution);
+        assert!(all.moniker);
+        assert!(all.document_color);
+        assert!(all.source_organize_imports);
+        assert!(all.formatting);
+        assert!(all.range_formatting);
+        assert!(all.folding_range);
+        assert!(all.signature_help);
+        assert!(all.document_highlight);
+        assert!(all.declaration);
+    }
+
+    // ── Default is all-false ────────────────────────────────────────
+
+    #[test]
+    fn default_flags_are_all_false() {
+        let default = BuildFlags::default();
+        assert!(default.to_feature_ids().is_empty(), "default flags should yield no features");
+    }
+
+    // ── all() produces strictly more IDs than ga_lock() ─────────────
+
+    #[test]
+    fn all_produces_superset_of_ga_lock_ids() {
+        let all_ids = BuildFlags::all().to_feature_ids();
+        let ga_ids = BuildFlags::ga_lock().to_feature_ids();
+        for id in &ga_ids {
+            assert!(all_ids.contains(id), "'all' profile should contain ga-lock feature '{id}'");
+        }
+        assert!(all_ids.len() >= ga_ids.len());
+    }
+
+    // ── to_advertised_features mapping ──────────────────────────────
+
+    #[test]
+    fn to_advertised_features_maps_completion() {
+        let flags = BuildFlags { completion: true, ..Default::default() };
+        let adv = flags.to_advertised_features();
+        assert!(adv.completion);
+        assert!(!adv.hover);
+    }
+
+    #[test]
+    fn to_advertised_features_maps_code_actions_to_code_action() {
+        let flags = BuildFlags { code_actions: true, ..Default::default() };
+        let adv = flags.to_advertised_features();
+        assert!(
+            adv.code_action,
+            "BuildFlags.code_actions should map to AdvertisedFeatures.code_action"
+        );
+    }
+
+    #[test]
+    fn to_advertised_features_maps_pull_diagnostics_to_diagnostic_provider() {
+        let flags = BuildFlags { pull_diagnostics: true, ..Default::default() };
+        let adv = flags.to_advertised_features();
+        assert!(
+            adv.diagnostic_provider,
+            "BuildFlags.pull_diagnostics should map to AdvertisedFeatures.diagnostic_provider"
+        );
+    }
+
+    #[test]
+    fn to_advertised_features_maps_selection_ranges_to_selection_range() {
+        let flags = BuildFlags { selection_ranges: true, ..Default::default() };
+        let adv = flags.to_advertised_features();
+        assert!(
+            adv.selection_range,
+            "BuildFlags.selection_ranges should map to AdvertisedFeatures.selection_range"
+        );
+    }
+
+    #[test]
+    fn default_advertised_features_are_all_false() {
+        let adv = AdvertisedFeatures::default();
+        assert!(!adv.completion);
+        assert!(!adv.hover);
+        assert!(!adv.definition);
+        assert!(!adv.references);
+        assert!(!adv.document_symbol);
+        assert!(!adv.workspace_symbol);
+        assert!(!adv.code_action);
+        assert!(!adv.code_lens);
+        assert!(!adv.formatting);
+        assert!(!adv.rename);
+    }
+
+    // ── Individual flag toggling produces exactly one feature ID ─────
+
+    #[test]
+    fn single_flag_produces_single_id() {
+        let cases: Vec<(&str, BuildFlags)> = vec![
+            ("completion", BuildFlags { completion: true, ..Default::default() }),
+            ("hover", BuildFlags { hover: true, ..Default::default() }),
+            ("definition", BuildFlags { definition: true, ..Default::default() }),
+            ("references", BuildFlags { references: true, ..Default::default() }),
+            ("rename", BuildFlags { rename: true, ..Default::default() }),
+            ("formatting", BuildFlags { formatting: true, ..Default::default() }),
+            ("signature_help", BuildFlags { signature_help: true, ..Default::default() }),
+            ("declaration", BuildFlags { declaration: true, ..Default::default() }),
+        ];
+        for (label, flags) in cases {
+            let ids = flags.to_feature_ids();
+            assert_eq!(
+                ids.len(),
+                1,
+                "flag '{label}' should produce exactly 1 feature id, got {ids:?}"
+            );
+        }
+    }
+
+    // ── Production vs all diff ──────────────────────────────────────
+
+    #[test]
+    fn production_and_all_differ_on_formatting() {
+        let prod = BuildFlags::production();
+        let all = BuildFlags::all();
+        assert!(!prod.formatting);
+        assert!(all.formatting);
+        assert!(!prod.range_formatting);
+        assert!(all.range_formatting);
+    }
+
+    #[test]
+    fn ga_lock_and_production_differ_on_inline_values() {
+        let ga = BuildFlags::ga_lock();
+        let prod = BuildFlags::production();
+        assert!(!ga.inline_values, "ga-lock excludes inline_values");
+        assert!(prod.inline_values, "production includes inline_values");
     }
 }

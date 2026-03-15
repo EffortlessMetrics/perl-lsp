@@ -215,4 +215,113 @@ mod tests {
         assert!(keys.contains(&"production"));
         assert!(keys.contains(&"all"));
     }
+
+    // ── compliance_percent_for_profile ───────────────────────────────
+
+    #[test]
+    fn compliance_percent_is_in_valid_range_for_all_profiles() {
+        for profile in FeatureProfile::all() {
+            let pct = compliance_percent_for_profile(*profile);
+            assert!(
+                (0.0..=100.0).contains(&pct),
+                "compliance for {} should be in [0, 100], got {}",
+                profile.as_str(),
+                pct
+            );
+        }
+    }
+
+    #[test]
+    fn all_profile_compliance_gte_ga_lock_compliance() {
+        let all_pct = compliance_percent_for_profile(FeatureProfile::All);
+        let ga_pct = compliance_percent_for_profile(FeatureProfile::GaLock);
+        assert!(all_pct >= ga_pct, "'all' compliance ({all_pct}) should be >= ga-lock ({ga_pct})");
+    }
+
+    // ── feature_profile_contracts ───────────────────────────────────
+
+    #[test]
+    fn feature_profile_contracts_returns_specs() {
+        let contracts = super::feature_profile_contracts();
+        assert_eq!(contracts.len(), 3);
+        assert_eq!(contracts[0].canonical, "ga-lock");
+        assert_eq!(contracts[1].canonical, "production");
+        assert_eq!(contracts[2].canonical, "all");
+    }
+
+    // ── FEATURE_GRID_COLUMNS ────────────────────────────────────────
+
+    #[test]
+    fn feature_grid_columns_has_expected_entries() {
+        assert!(super::FEATURE_GRID_COLUMNS.contains(&"id"));
+        assert!(super::FEATURE_GRID_COLUMNS.contains(&"area"));
+        assert!(super::FEATURE_GRID_COLUMNS.contains(&"spec"));
+        assert!(super::FEATURE_GRID_COLUMNS.contains(&"maturity"));
+        assert!(super::FEATURE_GRID_COLUMNS.contains(&"advertised"));
+        assert!(super::FEATURE_GRID_COLUMNS.contains(&"counts_in_coverage"));
+        assert!(super::FEATURE_GRID_COLUMNS.contains(&"description"));
+        assert!(super::FEATURE_GRID_COLUMNS.contains(&"tests"));
+    }
+
+    // ── to_json_for_profiles ────────────────────────────────────────
+
+    #[test]
+    fn to_json_for_profiles_subset() {
+        let payload = super::to_json_for_profiles(&[FeatureProfile::GaLock]);
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+        let profiles = must_some(value.get("profiles").and_then(|v| v.as_array()));
+        assert_eq!(profiles.len(), 1);
+        assert_eq!(profiles[0]["profile"].as_str(), Some("ga-lock"));
+    }
+
+    // ── Profile summary fields ──────────────────────────────────────
+
+    #[test]
+    fn profile_summary_contains_required_keys() {
+        let payload = to_json_for_all_profiles();
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+        let profiles = must_some(value.get("profiles").and_then(|v| v.as_array()));
+        for profile_value in profiles {
+            assert!(profile_value.get("profile").is_some(), "missing 'profile' key");
+            assert!(profile_value.get("advertised").is_some(), "missing 'advertised' key");
+            assert!(
+                profile_value.get("compliance_percent").is_some(),
+                "missing 'compliance_percent'"
+            );
+            assert!(
+                profile_value.get("trackable_feature_count").is_some(),
+                "missing 'trackable_feature_count'"
+            );
+            assert!(
+                profile_value.get("advertised_trackable_feature_count").is_some(),
+                "missing 'advertised_trackable_feature_count'"
+            );
+            assert!(
+                profile_value.get("advertised_feature_count").is_some(),
+                "missing 'advertised_feature_count'"
+            );
+        }
+    }
+
+    // ── Production profile JSON ─────────────────────────────────────
+
+    #[test]
+    fn to_json_for_production_profile() {
+        let payload = to_json_for_profile(FeatureProfile::Production);
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+        assert_eq!(value["profile"].as_str(), Some("production"));
+        assert!(value.get("feature_count").is_some());
+    }
+
+    // ── Default to_json has no profile key ───────────────────────────
+
+    #[test]
+    fn default_to_json_omits_profile_key() {
+        let payload = to_json();
+        let value: serde_json::Value = must(serde_json::from_str(&payload));
+        assert!(
+            value.get("profile").is_none(),
+            "default to_json() should not have a 'profile' key"
+        );
+    }
 }

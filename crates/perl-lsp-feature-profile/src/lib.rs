@@ -64,4 +64,49 @@ mod tests {
     fn normalized_profiles_keep_legacy_underscores() {
         assert_eq!(super::parse_profile_token("ga_lock"), Some(FeatureProfileKind::GaLock));
     }
+
+    // ── parse_profile_token normalization ────────────────────────────
+
+    #[test]
+    fn parse_profile_token_trims_whitespace() {
+        assert_eq!(super::parse_profile_token("  all  "), Some(FeatureProfileKind::All));
+        assert_eq!(super::parse_profile_token("\tprod\n"), Some(FeatureProfileKind::Production));
+    }
+
+    #[test]
+    fn parse_profile_token_lowercases() {
+        assert_eq!(super::parse_profile_token("ALL"), Some(FeatureProfileKind::All));
+        assert_eq!(super::parse_profile_token("Prod"), Some(FeatureProfileKind::Production));
+        assert_eq!(super::parse_profile_token("GA-LOCK"), Some(FeatureProfileKind::GaLock));
+    }
+
+    #[test]
+    fn parse_profile_token_normalizes_underscore_to_hyphen() {
+        assert_eq!(super::parse_profile_token("GA_LOCK"), Some(FeatureProfileKind::GaLock));
+    }
+
+    #[test]
+    fn parse_profile_token_rejects_empty() {
+        assert!(super::parse_profile_token("").is_none());
+    }
+
+    #[test]
+    fn parse_profile_token_rejects_unknown() {
+        assert!(super::parse_profile_token("debug").is_none());
+        assert!(super::parse_profile_token("minimal").is_none());
+    }
+
+    #[test]
+    fn parse_profile_token_resolves_auto() {
+        assert_eq!(super::parse_profile_token("auto"), Some(FeatureProfileKind::current()));
+        assert_eq!(super::parse_profile_token("AUTO"), Some(FeatureProfileKind::current()));
+    }
+
+    // ── from_str_name delegates ─────────────────────────────────────
+
+    #[test]
+    fn from_str_name_delegates_to_profile_kind() {
+        assert_eq!(super::from_str_name("all"), FeatureProfileKind::from_str_name("all"));
+        assert_eq!(super::from_str_name("bogus"), None);
+    }
 }

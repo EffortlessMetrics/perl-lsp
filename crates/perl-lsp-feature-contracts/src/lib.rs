@@ -186,3 +186,222 @@ pub fn compliance_percent_for_grid() -> f32 {
     let advertised = advertised_trackable_feature_count_for_grid();
     (advertised as f64 / trackable as f64 * 100.0).round() as f32
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── FeatureProfileKind ──────────────────────────────────────────
+
+    #[test]
+    fn from_ga_lock_enabled_true_yields_ga_lock() {
+        assert_eq!(FeatureProfileKind::from_ga_lock_enabled(true), FeatureProfileKind::GaLock);
+    }
+
+    #[test]
+    fn from_ga_lock_enabled_false_yields_production() {
+        assert_eq!(FeatureProfileKind::from_ga_lock_enabled(false), FeatureProfileKind::Production,);
+    }
+
+    #[test]
+    fn all_profiles_returns_three_variants() {
+        let all = FeatureProfileKind::all();
+        assert_eq!(all.len(), 3);
+        assert_eq!(all[0], FeatureProfileKind::GaLock);
+        assert_eq!(all[1], FeatureProfileKind::Production);
+        assert_eq!(all[2], FeatureProfileKind::All);
+    }
+
+    #[test]
+    fn from_str_name_rejects_unknown_token() {
+        assert!(FeatureProfileKind::from_str_name("bogus").is_none());
+        assert!(FeatureProfileKind::from_str_name("").is_none());
+        assert!(FeatureProfileKind::from_str_name("GA-LOCK").is_none());
+    }
+
+    #[test]
+    fn aliases_are_non_empty_for_every_profile() {
+        for profile in FeatureProfileKind::all() {
+            assert!(
+                !profile.aliases().is_empty(),
+                "aliases for {} should not be empty",
+                profile.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn aliases_contain_canonical_name() {
+        for profile in FeatureProfileKind::all() {
+            let aliases = profile.aliases();
+            assert!(
+                aliases.contains(&profile.as_str()),
+                "aliases for {} should contain canonical name",
+                profile.as_str()
+            );
+        }
+    }
+
+    #[test]
+    fn supported_cli_profiles_covers_all_aliases() {
+        let cli_tokens = FeatureProfileKind::supported_cli_profiles();
+        for profile in FeatureProfileKind::all() {
+            for alias in profile.aliases() {
+                assert!(
+                    cli_tokens.contains(alias),
+                    "CLI tokens should include alias '{}' for profile '{}'",
+                    alias,
+                    profile.as_str()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn auto_token_resolves_to_current() {
+        let resolved = FeatureProfileKind::from_str_name("auto");
+        assert_eq!(resolved, Some(FeatureProfileKind::current()));
+    }
+
+    // ── FeatureProfileSpec ──────────────────────────────────────────
+
+    #[test]
+    fn feature_profile_specs_has_three_entries() {
+        let specs = feature_profile_specs();
+        assert_eq!(specs.len(), 3);
+    }
+
+    #[test]
+    fn feature_profile_specs_canonical_names_match_enum() {
+        let specs = feature_profile_specs();
+        let expected_names: Vec<&str> =
+            FeatureProfileKind::all().iter().map(|p| p.as_str()).collect();
+        let spec_names: Vec<&str> = specs.iter().map(|s| s.canonical).collect();
+        assert_eq!(spec_names, expected_names);
+    }
+
+    #[test]
+    fn feature_profile_specs_descriptions_are_non_empty() {
+        for spec in feature_profile_specs() {
+            assert!(
+                !spec.description.is_empty(),
+                "description for '{}' should not be empty",
+                spec.canonical
+            );
+        }
+    }
+
+    // ── Catalog / BDD grid ──────────────────────────────────────────
+
+    #[test]
+    fn all_features_is_non_empty() {
+        assert!(!all_features().is_empty());
+    }
+
+    #[test]
+    fn all_features_have_non_empty_ids() {
+        for feature in all_features() {
+            assert!(!feature.id.is_empty(), "feature id should not be empty");
+        }
+    }
+
+    #[test]
+    fn all_features_have_valid_areas() {
+        let valid_areas = ["text_document", "workspace", "window", "notebook", "debug", "protocol"];
+        for feature in all_features() {
+            assert!(
+                valid_areas.contains(&feature.area),
+                "feature '{}' has unexpected area '{}'",
+                feature.id,
+                feature.area
+            );
+        }
+    }
+
+    #[test]
+    fn all_features_have_valid_maturity() {
+        let valid_maturities = ["ga", "beta", "alpha", "planned"];
+        for feature in all_features() {
+            assert!(
+                valid_maturities.contains(&feature.maturity),
+                "feature '{}' has unexpected maturity '{}'",
+                feature.id,
+                feature.maturity
+            );
+        }
+    }
+
+    #[test]
+    fn feature_ids_are_unique() {
+        let ids: Vec<&str> = all_features().iter().map(|f| f.id).collect();
+        let mut deduped = ids.clone();
+        deduped.sort_unstable();
+        deduped.dedup();
+        assert_eq!(ids.len(), deduped.len(), "feature IDs must be unique");
+    }
+
+    #[test]
+    fn bdd_feature_rows_sorted_by_area_then_id() {
+        let rows = bdd_feature_rows();
+        for window in rows.windows(2) {
+            let ordering = window[0].area.cmp(window[1].area).then(window[0].id.cmp(window[1].id));
+            assert!(
+                ordering.is_le(),
+                "BDD rows not sorted: '{}' in '{}' should come before '{}' in '{}'",
+                window[0].id,
+                window[0].area,
+                window[1].id,
+                window[1].area,
+            );
+        }
+    }
+
+    #[test]
+    fn bdd_feature_rows_count_matches_all_features() {
+        assert_eq!(bdd_feature_rows().len(), all_features().len());
+    }
+
+    #[test]
+    fn trackable_features_are_subset_of_all() {
+        let all_count = all_features().len();
+        let trackable = trackable_feature_count_for_grid();
+        assert!(trackable <= all_count);
+    }
+
+    #[test]
+    fn advertised_trackable_is_subset_of_trackable() {
+        let trackable = trackable_feature_count_for_grid();
+        let advertised = advertised_trackable_feature_count_for_grid();
+        assert!(advertised <= trackable);
+    }
+
+    #[test]
+    fn compliance_percent_is_in_valid_range() {
+        let pct = compliance_percent_for_grid();
+        assert!((0.0..=100.0).contains(&pct), "compliance must be 0-100, got {pct}");
+    }
+
+    #[test]
+    fn has_feature_returns_true_for_known_ids() {
+        assert!(has_feature("lsp.completion"));
+        assert!(has_feature("lsp.hover"));
+        assert!(has_feature("lsp.definition"));
+    }
+
+    #[test]
+    fn has_feature_returns_false_for_unknown_ids() {
+        assert!(!has_feature("lsp.nonexistent"));
+        assert!(!has_feature(""));
+    }
+
+    #[test]
+    fn advertised_features_is_non_empty() {
+        assert!(!advertised_features().is_empty());
+    }
+
+    #[test]
+    fn version_strings_are_non_empty() {
+        assert!(!VERSION.is_empty());
+        assert!(!LSP_VERSION.is_empty());
+    }
+}
