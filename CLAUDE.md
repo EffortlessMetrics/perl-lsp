@@ -20,6 +20,37 @@ cargo build -p perl-lsp --release
 cargo test --workspace --lib
 ```
 
+## Default Operating Mode
+
+The lead orchestrates. It does not do substantive implementation inline.
+
+Every task is classified before action:
+- **Scout**: read-only research, triage, issue analysis, docs — fan out aggressively
+- **Preplan**: branch-ready work packets — fan out aggressively
+- **Build**: code changes, commits, PR creation — gated by CI capacity
+- **Control**: CI monitoring, merge routing, green-master repair — narrow
+
+Scout and preplan agents may fan out widely — they cost context, not CI.
+Build agents are gated by active CI capacity, not by open PR count.
+If default branch is red, build capacity goes first to restoring green master.
+
+### Agent Spawn Patterns
+| Task | Lane | Pattern |
+|------|------|---------|
+| Research/explore | Scout | `Agent(subagent_type: "Explore", prompt: "...")` |
+| Plan implementation | Preplan | `Agent(subagent_type: "Plan", prompt: "...")` |
+| Code change | Build | `Agent(isolation: "worktree", prompt: "Goal/Crate/Files/Verify/Commit")` |
+| Parser fix | Build | `/parser-fix` skill |
+| CI monitoring | Control | `Bash(command: "gh run watch <id> --exit-status", run_in_background: true)` |
+| Full campaign | All | `/swarm all` |
+| Corpus check | Control | `/corpus-ratchet` |
+
+### CI Budget Rules
+- Throttle on active CI-producing actions (pushes), not open PR count
+- Use `gh run watch` in background instead of polling `gh pr checks`
+- When CI queue > 10: shift all capacity to scout/preplan
+- Keep a ready-to-build queue so CI slack gets consumed immediately
+
 ## Crate Structure
 
 The workspace contains **116 workspace members** across **121 crate directories** (see `Cargo.toml`), organized in dependency tiers. Key crates:
