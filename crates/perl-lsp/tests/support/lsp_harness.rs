@@ -1,6 +1,11 @@
 //! LSP Test Harness for Real JSON-RPC Testing
 //!
 //! Provides a test harness that communicates with the LSP server using real JSON-RPC protocol.
+//!
+//! This module acts as a facade: the implementation is split across focused
+//! submodules (`test_workspace`, `message_framing`, `notification_queue`) while
+//! this file re-exports every public symbol so that downstream test files
+//! continue to compile without import changes.
 
 #![allow(dead_code)]
 #![allow(clippy::assertions_on_constants)]
@@ -8,53 +13,19 @@
 
 use parking_lot::{Condvar, Mutex};
 use perl_content_length_framing::{ContentLengthFramer, frame};
-use perl_lsp::LspServer;
-use perl_tdd_support::must;
 use serde_json::{Value, json};
 use std::collections::VecDeque;
-use std::fs;
 use std::io::{Cursor, Write};
 use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
-use tempfile::TempDir;
-use url::Url;
 
-/// Temporary workspace for testing with real files
-pub struct TempWorkspace {
-    pub dir: TempDir,
-    pub root_uri: String,
-}
+// Re-export types from focused submodules so downstream imports are unchanged.
+pub use super::notification_queue::TestContext;
+pub use super::test_workspace::TempWorkspace;
 
-impl TempWorkspace {
-    /// Create a new temporary workspace
-    pub fn new() -> Result<Self, String> {
-        let dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
-        let root_uri = Url::from_directory_path(dir.path())
-            .map_err(|_| "Failed to create file URL")?
-            .to_string();
-        Ok(Self { dir, root_uri })
-    }
-
-    /// Write a file to the workspace
-    pub fn write(&self, relative_path: &str, content: &str) -> Result<(), String> {
-        let path = self.dir.path().join(relative_path);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("Failed to create dirs: {}", e))?;
-        }
-        fs::write(&path, content).map_err(|e| format!("Failed to write file: {}", e))?;
-        Ok(())
-    }
-
-    /// Get the full URI for a relative path
-    pub fn uri(&self, relative_path: &str) -> String {
-        let path = self.dir.path().join(relative_path);
-        match Url::from_file_path(&path) {
-            Ok(url) => url.to_string(),
-            Err(_) => must(Url::from_file_path(&path)).to_string(),
-        }
-    }
-}
+// Import internal-only types from submodules.
+use super::message_framing::{SendableServer, TestWriter};
 
 /// LSP Test Harness for testing with real JSON-RPC protocol
 pub struct LspHarness {
@@ -68,9 +39,6 @@ pub struct LspHarness {
     handle: Option<thread::JoinHandle<()>>,
     canceled_ids: Arc<Mutex<Vec<i32>>>, // Track canceled request IDs
 }
-
-struct SendableServer(LspServer);
-unsafe impl Send for SendableServer {}
 
 impl LspHarness {
     /// Lowest-level constructor: spawn server and wire pipes, no messages sent.
@@ -87,7 +55,7 @@ impl LspHarness {
             notifications: notification_buffer.clone(),
             server_requests: server_requests.clone(),
         }) as Box<dyn Write + Send>));
-        let server = SendableServer(LspServer::with_output(writer));
+        let server = SendableServer(perl_lsp::LspServer::with_output(writer));
 
         let (tx, rx) = mpsc::channel::<Vec<u8>>();
         let handle = thread::spawn(move || {
@@ -1024,46 +992,6 @@ impl LspHarness {
     }
 }
 
-/// Test writer that captures output
-struct TestWriter {
-    buffer: Arc<Mutex<Vec<u8>>>,
-    signal: Arc<Condvar>,
-    notifications: Arc<Mutex<VecDeque<Value>>>,
-    server_requests: Arc<Mutex<VecDeque<Value>>>,
-}
-
-impl Write for TestWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        {
-            let mut buffer = self.buffer.lock();
-            buffer.extend_from_slice(buf);
-        }
-        // Parse and classify message outside buffer lock to avoid contention
-        let content = String::from_utf8_lossy(buf);
-        if let Some(json_start) = content.find('{') {
-            let json_str = &content[json_start..];
-            if let Ok(value) = serde_json::from_str::<Value>(json_str) {
-                let has_method = value.get("method").is_some();
-                let has_id = value.get("id").is_some();
-                if has_method && !has_id {
-                    // Server-initiated notification (no id)
-                    self.notifications.lock().push_back(value);
-                } else if has_method && has_id {
-                    // Server-initiated request (e.g., workspace/configuration)
-                    self.server_requests.lock().push_back(value);
-                }
-                // Responses (has id, no method) stay in the raw buffer only
-            }
-        }
-        self.signal.notify_all();
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        Ok(())
-    }
-}
-
 // ======================== PHASE 1 STABILIZATION HELPERS ========================
 
 /// Spawn LSP server with clean environment - Phase 1 stable interface
@@ -1080,7 +1008,7 @@ pub fn spawn_lsp() -> LspHarness {
     LspHarness::new_raw()
 }
 
-/// Perform LSP handshake: initialize → wait for response → initialized notification
+/// Perform LSP handshake: initialize -> wait for response -> initialized notification
 /// This is the deterministic initialization sequence for Phase 1
 pub fn handshake_initialize(
     harness: &mut LspHarness,
@@ -1227,123 +1155,4 @@ macro_rules! assert_perf {
             $max_ms
         );
     }};
-}
-
-// ======================== TESTCONTEXT COMPATIBILITY WRAPPER ========================
-
-/// A compatibility wrapper that provides the same API as the old TestContext
-/// but uses LspHarness underneath for proper initialization and synchronization.
-///
-/// This enables mechanical migration of tests from TestContext to LspHarness
-/// with minimal diff.
-///
-/// # Migration
-///
-/// Old code:
-/// ```ignore
-/// let mut ctx = TestContext::new();
-/// let _ = ctx.initialize();
-/// ctx.open_document(uri, text);
-/// let result = ctx.send_request("textDocument/hover", params);
-/// ```
-///
-/// New code (just change imports):
-/// ```ignore
-/// use support::lsp_harness::TestContext;  // <-- Changed import
-/// let mut ctx = TestContext::new();  // Same API
-/// let _ = ctx.initialize();
-/// ctx.open_document(uri, text);
-/// let result = ctx.send_request("textDocument/hover", params);
-/// ```
-pub struct TestContext {
-    harness: LspHarness,
-    version_counter: i32,
-}
-
-impl TestContext {
-    /// Create a new test context with uninitialized harness
-    pub fn new() -> Self {
-        Self { harness: LspHarness::new_raw(), version_counter: 1 }
-    }
-
-    /// Initialize the LSP server and wait for it to be fully ready
-    ///
-    /// Returns the initialization response value.
-    /// Unlike the old TestContext, this includes a barrier to ensure the server is ready.
-    /// Uses default root_uri "file:///workspace" and default capabilities.
-    pub fn initialize(&mut self) -> Value {
-        self.initialize_with("file:///workspace", None)
-    }
-
-    /// Initialize the LSP server with custom root_uri and capabilities
-    ///
-    /// Returns the initialization response value.
-    /// This includes a barrier to ensure the server is fully ready.
-    ///
-    /// # Arguments
-    /// * `root_uri` - The workspace root URI (e.g., "file:///test" or a real temp directory)
-    /// * `capabilities` - Optional custom client capabilities (None = sensible defaults)
-    pub fn initialize_with(&mut self, root_uri: &str, capabilities: Option<Value>) -> Value {
-        match self.harness.initialize_ready(root_uri, capabilities) {
-            Ok(v) => v,
-            Err(e) => must(Err::<Value, _>(format!("initialization should succeed: {e}"))),
-        }
-    }
-
-    /// Send a request and wait for response
-    ///
-    /// Returns `Some(result)` on success, `None` on error.
-    /// Note: `params: None` maps to JSON `null`, not `{}` - this is correct per JSON-RPC spec.
-    pub fn send_request(&mut self, method: &str, params: Option<Value>) -> Option<Value> {
-        let p = params.unwrap_or(json!(null));
-        self.harness.request(method, p).ok()
-    }
-
-    /// Send a notification (no response expected)
-    /// Note: `params: None` maps to JSON `null`, not `{}` - this is correct per JSON-RPC spec.
-    pub fn send_notification(&mut self, method: &str, params: Option<Value>) {
-        let p = params.unwrap_or(json!(null));
-        self.harness.notify(method, p);
-    }
-
-    /// Open a document
-    pub fn open_document(&mut self, uri: &str, text: &str) {
-        match self.harness.open(uri, text) {
-            Ok(_) => {}
-            Err(e) => assert!(false, "open should succeed: {e}"),
-        }
-    }
-
-    /// Update document content with auto-incrementing version
-    pub fn update_document(&mut self, uri: &str, text: &str) {
-        self.version_counter += 1;
-        match self.harness.change_full(uri, self.version_counter, text) {
-            Ok(_) => {}
-            Err(e) => assert!(false, "change should succeed: {e}"),
-        }
-    }
-
-    /// Close a document
-    pub fn close_document(&mut self, uri: &str) {
-        match self.harness.close(uri) {
-            Ok(_) => {}
-            Err(e) => assert!(false, "close should succeed: {e}"),
-        }
-    }
-
-    /// Synchronization barrier - wait for server to be idle
-    pub fn barrier(&mut self) {
-        self.harness.barrier();
-    }
-
-    /// Get underlying harness for advanced operations
-    pub fn harness(&mut self) -> &mut LspHarness {
-        &mut self.harness
-    }
-}
-
-impl Default for TestContext {
-    fn default() -> Self {
-        Self::new()
-    }
 }
