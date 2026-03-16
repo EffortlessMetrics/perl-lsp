@@ -525,6 +525,32 @@ impl<'a> Parser<'a> {
                             ))
                         }
                         _ => {
+                            // `defined` and `ref` at statement start without parens use
+                            // parse_unary() for the single argument. This fixes
+                            // the precedence issue: `ref $obj->{list} eq 'ARRAY'` must parse
+                            // as `(eq (ref ...) 'ARRAY')` not `(ref (eq ...))`.
+                            //
+                            // Only these two are included because they specifically have the
+                            // arrow-chain pattern (`defined $obj->{k}`, `ref $obj->{list}`)
+                            // and should stop the indirect-call path from eating the `->`
+                            // chain while still leaving surrounding comparisons outside the
+                            // call node.
+                            //
+                            // When called WITH parens we fall through — parens already delimit.
+                            if self.peek_kind() != Some(TokenKind::LeftParen)
+                                && matches!(func_name.as_ref(), "defined" | "ref")
+                            {
+                                let arg = self.parse_unary()?;
+                                let end = self.previous_position();
+                                return Ok(Node::new(
+                                    NodeKind::FunctionCall {
+                                        name: func_name.to_string(),
+                                        args: vec![arg],
+                                    },
+                                    SourceLocation { start, end },
+                                ));
+                            }
+
                             // Has arguments - parse them as a comma-separated list
                             let mut args = vec![];
 
