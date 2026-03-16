@@ -99,6 +99,9 @@ coverage-*.md
 # Docs directory is curated -- never ignore tracked documentation
 !docs/**/*.md
 
+# Slash commands are curated -- never ignore tracked skill definitions
+!.claude/commands/*.md
+
 # Spec manifest files
 SPEC*.manifest.yml
 SPEC-*.manifest.yml

@@ -56,6 +56,11 @@ cargo test --workspace --lib
 | Multiple changes | Parallel worktree agents |
 | Swarm cycle | `/swarm all` |
 | Corpus improvement | `/corpus-ratchet` |
+| Focused scouting | `/scout <area>` |
+| Issue discovery | `/find-issues` |
+| Crate audit | `/audit <crate>` |
+| Design comparison | `/compare "A vs B"` |
+| Quick health check | `/health-check` |
 
 ## Crate Structure
 
@@ -367,7 +372,12 @@ This project uses continuous agent swarms with agent teams for parallel codebase
 | `/swarm-status` | Show PRs, issues, metrics, queue depth |
 | `/swarm-report` | Generate daily check-in summary |
 | `/coding-standards` | Load project coding standards |
-| `/queue-scout` | Launch scouts to find work |
+| `/queue-scout` | Launch broad multi-area scouts to find work |
+| `/scout` | Single-area deep dive (parser, lsp, dap, docs, tests, devex, security, deps, perf) |
+| `/find-issues` | Open-ended issue discovery across the codebase |
+| `/audit` | Deep audit of a specific crate |
+| `/compare` | Compare two approaches or implementations |
+| `/health-check` | Quick codebase health scan (stdout, no issues) |
 | `/green-merge` | Merge all passing PRs |
 | `/rebase-open` | Rebase conflicted PRs |
 | `/status-drift` | Fix computed metric drift |
@@ -385,6 +395,7 @@ This project uses continuous agent swarms with agent teams for parallel codebase
 | `/parser-fix` | TDD parser fix |
 | `/wave` | Launch parallel agent wave |
 | `/corpus-ratchet` | Corpus sweep and baseline update |
+| `/scout-report` | Write scout findings as GitHub issues (used by all scout skills) |
 
 ### Architecture
 
