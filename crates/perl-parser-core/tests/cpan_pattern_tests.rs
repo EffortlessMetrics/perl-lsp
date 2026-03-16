@@ -1640,3 +1640,83 @@ if ($start) { init(); run(); }
         assert_clean_parse(code);
     }
 }
+
+// ---------------------------------------------------------------------------
+// foreach (LIST) with implicit $_ topic variable (fix/foreach-implicit-topic-variable)
+// ---------------------------------------------------------------------------
+// Root cause: parse_foreach_statement() always tried to parse an iterator
+// variable before the '(' list — failing when the variable was omitted and $_ is
+// used implicitly. Very common Perl idiom: `foreach (@arr) { ... }`.
+// ---------------------------------------------------------------------------
+mod foreach_implicit_topic_variable {
+    use super::*;
+
+    #[test]
+    fn foreach_array_implicit_topic() {
+        // Most common form: foreach (@arr) { ... }
+        let code = "foreach (@arr) { print $_; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn foreach_keys_hash_implicit_topic() {
+        // DB_File.pm pattern: foreach (keys %h)
+        let code = "foreach (keys %h) { print $h{$_}; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn foreach_range_implicit_topic() {
+        // DB_File.pm pattern: foreach (0 .. $length - 1)
+        let code = "foreach (0 .. $n - 1) { print $_; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn foreach_sort_keys_implicit_topic() {
+        // DB_File.pm pattern: foreach (sort keys %h)
+        let code = "foreach (sort keys %h) { print $_; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn foreach_regex_match_implicit_topic() {
+        // Text::Glob pattern: for ($glob =~ m/(.)/gs)
+        let code = r#"foreach ($glob =~ m/(.)/gs) { $regex .= $_; }"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn foreach_with_explicit_variable_still_works() {
+        // Ensure the existing explicit-variable path is not broken
+        let code = "foreach my $item (@arr) { print $item; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn foreach_with_dollar_variable_still_works() {
+        let code = "foreach $item (@arr) { print $item; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn foreach_reverse_implicit_topic() {
+        // lib.pm pattern: foreach (reverse @_)
+        let code = "foreach (reverse @_) { unshift @INC, $_; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn foreach_qw_implicit_topic() {
+        // List::Util.pm pattern: foreach (qw( some keys here ))
+        let code = "foreach (qw( a b c )) { print \"$_\\n\"; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn for_implicit_topic_unchanged() {
+        // Ensure `for` with implicit $_ still works (pre-existing behavior)
+        let code = "for (1..10) { print $_; }";
+        assert_clean_parse(code);
+    }
+}

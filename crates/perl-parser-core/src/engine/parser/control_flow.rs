@@ -268,14 +268,25 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'foreach'
 
-        // Set flag to prevent semicolon consumption in variable declaration
-        self.in_for_loop_init = true;
-        let variable = if self.peek_kind() == Some(TokenKind::My) {
-            self.parse_variable_declaration()?
+        // Check for implicit $_ topic variable: `foreach (LIST) { ... }`
+        // When the next token is '(' there is no explicit iterator variable;
+        // Perl implicitly uses $_ in that case.
+        let variable = if self.peek_kind() == Some(TokenKind::LeftParen) {
+            Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "_".to_string() },
+                SourceLocation { start, end: start },
+            )
         } else {
-            self.parse_variable()?
+            // Set flag to prevent semicolon consumption in variable declaration
+            self.in_for_loop_init = true;
+            let v = if self.peek_kind() == Some(TokenKind::My) {
+                self.parse_variable_declaration()?
+            } else {
+                self.parse_variable()?
+            };
+            self.in_for_loop_init = false;
+            v
         };
-        self.in_for_loop_init = false;
 
         self.expect(TokenKind::LeftParen)?;
         let list = self.parse_expression()?;
