@@ -178,7 +178,7 @@ impl<'a> Parser<'a> {
         if self.peek_kind() == Some(TokenKind::Return)
             && !self.is_keyword_before_fat_arrow()
         {
-            return self.parse_return();
+            return self.parse_return_expr();
         }
 
         let mut expr = self.parse_ternary()?;
