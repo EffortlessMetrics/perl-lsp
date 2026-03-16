@@ -25,10 +25,7 @@ fn shift_statement_start_method_chain_uses_nullary_call() {
         sexp.contains("(method_call (identifier shift) decode"),
         "expected shift postfix method chain, got: {sexp}"
     );
-    assert!(
-        !sexp.contains("ERROR"),
-        "shift postfix method chain should stay error-free: {sexp}"
-    );
+    assert!(!sexp.contains("ERROR"), "shift postfix method chain should stay error-free: {sexp}");
 }
 
 #[test]
@@ -38,10 +35,7 @@ fn shift_statement_start_arrow_hash_deref_uses_nullary_call() {
         sexp.contains("(arrow_hash_deref (identifier shift)"),
         "expected shift postfix hash deref, got: {sexp}"
     );
-    assert!(
-        !sexp.contains("ERROR"),
-        "shift postfix hash deref should stay error-free: {sexp}"
-    );
+    assert!(!sexp.contains("ERROR"), "shift postfix hash deref should stay error-free: {sexp}");
 }
 
 #[test]
