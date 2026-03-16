@@ -1640,3 +1640,55 @@ if ($start) { init(); run(); }
         assert_clean_parse(code);
     }
 }
+
+mod undef_in_list_assignment {
+    use super::*;
+
+    #[test]
+    fn undef_middle_of_my_list() {
+        let code = "my ($a, undef, $b) = @_;";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn undef_first_in_my_list() {
+        let code = "my (undef, $x, $y) = @_;";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn undef_last_in_my_list() {
+        let code = "my ($a, $b, undef) = @_;";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn multiple_undef_in_my_list() {
+        let code = "my ($a, undef, undef, $b) = @_;";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn undef_in_method_signature() {
+        let code = r#"
+sub cat_decode {
+    my ( $obj, undef, $src, $pos ) = @_;
+    return $src;
+}
+"#;
+        assert_clean_parse(code);
+    }
+
+    /// Full OO pattern from Encode::CN::HZ — the original failing file.
+    #[test]
+    fn encode_module_pattern() {
+        let code = r#"
+sub cat_decode {
+    my ( $obj, undef, $src, $pos, $trm, $chk ) = @_;
+    my ( $rdst, $rsrc, $rpos ) = \@_[ 1 .. 3 ];
+    return $rdst;
+}
+"#;
+        assert_clean_parse(code);
+    }
+}
