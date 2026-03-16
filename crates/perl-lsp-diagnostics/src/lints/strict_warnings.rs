@@ -16,12 +16,27 @@ pub fn check_strict_warnings(node: &Node, diagnostics: &mut Vec<Diagnostic>) {
     let mut has_strict = false;
     let mut has_warnings = false;
 
+    // OO frameworks that implicitly provide strict+warnings
+    const IMPLICIT_STRICT_MODULES: &[&str] = &[
+        "Moo",
+        "Moose",
+        "MooseX::StrictConstructor",
+        "Modern::Perl",
+        "Dancer2",
+        "Catalyst",
+        "Mojolicious",
+        "Mojo::Base",
+    ];
+
     // Check if 'use strict' and 'use warnings' are present
     walk_node(node, &mut |n| {
         if let NodeKind::Use { module, .. } = &n.kind {
             if module == "strict" {
                 has_strict = true;
             } else if module == "warnings" {
+                has_warnings = true;
+            } else if IMPLICIT_STRICT_MODULES.contains(&module.as_str()) {
+                has_strict = true;
                 has_warnings = true;
             }
         }
