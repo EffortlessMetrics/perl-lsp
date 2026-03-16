@@ -1435,6 +1435,46 @@ if (exists $cache{$key}) {
     }
 
     #[test]
+    fn delete_arrow_hash_deref() {
+        assert_clean_parse("delete $self->{key};");
+    }
+
+    #[test]
+    fn delete_arrow_array_deref() {
+        assert_clean_parse("delete $ref->[0];");
+    }
+
+    #[test]
+    fn delete_chained_subscripts() {
+        assert_clean_parse("delete $self->{a}{b};");
+    }
+
+    #[test]
+    fn delete_chained_arrow_deref() {
+        assert_clean_parse("delete $self->{a}->{b};");
+    }
+
+    #[test]
+    fn exists_arrow_hash_deref() {
+        assert_clean_parse("exists $self->{key};");
+    }
+
+    #[test]
+    fn exists_arrow_array_deref() {
+        assert_clean_parse("exists $ref->[0];");
+    }
+
+    #[test]
+    fn delete_with_statement_modifier() {
+        assert_clean_parse("delete $self->{missing} if $self->{present};");
+    }
+
+    #[test]
+    fn exists_in_if_condition() {
+        assert_clean_parse("my $val = delete $cache->{$key} if exists $cache->{$key};");
+    }
+
+    #[test]
     fn local_input_record_separator() {
         let code = "local $/ = undef;";
         assert_clean_parse(code);
