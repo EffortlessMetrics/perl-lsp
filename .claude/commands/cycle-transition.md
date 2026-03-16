@@ -33,67 +33,42 @@ Worktrees may hold locks on branches that prevent switching to master. Remove al
 
 ```bash
 echo "=== Removing agent worktrees ==="
-WORKTREE_COUNT=0
-git worktree list | grep '.claude/worktrees/' | awk '{print $1}' | while read -r wt; do
-    echo "Removing: $wt"
-    git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
-    WORKTREE_COUNT=$((WORKTREE_COUNT + 1))
-done
-git worktree prune
-echo "Removed agent worktrees"
-```
-
-If `scripts/cleanup-worktrees.sh` exists, run it as a fallback to catch anything missed:
-
-```bash
+# Use cleanup-worktrees.sh which already handles this correctly
 if [[ -f scripts/cleanup-worktrees.sh ]]; then
     bash scripts/cleanup-worktrees.sh
+else
+    # Fallback: manual cleanup
+    git worktree list | grep '.claude/worktrees/' | awk '{print $1}' | while read -r wt; do
+        echo "Removing: $wt"
+        git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+    done
+    git worktree prune
 fi
+echo "Worktree cleanup complete"
 ```
 
 ### 3. Switch to master
 
 ```bash
-git checkout master
-```
-
-If checkout fails due to unmerged paths or other issues, report the error and continue with best effort:
-
-```bash
 git checkout master 2>&1 || {
-    echo "WARNING: checkout master failed, attempting reset"
+    echo "WARNING: checkout master failed, attempting force checkout"
     git checkout -f master
 }
 ```
 
 ### 4. Pull latest master
 
-Handle untracked file conflicts by removing conflicting untracked files, then retry.
+Use the safe-pull script which handles untracked file conflicts and stale tracking refs:
 
 ```bash
 echo "=== Pulling latest master ==="
-PULL_OUTPUT=$(git pull origin master 2>&1)
-PULL_EXIT=$?
-
-if [[ $PULL_EXIT -ne 0 ]]; then
-    echo "Pull failed, checking for untracked file conflicts..."
-    # Extract conflicting filenames from error output
-    CONFLICTING=$(echo "$PULL_OUTPUT" | grep -oP "(?<=Untracked working tree file ').*(?=' would be overwritten)" || true)
-    if [[ -n "$CONFLICTING" ]]; then
-        echo "Removing conflicting untracked files:"
-        echo "$CONFLICTING" | while read -r f; do
-            echo "  rm: $f"
-            rm -f "$f"
-        done
-        # Retry pull
-        git pull origin master
-    else
-        echo "WARNING: pull failed for unknown reason:"
-        echo "$PULL_OUTPUT"
-        echo "Continuing anyway..."
-    fi
+if [[ -f scripts/safe-pull.sh ]]; then
+    bash scripts/safe-pull.sh master
 else
-    echo "Pull succeeded"
+    # Fallback if safe-pull.sh not yet available
+    git pull origin master 2>&1 || {
+        echo "WARNING: pull failed, continuing anyway..."
+    }
 fi
 ```
 
