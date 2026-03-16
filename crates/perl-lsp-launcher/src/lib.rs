@@ -82,7 +82,7 @@ pub struct LspArgs {
     pub feature_profile: Option<String>,
 
     /// Files to check (used with --check)
-    #[arg(trailing_var_arg = true)]
+    #[arg(trailing_var_arg = true, requires = "check")]
     pub files: Vec<String>,
 }
 
@@ -520,8 +520,8 @@ complete -c perl-lsp -l help -d 'Show help message'
 /// Format a colored health status line.
 ///
 /// When `use_color` is true, "ok" is wrapped in ANSI green and the version
-/// is shown in bold. Callers should pass `use_color = true` only when stderr
-/// is a terminal.
+/// is shown in bold. Callers should pass `use_color = true` only when stdout
+/// is a terminal (output goes to stdout, not stderr).
 pub fn format_health_output(version: &str, use_color: bool) -> String {
     if use_color {
         format!("\x1b[32;1mok\x1b[0m \x1b[1m{version}\x1b[0m")

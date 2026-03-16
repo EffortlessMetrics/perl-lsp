@@ -125,13 +125,12 @@ fn run_check(files: &[String]) -> i32 {
 }
 
 /// Detect whether stdout is a terminal (for colored output).
+///
+/// Respects `NO_COLOR` (<https://no-color.org/>) and checks the actual
+/// file descriptor via `std::io::IsTerminal` (stable since Rust 1.70).
 fn is_terminal_stdout() -> bool {
-    // Use the TERM environment variable as a lightweight heuristic.
-    // This avoids adding a dependency on `atty` or `is-terminal`.
-    // Piped output (e.g., `perl-lsp --health | cat`) typically has
-    // TERM unset or set to "dumb".
-    env::var("NO_COLOR").is_err()
-        && env::var("TERM").map(|t| !t.is_empty() && t != "dumb").unwrap_or(false)
+    use std::io::IsTerminal;
+    env::var("NO_COLOR").is_err() && std::io::stdout().is_terminal()
 }
 
 fn run_server(launch_config: LaunchConfig) {
