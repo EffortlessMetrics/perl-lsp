@@ -29,8 +29,18 @@ export async function activate(context: vscode.ExtensionContext) {
     const serverPath = await getServerPath(context);
     if (!serverPath) {
         vscode.window.showErrorMessage(
-            'Perl Language Server (perl-lsp) not found. Please install it or set perl-lsp.serverPath in settings.'
-        );
+            'Perl Language Server (perl-lsp) not found.',
+            'Install (cargo install perl-lsp)',
+            'Open Settings'
+        ).then((choice: string | undefined) => {
+            if (choice === 'Install (cargo install perl-lsp)') {
+                vscode.window.showInformationMessage(
+                    'Run in your terminal: cargo install perl-lsp\nThen reload VS Code.'
+                );
+            } else if (choice === 'Open Settings') {
+                vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');
+            }
+        });
         return;
     }
 
