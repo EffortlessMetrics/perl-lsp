@@ -1833,6 +1833,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml",
+ "tracing",
  "url",
  "uuid",
  "walkdir",
