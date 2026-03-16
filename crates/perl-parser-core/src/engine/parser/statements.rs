@@ -601,12 +601,12 @@ impl<'a> Parser<'a> {
                             }
 
                             // Parse remaining arguments
-                            // For map/grep/sort/first/any/etc., parse list args without requiring commas
+                            // For block-list builtins, parse list arguments without requiring
+                            // commas. Use is_at_statement_end() so `map { ... } @arr` is
+                            // accepted as the last statement before a block close even without
+                            // a trailing semicolon.
                             if Self::is_block_list_func(func_name.as_ref()) {
-                                // Parse list arguments until statement boundary
-                                while !Self::is_statement_terminator(self.peek_kind())
-                                    && !self.is_statement_modifier_keyword()
-                                {
+                                while !self.is_at_statement_end() {
                                     // Skip optional comma or fat arrow
                                     if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                         self.consume_token()?;
