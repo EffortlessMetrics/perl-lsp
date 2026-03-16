@@ -1,0 +1,198 @@
+//! LspServer constructors.
+//!
+//! All `LspServer::new*` and `LspServer::with_*` constructors live here
+//! so that `mod.rs` is limited to the struct definition and core accessors.
+
+use super::*;
+
+impl LspServer {
+    /// Create a new LSP server
+    pub fn new() -> Self {
+        Self::new_with_feature_profile(FeatureProfile::current())
+    }
+
+    /// Create a new LSP server using an explicit feature profile.
+    pub fn new_with_feature_profile(feature_profile: FeatureProfile) -> Self {
+        // Initialize workspace indexing with coordinator lifecycle management
+        #[cfg(feature = "workspace")]
+        let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
+
+        let default_features = feature_profile.advertised_features();
+
+        Self {
+            documents: Arc::new(Mutex::new(HashMap::new())),
+            initialize_requested: AtomicBool::new(false),
+            initialized: AtomicBool::new(false),
+            shutdown_received: AtomicBool::new(false),
+            #[cfg(feature = "workspace")]
+            index_coordinator,
+            // Cache up to 100 ASTs with 5 minute TTL
+            ast_cache: Arc::new(AstCache::new(100, 300)),
+            symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
+            config: Arc::new(Mutex::new(ServerConfig::default())),
+            reader: Arc::new(Mutex::new(Box::new(BufReader::new(io::stdin())))),
+            outbound: {
+                let (sender, _handle) = outbound::spawn_writer(Box::new(io::stdout()));
+                sender
+            },
+            client_capabilities: Mutex::new(ClientCapabilities::default()),
+            cancelled: Arc::new(Mutex::new(HashSet::new())),
+            workspace_folders: Arc::new(Mutex::new(Vec::new())),
+            root_path: Arc::new(Mutex::new(None)),
+            advertised_features: Mutex::new(default_features),
+            client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
+            workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
+            next_request_id: Arc::new(AtomicI64::new(1)),
+            progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
+            refresh_controller: refresh::RefreshController::new(),
+            notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
+            feature_profile,
+        }
+    }
+
+    /// Create a new LSP server with custom I/O (for testing)
+    ///
+    /// This constructor allows you to provide custom Read and Write trait objects
+    /// for testing purposes, enabling you to test LSP protocol edge cases without
+    /// requiring actual stdin/stdout or process spawning.
+    ///
+    /// # Parameters
+    ///
+    /// - `reader`: A boxed reader implementing `Read + Send` for reading LSP messages
+    /// - `writer`: A boxed writer implementing `Write + Send` for writing LSP responses
+    ///
+    /// # Thread Safety
+    ///
+    /// Both reader and writer are automatically wrapped in `Arc<Mutex<...>>` to ensure
+    /// thread-safe access. The server can safely be used from multiple threads.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use std::io::Cursor;
+    /// use perl_lsp::LspServer;
+    ///
+    /// let input = Cursor::new(Vec::new());
+    /// let output = Vec::new();
+    ///
+    /// let server = LspServer::with_io(
+    ///     Box::new(input),
+    ///     Box::new(output)
+    /// );
+    /// ```
+    #[allow(clippy::boxed_local)] // reader is intentionally unused for API compatibility
+    pub fn with_io<R, W>(reader: Box<R>, writer: Box<W>) -> Self
+    where
+        R: Read + Send + 'static,
+        W: Write + Send + 'static,
+    {
+        Self::with_io_and_feature_profile(reader, writer, FeatureProfile::current())
+    }
+
+    /// Create a new LSP server with custom I/O and explicit feature profile.
+    pub fn with_io_and_feature_profile<R, W>(
+        reader: Box<R>,
+        writer: Box<W>,
+        feature_profile: FeatureProfile,
+    ) -> Self
+    where
+        R: Read + Send + 'static,
+        W: Write + Send + 'static,
+    {
+        // Initialize workspace indexing with coordinator lifecycle management
+        #[cfg(feature = "workspace")]
+        let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
+
+        let default_features = feature_profile.advertised_features();
+
+        Self {
+            documents: Arc::new(Mutex::new(HashMap::new())),
+            initialize_requested: AtomicBool::new(false),
+            initialized: AtomicBool::new(false),
+            shutdown_received: AtomicBool::new(false),
+            #[cfg(feature = "workspace")]
+            index_coordinator,
+            ast_cache: Arc::new(AstCache::new(100, 300)),
+            symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
+            config: Arc::new(Mutex::new(ServerConfig::default())),
+            reader: Arc::new(Mutex::new(Box::new(BufReader::new(reader)))),
+            outbound: {
+                let (sender, _handle) = outbound::spawn_writer(writer as Box<dyn Write + Send>);
+                sender
+            },
+            client_capabilities: Mutex::new(ClientCapabilities::default()),
+            cancelled: Arc::new(Mutex::new(HashSet::new())),
+            workspace_folders: Arc::new(Mutex::new(Vec::new())),
+            root_path: Arc::new(Mutex::new(None)),
+            advertised_features: Mutex::new(default_features),
+            client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
+            workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
+            next_request_id: Arc::new(AtomicI64::new(1)),
+            progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
+            refresh_controller: refresh::RefreshController::new(),
+            notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
+            feature_profile,
+        }
+    }
+
+    /// Create a new LSP server with custom output (for testing)
+    ///
+    /// **Deprecated**: Use `with_io()` instead for full control over I/O.
+    /// This method is maintained for backward compatibility.
+    pub fn with_output(output: Arc<Mutex<Box<dyn Write + Send>>>) -> Self {
+        Self::with_output_and_feature_profile(output, FeatureProfile::current())
+    }
+
+    /// Create a new LSP server with custom output and explicit feature profile.
+    pub fn with_output_and_feature_profile(
+        output: Arc<Mutex<Box<dyn Write + Send>>>,
+        feature_profile: FeatureProfile,
+    ) -> Self {
+        // Initialize workspace indexing with coordinator lifecycle management
+        #[cfg(feature = "workspace")]
+        let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
+
+        let default_features = feature_profile.advertised_features();
+
+        Self {
+            documents: Arc::new(Mutex::new(HashMap::new())),
+            initialize_requested: AtomicBool::new(false),
+            initialized: AtomicBool::new(false),
+            shutdown_received: AtomicBool::new(false),
+            #[cfg(feature = "workspace")]
+            index_coordinator,
+            ast_cache: Arc::new(AstCache::new(100, 300)),
+            symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
+            config: Arc::new(Mutex::new(ServerConfig::default())),
+            reader: Arc::new(Mutex::new(Box::new(BufReader::new(io::stdin())))),
+            outbound: {
+                let (sender, _handle) = outbound::spawn_writer_shared(output);
+                sender
+            },
+            client_capabilities: Mutex::new(ClientCapabilities::default()),
+            cancelled: Arc::new(Mutex::new(HashSet::new())),
+            workspace_folders: Arc::new(Mutex::new(Vec::new())),
+            root_path: Arc::new(Mutex::new(None)),
+            advertised_features: Mutex::new(default_features),
+            client_supports_pull_diags: Arc::new(AtomicBool::new(false)),
+            workspace_config: Arc::new(Mutex::new(WorkspaceConfig::default())),
+            next_request_id: Arc::new(AtomicI64::new(1)),
+            progress_tokens: Arc::new(Mutex::new(HashSet::new())),
+            progress_token_to_request: Arc::new(Mutex::new(HashMap::new())),
+            refresh_controller: refresh::RefreshController::new(),
+            notebook_store: notebook::NotebookStore::new(),
+            trace_level: Arc::new(Mutex::new("off".to_string())),
+            feature_profile,
+        }
+    }
+}
+
+impl Default for LspServer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
