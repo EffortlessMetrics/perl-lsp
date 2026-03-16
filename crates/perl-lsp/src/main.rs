@@ -17,6 +17,31 @@ use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::time::{Duration, sleep};
 
+/// Spawn a blocking reader thread that reads LSP messages from `reader` and
+/// forwards them to `tx`. The thread exits when the channel closes or the
+/// reader returns EOF or an error.
+fn spawn_reader_thread<R: std::io::Read + Send + 'static>(
+    reader: R,
+    tx: tokio::sync::mpsc::Sender<perl_lsp::JsonRpcRequest>,
+) {
+    use perl_lsp::transport::ContentLengthMessageReader;
+    std::thread::spawn(move || {
+        let mut msg_reader = ContentLengthMessageReader::new();
+        let mut buf_reader = std::io::BufReader::new(reader);
+        loop {
+            match msg_reader.read_next(&mut buf_reader) {
+                Ok(Some(request)) => {
+                    if tx.blocking_send(request).is_err() {
+                        break;
+                    }
+                }
+                Ok(None) => break, // EOF
+                Err(_) => break,
+            }
+        }
+    });
+}
+
 fn main() {
     let launch_plan = match parse_args(env::args()) {
         Ok(plan) => plan,
@@ -76,22 +101,7 @@ fn run_server(launch_config: LaunchConfig) {
 
                 // Spawn a blocking reader thread for stdin
                 let (tx, rx) = tokio::sync::mpsc::channel(64);
-                std::thread::spawn(move || {
-                    use perl_lsp::transport::ContentLengthMessageReader;
-                    let mut msg_reader = ContentLengthMessageReader::new();
-                    let mut buf_reader = std::io::BufReader::new(std::io::stdin());
-                    loop {
-                        match msg_reader.read_next(&mut buf_reader) {
-                            Ok(Some(request)) => {
-                                if tx.blocking_send(request).is_err() {
-                                    break;
-                                }
-                            }
-                            Ok(None) => break, // EOF
-                            Err(_) => break,
-                        }
-                    }
-                });
+                spawn_reader_thread(std::io::stdin(), tx);
 
                 // Same async dispatch path as TCP
                 server.serve_async(rx).await;
@@ -164,22 +174,7 @@ fn run_server(launch_config: LaunchConfig) {
 
                                 // Spawn a blocking reader thread that feeds an async channel
                                 let (tx, rx) = tokio::sync::mpsc::channel(64);
-                                std::thread::spawn(move || {
-                                    use perl_lsp::transport::ContentLengthMessageReader;
-                                    let mut msg_reader = ContentLengthMessageReader::new();
-                                    let mut buf_reader = std::io::BufReader::new(reader);
-                                    loop {
-                                        match msg_reader.read_next(&mut buf_reader) {
-                                            Ok(Some(request)) => {
-                                                if tx.blocking_send(request).is_err() {
-                                                    break;
-                                                }
-                                            }
-                                            Ok(None) => break, // EOF
-                                            Err(_) => break,
-                                        }
-                                    }
-                                });
+                                spawn_reader_thread(reader, tx);
 
                                 // Run async serve loop with concurrent dispatch
                                 server.serve_async(rx).await;
