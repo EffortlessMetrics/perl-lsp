@@ -17,5 +17,8 @@ include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 [dependencies]
 serde = { workspace = true, features = ["derive"] }
 
+[dev-dependencies]
+serde_json = { workspace = true }
+
 [lints]
 workspace = true
