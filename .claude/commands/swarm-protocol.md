@@ -173,6 +173,22 @@ Optimize for cost per merged artifact, not raw startup latency.
 - Do NOT respawn fresh agents just to preserve purity if it destroys reuse.
 - Do NOT keep idle agents alive speculatively if they have no likely near-term reuse path.
 
+## 7d. Review Discipline
+
+**One PR per review agent. Launch N parallel agents for N PRs.**
+
+- Each review agent invokes `/review-pr <number>` for exactly one PR.
+- Different PRs are different context sets — never batch reviews into a single agent.
+- The reviewer fixes what it can, files issues for what it cannot, and reports outcome.
+- The reviewer does NOT merge. It marks PRs ready or leaves blocking comments.
+- After review, the agent reports and spins down. Do not idle-wait for more PRs.
+
+Spawning pattern:
+```
+# For each PR needing review:
+Agent(isolation: "worktree", prompt: "Invoke /review-pr <PR_NUMBER>.")
+```
+
 ## 8. Research (Don't Guess — Look It Up)
 
 When you need external facts — Perl syntax rules, LSP protocol details, crate APIs, CPAN module behavior — spawn a research agent instead of guessing or spending your own context on web searches:
