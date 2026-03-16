@@ -35,7 +35,7 @@ If rebase fails (complex conflicts):
 ```bash
 git rebase --abort
 ```
-Note as blocked — needs manual resolution or a swarm-fixer agent.
+Note as blocked — needs manual resolution or a `fixer` worker.
 
 ### 4. Report
 | PR | Branch | Status |

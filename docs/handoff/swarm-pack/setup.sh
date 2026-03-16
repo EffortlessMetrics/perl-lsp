@@ -248,14 +248,13 @@ if [ -f "$SETTINGS" ]; then
     echo "EXISTING: .claude/settings.json found."
     echo "  Add these hooks manually if not already present:"
     echo ""
-    echo '  "TeammateIdle": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/teammate-idle.sh"}]}],'
-    echo '  "TaskCompleted": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/task-completed.sh"}]}],'
-    echo '  "SubagentStart": [{"matcher": "swarm-builder|swarm-reviewer|swarm-fixer", "hooks": [{"type": "command", "command": "echo '\''Reminder: Invoke /coding-standards before writing code.'\''"}]}],'
-    echo '  "SubagentStop": [{"matcher": "swarm-builder|swarm-reviewer|swarm-fixer", "hooks": [{"type": "command", "command": "bash .claude/hooks/subagent-stop.sh"}]}],'
-    echo '  "WorktreeCreate": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/worktree-create.sh"}]}],'
-    echo '  "WorktreeRemove": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/worktree-remove.sh"}]}],'
+    echo '  "TeammateIdle": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/teammate-idle.sh"}]}],'
+    echo '  "TaskCompleted": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/task-completed.sh"}]}],'
+    echo '  "SubagentStart": [{"matcher": "builder|reviewer|fixer|validator|bootstrapper|pr-responder|ops|improver", "hooks": [{"type": "command", "command": "echo '\''Reminder: Invoke /coding-standards before writing code.'\''"}]}],'
+    echo '  "SubagentStop": [{"matcher": "builder|reviewer|fixer|validator|bootstrapper|pr-responder|ops|improver", "hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/subagent-stop.sh"}]}],'
     echo '  "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r '\''.tool_input.command // empty'\''); ..."}]}]'
     echo '  "SessionStart": [{"matcher": "compact", "hooks": [{"type": "command", "command": "echo '\''Post-compaction context refresh...'\''"}]}]'
+    echo '  WorktreeCreate/WorktreeRemove are intentionally omitted from the shared template because they replace Claude Code'\''s default git worktree behavior.'
     echo ""
     echo "  See the generated settings.json template in this setup.sh for full hook commands."
     echo ""
@@ -300,7 +299,7 @@ else
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/teammate-idle.sh"
+            "command": "\"\$CLAUDE_PROJECT_DIR\"/.claude/hooks/teammate-idle.sh"
           }
         ]
       }
@@ -310,14 +309,14 @@ else
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/task-completed.sh"
+            "command": "\"\$CLAUDE_PROJECT_DIR\"/.claude/hooks/task-completed.sh"
           }
         ]
       }
     ],
     "SubagentStart": [
       {
-        "matcher": "swarm-builder|swarm-reviewer|swarm-fixer",
+        "matcher": "builder|reviewer|fixer|validator|bootstrapper|pr-responder|ops|improver",
         "hooks": [
           {
             "type": "command",
@@ -328,31 +327,11 @@ else
     ],
     "SubagentStop": [
       {
-        "matcher": "swarm-builder|swarm-reviewer|swarm-fixer",
+        "matcher": "builder|reviewer|fixer|validator|bootstrapper|pr-responder|ops|improver",
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/subagent-stop.sh"
-          }
-        ]
-      }
-    ],
-    "WorktreeCreate": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/worktree-create.sh"
-          }
-        ]
-      }
-    ],
-    "WorktreeRemove": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/worktree-remove.sh"
+            "command": "\"\$CLAUDE_PROJECT_DIR\"/.claude/hooks/subagent-stop.sh"
           }
         ]
       }
@@ -382,7 +361,7 @@ else
   }
 }
 SETTINGSEOF
-    echo "  Created with PostToolUse, TeammateIdle, TaskCompleted, SubagentStart, SubagentStop, WorktreeCreate, WorktreeRemove, PreToolUse, and SessionStart hooks"
+    echo "  Created with PostToolUse, TeammateIdle, TaskCompleted, SubagentStart, SubagentStop, PreToolUse, and SessionStart hooks"
 fi
 
 # --- Print customization guide -----------------------------------------------
@@ -401,14 +380,14 @@ echo "   - ${AGENT_COUNT} agent definitions in .claude/agents/"
 echo "   - ${SKILL_COUNT} skills in .claude/skills/"
 echo "   - ${COMMAND_COUNT} slash command files in .claude/commands/"
 echo "   - ${HOOK_COUNT} hook scripts in .claude/hooks/"
-echo "   - hooks registered in .claude/settings.json (9 event types)"
+echo "   - hooks registered in .claude/settings.json (7 event types)"
 echo "   - .claude/swarm-state/  — tracked knowledge (pitfalls, slices, discoveries, queue)"
 echo "   - ${OPS_DIR}/           — ephemeral runtime (gitignored: handoffs, metrics, patches, salvage)"
 echo "   - GitHub labels (7)"
 echo ""
 echo " Next steps — customize for your project:"
 echo ""
-echo "   1. AGENT DEFINITIONS (.claude/agents/swarm-*.md):"
+echo "   1. AGENT DEFINITIONS (.claude/agents/*.md):"
 echo "      Replace placeholder variables with your commands:"
 echo ""
 echo "        \$FMT_CMD          → ${FMT_CMD}"
@@ -418,13 +397,13 @@ echo "        \$TEST_CMD          → ${TEST_CMD}"
 echo "        \$DEAD_CODE_CMD     → your dead code detector"
 echo "        \$UNUSED_DEPS_CMD   → your unused deps checker"
 echo ""
-echo "   2. SCOUT FOCUS AREAS (.claude/agents/swarm-scout.md):"
+echo "   2. SCOUT FOCUS AREAS (.claude/agents/scout.md):"
 echo "      Replace \$ERROR_SOURCE, \$TEST_GAPS, etc. with your:"
 echo "        - Bug tracking / error baseline sources"
 echo "        - Test coverage gap locations"
 echo "        - Technical debt tracking file"
 echo ""
-echo "   3. DRIFT COMMANDS (.claude/agents/swarm-merger.md, commands/status-drift.md):"
+echo "   3. DRIFT COMMANDS (.claude/agents/ops.md, commands/status-drift.md):"
 echo "      Replace \$STATUS_REGEN_CMD and \$BASELINE_RATCHET_CMD"
 echo ""
 echo "   4. FORMAT CHECK HOOK (.claude/hooks/task-completed.sh):"

@@ -23,15 +23,15 @@ Discover the codebase structure and generate domain-specific agent definitions. 
 
 ## Process
 
-Launch the swarm-bootstrapper agent:
+Launch the `bootstrapper` agent:
 
 ```
 Agent(
-  subagent_type: "swarm-bootstrapper",
+  subagent_type: "bootstrapper",
   prompt: "Discover this codebase and generate domain-specific agents. $ARGUMENTS.
 Write agents to .claude/agents/.
-Update portable agents with repo-specific details.
-Create .claude/agents/AGENT_CATALOG.md.
+Update the canonical coordinator and worker roster only when the pattern is reusable.
+Create or refresh .claude/agents/AGENT_CATALOG.md.
 Target ~25-35 domain agents.",
   mode: "auto"
 )

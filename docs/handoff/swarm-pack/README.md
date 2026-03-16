@@ -1,6 +1,7 @@
 # Swarm Pack
 
-Drop-in infrastructure for running continuous, highly-parallel development swarms with Claude Code agent teams.
+Drop-in infrastructure derived from the live swarm control plane for running
+continuous, highly-parallel development swarms with Claude Code agent teams.
 
 ## What This Is
 
@@ -63,22 +64,16 @@ entrypoint.
 ```
 .claude/
   agents/
-    swarm-scout.md        # Discovery specialist
-    swarm-builder.md      # Build/worktree specialist
-    swarm-reviewer.md     # Review specialist
-    swarm-merger.md       # Merge/drift specialist reused by ops lane
-    swarm-fixer.md        # CI failure repair specialist
-    swarm-bootstrapper.md # Codebase discovery → domain agent generation
-    swarm-improver-*.md   # Docs/tests/devex/infra improvement specialists
-    swarm-*.md            # Optional strategist / validator / PR response helpers
-    review-*.md           # Review lenses (standards, security, scope)
+    scout.md              # Discovery coordinator
+    builder.md            # Build/worktree coordinator
+    reviewer.md           # Review coordinator
+    ops.md                # Merge + validate + queue-health coordinator
+    improver.md           # Docs/tests/devex/infra coordinator
+    bootstrapper.md       # Codebase discovery → roster refresh
+    fixer.md              # CI and branch failure repair worker
+    validator.md          # Post-merge claim validation worker
+    pr-responder.md       # Review feedback worker
     research-*.md         # Web/docs/verification helpers
-    mutant-killer.md      # Kill mutation survivors
-    coverage-filler.md    # Fill test coverage gaps
-    adr-writer.md         # Architecture Decision Records
-    friction-logger.md    # Friction log maintenance
-    dep-cleaner.md        # Unused dependency removal
-    dead-code.md          # Dead code removal
   skills/
     swarm/
       SKILL.md           # skill-native /swarm control plane
@@ -105,6 +100,7 @@ entrypoint.
   hooks/
     teammate-idle.sh      # Keeps teammates working
     task-completed.sh     # Quality gate on task completion
+    subagent-stop.sh      # Worker teardown metrics
   swarm-state/            # Tracked (committed, persists across sessions)
     known-pitfalls.md     # Failure knowledge base
     completed-slices.md   # Scout dedup log
@@ -112,8 +108,7 @@ entrypoint.
     swarm-queue.json      # Overlap tracking
   settings.json           # Hook registrations (PostToolUse, TeammateIdle,
                           # TaskCompleted, SubagentStart, SubagentStop,
-                          # WorktreeCreate, WorktreeRemove, PreToolUse,
-                          # SessionStart)
+                          # PreToolUse, SessionStart)
 .ops/                     # Ephemeral runtime (gitignored)
   handoffs/               # Agent handoff files (scout → builder → reviewer)
   swarm-metrics.jsonl     # Performance data
@@ -154,12 +149,15 @@ Hooks read JSON from stdin (not env vars). All hooks registered in `.claude/sett
 | `PostToolUse` (Edit/Write) | Auto-format + check edited source files |
 | `TeammateIdle` | Detect idle agents with unclaimed work |
 | `TaskCompleted` | Block ghost completions — verify deliverables exist |
-| `SubagentStart` (builder/reviewer/fixer) | Auto-inject coding standards |
-| `SubagentStop` (builder/reviewer/fixer) | Record worker teardown and handoff boundaries |
-| `WorktreeCreate` | Record new mutation lanes when worktree workers spin up |
-| `WorktreeRemove` | Record worktree cleanup when mutation lanes are torn down |
+| `SubagentStart` (builder/reviewer/fixer/etc.) | Auto-inject coding standards |
+| `SubagentStop` (builder/reviewer/fixer/etc.) | Record worker teardown and handoff boundaries |
 | `PreToolUse` (Bash) | Block dangerous commands |
 | `SessionStart` (compact) | Inject context refresh after compaction |
+
+`WorktreeCreate` and `WorktreeRemove` are intentionally not registered by
+default in the shared settings template. In Claude Code those hooks replace the
+default git worktree behavior, so they should only be added when the hook
+script itself creates or removes the working copy.
 
 ## Customization
 

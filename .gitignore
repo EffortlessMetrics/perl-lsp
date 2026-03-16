@@ -191,6 +191,8 @@ Cargo.toml.backup*
 # Agent status files
 .agent/
 agents/
+!.claude/agents/
+!.claude/agents/*.md
 
 # Old review/planning artifacts
 review/

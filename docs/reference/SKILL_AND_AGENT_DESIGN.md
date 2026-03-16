@@ -266,9 +266,13 @@ The repo still contains historical agent generations and experiments
 donor material, but they are not the architectural center of gravity anymore.
 
 The current control plane is defined by:
+- [`.claude/agents/README.md`](../../.claude/agents/README.md)
 - [`.claude/commands/swarm.md`](../../.claude/commands/swarm.md)
 - [`.claude/skills/swarm/SKILL.md`](../../.claude/skills/swarm/SKILL.md)
 - [`.claude/skills/swarm/reference/team-structure.md`](../../.claude/skills/swarm/reference/team-structure.md)
 - [`.claude/skills/swarm/templates/teammate-prompt-template.md`](../../.claude/skills/swarm/templates/teammate-prompt-template.md)
 - [`docs/handoff/SWARM_DESIGN.md`](../handoff/SWARM_DESIGN.md)
 - [`docs/project/AGENT_SWARM_WORKFLOW.md`](../project/AGENT_SWARM_WORKFLOW.md)
+
+The pack under `docs/handoff/swarm-pack/` is a derived export for adoption in
+other repos. It should mirror the live control plane, not compete with it.

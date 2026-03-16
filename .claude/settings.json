@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/teammate-idle.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/teammate-idle.sh"
           }
         ]
       }
@@ -67,14 +67,14 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/task-completed.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/task-completed.sh"
           }
         ]
       }
     ],
     "SubagentStart": [
       {
-        "matcher": "swarm-builder|swarm-reviewer|swarm-fixer",
+        "matcher": "builder|reviewer|fixer|validator|bootstrapper|pr-responder|ops|improver",
         "hooks": [
           {
             "type": "command",
@@ -85,31 +85,11 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "swarm-builder|swarm-reviewer|swarm-fixer",
+        "matcher": "builder|reviewer|fixer|validator|bootstrapper|pr-responder|ops|improver",
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/subagent-stop.sh"
-          }
-        ]
-      }
-    ],
-    "WorktreeCreate": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/worktree-create.sh"
-          }
-        ]
-      }
-    ],
-    "WorktreeRemove": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/worktree-remove.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/subagent-stop.sh"
           }
         ]
       }

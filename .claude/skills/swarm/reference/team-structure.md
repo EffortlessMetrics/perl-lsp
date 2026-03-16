@@ -4,11 +4,11 @@
 
 | Name | Role | Agent Type | Model | Subagent Strategy |
 |------|------|-----------|-------|-------------------|
-| `scout` | Discovery coordinator | swarm-scout | sonnet | Spawns 5-8 Explore subagents/round |
-| `builder` | Build coordinator | swarm-builder | sonnet | Spawns 3-5 worktree subagents/round |
-| `reviewer` | Review + PR creation | swarm-reviewer | sonnet | Spawns 3-5 review subagents/round |
-| `ops` | Merge + validate + fix CI | swarm-ops | sonnet | Sequential merges, spawns fix subagents |
-| `improver` | Docs + tests + devex | swarm-improver | sonnet | Spawns 2-4 worktree subagents |
+| `scout` | Discovery coordinator | scout | sonnet | Spawns 5-8 Explore or research workers/round |
+| `builder` | Build coordinator | builder | sonnet | Spawns 3-5 worktree workers/round |
+| `reviewer` | Review + PR creation | reviewer | sonnet | Spawns 3-5 review workers/round |
+| `ops` | Merge + validate + fix CI | ops | sonnet | Sequential merges, routes to fixer and validator |
+| `improver` | Docs + tests + devex | improver | sonnet | Spawns 2-4 worktree workers |
 
 ## Execution Doctrine
 
@@ -57,7 +57,7 @@ all agents ─→ TaskUpdate ────→ shared task list
 
 ## Spawn Rules
 
-- One scout subagent per discovery bucket or issue cluster
+- One scout worker per discovery bucket or issue cluster
 - One builder worker per PR-shaped change
 - One reviewer worker per PR
 - One fixer worker per failure mode
