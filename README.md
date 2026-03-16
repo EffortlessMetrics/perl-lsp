@@ -20,6 +20,8 @@
 
 ---
 
+> **Note**: perl-lsp is in public alpha. Core features work well, but expect some rough edges. [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues).
+
 ## Quick Start
 
 ```bash
@@ -198,6 +200,7 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 | [features.toml](features.toml) | Canonical LSP feature catalog |
 | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) | Live project metrics |
 | [ROADMAP.md](ROADMAP.md) | Version milestones and planning |
+| [Getting Started](docs/tutorials/GETTING_STARTED.md) | Installation and first steps |
 | [Stability Policy](docs/reference/STABILITY.md) | API versioning and compatibility |
 | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
 
