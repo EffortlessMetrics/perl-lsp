@@ -420,6 +420,12 @@ impl<'a> Parser<'a> {
                     self.consume_token()?; // consume tie
                     self.mark_not_stmt_start();
 
+                    // `tie(VARIABLE, CLASS, LIST)` is valid Perl syntax.
+                    let has_parens = self.peek_kind() == Some(TokenKind::LeftParen);
+                    if has_parens {
+                        self.consume_token()?; // consume '('
+                    }
+
                     // First argument to tie can be a variable declaration, e.g. tie my %hash, ...
                     let variable = if matches!(self.peek_kind(), Some(TokenKind::My | TokenKind::Our | TokenKind::Local | TokenKind::State)) {
                         Box::new(self.parse_variable_declaration()?)
@@ -446,7 +452,14 @@ impl<'a> Parser<'a> {
                     let mut args = vec![];
                     while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                         self.consume_token()?; // consume , or =>
+                        if has_parens && self.peek_kind() == Some(TokenKind::RightParen) {
+                            break;
+                        }
                         args.push(self.parse_assignment()?);
+                    }
+
+                    if has_parens {
+                        self.expect(TokenKind::RightParen)?;
                     }
 
                     let end = self.previous_position();

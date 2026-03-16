@@ -8,6 +8,15 @@ mod tests {
         parser.parse().ok()
     }
 
+    fn parse_without_error(input: &str) -> perl_ast::ast::Node {
+        let ast = parse_code(input).unwrap_or_else(|| {
+            Node::new(NodeKind::UnknownRest, SourceLocation { start: 0, end: 0 })
+        });
+        let sexp = ast.to_sexp();
+        assert!(!sexp.contains("ERROR"), "unexpected ERROR while parsing `{input}`: {sexp}");
+        ast
+    }
+
     #[test]
     fn test_tie_variable() {
         // AC: Tie NodeKind coverage
@@ -312,5 +321,53 @@ mod tests {
         if let NodeKind::Program { statements } = &ast.kind {
             assert!(!statements.is_empty(), "tie with local should parse");
         }
+    }
+
+    #[test]
+    fn test_tie_with_parens_array() {
+        parse_without_error("tie(@arr, 'Tie::Array');");
+    }
+
+    #[test]
+    fn test_tie_with_parens_hash() {
+        parse_without_error("tie(%hash, 'Tie::Hash');");
+    }
+
+    #[test]
+    fn test_tie_with_parens_scalar() {
+        parse_without_error("tie($scalar, 'Tie::Scalar', 'arg');");
+    }
+
+    #[test]
+    fn test_tie_with_parens_glob() {
+        parse_without_error("tie(*$fh, $class, $a);");
+    }
+
+    #[test]
+    fn test_tie_with_parens_extra_args() {
+        parse_without_error("tie(@arr, 'Tie::Array', $arg1, $arg2);");
+    }
+
+    #[test]
+    fn test_tie_without_parens_regression() {
+        parse_without_error("tie @arr, 'Tie::Array';");
+    }
+
+    #[test]
+    fn test_tie_without_parens_extra_args() {
+        parse_without_error("tie %hash, 'Tie::Hash', 'key', 'val';");
+    }
+
+    #[test]
+    fn test_tie_in_method_chain_context() {
+        parse_without_error(
+            r#"
+sub init {
+    my ($class, $fh, $start, $lg) = @_;
+    tie(*$fh, $class, $lg);
+    return bless($fh, $class);
+}
+"#,
+        );
     }
 }
