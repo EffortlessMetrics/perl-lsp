@@ -2,6 +2,13 @@
 //!
 //! This module provides functionality for detecting deprecated Perl syntax
 //! and generating appropriate diagnostic warnings.
+//!
+//! # Diagnostic codes
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `deprecated-defined` | Warning | `defined(@array)` or `defined(%hash)` is deprecated |
+//! | `deprecated-array-base` | Warning | `$[` variable is deprecated since Perl 5.12 |
 
 use perl_parser_core::ast::{Node, NodeKind};
 

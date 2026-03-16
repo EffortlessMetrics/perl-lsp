@@ -88,6 +88,9 @@ fn format_found_token(found: &str) -> String {
 }
 
 /// Build a contextual suggestion for a parse error based on the expected/found tokens.
+///
+/// Each suggestion is designed to be actionable: the user should be able to read
+/// the suggestion and know exactly what to change.
 fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
     match error {
         ParseError::UnexpectedToken { expected, found, .. } => {
@@ -105,6 +108,18 @@ fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
             if found == "}" || found == ")" || found == "]" {
                 return Some(format!("Check for a missing {expected} before '{found}'"));
             }
+            // Missing opening brace after sub/if/while/for
+            if expected.contains('{') || expected.contains("block") {
+                return Some(format!(
+                    "Add an opening '{{' to start the block (found {found})"
+                ));
+            }
+            // Missing closing paren in function call or condition
+            if expected.contains(')') {
+                return Some(
+                    "Add a closing ')' -- there may be an unmatched opening '('".to_string(),
+                );
+            }
             None
         }
         ParseError::UnexpectedEof => Some(
@@ -114,6 +129,52 @@ fn build_parse_error_suggestion(error: &ParseError) -> Option<String> {
         ParseError::UnclosedDelimiter { delimiter } => {
             Some(format!("Add a matching closing '{delimiter}'"))
         }
-        _ => None,
+        ParseError::SyntaxError { message, .. } => {
+            // Provide targeted suggestions for known syntax error patterns
+            let msg_lower = message.to_lowercase();
+            if msg_lower.contains("semicolon") || msg_lower.contains("missing ;") {
+                Some("Add a ';' at the end of the statement".to_string())
+            } else if msg_lower.contains("heredoc") {
+                Some(
+                    "Check that the heredoc terminator appears on its own line with no extra whitespace"
+                        .to_string(),
+                )
+            } else {
+                None
+            }
+        }
+        ParseError::LexerError { message } => {
+            let msg_lower = message.to_lowercase();
+            if msg_lower.contains("unterminated") || msg_lower.contains("unclosed") {
+                Some(
+                    "Check for an unclosed string, regex, or heredoc near this position"
+                        .to_string(),
+                )
+            } else if msg_lower.contains("invalid") && msg_lower.contains("character") {
+                Some(
+                    "Remove or replace the invalid character -- Perl source should be valid UTF-8 or the encoding declared with 'use utf8;'"
+                        .to_string(),
+                )
+            } else {
+                None
+            }
+        }
+        ParseError::RecursionLimit => Some(
+            "The code is too deeply nested -- consider refactoring into smaller subroutines"
+                .to_string(),
+        ),
+        ParseError::InvalidNumber { literal } => Some(format!(
+            "'{literal}' is not a valid number -- check for misplaced underscores or invalid digits"
+        )),
+        ParseError::InvalidString => Some(
+            "Check for a missing closing quote or an invalid escape sequence".to_string(),
+        ),
+        ParseError::InvalidRegex { .. } => Some(
+            "Check the regex pattern for unmatched delimiters, invalid quantifiers, or unescaped metacharacters"
+                .to_string(),
+        ),
+        ParseError::NestingTooDeep { .. } => Some(
+            "Reduce nesting depth by extracting inner logic into named subroutines".to_string(),
+        ),
     }
 }

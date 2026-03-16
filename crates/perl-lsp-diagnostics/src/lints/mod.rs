@@ -8,8 +8,65 @@
 //! Lints are organized into focused submodules:
 //!
 //! - **deprecated**: Deprecated syntax warnings (e.g., `defined(@array)`)
-//! - **strict_warnings**: Missing `use strict` and `use warnings` advisories
+//! - **strict_warnings**: Missing `use strict` / `use warnings` advisories and
+//!   misspelled pragma detection
 //! - **common_mistakes**: Frequent programming errors (assignment in conditions, etc.)
+//!
+//! # Diagnostic Code Reference
+//!
+//! Every diagnostic carries a `code` field that IDEs can use for quick-fix
+//! integration, filtering, and documentation lookup.
+//!
+//! ## Parse errors (`diagnostics.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `parse-error` | Error | Generic parse error from the parser |
+//!
+//! ## Scope issues (`scope.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `undeclared-variable` | Error | Variable used without declaration |
+//! | `variable-redeclaration` | Error | Duplicate `my` in same scope |
+//! | `duplicate-parameter` | Error | Same parameter name twice |
+//! | `unquoted-bareword` | Error | Bareword not allowed under strict |
+//! | `variable-shadowing` | Warning | Inner variable hides outer |
+//! | `unused-variable` | Warning | Declared but never read |
+//! | `unused-parameter` | Warning | Subroutine parameter never used |
+//! | `parameter-shadows-global` | Warning | Parameter hides package var |
+//! | `uninitialized-variable` | Warning | Used before assignment |
+//!
+//! ## Deprecated syntax (`deprecated.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `deprecated-defined` | Warning | `defined(@array)` or `defined(%hash)` |
+//! | `deprecated-array-base` | Warning | Use of `$[` variable |
+//!
+//! ## Strict / warnings (`strict_warnings.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `missing-strict` | Information | `use strict` not found |
+//! | `missing-warnings` | Information | `use warnings` not found |
+//! | `misspelled-pragma` | Warning | Pragma name appears misspelled |
+//!
+//! ## Common mistakes (`common_mistakes.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `assignment-in-condition` | Warning | `=` used where `==` likely intended |
+//! | `numeric-undef` | Warning | `==`/`!=` with potentially undef value |
+//!
+//! ## Dead code (`dead_code.rs`)
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `dead-code-subroutine` | Hint | Subroutine with no callers |
+//! | `dead-code-variable` | Hint | Package variable with no references |
+//! | `dead-code-constant` | Hint | Constant with no references |
+//! | `dead-code-package` | Hint | Package with no references |
 //!
 //! # Severity Levels
 //!
