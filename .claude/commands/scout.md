@@ -1,11 +1,11 @@
 ---
-description: Universal scout launcher — explore any area and produce GitHub issues
+description: Launch a single scout agent for a focus area
 argument-hint: "<focus> e.g. 'parser', 'lsp', 'dap', 'docs', 'tests', 'devex', 'security', 'deps', 'perf'"
 ---
 
-# Scout: Focused Exploration
+# Scout
 
-Launch a focused exploration of: **$ARGUMENTS**
+Launch a focused exploration of **$ARGUMENTS** and produce GitHub issues for concrete findings.
 
 ## Dispatch Table
 
@@ -23,54 +23,44 @@ Launch a focused exploration of: **$ARGUMENTS**
 
 ## Process
 
-1. **Identify focus area** from `$ARGUMENTS` using the dispatch table above. If the argument does not match a known focus, treat it as a crate name and explore `crates/<argument>/`.
+1. Identify the focus area from `$ARGUMENTS` using the dispatch table above. If the argument does not match a known focus, treat it as a crate name and explore `crates/<argument>/`.
 
-2. **Spawn an Explore agent** for the focus area:
+2. Spawn one `swarm-scout` agent for the focus area:
 
-```
+```text
 Agent(
-  subagent_type: "Explore",
+  subagent_type: "swarm-scout",
   prompt: "
     Focus: <focus area>
     Paths: <paths from dispatch table>
 
-    Explore these paths looking for improvement opportunities:
-    - Read source files and tests
-    - Look for TODO/FIXME/HACK comments
-    - Check error handling patterns (unwrap, expect, panic)
-    - Identify missing test coverage
-    - Note any code quality issues
-    - Check for dead code or unused imports
-
-    For each finding, note:
-    1. File path and line number
-    2. What the issue is
-    3. Why it matters (impact)
-    4. Suggested fix approach
-
-    After exploration, invoke /scout-report to create a GitHub issue for each distinct finding.
+    Load /swarm-protocol for behavioral rules.
+    Dedup-check completed slices, open issues, and open PRs.
+    Find ONE actionable improvement with concrete file:line evidence.
+    Write the finding as a GitHub issue via /scout-report.
   ",
+  model: "sonnet",
   run_in_background: true,
   name: "scout-<focus>"
 )
 ```
 
-3. **Collect results** when the agent completes.
+3. Collect the issue URL when the agent completes.
 
 ## Examples
 
-```
-/scout parser       # Explore parser crates for bugs and gaps
-/scout dap          # Audit DAP protocol compliance
-/scout lsp          # Check LSP feature completeness
-/scout security     # Security-focused scan
-/scout perl-refactoring  # Scout a specific crate by name
+```bash
+/scout parser           # Explore parser crates for bugs and gaps
+/scout dap              # Audit DAP protocol compliance
+/scout lsp              # Check LSP feature completeness
+/scout security         # Security-focused scan
+/scout perl-refactoring # Scout a specific crate by name
 ```
 
 ## After Scouting
 
 - Each finding becomes a GitHub issue via `/scout-report`
-- Issues are labeled `swarm-discovered` (or `swarm-architectural` for design decisions)
+- Issues are labeled `swarm-discovered` or `swarm-architectural` for design decisions
 - Builder agents can pick up issues directly
 - Use `/queue-scout` for broad multi-area scouting instead of single-focus
 

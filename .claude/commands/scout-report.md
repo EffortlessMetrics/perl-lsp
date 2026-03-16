@@ -1,59 +1,68 @@
 ---
-description: Write scout findings as a GitHub issue with structured context
-argument-hint: "<title> <body-summary>"
+description: Write scout findings as a GitHub issue with structured template
+argument-hint: "<one-line title of the finding>"
 ---
 
 # Scout Report
 
-Convert scout findings into a GitHub issue. This is the standard output format for all scout-type skills.
+Write a GitHub issue documenting your scout finding. This is the scout's primary deliverable.
 
-## Required Context
+## Template
 
-The calling scout MUST have gathered:
-1. **Title**: A concise description of the finding
-2. **Category**: One of `bug`, `test-gap`, `dead-code`, `doc-gap`, `perf`, `security`, `devex`, `cleanup`
-3. **Files**: Specific file paths with line numbers
-4. **Impact**: Why this matters (severity, frequency, user-facing?)
-5. **Suggested Approach**: Concrete next steps a builder agent can follow
-
-## Issue Creation
+Create the issue using this exact structure:
 
 ```bash
 gh issue create \
-  --title "<category>: <concise title>" \
+  --title "$ARGUMENTS" \
   --label "swarm-discovered" \
-  --body "$(cat <<'EOF'
-## Discovery
+  --body "$(cat <<'ISSUE_EOF'
+## Problem
 
-<What was found, why it matters>
+_What is wrong or missing? Be specific - include file paths with line numbers, error messages, metric values._
 
-## Category
+<your evidence here>
 
-<bug | test-gap | dead-code | doc-gap | perf | security | devex | cleanup>
+## Options
 
-## Files
+_What are the possible approaches to fix this? List 2-3 with tradeoffs._
 
-<file paths with line numbers>
+1. **Option A** - <description>. Tradeoff: <pro/con>.
+2. **Option B** - <description>. Tradeoff: <pro/con>.
+3. **Option C** - <description>. Tradeoff: <pro/con>.
 
-## Impact
+## Recommendation
 
-<severity: low/medium/high, user-facing: yes/no, frequency: rare/common/always>
+_Which option and why?_
 
-## Suggested Approach
+<your recommendation>
 
-<concrete steps a builder agent can follow without re-investigating>
+## Acceptance Criteria
 
-## Agent
+_How do we know this is done? Be concrete - test commands, metric thresholds, behavior changes._
 
-Discovered by `/scout` exploration.
-EOF
+- [ ] <criterion 1>
+- [ ] <criterion 2>
+- [ ] <criterion 3>
+
+## Scope
+
+- **Crate(s):** <which crates are affected>
+- **Files:** <key files with paths>
+- **Estimated size:** small / medium / large
+
+---
+_Filed by swarm-scout agent._
+ISSUE_EOF
 )"
 ```
 
 ## Rules
 
 - ONE issue per distinct finding. Do not bundle unrelated findings.
-- If multiple findings in the same category are closely related (same root cause), combine into one issue.
-- Always include enough context that a builder agent can start work without re-investigating.
-- Use `--label swarm-architectural` instead of `--label swarm-discovered` if the finding needs a design decision from the user.
-- Print the issue URL after creation so the caller can reference it.
+- Fill in ALL sections. Do not leave placeholders.
+- **Problem** must have file:line evidence, not just a vague description.
+- **Options** must list at least 2 approaches with real tradeoffs.
+- **Acceptance Criteria** must be verifiable.
+- **Scope** must list affected crates and files so builders know what to claim.
+- Always use label `swarm-discovered`, unless the finding needs a design decision. In that case use `swarm-architectural`.
+- After creating the issue, print the issue URL so the coordinator can collect it.
