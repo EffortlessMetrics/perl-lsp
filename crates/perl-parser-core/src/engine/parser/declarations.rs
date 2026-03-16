@@ -919,7 +919,39 @@ impl<'a> Parser<'a> {
                 if self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::FatArrow) {
                     // Don't consume - let the outer loop handle it as a key
                 } else {
+                    // Consume the identifier first.
                     args.push(self.consume_token()?.text.to_string());
+                    // If an operator follows (e.g. `$] < 5.016`), the value is a
+                    // full expression. Consume the operator and everything until the
+                    // next value boundary so the stray `<` is not left over for the
+                    // outer parser to misread as a glob/readline construct.
+                    if matches!(
+                        self.peek_kind(),
+                        Some(
+                            TokenKind::Less
+                                | TokenKind::Greater
+                                | TokenKind::LessEqual
+                                | TokenKind::GreaterEqual
+                                | TokenKind::Equal
+                                | TokenKind::NotEqual
+                                | TokenKind::And
+                                | TokenKind::Or
+                                | TokenKind::Plus
+                                | TokenKind::Minus
+                                | TokenKind::Star
+                                | TokenKind::Slash
+                                | TokenKind::Dot
+                                | TokenKind::WordAnd
+                                | TokenKind::WordOr
+                        )
+                    ) {
+                        while !Self::is_statement_terminator(self.peek_kind())
+                            && self.peek_kind() != Some(TokenKind::Comma)
+                            && self.peek_kind() != Some(TokenKind::FatArrow)
+                        {
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                    }
                 }
             }
             Some(TokenKind::Sub) => {

@@ -145,3 +145,63 @@ fn use_parent_regression() {
     let code = "use parent qw(Base::Class Other::Base);";
     assert_clean_parse(code);
 }
+
+mod use_constant_angle_bracket {
+    use super::*;
+
+    /// Data::Dumper pattern — the original failing file.
+    #[test]
+    fn data_dumper_is_pre_516_perl() {
+        let code = "use constant IS_PRE_516_PERL => $] < 5.016;";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn use_constant_less_equal() {
+        let code = "use constant IS_OLD => $] <= 5.020;";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn use_constant_greater_than() {
+        let code = "use constant IS_MODERN => $] > 5.020;";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn use_constant_greater_equal() {
+        let code = "use constant SUPPORTS_BOOLS => $] >= 5.036;";
+        assert_clean_parse(code);
+    }
+
+    /// Simple scalar constant still works.
+    #[test]
+    fn use_constant_simple_value() {
+        let code = "use constant MAX => 42;";
+        assert_clean_parse(code);
+    }
+
+    /// String constant still works.
+    #[test]
+    fn use_constant_string_value() {
+        let code = r#"use constant NAME => "Perl";"#;
+        assert_clean_parse(code);
+    }
+
+    /// Angle bracket readline must still work.
+    #[test]
+    fn angle_bracket_readline_still_works() {
+        let code = "my $line = <STDIN>;";
+        assert_clean_parse(code);
+    }
+
+    /// Full Data::Dumper preamble pattern.
+    #[test]
+    fn data_dumper_preamble() {
+        let code = r#"
+use constant IS_PRE_516_PERL => $] < 5.016;
+use constant SUPPORTS_CORE_BOOLS => defined &builtin::is_bool;
+"#;
+        assert_clean_parse(code);
+    }
+}
