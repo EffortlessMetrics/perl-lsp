@@ -279,3 +279,39 @@ gh pr checks <N>           # Must show all checks passing
 gh run list --limit 5      # Confirm master CI is green
 gh pr merge <N> --squash --delete-branch   # Only if both above are green
 ```
+
+## 11. CI Budget and Agent Lanes
+
+Agents fall into two lanes with different constraints:
+
+### CI-bound agents (code writers)
+These create PRs and trigger CI runs. Throttle by merge pipeline throughput.
+- Builders (worktree subagents that edit code)
+- Fixers (when they push fixes)
+- Improver-tests (when adding tests)
+
+Rules:
+- Monitor merge pipeline: only create PRs as fast as they can be reviewed and merged
+- When CI queue > 10 runs, pause new PR creation and shift to planning/research
+- Each PR triggers a CI run (~5-8 min). Budget accordingly.
+
+### Non-CI-bound agents (read-only)
+These never trigger CI. Run them freely — they cost context, not CI budget.
+- Scouts (explore, analyze, create handoffs and tasks)
+- Researchers (web search, docs lookup, verification)
+- Planners (implementation design, architecture)
+- Doc drafters (write drafts in handoffs, not PRs)
+- Triage agents (issue investigation, error analysis)
+- Strategists (priority analysis, metrics)
+
+Rules:
+- No throttle needed — run as many as useful
+- Use read-only agents to pre-plan work so code writers are maximally efficient
+- When CI is congested, shift ALL capacity to read-only work
+- Read-only agents prepare handoffs that code writers consume in focused bursts
+
+### The optimal pattern
+1. Continuous read-only agents: scouts, researchers, planners always active
+2. Burst code-writing agents: spawn when CI has capacity, ship PRs, stop
+3. When CI is saturated: shift to planning, research, doc drafting, triage
+4. Pre-planning reduces code-writing agent time → fewer CI-minutes per feature
