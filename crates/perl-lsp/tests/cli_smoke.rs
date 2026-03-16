@@ -43,8 +43,7 @@ fn check_no_files_exits_with_error() {
 fn check_valid_perl_file() {
     let dir = tempfile::tempdir().expect("failed to create tempdir");
     let file = dir.path().join("test.pl");
-    std::fs::write(&file, "use strict;\nprint \"hello\\n\";\n")
-        .expect("failed to write test file");
+    std::fs::write(&file, "use strict;\nprint \"hello\\n\";\n").expect("failed to write test file");
     let mut cmd = cargo_bin_cmd!("perl-lsp");
     cmd.arg("--check")
         .arg(file.to_str().expect("non-UTF-8 temp path"))
