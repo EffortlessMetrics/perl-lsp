@@ -1,8 +1,9 @@
-//! Message loop and cancellation state.
+//! Message loop, cancellation state, and progress tracking.
 //!
 //! `run`, `serve`, `serve_async`, and `handle_message` drive the LSP
 //! ingress loop. Cancellation helpers (`cancel_mark`, `cancel_clear`,
 //! `is_cancelled`) track request lifecycle for `$/cancelRequest`.
+//! `register_progress_request` maps progress tokens to request IDs.
 
 use super::*;
 
