@@ -25,11 +25,14 @@ async fn test_new_adapter_has_no_process() -> Result<()> {
 }
 
 /// Default implementation produces the same initial state as new().
-#[test]
-fn test_default_matches_new() -> Result<()> {
-    let _adapter: BridgeAdapter = BridgeAdapter::default();
-    // If Default were wrong the type system would catch it, but we also
-    // verify the adapter can be constructed and dropped without panic.
+/// Both should shut down cleanly (no child process to terminate).
+#[tokio::test]
+async fn test_default_matches_new() -> Result<()> {
+    let mut from_new = BridgeAdapter::new();
+    let mut from_default = BridgeAdapter::default();
+    // Both should succeed at shutdown (no child process in either case)
+    from_new.shutdown().await?;
+    from_default.shutdown().await?;
     Ok(())
 }
 
@@ -59,13 +62,18 @@ async fn test_double_shutdown_is_safe() -> Result<()> {
     Ok(())
 }
 
-/// Drop implementation must not panic on a fresh (no-process) adapter.
-#[test]
-fn test_drop_without_process_is_safe() -> Result<()> {
+/// Drop implementation cleans up a fresh (no-process) adapter without error.
+/// Verified by creating a second adapter after the first is dropped -- if Drop
+/// had corrupted shared state the second adapter would fail to construct or
+/// shut down.
+#[tokio::test]
+async fn test_drop_then_new_adapter_works() -> Result<()> {
     {
         let _adapter = BridgeAdapter::new();
         // adapter goes out of scope and Drop runs
     }
+    let mut second = BridgeAdapter::new();
+    second.shutdown().await?;
     Ok(())
 }
 
@@ -152,14 +160,17 @@ async fn test_repeated_lifecycle_cycles() -> Result<()> {
     Ok(())
 }
 
-/// Calling shutdown after drop should not be possible (this is a compile-time
-/// guarantee), but we verify that drop followed by recreating is fine.
+/// Multiple adapters can be created sequentially without interference.
+/// This verifies no global state leaks between adapter instances.
 #[tokio::test]
-async fn test_drop_then_recreate() -> Result<()> {
-    {
-        let _a = BridgeAdapter::new();
-    }
-    let mut b = BridgeAdapter::new();
-    b.shutdown().await?;
+async fn test_sequential_adapters_are_independent() -> Result<()> {
+    let mut first = BridgeAdapter::new();
+    first.shutdown().await?;
+    drop(first);
+
+    let mut second = BridgeAdapter::new();
+    let result = second.proxy_messages().await;
+    assert!(result.is_err(), "second adapter should still require spawn before proxy_messages");
+    second.shutdown().await?;
     Ok(())
 }
