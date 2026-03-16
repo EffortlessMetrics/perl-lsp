@@ -8,7 +8,8 @@ argument-hint: "[--dry-run] [--domain <name>] [--refresh]"
 Discover the codebase structure and generate domain-specific agent definitions. Context: **$ARGUMENTS**
 
 ## When to Use
-- **First time**: after `swarm-pack/setup.sh` installs portable agents — run this to add domain agents
+- **First time after import**: once the derived `swarm-pack` starter is copied into a new repo and you want repo-specific domain agents
+- **In perl-lsp itself**: prefer the tracked repo `.claude/` surfaces; this pack is a derived export
 - **Refresh**: when the codebase structure changed (new packages, reorganization)
 - **Single domain**: `--domain <name>` to regenerate agents for one domain only
 
@@ -17,7 +18,7 @@ Discover the codebase structure and generate domain-specific agent definitions. 
 1. **Discovers** your repo: packages, tests, errors, standards, CI, docs
 2. **Identifies** natural domains (package families, layers, feature areas)
 3. **Generates** 3-5 agent files per domain: fix, test, scout, explorer
-4. **Customizes** the portable agents with repo-specific details
+4. **Customizes** the imported starter agents with repo-specific details
 5. **Creates** `.claude/agents/AGENT_CATALOG.md` for orchestrator reference
 
 ## Process
@@ -29,7 +30,7 @@ Agent(
   subagent_type: "bootstrapper",
   prompt: "Discover this codebase and generate domain-specific agents. $ARGUMENTS.
 Write agents to .claude/agents/.
-Update portable agents with repo-specific details.
+Update the repo-local coordinator and worker roster when the pattern is reusable.
 Create .claude/agents/AGENT_CATALOG.md.
 Target ~25-35 domain agents.",
   mode: "auto"

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 #
-# Bootstrap script for the agent swarm workflow.
+# Legacy bootstrap script for the archived wave-based agent swarm workflow.
 #
 # Copies portable slash commands into .claude/commands/ and creates a
 # minimal .claude/settings.json with a PostToolUse hook.
+#
+# For perl-lsp itself, the tracked repo `.claude/` configuration is canonical.
+# This script is for exporting the older portable workflow to another repo.
 #
 # Usage:
 #   bash docs/handoff/agent-swarm-workflow/setup-script.sh
@@ -97,6 +100,10 @@ echo ""
 echo "========================================================================"
 echo " Agent Swarm Workflow -- Setup Complete"
 echo "========================================================================"
+echo ""
+echo " NOTE: This bundle is a legacy portable archive."
+echo "       For perl-lsp itself, prefer the tracked .claude/ skills, agents,"
+echo "       hooks, and docs/handoff/SWARM_DESIGN.md."
 echo ""
 echo " Files created in: ${CMD_DIR}/"
 echo ""
