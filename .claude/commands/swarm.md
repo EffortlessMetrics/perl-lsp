@@ -71,6 +71,14 @@ git worktree prune
 gh run list --branch master --limit 5 --json status,conclusion,headBranch
 ```
 
+### Check CI queue depth before launching builders
+
+```bash
+gh run list --json status --jq '[.[] | select(.status == "in_progress")] | length'
+```
+
+**If > 5 runs in progress**: wait before launching builders. CI runners are finite — sending more work while the queue is already saturated delays all PRs and obscures failures. Check again in a few minutes, or message fixer to investigate stuck runs.
+
 ### Check for pending work from previous sessions
 - Agent patches: `ls .ops-perl-lsp/agent-patches/*.md 2>/dev/null`
 - Discovered issues: `gh issue list --label swarm-discovered --state open`
@@ -138,9 +146,27 @@ Invoke /swarm-protocol and /coding-standards.
 You are builder-N. Use TaskList to find unclaimed tasks. Use TaskUpdate to claim (set owner to your name) and complete tasks.
 
 Spawn build subagents with isolation: "worktree". Before spawning, confirm:
+  - Named worktree (e.g. `agent-fix-parser-heredoc`)
   - Branch name, crate, exact file list (max 10 files)
   - Verification command: cargo fmt && cargo clippy -p <crate> --tests && cargo test -p <crate>
   - Subagent invokes /coding-standards
+  - If the change touches more than 10 files, split it into multiple subagents with non-overlapping file surfaces
+
+Track all spawned subagent IDs. Before shutting down, list them in your shutdown message so the lead knows what is still running.
+
+Check open PR count before creating new PRs. If more than 5 are open, message the lead for guidance instead of adding to the queue:
+  gh pr list --state open --json number --jq length
+
+Subagent prompt pattern (required fields):
+  "Worktree: <worktree-name>. Branch: <X>. Crate: <Y>.
+   Files: <exact list - max 10>.
+   Goal: <one sentence>.
+   Verify: cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>.
+   Run ALL commands from your worktree path. Do NOT cd to the main repo.
+   Read .ops-perl-lsp/handoffs/<branch>.md for context.
+   Read .claude/swarm-state/known-pitfalls.md for traps.
+   Invoke /swarm-protocol and /coding-standards.
+   Append reviewer briefing to handoff. Write metrics. gh issue create --label swarm-discovered for out-of-scope finds."
 
 Use SendMessage({to: "reviewer"}) when builds complete.
 Run 3-5 subagents in parallel.

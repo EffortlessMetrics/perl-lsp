@@ -165,6 +165,30 @@ If no concrete next action exists, an agent should report its findings and spin 
 - Re-spawn fresh with focused context when new work arrives — fresh context beats stale waiting context.
 - Exception: keep an agent alive if it is waiting for an imminent response in the same context path (e.g., a builder waiting for its worktree subagent to return).
 
+### Builder Shutdown Protocol
+
+**Before shutting down, builders MUST wait for all spawned subagents to complete or cancel them.** Do not exit while subagents are still running in their worktrees.
+
+**Subagents outlive parent shutdown — this is a known issue.** To mitigate it:
+- Track every subagent ID you spawn (note the name you gave it, e.g., `build-<branch-name>`).
+- On shutdown, list all subagent IDs you spawned in your shutdown message to the lead so the lead can monitor them:
+  ```
+  BUILDER SHUTDOWN
+  spawned-subagents: build-fix-parser-heredoc, build-add-dap-test
+  status: <completed|still-running|cancelled>
+  ```
+- The lead uses this list to watch for orphaned subagents that create PRs after their builder exits.
+
+### PR Creation Throttle
+
+Before creating any PR, check the current open PR count:
+
+```bash
+gh pr list --state open --json number --jq length
+```
+
+**If > 5 open PRs**: do NOT create another PR. Instead, message the lead with the work that is ready, and wait for guidance. CI queues are finite — piling on more PRs when the queue is already congested slows everything down.
+
 ## 7c. Cost Efficiency
 
 Optimize for cost per merged artifact, not raw startup latency.
