@@ -256,6 +256,11 @@ impl<'a> Parser<'a> {
     /// In Perl, compound statements (if/while/for/foreach/given/default/try/sub/package)
     /// are terminated by their own closing brace — a modifier keyword that follows is a
     /// new top-level statement, not a modifier on the compound statement.
+    ///
+    /// A bare `Block` is also compound: `{ ... } for @arr` is a syntax error in Perl
+    /// (verified: `perl -c` rejects it). Without this, `{ ... }\nfor my $x (...) { }`
+    /// would be misread as `{ ... } for my` (postfix-for with `my` as the iterator
+    /// expression), causing the `for my $x (LIST) { BLOCK }` form to fail.
     fn is_compound_statement(node: &Node) -> bool {
         matches!(
             node.kind,
@@ -268,6 +273,7 @@ impl<'a> Parser<'a> {
                 | NodeKind::Try { .. }
                 | NodeKind::Subroutine { .. }
                 | NodeKind::Package { .. }
+                | NodeKind::Block { .. }
         )
     }
 

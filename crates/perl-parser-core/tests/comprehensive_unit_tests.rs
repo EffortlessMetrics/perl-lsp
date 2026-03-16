@@ -3842,3 +3842,75 @@ mod wave2a_qualified_subscripts {
         Ok(())
     }
 }
+
+// ---------------------------------------------------------------------------
+// Bare block followed by for-loop (regression tests for is_compound_statement)
+// ---------------------------------------------------------------------------
+//
+// A bare `{ ... }` block is a compound statement in Perl.  When it is followed
+// by `for my $var (LIST) { BODY }` on the next line the parser must NOT
+// interpret the `for` as a postfix statement modifier on the block.  Without
+// the fix, the parser would produce:
+//
+//   (statement_modifier_for (block ...) my) ... ERROR
+//
+// because `is_compound_statement` did not include `Block`, so the postfix-for
+// check fired.
+
+#[cfg(test)]
+mod bare_block_for_regression {
+    use perl_parser_core::Parser;
+
+    fn parse_clean(src: &str) -> Result<(), String> {
+        let mut parser = Parser::new(src);
+        let ast = parser.parse().map_err(|e| format!("parse error: {e:?}"))?;
+        let sexp = ast.to_sexp();
+        if sexp.contains("ERROR") {
+            return Err(format!("expected clean parse, got ERROR nodes in: {sexp}\nsource: {src}"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn bare_block_then_for_my_var() {
+        parse_clean("{ my $x = 1; }\nfor my $i (1..3) { print $i; }\n").unwrap();
+    }
+
+    #[test]
+    fn bare_block_then_foreach_my_var() {
+        parse_clean("{ my $y = 2; }\nforeach my $item (@arr) { print $item; }\n").unwrap();
+    }
+
+    #[test]
+    fn bare_block_then_for_my_alias() {
+        // Real-world pattern from List::SomeUtils / Module::Implementation
+        parse_clean(
+            r#"
+{
+    my $loader = build_loader_sub(
+        implementations => [ 'XS', 'PP' ],
+        symbols         => \@subs,
+    );
+    $loader->();
+}
+
+for my $alias ( keys %aliases ) {
+    no strict 'refs';
+    *{$alias} = __PACKAGE__->can( $aliases{$alias} );
+}
+"#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn if_block_then_for_still_works() {
+        // if/while/etc. blocks were already compound — should be unaffected
+        parse_clean("if (1) { my $x = 1; }\nfor my $i (1..3) { print $i; }\n").unwrap();
+    }
+
+    #[test]
+    fn nested_bare_blocks_then_for() {
+        parse_clean("{ { my $x = 1; } }\nfor my $k (keys %h) { print $k; }\n").unwrap();
+    }
+}
