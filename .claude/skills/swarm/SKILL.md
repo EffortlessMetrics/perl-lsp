@@ -11,6 +11,8 @@ disable-model-invocation: true
 Start a continuous swarm. Focus: **$ARGUMENTS**
 
 You are the lead. You coordinate only. You NEVER write production code.
+Persistent coordinators own routing, review, merge control, and system
+improvement. Disposable workers in isolated worktrees do all code mutation.
 
 ## Skill Scope
 
@@ -32,6 +34,19 @@ The scope split is summarized here. See `reference/team-structure.md` for the co
 - `/verify-build` — deliverable verification
 - `/plan-fix` — write implementation plans
 - `/scout-report` — create GitHub issues
+
+## Execution Boundaries
+
+Treat each layer as a different boundary:
+
+1. **Worktree = write boundary**: every PR-shaped code change happens in its own worktree.
+2. **Worker = context boundary**: spawn a fresh worker when objective, file surface, tool profile, permissions, verification loop, or branch changes materially.
+3. **Skill = durable procedure boundary**: stable instructions live in skills, not in repeated inline prose.
+4. **Hook = deterministic control boundary**: anything that must always happen belongs in hooks, not in agent memory.
+
+If a coding task crosses into a different crate, file surface, or verification loop, do not stretch the current worker. Write or update the handoff and spawn a fresh worker in a fresh worktree.
+Subagents do not inherit parent skills automatically. Every worker prompt must name the required skills explicitly, or the task itself should be packaged as a `context: fork` skill.
+Each coordinator and worker should keep a local todo list. Every todo item should name the skill or command to invoke for that step so the procedure stays attached to the work, not to ambient memory.
 
 ## Phase 1: Bootstrap
 
@@ -103,6 +118,7 @@ Read .claude/swarm-state/discovered-issues.md and completed-slices.md for dedup.
 Invoke /swarm-priorities to understand what matters.
 Spawn 5-8 Explore subagents per round (1 per error bucket for parser work).
 For each finding: invoke /plan-fix to write handoff, then /scout-report to create issue.
+If a discovery would produce a different crate surface or verification loop, split it into a new task instead of bundling it into an existing slice.
 Use TaskCreate for each slice. Message builder when tasks are ready.
 ```
 
@@ -113,6 +129,7 @@ You are builder. Use TaskList to find unclaimed tasks. Use TaskUpdate to claim (
 Read handoff file from .ops-perl-lsp/handoffs/ for context.
 Spawn worktree subagents: Agent(isolation: "worktree", prompt: "Invoke /coding-standards. Then invoke /parser-fix '<desc>'.")
 Run 3-5 subagents in parallel. Each subagent does one task.
+If the task's crate, file surface, verification command, or permission profile changes, retire the current worker and spawn a fresh one. One worktree worker should produce one PR-shaped unit of change.
 When done: invoke /verify-build, then /pr-create.
 SendMessage({to: "reviewer"}) when builds complete.
 ```
@@ -123,6 +140,7 @@ Invoke /swarm-protocol and /coding-standards.
 You are reviewer. Receive build completions from builder.
 Spawn review subagents (3-5 parallel). Read handoff, then diff.
 Check: coding standards, no unwrap/expect/panic, tests exist, PR description.
+Keep reviewer workers one-PR-at-a-time. If feedback requires materially different implementation scope, send it back to builder for a fresh worktree worker instead of reusing the reviewer context for code mutation.
 Approve: SendMessage({to: "ops"}) for merge-ready PRs.
 Reject: SendMessage({to: "builder"}) with specific feedback.
 Also handle PR review comments: gh pr list --state open --json reviews.
@@ -137,6 +155,7 @@ Merge in batches of 3 (rapid merges cancel each other's CI).
 After merges: invoke /status-drift to fix computed metrics.
 After parser merges: invoke /corpus-ratchet to lock in gains.
 If CI fails: spawn fix subagent in worktree.
+Do not reuse one fixer across unrelated failures. Each failure mode gets a fresh worker with the logs and the exact verification loop for that incident.
 When queue is low: SendMessage({to: "scout"}) for more work.
 ```
 
@@ -172,3 +191,11 @@ ops ────────→ gh pr merge ────→ ops (verify post-mer
 ops ────────→ SendMessage ────→ scout (queue low)
 improver ───→ worktree subs ──→ improvement PRs (always ~20%)
 ```
+
+## Spawn Rules
+
+- New worktree: separate PR, separate rebase surface, or separate verification loop.
+- New worker: different objective, crate, file surface, permissions, or hypothesis.
+- New skill: instructions are stable enough to reuse across runs.
+- New hook: behavior must be guaranteed rather than requested.
+- No new worker: sequential branch-local work with the same goal, files, and verification loop.

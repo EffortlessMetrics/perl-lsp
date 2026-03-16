@@ -49,6 +49,45 @@ Lead (orchestrator) — coordinates only, never writes code
 
 **Per-unit verification.** `cargo test --workspace` takes 3-5 min. `cargo test -p <crate>` takes 10-30 sec. For small, focused PRs, crate-level verification is 10x faster and sufficient. Escalate to workspace verification only for cross-cutting changes.
 
+## Boundary Doctrine
+
+The swarm is optimized around cleaner boundaries, not around keeping more
+workers alive.
+
+### Worktree Boundary
+
+The worktree is the write-isolation boundary. Every PR-shaped code change gets
+its own worktree by default.
+
+### Worker Boundary
+
+The worker is the context boundary. Spawn a fresh worker whenever any of these
+change materially:
+- objective or hypothesis
+- dominant crate or file surface
+- tool or permission profile
+- verification command
+- branch or PR target
+
+If those change, write or update the handoff and replace the worker. Do not
+stretch the same implementation context across multiple PR-shaped changes.
+
+### Knowledge Boundary
+
+Pre-encode only durable knowledge:
+- repo rules in `CLAUDE.md`
+- reusable procedure in skills
+- deterministic enforcement in hooks
+- output shape in templates
+
+Keep volatile task state in handoffs, worktrees, PRs, issues, and queue files.
+
+### Team Boundary
+
+Persistent teammates are a control plane, not an implementation pool. Keep the
+always-on layer small (`scout`, `builder`, `reviewer`, `ops`, `improver`) and
+push most code mutation into disposable specialists.
+
 ## Skills Architecture
 
 Skills are structured as directories under `.claude/skills/<name>/`, each containing:
@@ -118,7 +157,9 @@ Hooks are registered in `.claude/settings.json` under `hooks.<EventType>`:
     "TeammateIdle": [...],
     "TaskCompleted": [...],
     "SubagentStart": [...],
-    "Stop": [...],
+    "SubagentStop": [...],
+    "WorktreeCreate": [...],
+    "WorktreeRemove": [...],
     "PreToolUse": [...],
     "SessionStart": [...]
   }
@@ -140,7 +181,9 @@ CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 | `TeammateIdle` | — | Tracks idle transitions, checks for unclaimed work |
 | `TaskCompleted` | — | Verifies deliverables exist (branch, PR, fmt clean) before marking done |
 | `SubagentStart` | `swarm-builder\|swarm-reviewer\|swarm-fixer` | Auto-injects coding standards reminder |
-| `Stop` | — | Reads `stop_hook_active` from stdin JSON; warns if tasks are incomplete |
+| `SubagentStop` | `swarm-builder\|swarm-reviewer\|swarm-fixer` | Records worker teardown and handoff boundaries in metrics |
+| `WorktreeCreate` | — | Records new mutation lanes when worktree workers spin up |
+| `WorktreeRemove` | — | Records worktree cleanup when mutation lanes are torn down |
 | `PreToolUse` | `Bash` | Reads command from stdin JSON; blocks dangerous commands |
 | `SessionStart` | `compact` | Injects context refresh after conversation compaction |
 
@@ -167,6 +210,29 @@ Context flows from general to specific across 6 layers:
 6. **Source code** — the actual codebase
 
 Each layer is more specific than the last. Don't duplicate information across layers.
+
+### What To Pre-Encode
+
+Pre-encode:
+- coding standards
+- review checklists
+- task templates
+- queue conventions
+- merge and completion rules
+
+Do not pre-encode:
+- ephemeral task detail
+- branch-local findings
+- per-PR reviewer notes
+- a worker's temporary reasoning state
+
+Subagents do not inherit the caller's loaded skills automatically. If a worker
+needs repo rules or procedure, name the required skills explicitly in the spawn
+prompt or package the task itself as a `context: fork` skill.
+
+Workers should also keep a local todo list for the active slice. Each todo item
+should name the skill or command for that step so the procedure stays attached
+to the work item instead of floating in coordinator memory.
 
 ### Handoff Protocol
 
@@ -206,6 +272,17 @@ Builder coordinators compose prompts like:
 ```
 
 7 lines. The handoff file has all the context. The skill invocations load the rules. No context wasted.
+
+### Context Shift = New Worker
+
+When the work stops being "same branch, same files, same verification loop,"
+spawn again. This is the default:
+- different crate → new worker
+- different PR target → new worker
+- different verification gate → new worker
+- different tool or permission profile → new worker
+
+Worker reuse is the exception. Handoffs are the continuity mechanism.
 
 ## Self-Governance
 

@@ -110,7 +110,9 @@ all agents ─→ TaskUpdate ────→ shared task list
 | `TaskCompleted` | Block ghost completions — verify deliverables exist |
 | `TeammateIdle` | Detect idle agents with unclaimed work |
 | `SubagentStart` (builder/reviewer/fixer) | Auto-inject coding standards |
-| `Stop` | Warn if tasks incomplete before stopping |
+| `SubagentStop` (builder/reviewer/fixer) | Record worker teardown and handoff boundaries |
+| `WorktreeCreate` | Record new mutation lanes when worktree workers spin up |
+| `WorktreeRemove` | Record worktree cleanup when mutation lanes are torn down |
 | `PreToolUse` (Bash) | Block dangerous commands |
 | `SessionStart` (compact) | Inject context refresh after compaction |
 

@@ -4,7 +4,9 @@ Drop-in infrastructure for running continuous, highly-parallel development swarm
 
 ## What This Is
 
-A portable pack of agent definitions, slash commands, hooks, and a setup script that gives any repo a `/swarm` command for continuous codebase improvement. Designed for repos with many independent improvement opportunities.
+A portable pack of agent definitions, skills, slash commands, hooks, and a setup
+script that gives any repo a `/swarm` control plane for continuous codebase
+improvement. Designed for repos with many independent improvement opportunities.
 
 ## Architecture
 
@@ -46,9 +48,15 @@ bash path/to/swarm-pack/setup.sh
 /swarm-stop            # emergency: save state, halt (~5 min)
 ```
 
-`setup.sh` gives you portable agents + slash commands. `/bootstrap-agents` explores YOUR codebase and generates ~25-30 domain-specific agents. Together: ~50 agents with full repo context pre-encoded, 5 named coordinator teammates, GitHub labels, issue/PR templates, and a self-improving learning loop.
+`setup.sh` gives you portable agents + skills + slash commands. `/bootstrap-agents`
+explores YOUR codebase and generates ~25-30 domain-specific agents. Together:
+~50 agents with full repo context pre-encoded, 5 named coordinator teammates,
+GitHub labels, issue/PR templates, and a self-improving learning loop.
 
-This branch is a later design step, not a flattened rewrite: the portable pack still ships slash command files under `.claude/commands/`, while the repo-local swarm orchestration is additionally captured as a skill so coordinator prompts can compose other skills directly.
+The pack now ships both a portable `.claude/skills/swarm/` tree and compatible
+`.claude/commands/` files. Skills are the canonical control plane for modern
+Claude Code installs; commands remain as the compatibility surface and manual
+entrypoint.
 
 ## What Gets Installed
 
@@ -71,6 +79,13 @@ This branch is a later design step, not a flattened rewrite: the portable pack s
     friction-logger.md    # Friction log maintenance
     dep-cleaner.md        # Unused dependency removal
     dead-code.md          # Dead code removal
+  skills/
+    swarm/
+      SKILL.md           # skill-native /swarm control plane
+      reference/
+        team-structure.md
+      templates/
+        teammate-prompt-template.md
   commands/
     swarm.md              # /swarm — 5-coordinator orchestrator entrypoint
     bootstrap-agents.md   # /bootstrap-agents — discover codebase, mint domain agents
@@ -96,7 +111,8 @@ This branch is a later design step, not a flattened rewrite: the portable pack s
     discovered-issues.md  # Agent-flagged leads
     swarm-queue.json      # Overlap tracking
   settings.json           # Hook registrations (PostToolUse, TeammateIdle,
-                          # TaskCompleted, SubagentStart, Stop, PreToolUse,
+                          # TaskCompleted, SubagentStart, SubagentStop,
+                          # WorktreeCreate, WorktreeRemove, PreToolUse,
                           # SessionStart)
 .ops/                     # Ephemeral runtime (gitignored)
   handoffs/               # Agent handoff files (scout → builder → reviewer)
@@ -105,11 +121,12 @@ This branch is a later design step, not a flattened rewrite: the portable pack s
   salvage/                # Emergency worktree dumps
 ```
 
-The portable pack does not install a full `.claude/skills/` tree yet. In this repo, the repo-local coordinator flow is additionally tracked as `.claude/skills/swarm/`; that is the canonical skill-native playbook for the 5-coordinator model.
-
 ## Command And Skill Layer
 
-The portable pack itself installs slash command files under `.claude/commands/`. This repo additionally tracks a repo-local `.claude/skills/swarm/` directory so the five-coordinator playbook can also live in Claude Code's modern skill format. When you move from the pack into a repo-specific install, that skill layer is the natural place to put durable coordinator prompts, templates, and references.
+The portable pack installs both `.claude/skills/swarm/` and compatible
+`.claude/commands/` files. Prefer the skill layer for the coordinator
+playbook; keep the command layer as a compatibility surface and operator
+entrypoint.
 
 Key frontmatter fields for that repo-local skill layer:
 
@@ -125,6 +142,8 @@ user-invocable: true
 - `context: fork` — skill runs in isolated context (important for agent skills)
 - `allowed-tools` — enforces tool restrictions at the framework level
 - `user-invocable: false` — hides internal skills from the user's skill list
+- `disable-model-invocation: true` — prevents the model from firing a
+  side-effecting workflow automatically
 
 ## Hooks Architecture
 
@@ -136,7 +155,9 @@ Hooks read JSON from stdin (not env vars). All hooks registered in `.claude/sett
 | `TeammateIdle` | Detect idle agents with unclaimed work |
 | `TaskCompleted` | Block ghost completions — verify deliverables exist |
 | `SubagentStart` (builder/reviewer/fixer) | Auto-inject coding standards |
-| `Stop` | Warn if tasks incomplete before stopping |
+| `SubagentStop` (builder/reviewer/fixer) | Record worker teardown and handoff boundaries |
+| `WorktreeCreate` | Record new mutation lanes when worktree workers spin up |
+| `WorktreeRemove` | Record worktree cleanup when mutation lanes are torn down |
 | `PreToolUse` (Bash) | Block dangerous commands |
 | `SessionStart` (compact) | Inject context refresh after compaction |
 

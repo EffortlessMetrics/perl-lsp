@@ -9,6 +9,8 @@ disable-model-invocation: true
 Start a continuous swarm. Focus: **$ARGUMENTS**
 
 You are the lead. You coordinate only. You NEVER write production code.
+Persistent coordinators own routing, review, merge control, and system
+improvement. Disposable workers in isolated worktrees do all code mutation.
 
 ## Dispatch Principles
 
@@ -40,6 +42,19 @@ You are the lead. You coordinate only. You NEVER write production code.
 - `/scout-report` — GitHub issue creation for discovered work
 - `/pr-create` — draft PR creation
 - `/pr-ready` — mark reviewed PRs ready
+
+## Execution Boundaries
+
+Treat each layer as a different boundary:
+
+1. **Worktree = write boundary**: every PR-shaped code change happens in its own worktree.
+2. **Worker = context boundary**: spawn a fresh worker when objective, file surface, tool profile, permissions, verification loop, or branch changes materially.
+3. **Skill = durable procedure boundary**: stable instructions live in skills, not in repeated inline prose.
+4. **Hook = deterministic control boundary**: anything that must always happen belongs in hooks, not in agent memory.
+
+If a coding task crosses into a different crate, file surface, or verification loop, do not stretch the current worker. Write or update the handoff and spawn a fresh worker in a fresh worktree.
+Subagents do not inherit parent skills automatically. Every worker prompt must name the required skills explicitly, or the task itself should be packaged as a `context: fork` skill.
+Each coordinator and worker should keep a local todo list. Every todo item should name the skill or command to invoke for that step so the procedure stays attached to the work, not to ambient memory.
 
 ## Phase 1: Bootstrap
 
@@ -133,6 +148,7 @@ Read .claude/swarm-state/discovered-issues.md and completed-slices.md for dedup.
 Invoke /swarm-priorities to understand what matters.
 Spawn 5-8 Explore subagents per round (1 per error bucket for parser work).
 For each finding: invoke /plan-fix to write handoff, then /scout-report to create issue.
+If a discovery would produce a different crate surface or verification loop, split it into a new task instead of bundling it into an existing slice.
 Use TaskCreate for each slice. Use TaskList to check what already exists.
 SendMessage({to: "builder"}) when tasks are ready.
 After each round, append to .ops-perl-lsp/swarm-metrics.jsonl.
@@ -154,6 +170,8 @@ Track all spawned subagent IDs. Before shutting down, list them in your shutdown
 
 Check open PR count before creating new PRs. If more than 5 are open, message the lead for guidance instead of adding to the queue:
   gh pr list --state open --json number --jq length
+
+If the task's crate, file surface, verification command, or permission profile changes, retire the current worker and spawn a fresh one. One worktree worker should produce one PR-shaped unit of change.
 
 Subagent prompt pattern (required fields):
   "Worktree: <worktree-name>. Branch: <X>. Crate: <Y>.
@@ -180,6 +198,7 @@ Spawn review subagents (3-5 parallel). Read handoff briefings first, then focuse
 Check: coding standards, no unwrap/expect/panic, tests exist, PR description.
 Invoke /pr-create to open draft PRs with the right labels.
 Use /pr-ready only after feedback is addressed and checks are green.
+Keep reviewer workers one-PR-at-a-time. If feedback requires materially different implementation scope, send it back to builder for a fresh worktree worker instead of reusing the reviewer context for code mutation.
 Use TaskUpdate to mark review tasks completed.
 Approve: SendMessage({to: "ops"}) for merge-ready PRs.
 Reject: SendMessage({to: "builder"}) with specific feedback.
@@ -199,6 +218,7 @@ Before every merge, run:
 
 If CI Gate is not SUCCESS: do NOT merge. Spawn fix subagent (isolation: "worktree").
 If master CI is red: stop all merges. Fix master CI first.
+Do not reuse one fixer across unrelated failures. Each failure mode gets a fresh worker with the logs and the exact verification loop for that incident.
 
 Merge: gh pr merge <N> --squash --delete-branch (only when CI Gate is SUCCESS)
 Use TaskUpdate to track merge progress.
@@ -274,6 +294,14 @@ all agents ─→ gh issue create → scout (swarm-discovered)
 all agents ─→ swarm-metrics  → ops (analysis)
 all agents ─→ TaskUpdate ────→ shared task list
 ```
+
+### Spawn Rules
+
+- New worktree: separate PR, separate rebase surface, or separate verification loop.
+- New worker: different objective, crate, file surface, permissions, or hypothesis.
+- New skill: instructions are stable enough to reuse across runs.
+- New hook: behavior must be guaranteed rather than requested.
+- No new worker: sequential branch-local work with the same goal, files, and verification loop.
 
 ### Auto-merge
 ```bash

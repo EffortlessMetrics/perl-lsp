@@ -3,7 +3,9 @@
 A practical reference for the parallel-agent development methodology used in
 perl-lsp. For historical context and analysis, see
 [AGENTIC_SWARM_ERA.md](AGENTIC_SWARM_ERA.md) and
-[AGENTIC_DEVELOPMENT.md](AGENTIC_DEVELOPMENT.md).
+[AGENTIC_DEVELOPMENT.md](AGENTIC_DEVELOPMENT.md). For the governing execution
+doctrine, see [ADR-0033](../adr/0033-worktree-first-disposable-workers.md) and
+[SKILL_AND_AGENT_DESIGN.md](../reference/SKILL_AND_AGENT_DESIGN.md).
 
 ---
 
@@ -41,6 +43,20 @@ This pattern works because:
 - Architectural decisions that require cross-crate coordination
 - Features where the design is unclear or exploratory
 - Work that depends on sequential ordering (use a single agent instead)
+
+### Context Shift Rule
+
+Spawn a fresh worker when the work stops being "same branch, same files, same
+verification loop." In practice, that means a new worker for:
+
+- a different crate or file surface
+- a different PR target
+- a different tool or permission profile
+- a different verification command
+- a different root-cause hypothesis
+
+Do not reuse an implementation worker just because the next task looks nearby.
+Write or update the handoff and spawn again.
 
 ---
 

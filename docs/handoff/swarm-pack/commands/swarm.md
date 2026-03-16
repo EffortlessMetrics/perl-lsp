@@ -18,7 +18,7 @@ You are the lead. You coordinate only. You NEVER write production code.
 4. **Worktrees for code changes**: every coding subagent runs in its own worktree.
 5. **Task tools are the queue**: scouts create work, builders claim it, everyone updates status.
 6. **Draft first**: reviewers open draft PRs, ops merges only after CI is green.
-7. **Portable pack stays command-first**: rely on installed slash commands plus Task tools rather than huge inline checklists.
+7. **Skills are canonical; commands stay compatible**: prefer the installed `.claude/skills/swarm/` control plane, with command files as the compatibility surface.
 
 ## Command Scope
 
@@ -36,6 +36,12 @@ You are the lead. You coordinate only. You NEVER write production code.
 - `/coding-standards` — project standards
 - `/swarm-priorities` — roadmap alignment
 - `/pr-respond` — address review feedback on open PRs
+
+Subagents do not inherit parent skills automatically. Every worker prompt must
+name the required skills or commands explicitly.
+Each coordinator and worker should keep a local todo list. Every todo item
+should name the skill or command for that step so the procedure stays attached
+to the work.
 
 ## Phase 1: Bootstrap
 
