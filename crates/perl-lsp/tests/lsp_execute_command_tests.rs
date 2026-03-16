@@ -5,7 +5,7 @@ use std::fs;
 use tempfile::TempDir;
 
 fn setup_server(root_path: Option<String>) -> LspServer {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize the server
     let init_request = JsonRpcRequest {
@@ -37,7 +37,7 @@ fn setup_server(root_path: Option<String>) -> LspServer {
 fn test_execute_command_run_file() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = TempDir::new()?;
     let root_path = temp_dir.path().to_string_lossy().to_string();
-    let mut server = setup_server(Some(root_path.clone()));
+    let server = setup_server(Some(root_path.clone()));
 
     // Create a test file
     let test_content = r#"#!/usr/bin/perl
@@ -97,7 +97,7 @@ print "Hello, World!\n";
 fn test_execute_command_run_tests() -> Result<(), Box<dyn std::error::Error>> {
     let temp_dir = TempDir::new()?;
     let root_path = temp_dir.path().to_string_lossy().to_string();
-    let mut server = setup_server(Some(root_path.clone()));
+    let server = setup_server(Some(root_path.clone()));
 
     // Create a test file with Test::More
     let test_content = r#"#!/usr/bin/perl
@@ -167,7 +167,7 @@ is(1 + 1, 2, "Math works");
 
 #[test]
 fn test_execute_command_unknown() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server(None);
+    let server = setup_server(None);
 
     // Try an unknown command
     let execute_request = JsonRpcRequest {
@@ -192,7 +192,7 @@ fn test_execute_command_unknown() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_execute_command_capabilities() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize and check capabilities
     let init_request = JsonRpcRequest {

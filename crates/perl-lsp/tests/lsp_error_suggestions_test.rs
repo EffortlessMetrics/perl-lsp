@@ -8,7 +8,7 @@ use serde_json::json;
 
 /// Helper function to initialize LSP server
 fn init_server() -> Result<LspServer, Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -34,7 +34,7 @@ fn init_server() -> Result<LspServer, Box<dyn std::error::Error>> {
 
 /// Helper to open document and get diagnostics
 fn get_diagnostics_for_code(code: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let mut server = init_server()?;
+    let server = init_server()?;
     let uri = "file:///test.pl";
 
     let did_open_request = JsonRpcRequest {

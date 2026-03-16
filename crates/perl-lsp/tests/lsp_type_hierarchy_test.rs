@@ -5,7 +5,7 @@ use serde_json::json;
 #[test]
 
 fn test_type_hierarchy_prepare() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_request = JsonRpcRequest {
@@ -91,7 +91,7 @@ sub new {
 #[test]
 
 fn test_type_hierarchy_supertypes() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_request = JsonRpcRequest {
@@ -199,7 +199,7 @@ package Parent2;
 #[test]
 
 fn test_type_hierarchy_subtypes() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_request = JsonRpcRequest {
@@ -308,7 +308,7 @@ our @ISA = ('Base');
 #[test]
 
 fn test_type_hierarchy_capability_advertised() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -339,7 +339,7 @@ fn test_type_hierarchy_capability_advertised() -> Result<(), Box<dyn std::error:
 #[test]
 
 fn test_type_hierarchy_with_namespace_packages() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_request = JsonRpcRequest {

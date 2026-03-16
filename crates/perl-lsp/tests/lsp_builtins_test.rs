@@ -9,7 +9,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Helper to create and initialize a test server
 fn setup_server() -> LspServer {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Send initialize request
     let init_request = JsonRpcRequest {

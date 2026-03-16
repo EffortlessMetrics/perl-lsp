@@ -4,7 +4,7 @@ use serde_json::json;
 
 #[test]
 fn locked_capabilities_are_conservative() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),

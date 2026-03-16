@@ -4,7 +4,7 @@ use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::json;
 
 fn setup_server() -> Result<LspServer, Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize the server
     let init_request = JsonRpcRequest {

@@ -4,7 +4,7 @@ use serde_json::json;
 #[test]
 
 fn on_type_braces_indent() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -69,7 +69,7 @@ fn on_type_braces_indent() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 
 fn on_type_closing_brace_dedent() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),

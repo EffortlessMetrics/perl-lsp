@@ -14,7 +14,7 @@ use serde_json::json;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn setup_server() -> LspServer {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize the server
     let init_request = JsonRpcRequest {

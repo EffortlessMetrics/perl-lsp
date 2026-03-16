@@ -21,7 +21,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 // ---------------------------------------------------------------------------
 
 fn setup_server() -> LspServer {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),

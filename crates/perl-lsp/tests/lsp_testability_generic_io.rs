@@ -215,7 +215,7 @@ fn lsp_testability_message_handling_integration() {
     let input = Cursor::new(init_msg);
     let output = make_shared_output();
 
-    let mut server = LspServer::with_output(output);
+    let server = LspServer::with_output(output);
 
     // Attempt to handle the message
     let mut input = std::io::BufReader::new(input);
@@ -235,7 +235,7 @@ fn lsp_protocol_edge_case_malformed_message() {
     let input = Cursor::new(malformed);
     let output = make_shared_output();
 
-    let mut server = LspServer::with_output(output);
+    let server = LspServer::with_output(output);
 
     // Server should handle the malformed message gracefully
     let mut input = std::io::BufReader::new(input);
@@ -254,7 +254,7 @@ fn lsp_protocol_edge_case_missing_header() {
     let input = Cursor::new(invalid_msg);
     let output = make_shared_output();
 
-    let mut server = LspServer::with_output(output);
+    let server = LspServer::with_output(output);
 
     // Server should handle missing header gracefully
     let mut input = std::io::BufReader::new(input);
@@ -294,7 +294,7 @@ fn lsp_protocol_edge_case_rapid_messages() {
     let input = Cursor::new(messages);
     let output = make_shared_output();
 
-    let mut server = LspServer::with_output(output);
+    let server = LspServer::with_output(output);
 
     // Process all messages
     let mut input = std::io::BufReader::new(input);

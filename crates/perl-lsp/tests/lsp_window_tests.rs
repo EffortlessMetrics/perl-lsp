@@ -67,7 +67,7 @@ impl Clone for OutputCapture {
 fn lsp_window_show_message_request_format() -> Result<(), Box<dyn std::error::Error>> {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
-    let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
+    let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
 
     // Initialize server to enable capabilities
     let init_params = json!({
@@ -140,7 +140,7 @@ fn lsp_window_show_document_requires_capability() -> Result<(), Box<dyn std::err
 fn lsp_window_show_document_with_capability() {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
-    let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
+    let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
 
     // Initialize with showDocument capability
     let init_params = json!({
@@ -189,7 +189,7 @@ fn lsp_window_show_document_with_capability() {
 fn lsp_window_progress_lifecycle() {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
-    let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
+    let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
 
     // Initialize with workDoneProgress capability
     let init_params = json!({
@@ -262,7 +262,7 @@ fn lsp_window_progress_lifecycle() {
 fn lsp_window_progress_duplicate_token_fails() -> Result<(), Box<dyn std::error::Error>> {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
-    let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
+    let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
 
     // Initialize with workDoneProgress capability
     let init_params = json!({
@@ -298,7 +298,7 @@ fn lsp_window_progress_duplicate_token_fails() -> Result<(), Box<dyn std::error:
 fn lsp_window_progress_cancel_handler() {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
-    let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
+    let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
 
     // Initialize with workDoneProgress capability
     let init_params = json!({
@@ -345,7 +345,7 @@ fn lsp_window_progress_cancel_handler() {
 fn lsp_window_telemetry_respects_config() {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
-    let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
+    let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
 
     // Initialize server first
     let _ = server.handle_request(perl_lsp::JsonRpcRequest {
@@ -453,7 +453,7 @@ fn lsp_window_progress_without_capability() -> Result<(), Box<dyn std::error::Er
 fn lsp_window_show_document_external_flag() {
     let output = OutputCapture::new();
     let output_box: Box<dyn Write + Send> = Box::new(output.clone());
-    let mut server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
+    let server = LspServer::with_output(Arc::new(Mutex::new(output_box)));
 
     // Initialize with showDocument capability
     let init_params = json!({

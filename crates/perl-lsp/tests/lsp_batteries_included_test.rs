@@ -11,7 +11,7 @@ use serde_json::json;
 /// Test that formatting is properly advertised in server capabilities
 #[test]
 fn test_formatting_capability_advertised() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -54,7 +54,7 @@ fn test_formatting_capability_advertised() -> Result<(), Box<dyn std::error::Err
 /// Test that code actions include organize imports
 #[test]
 fn test_organize_imports_code_action_available() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
 
     // Initialize server
     let init_req = JsonRpcRequest {
@@ -136,7 +136,7 @@ print Dumper($data);
 /// Test that execute commands include perlcritic integration
 #[test]
 fn test_perlcritic_execute_command_available() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -177,7 +177,7 @@ fn test_perlcritic_execute_command_available() -> Result<(), Box<dyn std::error:
 /// Test that basic diagnostics work without external tools
 #[test]
 fn test_builtin_diagnostics_work() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
 
     // Initialize
     let init_req = JsonRpcRequest {
@@ -255,7 +255,7 @@ fn test_default_configuration_sensible() -> Result<(), Box<dyn std::error::Error
 /// Test that the server provides helpful capabilities information
 #[test]
 fn test_server_capabilities_complete() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -296,7 +296,7 @@ fn test_server_capabilities_complete() -> Result<(), Box<dyn std::error::Error>>
 /// Test that formatting gracefully handles missing perltidy
 #[test]
 fn test_formatting_graceful_degradation() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
 
     // Initialize
     let init_req = JsonRpcRequest {
