@@ -277,33 +277,31 @@ The lead's periodic duties:
 - **Daily**: `/swarm-report` for user check-in
 - **As needed**: Review `.ops-perl-lsp/agent-patches/`, apply improvements
 - **As needed**: Write Claude Code memories for cross-session knowledge
+- **When CI queue > 10**: Message all code-writing agents (builder-1, builder-2, reviewer, fixer, improver-tests) to pause PR creation and shift to planning
 
 ## Phase 4: Continuous Operation
 
 The full swarm — 12 teammates, all concurrent:
 
 ```
-DISCOVERY
-  scout-1, scout-2       → find gaps, write handoffs, TaskCreate
+DISCOVERY + PLANNING (no CI cost, run freely)
+  scout-1, scout-2    → find gaps, write handoffs, create tasks
+  strategist           → priority alignment, roadmap
+  researchers          → look up docs, verify approaches
 
-BUILD
-  builder-1, builder-2   → claim tasks, build in worktrees, message reviewer
+CODE + CI (throttled by merge pipeline)
+  builder-1, builder-2 → claim tasks, build in worktrees, create PRs
+  reviewer             → review diffs, create PRs with labels, enable auto-merge
+  pr-responder         → address review comments, push fixes
+  fixer                → fix CI failures
+  improver-tests       → add tests (creates PRs)
 
-REVIEW
-  reviewer               → review diffs, create PRs with labels, enable auto-merge
-  pr-responder           → address review comments, push fixes
+MERGE (sequential, no parallel)
+  merger               → merge green PRs one at a time
+  validator            → verify merges helped
 
-MERGE
-  merger                 → merge PRs, update completed-slices, trigger validator
-  validator              → verify merges actually helped, catch regressions
-
-IMPROVE (~20%)
-  improver-docs          → ADRs, changelog, friction log, README, roadmap
-  improver-tests         → mutants, flaky tests, coverage, deps, dead code
-
-GOVERNANCE
-  strategist             → priority alignment, roadmap updates, agent health
-  fixer                  → CI failures, regression fixes, known-pitfalls
+DOCS (low CI cost — doc-only PRs pass CI fast)
+  improver-docs        → ADRs, changelog, friction log
 ```
 
 ### Data flows
