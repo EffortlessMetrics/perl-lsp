@@ -96,6 +96,16 @@ dap-phase3 = []  # AC17-AC19: Non-regression, dependency management, packaging
 
 # Test targets with acceptance criteria mapping
 [[test]]
+name = "bridge_adapter_unit_tests"
+path = "tests/bridge_adapter_unit_tests.rs"
+# Unit tests for BridgeAdapter lifecycle (bridge_adapter.rs)
+
+[[test]]
+name = "protocol_edge_case_tests"
+path = "tests/protocol_edge_case_tests.rs"
+# Protocol edge cases: malformed JSON, missing fields, boundary values
+
+[[test]]
 name = "bridge_integration_tests"
 path = "tests/bridge_integration_tests.rs"
 # AC1-AC4: Bridge to Perl::LanguageServer DAP
