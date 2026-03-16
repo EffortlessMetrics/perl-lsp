@@ -141,10 +141,37 @@ After completing:
 
 The user is an **observer** who checks in every few hours or daily.
 
-- Do NOT wait for approval. Ship PRs, merge green, fix failures, create issues.
+- Do NOT wait for approval. Ship PRs, merge green **only if CI passes**, fix failures, create issues.
 - DO leave a clear trail: PRs, issues, handoffs, metrics.
 - When user checks in, lead summarizes: PRs merged, issues created, blockers, trends, patches pending.
 - If genuinely ambiguous, create an issue labeled `swarm-architectural` and move on.
+
+## 7a. Worktree Isolation
+
+Every code-writing subagent MUST use `isolation: "worktree"`. No editing files on local HEAD.
+
+- Subagent prompts MUST include: "Run ALL commands from your worktree path. Do NOT cd to the main repo."
+- No code-writing agent is active until it has: a named worktree, a branch, a claimed file surface, and a verification command.
+- Builder prompts must explicitly state the exact files to touch — no open-ended "fix all the things."
+- PR size hard limit: **max 10 files per PR**. If a change touches >10 files, split it into multiple worktree agents with non-overlapping file surfaces.
+
+## 7b. Agent Lifecycle
+
+If no concrete next action exists, an agent should report its findings and spin down. Do not idle-loop.
+
+- Spawn agents on-demand when their pipeline stage has work.
+- Send shutdown signal to agents that have delivered output and have no imminent follow-up.
+- Re-spawn fresh with focused context when new work arrives — fresh context beats stale waiting context.
+- Exception: keep an agent alive if it is waiting for an imminent response in the same context path (e.g., a builder waiting for its worktree subagent to return).
+
+## 7c. Cost Efficiency
+
+Optimize for cost per merged artifact, not raw startup latency.
+
+- **Warm for same-lane continuation**: keep agents alive when they have loaded skills, lane context, recent file understanding, and an active worktree with likely near-term reuse.
+- **Fresh for true boundary crossings**: spawn new agents when the task is cleanly separable, the crate/file surface is distinct, and the worktree should be isolated.
+- Do NOT respawn fresh agents just to preserve purity if it destroys reuse.
+- Do NOT keep idle agents alive speculatively if they have no likely near-term reuse path.
 
 ## 8. Research (Don't Guess — Look It Up)
 
@@ -172,7 +199,7 @@ Each stage reads the PREVIOUS stage's output, not the original source:
 
 Include in handoffs: code excerpts, error messages, decision rationale, file:line refs.
 
-## 9. Learning Loop
+## 9a. Learning Loop
 
 The swarm writes to four persistence layers, each with different lifetimes:
 
@@ -205,3 +232,26 @@ Don't write memories for ephemeral state (which PRs are open, which slices are i
 9. **Lead** → Claude Code memories for cross-session knowledge
 
 The system gets better with each cycle AND each session.
+
+## 10. CI Gate Discipline
+
+**NEVER merge a PR with failing CI Gate. If CI fails, message the fixer. Do not merge red.**
+
+### Rules
+
+1. **Red CI blocks all merges.** The merger MUST run `gh pr checks <N>` before every merge and only proceed when CI Gate shows SUCCESS.
+2. **No "pre-existing failure" exceptions.** If CI fails for any reason — including failures inherited from a previous broken merge — fix the failure FIRST, then merge.
+3. **Cascading failures must be fixed before merging more PRs.** When a large change (e.g., async migration, refactor) breaks CI, stop all merges and fix CI on master before queuing any new merges.
+4. **Each PR must pass CI independently.** A PR that only passes because it is layered on top of another unmerged PR is not ready to merge.
+5. **The merge pipeline:** check CI → if SUCCESS, merge; if FAILURE, SendMessage({to: "fixer"}) with the PR number and failure log.
+
+### Cascade pattern to avoid
+
+One broken merge → all subsequent PRs inherit the failure → agents merge anyway → master accumulates unfixed issues → user finds a broken master and stale worktrees with phantom diagnostics.
+
+### Merger checklist (every merge)
+```bash
+gh pr checks <N>           # Must show all checks passing
+gh run list --limit 5      # Confirm master CI is green
+gh pr merge <N> --squash --delete-branch   # Only if both above are green
+```

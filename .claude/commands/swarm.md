@@ -32,11 +32,35 @@ for label in "swarm-core:0E8A16" "swarm-improve-docs:C5DEF5" "swarm-improve-test
 done
 ```
 
+### Clean up stale worktrees (REQUIRED before team creation)
+
+Stale agent worktrees from previous sessions pollute IDE diagnostics and cause false alarms. Remove them first:
+
+```bash
+git worktree list                      # Inspect what exists
+git worktree prune                     # Remove refs to deleted worktrees
+ls .claude/worktrees/agent-* 2>/dev/null | head -20   # See stale agent dirs
+# Remove stale worktree directories (agents from previous sessions):
+for wt in .claude/worktrees/agent-*; do
+  git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+done
+git worktree prune                     # Final prune
+```
+
+### Verify master CI is green before starting
+
+**Do not start new work if master CI is red.** Fix it first.
+
+```bash
+gh run list --branch master --limit 5 --json status,conclusion,headBranch
+# If any run shows conclusion != "success": fix master CI before proceeding.
+# Message fixer with: gh run view <run-id> --log-failed
+```
+
 ### Check for pending work from previous sessions
 - Agent patches: `ls .ops-perl-lsp/agent-patches/*.md 2>/dev/null`
 - In-progress slices: `grep "in-progress" .claude/swarm-state/completed-slices.md 2>/dev/null`
 - Discovered issues: `gh issue list --label swarm-discovered --state open`
-- Stale worktrees: `git worktree list`
 
 ### Resume or start fresh
 If there's pending work, prioritize it. Otherwise start fresh scouting.
@@ -94,12 +118,25 @@ Message builder-1 and builder-2 when tasks are ready.
 ```
 Invoke /swarm-protocol and /coding-standards.
 You are builder-N. Claim tasks, spawn build subagents with isolation: "worktree".
-Subagent prompt pattern (minimal — 7 lines):
-  "Read .ops-perl-lsp/handoffs/<branch>.md for context and test template.
+
+Before spawning any subagent, confirm it has ALL of the following:
+  - Named worktree (e.g., agent-fix-parser-heredoc)
+  - Branch name
+  - Claimed file surface (exact list of files to touch — no open-ended scope)
+  - Verification command (cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>)
+  - PR size confirmation: if the change touches >10 files, split into multiple subagents with non-overlapping file surfaces
+
+Subagent prompt pattern (required fields):
+  "Worktree: <worktree-name>. Branch: <X>. Crate: <Y>.
+   Files: <exact list — max 10>.
+   Goal: <one sentence>.
+   Verify: cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>.
+   Run ALL commands from your worktree path. Do NOT cd to the main repo.
+   Read .ops-perl-lsp/handoffs/<branch>.md for context.
    Read .claude/swarm-state/known-pitfalls.md for traps.
    Invoke /swarm-protocol and /coding-standards.
-   Branch: <X>. Crate: <Y>. Verify: cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>.
    Append reviewer briefing to handoff. Write metrics. gh issue create --label swarm-discovered for out-of-scope finds."
+
 Use SendMessage({to: "reviewer"}) when builds complete.
 Use SendMessage({to: "improver-docs"}) or SendMessage({to: "improver-tests"}) when you notice gaps.
 Run 3-5 subagents in parallel.
@@ -120,12 +157,22 @@ Use SendMessage({to: "improver-docs"}) when you see patterns across PRs that nee
 **merger**:
 ```
 Invoke /swarm-protocol.
-You are merger. Merge green PRs sequentially. Use gh pr merge --squash --delete-branch.
-After each merge, update .claude/swarm-state/completed-slices.md status to "merged".
-Monitor CI: gh run list --limit 10 --json status,conclusion,headBranch.
+You are merger. ONLY merge PRs where CI Gate shows SUCCESS. Never merge red CI.
+
+Before every merge, run:
+  gh pr checks <N>          — must show all checks passing
+  gh run list --limit 5     — confirm master CI is also green
+
+If CI Gate is not SUCCESS: do NOT merge. SendMessage({to: "fixer"}) with the PR number and a summary of the failure.
+If master CI is red: stop all merges. SendMessage({to: "fixer"}) to fix master first.
+
+Merge sequence:
+  gh pr merge <N> --squash --delete-branch   (only when CI Gate is SUCCESS)
+  Update .claude/swarm-state/completed-slices.md status to "merged".
+
 After ~5 merges: invoke /status-drift --commit.
 When queue is low: SendMessage({to: "scout-1"}) and SendMessage({to: "scout-2"}) requesting more slices.
-After merge cycles: SendMessage({to: "janitor"}) for cleanup — oh wait, janitor isn't a teammate. Just invoke /salvage-worktrees periodically.
+Invoke /salvage-worktrees periodically to clean up old agent branches.
 Every ~10 merges: analyze .ops-perl-lsp/swarm-metrics.jsonl and report trends.
 Write Claude Code memories for cross-session knowledge (e.g., "swarm cycle merged N PRs, corpus improved X%→Y%").
 ```
