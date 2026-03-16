@@ -352,7 +352,10 @@ impl CompletionProvider {
         let context = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.analyze_context(source, position)
         })) {
-            Ok(ctx) => ctx,
+            Ok(mut ctx) => {
+                ctx.in_use_statement = Self::is_use_statement_context(source, position);
+                ctx
+            }
             Err(_) => {
                 return vec![];
             }
@@ -370,11 +373,25 @@ impl CompletionProvider {
         let mut completions = Vec::new();
 
         // Determine what kind of completions to provide based on context
-        if self.is_has_options_key_context(source, position) {
+        if context.in_use_statement && !context.prefix.starts_with('$') {
+            // Module name completion after `use` or `require`
+            workspace::add_use_module_completions(
+                &mut completions,
+                &context,
+                &self.workspace_index,
+            );
+        } else if self.is_has_options_key_context(source, position) {
             self.add_has_option_completions(&mut completions, &context);
         } else if context.trigger_character == Some('>') && context.prefix.ends_with("->") {
             // Method completion must run before sigil-prefixed variable completion.
             methods::add_method_completions(&mut completions, &context, source, &self.symbol_table);
+            // Add workspace-indexed methods for the receiver's type
+            workspace::add_workspace_method_completions(
+                &mut completions,
+                &context,
+                source,
+                &self.workspace_index,
+            );
         } else if context.prefix.starts_with('$') {
             // Scalar variable completion
             variables::add_variable_completions(
@@ -553,6 +570,49 @@ impl CompletionProvider {
     /// Example: `provider.get_completions(source, pos)`.
     pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
         self.get_completions_with_path(source, position, None)
+    }
+
+    /// Check if the cursor is in a `use` or `require` statement context.
+    ///
+    /// Detects patterns like `use Mod`, `use Some::Mo`, `require Mo` etc.
+    /// Returns true when the cursor is positioned where a module name is expected.
+    ///
+    /// Returns false for pragma-like directives (`use constant`, `use lib`, `use if`,
+    /// `use strict`, `use warnings`, etc.) where module-name completion is not useful,
+    /// and for positions past the module name (after `;`, `(`, or `qw`).
+    fn is_use_statement_context(source: &str, position: usize) -> bool {
+        // Guard against slicing at a non-char-boundary
+        if !source.is_char_boundary(position) {
+            return false;
+        }
+        let before = &source[..position];
+        // Find the start of the current line
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        let line = before[line_start..].trim_start();
+
+        // Check for `use Module` or `require Module` patterns
+        // Must be at the start of a statement (after optional whitespace)
+        if let Some(rest) = line.strip_prefix("use ") {
+            // After `use `, we expect a module name (possibly partial)
+            // But not if we've already moved past the module name (e.g., `use Module qw(`)
+            let rest = rest.trim_start();
+            // If there's a semicolon, version number, or import list, we're past the module name
+            if rest.contains(';') || rest.contains('(') || rest.contains("qw") {
+                return false;
+            }
+            // Skip pragma-like directives where the token after `use` is lowercase
+            // (e.g. `use strict`, `use warnings`, `use constant`, `use lib`, `use if`)
+            // Module names in Perl start with an uppercase letter by convention
+            let first_char = rest.chars().next();
+            // Empty rest means cursor is right after `use ` -- still a valid context
+            // Uppercase first char means a module name is being typed
+            first_char.is_none() || first_char.is_some_and(|c| c.is_ascii_uppercase())
+        } else if let Some(rest) = line.strip_prefix("require ") {
+            let rest = rest.trim_start();
+            !rest.contains(';')
+        } else {
+            false
+        }
     }
 
     /// Analyze the context at the cursor position

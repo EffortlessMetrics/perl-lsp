@@ -1057,3 +1057,261 @@ fn completion_preserves_text_edit_range() {
     assert!(start < end, "text_edit_range start should be before end");
     assert_eq!(end, code.len(), "text_edit_range end should be at cursor position");
 }
+
+// ---------------------------------------------------------------------------
+// Workspace-aware `use` module name completion (#352)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn use_statement_suggests_workspace_modules() {
+    let index = Arc::new(WorkspaceIndex::new());
+
+    // Index two modules in the workspace
+    let uri1 = must(Url::parse("file:///workspace/lib/MyApp/Config.pm"));
+    must(index.index_file(uri1, "package MyApp::Config;\nsub load { }\n1;\n".to_string()));
+
+    let uri2 = must(Url::parse("file:///workspace/lib/MyApp/Logger.pm"));
+    must(index.index_file(uri2, "package MyApp::Logger;\nsub info { }\n1;\n".to_string()));
+
+    let code = "use MyApp::";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    assert!(
+        has_label(&items, "MyApp::Config"),
+        "should suggest MyApp::Config after `use MyApp::`, got: {:?}",
+        items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+    assert!(
+        has_label(&items, "MyApp::Logger"),
+        "should suggest MyApp::Logger after `use MyApp::`, got: {:?}",
+        items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn use_statement_filters_by_prefix() {
+    let index = Arc::new(WorkspaceIndex::new());
+
+    let uri1 = must(Url::parse("file:///workspace/lib/Foo/Bar.pm"));
+    must(index.index_file(uri1, "package Foo::Bar;\n1;\n".to_string()));
+
+    let uri2 = must(Url::parse("file:///workspace/lib/Baz/Qux.pm"));
+    must(index.index_file(uri2, "package Baz::Qux;\n1;\n".to_string()));
+
+    let code = "use Foo";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    assert!(has_label(&items, "Foo::Bar"), "should suggest Foo::Bar when prefix is Foo");
+    assert!(!has_label(&items, "Baz::Qux"), "should NOT suggest Baz::Qux when prefix is Foo");
+}
+
+#[test]
+fn use_statement_items_are_module_kind() {
+    let index = Arc::new(WorkspaceIndex::new());
+
+    let uri = must(Url::parse("file:///workspace/lib/TestMod.pm"));
+    must(index.index_file(uri, "package TestMod;\n1;\n".to_string()));
+
+    let code = "use Test";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    let module_item = must_some(find_item(&items, "TestMod"));
+    assert_eq!(
+        module_item.kind,
+        CompletionItemKind::Module,
+        "use-statement module completions should be Module kind"
+    );
+}
+
+#[test]
+fn use_statement_not_triggered_after_semicolon() {
+    // After `use Module;`, we should NOT be in use-statement context
+    let index = Arc::new(WorkspaceIndex::new());
+
+    let uri = must(Url::parse("file:///workspace/lib/Done.pm"));
+    must(index.index_file(uri, "package Done;\n1;\n".to_string()));
+
+    let code = "use strict;\nmy $d";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    // Should not have module completion here, should have variable completion
+    assert!(
+        !has_label(&items, "Done"),
+        "should NOT suggest module names outside use statement context"
+    );
+}
+
+#[test]
+fn require_statement_suggests_workspace_modules() {
+    let index = Arc::new(WorkspaceIndex::new());
+
+    let uri = must(Url::parse("file:///workspace/lib/Net/HTTP.pm"));
+    must(index.index_file(uri, "package Net::HTTP;\n1;\n".to_string()));
+
+    let code = "require Net";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    assert!(has_label(&items, "Net::HTTP"), "should suggest Net::HTTP after `require Net`");
+}
+
+// ---------------------------------------------------------------------------
+// Workspace-aware method completion via `->` (#352)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn arrow_completion_uses_workspace_methods_static_call() {
+    let index = Arc::new(WorkspaceIndex::new());
+
+    let uri = must(Url::parse("file:///workspace/lib/MyService.pm"));
+    must(index.index_file(
+        uri,
+        "package MyService;\nsub new { }\nsub process { }\nsub validate { }\n1;\n".to_string(),
+    ));
+
+    let code = "MyService->";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    assert!(
+        has_label(&items, "process"),
+        "should suggest workspace method `process` for MyService->, got: {:?}",
+        items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+    assert!(
+        has_label(&items, "validate"),
+        "should suggest workspace method `validate` for MyService->"
+    );
+}
+
+#[test]
+fn arrow_completion_workspace_methods_have_detail() {
+    let index = Arc::new(WorkspaceIndex::new());
+
+    let uri = must(Url::parse("file:///workspace/lib/Greeter.pm"));
+    must(index.index_file(uri, "package Greeter;\nsub hello { }\n1;\n".to_string()));
+
+    let code = "Greeter->";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    let hello = must_some(find_item(&items, "hello"));
+    let detail = must_some(hello.detail.as_deref());
+    assert!(
+        detail.contains("Greeter"),
+        "workspace method detail should mention the package name, got: {detail:?}"
+    );
+}
+
+#[test]
+fn arrow_completion_from_variable_assignment() {
+    let index = Arc::new(WorkspaceIndex::new());
+
+    let uri = must(Url::parse("file:///workspace/lib/Cache.pm"));
+    must(index.index_file(
+        uri,
+        "package Cache;\nsub new { }\nsub get { }\nsub set { }\n1;\n".to_string(),
+    ));
+
+    let code = "my $cache = Cache->new();\n$cache->";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    assert!(
+        has_label(&items, "get"),
+        "should suggest `get` from Cache via variable assignment inference, got: {:?}",
+        items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+    assert!(
+        has_label(&items, "set"),
+        "should suggest `set` from Cache via variable assignment inference"
+    );
+}
+
+#[test]
+fn arrow_completion_does_not_duplicate_local_methods() {
+    let index = Arc::new(WorkspaceIndex::new());
+
+    let uri = must(Url::parse("file:///workspace/lib/Dup.pm"));
+    must(index.index_file(uri, "package Dup;\nsub shared_method { }\n1;\n".to_string()));
+
+    // The local file also defines shared_method
+    let code = "package Dup;\nsub shared_method { }\nDup->";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    let count = items.iter().filter(|i| i.label == "shared_method").count();
+    assert!(
+        count <= 1,
+        "should not duplicate method completions, found {count} entries for shared_method"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+
+#[test]
+fn use_statement_no_workspace_index_returns_general_completions() {
+    // Without workspace index, use-statement context should still work
+    // (just fall through to no completions or keyword completions)
+    let code = "use My";
+    let provider = parse_and_provider(code);
+    let items = provider.get_completions(code, code.len());
+    // Should not crash; may return empty or keyword completions
+    let _ = items;
+}
+
+#[test]
+fn use_statement_empty_workspace_index() {
+    let index = Arc::new(WorkspaceIndex::new());
+    let code = "use My";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+    // Should not crash with empty workspace index
+    assert!(
+        !items.iter().any(|i| i.kind == CompletionItemKind::Module),
+        "empty workspace index should produce no module completions"
+    );
+}
+
+#[test]
+fn use_pragma_does_not_trigger_module_completion() {
+    // `use strict`, `use warnings`, `use constant` etc. should NOT trigger
+    // module name completion because these are lowercase pragmas, not modules.
+    let index = Arc::new(WorkspaceIndex::new());
+    let uri = must(Url::parse("file:///workspace/lib/Strict.pm"));
+    must(index.index_file(uri, "package Strict;\n1;\n".to_string()));
+
+    for pragma in &["use strict", "use warnings", "use constant", "use lib", "use if"] {
+        let provider = parse_provider_with_index(pragma, Arc::clone(&index));
+        let items = provider.get_completions(pragma, pragma.len());
+        assert!(
+            !items.iter().any(|i| i.kind == CompletionItemKind::Module),
+            "pragma `{pragma}` should NOT trigger module completion, got: {:?}",
+            items.iter().map(|i| &i.label).collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn variable_assignment_inference_ignores_comparison_operators() {
+    // `if ($var == 0)` should NOT be confused with an assignment
+    let index = Arc::new(WorkspaceIndex::new());
+    let uri = must(Url::parse("file:///workspace/lib/Cmp.pm"));
+    must(index.index_file(uri, "package Cmp;\nsub check { }\n1;\n".to_string()));
+
+    let code = "if ($obj == Cmp->new()) { }\n$obj->";
+    let provider = parse_provider_with_index(code, Arc::clone(&index));
+    let items = provider.get_completions(code, code.len());
+    // Should NOT infer type from `== Cmp->new()` comparison
+    assert!(
+        !has_label(&items, "check"),
+        "should not infer package from comparison operator ==, got: {:?}",
+        items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+}
