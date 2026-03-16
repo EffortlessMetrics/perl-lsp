@@ -12,7 +12,10 @@ Target: **$ARGUMENTS** (default: top 5 error buckets)
 ## Steps
 
 1. **Load error buckets** from `.ci/parser-corpus-baseline.json`
-   - Top buckets: `unexpected_token_in_expr` (596), `unclosed_bracket` (544), `unclosed_paren_identifier` (488), `unclosed_brace_semicolon` (446), `fat_arrow_expr` (310)
+   ```bash
+   cat .ci/parser-corpus-baseline.json | python3 -c "import json,sys; d=json.load(sys.stdin)['first_error_buckets']; [print(f'{k}: {v}') for k,v in sorted(d.items(), key=lambda x:-x[1])[:5]]"
+   ```
+   Counts change as the parser improves — always read the file, do not use hardcoded values.
 
 2. **Pick a bucket** — use $ARGUMENTS if specified, otherwise pick the highest-count bucket
 
