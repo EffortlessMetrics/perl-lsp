@@ -16,6 +16,7 @@ impl<'a> Parser<'a> {
         ) {
             self.parse_variable_declaration()?
         } else {
+            self.mark_not_stmt_start();
             self.parse_expression()?
         };
 
@@ -41,6 +42,7 @@ impl<'a> Parser<'a> {
             ) {
                 self.parse_variable_declaration()?
             } else {
+                self.mark_not_stmt_start();
                 self.parse_expression()?
             };
 
@@ -73,6 +75,7 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'unless'
 
         self.expect(TokenKind::LeftParen)?;
+        self.mark_not_stmt_start();
         let condition = self.parse_expression()?;
         self.expect(TokenKind::RightParen)?;
 
@@ -113,6 +116,7 @@ impl<'a> Parser<'a> {
         ) {
             self.parse_variable_declaration()?
         } else {
+            self.mark_not_stmt_start();
             self.parse_expression()?
         };
 
@@ -145,6 +149,7 @@ impl<'a> Parser<'a> {
         self.tokens.next()?; // consume 'until'
 
         self.expect(TokenKind::LeftParen)?;
+        self.mark_not_stmt_start();
         let condition = self.parse_expression()?;
         self.expect(TokenKind::RightParen)?;
 
@@ -200,6 +205,7 @@ impl<'a> Parser<'a> {
             Some(Box::new(decl))
         } else {
             // Parse expression
+            self.mark_not_stmt_start();
             let expr = self.parse_expression()?;
 
             // If followed by ), it's a foreach loop
@@ -234,6 +240,7 @@ impl<'a> Parser<'a> {
         let condition = if self.peek_kind() == Some(TokenKind::Semicolon) {
             None
         } else {
+            self.mark_not_stmt_start();
             Some(Box::new(self.parse_expression()?))
         };
         self.expect(TokenKind::Semicolon)?;
@@ -242,6 +249,7 @@ impl<'a> Parser<'a> {
         let update = if self.peek_kind() == Some(TokenKind::RightParen) {
             None
         } else {
+            self.mark_not_stmt_start();
             Some(Box::new(self.parse_expression()?))
         };
 
@@ -285,6 +293,7 @@ impl<'a> Parser<'a> {
         self.in_for_loop_init = false;
 
         self.expect(TokenKind::LeftParen)?;
+        self.mark_not_stmt_start();
         let list = self.parse_expression()?;
         self.expect(TokenKind::RightParen)?;
 
@@ -323,6 +332,7 @@ impl<'a> Parser<'a> {
         self.in_for_loop_init = false;
 
         self.expect(TokenKind::LeftParen)?;
+        self.mark_not_stmt_start();
         let list = self.parse_expression()?;
         self.expect(TokenKind::RightParen)?;
 
