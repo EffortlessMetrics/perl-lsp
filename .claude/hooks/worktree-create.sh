@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-OPS_DIR=".ops-perl-lsp"
+OPS_DIR="${OPS_DIR:-.ops-perl-lsp}"
 METRICS_FILE="${OPS_DIR}/swarm-metrics.jsonl"
 
 mkdir -p "${OPS_DIR}"
