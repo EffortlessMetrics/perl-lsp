@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 /// Helper to set up an initialized LSP server with a document
 fn setup_server_with_document() -> (LspServer, String) {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // 1. Send initialize request with JsonRpcRequest
     let init_request = JsonRpcRequest {
@@ -58,7 +58,7 @@ fn get_result(response: Option<JsonRpcResponse>) -> Option<Value> {
 
 #[test]
 fn test_did_save_notification() {
-    let (mut server, uri) = setup_server_with_document();
+    let (server, uri) = setup_server_with_document();
 
     // Send didSave notification
     let request = JsonRpcRequest {
@@ -80,7 +80,7 @@ fn test_did_save_notification() {
 
 #[test]
 fn test_did_save_with_text() {
-    let (mut server, uri) = setup_server_with_document();
+    let (server, uri) = setup_server_with_document();
 
     // Send didSave notification with text
     let request = JsonRpcRequest {
@@ -102,7 +102,7 @@ fn test_did_save_with_text() {
 
 #[test]
 fn test_will_save_notification() {
-    let (mut server, uri) = setup_server_with_document();
+    let (server, uri) = setup_server_with_document();
 
     // Send willSave notification - Manual save (reason = 1)
     let request = JsonRpcRequest {
@@ -152,7 +152,7 @@ fn test_will_save_notification() {
 
 #[test]
 fn test_will_save_wait_until_returns_valid_edits() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, uri) = setup_server_with_document();
+    let (server, uri) = setup_server_with_document();
 
     // Send willSaveWaitUntil request (this is a request, not notification)
     let request = JsonRpcRequest {
@@ -194,7 +194,7 @@ fn test_will_save_wait_until_returns_valid_edits() -> Result<(), Box<dyn std::er
 
 #[test]
 fn test_will_save_wait_until_with_formatting() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, uri) = setup_server_with_document();
+    let (server, uri) = setup_server_with_document();
 
     // Update document with poorly formatted code
     let change_notification = JsonRpcRequest {
@@ -253,7 +253,7 @@ fn test_will_save_wait_until_with_formatting() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn test_did_close_after_save() {
-    let (mut server, uri) = setup_server_with_document();
+    let (server, uri) = setup_server_with_document();
 
     // Send didSave notification
     let save_notification = JsonRpcRequest {
@@ -287,7 +287,7 @@ fn test_did_close_after_save() {
 
 #[test]
 fn test_save_events_sequence() {
-    let (mut server, uri) = setup_server_with_document();
+    let (server, uri) = setup_server_with_document();
 
     // Simulate typical save sequence: willSave -> willSaveWaitUntil -> didSave
 
@@ -335,7 +335,7 @@ fn test_save_events_sequence() {
 
 #[test]
 fn test_save_with_invalid_uri() {
-    let (mut server, _uri) = setup_server_with_document();
+    let (server, _uri) = setup_server_with_document();
 
     // Try to save a document that was never opened
     let request = JsonRpcRequest {

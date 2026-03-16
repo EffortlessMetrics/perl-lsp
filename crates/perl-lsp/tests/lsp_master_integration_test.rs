@@ -9,7 +9,7 @@ use serde_json::json;
 #[test]
 fn test_complete_lsp_integration() {
     // Initialize server
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Step 1: Initialize
     let init_request = JsonRpcRequest {
@@ -200,7 +200,7 @@ fn test_all_test_suites_pass() {
 fn test_complete_workflow_performance() {
     use std::time::Instant;
 
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize
     let init_request = JsonRpcRequest {

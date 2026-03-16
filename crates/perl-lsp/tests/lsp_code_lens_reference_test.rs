@@ -7,7 +7,7 @@ use serde_json::json;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn setup_server() -> Result<LspServer, Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize the server
     let init_request = JsonRpcRequest {
@@ -37,7 +37,7 @@ fn setup_server() -> Result<LspServer, Box<dyn std::error::Error>> {
 
 #[test]
 fn test_code_lens_reference_counting() -> TestResult {
-    let mut server = setup_server()?;
+    let server = setup_server()?;
 
     // Open a document with a subroutine that's called multiple times
     let code = r#"
@@ -165,7 +165,7 @@ sub unused_function {
 
 #[test]
 fn test_code_lens_package_references() -> TestResult {
-    let mut server = setup_server()?;
+    let server = setup_server()?;
 
     // Open a document with a package that's used
     let code = r#"

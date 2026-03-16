@@ -6,7 +6,7 @@ use perl_lsp::{JsonRpcRequest, LspServer};
 use serde_json::{Value, json};
 
 fn setup_server() -> LspServer {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
