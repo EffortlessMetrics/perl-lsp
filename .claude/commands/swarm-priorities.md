@@ -1,6 +1,7 @@
 ---
 description: Load roadmap priorities and weight scout targets for strategic alignment
 argument-hint: ""
+user-invocable: false
 ---
 
 # Swarm Priorities

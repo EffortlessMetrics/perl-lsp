@@ -1,6 +1,7 @@
 ---
 description: Emergency stop the swarm — save state and halt within 5 minutes
 argument-hint: "[--reason <why>]"
+disable-model-invocation: true
 ---
 
 # Swarm Stop (Emergency)
