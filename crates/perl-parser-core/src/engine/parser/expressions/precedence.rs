@@ -270,8 +270,53 @@ impl<'a> Parser<'a> {
 
     /// Parse logical OR expression
     fn parse_or(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_and()?;
+        let expr = self.parse_and()?;
+        self.parse_or_with(expr)
+    }
 
+    /// Parse logical AND expression
+    fn parse_and(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_bitwise_or()?;
+        self.parse_and_with(expr)
+    }
+
+    /// Parse bitwise OR expression
+    fn parse_bitwise_or(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_bitwise_xor()?;
+        self.parse_bitwise_or_with(expr)
+    }
+
+    /// Parse bitwise XOR expression
+    fn parse_bitwise_xor(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_bitwise_and()?;
+        self.parse_bitwise_xor_with(expr)
+    }
+
+    /// Parse range expression
+    fn parse_range(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_equality()?;
+        self.parse_range_with(expr)
+    }
+
+    /// Parse bitwise AND expression
+    fn parse_bitwise_and(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_range()?;
+        self.parse_bitwise_and_with(expr)
+    }
+
+    /// Parse equality expression
+    fn parse_equality(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_relational()?;
+        self.parse_equality_with(expr)
+    }
+
+    /// Parse relational expression
+    fn parse_relational(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_shift()?;
+        self.parse_relational_with(expr)
+    }
+
+    fn parse_or_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while Self::is_logical_or(self.peek_kind()) {
             let op_token = self.tokens.next()?;
             let right = self.parse_and()?;
@@ -291,10 +336,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse logical AND expression
-    fn parse_and(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_bitwise_or()?;
-
+    fn parse_and_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while self.peek_kind() == Some(TokenKind::And) {
             let op_token = self.tokens.next()?;
             let right = self.parse_bitwise_or()?;
@@ -314,10 +356,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse bitwise OR expression
-    fn parse_bitwise_or(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_bitwise_xor()?;
-
+    fn parse_bitwise_or_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while self.peek_kind() == Some(TokenKind::BitwiseOr) {
             let op_token = self.tokens.next()?;
             let right = self.parse_bitwise_xor()?;
@@ -337,10 +376,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse bitwise XOR expression
-    fn parse_bitwise_xor(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_bitwise_and()?;
-
+    fn parse_bitwise_xor_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while self.peek_kind() == Some(TokenKind::BitwiseXor) {
             let op_token = self.tokens.next()?;
             let right = self.parse_bitwise_and()?;
@@ -360,10 +396,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse range expression
-    fn parse_range(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_equality()?;
-
+    fn parse_range_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while self.peek_kind() == Some(TokenKind::Range) {
             let op_token = self.tokens.next()?;
             let right = self.parse_equality()?;
@@ -383,10 +416,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse bitwise AND expression
-    fn parse_bitwise_and(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_range()?;
-
+    fn parse_bitwise_and_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while self.peek_kind() == Some(TokenKind::BitwiseAnd) {
             let op_token = self.tokens.next()?;
             let right = self.parse_range()?;
@@ -406,15 +436,10 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse equality expression
-    fn parse_equality(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_relational()?;
-
+    fn parse_equality_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while let Some(kind) = self.peek_kind() {
             match kind {
-                // Handle word comparison operators (eq, ne, lt, le, gt, ge, cmp)
                 TokenKind::Identifier => {
-                    // Check if this is a word comparison operator
                     let next_text = self.tokens.peek()?.text.as_ref();
                     if matches!(next_text, "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "cmp") {
                         let op_token = self.tokens.next()?;
@@ -444,14 +469,11 @@ impl<'a> Parser<'a> {
                     let start = expr.location.start;
                     let end = right.location.end;
 
-                    // Special handling for match operators with substitution/transliteration
                     if matches!(op_token.kind, TokenKind::Match | TokenKind::NotMatch) {
-                        // Check if right side is already a substitution or transliteration
                         if let NodeKind::Substitution { pattern, replacement, modifiers, has_embedded_code, .. } =
                             &right.kind
                         {
                             let negated = matches!(op_token.kind, TokenKind::NotMatch);
-                            // Update the expression in the substitution
                             expr = Node::new(
                                 NodeKind::Substitution {
                                     expr: Box::new(expr),
@@ -468,7 +490,6 @@ impl<'a> Parser<'a> {
                         } = &right.kind
                         {
                             let negated = matches!(op_token.kind, TokenKind::NotMatch);
-                            // Update the expression in the transliteration
                             expr = Node::new(
                                 NodeKind::Transliteration {
                                     expr: Box::new(expr),
@@ -513,7 +534,6 @@ impl<'a> Parser<'a> {
                                 );
                             }
                         } else {
-                            // Normal binary operation
                             expr = Node::new(
                                 NodeKind::Binary {
                                     op: op_token.text.to_string(),
@@ -524,7 +544,6 @@ impl<'a> Parser<'a> {
                             );
                         }
                     } else {
-                        // Normal binary operation for == and !=
                         expr = Node::new(
                             NodeKind::Binary {
                                 op: op_token.text.to_string(),
@@ -542,10 +561,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse relational expression
-    fn parse_relational(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_shift()?;
-
+    fn parse_relational_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::Less
@@ -569,7 +585,6 @@ impl<'a> Parser<'a> {
                     );
                 }
                 TokenKind::Identifier => {
-                    // Check if it's ISA operator
                     if self.tokens.peek()?.text.as_ref() == "ISA" {
                         let _op_token = self.tokens.next()?;
                         let right = self.parse_shift()?;
@@ -597,8 +612,29 @@ impl<'a> Parser<'a> {
 
     /// Parse shift expression
     fn parse_shift(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_additive()?;
+        let expr = self.parse_additive()?;
+        self.parse_shift_with(expr)
+    }
 
+    /// Parse additive expression
+    fn parse_additive(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_multiplicative()?;
+        self.parse_additive_with(expr)
+    }
+
+    /// Parse multiplicative expression (including the `x` string repetition operator)
+    fn parse_multiplicative(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_power()?;
+        self.parse_multiplicative_with(expr)
+    }
+
+    /// Parse power expression
+    fn parse_power(&mut self) -> ParseResult<Node> {
+        let expr = self.parse_unary()?;
+        self.parse_power_with(expr)
+    }
+
+    fn parse_shift_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::LeftShift | TokenKind::RightShift => {
@@ -623,10 +659,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse additive expression
-    fn parse_additive(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_multiplicative()?;
-
+    fn parse_additive_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::Plus | TokenKind::Minus | TokenKind::Dot => {
@@ -651,10 +684,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse multiplicative expression (including the `x` string repetition operator)
-    fn parse_multiplicative(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_power()?;
-
+    fn parse_multiplicative_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while let Some(kind) = self.peek_kind() {
             match kind {
                 TokenKind::Star | TokenKind::Slash | TokenKind::Percent => {
@@ -672,25 +702,11 @@ impl<'a> Parser<'a> {
                         SourceLocation { start, end },
                     );
                 }
-                // Handle Perl's `x` string repetition operator.
-                // `x` is an identifier that acts as a binary operator at
-                // multiplicative precedence: `"ha" x 3` => `"hahaha"`.
-                //
-                // Disambiguation: `x` is only an operator when the token
-                // after it looks like an operand (number, variable sigil,
-                // opening paren/bracket). This avoids misinterpreting
-                // `$x = 5` or `x($arg)` as repetition.
-                //
-                // Note: the lexer sometimes produces `$var` as a single
-                // Identifier token rather than ScalarSigil + Identifier,
-                // so we must also check whether the following Identifier
-                // text begins with a sigil character.
                 TokenKind::Identifier => {
                     let peeked = self.tokens.peek()?;
                     if peeked.text.as_ref() != "x" {
                         break;
                     }
-                    // Lookahead: the token *after* `x` must begin an operand
                     let is_operand_start = if let Ok(next) = self.tokens.peek_second() {
                         match next.kind {
                             TokenKind::Number
@@ -702,9 +718,6 @@ impl<'a> Parser<'a> {
                             | TokenKind::String
                             | TokenKind::QuoteSingle
                             | TokenKind::QuoteDouble => true,
-                            // The lexer may emit `$var`, `@arr`, or `%hash`
-                            // as a single Identifier token with the sigil
-                            // embedded in the text.
                             TokenKind::Identifier => {
                                 let t = next.text.as_ref();
                                 t.starts_with('$')
@@ -740,13 +753,10 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    /// Parse power expression
-    fn parse_power(&mut self) -> ParseResult<Node> {
-        let mut expr = self.parse_unary()?;
-
+    fn parse_power_with(&mut self, mut expr: Node) -> ParseResult<Node> {
         while self.peek_kind() == Some(TokenKind::Power) {
             let op_token = self.tokens.next()?;
-            let right = self.parse_unary()?; // Right associative
+            let right = self.parse_unary()?;
             let start = expr.location.start;
             let end = right.location.end;
 

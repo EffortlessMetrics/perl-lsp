@@ -408,15 +408,99 @@ impl<'a> Parser<'a> {
         ))
     }
 
+    /// Continue parsing operators after a no-arg named-unary/nullary call.
+    fn parse_call_statement_tail(&mut self, mut expr: Node) -> ParseResult<Node> {
+        expr = self.parse_power_with(expr)?;
+        expr = self.parse_multiplicative_with(expr)?;
+        expr = self.parse_additive_with(expr)?;
+        expr = self.parse_shift_with(expr)?;
+        self.parse_named_unary_statement_tail(expr)
+    }
+
+    /// Continue parsing operators that bind less tightly than named-unary/list
+    /// operator arguments after we have already constructed the call node.
+    fn parse_named_unary_statement_tail(&mut self, mut expr: Node) -> ParseResult<Node> {
+        expr = self.parse_relational_with(expr)?;
+        expr = self.parse_equality_with(expr)?;
+        expr = self.parse_range_with(expr)?;
+        expr = self.parse_bitwise_and_with(expr)?;
+        expr = self.parse_bitwise_xor_with(expr)?;
+        expr = self.parse_bitwise_or_with(expr)?;
+        expr = self.parse_and_with(expr)?;
+        expr = self.parse_or_with(expr)?;
+        self.parse_word_or_expr(expr)
+    }
+
+    fn parse_named_unary_statement_call(
+        &mut self,
+        start: usize,
+        func_name: &str,
+        allow_no_args: bool,
+    ) -> ParseResult<Node> {
+        let omit_optional_arg = allow_no_args
+            && (self.peek_kind().is_some_and(Self::is_binary_operator)
+                || self.peek_kind() == Some(TokenKind::Slash));
+
+        let args = if self.is_at_statement_end() || omit_optional_arg {
+            vec![]
+        } else {
+            vec![self.parse_shift()?]
+        };
+
+        if args.is_empty() && !allow_no_args {
+            return Err(ParseError::unexpected(
+                "expression".to_string(),
+                format!("{:?}", self.peek_kind()),
+                self.current_position(),
+            ));
+        }
+
+        let had_args = !args.is_empty();
+        let end = args
+            .last()
+            .map(|arg| arg.location.end)
+            .unwrap_or_else(|| self.previous_position());
+        let expr = Node::new(
+            NodeKind::FunctionCall {
+                name: func_name.to_string(),
+                args,
+            },
+            SourceLocation { start, end },
+        );
+
+        if had_args {
+            self.parse_named_unary_statement_tail(expr)
+        } else {
+            self.parse_call_statement_tail(expr)
+        }
+    }
+
     /// Parse simple statement (print, die, next, last, etc. with their arguments)
     fn parse_simple_statement(&mut self) -> ParseResult<Node> {
         // Check if it's a builtin that can take arguments without parens
         if let Ok(token) = self.tokens.peek() {
-            match token.text.as_ref() {
+            let token_text = token.text.clone();
+            let token_start = token.start;
+
+            match token_text.as_ref() {
+                // Parenthesized nullary builtins are handled by the general
+                // expression parser; this branch is for statement-start
+                // bare calls like `shift @arr` or `caller 1 || die`.
+                name if Self::is_nullary_builtin(name) => {
+                    if self.tokens.peek_second().is_ok_and(|t| {
+                        matches!(t.kind, TokenKind::LeftParen | TokenKind::Arrow)
+                    }) {
+                        self.parse_expression()
+                    } else {
+                        let token = self.consume_token()?;
+                        self.mark_not_stmt_start();
+                        self.parse_named_unary_statement_call(token_start, token.text.as_ref(), true)
+                    }
+                }
                 // Special-cased builtins with dedicated AST nodes — must come
                 // before the generic `is_builtin_function` guard below.
                 "tie" => {
-                    let start = token.start;
+                    let start = token_start;
                     self.consume_token()?; // consume tie
                     self.mark_not_stmt_start();
 
@@ -469,7 +553,7 @@ impl<'a> Parser<'a> {
                     ))
                 }
                 "untie" => {
-                    let start = token.start;
+                    let start = token_start;
                     self.consume_token()?; // consume untie
                     self.mark_not_stmt_start();
 
@@ -483,7 +567,7 @@ impl<'a> Parser<'a> {
                 }
                 "new" => {
                     // Check for indirect constructor syntax
-                    let _start = token.start;
+                    let _start = token_start;
                     // Clone to satisfy borrow checker
                     let text = token.text.clone();
 
@@ -501,7 +585,7 @@ impl<'a> Parser<'a> {
                 // Generic builtin functions that can take arguments without parens.
                 // Uses the canonical builtin registry in `perl-builtins-phf`.
                 name if Self::is_builtin_function(name) => {
-                    let start = token.start;
+                    let start = token_start;
                     // We need to clone the text to check for indirect call pattern because
                     // is_indirect_call_pattern borrows self mutably to peek ahead
                     let text = token.text.clone();
@@ -553,15 +637,11 @@ impl<'a> Parser<'a> {
                             if self.peek_kind() != Some(TokenKind::LeftParen)
                                 && matches!(func_name.as_ref(), "defined" | "ref")
                             {
-                                let arg = self.parse_unary()?;
-                                let end = self.previous_position();
-                                return Ok(Node::new(
-                                    NodeKind::FunctionCall {
-                                        name: func_name.to_string(),
-                                        args: vec![arg],
-                                    },
-                                    SourceLocation { start, end },
-                                ));
+                                return self.parse_named_unary_statement_call(
+                                    start,
+                                    func_name.as_ref(),
+                                    false,
+                                );
                             }
 
                             // Has arguments - parse them as a comma-separated list
