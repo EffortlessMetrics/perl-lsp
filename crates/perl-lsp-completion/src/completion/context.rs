@@ -15,6 +15,8 @@ pub struct CompletionContext {
     pub in_regex: bool,
     /// Whether we're in a comment
     pub in_comment: bool,
+    /// Whether we're completing a module name after `use` or `require`
+    pub in_use_statement: bool,
     /// Current package context
     pub current_package: String,
     /// Prefix text before cursor
@@ -88,6 +90,7 @@ impl CompletionContext {
             in_string,
             in_regex,
             in_comment,
+            in_use_statement: false,
             current_package,
             prefix,
             prefix_start,
