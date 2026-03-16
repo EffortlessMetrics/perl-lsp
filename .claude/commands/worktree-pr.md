@@ -37,16 +37,33 @@ Fix any issues before proceeding.
 git checkout -b <branch-name>
 ```
 
-5. **Commit** — stage relevant files and commit with conventional commit message:
+5. **Commit hygiene check** — verify only intended files are staged:
 ```bash
-git add <files>
+git diff --cached --name-only
+```
+**NEVER** use `git add -A` or `git add .`. Always add specific files.
+
+Reject any of these from the staged set (unless they are the point of the PR):
+- `Cargo.lock` — worktree drift causes false conflicts; let CI regenerate
+- `.claude/` infrastructure files
+- `docs/project/CURRENT_STATUS.md` — auto-generated
+- `scripts/.ignored-baseline` — auto-generated
+
+If unintended files are staged, unstage them:
+```bash
+git reset HEAD <file>
+```
+
+6. **Commit** — stage relevant files and commit with conventional commit message:
+```bash
+git add <specific-files>
 git commit -m "$(cat <<'EOF'
 <type>(<scope>): <description>
 EOF
 )"
 ```
 
-6. **Push and PR**:
+7. **Push and PR**:
 ```bash
 git push -u origin <branch-name>
 gh pr create --title "<type>(<scope>): <description>" --body "$(cat <<'EOF'
@@ -61,4 +78,4 @@ EOF
 )"
 ```
 
-7. **Return the PR URL**.
+8. **Return the PR URL**.
