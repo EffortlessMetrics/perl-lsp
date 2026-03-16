@@ -181,8 +181,20 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'for'
 
-        // Check if it's a foreach-style for loop
-        if matches!(self.peek_kind(), Some(TokenKind::My)) || self.is_variable_start() {
+        // Check if it's a foreach-style for loop:
+        //   for my $var (LIST) { }  — My keyword
+        //   for $var (LIST) { }    — bare variable without 'my' (sigil or identifier token)
+        //   for @arr (LIST) { }    — array variable
+        //
+        // Note: variables are lexed as Identifier tokens (e.g. "$pp") in most contexts,
+        // so we check both bare sigil tokens AND Identifier tokens that start with a sigil.
+        let is_foreach_var = matches!(self.peek_kind(), Some(TokenKind::My))
+            || self.is_variable_start()
+            || matches!(self.peek_kind(), Some(TokenKind::Identifier)
+                if self.tokens.peek().is_ok_and(|t| {
+                    t.text.starts_with('$') || t.text.starts_with('@') || t.text.starts_with('%')
+                }));
+        if is_foreach_var {
             return self.parse_foreach_style_for();
         }
 

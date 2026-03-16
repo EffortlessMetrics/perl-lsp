@@ -1640,3 +1640,75 @@ if ($start) { init(); run(); }
         assert_clean_parse(code);
     }
 }
+
+// ---------------------------------------------------------------------------
+// for $var (LIST) without 'my' — legacy iterator variable form
+// ---------------------------------------------------------------------------
+// Perl allows `for $var (LIST)` (without `my`) as a synonym for
+// `foreach $var (LIST)`. This was common in older CPAN code.
+
+mod for_variable_iterator {
+    use super::*;
+
+    fn sexp(code: &str) -> String {
+        parse(code).to_sexp()
+    }
+
+    /// `for $pp (LIST)` — scalar iterator without my.
+    #[test]
+    fn for_scalar_var_no_my() {
+        let s = sexp("for $pp (1, 2, 3) { print $pp; }");
+        assert!(!s.contains("ERROR"), "ERROR in sexp: {s}");
+        assert!(s.contains("foreach"), "should produce foreach node: {s}");
+    }
+
+    /// `for $k (keys %hash)` — common hash iteration pattern.
+    #[test]
+    fn for_scalar_var_keys_hash() {
+        assert_clean_parse("for $k (keys %hash) { print \"$k\\n\"; }");
+    }
+
+    /// `for $item (@array)` — array iteration without my.
+    #[test]
+    fn for_scalar_var_array() {
+        assert_clean_parse("for $item (@array) { process($item); }");
+    }
+
+    /// `for $file (split /\n/, $data)` — as seen in Text::Wrap.
+    #[test]
+    fn for_scalar_var_split() {
+        assert_clean_parse(r#"for $pp (split(/\n\s+/, join("\n", @raw))) { $pp =~ s/\s+/ /g; }"#);
+    }
+
+    /// `for my $var (LIST)` — still works (no regression).
+    #[test]
+    fn for_my_scalar_var_no_regression() {
+        assert_clean_parse("for my $x (1, 2, 3) { print $x; }");
+    }
+
+    /// `foreach $var (LIST)` — still works (no regression).
+    #[test]
+    fn foreach_scalar_var_no_regression() {
+        assert_clean_parse("foreach $item (@list) { do_work($item); }");
+    }
+
+    /// C-style `for (init; cond; update)` — still works (no regression).
+    #[test]
+    fn c_style_for_no_regression() {
+        assert_clean_parse("for (my $i = 0; $i < 10; $i++) { print $i; }");
+    }
+
+    /// Nested for loops both without my.
+    #[test]
+    fn nested_for_loops_no_my() {
+        assert_clean_parse(
+            r#"
+for $i (1..3) {
+    for $j (1..3) {
+        print "$i $j\n";
+    }
+}
+"#,
+        );
+    }
+}
