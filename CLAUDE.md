@@ -69,6 +69,9 @@ cargo test --workspace --lib
 | Crate verification | `/verify <crate>` |
 | Master health check | `/verify-master-green` |
 | Single PR rebase | `/rebase-pr <number>` |
+| PR review response | `/pr-respond <PR#>` |
+| CI monitoring | `/ci-watch <PR#>` |
+| Wind down swarm | `/swarm-wind-down` |
 
 ## Crate Structure
 
@@ -361,7 +364,7 @@ Metrics in this project are **computed, not hand-edited**:
 
 ## Continuous Swarm Development
 
-This project uses continuous agent swarms with agent teams for parallel codebase improvement. 50 agents, 18 skills, GitHub-native tracking.
+This project uses continuous agent swarms with agent teams for parallel codebase improvement. 16 agents, 48 skills, GitHub-native tracking.
 
 ### Quick Start
 
@@ -369,63 +372,96 @@ This project uses continuous agent swarms with agent teams for parallel codebase
 /swarm all          # Start continuous swarm (agent teams)
 /swarm-status       # Check current state
 /swarm-report       # Daily summary
+/swarm-priorities   # Load roadmap priorities for strategic alignment
+/ci-watch <PR>      # Watch CI run until completion
+/agent-dashboard    # Show progress of running agents
 ```
 
-### Core Skills
+### Core Workflow Skills
 
 | Skill | Purpose |
 |-------|---------|
 | `/swarm` | Start continuous swarm with agent teams |
 | `/swarm-protocol` | Load behavioral rules (autonomy, messaging, learning) |
-| `/swarm-status` | Show PRs, issues, metrics, queue depth |
-| `/swarm-report` | Generate daily check-in summary |
+| `/swarm-priorities` | Load roadmap priorities and weight scout targets for strategic alignment |
 | `/coding-standards` | Load project coding standards |
-| `/queue-scout` | Launch broad multi-area scouts to find work |
-| `/scout` | Single-area deep dive (parser, lsp, dap, docs, tests, devex, security, deps, perf) |
-| `/find-issues` | Open-ended issue discovery across the codebase |
-| `/audit` | Deep audit of a specific crate |
-| `/compare` | Compare two approaches or implementations |
-| `/health-check` | Quick codebase health scan (stdout, no issues) |
-| `/green-merge` | Merge all passing PRs |
-| `/rebase-open` | Rebase conflicted PRs |
-| `/rebase-pr` | Rebase a single PR onto master |
-| `/verify-master-green` | Check master CI status, block if red |
-| `/verify` | Run fmt/clippy/test pipeline for a crate |
-| `/status-drift` | Fix computed metric drift |
-| `/bootstrap-agents` | Discover codebase, generate domain agents |
+| `/coding-standards` | Load project coding standards for builders and reviewers |
 
-### Scout & Review Skills
-
-| Skill | Purpose |
-|-------|---------|
-| `/parser-scout` | Scout parser error buckets for improvement opportunities |
-| `/dap-scout` | Scout DAP crates for test gaps |
-| `/security-scout` | Scout for security issues across codebase |
-| `/review-scope` | Review PR for scope creep and focus violations |
-| `/review-performance` | Review PR for performance issues |
-| `/review-security` | Review PR for security issues |
-| `/standards-check` | Review PR for coding standards compliance |
-| `/dead-code-check` | Find and report dead code |
-| `/dep-check` | Analyze dependency health, security, compliance |
-| `/dep-clean` | Remove unused dependencies |
-
-### PR/Worktree Skills
+### PR/Merge Skills
 
 | Skill | Purpose |
 |-------|---------|
 | `/pr-create` | Create a draft PR from current branch |
 | `/pr-cleanup` | Clean up branch for review |
 | `/pr-ready` | Mark a reviewed draft PR as ready for CI |
-| `/worktree-pr` | PR a worktree's changes (as draft) |
-| `/bulk-pr` | PR all worktrees with changes (as draft) |
-| `/salvage-worktrees` | Save dirty worktrees before cleanup |
-| `/cleanup-worktrees` | Remove merged/abandoned worktrees mid-cycle |
-| `/parser-fix` | TDD parser fix |
-| `/wave` | Launch parallel agent wave |
-| `/corpus-ratchet` | Corpus sweep and baseline update |
-| `/scout-report` | Write scout findings as GitHub issues (used by all scout skills) |
+| `/pr-respond` | Address PR review comments — read feedback, fix issues, push updates |
+| `/review-pr` | Review a single PR end-to-end and fix issues before marking it ready |
+| `/green-merge` | Drain green PRs sequentially (merge all passing PRs) |
+| `/rebase-open` | Rebase all open PRs onto current master |
+| `/rebase-pr` | Rebase a single PR onto master |
+| `/worktree-pr` | PR a worktree's changes (validate, branch, commit, push, PR) |
+| `/bulk-pr` | PR all worktrees with uncommitted changes |
 
-> **PR lifecycle**: Builder creates draft PR --> Review agent fixes issues --> `/pr-ready` marks ready --> CI triggers --> Merge
+### Scout/Explore Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/queue-scout` | Launch scouts across parser/LSP/DAP/security/test gaps |
+| `/scout` | Launch a focused scout for a specific area or crate |
+| `/find-issues` | Open-ended issue discovery across the codebase |
+| `/audit` | Deep audit of a specific crate |
+| `/compare` | Compare two approaches or implementations and write a trade-off analysis |
+| `/parser-scout` | Scout parser error buckets for improvement opportunities |
+| `/dap-scout` | Scout DAP crates for test gaps |
+| `/security-scout` | Scout for security issues across the codebase |
+| `/review-scope` | Review PR for scope creep and focus violations |
+| `/review-performance` | Review PR for performance issues |
+| `/review-security` | Review PR for security issues |
+| `/standards-check` | Review PR for coding standards compliance |
+| `/dead-code-check` | Find and report dead code |
+| `/dep-check` | Analyze dependency health, security, and compliance |
+| `/dep-clean` | Remove unused dependencies |
+| `/scout-report` | Write scout findings as a GitHub issue with structured template |
+| `/corpus-ratchet` | Run corpus sweep, compare baseline, update manifests |
+
+### CI/Status Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/ci-watch` | Watch a CI run until completion (non-blocking) |
+| `/swarm-status` | Show current swarm state — open PRs, issues, metrics, queue depth |
+| `/swarm-report` | Generate daily swarm summary for user check-in |
+| `/agent-dashboard` | Show progress of running agents by scanning worktrees and PR state |
+| `/health-check` | Quick codebase health scan across CI, PRs, tests, corpus, clippy, and worktrees |
+| `/status-drift` | Check and fix CURRENT_STATUS, corpus baseline, and CPAN manifest drift |
+| `/verify-master-green` | Check master CI status and block work if master is red |
+| `/verify` | Run fmt/clippy/test verification for a crate |
+
+### Lifecycle Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/cycle-transition` | Automate end-of-cycle and start-of-cycle transition work |
+| `/swarm-stop` | Emergency stop the swarm — save state and halt within 5 minutes |
+| `/swarm-wind-down` | Gracefully wind down — finish in-progress work, merge what's ready, clean up |
+| `/salvage-worktrees` | Stash or patch dirty worktrees before cleanup |
+| `/cleanup-worktrees` | Remove merged or abandoned worktrees mid-cycle |
+
+### Fix/Build Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/parser-fix` | TDD parser fix (failing test, fix, verify, PR) |
+| `/wave` | Launch a wave of parallel agents for codebase improvement |
+| `/bootstrap-agents` | Discover codebase and generate domain-specific swarm agents |
+
+### Release/Meta Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/changelog` | Generate a changelog entry for recent commits |
+
+> **PR lifecycle**: Builder creates a draft PR -> reviewer runs `/review-pr` or `/pr-respond` -> `/pr-ready` marks it ready -> CI triggers -> `/green-merge` lands it.
 
 ### Architecture
 
