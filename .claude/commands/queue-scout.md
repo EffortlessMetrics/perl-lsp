@@ -5,7 +5,7 @@ argument-hint: "[focus-area] e.g. 'parser', 'dap', 'issues', 'dead-code', 'all'"
 
 # Queue Scout
 
-Launch swarm-scout agents to find improvement slices. Focus: **$ARGUMENTS**
+Launch `scout` agents to find improvement slices. Focus: **$ARGUMENTS**
 
 ## Focus Areas
 
@@ -33,7 +33,7 @@ Launch swarm-scout agents to find improvement slices. Focus: **$ARGUMENTS**
 For each scout:
 ```text
 Agent(
-  subagent_type: "swarm-scout",
+  subagent_type: "scout",
   prompt: "Focus area: <specific target>. Find ONE actionable improvement. Write findings as GitHub issue via /scout-report.",
   model: "sonnet",
   run_in_background: true,
@@ -48,7 +48,7 @@ Each scout MUST write a GitHub issue via `/scout-report` before exiting. Agent o
 1. Collect GitHub issue numbers from scout output, not SLICE outputs.
 2. Review issues for overlapping file surfaces.
 3. If two issues overlap, keep the higher-impact one and defer the other.
-4. Feed non-overlapping issues to swarm-builder agents.
+4. Feed non-overlapping issues to `builder` workers.
 5. Update `.claude/swarm-state/swarm-queue.json` with active slices linked to issue numbers.
 
 ## Relationship to /scout

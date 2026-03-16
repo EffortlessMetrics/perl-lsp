@@ -25,11 +25,11 @@ Launch a focused exploration of **$ARGUMENTS** and produce GitHub issues for con
 
 1. Identify the focus area from `$ARGUMENTS` using the dispatch table above. If the argument does not match a known focus, treat it as a crate name and explore `crates/<argument>/`.
 
-2. Spawn one `swarm-scout` agent for the focus area:
+2. Spawn one `scout` agent for the focus area:
 
 ```text
 Agent(
-  subagent_type: "swarm-scout",
+  subagent_type: "scout",
   prompt: "
     Focus: <focus area>
     Paths: <paths from dispatch table>

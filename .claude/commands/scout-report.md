@@ -51,7 +51,7 @@ _How do we know this is done? Be concrete - test commands, metric thresholds, be
 - **Estimated size:** small / medium / large
 
 ---
-_Filed by swarm-scout agent._
+_Filed by scout agent._
 ISSUE_EOF
 )"
 ```

@@ -30,7 +30,7 @@ gh pr list --state open --json number,title,headRefName,mergeable,statusCheckRol
 ### 3. Classify each PR
 - **Green**: mergeable, no failing checks → merge
 - **Conflicted**: merge conflicts → skip (use `/rebase-open` first)
-- **Failing**: CI failures → skip (needs `/parser-fix` or swarm-fixer)
+- **Failing**: CI failures → skip (needs `/parser-fix` or `fixer`)
 - **Draft**: skip unless `--include-drafts`
 
 ### 4. Merge green PRs in batches

@@ -5,7 +5,7 @@ argument-hint: "[focus] e.g. 'all', 'bugs', 'tests', 'dead-code'"
 
 # Queue Scout
 
-Launch swarm-scout agents to find improvement slices. Focus: **$ARGUMENTS**
+Launch `scout` agents to find improvement slices. Focus: **$ARGUMENTS**
 
 ## `all` (default)
 
@@ -20,7 +20,7 @@ Launch 10-15 scouts across:
 
 ```
 Agent(
-  subagent_type: "swarm-scout",
+  subagent_type: "scout",
   prompt: "Focus area: <target>. Find ONE actionable improvement.",
   model: "sonnet",
   run_in_background: true,

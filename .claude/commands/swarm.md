@@ -121,6 +121,9 @@ Create an agent team with these 5 teammates. Use `TeamCreate` with specific name
 
 Each teammate fans out to subagents for actual parallelism. Net capacity is 20-40 parallel workers with only 5 coordination slots.
 
+The canonical teammate agent files live in `.claude/agents/README.md`:
+`scout`, `builder`, `reviewer`, `ops`, and `improver`.
+
 ### Team structure
 
 | Name | Role | Model | Subagent Strategy |

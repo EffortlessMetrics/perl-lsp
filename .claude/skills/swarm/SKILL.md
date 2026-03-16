@@ -94,6 +94,9 @@ Use `TeamCreate` then spawn 5 teammates. Each teammate's spawn prompt includes:
 4. Task tool reminders
 5. Metrics mandate
 
+The canonical teammate agent files live in `.claude/agents/README.md`:
+`scout`, `builder`, `reviewer`, `ops`, and `improver`.
+
 See `templates/teammate-prompt-template.md` for the standard prompt format.
 See `reference/team-structure.md` for full team layout and spawn prompts.
 

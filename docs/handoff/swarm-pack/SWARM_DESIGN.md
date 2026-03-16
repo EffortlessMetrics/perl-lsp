@@ -120,8 +120,6 @@ Hooks are registered in `.claude/settings.json` under `hooks.<EventType>`:
     "TaskCompleted": [...],
     "SubagentStart": [...],
     "SubagentStop": [...],
-    "WorktreeCreate": [...],
-    "WorktreeRemove": [...],
     "PreToolUse": [...],
     "SessionStart": [...]
   }
@@ -142,12 +140,15 @@ CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 | `PostToolUse` | `Edit\|Write\|NotebookEdit` | Auto-runs `cargo fmt` + `cargo check` on edited `.rs` files |
 | `TeammateIdle` | — | Tracks idle transitions, checks for unclaimed work |
 | `TaskCompleted` | — | Verifies deliverables exist (branch, PR, fmt clean) before marking done |
-| `SubagentStart` | `swarm-builder\|swarm-reviewer\|swarm-fixer` | Auto-injects coding standards reminder |
-| `SubagentStop` | `swarm-builder\|swarm-reviewer\|swarm-fixer` | Records worker teardown and handoff boundaries in metrics |
-| `WorktreeCreate` | — | Records new mutation lanes when worktree workers spin up |
-| `WorktreeRemove` | — | Records worktree cleanup when mutation lanes are torn down |
+| `SubagentStart` | `builder\|reviewer\|fixer\|validator\|bootstrapper\|pr-responder\|ops\|improver` | Auto-injects coding standards reminder |
+| `SubagentStop` | `builder\|reviewer\|fixer\|validator\|bootstrapper\|pr-responder\|ops\|improver` | Records worker teardown and handoff boundaries in metrics |
 | `PreToolUse` | `Bash` | Reads command from stdin JSON; blocks dangerous commands |
 | `SessionStart` | `compact` | Injects context refresh after conversation compaction |
+
+`WorktreeCreate` and `WorktreeRemove` are intentionally not registered by
+default. In Claude Code those hooks replace the default git worktree behavior,
+so they should only be used when the hook itself provisions or removes the
+working copy.
 
 ### Hook Design Principles
 
