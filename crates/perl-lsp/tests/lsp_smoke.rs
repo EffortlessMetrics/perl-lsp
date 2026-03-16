@@ -115,7 +115,7 @@ fn create_server() -> LspServer {
 /// NOTE: Does NOT send `initialized` notification to avoid triggering
 /// workspace indexing and stdout notifications that interfere with test output.
 /// For tests that need full initialization, use `initialize_server_full()`.
-fn initialize_server(server: &mut LspServer) -> Result<Value, Box<dyn std::error::Error>> {
+fn initialize_server(server: &LspServer) -> Result<Value, Box<dyn std::error::Error>> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -146,7 +146,7 @@ fn initialize_server(server: &mut LspServer) -> Result<Value, Box<dyn std::error
 
 /// Send initialize request AND initialized notification
 /// Use when you need full server functionality including workspace indexing
-fn initialize_server_full(server: &mut LspServer) -> Result<Value, Box<dyn std::error::Error>> {
+fn initialize_server_full(server: &LspServer) -> Result<Value, Box<dyn std::error::Error>> {
     let result = initialize_server(server)?;
 
     // Send initialized notification
@@ -162,7 +162,7 @@ fn initialize_server_full(server: &mut LspServer) -> Result<Value, Box<dyn std::
 }
 
 /// Open a document in the server
-fn open_document(server: &mut LspServer, uri: &str, content: &str) {
+fn open_document(server: &LspServer, uri: &str, content: &str) {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
@@ -180,7 +180,7 @@ fn open_document(server: &mut LspServer, uri: &str, content: &str) {
 }
 
 /// Send a request and get the result
-fn send_request(server: &mut LspServer, id: i32, method: &str, params: Value) -> Option<Value> {
+fn send_request(server: &LspServer, id: i32, method: &str, params: Value) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(id)),
@@ -196,7 +196,7 @@ fn send_request(server: &mut LspServer, id: i32, method: &str, params: Value) ->
 }
 
 /// Shutdown the server gracefully
-fn shutdown_server(server: &mut LspServer) {
+fn shutdown_server(server: &LspServer) {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(999)),
@@ -226,8 +226,8 @@ fn shutdown_server(server: &mut LspServer) {
 /// - Core providers are advertised (hover, completion, definition)
 #[test]
 fn smoke_server_initialization_and_capabilities() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let init_result = initialize_server(&mut server)?;
+    let server = create_server();
+    let init_result = initialize_server(&server)?;
 
     // Verify response structure
     let caps = &init_result["capabilities"];
@@ -254,15 +254,15 @@ fn smoke_server_initialization_and_capabilities() -> Result<(), Box<dyn std::err
         "documentSymbolProvider must be advertised"
     );
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
 /// Smoke test: Server rejects double initialization
 #[test]
 fn smoke_double_initialization_rejected() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
 
     // Try to initialize again
     let request = JsonRpcRequest {
@@ -279,7 +279,7 @@ fn smoke_double_initialization_rejected() -> Result<(), Box<dyn std::error::Erro
     let response = server.handle_request(request).ok_or("Should return response")?;
     assert!(response.error.is_some(), "Second initialize should return error");
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -290,14 +290,14 @@ fn smoke_double_initialization_rejected() -> Result<(), Box<dyn std::error::Erro
 /// Smoke test: Document open is accepted
 #[test]
 fn smoke_document_open() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
 
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Verify document is tracked by requesting hover (should not fail)
     let result = send_request(
-        &mut server,
+        &server,
         10,
         "textDocument/hover",
         json!({
@@ -309,17 +309,17 @@ fn smoke_document_open() -> Result<(), Box<dyn std::error::Error>> {
     // Result can be null but should not error
     assert!(result.is_some(), "Hover should return a response (even if null)");
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
 /// Smoke test: Document change is accepted
 #[test]
 fn smoke_document_change() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
 
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Change the document
     let change_request = JsonRpcRequest {
@@ -340,7 +340,7 @@ fn smoke_document_change() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verify server still responds
     let result = send_request(
-        &mut server,
+        &server,
         11,
         "textDocument/hover",
         json!({
@@ -351,7 +351,7 @@ fn smoke_document_change() -> Result<(), Box<dyn std::error::Error>> {
 
     assert!(result.is_some(), "Server should still respond after document change");
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -362,12 +362,12 @@ fn smoke_document_change() -> Result<(), Box<dyn std::error::Error>> {
 /// Smoke test: Hover returns valid response
 #[test]
 fn smoke_hover_response_structure() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
-        &mut server,
+        &server,
         20,
         "textDocument/hover",
         json!({
@@ -388,19 +388,19 @@ fn smoke_hover_response_structure() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
 /// Smoke test: Hover on subroutine name
 #[test]
 fn smoke_hover_on_subroutine() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
-        &mut server,
+        &server,
         21,
         "textDocument/hover",
         json!({
@@ -411,7 +411,7 @@ fn smoke_hover_on_subroutine() -> Result<(), Box<dyn std::error::Error>> {
 
     assert!(result.is_some(), "Hover on subroutine should return response");
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -422,12 +422,12 @@ fn smoke_hover_on_subroutine() -> Result<(), Box<dyn std::error::Error>> {
 /// Smoke test: Completion returns items
 #[test]
 fn smoke_completion_returns_items() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
-        &mut server,
+        &server,
         30,
         "textDocument/completion",
         json!({
@@ -454,21 +454,21 @@ fn smoke_completion_returns_items() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
 /// Smoke test: Completion for builtins
 #[test]
 fn smoke_completion_builtins() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
 
     // Open a file with partial builtin
-    open_document(&mut server, "file:///builtin.pl", "pri");
+    open_document(&server, "file:///builtin.pl", "pri");
 
     let result = send_request(
-        &mut server,
+        &server,
         31,
         "textDocument/completion",
         json!({
@@ -494,7 +494,7 @@ fn smoke_completion_builtins() -> Result<(), Box<dyn std::error::Error>> {
         assert!(has_print, "Completion should include 'print' for 'pri' prefix");
     }
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -505,13 +505,13 @@ fn smoke_completion_builtins() -> Result<(), Box<dyn std::error::Error>> {
 /// Smoke test: Definition returns locations
 #[test]
 fn smoke_definition_returns_locations() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Request definition for say_hello call
     let result = send_request(
-        &mut server,
+        &server,
         40,
         "textDocument/definition",
         json!({
@@ -536,7 +536,7 @@ fn smoke_definition_returns_locations() -> Result<(), Box<dyn std::error::Error>
         }
     }
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -547,12 +547,12 @@ fn smoke_definition_returns_locations() -> Result<(), Box<dyn std::error::Error>
 /// Smoke test: Document symbols returns symbols
 #[test]
 fn smoke_document_symbols() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
-        &mut server,
+        &server,
         50,
         "textDocument/documentSymbol",
         json!({
@@ -587,7 +587,7 @@ fn smoke_document_symbols() -> Result<(), Box<dyn std::error::Error>> {
         names
     );
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -598,12 +598,12 @@ fn smoke_document_symbols() -> Result<(), Box<dyn std::error::Error>> {
 /// Smoke test: References returns locations
 #[test]
 fn smoke_find_references() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
-        &mut server,
+        &server,
         60,
         "textDocument/references",
         json!({
@@ -624,7 +624,7 @@ fn smoke_find_references() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -635,12 +635,12 @@ fn smoke_find_references() -> Result<(), Box<dyn std::error::Error>> {
 /// Smoke test: Folding ranges returns ranges
 #[test]
 fn smoke_folding_ranges() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     let result = send_request(
-        &mut server,
+        &server,
         70,
         "textDocument/foldingRange",
         json!({
@@ -658,7 +658,7 @@ fn smoke_folding_ranges() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -669,13 +669,13 @@ fn smoke_folding_ranges() -> Result<(), Box<dyn std::error::Error>> {
 /// Smoke test: Workspace symbol search
 #[test]
 fn smoke_workspace_symbols() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
-    open_document(&mut server, "file:///module.pm", FIXTURE_MODULE);
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    open_document(&server, "file:///module.pm", FIXTURE_MODULE);
 
     let result = send_request(
-        &mut server,
+        &server,
         80,
         "workspace/symbol",
         json!({
@@ -694,7 +694,7 @@ fn smoke_workspace_symbols() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -705,11 +705,11 @@ fn smoke_workspace_symbols() -> Result<(), Box<dyn std::error::Error>> {
 /// Smoke test: Server handles unknown method gracefully
 #[test]
 fn smoke_unknown_method_error() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
 
     let result = send_request(
-        &mut server,
+        &server,
         90,
         "textDocument/unknownMethod",
         json!({
@@ -722,7 +722,7 @@ fn smoke_unknown_method_error() -> Result<(), Box<dyn std::error::Error>> {
 
     // Server should still be responsive
     let hover_result = send_request(
-        &mut server,
+        &server,
         91,
         "textDocument/hover",
         json!({
@@ -732,19 +732,19 @@ fn smoke_unknown_method_error() -> Result<(), Box<dyn std::error::Error>> {
     );
     assert!(hover_result.is_some(), "Server should still respond after error");
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
 /// Smoke test: Server handles request for non-existent document
 #[test]
 fn smoke_nonexistent_document() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
 
     // Don't open any document, just request hover
     let result = send_request(
-        &mut server,
+        &server,
         92,
         "textDocument/hover",
         json!({
@@ -756,7 +756,7 @@ fn smoke_nonexistent_document() -> Result<(), Box<dyn std::error::Error>> {
     // Should return something (null is acceptable)
     assert!(result.is_some(), "Should return response for non-existent document");
 
-    shutdown_server(&mut server);
+    shutdown_server(&server);
     Ok(())
 }
 
@@ -767,13 +767,13 @@ fn smoke_nonexistent_document() -> Result<(), Box<dyn std::error::Error>> {
 /// Smoke test: Graceful shutdown
 #[test]
 fn smoke_graceful_shutdown() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_server();
-    let _ = initialize_server_full(&mut server)?;
-    open_document(&mut server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
+    let server = create_server();
+    let _ = initialize_server_full(&server)?;
+    open_document(&server, "file:///test.pl", FIXTURE_SIMPLE_SUB);
 
     // Make some requests
     let _ = send_request(
-        &mut server,
+        &server,
         100,
         "textDocument/hover",
         json!({

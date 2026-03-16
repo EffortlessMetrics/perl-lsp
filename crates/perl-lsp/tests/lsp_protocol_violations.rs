@@ -15,11 +15,11 @@ use common::{
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_missing_jsonrpc_version() {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Send request without jsonrpc field
     send_request(
-        &mut server,
+        &server,
         json!({
             "id": 1,
             "method": "initialize",
@@ -27,18 +27,18 @@ fn test_missing_jsonrpc_version() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
     assert_eq!(response["error"]["code"], -32600); // Invalid Request
 }
 
 #[test]
 fn test_wrong_jsonrpc_version() {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Send request with wrong version
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "1.0",
             "id": 1,
@@ -47,18 +47,18 @@ fn test_wrong_jsonrpc_version() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
 }
 
 #[test]
 fn test_notification_with_id() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Notifications should not have an id field
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,  // Invalid for notification
@@ -73,11 +73,11 @@ fn test_notification_with_id() {
 
 #[test]
 fn test_request_without_id() {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Requests must have an id field
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -95,12 +95,12 @@ fn test_request_without_id() {
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_duplicate_request_ids() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send two requests with same ID
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 100,
@@ -113,7 +113,7 @@ fn test_duplicate_request_ids() {
     );
 
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 100,  // Duplicate ID
@@ -126,15 +126,15 @@ fn test_duplicate_request_ids() {
     );
 
     // Should handle both, but may cause confusion
-    let response1 = read_response(&mut server);
-    let response2 = read_response(&mut server);
+    let response1 = read_response(&server);
+    let response2 = read_response(&server);
     assert_eq!(response1["id"], 100);
     assert_eq!(response2["id"], 100);
 }
 
 #[test]
 fn test_invalid_content_length_header() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Send malformed content-length
     server
@@ -149,7 +149,7 @@ fn test_invalid_content_length_header() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn test_mismatched_content_length() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Content-Length doesn't match actual content
     let content = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#;
@@ -167,7 +167,7 @@ fn test_mismatched_content_length() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_missing_content_length_header() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Send without Content-Length
     server
@@ -182,7 +182,7 @@ fn test_missing_content_length_header() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn test_additional_headers() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Send with additional headers
     let content = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#;
@@ -196,15 +196,15 @@ fn test_additional_headers() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     server.stdin_writer().flush()?;
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["id"].is_number());
     Ok(())
 }
 
 #[test]
 fn test_invalid_utf8_in_message() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try to send invalid UTF-8
     let mut invalid_content = Vec::from(b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"file:///test.pl\",\"languageId\":\"perl\",\"version\":1,\"text\":\"");
@@ -226,11 +226,11 @@ fn test_invalid_utf8_in_message() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_request_before_initialization() {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Try to use server before initialization
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -242,21 +242,21 @@ fn test_request_before_initialization() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
     assert_eq!(response["error"]["code"], -32002); // Server not initialized
 }
 
 #[test]
 fn test_double_initialization() {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Initialize once
-    initialize_lsp(&mut server);
+    initialize_lsp(&server);
 
     // Try to initialize again
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -269,14 +269,14 @@ fn test_double_initialization() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
 }
 
 #[test]
 fn test_invalid_method_name_format() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Test various invalid method names
     let invalid_methods = [
@@ -294,7 +294,7 @@ fn test_invalid_method_name_format() {
     for (i, method) in invalid_methods.iter().enumerate() {
         // Fix: capture the response returned by send_request
         let response = send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i + 100,
@@ -315,12 +315,12 @@ fn test_invalid_method_name_format() {
 
 #[test]
 fn test_params_type_violations() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Params should be object or array, not scalar
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -329,12 +329,12 @@ fn test_params_type_violations() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
 
     // Number params
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -343,14 +343,14 @@ fn test_params_type_violations() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
 }
 
 #[test]
 fn test_circular_json_reference() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create a JSON string that would cause circular reference if parsed incorrectly
     let circular_json = r#"{
@@ -367,7 +367,7 @@ fn test_circular_json_reference() -> Result<(), Box<dyn std::error::Error>> {
         }
     }"#;
 
-    send_request(&mut server, serde_json::from_str(circular_json)?);
+    send_request(&server, serde_json::from_str(circular_json)?);
 
     // Should handle without stack overflow
     std::thread::sleep(Duration::from_millis(100));
@@ -376,8 +376,8 @@ fn test_circular_json_reference() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_extremely_nested_json() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create deeply nested structure
     let mut nested = json!(null);
@@ -386,7 +386,7 @@ fn test_extremely_nested_json() {
     }
 
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -399,18 +399,18 @@ fn test_extremely_nested_json() {
     );
 
     // Should handle without stack overflow
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object() || response["result"].is_object());
 }
 
 #[test]
 fn test_null_values_in_required_fields() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send nulls where objects are expected
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -422,18 +422,18 @@ fn test_null_values_in_required_fields() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
 }
 
 #[test]
 fn test_wrong_type_for_position() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Position with wrong types
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -448,17 +448,17 @@ fn test_wrong_type_for_position() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
 }
 
 #[test]
 fn test_negative_positions() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -475,7 +475,7 @@ fn test_negative_positions() {
 
     // Negative line and character
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -487,19 +487,19 @@ fn test_negative_positions() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     // Should handle gracefully
     assert!(response.is_object());
 }
 
 #[test]
 fn test_float_positions() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Positions with floating point numbers
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -511,15 +511,15 @@ fn test_float_positions() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     // Should truncate or error
     assert!(response.is_object());
 }
 
 #[test]
 fn test_invalid_uri_schemes() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let invalid_uris = vec![
         "not-a-uri",
@@ -534,7 +534,7 @@ fn test_invalid_uri_schemes() {
 
     for uri in invalid_uris {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -556,12 +556,12 @@ fn test_invalid_uri_schemes() {
 
 #[test]
 fn test_response_without_request() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send a response without a corresponding request
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 999,
@@ -576,7 +576,7 @@ fn test_response_without_request() {
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_batch_request_violations() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Empty batch
     server.stdin_writer().write_all(b"Content-Length: 2\r\n\r\n[]")?;
@@ -604,7 +604,7 @@ fn test_batch_request_violations() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_incomplete_message() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Send partial message
     let content = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}"#; // Missing closing brace
@@ -621,14 +621,14 @@ fn test_incomplete_message() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_mixed_protocol_versions() {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Initialize with 2.0
-    initialize_lsp(&mut server);
+    initialize_lsp(&server);
 
     // Then send 1.0 style request
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "1.0",
             "id": 2,
@@ -637,17 +637,17 @@ fn test_mixed_protocol_versions() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
 }
 
 #[test]
 fn test_method_result_and_error() {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Response with both result and error (invalid)
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,

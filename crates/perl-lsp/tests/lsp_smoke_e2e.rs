@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
 fn send_request_with_timeout(
-    server: &mut common::LspServer,
+    server: &common::LspServer,
     id: i64,
     method: &str,
     params: Value,
@@ -41,7 +41,7 @@ fn line_col(source: &str, target_line: usize, needle: &str) -> Result<(u32, u32)
 
 #[test]
 fn lsp_smoke_e2e_stdio_flow() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = common::start_lsp_server();
+    let server = common::start_lsp_server();
     let timeout = Duration::from_secs(2);
     let init_timeout = common::timeout_scaler::TimeoutProfile::Initialization.timeout();
 
@@ -56,7 +56,7 @@ my $value = gre
 "#;
 
     let init_response = send_request_with_timeout(
-        &mut server,
+        &server,
         1,
         "initialize",
         json!({
@@ -80,7 +80,7 @@ my $value = gre
     assert!(init_response.get("error").is_none(), "initialize returned error: {init_response:#}");
 
     common::send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "initialized",
@@ -89,7 +89,7 @@ my $value = gre
     );
 
     common::send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -116,7 +116,7 @@ my $value = gre
         .ok_or("completion token missing in fixture")?;
 
     let completion_response = send_request_with_timeout(
-        &mut server,
+        &server,
         2,
         "textDocument/completion",
         json!({
@@ -137,7 +137,7 @@ my $value = gre
 
     let (hover_line, hover_col) = line_col(fixture, 4, "$greeting")?;
     let hover_response = send_request_with_timeout(
-        &mut server,
+        &server,
         3,
         "textDocument/hover",
         json!({
@@ -154,7 +154,7 @@ my $value = gre
 
     let (def_line, def_col) = line_col(fixture, 5, "greet()")?;
     let definition_response = send_request_with_timeout(
-        &mut server,
+        &server,
         4,
         "textDocument/definition",
         json!({
@@ -184,7 +184,7 @@ my $result = greet();
 my $value = gre
 "#;
     common::send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -209,7 +209,7 @@ my $value = gre
         .ok_or("v2 completion token missing")?;
 
     let v2_completion_response = send_request_with_timeout(
-        &mut server,
+        &server,
         5,
         "textDocument/completion",
         json!({
@@ -231,7 +231,7 @@ my $value = gre
     // ── Step 6: textDocument/references ─────────────────────────────────
     let (ref_line, ref_col) = line_col(fixture_v2, 4, "$greeting")?;
     let references_response = send_request_with_timeout(
-        &mut server,
+        &server,
         6,
         "textDocument/references",
         json!({
@@ -253,7 +253,7 @@ my $value = gre
 
     // ── Step 7: textDocument/documentSymbol ─────────────────────────────
     let doc_symbol_response = send_request_with_timeout(
-        &mut server,
+        &server,
         7,
         "textDocument/documentSymbol",
         json!({
@@ -275,7 +275,7 @@ my $value = gre
 
     // ── Step 8: workspace/symbol ────────────────────────────────────────
     let ws_symbol_response = send_request_with_timeout(
-        &mut server,
+        &server,
         8,
         "workspace/symbol",
         json!({
@@ -297,7 +297,7 @@ my $value = gre
     // ── Step 9: $/cancelRequest for bogus ID, then valid request ────────
     // Send cancel for a request ID that was never issued (should not crash)
     common::send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -309,7 +309,7 @@ my $value = gre
 
     // Now send a valid request to confirm the server is still healthy
     let post_cancel_response = send_request_with_timeout(
-        &mut server,
+        &server,
         9,
         "textDocument/hover",
         json!({
@@ -325,13 +325,13 @@ my $value = gre
 
     // ── Shutdown ────────────────────────────────────────────────────────
     let shutdown_response =
-        send_request_with_timeout(&mut server, 10, "shutdown", json!(null), timeout)?;
+        send_request_with_timeout(&server, 10, "shutdown", json!(null), timeout)?;
     assert!(
         shutdown_response.get("error").is_none(),
         "shutdown returned error: {shutdown_response:#}"
     );
     common::send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "exit",
@@ -341,13 +341,13 @@ my $value = gre
 
     let wait_deadline = Instant::now() + Duration::from_secs(2);
     loop {
-        if let Some(status) = server.process.try_wait()? {
+        if let Some(status) = server.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait()? {
             assert!(status.success(), "perl-lsp process exited with non-zero status: {status}");
             break;
         }
 
         if Instant::now() >= wait_deadline {
-            let _ = server.process.kill();
+            let _ = server.process.lock().unwrap_or_else(|e| e.into_inner()).kill();
             return Err("perl-lsp did not exit cleanly within timeout".into());
         }
 

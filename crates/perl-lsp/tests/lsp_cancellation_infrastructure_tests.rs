@@ -39,8 +39,8 @@ struct InfrastructureTestFixture {
 
 impl InfrastructureTestFixture {
     fn new() -> Self {
-        let mut server = start_lsp_server();
-        initialize_lsp(&mut server);
+        let server = start_lsp_server();
+        initialize_lsp(&server);
 
         // Initialize monitoring infrastructure
         let resource_monitor = ResourceMonitor::new();
@@ -48,18 +48,18 @@ impl InfrastructureTestFixture {
         let integration_validator = IntegrationValidator::new();
 
         // Setup test environment for infrastructure quality testing
-        setup_infrastructure_test_environment(&mut server);
+        setup_infrastructure_test_environment(&server);
 
         // Wait for infrastructure to stabilize with adaptive timeout
         let adaptive_timeout = adaptive_timeout();
-        drain_until_quiet(&mut server, Duration::from_millis(800), adaptive_timeout);
+        drain_until_quiet(&server, Duration::from_millis(800), adaptive_timeout);
 
         Self { server, resource_monitor, thread_safety_monitor, integration_validator }
     }
 }
 
 /// Setup test environment for infrastructure quality testing
-fn setup_infrastructure_test_environment(server: &mut LspServer) {
+fn setup_infrastructure_test_environment(server: &LspServer) {
     // Create test files for infrastructure testing
     let test_files = vec![
         (
@@ -441,7 +441,7 @@ impl IntegrationValidator {
         }
     }
 
-    fn validate_integration(&self, server: &mut LspServer) -> IntegrationValidationResult {
+    fn validate_integration(&self, server: &LspServer) -> IntegrationValidationResult {
         let mut test_results = Vec::new();
 
         // Run LSP compatibility tests
@@ -465,7 +465,7 @@ impl IntegrationValidator {
 
     fn run_compatibility_test(
         &self,
-        server: &mut LspServer,
+        server: &LspServer,
         test: &LspCompatibilityTest,
     ) -> CompatibilityTestResult {
         let test_start = Instant::now();
@@ -533,7 +533,7 @@ impl PerformanceRegressionDetector {
         Self { baseline_measurements: HashMap::new() }
     }
 
-    fn check_for_regressions(&self, server: &mut LspServer) -> PerformanceRegressionResult {
+    fn check_for_regressions(&self, server: &LspServer) -> PerformanceRegressionResult {
         let mut regressions = Vec::new();
 
         // Test basic LSP operations for performance regressions
@@ -1626,11 +1626,10 @@ fn test_lsp_infrastructure_integration_ac11() {
         return;
     }
 
-    let mut fixture = InfrastructureTestFixture::new();
+    let fixture = InfrastructureTestFixture::new();
 
     // Run comprehensive integration validation
-    let integration_result =
-        fixture.integration_validator.validate_integration(&mut fixture.server);
+    let integration_result = fixture.integration_validator.validate_integration(&fixture.server);
 
     println!("LSP Infrastructure Integration Test Results:");
 
@@ -1701,16 +1700,16 @@ fn test_lsp_infrastructure_integration_ac11() {
     );
 
     // Test integration with existing LSP behavioral patterns
-    test_existing_lsp_behavioral_integration(&mut fixture.server);
+    test_existing_lsp_behavioral_integration(&fixture.server);
 
     // Test integration with existing LSP test utilities
-    test_existing_lsp_utilities_integration(&mut fixture.server);
+    test_existing_lsp_utilities_integration(&fixture.server);
 
     println!("LSP infrastructure integration validation completed successfully");
 }
 
 /// Test integration with existing LSP behavioral patterns
-fn test_existing_lsp_behavioral_integration(server: &mut LspServer) {
+fn test_existing_lsp_behavioral_integration(server: &LspServer) {
     println!("Testing integration with existing LSP behavioral patterns:");
 
     // Test that existing LSP behavioral tests still pass with cancellation infrastructure
@@ -1774,7 +1773,7 @@ fn test_existing_lsp_behavioral_integration(server: &mut LspServer) {
 }
 
 /// Test integration with existing LSP test utilities
-fn test_existing_lsp_utilities_integration(server: &mut LspServer) {
+fn test_existing_lsp_utilities_integration(server: &LspServer) {
     println!("Testing integration with existing LSP test utilities:");
 
     // Test that existing utility functions work correctly
@@ -1862,7 +1861,7 @@ fn test_lsp_regression_prevention_ac11() {
         return;
     }
 
-    let mut fixture = InfrastructureTestFixture::new();
+    let fixture = InfrastructureTestFixture::new();
 
     // Test that existing LSP functionality remains unaffected by cancellation infrastructure
     // Note: Skip initialize test since the server was already initialized in fixture creation
@@ -1907,7 +1906,7 @@ fn test_lsp_regression_prevention_ac11() {
         let test_start = Instant::now();
 
         let response = send_request(
-            &mut fixture.server,
+            &fixture.server,
             json!({
                 "jsonrpc": "2.0",
                 "method": test_case.method,
@@ -2017,7 +2016,7 @@ impl Drop for InfrastructureTestFixture {
         );
 
         // Graceful server shutdown
-        shutdown_and_exit(&mut self.server);
+        shutdown_and_exit(&self.server);
 
         println!("Infrastructure quality test fixture cleaned up successfully");
     }

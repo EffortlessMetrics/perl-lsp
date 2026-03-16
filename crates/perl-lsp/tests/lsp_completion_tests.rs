@@ -7,13 +7,13 @@ use common::{completion_items, initialize_lsp, send_notification, send_request, 
 /// Test basic variable completion
 #[test]
 fn test_scalar_variable_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open a document with scalar variables
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -36,7 +36,7 @@ $cou
 
     // Request completion at position after "$cou"
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -65,12 +65,12 @@ $cou
 /// Test array variable completion
 #[test]
 fn test_array_variable_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -92,7 +92,7 @@ my @data = qw(a b c);
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -119,12 +119,12 @@ my @data = qw(a b c);
 /// Test hash variable completion
 #[test]
 fn test_hash_variable_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -146,7 +146,7 @@ my %settings = ();
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -174,12 +174,12 @@ my %settings = ();
 /// Test function completion
 #[test]
 fn test_function_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -207,7 +207,7 @@ proc
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -235,12 +235,12 @@ proc
 /// Test built-in function completion
 #[test]
 fn test_builtin_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -256,7 +256,7 @@ fn test_builtin_completion() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -284,12 +284,12 @@ fn test_builtin_completion() -> Result<(), Box<dyn std::error::Error>> {
 /// Test keyword completion
 #[test]
 fn test_keyword_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -305,7 +305,7 @@ fn test_keyword_completion() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -340,12 +340,12 @@ fn test_keyword_completion() -> Result<(), Box<dyn std::error::Error>> {
 /// Test special variable completion
 #[test]
 fn test_special_variable_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -361,7 +361,7 @@ fn test_special_variable_completion() -> Result<(), Box<dyn std::error::Error>> 
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -402,12 +402,12 @@ fn test_special_variable_completion() -> Result<(), Box<dyn std::error::Error>> 
 /// Test method completion after ->
 #[test]
 fn test_method_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -423,7 +423,7 @@ fn test_method_completion() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -458,12 +458,12 @@ fn test_method_completion() -> Result<(), Box<dyn std::error::Error>> {
 /// Test completion in mixed context
 #[test]
 fn test_mixed_context_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -489,7 +489,7 @@ va
 
     // Request completion at position after "va"
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -519,12 +519,12 @@ va
 /// Test completion details and documentation
 #[test]
 fn test_completion_details() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -540,7 +540,7 @@ fn test_completion_details() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -575,12 +575,12 @@ fn test_completion_details() -> Result<(), Box<dyn std::error::Error>> {
 /// Test completion with empty prefix (should show all relevant items)
 #[test]
 fn test_empty_prefix_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -596,7 +596,7 @@ fn test_empty_prefix_completion() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -627,12 +627,12 @@ fn test_empty_prefix_completion() -> Result<(), Box<dyn std::error::Error>> {
 /// Test that completion doesn't trigger in comments
 #[test]
 fn test_no_completion_in_comments() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -648,7 +648,7 @@ fn test_no_completion_in_comments() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -668,12 +668,12 @@ fn test_no_completion_in_comments() -> Result<(), Box<dyn std::error::Error>> {
 /// Test completion with package context
 #[test]
 fn test_package_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -697,7 +697,7 @@ MyModule::"#
 
     // Test package member completion (qualified name after ::)
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -730,12 +730,12 @@ MyModule::"#
 /// Test package completion for known core modules outside the workspace index
 #[test]
 fn test_core_module_package_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -753,7 +753,7 @@ List::Util::"#
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -792,12 +792,12 @@ List::Util::"#
 #[test]
 fn test_core_module_package_completion_additional_module() -> Result<(), Box<dyn std::error::Error>>
 {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -815,7 +815,7 @@ Cwd::"#
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -836,12 +836,12 @@ Cwd::"#
 /// Test snippet expansion in completions
 #[test]
 fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -857,7 +857,7 @@ fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -915,12 +915,12 @@ fn test_snippet_completion() -> Result<(), Box<dyn std::error::Error>> {
 /// Test array and hash element access completion
 #[test]
 fn test_element_access_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -940,7 +940,7 @@ $arr"#
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -968,12 +968,12 @@ $arr"#
 /// Test completion filtering and ranking
 #[test]
 fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -989,7 +989,7 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -1018,14 +1018,14 @@ fn test_completion_ranking() -> Result<(), Box<dyn std::error::Error>> {
 /// Test completion with incremental typing
 #[test]
 fn test_incremental_completion() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
 
     // Initial document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -1047,7 +1047,7 @@ $p"#
 
     // First completion request with "$p"
     let response1 = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -1064,7 +1064,7 @@ $p"#
 
     // Update document to narrow down
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -1087,7 +1087,7 @@ $pre"#
 
     // Second completion request with "$pre"
     let response2 = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -1104,7 +1104,7 @@ $pre"#
 
     // Update to be more specific
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -1127,7 +1127,7 @@ $prefi"#
 
     // Third completion request with "$prefi"
     let response3 = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",

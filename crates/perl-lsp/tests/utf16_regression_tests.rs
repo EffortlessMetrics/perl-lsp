@@ -113,8 +113,8 @@ fn extract_definition_locations(response: &serde_json::Value) -> Vec<(String, u3
 /// - '=' is at position 13
 #[test]
 fn test_utf16_emoji_position_handling() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Code with emoji in variable name
     // Line 0: "my $emoji_🎉 = 1;"
@@ -131,7 +131,7 @@ fn test_utf16_emoji_position_handling() {
     let uri = "file:///test_emoji.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -154,7 +154,7 @@ fn test_utf16_emoji_position_handling() {
 
     // Request hover at $after (line 1, position 3 in UTF-16)
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",
@@ -219,8 +219,8 @@ fn test_utf16_emoji_position_handling() {
 /// - Positions after "日本語" would be off by +6 (9 bytes - 3 UTF-16 units)
 #[test]
 fn test_utf16_cjk_position_handling() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Code with CJK variable name
     // Line 0: "my $日本語 = 'hello';"
@@ -238,7 +238,7 @@ fn test_utf16_cjk_position_handling() {
     let uri = "file:///test_cjk.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -268,7 +268,7 @@ fn test_utf16_cjk_position_handling() {
     // Request hover at $result (line 1, position 3)
     let expected_result_start = utf16_len("my "); // 3
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",
@@ -302,7 +302,7 @@ fn test_utf16_cjk_position_handling() {
     let expected_cjk_ref_start = utf16_len(prefix_to_cjk_ref); // 13
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/definition",
@@ -355,8 +355,8 @@ fn test_utf16_cjk_position_handling() {
 /// Total: 12 UTF-16 units, 18 bytes
 #[test]
 fn test_utf16_mixed_content_position_handling() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Code with mixed Unicode content
     // We'll put a variable AFTER the mixed content string to verify positions
@@ -366,7 +366,7 @@ my $length = length($greeting);
     let uri = "file:///test_mixed.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -392,7 +392,7 @@ my $length = length($greeting);
     // Request hover at $length on line 1
     let expected_length_start = utf16_len("my "); // 3
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",
@@ -422,7 +422,7 @@ my $length = length($greeting);
     // Request hover at $greeting on line 0 - this is BEFORE the mixed content in the string
     // Position: "my " = 3, then "$greeting" starts at 3
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",
@@ -452,7 +452,7 @@ my $length = length($greeting);
 
     // Just verify this doesn't panic or return garbage positions
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",

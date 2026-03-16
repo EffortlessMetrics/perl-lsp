@@ -22,8 +22,8 @@ const DIST_LIST_PATH: &str = ".ci/cpan-top-1000-distributions.txt";
 const CPAN_MANIFEST_PATH: &str = ".ci/cpan-corpus-manifest.txt";
 /// Default install target directory
 const CPAN_INSTALL_DIR: &str = "target/cpan-corpus";
-/// MetaCPAN API endpoint for release search
-const METACPAN_API: &str = "https://fastapi.metacpan.org/v1/release/_search";
+/// MetaCPAN API endpoint for distribution search (sorted by river.immediate)
+const METACPAN_API: &str = "https://fastapi.metacpan.org/v1/distribution/_search";
 
 /// Configuration for cpan-corpus sub-commands
 #[derive(Debug, Clone)]
@@ -73,7 +73,7 @@ struct MetaCpanHit {
 
 #[derive(Deserialize)]
 struct MetaCpanRelease {
-    distribution: String,
+    name: String,
 }
 
 // --------------------------------------------------------------------------
@@ -88,9 +88,8 @@ pub fn fetch_list(config: &CpanCorpusConfig) -> Result<()> {
     let query_body = serde_json::json!({
         "size": config.top_n,
         "query": { "match_all": {} },
-        "sort": [{ "stat.dependents": { "order": "desc" } }],
-        "_source": ["distribution"],
-        "collapse": { "field": "distribution" }
+        "sort": [{ "river.immediate": { "order": "desc" } }],
+        "_source": ["name"]
     });
 
     let output = Command::new("curl")
@@ -116,7 +115,7 @@ pub fn fetch_list(config: &CpanCorpusConfig) -> Result<()> {
         serde_json::from_slice(&output.stdout).context("Failed to parse MetaCPAN response")?;
 
     let distributions: Vec<&str> =
-        response.hits.hits.iter().map(|h| h._source.distribution.as_str()).collect();
+        response.hits.hits.iter().map(|h| h._source.name.as_str()).collect();
 
     println!("Got {} distributions from MetaCPAN", distributions.len());
 

@@ -13,13 +13,13 @@ use common::{completion_items, initialize_lsp, send_notification, send_request, 
 /// functions from other files in the workspace that have been indexed.
 #[test]
 fn test_completion_cross_file_function() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Index a module file with a function
     let module_uri = "file:///workspace/EmailUtils.pm";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -51,7 +51,7 @@ sub parse_email_header {
     // Now open a different file and request completion
     let script_uri = "file:///workspace/script.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -73,7 +73,7 @@ vali
 
     // Request completion at position after "vali"
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -101,13 +101,13 @@ vali
 /// Test cross-file package member completion with qualified names
 #[test]
 fn test_completion_cross_file_qualified() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Index a module file
     let module_uri = "file:///workspace/DataProcessor.pm";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -139,7 +139,7 @@ sub transform_data {
     // Open a file requesting qualified completion
     let script_uri = "file:///workspace/main.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -160,7 +160,7 @@ my $result = DataProcessor::
 
     // Request completion after "DataProcessor::"
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -206,13 +206,13 @@ my $result = DataProcessor::
 #[test]
 #[ignore = "feature: cross-file variable completion not yet wired to workspace index"]
 fn test_completion_cross_file_variable() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Index a module with exported variables
     let module_uri = "file:///workspace/Config.pm";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -237,7 +237,7 @@ our $DEBUG_MODE = 1;
     // Open a file requesting variable completion
     let script_uri = "file:///workspace/app.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -258,7 +258,7 @@ print $Config::CONF
 
     // Request completion after "$Config::CONF"
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -286,13 +286,13 @@ print $Config::CONF
 /// Test that workspace completions are provided even for unqualified calls
 #[test]
 fn test_completion_bare_function_from_workspace() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Index a module with exported functions
     let module_uri = "file:///workspace/StringUtils.pm";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -328,7 +328,7 @@ sub uppercase {
     // Open a file that imports the module
     let script_uri = "file:///workspace/text_processor.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -350,7 +350,7 @@ tri
 
     // Request completion after "tri"
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",

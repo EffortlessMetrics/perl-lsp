@@ -48,7 +48,7 @@ fn create_test_server() -> (LspServer, Arc<Mutex<Vec<u8>>>) {
 
 /// Helper to send a request to the server
 fn send_request(
-    server: &mut LspServer,
+    server: &LspServer,
     method: &str,
     id: Option<Value>,
     params: Value,
@@ -59,7 +59,7 @@ fn send_request(
 }
 
 /// Helper to initialize and mark server as ready
-fn initialize_server(server: &mut LspServer) {
+fn initialize_server(server: &LspServer) {
     // Initialize
     send_request(
         server,
@@ -148,10 +148,10 @@ fn workspace_config_system_inc_disabled_by_default() {
 
 #[test]
 fn initialize_with_workspace_folders() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, _buffer) = create_test_server();
+    let (server, _buffer) = create_test_server();
 
     let result = send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!(1)),
         json!({
@@ -171,10 +171,10 @@ fn initialize_with_workspace_folders() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn initialize_with_root_uri_fallback() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, _buffer) = create_test_server();
+    let (server, _buffer) = create_test_server();
 
     let result = send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!(1)),
         json!({
@@ -190,11 +190,11 @@ fn initialize_with_root_uri_fallback() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn initialize_with_legacy_root_path_fallback() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, _buffer) = create_test_server();
+    let (server, _buffer) = create_test_server();
 
     // Legacy rootPath (deprecated since LSP 3.0 but still used by some clients)
     let result = send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!(1)),
         json!({
@@ -210,11 +210,11 @@ fn initialize_with_legacy_root_path_fallback() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn initialize_windows_root_path_conversion() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, _buffer) = create_test_server();
+    let (server, _buffer) = create_test_server();
 
     // Windows-style rootPath should be handled
     let result = send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!(1)),
         json!({
@@ -229,11 +229,11 @@ fn initialize_windows_root_path_conversion() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn initialize_rejects_double_initialize() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, _buffer) = create_test_server();
+    let (server, _buffer) = create_test_server();
 
     // First initialize should succeed
     let result1 = send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!(1)),
         json!({
@@ -277,14 +277,14 @@ fn initialize_rejects_double_initialize() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn configuration_returns_workspace_include_paths() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, _buffer) = create_test_server();
+    let (server, _buffer) = create_test_server();
 
     // Initialize and mark ready
-    initialize_server(&mut server);
+    initialize_server(&server);
 
     // Request configuration
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/configuration",
         Some(json!(2)),
         json!({
@@ -308,14 +308,14 @@ fn configuration_returns_workspace_include_paths() -> Result<(), Box<dyn std::er
 
 #[test]
 fn configuration_returns_system_inc_disabled() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, _buffer) = create_test_server();
+    let (server, _buffer) = create_test_server();
 
     // Initialize and mark ready
-    initialize_server(&mut server);
+    initialize_server(&server);
 
     // Request configuration
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/configuration",
         Some(json!(2)),
         json!({
@@ -333,14 +333,14 @@ fn configuration_returns_system_inc_disabled() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn configuration_returns_resolution_timeout() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, _buffer) = create_test_server();
+    let (server, _buffer) = create_test_server();
 
     // Initialize and mark ready
-    initialize_server(&mut server);
+    initialize_server(&server);
 
     // Request configuration
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/configuration",
         Some(json!(2)),
         json!({
@@ -362,10 +362,10 @@ fn configuration_returns_resolution_timeout() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn did_change_configuration_updates_workspace_settings() -> Result<(), Box<dyn std::error::Error>> {
-    let (mut server, _buffer) = create_test_server();
+    let (server, _buffer) = create_test_server();
 
     // Initialize and mark ready
-    initialize_server(&mut server);
+    initialize_server(&server);
 
     // Send didChangeConfiguration notification
     let req = JsonRpcRequest {
@@ -390,7 +390,7 @@ fn did_change_configuration_updates_workspace_settings() -> Result<(), Box<dyn s
 
     // Verify configuration was updated by requesting it
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/configuration",
         Some(json!(2)),
         json!({

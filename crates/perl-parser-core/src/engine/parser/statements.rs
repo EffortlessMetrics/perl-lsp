@@ -219,8 +219,12 @@ impl<'a> Parser<'a> {
             }
         }?;
 
-        // Check for statement modifiers on ANY statement
-        if matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k)) {
+        // Check for statement modifiers — only on non-compound statements.
+        // Compound statements (if/while/for/foreach/given/default/try/sub/package)
+        // cannot take postfix modifiers; the keyword that follows is a new statement.
+        if !Self::is_compound_statement(&stmt)
+            && matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k))
+        {
             stmt = self.parse_statement_modifier(stmt)?;
         }
 
@@ -246,6 +250,25 @@ impl<'a> Parser<'a> {
     /// Check if current token is a statement modifier keyword
     fn is_statement_modifier_keyword(&mut self) -> bool {
         matches!(self.peek_kind(), Some(k) if Self::is_stmt_modifier_kind(k))
+    }
+
+    /// Returns true if the node is a compound statement that cannot take a postfix modifier.
+    /// In Perl, compound statements (if/while/for/foreach/given/default/try/sub/package)
+    /// are terminated by their own closing brace — a modifier keyword that follows is a
+    /// new top-level statement, not a modifier on the compound statement.
+    fn is_compound_statement(node: &Node) -> bool {
+        matches!(
+            node.kind,
+            NodeKind::If { .. }
+                | NodeKind::While { .. }
+                | NodeKind::For { .. }
+                | NodeKind::Foreach { .. }
+                | NodeKind::Given { .. }
+                | NodeKind::Default { .. }
+                | NodeKind::Try { .. }
+                | NodeKind::Subroutine { .. }
+                | NodeKind::Package { .. }
+        )
     }
 
     /// Parse expression statement

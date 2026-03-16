@@ -13,7 +13,7 @@ fn create_test_server() -> LspServer {
 
 /// Helper to make a request to the server
 fn make_request(
-    server: &mut LspServer,
+    server: &LspServer,
     method: &str,
     params: Option<Value>,
 ) -> Result<Option<Value>, String> {
@@ -37,7 +37,7 @@ fn make_request(
 }
 
 /// Helper to send the initialized notification (required after initialize request)
-fn send_initialized(server: &mut LspServer) {
+fn send_initialized(server: &LspServer) {
     let initialized_notification = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
@@ -49,7 +49,7 @@ fn send_initialized(server: &mut LspServer) {
 
 #[test]
 fn test_did_change_watched_files_created() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server first
     let init_params = json!({
@@ -57,8 +57,8 @@ fn test_did_change_watched_files_created() -> Result<(), Box<dyn std::error::Err
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Send a file created notification
     let params = json!({
@@ -70,7 +70,7 @@ fn test_did_change_watched_files_created() -> Result<(), Box<dyn std::error::Err
         ]
     });
 
-    let result = make_request(&mut server, "workspace/didChangeWatchedFiles", Some(params));
+    let result = make_request(&server, "workspace/didChangeWatchedFiles", Some(params));
 
     // This is a notification, should return None
     assert!(result.is_ok());
@@ -80,7 +80,7 @@ fn test_did_change_watched_files_created() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn test_did_change_watched_files_changed() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -88,8 +88,8 @@ fn test_did_change_watched_files_changed() -> Result<(), Box<dyn std::error::Err
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // First open a document
     let open_params = json!({
@@ -100,7 +100,7 @@ fn test_did_change_watched_files_changed() -> Result<(), Box<dyn std::error::Err
             "text": "use strict;\nprint 'Hello';\n"
         }
     });
-    let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
+    let _ = make_request(&server, "textDocument/didOpen", Some(open_params));
 
     // Send a file changed notification
     let params = json!({
@@ -112,7 +112,7 @@ fn test_did_change_watched_files_changed() -> Result<(), Box<dyn std::error::Err
         ]
     });
 
-    let result = make_request(&mut server, "workspace/didChangeWatchedFiles", Some(params));
+    let result = make_request(&server, "workspace/didChangeWatchedFiles", Some(params));
 
     // This is a notification, should return None
     assert!(result.is_ok());
@@ -122,7 +122,7 @@ fn test_did_change_watched_files_changed() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn test_did_change_watched_files_deleted() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -130,8 +130,8 @@ fn test_did_change_watched_files_deleted() -> Result<(), Box<dyn std::error::Err
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // First open a document
     let open_params = json!({
@@ -142,7 +142,7 @@ fn test_did_change_watched_files_deleted() -> Result<(), Box<dyn std::error::Err
             "text": "use strict;\nprint 'Hello';\n"
         }
     });
-    let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
+    let _ = make_request(&server, "textDocument/didOpen", Some(open_params));
 
     // Send a file deleted notification
     let params = json!({
@@ -154,7 +154,7 @@ fn test_did_change_watched_files_deleted() -> Result<(), Box<dyn std::error::Err
         ]
     });
 
-    let result = make_request(&mut server, "workspace/didChangeWatchedFiles", Some(params));
+    let result = make_request(&server, "workspace/didChangeWatchedFiles", Some(params));
 
     // This is a notification, should return None
     assert!(result.is_ok());
@@ -164,7 +164,7 @@ fn test_did_change_watched_files_deleted() -> Result<(), Box<dyn std::error::Err
 
 #[test]
 fn test_did_change_watched_files_invalid_uri() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -172,8 +172,8 @@ fn test_did_change_watched_files_invalid_uri() -> Result<(), Box<dyn std::error:
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Send notification with invalid URI (missing uri field)
     let params = json!({
@@ -184,7 +184,7 @@ fn test_did_change_watched_files_invalid_uri() -> Result<(), Box<dyn std::error:
         ]
     });
 
-    let result = make_request(&mut server, "workspace/didChangeWatchedFiles", Some(params));
+    let result = make_request(&server, "workspace/didChangeWatchedFiles", Some(params));
 
     // Should handle gracefully
     assert!(result.is_ok());
@@ -194,7 +194,7 @@ fn test_did_change_watched_files_invalid_uri() -> Result<(), Box<dyn std::error:
 
 #[test]
 fn test_will_rename_files() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -202,8 +202,8 @@ fn test_will_rename_files() -> Result<(), Box<dyn std::error::Error>> {
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Open a document that uses a module
     let open_params = json!({
@@ -214,7 +214,7 @@ fn test_will_rename_files() -> Result<(), Box<dyn std::error::Error>> {
             "text": "use lib 'lib';\nuse MyModule;\nuse parent 'MyModule';\n"
         }
     });
-    let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
+    let _ = make_request(&server, "textDocument/didOpen", Some(open_params));
 
     // Request to rename a module file
     let params = json!({
@@ -226,7 +226,7 @@ fn test_will_rename_files() -> Result<(), Box<dyn std::error::Error>> {
         ]
     });
 
-    let result = make_request(&mut server, "workspace/willRenameFiles", Some(params));
+    let result = make_request(&server, "workspace/willRenameFiles", Some(params));
 
     // Should return a workspace edit (potentially empty if no references found)
     let edit = result?.ok_or("expected workspace edit response")?;
@@ -237,7 +237,7 @@ fn test_will_rename_files() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -245,8 +245,8 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Open the renamed module and a dependent file that imports it.
     let module_open = json!({
@@ -257,7 +257,7 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
             "text": "package MyModule;\n1;\n"
         }
     });
-    let _ = make_request(&mut server, "textDocument/didOpen", Some(module_open));
+    let _ = make_request(&server, "textDocument/didOpen", Some(module_open));
 
     let dependent_open = json!({
         "textDocument": {
@@ -267,7 +267,7 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
             "text": "use MyModule;\nuse parent 'MyModule';\nrequire MyModule;\n"
         }
     });
-    let _ = make_request(&mut server, "textDocument/didOpen", Some(dependent_open));
+    let _ = make_request(&server, "textDocument/didOpen", Some(dependent_open));
 
     // Request rename edits for module file rename.
     let params = json!({
@@ -279,7 +279,7 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
         ]
     });
 
-    let edit = make_request(&mut server, "workspace/willRenameFiles", Some(params))?
+    let edit = make_request(&server, "workspace/willRenameFiles", Some(params))?
         .ok_or("expected workspace edit response")?;
     let changes =
         edit.get("changes").and_then(Value::as_object).ok_or("expected changes object")?;
@@ -311,7 +311,7 @@ fn test_will_rename_files_returns_module_import_edits() -> Result<(), Box<dyn st
 
 #[test]
 fn test_will_rename_files_missing_uri() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -319,8 +319,8 @@ fn test_will_rename_files_missing_uri() -> Result<(), Box<dyn std::error::Error>
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Request with missing URIs
     let params = json!({
@@ -331,7 +331,7 @@ fn test_will_rename_files_missing_uri() -> Result<(), Box<dyn std::error::Error>
         ]
     });
 
-    let result = make_request(&mut server, "workspace/willRenameFiles", Some(params));
+    let result = make_request(&server, "workspace/willRenameFiles", Some(params));
 
     // Should handle gracefully and return empty edit
     let edit = result?.ok_or("expected workspace edit response")?;
@@ -342,7 +342,7 @@ fn test_will_rename_files_missing_uri() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn test_did_delete_files() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -350,8 +350,8 @@ fn test_did_delete_files() -> Result<(), Box<dyn std::error::Error>> {
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Open a document
     let open_params = json!({
@@ -362,7 +362,7 @@ fn test_did_delete_files() -> Result<(), Box<dyn std::error::Error>> {
             "text": "use strict;\nprint 'Hello';\n"
         }
     });
-    let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
+    let _ = make_request(&server, "textDocument/didOpen", Some(open_params));
 
     // Send delete notification
     let params = json!({
@@ -373,7 +373,7 @@ fn test_did_delete_files() -> Result<(), Box<dyn std::error::Error>> {
         ]
     });
 
-    let result = make_request(&mut server, "workspace/didDeleteFiles", Some(params));
+    let result = make_request(&server, "workspace/didDeleteFiles", Some(params));
 
     // This is a notification, should return None
     assert!(result.is_ok());
@@ -383,7 +383,7 @@ fn test_did_delete_files() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_did_delete_files_invalid_uri() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -391,8 +391,8 @@ fn test_did_delete_files_invalid_uri() -> Result<(), Box<dyn std::error::Error>>
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Send delete notification with missing URI
     let params = json!({
@@ -403,7 +403,7 @@ fn test_did_delete_files_invalid_uri() -> Result<(), Box<dyn std::error::Error>>
         ]
     });
 
-    let result = make_request(&mut server, "workspace/didDeleteFiles", Some(params));
+    let result = make_request(&server, "workspace/didDeleteFiles", Some(params));
 
     // Should handle gracefully
     assert!(result.is_ok());
@@ -413,7 +413,7 @@ fn test_did_delete_files_invalid_uri() -> Result<(), Box<dyn std::error::Error>>
 
 #[test]
 fn test_apply_edit_single_line() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -421,8 +421,8 @@ fn test_apply_edit_single_line() -> Result<(), Box<dyn std::error::Error>> {
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Open a document
     let open_params = json!({
@@ -433,7 +433,7 @@ fn test_apply_edit_single_line() -> Result<(), Box<dyn std::error::Error>> {
             "text": "print 'Hello';\nprint 'World';\n"
         }
     });
-    let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
+    let _ = make_request(&server, "textDocument/didOpen", Some(open_params));
 
     // Apply an edit
     let params = json!({
@@ -452,7 +452,7 @@ fn test_apply_edit_single_line() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let result = make_request(&mut server, "workspace/applyEdit", Some(params));
+    let result = make_request(&server, "workspace/applyEdit", Some(params));
 
     // Should return success
     let response = result?.ok_or("expected applyEdit response")?;
@@ -462,7 +462,7 @@ fn test_apply_edit_single_line() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_apply_edit_multi_line() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -470,8 +470,8 @@ fn test_apply_edit_multi_line() -> Result<(), Box<dyn std::error::Error>> {
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Open a document
     let open_params = json!({
@@ -482,7 +482,7 @@ fn test_apply_edit_multi_line() -> Result<(), Box<dyn std::error::Error>> {
             "text": "print 'Hello';\nprint 'World';\nprint 'End';\n"
         }
     });
-    let _ = make_request(&mut server, "textDocument/didOpen", Some(open_params));
+    let _ = make_request(&server, "textDocument/didOpen", Some(open_params));
 
     // Apply a multi-line edit
     let params = json!({
@@ -501,7 +501,7 @@ fn test_apply_edit_multi_line() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let result = make_request(&mut server, "workspace/applyEdit", Some(params));
+    let result = make_request(&server, "workspace/applyEdit", Some(params));
 
     // Should return success
     let response = result?.ok_or("expected applyEdit response")?;
@@ -511,7 +511,7 @@ fn test_apply_edit_multi_line() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_apply_edit_no_document() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -519,8 +519,8 @@ fn test_apply_edit_no_document() -> Result<(), Box<dyn std::error::Error>> {
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Try to apply edit to non-existent document
     let params = json!({
@@ -539,7 +539,7 @@ fn test_apply_edit_no_document() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let result = make_request(&mut server, "workspace/applyEdit", Some(params));
+    let result = make_request(&server, "workspace/applyEdit", Some(params));
 
     // Should still return success (edit was "applied" even if document doesn't exist)
     let response = result?.ok_or("expected applyEdit response")?;
@@ -549,7 +549,7 @@ fn test_apply_edit_no_document() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_apply_edit_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -557,13 +557,13 @@ fn test_apply_edit_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Send invalid params (no edit field)
     let params = json!({});
 
-    let result = make_request(&mut server, "workspace/applyEdit", Some(params));
+    let result = make_request(&server, "workspace/applyEdit", Some(params));
 
     // Should return failure
     let response = result?.ok_or("expected applyEdit response")?;
@@ -575,7 +575,7 @@ fn test_apply_edit_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 fn test_path_to_module_name() -> Result<(), Box<dyn std::error::Error>> {
     // Test the path_to_module_name function indirectly through willRenameFiles
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize the server
     let init_params = json!({
@@ -583,8 +583,8 @@ fn test_path_to_module_name() -> Result<(), Box<dyn std::error::Error>> {
         "rootUri": "file:///test/workspace",
         "capabilities": {}
     });
-    let _ = make_request(&mut server, "initialize", Some(init_params));
-    send_initialized(&mut server);
+    let _ = make_request(&server, "initialize", Some(init_params));
+    send_initialized(&server);
 
     // Test various path patterns
     let test_cases = vec![
@@ -603,7 +603,7 @@ fn test_path_to_module_name() -> Result<(), Box<dyn std::error::Error>> {
             ]
         });
 
-        let result = make_request(&mut server, "workspace/willRenameFiles", Some(params));
+        let result = make_request(&server, "workspace/willRenameFiles", Some(params));
 
         // Should always succeed and return a workspace edit
         let edit = result?.ok_or("expected workspace edit response")?;

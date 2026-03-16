@@ -39,25 +39,25 @@ struct PerformanceTestFixture {
 
 impl PerformanceTestFixture {
     fn new() -> Self {
-        let mut server = start_lsp_server();
-        initialize_lsp(&mut server);
+        let server = start_lsp_server();
+        initialize_lsp(&server);
 
         // Setup test workspace for performance validation
-        setup_performance_test_workspace(&mut server);
+        setup_performance_test_workspace(&server);
 
         // Wait for initial indexing to stabilize with adaptive timeout
         let adaptive_timeout = adaptive_timeout();
-        drain_until_quiet(&mut server, Duration::from_millis(800), adaptive_timeout);
+        drain_until_quiet(&server, Duration::from_millis(800), adaptive_timeout);
 
         // Collect baseline measurements
-        let baseline_measurements = collect_baseline_measurements(&mut server);
+        let baseline_measurements = collect_baseline_measurements(&server);
 
         Self { server, metrics_collector: MetricsCollector::new(), baseline_measurements }
     }
 }
 
 /// Setup performance test workspace with various complexity levels
-fn setup_performance_test_workspace(server: &mut LspServer) {
+fn setup_performance_test_workspace(server: &LspServer) {
     // Small test file for quick operations
     setup_test_file(
         server,
@@ -140,7 +140,7 @@ sub cross_reference_function {
 }
 
 /// Setup test file helper
-fn setup_test_file(server: &mut LspServer, uri: &str, content: &str) {
+fn setup_test_file(server: &LspServer, uri: &str, content: &str) {
     send_notification(
         server,
         json!({
@@ -313,7 +313,7 @@ struct BaselineMeasurements {
 }
 
 /// Collect baseline measurements without cancellation
-fn collect_baseline_measurements(server: &mut LspServer) -> BaselineMeasurements {
+fn collect_baseline_measurements(server: &LspServer) -> BaselineMeasurements {
     // Measure hover latency
     let hover_start = Instant::now();
     let _ = send_request(
@@ -599,7 +599,7 @@ impl ThreadingScenario {
 /// AC:12 - End-to-end cancellation response time validation across all LSP providers
 #[test]
 fn test_end_to_end_cancellation_response_time_ac12() -> Result<(), Box<dyn std::error::Error>> {
-    let mut fixture = PerformanceTestFixture::new();
+    let fixture = PerformanceTestFixture::new();
 
     let provider_scenarios = vec![
         (
@@ -656,7 +656,7 @@ fn test_end_to_end_cancellation_response_time_ac12() -> Result<(), Box<dyn std::
 
             // Send request
             send_request_no_wait(
-                &mut fixture.server,
+                &fixture.server,
                 json!({
                     "jsonrpc": "2.0",
                     "id": request_id,
@@ -667,7 +667,7 @@ fn test_end_to_end_cancellation_response_time_ac12() -> Result<(), Box<dyn std::
 
             // Immediate cancellation to test response time
             send_notification(
-                &mut fixture.server,
+                &fixture.server,
                 json!({
                     "jsonrpc": "2.0",
                     "method": "$/cancelRequest",
@@ -683,11 +683,8 @@ fn test_end_to_end_cancellation_response_time_ac12() -> Result<(), Box<dyn std::
             );
 
             // Measure response time
-            let response = read_response_matching_i64(
-                &mut fixture.server,
-                request_id,
-                Duration::from_millis(200),
-            );
+            let response =
+                read_response_matching_i64(&fixture.server, request_id, Duration::from_millis(200));
 
             let end_to_end_time = start_time.elapsed();
 
@@ -1155,6 +1152,6 @@ impl Drop for PerformanceTestFixture {
         }
 
         // Graceful server shutdown
-        shutdown_and_exit(&mut self.server);
+        shutdown_and_exit(&self.server);
     }
 }

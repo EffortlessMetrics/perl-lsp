@@ -540,6 +540,70 @@ fn strict_warnings_related_info() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 // =========================================================================
+// 8b. strict_warnings — implicit-strict framework suppression
+// =========================================================================
+
+#[test]
+fn strict_warnings_suppressed_for_moo() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![use_node("Moo", 0, 8)]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-strict")),
+        "Moo provides implicit strict - should not fire missing-strict"
+    );
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-warnings")),
+        "Moo provides implicit warnings - should not fire missing-warnings"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_warnings_suppressed_for_moose() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![use_node("Moose", 0, 10)]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-strict")),
+        "Moose provides implicit strict - should not fire missing-strict"
+    );
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-warnings")),
+        "Moose provides implicit warnings - should not fire missing-warnings"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_warnings_suppressed_for_modern_perl() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![use_node("Modern::Perl", 0, 20)]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
+    assert!(
+        diagnostics.is_empty(),
+        "Modern::Perl replaces strict+warnings - should emit no missing-pragma diagnostics"
+    );
+    Ok(())
+}
+
+#[test]
+fn strict_warnings_suppressed_for_mojo_base() -> Result<(), Box<dyn std::error::Error>> {
+    let root = program(vec![use_node("Mojo::Base", 0, 15)]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&root, &mut diagnostics);
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-strict")),
+        "Mojo::Base provides implicit strict - should not fire missing-strict"
+    );
+    assert!(
+        diagnostics.iter().all(|d| d.code.as_deref() != Some("missing-warnings")),
+        "Mojo::Base provides implicit warnings - should not fire missing-warnings"
+    );
+    Ok(())
+}
+
+// =========================================================================
 // 9. lints::common_mistakes — check_common_mistakes
 // =========================================================================
 
@@ -905,7 +969,7 @@ fn undeclared_variable_related_info_explains_strict() -> Result<(), Box<dyn std:
     // Directly test scope_issues_to_diagnostics with a synthetic undeclared variable issue
     use perl_semantic_analyzer::scope_analyzer::{IssueKind, ScopeIssue};
 
-    let issue = ScopeIssue {
+    let _issue = ScopeIssue {
         kind: IssueKind::UndeclaredVariable,
         variable_name: "$foo".to_string(),
         line: 1,
@@ -1211,5 +1275,55 @@ fn diagnostic_equality_considers_suggestion() -> Result<(), Box<dyn std::error::
     d2.suggestion = Some("fix B".to_string());
 
     assert_ne!(d1, d2, "Diagnostics with different suggestions should not be equal");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Full pipeline: uninitialized variable integration tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn full_pipeline_uninitialized_variable_emits_warning() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse real Perl with an uninitialized variable usage
+    let source = "use strict;\nuse warnings;\nmy $x;\nprint $x;\n";
+    let output = perl_parser::Parser::new(source).parse_with_recovery();
+    let ast = Arc::new(output.ast);
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source);
+
+    let uninit: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("uninitialized-variable"))
+        .collect();
+
+    assert!(!uninit.is_empty(), "Expected at least one uninitialized-variable diagnostic");
+    assert_eq!(
+        uninit[0].severity,
+        DiagnosticSeverity::Warning,
+        "Uninitialized variable should be a Warning"
+    );
+    assert!(uninit[0].suggestion.is_some(), "Should carry a quick-fix suggestion");
+    assert!(!uninit[0].related_information.is_empty(), "Should have related info with guidance");
+    Ok(())
+}
+
+#[test]
+fn full_pipeline_initialized_variable_no_warning() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse Perl with properly initialized variable — no uninitialized-variable diagnostic expected
+    let source = "use strict;\nuse warnings;\nmy $x = 42;\nprint $x;\n";
+    let output = perl_parser::Parser::new(source).parse_with_recovery();
+    let ast = Arc::new(output.ast);
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source);
+
+    let uninit: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("uninitialized-variable"))
+        .collect();
+
+    assert!(
+        uninit.is_empty(),
+        "Initialized variable should not produce uninitialized-variable diagnostic"
+    );
     Ok(())
 }

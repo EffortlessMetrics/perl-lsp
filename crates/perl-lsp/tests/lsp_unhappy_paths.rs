@@ -18,31 +18,34 @@ use common::read_response;
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_malformed_json_request() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Malformed frame; don't append extra newline
-    send_raw(&mut server, b"Content-Length: 5\r\n\r\n{{{{{");
+    send_raw(&server, b"Content-Length: 5\r\n\r\n{{{{{");
 
     // Do NOT block: accept None as compliant behavior
     // Server may ignore malformed JSON, send notifications, or send an error
-    let _maybe = read_response_timeout(&mut server, short_timeout());
+    let _maybe = read_response_timeout(&server, short_timeout());
     // Any behavior is acceptable - we just verify the server doesn't crash
 
     // Server must remain alive
-    assert!(server.process.try_wait()?.is_none(), "server crashed");
-    shutdown_and_exit(&mut server);
+    assert!(
+        server.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait()?.is_none(),
+        "server crashed"
+    );
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_invalid_method() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Call non-existent method
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 4242,
@@ -54,18 +57,18 @@ fn test_invalid_method() -> Result<(), Box<dyn std::error::Error>> {
     // Check for error response
     assert!(response.get("error").is_some(), "expected error for invalid method");
     assert_eq!(response["error"]["code"], -32601); // Method not found
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_missing_required_params() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send completion request without required params
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -101,18 +104,18 @@ fn test_missing_required_params() -> Result<(), Box<dyn std::error::Error>> {
             response
         )));
     }
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_invalid_uri_format() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send document with invalid URI
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -129,7 +132,7 @@ fn test_invalid_uri_format() -> Result<(), Box<dyn std::error::Error>> {
 
     // Try to get diagnostics - should handle gracefully with enhanced error handling
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -174,18 +177,18 @@ fn test_invalid_uri_format() -> Result<(), Box<dyn std::error::Error>> {
         ));
     }
 
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_document_not_found() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Request operations on non-existent document - should handle gracefully
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -230,18 +233,18 @@ fn test_document_not_found() -> Result<(), Box<dyn std::error::Error>> {
         ));
     }
 
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_out_of_bounds_position() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open a small document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -258,7 +261,7 @@ fn test_out_of_bounds_position() -> Result<(), Box<dyn std::error::Error>> {
 
     // Request completion at out-of-bounds position - should handle gracefully
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -304,21 +307,21 @@ fn test_out_of_bounds_position() -> Result<(), Box<dyn std::error::Error>> {
         ));
     }
 
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[cfg(feature = "stress-tests")]
 #[test]
 fn test_concurrent_document_edits() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///concurrent.pl";
 
     // Open document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -336,7 +339,7 @@ fn test_concurrent_document_edits() -> Result<(), Box<dyn std::error::Error>> {
     // Send multiple rapid edits
     for i in 2..10 {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
@@ -355,7 +358,7 @@ fn test_concurrent_document_edits() -> Result<(), Box<dyn std::error::Error>> {
 
     // Request symbols - should use latest version
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -368,7 +371,7 @@ fn test_concurrent_document_edits() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["result"].is_array());
     Ok(())
 }
@@ -376,14 +379,14 @@ fn test_concurrent_document_edits() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "stress-tests")]
 #[test]
 fn test_version_mismatch() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///version.pl";
 
     // Open with version 1
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -400,7 +403,7 @@ fn test_version_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send change with wrong version (skip version 2)
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -418,7 +421,7 @@ fn test_version_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 
     // Server should handle version mismatch gracefully
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -431,7 +434,7 @@ fn test_version_mismatch() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["result"].is_array() || response["error"].is_object());
     Ok(())
 }
@@ -439,12 +442,12 @@ fn test_version_mismatch() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "stress-tests")]
 #[test]
 fn test_invalid_regex_pattern() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open document with invalid regex
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -464,7 +467,7 @@ fn test_invalid_regex_pattern() -> Result<(), Box<dyn std::error::Error>> {
 
     // Request hover on invalid regex
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -481,7 +484,7 @@ fn test_invalid_regex_pattern() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     // Should handle parse error gracefully
     assert!(response.is_object());
     Ok(())
@@ -490,12 +493,12 @@ fn test_invalid_regex_pattern() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "stress-tests")]
 #[test]
 fn test_circular_module_dependency() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create circular dependency
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -511,7 +514,7 @@ fn test_circular_module_dependency() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -528,7 +531,7 @@ fn test_circular_module_dependency() -> Result<(), Box<dyn std::error::Error>> {
 
     // Request references - should handle circular deps
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -548,7 +551,7 @@ fn test_circular_module_dependency() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["result"].is_array());
     Ok(())
 }
@@ -556,15 +559,15 @@ fn test_circular_module_dependency() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "stress-tests")]
 #[test]
 fn test_extremely_long_line() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create document with extremely long line
     let long_string = "x".repeat(100000);
     let content = format!("my $x = '{}';\nprint $x;", long_string);
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -581,7 +584,7 @@ fn test_extremely_long_line() -> Result<(), Box<dyn std::error::Error>> {
 
     // Request completion in long line
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -598,7 +601,7 @@ fn test_extremely_long_line() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     // Should handle without crashing
     assert!(response.is_object());
     Ok(())
@@ -607,8 +610,8 @@ fn test_extremely_long_line() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "stress-tests")]
 #[test]
 fn test_deeply_nested_structure() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create deeply nested structure
     let mut nested = String::from("sub test {\n");
@@ -622,7 +625,7 @@ fn test_deeply_nested_structure() -> Result<(), Box<dyn std::error::Error>> {
     nested.push_str("}\n");
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -639,7 +642,7 @@ fn test_deeply_nested_structure() -> Result<(), Box<dyn std::error::Error>> {
 
     // Request symbols - should handle deep nesting
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -652,21 +655,21 @@ fn test_deeply_nested_structure() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["result"].is_array());
     Ok(())
 }
 
 #[test]
 fn test_binary_content() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try to open binary content
     let binary_content = "#!/usr/bin/perl\n\0\x7F\x7E\x00binary data here\n";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -683,7 +686,7 @@ fn test_binary_content() -> Result<(), Box<dyn std::error::Error>> {
 
     // Should handle binary data gracefully - request document symbols
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -703,21 +706,21 @@ fn test_binary_content() -> Result<(), Box<dyn std::error::Error>> {
         response.get("result").is_some() || response.get("error").is_some(),
         "Expected either result or error for binary content"
     );
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_binary_frame() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send actual binary junk as a frame body; behavior is implementation-defined
-    send_raw(&mut server, b"Content-Length: 8\r\n\r\n\x00\x01\x02\x03\x04\x05\x06\x07");
+    send_raw(&server, b"Content-Length: 8\r\n\r\n\x00\x01\x02\x03\x04\x05\x06\x07");
 
     // Enhanced timeout for binary frame handling with adaptive scaling
     let binary_timeout = std::cmp::max(short_timeout(), Duration::from_millis(200));
-    let _maybe = read_response_timeout(&mut server, binary_timeout);
+    let _maybe = read_response_timeout(&server, binary_timeout);
     // Any behavior is acceptable - ignore, error, or notification
 
     // Allow brief recovery time for server to process malformed input
@@ -725,7 +728,9 @@ fn test_binary_frame() -> Result<(), Box<dyn std::error::Error>> {
 
     // Enhanced error handling: server may crash on malformed binary frames
     // This is acceptable behavior for LSP servers when receiving non-UTF8 content
-    if let Ok(Some(_exit_status)) = server.process.try_wait() {
+    if let Ok(Some(_exit_status)) =
+        server.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait()
+    {
         // Server crashed - this is acceptable for binary frame input
         eprintln!("Server crashed on binary frame (acceptable behavior)");
         return Ok(());
@@ -733,7 +738,7 @@ fn test_binary_frame() -> Result<(), Box<dyn std::error::Error>> {
 
     // If server survived, verify it's still responsive
     let ping_response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 9999,
@@ -746,18 +751,18 @@ fn test_binary_frame() -> Result<(), Box<dyn std::error::Error>> {
 
     // Accept any valid response format
     assert!(ping_response.is_object(), "Server should respond to requests after binary frame");
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_cancel_request() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open a document first to make the completion request valid
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -789,13 +794,13 @@ fn test_cancel_request() -> Result<(), Box<dyn std::error::Error>> {
     });
     let request_str = serde_json::to_string(&request_json)?;
     send_raw(
-        &mut server,
+        &server,
         format!("Content-Length: {}\r\n\r\n{}", request_str.len(), request_str).as_bytes(),
     );
 
     // Immediately send cancellation request
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -813,7 +818,7 @@ fn test_cancel_request() -> Result<(), Box<dyn std::error::Error>> {
     while attempts < 3 && !got_completion_response {
         // Enhanced timeout for cancellation protocol with adaptive scaling
         let cancel_timeout = std::cmp::max(Duration::from_millis(500), adaptive_timeout() / 4);
-        let response = read_response_timeout(&mut server, cancel_timeout);
+        let response = read_response_timeout(&server, cancel_timeout);
 
         if let Some(resp) = response {
             // Check if this is a notification (has method, no id)
@@ -861,19 +866,19 @@ fn test_cancel_request() -> Result<(), Box<dyn std::error::Error>> {
     // If we didn't get a completion response after notifications, that's also valid
     // The cancellation might have prevented the response entirely
 
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_shutdown_without_exit() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send shutdown request
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -882,12 +887,12 @@ fn test_shutdown_without_exit() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert_eq!(response["result"], json!(null));
 
     // Try to send another request after shutdown
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -905,7 +910,7 @@ fn test_shutdown_without_exit() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Should get error - server is shut down
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["error"].is_object());
     Ok(())
 }
@@ -913,11 +918,11 @@ fn test_shutdown_without_exit() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "strict-jsonrpc")]
 #[test]
 fn test_invalid_capability_request() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Initialize without certain capabilities
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -936,11 +941,11 @@ fn test_invalid_capability_request() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let _response = read_response(&mut server);
+    let _response = read_response(&server);
 
     // Try to use disabled capability
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -957,7 +962,7 @@ fn test_invalid_capability_request() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     // Should handle gracefully
     assert!(response.is_object());
     Ok(())
@@ -966,8 +971,8 @@ fn test_invalid_capability_request() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "stress-tests")]
 #[test]
 fn test_unicode_unhappy_paths() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Document with various Unicode edge cases
     let content = r#"
@@ -979,7 +984,7 @@ fn test_unicode_unhappy_paths() -> Result<(), Box<dyn std::error::Error>> {
     "#;
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -996,7 +1001,7 @@ fn test_unicode_unhappy_paths() -> Result<(), Box<dyn std::error::Error>> {
 
     // Request symbols - should handle Unicode
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -1009,7 +1014,7 @@ fn test_unicode_unhappy_paths() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["result"].is_array());
     Ok(())
 }
@@ -1017,14 +1022,14 @@ fn test_unicode_unhappy_paths() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(feature = "stress-tests")]
 #[test]
 fn test_memory_stress() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open many documents
     for i in 0..100 {
         let content = format!("my $var{} = {};\n", i, i).repeat(100);
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -1042,7 +1047,7 @@ fn test_memory_stress() -> Result<(), Box<dyn std::error::Error>> {
 
     // Server should still respond
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -1055,7 +1060,7 @@ fn test_memory_stress() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["result"].is_array());
     Ok(())
 }

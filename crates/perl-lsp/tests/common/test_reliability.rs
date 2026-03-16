@@ -18,10 +18,10 @@
 //!     let env = TestEnvironment::validate()?;
 //!     eprintln!("Test environment: {}", env.summary());
 //!
-//!     let mut server = start_lsp_server();
+//!     let server = start_lsp_server();
 //!
 //!     // Perform health check
-//!     HealthCheck::new(&mut server).verify()?;
+//!     HealthCheck::new(&server).verify()?;
 //!
 //!     // Run test...
 //!     Ok(())
@@ -152,13 +152,13 @@ fn detect_available_memory() -> Option<u64> {
 
 /// Health check utilities for LSP server
 pub struct HealthCheck<'a> {
-    server: &'a mut crate::common::LspServer,
+    server: &'a crate::common::LspServer,
     timeout: Duration,
 }
 
 impl<'a> HealthCheck<'a> {
     /// Create a new health check for the given server
-    pub fn new(server: &'a mut crate::common::LspServer) -> Self {
+    pub fn new(server: &'a crate::common::LspServer) -> Self {
         Self { server, timeout: Duration::from_secs(5) }
     }
 

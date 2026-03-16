@@ -12,14 +12,14 @@ use common::{
 
 #[test]
 fn test_concurrent_document_modifications() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///concurrent.pl";
 
     // Open initial document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -53,7 +53,7 @@ fn test_concurrent_document_modifications() -> Result<(), Box<dyn std::error::Er
     for handle in handles {
         let (version, text) = handle.join().map_err(|_| "Thread join failed")?;
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
@@ -75,7 +75,7 @@ fn test_concurrent_document_modifications() -> Result<(), Box<dyn std::error::Er
 
     // Final request should see consistent state
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -93,12 +93,12 @@ fn test_concurrent_document_modifications() -> Result<(), Box<dyn std::error::Er
 
 #[test]
 fn test_concurrent_requests() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open test document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -134,7 +134,7 @@ fn test_concurrent_requests() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
@@ -154,8 +154,8 @@ fn test_concurrent_requests() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_race_condition_open_close() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Rapidly open and close documents (adaptive count)
     let document_count = (max_concurrent_threads()).clamp(2, 10);
@@ -164,7 +164,7 @@ fn test_race_condition_open_close() -> Result<(), Box<dyn std::error::Error>> {
 
         // Open document
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -181,7 +181,7 @@ fn test_race_condition_open_close() -> Result<(), Box<dyn std::error::Error>> {
 
         // Immediately try to use it
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i * 2 + 1,
@@ -195,7 +195,7 @@ fn test_race_condition_open_close() -> Result<(), Box<dyn std::error::Error>> {
 
         // Close document
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didClose",
@@ -212,7 +212,7 @@ fn test_race_condition_open_close() -> Result<(), Box<dyn std::error::Error>> {
 
         // Try to use after close (should fail gracefully)
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i * 2 + 2,
@@ -230,14 +230,14 @@ fn test_race_condition_open_close() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_workspace_symbol_during_changes() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open multiple documents (adaptive count)
     let document_count = (max_concurrent_threads() / 2).clamp(2, 5);
     for i in 0..document_count {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -255,7 +255,7 @@ fn test_workspace_symbol_during_changes() -> Result<(), Box<dyn std::error::Erro
 
     // Start workspace symbol search
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 100,
@@ -269,7 +269,7 @@ fn test_workspace_symbol_during_changes() -> Result<(), Box<dyn std::error::Erro
     // Modify documents during search (adaptive count)
     for i in 0..document_count {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
@@ -288,7 +288,7 @@ fn test_workspace_symbol_during_changes() -> Result<(), Box<dyn std::error::Erro
 
     // Another workspace search
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 101,
@@ -304,12 +304,12 @@ fn test_workspace_symbol_during_changes() -> Result<(), Box<dyn std::error::Erro
 
 #[test]
 fn test_reference_search_during_edits() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open document with variable
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -326,7 +326,7 @@ fn test_reference_search_during_edits() -> Result<(), Box<dyn std::error::Error>
 
     // Start reference search
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -341,7 +341,7 @@ fn test_reference_search_during_edits() -> Result<(), Box<dyn std::error::Error>
 
     // Modify document while search might be in progress
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -359,7 +359,7 @@ fn test_reference_search_during_edits() -> Result<(), Box<dyn std::error::Error>
 
     // Another reference search
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -377,14 +377,14 @@ fn test_reference_search_during_edits() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn test_completion_cache_invalidation() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///completion.pl";
 
     // Open document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -401,7 +401,7 @@ fn test_completion_cache_invalidation() -> Result<(), Box<dyn std::error::Error>
 
     // Request completion
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -415,7 +415,7 @@ fn test_completion_cache_invalidation() -> Result<(), Box<dyn std::error::Error>
 
     // Change document (should invalidate completion cache)
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -433,7 +433,7 @@ fn test_completion_cache_invalidation() -> Result<(), Box<dyn std::error::Error>
 
     // Request completion again (should reflect new state)
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -450,8 +450,8 @@ fn test_completion_cache_invalidation() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn test_diagnostic_publishing_race() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///diagnostic.pl";
 
@@ -466,7 +466,7 @@ fn test_diagnostic_publishing_race() -> Result<(), Box<dyn std::error::Error>> {
         };
 
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": if version == 1 { "textDocument/didOpen" } else { "textDocument/didChange" },
@@ -495,7 +495,7 @@ fn test_diagnostic_publishing_race() -> Result<(), Box<dyn std::error::Error>> {
 
     // Final state should be consistent
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -511,14 +511,14 @@ fn test_diagnostic_publishing_race() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_multi_file_rename_race() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create multiple files with shared variable (adaptive count)
     let file_count = (max_concurrent_threads() / 2).clamp(1, 3);
     for i in 0..file_count {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -536,7 +536,7 @@ fn test_multi_file_rename_race() -> Result<(), Box<dyn std::error::Error>> {
 
     // Start rename operation
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -552,7 +552,7 @@ fn test_multi_file_rename_race() -> Result<(), Box<dyn std::error::Error>> {
     // Modify files during rename (adaptive count)
     for i in 0..file_count {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
@@ -574,12 +574,12 @@ fn test_multi_file_rename_race() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_call_hierarchy_during_refactoring() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create call hierarchy
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -613,7 +613,7 @@ sub baz {
 
     // Prepare call hierarchy
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -627,7 +627,7 @@ sub baz {
 
     // Modify document during hierarchy traversal
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -670,14 +670,14 @@ sub qux {
 
 #[test]
 fn test_semantic_tokens_consistency() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///semantic.pl";
 
     // Open document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -696,7 +696,7 @@ fn test_semantic_tokens_consistency() -> Result<(), Box<dyn std::error::Error>> 
     let request_count = max_concurrent_threads().clamp(2, 5);
     for id in 1..request_count {
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
@@ -710,7 +710,7 @@ fn test_semantic_tokens_consistency() -> Result<(), Box<dyn std::error::Error>> 
         // Interleave with edits
         if id % 2 == 0 {
             send_notification(
-                &mut server,
+                &server,
                 json!({
                     "jsonrpc": "2.0",
                     "method": "textDocument/didChange",

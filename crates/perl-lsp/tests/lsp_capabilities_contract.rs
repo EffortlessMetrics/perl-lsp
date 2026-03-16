@@ -7,7 +7,7 @@ use serde_json::json;
 /// PHASE 1 RE-ENABLED: Pure API contract test, no I/O, safe for CI
 #[test]
 fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Send initialize request through public API
     let request = JsonRpcRequest {
@@ -121,7 +121,7 @@ fn test_ga_capabilities_contract() -> Result<(), Box<dyn std::error::Error>> {
 #[test]
 
 fn test_unsupported_methods_return_error() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize first through public API
     let init_request = JsonRpcRequest {

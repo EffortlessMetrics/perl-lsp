@@ -21,7 +21,7 @@ mod tests {
 
     /// Drive initialize + didOpen + inlayHint(range) and return the result array (or empty array).
     fn get_hints(
-        server: &mut LspServer,
+        server: &LspServer,
         uri: &str,
         text: &str,
     ) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
@@ -94,7 +94,7 @@ mod tests {
         // Tests anchoring behavior for non-parenthesized function calls.
         // For `open my $fh, ...` we anchor at "my" to precede the variable declaration.
         // For array/hash operations, we anchor at the sigil position.
-        let (mut server, _out) = start_server();
+        let (server, _out) = start_server();
         let uri = "file:///tmp/anchors.pl";
         let text = r#"
 open my $fh, "<", $file;
@@ -102,7 +102,7 @@ push @arr, "x";
 my %h = ();
 my $r = {};
 "#;
-        let hints = get_hints(&mut server, uri, text)?;
+        let hints = get_hints(&server, uri, text)?;
         // Lines are 0-based; first non-empty is line 1.
         // For "open my $fh", the filehandle hint anchors at "my" (column 5)
         assert_unique_label_at(text, &hints, "filehandle:", 1, "my")?;
@@ -116,14 +116,14 @@ my $r = {};
         // Tests anchoring behavior for parenthesized function calls.
         // For `open(FH, ...)` we anchor at '(' to maintain visual alignment.
         // For other args, we anchor at the variable/token position.
-        let (mut server, _out) = start_server();
+        let (server, _out) = start_server();
         let uri = "file:///tmp/paren.pl";
         let text = r#"
 push(@arr, "x");
 substr($s, 0, 5);
 open(FH, "<", "file.txt");
 "#;
-        let hints = get_hints(&mut server, uri, text)?;
+        let hints = get_hints(&server, uri, text)?;
         // For parenthesized calls, the parameter hint anchors at the "(" or first
         // token position depending on how the parser reports the arg location.
         // push(@arr  → array: at "(" (column 4)

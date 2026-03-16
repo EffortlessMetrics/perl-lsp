@@ -3,7 +3,7 @@ use serde_json::json;
 
 #[test]
 fn server_side_cancellation_emits_err_server_cancelled() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let _ = server.handle_request(serde_json::from_value::<JsonRpcRequest>(json!({

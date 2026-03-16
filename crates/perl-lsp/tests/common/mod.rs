@@ -76,29 +76,29 @@ pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
 }
 
 pub struct LspServer {
-    pub process: Child,
-    writer: BufWriter<ChildStdin>, // keep stdin pinned and flushed
-    rx: Receiver<Value>,
+    pub process: Mutex<Child>,
+    writer: Mutex<BufWriter<ChildStdin>>, // keep stdin pinned and flushed
+    rx: Mutex<Receiver<Value>>,
     // Keep threads alive for the lifetime of the server
     _stdout_thread: std::thread::JoinHandle<()>,
     _stderr_thread: std::thread::JoinHandle<()>,
-    pending: VecDeque<Value>,
+    pending: Mutex<VecDeque<Value>>,
     /// Flag to track if shutdown has been initiated (prevents double-shutdown)
     shutdown_initiated: std::sync::atomic::AtomicBool,
 }
 
 impl LspServer {
     /// Check if the server process is still running
-    pub fn is_alive(&mut self) -> bool {
-        match self.process.try_wait() {
+    pub fn is_alive(&self) -> bool {
+        match self.process.lock().unwrap_or_else(|e| e.into_inner()).try_wait() {
             Ok(status) => status.is_none(),
             Err(_) => false, // If we can't check status, assume not alive
         }
     }
 
     /// Get mutable access to the stdin writer
-    pub fn stdin_writer(&mut self) -> &mut BufWriter<ChildStdin> {
-        &mut self.writer
+    pub fn stdin_writer(&self) -> std::sync::MutexGuard<'_, BufWriter<ChildStdin>> {
+        self.writer.lock().unwrap_or_else(|e| e.into_inner())
     }
 }
 
@@ -380,12 +380,12 @@ pub fn start_lsp_server() -> LspServer {
         };
 
     let server = LspServer {
-        process,
-        writer: BufWriter::new(stdin),
-        rx,
+        process: Mutex::new(process),
+        writer: Mutex::new(BufWriter::new(stdin)),
+        rx: Mutex::new(rx),
         _stdout_thread,
         _stderr_thread,
-        pending: VecDeque::new(),
+        pending: Mutex::new(VecDeque::new()),
         shutdown_initiated: std::sync::atomic::AtomicBool::new(false),
     };
 
@@ -395,7 +395,7 @@ pub fn start_lsp_server() -> LspServer {
     server
 }
 
-pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
+pub fn send_request(server: &LspServer, mut request: Value) -> Value {
     // IMPORTANT: Extract/assign ID FIRST, before any early returns.
     // This ensures error responses can include the proper request ID.
     let id = match request.get("id") {
@@ -408,7 +408,9 @@ pub fn send_request(server: &mut LspServer, mut request: Value) -> Value {
     };
 
     let body = request.to_string();
-    if let Err(e) = send_message_inner(&mut server.writer, &body) {
+    if let Err(e) =
+        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body)
+    {
         // Handle write errors gracefully with proper JSON-RPC envelope
         // BrokenPipe during teardown is expected; other errors are transport failures
         return map_send_error(Some(id), e, "send_request");
@@ -454,10 +456,11 @@ fn map_send_error(id: Option<Value>, e: io::Error, context: &str) -> Value {
     }
 }
 
-pub fn send_notification(server: &mut LspServer, notification: Value) {
+pub fn send_notification(server: &LspServer, notification: Value) {
     let body = notification.to_string();
     // Ignore write errors during notification sends - BrokenPipe during teardown is expected
-    let _ = send_message_inner(&mut server.writer, &body);
+    let _ =
+        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body);
 }
 
 fn default_timeout() -> Duration {
@@ -584,20 +587,20 @@ fn internal_transport_error(msg: &str) -> Value {
 }
 
 /// Blocking receive with a sane default timeout to avoid hangs.
-pub fn read_response(server: &mut LspServer) -> Value {
+pub fn read_response(server: &LspServer) -> Value {
     read_response_timeout(server, default_timeout()).unwrap_or_else(
         || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
     )
 }
 
 /// Try to receive a response within `dur`. Returns None on timeout.
-pub fn read_response_timeout(server: &mut LspServer, dur: Duration) -> Option<Value> {
-    server.rx.recv_timeout(dur).ok()
+pub fn read_response_timeout(server: &LspServer, dur: Duration) -> Option<Value> {
+    server.rx.lock().unwrap_or_else(|e| e.into_inner()).recv_timeout(dur).ok()
 }
 
 /// Try to receive a notification (message without id) within `dur`. Returns None on timeout or if a response is received.
-pub fn read_notification_timeout(server: &mut LspServer, dur: Duration) -> Option<Value> {
-    match server.rx.recv_timeout(dur) {
+pub fn read_notification_timeout(server: &LspServer, dur: Duration) -> Option<Value> {
+    match server.rx.lock().unwrap_or_else(|e| e.into_inner()).recv_timeout(dur) {
         Ok(val) if val.get("id").is_none() => Some(val),
         Ok(_) => None,  // Got a response, not a notification
         Err(_) => None, // Timeout or disconnected
@@ -605,17 +608,21 @@ pub fn read_notification_timeout(server: &mut LspServer, dur: Duration) -> Optio
 }
 
 /// Receive the response matching `id` (number or string), buffering other traffic.
-pub fn read_response_matching(server: &mut LspServer, id: &Value, dur: Duration) -> Option<Value> {
+pub fn read_response_matching(server: &LspServer, id: &Value, dur: Duration) -> Option<Value> {
     // scan buffered
-    for _ in 0..server.pending.len() {
-        if let Some(msg) = server.pending.pop_front() {
-            if msg.get("id") == Some(id) {
-                return Some(msg);
+    {
+        let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
+        let len = pending.len();
+        for _ in 0..len {
+            if let Some(msg) = pending.pop_front() {
+                if msg.get("id") == Some(id) {
+                    return Some(msg);
+                }
+                if pending.len() >= PENDING_CAP {
+                    pending.pop_front();
+                }
+                pending.push_back(msg);
             }
-            if server.pending.len() >= PENDING_CAP {
-                server.pending.pop_front();
-            }
-            server.pending.push_back(msg);
         }
     }
     // then poll
@@ -625,15 +632,20 @@ pub fn read_response_matching(server: &mut LspServer, id: &Value, dur: Duration)
         if now >= deadline {
             return None;
         }
-        match server.rx.recv_timeout(deadline - now) {
+        let recv_result = {
+            let rx = server.rx.lock().unwrap_or_else(|e| e.into_inner());
+            rx.recv_timeout(deadline - now)
+        };
+        match recv_result {
             Ok(msg) => {
                 if msg.get("id") == Some(id) {
                     return Some(msg);
                 }
-                if server.pending.len() >= PENDING_CAP {
-                    server.pending.pop_front();
+                let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
+                if pending.len() >= PENDING_CAP {
+                    pending.pop_front();
                 }
-                server.pending.push_back(msg);
+                pending.push_back(msg);
             }
             Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => return None,
         }
@@ -641,46 +653,52 @@ pub fn read_response_matching(server: &mut LspServer, id: &Value, dur: Duration)
 }
 
 /// Convenience for numeric ids.
-pub fn read_response_matching_i64(server: &mut LspServer, id: i64, dur: Duration) -> Option<Value> {
+pub fn read_response_matching_i64(server: &LspServer, id: i64, dur: Duration) -> Option<Value> {
     read_response_matching(server, &json!(id), dur)
 }
 
 /// Write raw bytes (for malformed/binary frame tests).
-pub fn send_raw(server: &mut LspServer, bytes: &[u8]) {
+pub fn send_raw(server: &LspServer, bytes: &[u8]) {
     // Ignore write errors - BrokenPipe during teardown is expected
-    let _ = server.writer.write_all(bytes).and_then(|_| server.writer.flush());
+    let mut writer = server.writer.lock().unwrap_or_else(|e| e.into_inner());
+    let _ = writer.write_all(bytes).and_then(|_| writer.flush());
 }
 
 /// Read a notification matching the given method name
-pub fn read_notification_method(
-    server: &mut LspServer,
-    method: &str,
-    dur: Duration,
-) -> Option<Value> {
+pub fn read_notification_method(server: &LspServer, method: &str, dur: Duration) -> Option<Value> {
     let deadline = Instant::now() + dur;
 
     // scan buffered first
-    for _ in 0..server.pending.len() {
-        if let Some(msg) = server.pending.pop_front() {
-            if msg.get("id").is_none() && msg.get("method") == Some(&json!(method)) {
-                return Some(msg);
+    {
+        let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
+        let len = pending.len();
+        for _ in 0..len {
+            if let Some(msg) = pending.pop_front() {
+                if msg.get("id").is_none() && msg.get("method") == Some(&json!(method)) {
+                    return Some(msg);
+                }
+                pending.push_back(msg);
             }
-            server.pending.push_back(msg);
         }
     }
 
     // then poll
     while Instant::now() < deadline {
-        match server.rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+        let recv_result = {
+            let rx = server.rx.lock().unwrap_or_else(|e| e.into_inner());
+            rx.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+        };
+        match recv_result {
             Ok(msg) => {
                 let is_match = msg.get("id").is_none() && msg.get("method") == Some(&json!(method));
                 if is_match {
                     return Some(msg);
                 }
-                if server.pending.len() >= PENDING_CAP {
-                    server.pending.pop_front();
+                let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
+                if pending.len() >= PENDING_CAP {
+                    pending.pop_front();
                 }
-                server.pending.push_back(msg);
+                pending.push_back(msg);
             }
             Err(_) => break,
         }
@@ -689,16 +707,21 @@ pub fn read_notification_method(
 }
 
 /// Drain messages until no traffic for a quiet period (stabilizes CI)
-pub fn drain_until_quiet(server: &mut LspServer, quiet: Duration, ceiling: Duration) {
+pub fn drain_until_quiet(server: &LspServer, quiet: Duration, ceiling: Duration) {
     let start = Instant::now();
     let mut last = Instant::now();
     while start.elapsed() < ceiling {
-        match server.rx.recv_timeout(quiet.saturating_sub(last.elapsed())) {
+        let recv_result = {
+            let rx = server.rx.lock().unwrap_or_else(|e| e.into_inner());
+            rx.recv_timeout(quiet.saturating_sub(last.elapsed()))
+        };
+        match recv_result {
             Ok(msg) => {
-                if server.pending.len() >= PENDING_CAP {
-                    server.pending.pop_front();
+                let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
+                if pending.len() >= PENDING_CAP {
+                    pending.pop_front();
                 }
-                server.pending.push_back(msg);
+                pending.push_back(msg);
                 last = Instant::now();
             }
             Err(_) => break, // quiet period achieved
@@ -706,7 +729,7 @@ pub fn drain_until_quiet(server: &mut LspServer, quiet: Duration, ceiling: Durat
     }
 }
 
-pub fn initialize_lsp(server: &mut LspServer) -> Value {
+pub fn initialize_lsp(server: &LspServer) -> Value {
     let init = json!({
         "jsonrpc": "2.0",
         "id": 1,
@@ -722,7 +745,9 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
     // write without reading
     {
         let body = init.to_string();
-        if let Err(e) = send_message_inner(&mut server.writer, &body) {
+        if let Err(e) =
+            send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body)
+        {
             // Handle write errors gracefully with proper JSON-RPC envelope (id=1)
             return map_send_error(Some(json!(1)), e, "initialize");
         }
@@ -801,7 +826,7 @@ pub fn initialize_lsp(server: &mut LspServer) -> Value {
 }
 
 /// Wait for the index-ready notification from the server
-pub fn await_index_ready(server: &mut LspServer) {
+pub fn await_index_ready(server: &LspServer) {
     // Wait for perl-lsp/index-ready notification with a reasonable timeout
     if let Some(_notification) =
         read_notification_method(server, "perl-lsp/index-ready", Duration::from_millis(500))
@@ -813,14 +838,22 @@ pub fn await_index_ready(server: &mut LspServer) {
 }
 
 /// Gracefully shut the server down (best-effort) without hanging tests.
-pub fn shutdown_and_exit(server: &mut LspServer) {
+pub fn shutdown_and_exit(server: &LspServer) {
     use std::sync::atomic::Ordering;
 
     // Mark shutdown as initiated to prevent duplicate shutdown in Drop
     if server.shutdown_initiated.swap(true, Ordering::SeqCst) {
         // Already initiated, just wait for exit
         for _ in 0..20 {
-            if server.process.try_wait().ok().flatten().is_some() {
+            if server
+                .process
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .try_wait()
+                .ok()
+                .flatten()
+                .is_some()
+            {
                 return;
             }
             std::thread::sleep(Duration::from_millis(50));
@@ -837,25 +870,35 @@ pub fn shutdown_and_exit(server: &mut LspServer) {
 
     // Give it a moment, then force-kill if needed.
     for _ in 0..20 {
-        if server.process.try_wait().ok().flatten().is_some() {
+        if server
+            .process
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .try_wait()
+            .ok()
+            .flatten()
+            .is_some()
+        {
             return;
         }
         std::thread::sleep(Duration::from_millis(50));
     }
-    let _ = server.process.kill();
+    let _ = server.process.lock().unwrap_or_else(|e| e.into_inner()).kill();
 }
 
 /// Send raw message to server (for testing malformed input)
-pub fn send_raw_message(server: &mut LspServer, content: &str) {
+pub fn send_raw_message(server: &LspServer, content: &str) {
     // Ignore write errors - BrokenPipe during teardown is expected
-    let _ = send_message_inner(&mut server.writer, content);
+    let _ =
+        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), content);
 }
 
 /// Send request without waiting for response
-pub fn send_request_no_wait(server: &mut LspServer, req: Value) {
+pub fn send_request_no_wait(server: &LspServer, req: Value) {
     let body = req.to_string();
     // Ignore write errors - BrokenPipe during teardown is expected
-    let _ = send_message_inner(&mut server.writer, &body);
+    let _ =
+        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body);
 }
 
 impl Drop for LspServer {
@@ -863,7 +906,15 @@ impl Drop for LspServer {
         use std::sync::atomic::Ordering;
 
         // Check if already exited
-        if self.process.try_wait().ok().flatten().is_some() {
+        if self
+            .process
+            .get_mut()
+            .unwrap_or_else(|e| e.into_inner())
+            .try_wait()
+            .ok()
+            .flatten()
+            .is_some()
+        {
             return;
         }
 
@@ -871,35 +922,57 @@ impl Drop for LspServer {
         if self.shutdown_initiated.swap(true, Ordering::SeqCst) {
             // Already initiated, just wait for exit then force-kill if needed
             for _ in 0..50 {
-                if self.process.try_wait().ok().flatten().is_some() {
+                if self
+                    .process
+                    .get_mut()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .try_wait()
+                    .ok()
+                    .flatten()
+                    .is_some()
+                {
                     return;
                 }
                 std::thread::sleep(Duration::from_millis(10));
             }
-            let _ = self.process.kill();
-            let _ = self.process.wait();
+            let _ = self.process.get_mut().unwrap_or_else(|e| e.into_inner()).kill();
+            let _ = self.process.get_mut().unwrap_or_else(|e| e.into_inner()).wait();
             return;
         }
 
         // Best-effort graceful shutdown (never panic in Drop)
         // 1. Try to send shutdown request
         let shutdown_body = r#"{"jsonrpc":"2.0","id":999999,"method":"shutdown","params":{}}"#;
-        let _ = send_message_inner(&mut self.writer, shutdown_body);
+        let _ = send_message_inner(
+            &mut *self.writer.get_mut().unwrap_or_else(|e| e.into_inner()),
+            shutdown_body,
+        );
 
         // 2. Try to send exit notification
         let exit_body = r#"{"jsonrpc":"2.0","method":"exit"}"#;
-        let _ = send_message_inner(&mut self.writer, exit_body);
+        let _ = send_message_inner(
+            &mut *self.writer.get_mut().unwrap_or_else(|e| e.into_inner()),
+            exit_body,
+        );
 
         // 3. Wait briefly for graceful exit (max 500ms)
         for _ in 0..50 {
-            if self.process.try_wait().ok().flatten().is_some() {
+            if self
+                .process
+                .get_mut()
+                .unwrap_or_else(|e| e.into_inner())
+                .try_wait()
+                .ok()
+                .flatten()
+                .is_some()
+            {
                 return;
             }
             std::thread::sleep(Duration::from_millis(10));
         }
 
         // 4. Fall back to hard kill if graceful shutdown didn't work
-        let _ = self.process.kill();
-        let _ = self.process.wait();
+        let _ = self.process.get_mut().unwrap_or_else(|e| e.into_inner()).kill();
+        let _ = self.process.get_mut().unwrap_or_else(|e| e.into_inner()).wait();
     }
 }

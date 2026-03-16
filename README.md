@@ -26,10 +26,13 @@
 # 1. Install
 cargo install perl-lsp
 
-# 2. Configure your editor (VS Code)
+# 2. Verify the install
+perl-lsp --health  # should print: ok X.Y.Z
+
+# 3. Configure your editor (VS Code)
 code --install-extension effortlessmetrics.perl-lsp-rs
 
-# 3. Open a Perl file — completions, diagnostics, hover, and navigation work immediately.
+# 4. Open a Perl file — completions, diagnostics, hover, and navigation work immediately.
 ```
 
 <details>
@@ -111,6 +114,7 @@ See [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for the latest computed 
 
 ```bash
 cargo install perl-lsp
+perl-lsp --health  # should print: ok X.Y.Z
 ```
 
 ### From source
@@ -119,6 +123,7 @@ cargo install perl-lsp
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
 cd perl-lsp
 cargo install --path crates/perl-lsp
+perl-lsp --health  # should print: ok X.Y.Z
 ```
 
 ### Pre-built binaries

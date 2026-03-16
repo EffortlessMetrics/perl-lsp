@@ -104,7 +104,7 @@ sub new_name {
 /// Test LSP workspace/symbol request with index
 #[test]
 fn test_lsp_workspace_symbols_with_index() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_request = JsonRpcRequest {
@@ -198,7 +198,7 @@ fn test_lsp_workspace_symbols_with_index() -> Result<(), Box<dyn std::error::Err
 /// Test cross-file go-to-definition
 #[test]
 fn test_cross_file_definition() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize
     let init_request = JsonRpcRequest {

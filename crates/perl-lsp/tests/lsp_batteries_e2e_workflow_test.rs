@@ -14,7 +14,7 @@ use serde_json::json;
 
 #[test]
 fn test_complete_workflow_from_messy_to_clean() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
 
     // Step 1: Initialize the LSP server
     let init_req = JsonRpcRequest {
@@ -170,7 +170,7 @@ print encode_json({result => $result});
 
 #[test]
 fn test_batteries_included_features_summary() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),

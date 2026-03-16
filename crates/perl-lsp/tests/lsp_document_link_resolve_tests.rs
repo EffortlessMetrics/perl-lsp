@@ -11,7 +11,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 /// Test that documentLink/resolve returns target for deferred module links
 #[test]
 fn test_document_link_resolve_module() -> TestResult {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_params = json!({
@@ -76,7 +76,7 @@ fn test_document_link_resolve_module() -> TestResult {
 /// Test that documentLink/resolve handles file path links
 #[test]
 fn test_document_link_resolve_file() -> TestResult {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_params = json!({
@@ -139,7 +139,7 @@ fn test_document_link_resolve_file() -> TestResult {
 /// Test that already-resolved links pass through unchanged
 #[test]
 fn test_document_link_resolve_already_resolved() -> TestResult {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_params = json!({
@@ -193,7 +193,7 @@ fn test_document_link_resolve_already_resolved() -> TestResult {
 /// Test error handling for invalid link data
 #[test]
 fn test_document_link_resolve_invalid_data() -> TestResult {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_params = json!({
@@ -247,7 +247,7 @@ fn test_document_link_resolve_invalid_data() -> TestResult {
 /// Test error handling for missing parameters
 #[test]
 fn test_document_link_resolve_missing_params() -> TestResult {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_params = json!({
@@ -290,7 +290,7 @@ fn test_document_link_resolve_missing_params() -> TestResult {
 /// Test that data field is preserved in resolved link
 #[test]
 fn test_document_link_resolve_preserves_data() -> TestResult {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_params = json!({
@@ -352,7 +352,7 @@ fn test_document_link_resolve_preserves_data() -> TestResult {
 /// Test URL type links (already resolved)
 #[test]
 fn test_document_link_resolve_url_type() -> TestResult {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_params = json!({
@@ -408,7 +408,7 @@ fn test_document_link_resolve_url_type() -> TestResult {
 /// Integration test: documentLink returns deferred links, resolve fills them in
 #[test]
 fn test_document_link_integration() -> TestResult {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_params = json!({

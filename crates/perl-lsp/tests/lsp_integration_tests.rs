@@ -15,7 +15,7 @@ fn create_test_server() -> LspServer {
 }
 
 /// Helper to send a request and get response
-fn send_request(server: &mut LspServer, method: &str, params: Option<Value>) -> Option<Value> {
+fn send_request(server: &LspServer, method: &str, params: Option<Value>) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -27,7 +27,7 @@ fn send_request(server: &mut LspServer, method: &str, params: Option<Value>) -> 
 }
 
 /// Helper to send the initialized notification (required after initialize request)
-fn send_initialized(server: &mut LspServer) {
+fn send_initialized(server: &LspServer) {
     let initialized_notification = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
@@ -39,7 +39,7 @@ fn send_initialized(server: &mut LspServer) {
 
 #[test]
 fn test_lsp_initialization() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     let params = json!({
         "processId": null,
@@ -47,7 +47,7 @@ fn test_lsp_initialization() -> TestResult {
         "rootUri": "file:///test"
     });
 
-    let result = send_request(&mut server, "initialize", Some(params));
+    let result = send_request(&server, "initialize", Some(params));
     assert!(result.is_some());
 
     let capabilities = result.ok_or("Failed to get initialization response")?;
@@ -75,11 +75,11 @@ fn test_lsp_initialization() -> TestResult {
 
 #[test]
 fn test_workspace_symbols_integration() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -87,7 +87,7 @@ fn test_workspace_symbols_integration() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     // Open a document with symbols
     let test_code = r#"
@@ -106,7 +106,7 @@ my $local_var = 456;
 "#;
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -120,7 +120,7 @@ my $local_var = 456;
 
     // Search for symbols
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/symbol",
         Some(json!({
             "query": "func"
@@ -147,11 +147,11 @@ my $local_var = 456;
 
 #[test]
 fn test_code_lens_integration() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -159,7 +159,7 @@ fn test_code_lens_integration() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     // Open a test file
     let test_code = r#"#!/usr/bin/perl
@@ -180,7 +180,7 @@ sub TestPackage::test_method {
 "#;
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -194,7 +194,7 @@ sub TestPackage::test_method {
 
     // Get code lenses
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/codeLens",
         Some(json!({
             "textDocument": {
@@ -229,11 +229,11 @@ sub TestPackage::test_method {
 
 #[test]
 fn test_code_lens_resolve() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -241,7 +241,7 @@ fn test_code_lens_resolve() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     // Test resolving a code lens
     let unresolved_lens = json!({
@@ -254,7 +254,7 @@ fn test_code_lens_resolve() -> TestResult {
         }
     });
 
-    let result = send_request(&mut server, "codeLens/resolve", Some(unresolved_lens));
+    let result = send_request(&server, "codeLens/resolve", Some(unresolved_lens));
     assert!(result.is_some());
 
     let resolved = result.ok_or("Failed to resolve code lens")?;
@@ -266,11 +266,11 @@ fn test_code_lens_resolve() -> TestResult {
 
 #[test]
 fn test_multiple_documents() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -278,7 +278,7 @@ fn test_multiple_documents() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     // Open multiple documents
     let doc1 = r#"
@@ -292,7 +292,7 @@ sub function2 { }
 "#;
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -305,7 +305,7 @@ sub function2 { }
     );
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -319,7 +319,7 @@ sub function2 { }
 
     // Search across all documents
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/symbol",
         Some(json!({
             "query": "Module"
@@ -347,11 +347,11 @@ sub function2 { }
 
 #[test]
 fn test_document_updates() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -359,11 +359,11 @@ fn test_document_updates() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     // Open a document
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -377,7 +377,7 @@ fn test_document_updates() -> TestResult {
 
     // Update the document
     send_request(
-        &mut server,
+        &server,
         "textDocument/didChange",
         Some(json!({
             "textDocument": {
@@ -392,7 +392,7 @@ fn test_document_updates() -> TestResult {
 
     // Search for new symbols
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/symbol",
         Some(json!({
             "query": "new"
@@ -414,7 +414,7 @@ fn test_document_updates() -> TestResult {
 
     // Ensure stale symbols from old content are no longer discoverable
     let stale_result = send_request(
-        &mut server,
+        &server,
         "workspace/symbol",
         Some(json!({
             "query": "old_function"
@@ -431,10 +431,10 @@ fn test_document_updates() -> TestResult {
 
 #[test]
 fn test_incremental_change_replaces_symbol_set() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -442,10 +442,10 @@ fn test_incremental_change_replaces_symbol_set() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -458,7 +458,7 @@ fn test_incremental_change_replaces_symbol_set() -> TestResult {
     );
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didChange",
         Some(json!({
             "textDocument": {
@@ -472,7 +472,7 @@ fn test_incremental_change_replaces_symbol_set() -> TestResult {
     );
 
     let new_symbols = send_request(
-        &mut server,
+        &server,
         "workspace/symbol",
         Some(json!({
             "query": "symbol"
@@ -548,16 +548,16 @@ package MyPkg;
 
 #[test]
 fn test_error_handling() {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Try to use server before initialization
-    let _result = send_request(&mut server, "textDocument/completion", Some(json!({})));
+    let _result = send_request(&server, "textDocument/completion", Some(json!({})));
     // Server may return an error or empty result - either is fine
     // Just ensure it doesn't panic
 
     // Initialize
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -567,17 +567,17 @@ fn test_error_handling() {
     );
 
     // Send invalid request
-    let result = send_request(&mut server, "invalid/method", Some(json!({})));
+    let result = send_request(&server, "invalid/method", Some(json!({})));
     assert!(result.is_none());
 }
 
 #[test]
 fn test_semantic_tokens_full() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -585,11 +585,11 @@ fn test_semantic_tokens_full() -> TestResult {
             "capabilities": {}
         })),
     );
-    send_request(&mut server, "initialized", None);
+    send_request(&server, "initialized", None);
 
     // Open a document
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -616,7 +616,7 @@ process_data($obj, $global);
 
     // Request semantic tokens
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/semanticTokens/full",
         Some(json!({
             "textDocument": {
@@ -640,11 +640,11 @@ process_data($obj, $global);
 
 #[test]
 fn test_semantic_tokens_range() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -652,11 +652,11 @@ fn test_semantic_tokens_range() -> TestResult {
             "capabilities": {}
         })),
     );
-    send_request(&mut server, "initialized", None);
+    send_request(&server, "initialized", None);
 
     // Open a document
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -676,7 +676,7 @@ print $var3;
 
     // Request semantic tokens for a range (lines 1-3)
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/semanticTokens/range",
         Some(json!({
             "textDocument": {
@@ -706,11 +706,11 @@ print $var3;
 
 #[test]
 fn test_call_hierarchy_prepare() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     let init_result = send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -727,11 +727,11 @@ fn test_call_hierarchy_prepare() -> TestResult {
         eprintln!("call hierarchy not advertised; skipping test");
         return Ok(());
     }
-    send_request(&mut server, "initialized", None);
+    send_request(&server, "initialized", None);
 
     // Open a document
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -759,7 +759,7 @@ sub process_data {
 
     // Prepare call hierarchy at "main" function
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/prepareCallHierarchy",
         Some(json!({
             "textDocument": {
@@ -788,11 +788,11 @@ sub process_data {
 
 #[test]
 fn test_call_hierarchy_incoming() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     let init_result = send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -809,11 +809,11 @@ fn test_call_hierarchy_incoming() -> TestResult {
         eprintln!("call hierarchy not advertised; skipping test");
         return Ok(());
     }
-    send_request(&mut server, "initialized", None);
+    send_request(&server, "initialized", None);
 
     // Open a document
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -840,7 +840,7 @@ sub target_func {
 
     // First prepare call hierarchy for target_func
     let prepare_result = send_request(
-        &mut server,
+        &server,
         "textDocument/prepareCallHierarchy",
         Some(json!({
             "textDocument": {
@@ -859,7 +859,7 @@ sub target_func {
 
     // Get incoming calls
     let incoming_result = send_request(
-        &mut server,
+        &server,
         "callHierarchy/incomingCalls",
         Some(json!({
             "item": target_item
@@ -886,11 +886,11 @@ sub target_func {
 
 #[test]
 fn test_call_hierarchy_outgoing() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     let init_result = send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -907,11 +907,11 @@ fn test_call_hierarchy_outgoing() -> TestResult {
         eprintln!("call hierarchy not advertised; skipping test");
         return Ok(());
     }
-    send_request(&mut server, "initialized", None);
+    send_request(&server, "initialized", None);
 
     // Open a document
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -935,7 +935,7 @@ sub helper {
 
     // First prepare call hierarchy for main
     let prepare_result = send_request(
-        &mut server,
+        &server,
         "textDocument/prepareCallHierarchy",
         Some(json!({
             "textDocument": {
@@ -954,7 +954,7 @@ sub helper {
 
     // Get outgoing calls
     let outgoing_result = send_request(
-        &mut server,
+        &server,
         "callHierarchy/outgoingCalls",
         Some(json!({
             "item": main_item
@@ -982,11 +982,11 @@ sub helper {
 
 #[test]
 fn test_inlay_hints() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -994,11 +994,11 @@ fn test_inlay_hints() -> TestResult {
             "capabilities": {}
         })),
     );
-    send_request(&mut server, "initialized", None);
+    send_request(&server, "initialized", None);
 
     // Open a document with function calls
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -1019,7 +1019,7 @@ my $hash = { key => "value" };
 
     // Request inlay hints
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/inlayHint",
         Some(json!({
             "textDocument": {
@@ -1060,11 +1060,11 @@ my $hash = { key => "value" };
 
 #[test]
 fn test_inlay_hints_range() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     // Initialize server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -1072,11 +1072,11 @@ fn test_inlay_hints_range() -> TestResult {
             "capabilities": {}
         })),
     );
-    send_request(&mut server, "initialized", None);
+    send_request(&server, "initialized", None);
 
     // Open a document
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -1095,7 +1095,7 @@ push(@array4, "value4");  # Line 4
 
     // Request inlay hints for lines 2-3 only
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/inlayHint",
         Some(json!({
             "textDocument": {
@@ -1129,10 +1129,10 @@ push(@array4, "value4");  # Line 4
 
 #[test]
 fn test_glob_expression_document_symbols() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -1140,7 +1140,7 @@ fn test_glob_expression_document_symbols() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     let test_code = r#"
 my @files = glob "*.pl";
@@ -1149,7 +1149,7 @@ my @all = glob "**/*.pm";
 "#;
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -1162,7 +1162,7 @@ my @all = glob "**/*.pm";
     );
 
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/documentSymbol",
         Some(json!({
             "textDocument": {
@@ -1183,10 +1183,10 @@ my @all = glob "**/*.pm";
 
 #[test]
 fn test_glob_expression_hover() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -1194,12 +1194,12 @@ fn test_glob_expression_hover() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     let test_code = "my @files = glob '*.pl';\n";
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -1213,7 +1213,7 @@ fn test_glob_expression_hover() -> TestResult {
 
     let glob_position = test_code.find("glob").ok_or("Could not find 'glob'")?;
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/hover",
         Some(json!({
             "textDocument": {
@@ -1239,10 +1239,10 @@ fn test_glob_expression_hover() -> TestResult {
 
 #[test]
 fn test_glob_expression_completion() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -1250,12 +1250,12 @@ fn test_glob_expression_completion() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     let test_code = "my @files = glob '*.pl';\nmy $file = ";
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -1268,7 +1268,7 @@ fn test_glob_expression_completion() -> TestResult {
     );
 
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/completion",
         Some(json!({
             "textDocument": {
@@ -1288,10 +1288,10 @@ fn test_glob_expression_completion() -> TestResult {
 
 #[test]
 fn test_glob_angle_bracket_syntax() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -1299,7 +1299,7 @@ fn test_glob_angle_bracket_syntax() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     let test_code = r#"
 my @files = <*.pl>;
@@ -1307,7 +1307,7 @@ my @modules = <lib/**/*.pm>;
 "#;
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -1320,7 +1320,7 @@ my @modules = <lib/**/*.pm>;
     );
 
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/documentSymbol",
         Some(json!({
             "textDocument": {
@@ -1341,10 +1341,10 @@ my @modules = <lib/**/*.pm>;
 
 #[test]
 fn test_glob_vs_readline_distinction() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -1352,7 +1352,7 @@ fn test_glob_vs_readline_distinction() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     let test_code = r#"
 my @files = <*.pl>;
@@ -1363,7 +1363,7 @@ my $content = <$fh>;
 "#;
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -1376,7 +1376,7 @@ my $content = <$fh>;
     );
 
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/documentSymbol",
         Some(json!({
             "textDocument": {
@@ -1397,10 +1397,10 @@ my $content = <$fh>;
 
 #[test]
 fn test_glob_complex_patterns() -> TestResult {
-    let mut server = create_test_server();
+    let server = create_test_server();
 
     send_request(
-        &mut server,
+        &server,
         "initialize",
         Some(json!({
             "processId": null,
@@ -1408,7 +1408,7 @@ fn test_glob_complex_patterns() -> TestResult {
             "rootUri": "file:///test"
         })),
     );
-    send_initialized(&mut server);
+    send_initialized(&server);
 
     let test_code = r#"
 my @recursive = glob "**/*.pm";
@@ -1420,7 +1420,7 @@ my @mixed = glob "/tmp/[abc]*{.txt,.log}";
 "#;
 
     send_request(
-        &mut server,
+        &server,
         "textDocument/didOpen",
         Some(json!({
             "textDocument": {
@@ -1433,7 +1433,7 @@ my @mixed = glob "/tmp/[abc]*{.txt,.log}";
     );
 
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/documentSymbol",
         Some(json!({
             "textDocument": {

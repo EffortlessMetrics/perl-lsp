@@ -35,8 +35,8 @@ struct CancellationTestFixture {
 
 impl CancellationTestFixture {
     fn new() -> Self {
-        let mut server = start_lsp_server();
-        initialize_lsp(&mut server);
+        let server = start_lsp_server();
+        initialize_lsp(&server);
 
         let mut test_workspace_files = HashMap::new();
 
@@ -85,7 +85,7 @@ print "Results: $result, $other, $complex\n";
 
         // Setup test files
         for (uri, content) in &test_workspace_files {
-            setup_test_file(&mut server, uri, content);
+            setup_test_file(&server, uri, content);
         }
 
         // Wait for indexing to complete with adaptive timeout
@@ -94,18 +94,18 @@ print "Results: $result, $other, $complex\n";
             3..=4 => Duration::from_secs(4), // Moderate: reduced timeout
             _ => Duration::from_secs(3),     // Unconstrained: shorter timeout
         };
-        drain_until_quiet(&mut server, Duration::from_millis(200), indexing_timeout);
+        drain_until_quiet(&server, Duration::from_millis(200), indexing_timeout);
 
         Self { server }
     }
 
     fn setup_test_file(&mut self, uri: &str, content: &str) {
-        setup_test_file(&mut self.server, uri, content);
+        setup_test_file(&self.server, uri, content);
     }
 }
 
 /// Setup test file helper
-fn setup_test_file(server: &mut LspServer, uri: &str, content: &str) {
+fn setup_test_file(server: &LspServer, uri: &str, content: &str) {
     send_notification(
         server,
         json!({
@@ -132,12 +132,12 @@ fn setup_test_file(server: &mut LspServer, uri: &str, content: &str) {
 #[test]
 fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dyn std::error::Error>>
 {
-    let mut fixture = CancellationTestFixture::new();
+    let fixture = CancellationTestFixture::new();
 
     // Test completion provider cancellation with enhanced context
     let completion_id = 1001;
     send_request_no_wait(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "id": completion_id,
@@ -152,7 +152,7 @@ fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dy
     // Send enhanced cancellation with provider context
     // This should fail initially as enhanced cancellation infrastructure doesn't exist
     send_notification(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -170,7 +170,7 @@ fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dy
 
     // Validate enhanced cancellation response
     let response =
-        read_response_matching_i64(&mut fixture.server, completion_id, Duration::from_millis(500));
+        read_response_matching_i64(&fixture.server, completion_id, Duration::from_millis(500));
 
     if let Some(resp) = response {
         if let Some(error) = resp.get("error") {
@@ -209,7 +209,7 @@ fn test_enhanced_cancel_request_with_provider_context_ac1() -> Result<(), Box<dy
 #[test]
 fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn std::error::Error>>
 {
-    let mut fixture = CancellationTestFixture::new();
+    let fixture = CancellationTestFixture::new();
 
     let provider_scenarios = vec![
         (
@@ -253,7 +253,7 @@ fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn 
     // Send all provider requests concurrently
     for (id, method, params, _provider_type) in &provider_scenarios {
         send_request_no_wait(
-            &mut fixture.server,
+            &fixture.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
@@ -266,7 +266,7 @@ fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn 
     // Cancel all requests with provider-specific context
     for (id, method, _params, provider_type) in &provider_scenarios {
         send_notification(
-            &mut fixture.server,
+            &fixture.server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "$/cancelRequest",
@@ -288,7 +288,7 @@ fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn 
     // Validate all cancellations with enhanced error context
     for (id, method, _params, _provider_type) in &provider_scenarios {
         let response =
-            read_response_matching_i64(&mut fixture.server, *id, Duration::from_millis(1000));
+            read_response_matching_i64(&fixture.server, *id, Duration::from_millis(1000));
 
         if let Some(resp) = response {
             if let Some(error) = resp.get("error") {
@@ -324,11 +324,11 @@ fn test_multiple_provider_cancellation_with_context_ac1() -> Result<(), Box<dyn 
 /// AC:1 - JSON-RPC 2.0 protocol compliance validation
 #[test]
 fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Error>> {
-    let mut fixture = CancellationTestFixture::new();
+    let fixture = CancellationTestFixture::new();
 
     // Test 1: Invalid cancellation request handling
     send_notification(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -340,7 +340,7 @@ fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Err
     );
 
     // Verify server remains stable and doesn't crash
-    let health_check = read_response_timeout(&mut fixture.server, Duration::from_millis(200));
+    let health_check = read_response_timeout(&fixture.server, Duration::from_millis(200));
     assert!(health_check.is_none(), "$/cancelRequest notification should not produce response");
     assert!(
         fixture.server.is_alive(),
@@ -349,7 +349,7 @@ fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Err
 
     // Test 2: Cancellation of non-existent request
     send_notification(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -358,13 +358,13 @@ fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Err
     );
 
     // Should handle gracefully without response
-    let response = read_response_timeout(&mut fixture.server, Duration::from_millis(200));
+    let response = read_response_timeout(&fixture.server, Duration::from_millis(200));
     assert!(response.is_none(), "Non-existent request cancellation should not produce response");
 
     // Test 3: JSON-RPC structure validation
     let test_id = 3001;
     send_request_no_wait(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "id": test_id,
@@ -377,7 +377,7 @@ fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Err
     );
 
     send_notification(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -386,7 +386,7 @@ fn test_json_rpc_protocol_compliance_ac1() -> Result<(), Box<dyn std::error::Err
     );
 
     if let Some(resp) =
-        read_response_matching_i64(&mut fixture.server, test_id, Duration::from_millis(500))
+        read_response_matching_i64(&fixture.server, test_id, Duration::from_millis(500))
     {
         // Validate JSON-RPC 2.0 structure
         assert_eq!(resp.get("jsonrpc").and_then(|v| v.as_str()), Some("2.0"));
@@ -697,7 +697,7 @@ fn test_provider_cleanup_thread_safety_ac2() -> Result<(), Box<dyn std::error::E
 /// AC:3 - Dual indexing cancellation with consistency preservation
 #[test]
 fn test_dual_indexing_cancellation_consistency_ac3() -> Result<(), Box<dyn std::error::Error>> {
-    let mut fixture = CancellationTestFixture::new();
+    let fixture = CancellationTestFixture::new();
 
     // Wait for initial indexing to complete with adaptive timeout
     let initial_indexing_timeout = match max_concurrent_threads() {
@@ -705,12 +705,12 @@ fn test_dual_indexing_cancellation_consistency_ac3() -> Result<(), Box<dyn std::
         3..=4 => Duration::from_secs(6),  // Moderate: reduced timeout
         _ => Duration::from_secs(4),      // Unconstrained: shorter timeout
     };
-    drain_until_quiet(&mut fixture.server, Duration::from_millis(500), initial_indexing_timeout);
+    drain_until_quiet(&fixture.server, Duration::from_millis(500), initial_indexing_timeout);
 
     // Verify baseline dual pattern functionality before cancellation testing
     let baseline_qualified =
-        request_workspace_symbols(&mut fixture.server, "TestModule::test_function");
-    let baseline_bare = request_workspace_symbols(&mut fixture.server, "test_function");
+        request_workspace_symbols(&fixture.server, "TestModule::test_function");
+    let baseline_bare = request_workspace_symbols(&fixture.server, "test_function");
 
     // Baseline assertions - these should work with current implementation
     assert!(
@@ -721,7 +721,7 @@ fn test_dual_indexing_cancellation_consistency_ac3() -> Result<(), Box<dyn std::
     // Test cancellation during workspace symbol search (re-indexing simulation)
     let reindex_id = 3001;
     send_request_no_wait(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "id": reindex_id,
@@ -732,7 +732,7 @@ fn test_dual_indexing_cancellation_consistency_ac3() -> Result<(), Box<dyn std::
 
     // Cancel during indexing operation to test consistency preservation
     send_notification(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -748,8 +748,8 @@ fn test_dual_indexing_cancellation_consistency_ac3() -> Result<(), Box<dyn std::
 
     // Verify dual pattern functionality is preserved after cancellation
     let post_cancel_qualified =
-        request_workspace_symbols(&mut fixture.server, "TestModule::test_function");
-    let post_cancel_bare = request_workspace_symbols(&mut fixture.server, "test_function");
+        request_workspace_symbols(&fixture.server, "TestModule::test_function");
+    let post_cancel_bare = request_workspace_symbols(&fixture.server, "test_function");
 
     // Index consistency validation - enhanced implementation will ensure
     // atomic operations preserve dual indexing integrity
@@ -774,7 +774,7 @@ fn test_dual_indexing_cancellation_consistency_ac3() -> Result<(), Box<dyn std::
 }
 
 /// Helper function to request workspace symbols
-fn request_workspace_symbols(server: &mut LspServer, query: &str) -> Vec<Value> {
+fn request_workspace_symbols(server: &LspServer, query: &str) -> Vec<Value> {
     let response = send_request(
         server,
         json!({
@@ -791,7 +791,7 @@ fn request_workspace_symbols(server: &mut LspServer, query: &str) -> Vec<Value> 
 /// AC:3 - Cross-file navigation cancellation with multi-tier fallback preservation
 #[test]
 fn test_cross_file_navigation_cancellation_ac3() -> Result<(), Box<dyn std::error::Error>> {
-    let mut fixture = CancellationTestFixture::new();
+    let fixture = CancellationTestFixture::new();
 
     // Wait for cross-file indexing to stabilize with adaptive timeout
     let cross_file_timeout = match max_concurrent_threads() {
@@ -799,12 +799,12 @@ fn test_cross_file_navigation_cancellation_ac3() -> Result<(), Box<dyn std::erro
         3..=4 => Duration::from_secs(8),  // Moderate: reduced timeout
         _ => Duration::from_secs(5),      // Unconstrained: shorter timeout
     };
-    drain_until_quiet(&mut fixture.server, Duration::from_millis(1000), cross_file_timeout);
+    drain_until_quiet(&fixture.server, Duration::from_millis(1000), cross_file_timeout);
 
     // Test definition resolution cancellation across files
     let definition_id = 4001;
     send_request_no_wait(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "id": definition_id,
@@ -818,7 +818,7 @@ fn test_cross_file_navigation_cancellation_ac3() -> Result<(), Box<dyn std::erro
 
     // Cancel definition resolution to test multi-tier fallback preservation
     send_notification(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -835,12 +835,12 @@ fn test_cross_file_navigation_cancellation_ac3() -> Result<(), Box<dyn std::erro
 
     // Validate cancellation response or completion
     let response =
-        read_response_matching_i64(&mut fixture.server, definition_id, Duration::from_secs(2));
+        read_response_matching_i64(&fixture.server, definition_id, Duration::from_secs(2));
     validate_cancellation_or_completion(response, "cross-file definition resolution");
 
     // Verify workspace navigation remains functional after cancellation
     let verification_response = send_request(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/definition",
@@ -907,12 +907,12 @@ fn test_workspace_symbol_dual_pattern_cancellation_ac3() -> Result<(), Box<dyn s
         3..=4 => Duration::from_secs(12), // Moderate: reduced timeout
         _ => Duration::from_secs(8),      // Unconstrained: shorter timeout
     };
-    drain_until_quiet(&mut fixture.server, Duration::from_millis(1000), large_file_timeout);
+    drain_until_quiet(&fixture.server, Duration::from_millis(1000), large_file_timeout);
 
     // Test qualified pattern search with cancellation
     let qualified_search_id = 5001;
     send_request_no_wait(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "id": qualified_search_id,
@@ -924,7 +924,7 @@ fn test_workspace_symbol_dual_pattern_cancellation_ac3() -> Result<(), Box<dyn s
     // Cancel after brief delay to test cancellation during search
     thread::sleep(Duration::from_millis(50));
     send_notification(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -941,7 +941,7 @@ fn test_workspace_symbol_dual_pattern_cancellation_ac3() -> Result<(), Box<dyn s
     // Test bare pattern search with cancellation
     let bare_search_id = 5002;
     send_request_no_wait(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "id": bare_search_id,
@@ -952,7 +952,7 @@ fn test_workspace_symbol_dual_pattern_cancellation_ac3() -> Result<(), Box<dyn s
 
     thread::sleep(Duration::from_millis(50));
     send_notification(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -967,13 +967,10 @@ fn test_workspace_symbol_dual_pattern_cancellation_ac3() -> Result<(), Box<dyn s
     );
 
     // Validate both search cancellations
-    let qualified_response = read_response_matching_i64(
-        &mut fixture.server,
-        qualified_search_id,
-        Duration::from_secs(3),
-    );
+    let qualified_response =
+        read_response_matching_i64(&fixture.server, qualified_search_id, Duration::from_secs(3));
     let bare_response =
-        read_response_matching_i64(&mut fixture.server, bare_search_id, Duration::from_secs(3));
+        read_response_matching_i64(&fixture.server, bare_search_id, Duration::from_secs(3));
 
     validate_cancellation_or_completion(qualified_response, "qualified pattern search");
     validate_cancellation_or_completion(bare_response, "bare pattern search");
@@ -1007,7 +1004,7 @@ fn generate_large_perl_content(function_count: usize) -> String {
 /// AC:4 - Enhanced -32800 error code responses with context and performance tracking
 #[test]
 fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error::Error>> {
-    let mut fixture = CancellationTestFixture::new();
+    let fixture = CancellationTestFixture::new();
 
     let test_scenarios = vec![
         (
@@ -1045,7 +1042,7 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
 
         // Send request
         send_request_no_wait(
-            &mut fixture.server,
+            &fixture.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -1056,7 +1053,7 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
 
         // Cancel with enhanced context
         send_notification(
-            &mut fixture.server,
+            &fixture.server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "$/cancelRequest",
@@ -1080,7 +1077,7 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
 
         // Validate enhanced error response
         if let Some(response) =
-            read_response_matching_i64(&mut fixture.server, request_id, Duration::from_secs(1))
+            read_response_matching_i64(&fixture.server, request_id, Duration::from_secs(1))
         {
             if let Some(error) = response.get("error") {
                 // Validate standard error code
@@ -1147,14 +1144,14 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
 /// AC:4 - Graceful error handling under various cancellation scenarios
 #[test]
 fn test_graceful_error_degradation_ac4() -> Result<(), Box<dyn std::error::Error>> {
-    let mut fixture = CancellationTestFixture::new();
+    let fixture = CancellationTestFixture::new();
 
     // Test 1: Rapid successive cancellations
     let rapid_ids = vec![7001, 7002, 7003, 7004, 7005];
 
     for &id in &rapid_ids {
         send_request_no_wait(
-            &mut fixture.server,
+            &fixture.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
@@ -1168,7 +1165,7 @@ fn test_graceful_error_degradation_ac4() -> Result<(), Box<dyn std::error::Error
 
         // Immediate cancellation
         send_notification(
-            &mut fixture.server,
+            &fixture.server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "$/cancelRequest",
@@ -1181,7 +1178,7 @@ fn test_graceful_error_degradation_ac4() -> Result<(), Box<dyn std::error::Error
     let mut responses = Vec::new();
     for &id in &rapid_ids {
         if let Some(resp) =
-            read_response_matching_i64(&mut fixture.server, id, Duration::from_millis(500))
+            read_response_matching_i64(&fixture.server, id, Duration::from_millis(500))
         {
             responses.push((id, resp));
         }
@@ -1229,7 +1226,7 @@ fn test_graceful_error_degradation_ac4() -> Result<(), Box<dyn std::error::Error
     ];
 
     for malformed_request in malformed_scenarios {
-        send_notification(&mut fixture.server, malformed_request);
+        send_notification(&fixture.server, malformed_request);
 
         // Brief pause to process
         thread::sleep(adaptive_sleep_ms(50));
@@ -1243,7 +1240,7 @@ fn test_graceful_error_degradation_ac4() -> Result<(), Box<dyn std::error::Error
 
     // Final stability check
     let health_response = send_request(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",
@@ -1271,7 +1268,7 @@ fn test_graceful_error_degradation_ac4() -> Result<(), Box<dyn std::error::Error
 /// AC:5 - Multiple concurrent cancellation handling without interference
 #[test]
 fn test_concurrent_cancellation_coordination_ac5() -> Result<(), Box<dyn std::error::Error>> {
-    let mut fixture = CancellationTestFixture::new();
+    let fixture = CancellationTestFixture::new();
 
     // Create concurrent requests across different providers
     let concurrent_requests = vec![
@@ -1321,7 +1318,7 @@ fn test_concurrent_cancellation_coordination_ac5() -> Result<(), Box<dyn std::er
     let start_time = Instant::now();
     for (id, method, params) in &concurrent_requests {
         send_request_no_wait(
-            &mut fixture.server,
+            &fixture.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
@@ -1346,7 +1343,7 @@ fn test_concurrent_cancellation_coordination_ac5() -> Result<(), Box<dyn std::er
     for (id, delay) in cancellation_patterns {
         thread::sleep(delay);
         send_notification(
-            &mut fixture.server,
+            &fixture.server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "$/cancelRequest",
@@ -1365,7 +1362,7 @@ fn test_concurrent_cancellation_coordination_ac5() -> Result<(), Box<dyn std::er
     let mut results = HashMap::new();
     for (id, method, _) in &concurrent_requests {
         if let Some(response) =
-            read_response_matching_i64(&mut fixture.server, *id, Duration::from_secs(2))
+            read_response_matching_i64(&fixture.server, *id, Duration::from_secs(2))
         {
             results.insert(*id, ((*method).to_string(), response));
         }
@@ -1429,7 +1426,7 @@ fn test_concurrent_cancellation_coordination_ac5() -> Result<(), Box<dyn std::er
 /// AC:5 - Resource cleanup during concurrent cancellation without memory leaks
 #[test]
 fn test_concurrent_resource_cleanup_ac5() -> Result<(), Box<dyn std::error::Error>> {
-    let mut fixture = CancellationTestFixture::new();
+    let fixture = CancellationTestFixture::new();
 
     // Memory measurement before concurrent operations
     let baseline_memory = estimate_memory_usage();
@@ -1446,7 +1443,7 @@ fn test_concurrent_resource_cleanup_ac5() -> Result<(), Box<dyn std::error::Erro
             let id = (wave * 1000) + req_in_wave + 9000;
 
             send_request_no_wait(
-                &mut fixture.server,
+                &fixture.server,
                 json!({
                     "jsonrpc": "2.0",
                     "id": id,
@@ -1466,7 +1463,7 @@ fn test_concurrent_resource_cleanup_ac5() -> Result<(), Box<dyn std::error::Erro
             if idx % 3 != 0 {
                 // Cancel ~67% of requests
                 send_notification(
-                    &mut fixture.server,
+                    &fixture.server,
                     json!({
                         "jsonrpc": "2.0",
                         "method": "$/cancelRequest",
@@ -1487,7 +1484,7 @@ fn test_concurrent_resource_cleanup_ac5() -> Result<(), Box<dyn std::error::Erro
     }
 
     // Wait for all operations to settle
-    drain_until_quiet(&mut fixture.server, Duration::from_millis(500), Duration::from_secs(10));
+    drain_until_quiet(&fixture.server, Duration::from_millis(500), Duration::from_secs(10));
 
     // Memory measurement after concurrent operations
     let final_memory = estimate_memory_usage();
@@ -1509,7 +1506,7 @@ fn test_concurrent_resource_cleanup_ac5() -> Result<(), Box<dyn std::error::Erro
 
     // Final system health check
     let health_response = send_request(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",
@@ -1547,7 +1544,7 @@ fn estimate_memory_usage() -> usize {
 impl Drop for CancellationTestFixture {
     fn drop(&mut self) {
         // Graceful cleanup
-        shutdown_and_exit(&mut self.server);
+        shutdown_and_exit(&self.server);
     }
 }
 

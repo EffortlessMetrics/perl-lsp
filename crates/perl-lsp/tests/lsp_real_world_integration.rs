@@ -14,8 +14,8 @@ fn test_cpan_module_structure() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Typical CPAN module structure
     let module_code = r#"
@@ -80,7 +80,7 @@ This is a sample CPAN-style module for testing.
     let uri = "file:///Module.pm";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -97,7 +97,7 @@ This is a sample CPAN-style module for testing.
 
     // Request document symbols
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -132,8 +132,8 @@ fn test_mojolicious_app() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let mojo_app = r#"
 #!/usr/bin/env perl
@@ -200,7 +200,7 @@ __DATA__
     let uri = "file:///app.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -217,7 +217,7 @@ __DATA__
 
     // Test diagnostics - should have no errors
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -244,8 +244,8 @@ fn test_dbi_database_code() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let dbi_code = r#"
 #!/usr/bin/perl
@@ -340,7 +340,7 @@ END {
     let uri = "file:///database.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -357,7 +357,7 @@ END {
 
     // Request symbols
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -391,8 +391,8 @@ fn test_perl_test_file() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let test_code = r#"
 #!/usr/bin/perl
@@ -464,7 +464,7 @@ done_testing();
     let uri = "file:///test.t";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -481,7 +481,7 @@ done_testing();
 
     // Verify parsing succeeds
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -506,8 +506,8 @@ fn test_catalyst_controller() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let catalyst_code = r#"
 package MyApp::Controller::API;
@@ -637,7 +637,7 @@ __PACKAGE__->meta->make_immutable;
     let uri = "file:///Controller.pm";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -654,7 +654,7 @@ __PACKAGE__->meta->make_immutable;
 
     // Request symbols - should find all REST methods
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -687,8 +687,8 @@ fn test_complex_regex_patterns() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let regex_code = r#"
 #!/usr/bin/perl
@@ -798,7 +798,7 @@ sub normalize_text {
     let uri = "file:///regex.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -815,7 +815,7 @@ sub normalize_text {
 
     // Should parse complex regex patterns without errors
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -840,8 +840,8 @@ fn test_modern_perl_features() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let modern_perl = r#"
 #!/usr/bin/perl
@@ -937,7 +937,7 @@ sub array_operations {
     let uri = "file:///modern.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -954,7 +954,7 @@ sub array_operations {
 
     // Request symbols to verify modern constructs are recognized
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -985,8 +985,8 @@ fn test_multi_file_project() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Main script
     let main_script = r#"
@@ -1058,7 +1058,7 @@ sub get {
     let config_uri = "file:///lib/MyApp/Config.pm";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -1074,7 +1074,7 @@ sub get {
     );
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -1093,7 +1093,7 @@ sub get {
     // For now, just verify both files parse correctly
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -1107,7 +1107,7 @@ sub get {
     assert_eq!(items.len(), 0, "Main script should parse without errors");
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,

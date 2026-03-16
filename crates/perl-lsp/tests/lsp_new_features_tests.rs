@@ -6,10 +6,7 @@ mod common;
 use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 
 #[cfg(feature = "lsp-extras")]
-fn resolve_link(
-    server: &mut common::LspServer,
-    link: &serde_json::Value,
-) -> Option<serde_json::Value> {
+fn resolve_link(server: &common::LspServer, link: &serde_json::Value) -> Option<serde_json::Value> {
     let response = send_request(
         server,
         json!({
@@ -26,12 +23,12 @@ fn resolve_link(
 #[cfg(feature = "lsp-extras")]
 #[test]
 fn test_document_links_metacpan() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -51,7 +48,7 @@ require Module::Load;
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -66,7 +63,7 @@ require Module::Load;
     assert!(links.len() >= 3, "Should have links for Data::Dumper, File::Path, and Module::Load");
 
     let resolved_links: Vec<_> =
-        links.iter().filter_map(|link| resolve_link(&mut server, link)).collect();
+        links.iter().filter_map(|link| resolve_link(&server, link)).collect();
 
     // Check Data::Dumper link
     let dumper_link = resolved_links
@@ -83,12 +80,12 @@ require Module::Load;
 #[cfg(feature = "lsp-extras")]
 #[test]
 fn test_document_links_local_files() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///workspace/src/main.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -107,7 +104,7 @@ do "config/settings.pl";
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -124,7 +121,7 @@ do "config/settings.pl";
     }
 
     let resolved_links: Vec<_> =
-        links.iter().filter_map(|link| resolve_link(&mut server, link)).collect();
+        links.iter().filter_map(|link| resolve_link(&server, link)).collect();
     if resolved_links.is_empty() {
         return Ok(());
     }
@@ -140,12 +137,12 @@ do "config/settings.pl";
 /// Test selection ranges
 #[test]
 fn test_selection_ranges() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -169,7 +166,7 @@ sub process_data {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 3,
@@ -203,12 +200,12 @@ sub process_data {
 /// Test on-type formatting for braces
 #[test]
 fn test_on_type_formatting_brace() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -224,7 +221,7 @@ fn test_on_type_formatting_brace() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 4,
@@ -255,12 +252,12 @@ fn test_on_type_formatting_brace() -> Result<(), Box<dyn std::error::Error>> {
 /// Test on-type formatting for newline
 #[test]
 fn test_on_type_formatting_newline() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -276,7 +273,7 @@ fn test_on_type_formatting_newline() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 5,
@@ -314,11 +311,11 @@ fn test_on_type_formatting_newline() -> Result<(), Box<dyn std::error::Error>> {
 /// Test workspace/didChangeWatchedFiles registration
 #[test]
 fn test_file_watcher_registration() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Initialize with dynamic registration support
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -341,7 +338,7 @@ fn test_file_watcher_registration() -> Result<(), Box<dyn std::error::Error>> {
 
     // Send initialized notification - this should trigger file watcher registration
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "initialized",
@@ -358,12 +355,12 @@ fn test_file_watcher_registration() -> Result<(), Box<dyn std::error::Error>> {
 /// Test that selection ranges handle edge cases
 #[test]
 fn test_selection_ranges_edge_cases() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -380,7 +377,7 @@ fn test_selection_ranges_edge_cases() -> Result<(), Box<dyn std::error::Error>> 
 
     // Test at the start of the identifier
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 6,
@@ -403,12 +400,12 @@ fn test_selection_ranges_edge_cases() -> Result<(), Box<dyn std::error::Error>> 
 /// Test on-type formatting with tabs
 #[test]
 fn test_on_type_formatting_tabs() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -424,7 +421,7 @@ fn test_on_type_formatting_tabs() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 7,
@@ -457,8 +454,8 @@ fn test_on_type_formatting_tabs() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(windows)]
 #[test]
 fn test_document_links_windows_path_with_space() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Simulate a file living in a folder with a space; we don't need the file to exist.
     let uri = "file:///C:/Temp/Perl%20LSP%20Demo/main.pl";
@@ -466,7 +463,7 @@ fn test_document_links_windows_path_with_space() -> Result<(), Box<dyn std::erro
 
     // Open doc
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -483,7 +480,7 @@ fn test_document_links_windows_path_with_space() -> Result<(), Box<dyn std::erro
 
     // Request document links
     let resp = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc":"2.0",
             "id": 99001,

@@ -50,8 +50,8 @@ fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
 
 #[test]
 fn test_utf8_bom() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // UTF-8 with BOM
     let content = String::from("\u{FEFF}#!/usr/bin/perl\nprint 'BOM test';\n");
@@ -59,7 +59,7 @@ fn test_utf8_bom() -> Result<(), Box<dyn std::error::Error>> {
     let uri = "file:///bom_test.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -76,7 +76,7 @@ fn test_utf8_bom() -> Result<(), Box<dyn std::error::Error>> {
 
     // Should handle BOM correctly
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -87,15 +87,15 @@ fn test_utf8_bom() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_mixed_line_endings() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Mix of LF, CRLF, and CR
     let content = "#!/usr/bin/perl\nprint 'line1';\r\nprint 'line2';\rprint 'line3';\n";
@@ -103,7 +103,7 @@ fn test_mixed_line_endings() -> Result<(), Box<dyn std::error::Error>> {
     let uri = "file:///mixed_endings.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -120,7 +120,7 @@ fn test_mixed_line_endings() -> Result<(), Box<dyn std::error::Error>> {
 
     // Line positions should be calculated correctly
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -132,15 +132,15 @@ fn test_mixed_line_endings() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_unicode_normalization() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Different Unicode normalizations of é
     // NFC: é (single character U+00E9)
@@ -153,7 +153,7 @@ fn test_unicode_normalization() -> Result<(), Box<dyn std::error::Error>> {
 
     // Open NFC version
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -170,7 +170,7 @@ fn test_unicode_normalization() -> Result<(), Box<dyn std::error::Error>> {
 
     // Open NFD version
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -187,7 +187,7 @@ fn test_unicode_normalization() -> Result<(), Box<dyn std::error::Error>> {
 
     // Both should work
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -198,7 +198,7 @@ fn test_unicode_normalization() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
@@ -209,7 +209,7 @@ fn test_emoji_and_special_unicode() -> Result<(), Box<dyn std::error::Error>> {
     use std::time::{Duration, Instant};
 
     let start_time = Instant::now();
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Adaptive timeout based on thread constraints (Issue #200)
     let unicode_timeout = compute_adaptive_timeout();
@@ -228,7 +228,7 @@ fn test_emoji_and_special_unicode() -> Result<(), Box<dyn std::error::Error>> {
         }
     );
 
-    let init_result = initialize_lsp(&mut server);
+    let init_result = initialize_lsp(&server);
 
     // Validate initialization succeeded before proceeding
     assert!(
@@ -266,7 +266,7 @@ my $test = 'hello';
 
     let doc_open_start = Instant::now();
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -289,7 +289,7 @@ my $test = 'hello';
     eprintln!("Testing server responsiveness with hover request...");
     let hover_start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 100,
@@ -301,7 +301,7 @@ my $test = 'hello';
         }),
     );
 
-    let hover_response = read_response_timeout(&mut server, Duration::from_secs(10));
+    let hover_response = read_response_timeout(&server, Duration::from_secs(10));
     let hover_time = hover_start.elapsed();
     eprintln!("Hover request completed in {:?}: {:?}", hover_time, hover_response.is_some());
 
@@ -309,7 +309,7 @@ my $test = 'hello';
     eprintln!("Testing document symbols request...");
     let symbol_request_start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -321,7 +321,7 @@ my $test = 'hello';
     );
 
     // Use explicit timeout and validate response structure
-    let response = read_response_timeout(&mut server, unicode_timeout);
+    let response = read_response_timeout(&server, unicode_timeout);
 
     if response.is_none() {
         eprintln!("Document symbols request timed out after {:?}", unicode_timeout);
@@ -329,7 +329,7 @@ my $test = 'hello';
 
         // Try a simpler request to see if server is still alive
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": 999,
@@ -341,7 +341,7 @@ my $test = 'hello';
             }),
         );
 
-        let fallback = read_response_timeout(&mut server, Duration::from_secs(5));
+        let fallback = read_response_timeout(&server, Duration::from_secs(5));
         eprintln!("Fallback request succeeded: {}", fallback.is_some());
 
         // Mark this as an expected performance limitation rather than a hard failure
@@ -433,8 +433,8 @@ my $test = 'hello';
 
 #[test]
 fn test_surrogate_pairs() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Emojis that use surrogate pairs in UTF-16
     let content = r#"
@@ -446,7 +446,7 @@ my $emoji3 = '👨‍👩‍👧‍👦'; # Family with ZWJ sequences
     let uri = "file:///surrogates.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -463,7 +463,7 @@ my $emoji3 = '👨‍👩‍👧‍👦'; # Family with ZWJ sequences
 
     // Position calculation with surrogate pairs
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -475,15 +475,15 @@ my $emoji3 = '👨‍👩‍👧‍👦'; # Family with ZWJ sequences
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_invalid_utf8_sequences() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Valid UTF-8 with comments about invalid sequences
     let content = r#"
@@ -499,7 +499,7 @@ my $text = "valid utf-8 only";
     let uri = "file:///invalid_utf8.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -516,7 +516,7 @@ my $text = "valid utf-8 only";
 
     // Should handle gracefully
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -527,15 +527,15 @@ my $text = "valid utf-8 only";
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_encoding_pragma() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Perl encoding pragmas
     let content = r#"
@@ -550,7 +550,7 @@ my $latin = 'café';
     let uri = "file:///encoding_pragma.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -567,7 +567,7 @@ my $latin = 'café';
 
     // Should recognize encoding pragmas
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -578,15 +578,15 @@ my $latin = 'café';
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_grapheme_clusters() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Complex grapheme clusters
     let content = r#"
@@ -603,7 +603,7 @@ my $combined = 'e̊⃝'; # Multiple combining marks
     let uri = "file:///graphemes.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -620,7 +620,7 @@ my $combined = 'e̊⃝'; # Multiple combining marks
 
     // Character positions with grapheme clusters
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -632,15 +632,15 @@ my $combined = 'e̊⃝'; # Multiple combining marks
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_zero_width_characters() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Zero-width characters that can cause issues
     let content = format!(
@@ -653,7 +653,7 @@ fn test_zero_width_characters() -> Result<(), Box<dyn std::error::Error>> {
     let uri = "file:///zero_width.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -670,7 +670,7 @@ fn test_zero_width_characters() -> Result<(), Box<dyn std::error::Error>> {
 
     // Should handle zero-width characters
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -681,15 +681,15 @@ fn test_zero_width_characters() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_bidi_text() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Bidirectional text
     let content = r#"
@@ -705,7 +705,7 @@ my $embed = '\u{202A}LTR embed\u{202A}';
     let uri = "file:///bidi.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -722,7 +722,7 @@ my $embed = '\u{202A}LTR embed\u{202A}';
 
     // Should handle bidi text
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -734,15 +734,15 @@ my $embed = '\u{202A}LTR embed\u{202A}';
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_confusable_characters() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Visually similar but different characters
     let content = r#"
@@ -763,7 +763,7 @@ my $backticks = '`test`';
     let uri = "file:///confusable.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -780,7 +780,7 @@ my $backticks = '`test`';
 
     // Should distinguish confusable characters
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -791,15 +791,15 @@ my $backticks = '`test`';
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_private_use_area() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Private Use Area characters
     let content = r#"
@@ -814,7 +814,7 @@ my $spua = '󰀀';  # U+F0000
     let uri = "file:///pua.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -831,7 +831,7 @@ my $spua = '󰀀';  # U+F0000
 
     // Should handle PUA characters
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -842,15 +842,15 @@ my $spua = '󰀀';  # U+F0000
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_long_unicode_identifiers() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Very long Unicode identifiers
     let content = r#"
@@ -867,7 +867,7 @@ my $mixed_中文_english_العربية_русский = 5;
     let uri = "file:///long_unicode.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -884,7 +884,7 @@ my $mixed_中文_english_العربية_русский = 5;
 
     // Should handle long Unicode identifiers
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -895,15 +895,15 @@ my $mixed_中文_english_العربية_русский = 5;
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
 
 #[test]
 fn test_unicode_in_regex() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Unicode in regular expressions
     let content = r#"
@@ -924,7 +924,7 @@ if ($text =~ /café/i) { } # Case insensitive with accents
     let uri = "file:///unicode_regex.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -941,7 +941,7 @@ if ($text =~ /café/i) { } # Case insensitive with accents
 
     // Should handle Unicode in regex
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -952,7 +952,7 @@ if ($text =~ /café/i) { } # Case insensitive with accents
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
     Ok(())
 }
