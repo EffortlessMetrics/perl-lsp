@@ -32,20 +32,13 @@ for label in "swarm-core:0E8A16" "swarm-improve-docs:C5DEF5" "swarm-improve-test
 done
 ```
 
-### Clean up stale worktrees (REQUIRED before team creation)
-
-Stale agent worktrees from previous sessions pollute IDE diagnostics and cause false alarms. Remove them first:
+### Clean up stale worktrees
 
 ```bash
-git worktree list                      # Inspect what exists
-git worktree prune                     # Remove refs to deleted worktrees
-ls .claude/worktrees/agent-* 2>/dev/null | head -20   # See stale agent dirs
-# Remove stale worktree directories (agents from previous sessions):
-for wt in .claude/worktrees/agent-*; do
-  git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
-done
-git worktree prune                     # Final prune
+bash scripts/cleanup-worktrees.sh
 ```
+
+Required before team creation. Stale worktrees from previous sessions pollute IDE diagnostics and waste disk space.
 
 ### Verify master CI is green before starting
 
