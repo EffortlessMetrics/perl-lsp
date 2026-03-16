@@ -117,10 +117,17 @@ attempt to enforce invariants such as:
 - mandatory logging
 - state refresh after compaction
 
-In swarm mode, the lifecycle hooks that operationalize this model are
-`SubagentStart`, `SubagentStop`, `WorktreeCreate`, `WorktreeRemove`, and
-`TaskCompleted`. Those are the mechanical boundaries for provisioning, cleanup,
-queue bookkeeping, metrics, and completion gates.
+In the live repo control plane, the primary lifecycle hooks that operationalize
+this model are `SessionStart`, `SubagentStart`, `SubagentStop`,
+`TeammateIdle`, and `TaskCompleted`. Those are the mechanical boundaries for
+state refresh, provisioning, cleanup, queue bookkeeping, metrics, and
+completion gates.
+
+`WorktreeCreate` and `WorktreeRemove` remain available hook boundaries, but
+they are intentionally not registered in the shared project settings because
+they replace Claude Code's default worktree provisioning and teardown behavior.
+Treat them as reserved hooks to adopt only when the repo explicitly wants to
+own that lifecycle itself.
 
 ### 6. Handoffs are the continuity mechanism
 
