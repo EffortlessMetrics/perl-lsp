@@ -40,16 +40,14 @@ fn check_no_files_exits_with_error() {
 }
 
 #[test]
-fn check_valid_perl_file() {
-    let dir = tempfile::tempdir().expect("failed to create tempdir");
+fn check_valid_perl_file() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = tempfile::tempdir()?;
     let file = dir.path().join("test.pl");
-    std::fs::write(&file, "use strict;\nprint \"hello\\n\";\n").expect("failed to write test file");
+    std::fs::write(&file, "use strict;\nprint \"hello\\n\";\n")?;
+    let file_str = file.to_str().ok_or("non-UTF-8 temp path")?;
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    cmd.arg("--check")
-        .arg(file.to_str().expect("non-UTF-8 temp path"))
-        .assert()
-        .success()
-        .stdout(predicates::str::contains("ok"));
+    cmd.arg("--check").arg(file_str).assert().success().stdout(predicates::str::contains("ok"));
+    Ok(())
 }
 
 #[test]
@@ -96,11 +94,19 @@ fn completion_unknown_shell_fails() {
 }
 
 #[test]
-fn help_mentions_new_flags() {
+fn help_mentions_new_flags() -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = cargo_bin_cmd!("perl-lsp");
-    let output = cmd.arg("--help").output().expect("failed to run perl-lsp --help");
+    let output = cmd.arg("--help").output()?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("--info"), "help should mention --info");
     assert!(stdout.contains("--check"), "help should mention --check");
     assert!(stdout.contains("--completion"), "help should mention --completion");
+    Ok(())
+}
+
+#[test]
+fn trailing_files_without_check_flag_errors() {
+    // Trailing file arguments should require --check
+    let mut cmd = cargo_bin_cmd!("perl-lsp");
+    cmd.arg("somefile.pl").assert().failure();
 }
