@@ -293,9 +293,10 @@ impl<'a> Parser<'a> {
                 }
 
                 Some(TokenKind::LeftBrace) => {
-                    // Check if this is a builtin function that needs special handling
+                    // Check if this is a builtin function (or block-list func like first/any/all)
+                    // that needs special handling
                     if let NodeKind::Identifier { name } = &expr.kind {
-                        if Self::is_builtin_function(name) {
+                        if Self::is_builtin_function(name) || Self::is_block_list_func(name) {
                             // This is a builtin function with {} as argument
                             // Parse arguments without parentheses
                             let mut args = Vec::new();
@@ -312,11 +313,12 @@ impl<'a> Parser<'a> {
                                     }
                                     args.push(self.parse_comma()?);
                                 }
-                            } else if matches!(name.as_str(), "sort" | "map" | "grep") {
+                            } else if Self::is_block_list_func(name.as_str()) {
                                 // Parse block (may contain multiple statements) as first argument
+                                // for map/grep/sort/first/any/all/none/reduce/etc.
                                 args.push(self.parse_builtin_block()?);
 
-                                // Parse trailing list arguments for map/grep/sort.
+                                // Parse trailing list arguments.
                                 // In Perl, the block form does not require a comma
                                 // before the list: `grep { ... } @array`
                                 // First consume without a comma/fat arrow if present
@@ -448,14 +450,15 @@ impl<'a> Parser<'a> {
                                 // Parse arguments without parentheses
                                 let mut args = Vec::new();
 
-                                // Special handling for sort, map, grep with block first argument
-                                if matches!(name.as_str(), "sort" | "map" | "grep")
+                                // Special handling for sort/map/grep/first/any/all/etc.
+                                // with block first argument
+                                if Self::is_block_list_func(name.as_str())
                                     && self.peek_kind() == Some(TokenKind::LeftBrace)
                                 {
                                     // Parse block (may contain multiple statements) as first argument
                                     args.push(self.parse_builtin_block()?);
 
-                                    // Parse remaining arguments for map/grep/sort without requiring commas
+                                    // Parse remaining arguments without requiring commas
                                     // But respect statement boundaries including ] and )
                                     while !self.is_at_statement_end() {
                                         // Skip comma or fat arrow if present

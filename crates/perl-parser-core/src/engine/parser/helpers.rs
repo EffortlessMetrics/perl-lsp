@@ -469,4 +469,23 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Return true if `name` is a function that takes a block as its first argument
+    /// followed by a list (like `map { } @list`). This covers Perl builtins and
+    /// commonly-used functions from List::Util, List::MoreUtils, Scalar::Util, etc.
+    ///
+    /// These functions need special handling so that `{ ... }` is parsed as a code
+    /// block rather than a hash constructor.
+    #[inline]
+    pub(crate) fn is_block_list_func(name: &str) -> bool {
+        matches!(
+            name,
+            // Perl builtins
+            "map" | "grep" | "sort"
+            // List::Util (most common block-taking exports)
+            | "first" | "any" | "all" | "none" | "reduce" | "pairfirst" | "pairgrep" | "pairmap"
+            // List::MoreUtils / List::Util extensions
+            | "first_index" | "last_index" | "any_u" | "all_u" | "none_u"
+        )
+    }
+
 }
