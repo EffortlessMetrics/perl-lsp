@@ -1555,6 +1555,84 @@ unshift @queue, $new_item;
     }
 }
 
+// ---------------------------------------------------------------------------
+// print/say/printf with block-form filehandle: print { $fh } ...
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod print_block_filehandle {
+    use super::*;
+
+    #[test]
+    fn print_block_scalar_fh() {
+        let code = r#"print { $fh } "data\n";"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn print_block_scalar_fh_is_indirect_call() {
+        let code = r#"print { $fh } "data\n";"#;
+        let ast = parse(code);
+        let sexp = ast.to_sexp();
+        assert!(sexp.contains("indirect_call"), "Expected indirect_call, got: {sexp}");
+    }
+
+    #[test]
+    fn say_block_scalar_fh() {
+        let code = r#"say { $fh } "data";"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn printf_block_scalar_fh() {
+        let code = r#"printf { $fh } "%s\n", $line;"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn print_block_typeglob_stderr() {
+        let code = r#"print { *STDERR } "error\n";"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn print_block_typeglob_stdout() {
+        let code = r#"print { *STDOUT } "ok\n";"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn print_block_hash_accessor() {
+        let code = r#"print { $self->{fh} } "msg\n";"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn print_block_method_call() {
+        let code = r#"print { $self->fh() } "msg\n";"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn print_without_block_still_works() {
+        // Regression: plain print without block filehandle must still work
+        let code = r#"
+print "hello\n";
+print STDOUT "message\n";
+print STDERR "error\n";
+print $fh "data\n";
+"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn print_block_with_multiple_args() {
+        // print { $fh } with comma-separated arguments
+        let code = r#"print { $fh } "key=", $value, "\n";"#;
+        assert_clean_parse(code);
+    }
+}
+
 mod compound_stmt_modifier {
     use super::*;
 

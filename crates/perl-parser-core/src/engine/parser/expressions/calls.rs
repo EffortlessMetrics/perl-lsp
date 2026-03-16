@@ -52,6 +52,27 @@ impl<'a> Parser<'a> {
                 _ => {}
             }
 
+            // Check for print { $fh } pattern (block-form filehandle)
+            // e.g. print { $self->{fh} } "data\n"
+            //      print { *STDERR } "error\n"
+            // A LeftBrace followed by a sigiled variable or glob is a filehandle block,
+            // not a hash constructor or code block.
+            if next_kind == TokenKind::LeftBrace
+                && matches!(
+                    name,
+                    "print" | "say" | "printf"
+                )
+            {
+                if let Ok(third) = self.tokens.peek_third() {
+                    let third_text = &third.text;
+                    // $var or *GLOB inside { } is a filehandle
+                    if third_text.starts_with('$') || third_text.starts_with('*') {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
             // Check for print $fh $x pattern first (variable followed by another arg)
             // This must be checked before the STDOUT pattern because $fh is also an Identifier
             if next_text.starts_with('$') {
