@@ -4,7 +4,7 @@ Drop-in infrastructure for running continuous, highly-parallel development swarm
 
 ## What This Is
 
-A portable pack of agent definitions, skills, hooks, and a setup script that gives any repo a `/swarm` command for continuous codebase improvement. Designed for repos with many independent improvement opportunities.
+A portable pack of agent definitions, slash commands, hooks, and a setup script that gives any repo a `/swarm` command for continuous codebase improvement. Designed for repos with many independent improvement opportunities.
 
 ## Architecture
 
@@ -46,86 +46,47 @@ bash path/to/swarm-pack/setup.sh
 /swarm-stop            # emergency: save state, halt (~5 min)
 ```
 
-`setup.sh` gives you portable agents + skills. `/bootstrap-agents` explores YOUR codebase and generates ~25-30 domain-specific agents. Together: ~50 agents with full repo context pre-encoded, 5 named coordinator teammates, GitHub labels, issue/PR templates, and a self-improving learning loop.
+`setup.sh` gives you portable agents + slash commands. `/bootstrap-agents` explores YOUR codebase and generates ~25-30 domain-specific agents. Together: ~50 agents with full repo context pre-encoded, 5 named coordinator teammates, GitHub labels, issue/PR templates, and a self-improving learning loop.
 
-This branch is a later design step, not the first infrastructure landing: the portable pack still ships slash command files under `.claude/commands/`, while the repo-local swarm orchestration is additionally captured as a skill so coordinator prompts can compose other skills directly.
+This branch is a later design step, not a flattened rewrite: the portable pack still ships slash command files under `.claude/commands/`, while the repo-local swarm orchestration is additionally captured as a skill so coordinator prompts can compose other skills directly.
 
 ## What Gets Installed
 
 ```
 .claude/
   agents/
-    # Core coordinators (5) — run as teammates
-    swarm-scout.md        # Gap finder — priority-weighted, writes handoffs
-    swarm-builder.md      # TDD implementer — reads handoffs, spawns worktree subs
-    swarm-reviewer.md     # Review + PR creation — labels, auto-merge
-    swarm-merger.md       # Sequential merge — signals ops, drift handling
-    swarm-improver-docs.md    # README, CHANGELOG, ADRs, friction log
-    swarm-improver-tests.md   # Mutation survivors, flaky tests, coverage
-    swarm-improver-devex.md   # Error messages, tooling, observability
-    swarm-improver-infra.md   # Dependencies, security, dead code
-    # Governance specialists (spawned as subagents)
-    swarm-validator.md        # Post-merge verification — catches regressions
-    swarm-strategist.md       # Priority alignment — steers scouts, tracks roadmap
-    swarm-pr-responder.md     # Review comment handler — addresses feedback
-    swarm-fixer.md            # CI failure repair — known-pitfalls, agent-patches
-    swarm-janitor.md          # Cleanup — consolidates all ops artifacts
-    # Bootstrapper
-    swarm-bootstrapper.md     # Codebase discovery → domain agent generation
-    # Specialists (12) — focused capabilities
-    review-standards.md       # Coding standards review lens
-    review-security.md        # Security review lens
-    review-scope.md           # Scope/focus review lens
-    mutant-killer.md          # Kill mutation survivors
-    coverage-filler.md        # Fill test coverage gaps
-    adr-writer.md             # Architecture Decision Records
-    friction-logger.md        # Friction log maintenance
-    dep-cleaner.md            # Unused dependency removal
-    dead-code.md              # Dead code removal
-    explore-codebase.md       # Deep codebase exploration
-    explore-issues.md         # GitHub issue/PR research
-    research-web.md           # Web search → condensed answers
-    research-docs.md          # Upstream docs (docs.rs, perldoc, specs)
-    research-verify.md        # Cross-check claims against authoritative sources
-  skills/
-    swarm/
-      SKILL.md              # /swarm — 5-coordinator orchestrator with data flows
-      reference/
-        team-structure.md   # Team layout, spawn prompts, data flow diagram
-      templates/
-        teammate-prompt-template.md  # Standard teammate spawn prompt format
-    swarm-protocol/
-      SKILL.md              # /swarm-protocol — behavioral rules (agent use)
-    swarm-priorities/
-      SKILL.md              # /swarm-priorities — roadmap + P0-P4 tiers
-    swarm-status/
-      SKILL.md              # /swarm-status — current state aggregation
-    swarm-report/
-      SKILL.md              # /swarm-report — daily check-in summary
-    coding-standards/
-      SKILL.md              # /coding-standards — project standards
-    pr-create/
-      SKILL.md              # /pr-create — create PR from branch
-    pr-cleanup/
-      SKILL.md              # /pr-cleanup — clean branch for review
-    green-merge/
-      SKILL.md              # /green-merge — drain passing PRs
-    rebase-open/
-      SKILL.md              # /rebase-open — rebase conflicted PRs
-    status-drift/
-      SKILL.md              # /status-drift — fix computed metrics
-    queue-scout/
-      SKILL.md              # /queue-scout — launch discovery agents
-    salvage-worktrees/
-      SKILL.md              # /salvage-worktrees — save dirty worktrees
-    plan-fix/
-      SKILL.md              # /plan-fix — write implementation plans
-    verify-build/
-      SKILL.md              # /verify-build — deliverable verification
-    scout-report/
-      SKILL.md              # /scout-report — create GitHub issues
-    bootstrap-agents/
-      SKILL.md              # /bootstrap-agents — generate domain agents
+    swarm-scout.md        # Discovery specialist
+    swarm-builder.md      # Build/worktree specialist
+    swarm-reviewer.md     # Review specialist
+    swarm-merger.md       # Merge/drift specialist reused by ops lane
+    swarm-fixer.md        # CI failure repair specialist
+    swarm-bootstrapper.md # Codebase discovery → domain agent generation
+    swarm-improver-*.md   # Docs/tests/devex/infra improvement specialists
+    swarm-*.md            # Optional strategist / validator / PR response helpers
+    review-*.md           # Review lenses (standards, security, scope)
+    research-*.md         # Web/docs/verification helpers
+    mutant-killer.md      # Kill mutation survivors
+    coverage-filler.md    # Fill test coverage gaps
+    adr-writer.md         # Architecture Decision Records
+    friction-logger.md    # Friction log maintenance
+    dep-cleaner.md        # Unused dependency removal
+    dead-code.md          # Dead code removal
+  commands/
+    swarm.md              # /swarm — 5-coordinator orchestrator entrypoint
+    bootstrap-agents.md   # /bootstrap-agents — discover codebase, mint domain agents
+    swarm-protocol.md     # /swarm-protocol — behavioral rules
+    coding-standards.md   # /coding-standards — project standards
+    swarm-priorities.md   # /swarm-priorities — roadmap + P0-P4 tiers
+    swarm-status.md       # /swarm-status — current state aggregation
+    swarm-report.md       # /swarm-report — daily check-in summary
+    green-merge.md        # /green-merge — drain passing PRs
+    queue-scout.md        # /queue-scout — launch discovery agents
+    status-drift.md       # /status-drift — fix computed metrics
+    rebase-open.md        # /rebase-open — rebase conflicted PRs
+    pr-respond.md         # /pr-respond — address review feedback
+    salvage-worktrees.md  # /salvage-worktrees — save dirty worktrees
+    swarm-stop.md         # /swarm-stop — emergency halt
+    swarm-wind-down.md    # /swarm-wind-down — graceful shutdown
   hooks/
     teammate-idle.sh      # Keeps teammates working
     task-completed.sh     # Quality gate on task completion
@@ -144,9 +105,13 @@ This branch is a later design step, not the first infrastructure landing: the po
   salvage/                # Emergency worktree dumps
 ```
 
-## Skills Architecture
+The portable pack does not install a full `.claude/skills/` tree yet. In this repo, the repo-local coordinator flow is additionally tracked as `.claude/skills/swarm/`; that is the canonical skill-native playbook for the 5-coordinator model.
 
-Skills are structured as directories (`SKILL.md` + `templates/` + optional `reference/`), not flat `.md` files. Key frontmatter fields:
+## Command And Skill Layer
+
+The portable pack itself installs slash command files under `.claude/commands/`. This repo additionally tracks a repo-local `.claude/skills/swarm/` directory so the five-coordinator playbook can also live in Claude Code's modern skill format. When you move from the pack into a repo-specific install, that skill layer is the natural place to put durable coordinator prompts, templates, and references.
+
+Key frontmatter fields for that repo-local skill layer:
 
 ```yaml
 ---
@@ -204,7 +169,7 @@ Find-and-replace these patterns:
 | Test (all) | `cargo test --workspace` | `pytest` | `vitest run` | `go test ./...` |
 | Fast check | `cargo check` | `python -m py_compile` | `tsc --noEmit` | `go build ./...` |
 
-### 3. Drift Protocol (`swarm-merger`, `status-drift`)
+### 3. Drift Protocol (merge automation + `status-drift`)
 
 Replace the drift commands with your repo's computed metrics:
 
@@ -246,7 +211,7 @@ See [SWARM_DESIGN.md](../SWARM_DESIGN.md) for full rationale.
 13. **Review comments get addressed.** PR responder monitors and fixes feedback.
 
 ### Governance
-14. **Priority-weighted discovery.** Scouts check roadmap, strategist steers away from drift.
+14. **Priority-weighted discovery.** Scouts check roadmap, and the lead can spawn strategist-style analysis when drift appears.
 15. **Self-improving.** Metrics analysis, agent patches, friction logs, ADRs — the system learns.
 16. **4 persistence layers.** Handoffs (ephemeral) → ops files (session) → GitHub (permanent) → memories (cross-session).
 17. **GitHub-native tracking.** Labels, issues, PR templates, auto-merge, `gh` CLI everywhere.

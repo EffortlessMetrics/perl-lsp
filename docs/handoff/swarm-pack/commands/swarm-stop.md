@@ -11,18 +11,11 @@ User needs everything stopped in ~5 minutes. No new work, save state, halt. Cont
 
 Broadcast to ALL teammates simultaneously:
 ```
-SendMessage({to: "scout-1"}, "STOP: halt immediately, do not launch subagents")
-SendMessage({to: "scout-2"}, "STOP: halt immediately")
-SendMessage({to: "builder-1"}, "STOP: do not claim tasks, let running subagents finish naturally")
-SendMessage({to: "builder-2"}, "STOP: same")
-SendMessage({to: "reviewer"}, "STOP: do not launch review subagents")
-SendMessage({to: "merger"}, "STOP: do not merge, save state")
-SendMessage({to: "fixer"}, "STOP: halt")
-SendMessage({to: "improver-docs"}, "STOP: halt")
-SendMessage({to: "improver-tests"}, "STOP: halt")
-SendMessage({to: "validator"}, "STOP: halt")
-SendMessage({to: "strategist"}, "STOP: write final memory and halt")
-SendMessage({to: "pr-responder"}, "STOP: halt")
+SendMessage({to: "scout"}, "STOP: halt immediately, do not launch new subagents or create new tasks")
+SendMessage({to: "builder"}, "STOP: do not claim new tasks; let running worktree subagents finish naturally")
+SendMessage({to: "reviewer"}, "STOP: do not launch new review subagents; snapshot anything already in progress")
+SendMessage({to: "ops"}, "STOP: do not merge; save queue state and recent CI context")
+SendMessage({to: "improver"}, "STOP: halt new improvement work; capture any unfinished notes for next session")
 ```
 
 ## Minute 2-3: Save State

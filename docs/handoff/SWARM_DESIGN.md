@@ -221,7 +221,7 @@ The `/swarm-priorities` skill loads the roadmap (NOW/NEXT/LATER), open milestone
 | P3 | Codebase health: DAP tests, debt, dead code, unused deps |
 | P4 | Polish: test naming, error messages, observability |
 
-Scouts tag every SLICE with a priority tier. Builders claim higher-priority tasks first. The strategist monitors distribution and steers scouts when the swarm drifts toward easy P3/P4 work.
+Scouts tag every SLICE with a priority tier. Builders claim higher-priority tasks first. The lead watches the distribution and can spin up a strategist-style analysis subagent when the swarm drifts toward easy P3/P4 work.
 
 ### Post-Merge Validation
 
@@ -258,10 +258,10 @@ Every ~10 merges, the lead triggers a data-driven check:
 1. **Fixers** → `known-pitfalls.md` → scouts/builders avoid repeating known traps
 2. **All agents** → `discovered-issues.md` → scouts pick up pre-investigated leads
 3. **All agents** → GitHub issues (`--label swarm-discovered`) → persistent, searchable backlog
-4. **All agents** → `swarm-metrics.jsonl` → strategist spots performance patterns
+4. **All agents** → `swarm-metrics.jsonl` → ops + improver spot performance patterns
 5. **Failing agents** → `agent-patches/` → bootstrapper improves agent definitions
 6. **Improver** → reads handoff lessons → crystallizes into ADRs and friction logs
-7. **Merger** → analyzes metrics → reports which domains/agents need attention
+7. **Ops** → analyzes metrics → reports which domains/agents need attention
 8. **Lead** → Claude Code memories → carries critical knowledge to future sessions
 
 ### Agent Self-Improvement
@@ -279,7 +279,7 @@ When an agent hits friction caused by its own definition being wrong or incomple
 - **PR template**: summary, changes, verification, agent attribution
 
 ### Auto-Merge
-Small PRs (improvements, side fixes) use `gh pr merge --auto --squash --delete-branch` to merge when checks pass without waiting for the merger.
+Small PRs (improvements, side fixes) use `gh pr merge --auto --squash --delete-branch` to merge when checks pass without waiting for the main ops lane.
 
 ### State Queries
 ```bash
@@ -315,7 +315,7 @@ The key: include enough context in the issue that the NEXT agent doesn't have to
 2. Sync repo, ensure GitHub labels exist
 3. Check for pending work from previous sessions (in-progress slices, open PRs, stale worktrees)
 4. Create 5-coordinator team
-5. Lead monitors: messages scout when queue is low, triggers validator after merges, triggers strategist every ~10 merges
+5. Lead monitors: messages scout when queue is low, asks ops to validate recent merges, and triggers strategist-style analysis when priority drift appears
 
 ### Continuous Operation
 All lanes run concurrently. Scouts feed builders feed reviewers feed ops. Improver runs alongside. No batching.
@@ -334,19 +334,19 @@ Next `/swarm` picks up: in-progress slices from `completed-slices.md`, open PRs 
 The `docs/handoff/swarm-pack/` directory contains everything needed to adopt this in another repo:
 
 ```bash
-bash swarm-pack/setup.sh    # Install agents, skills, hooks, ops, GH labels
+bash swarm-pack/setup.sh    # Install agents, slash commands, hooks, ops, GH labels
 /bootstrap-agents            # Discover codebase → generate ~25-30 domain agents
 /swarm all                   # Start continuous swarm
 ```
 
-The pack installs portable agents (core swarm, improvers, quality, review, research, docs, infra, bootstrapper) and expects each repo to generate its own domain-specific agents via `/bootstrap-agents`.
+The pack installs reusable specialist agent definitions plus slash commands and hooks, and expects each repo to generate its own domain-specific agents via `/bootstrap-agents`. The live swarm still runs as 5 named coordinators; optional specialists are spawned on demand.
 
 ### Agent Taxonomy (~50 total after bootstrap)
 
 | Category | Pack (portable) | Repo-specific (generated) |
 |----------|----------------|--------------------------|
 | Core swarm | 5 (scout, builder, reviewer, ops, improver) | — |
-| Specialists | 6 (bootstrapper, pr-responder, janitor, validator, strategist, fixer) | — |
+| Optional specialist subagents | 6 (bootstrapper, pr-responder, janitor, validator, strategist, fixer) | — |
 | Quality | 2 (mutant-killer, coverage-filler) | 3-5 (fuzz, flaky, test-quality) |
 | Review | 3 (standards, security, scope) | 2-3 (performance, api) |
 | Research | 3 (web, docs, verify) | 1-2 (deps, PRs) |
@@ -378,7 +378,7 @@ The pack installs portable agents (core swarm, improvers, quality, review, resea
 13. **Review comments get addressed.** PR responder monitors and fixes feedback.
 
 ### Governance
-14. **Priority-weighted discovery.** Scouts check roadmap; strategist steers.
+14. **Priority-weighted discovery.** Scouts check roadmap; the lead or a strategist-style subagent steers when the swarm drifts.
 15. **Self-improving.** Metrics, agent patches, friction logs, ADRs.
 16. **4 persistence layers.** Handoffs → ops files → GitHub → memories.
 17. **GitHub-native.** Labels, issues, templates, auto-merge, `gh` CLI everywhere.

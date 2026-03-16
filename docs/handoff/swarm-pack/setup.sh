@@ -349,11 +349,11 @@ echo " Swarm Pack — Setup Complete"
 echo "========================================================================"
 echo ""
 AGENT_COUNT=$(ls -1 "${CLAUDE_DIR}/agents"/*.md 2>/dev/null | wc -l | tr -d ' ')
-SKILL_COUNT=$(ls -1 "${CLAUDE_DIR}/commands"/*.md 2>/dev/null | wc -l | tr -d ' ')
+COMMAND_COUNT=$(ls -1 "${CLAUDE_DIR}/commands"/*.md 2>/dev/null | wc -l | tr -d ' ')
 HOOK_COUNT=$(ls -1 "${CLAUDE_DIR}/hooks"/*.sh 2>/dev/null | wc -l | tr -d ' ')
 echo " Installed:"
 echo "   - ${AGENT_COUNT} agent definitions in .claude/agents/"
-echo "   - ${SKILL_COUNT} skills in .claude/commands/"
+echo "   - ${COMMAND_COUNT} slash command files in .claude/commands/"
 echo "   - ${HOOK_COUNT} hook scripts in .claude/hooks/"
 echo "   - hooks registered in .claude/settings.json (7 event types)"
 echo "   - .claude/swarm-state/  — tracked knowledge (pitfalls, slices, discoveries, queue)"

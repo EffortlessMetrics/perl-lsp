@@ -55,7 +55,7 @@ builder ────→ SendMessage ────→ reviewer
 reviewer ───→ gh pr create ───→ ops (merge queue)
 ops ────────→ gh pr merge ────→ ops (verify post-merge)
 ops ────────→ SendMessage ────→ scout (queue low)
-ops ────────→ /corpus-ratchet → lock in gains
+ops ────────→ /status-drift ──→ repair computed drift when needed
 improver ───→ worktree subs ──→ improvement PRs
 all agents ─→ gh issue create → scout (swarm-discovered)
 all agents ─→ swarm-metrics  → ops (analysis)
@@ -69,11 +69,11 @@ all agents ─→ TaskUpdate ────→ shared task list
 | File | Purpose | Writers | Readers |
 |------|---------|---------|---------|
 | `known-pitfalls.md` | Failure knowledge | fixer | scout, builder |
-| `completed-slices.md` | Dedup log | scout, merger | scout, improvers |
+| `completed-slices.md` | Dedup log | scout, ops | scout, improvers |
 | `discovered-issues.md` | Agent-flagged leads | all agents | scout |
 | `swarm-queue.json` | Overlap tracking | scout, lead | scout, lead |
 
-### Ephemeral (`.ops-perl-lsp/` — gitignored, per-session runtime)
+### Ephemeral (`.ops/` — gitignored, per-session runtime)
 
 | File | Purpose | Writers | Readers |
 |------|---------|---------|---------|
@@ -82,25 +82,24 @@ all agents ─→ TaskUpdate ────→ shared task list
 | `agent-patches/` | Self-improvement | fixer, any agent | bootstrapper |
 | `salvage/` | Emergency worktree dumps | janitor | user |
 
-## Skills — Scope Reference
+## Commands — Scope Reference
 
 ### Orchestrator-only (lead invokes these)
 ```
-/swarm-status     /green-merge      /swarm-report
-/health-check     /rebase-open      /corpus-ratchet
-/status-drift     /swarm-stop       /swarm-wind-down
+/swarm-status      /green-merge        /swarm-report
+/rebase-open       /queue-scout        /status-drift
+/salvage-worktrees /swarm-stop         /swarm-wind-down
 ```
 
 ### Agent-only (agents invoke — do NOT load into orchestrator context)
 ```
 /swarm-protocol   /coding-standards   /swarm-priorities
-/parser-fix       /verify-build       /plan-fix
-/scout-report     /pr-create          /pr-cleanup
+/pr-respond
 ```
 
-### Dual-use (either context)
+### Shared setup commands
 ```
-/scout    /queue-scout    /audit
+/bootstrap-agents
 ```
 
 ## Hooks (auto-fire, no agent memory required)

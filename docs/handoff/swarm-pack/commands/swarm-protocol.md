@@ -107,7 +107,7 @@ After completing any task, append to `.ops/swarm-metrics.jsonl`:
 {"ts":"<ISO-8601>","agent":"<name>","type":"<build|review|fix|merge|improve|scout>","branch":"<branch>","outcome":"<green|red|blocked|merged>","duration_hint":"<fast|medium|slow>","side_prs":<N>,"issues_created":<N>,"notes":"<one line>"}
 ```
 
-Append-only. The lead/merger analyzes periodically for patterns.
+Append-only. The lead/ops lane analyzes periodically for patterns.
 
 ## 5. Agent Self-Improvement
 
@@ -133,7 +133,7 @@ Before starting work:
 5. `gh pr list --state open` — already a PR?
 
 After completing:
-1. `completed-slices.md` — `in-progress` (scout) or `merged` (merger)
+1. `completed-slices.md` — `in-progress` (scout) or `merged` (ops)
 2. `known-pitfalls.md` — if you learned a reusable lesson
 3. `swarm-metrics.jsonl` — always
 

@@ -18,7 +18,7 @@ You are the lead. You coordinate only. You NEVER write production code.
 4. **Reviewers**: One PR per reviewer. Fresh context for clean review.
 5. **Ops**: One PR at a time for merges. Verify CI between each.
 6. **Draft first**: Builders create draft PRs. Reviewer marks ready after checking.
-7. **Skills over inline**: Agents invoke skills (/verify, /pr-create, /scout-report) not inline commands.
+7. **Skills over inline**: Agents invoke skills (/verify-build, /pr-create, /plan-fix, /scout-report) instead of repeating long inline workflows.
 
 ## Skill Scope
 
@@ -34,6 +34,12 @@ You are the lead. You coordinate only. You NEVER write production code.
 - `/swarm-protocol` — behavioral rules
 - `/coding-standards` — project standards
 - `/swarm-priorities` — roadmap alignment
+- `/parser-fix` — task-specific implementation flow
+- `/verify-build` — branch/test/PR verification
+- `/plan-fix` — scout handoff generation
+- `/scout-report` — GitHub issue creation for discovered work
+- `/pr-create` — draft PR creation
+- `/pr-ready` — mark reviewed PRs ready
 
 ## Phase 1: Bootstrap
 
@@ -157,7 +163,7 @@ Subagent prompt pattern (required fields):
    Run ALL commands from your worktree path. Do NOT cd to the main repo.
    Read .ops-perl-lsp/handoffs/<branch>.md for context.
    Read .claude/swarm-state/known-pitfalls.md for traps.
-   Invoke /swarm-protocol and /coding-standards.
+   Invoke /swarm-protocol, /coding-standards, and the task-specific skill (usually /parser-fix).
    Append reviewer briefing to handoff. Write metrics. gh issue create --label swarm-discovered for out-of-scope finds."
 
 Use TaskList to find unclaimed tasks. Use TaskUpdate to claim (owner: "builder") and complete.
@@ -172,7 +178,8 @@ Invoke /swarm-protocol and /coding-standards.
 You are reviewer. Receive build completions from builder.
 Spawn review subagents (3-5 parallel). Read handoff briefings first, then focused diff.
 Check: coding standards, no unwrap/expect/panic, tests exist, PR description.
-Create PRs: gh pr create --draft --label swarm-core (or swarm-improve-*).
+Invoke /pr-create to open draft PRs with the right labels.
+Use /pr-ready only after feedback is addressed and checks are green.
 Use TaskUpdate to mark review tasks completed.
 Approve: SendMessage({to: "ops"}) for merge-ready PRs.
 Reject: SendMessage({to: "builder"}) with specific feedback.
@@ -243,7 +250,7 @@ BUILD
   builder                → TaskList → claim → worktree subagents → SendMessage reviewer
 
 REVIEW
-  reviewer               → review diffs → gh pr create → SendMessage ops
+  reviewer               → review diffs → /pr-create → SendMessage ops
 
 MERGE
   ops                    → gh pr merge (CI green only) → verify → /corpus-ratchet if improved
@@ -258,7 +265,7 @@ IMPROVE (~20%)
 ```
 scout ──────→ TaskCreate ─────→ builder claims via TaskList
 builder ────→ SendMessage ────→ reviewer
-reviewer ───→ gh pr create ───→ ops (merge queue)
+reviewer ───→ /pr-create ────→ ops (merge queue)
 ops ────────→ gh pr merge ────→ ops (verify post-merge)
 ops ────────→ SendMessage ────→ scout (queue low)
 ops ────────→ /corpus-ratchet → lock in gains
