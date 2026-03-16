@@ -44,13 +44,17 @@ gh pr merge <number> --squash --delete-branch
 
 If the merge **fails due to a Cargo.lock conflict**, attempt auto-resolution:
 1. Check out the PR branch locally
-2. Resolve the conflict by accepting theirs and regenerating:
+2. Rebase onto the latest master, then regenerate the lockfile:
    ```bash
+   gh pr checkout <number>
+   git fetch origin master
+   git rebase origin/master
+   # If rebase conflicts on Cargo.lock, accept master's version and regenerate
    git checkout --theirs Cargo.lock
-   cargo update --workspace
+   cargo generate-lockfile
    git add Cargo.lock
-   git commit -m "chore: regenerate Cargo.lock after merge conflict"
-   git push
+   git rebase --continue
+   git push --force-with-lease
    ```
 3. Retry the merge: `gh pr merge <number> --squash --delete-branch`
 4. If it still fails, skip the PR and report the failure
@@ -80,9 +84,11 @@ for pr in green_prs:
     merge(pr)
     merged_count += 1
 
-    if merged_count % batch_size == 0:
+    # Check after every batch AND after the final merge
+    is_last = (pr == last green_pr)
+    if merged_count % batch_size == 0 or is_last:
         # Wait for master CI to go green
-        for retry in 1..=10:
+        for retry in 1..10:
             run = gh run list --branch master --limit 1
             if run.status == "completed":
                 if run.conclusion == "success":
