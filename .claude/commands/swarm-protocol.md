@@ -104,29 +104,10 @@ gh pr list --state merged --limit 20 --json number,title,mergedAt
 After completing any task, append to `.ops-perl-lsp/swarm-metrics.jsonl`:
 
 ```json
-{"ts":"<ISO-8601>","agent":"<name>","type":"<build|review|fix|merge|improve|scout>","branch":"<branch>","outcome":"<green|red|blocked|merged>","duration_hint":"<fast|medium|slow>","tokens_used":<N>,"side_prs":<N>,"issues_created":<N>,"notes":"<one line>"}
+{"ts":"<ISO-8601>","agent":"<name>","type":"<build|review|fix|merge|improve|scout>","branch":"<branch>","outcome":"<green|red|blocked|merged>","duration_hint":"<fast|medium|slow>","side_prs":<N>,"issues_created":<N>,"notes":"<one line>"}
 ```
 
 Append-only. The lead/merger analyzes periodically for patterns.
-
-### Token Usage Extraction
-
-The Agent tool returns a usage block in its output:
-```
-<usage>total_tokens: 41036
-tool_uses: 35
-duration_ms: 221290</usage>
-```
-
-The lead should extract `total_tokens` from each agent result and log it as `tokens_used` in the metrics entry. If the usage block is unavailable, set `tokens_used` to `0`.
-
-### Cost Tracking
-
-- Track `tokens_used` per agent in metrics to build a per-agent cost profile.
-- Calculate `cost_per_merged_pr` by summing `tokens_used` across all entries for a branch (build + review + fix + merge) and dividing by the number of PRs that reached `merged`.
-- Use this to identify expensive vs efficient agent patterns — e.g., agents that require many fix cycles or blocked reviews are high-cost; agents that ship green on the first pass are low-cost.
-- Target: lower cost per merged artifact over time by adjusting agent prompts, slice sizes, and lane assignments based on observed patterns.
-- The lead should report `cost_per_merged_pr` trend in swarm-report summaries.
 
 ## 5. Agent Self-Improvement
 
@@ -182,30 +163,6 @@ If no concrete next action exists, an agent should report its findings and spin 
 - Send shutdown signal to agents that have delivered output and have no imminent follow-up.
 - Re-spawn fresh with focused context when new work arrives — fresh context beats stale waiting context.
 - Exception: keep an agent alive if it is waiting for an imminent response in the same context path (e.g., a builder waiting for its worktree subagent to return).
-
-### Builder Shutdown Protocol
-
-**Before shutting down, builders MUST wait for all spawned subagents to complete or cancel them.** Do not exit while subagents are still running in their worktrees.
-
-**Subagents outlive parent shutdown — this is a known issue.** To mitigate it:
-- Track every subagent ID you spawn (note the name you gave it, e.g., `build-<branch-name>`).
-- On shutdown, list all subagent IDs you spawned in your shutdown message to the lead so the lead can monitor them:
-  ```
-  BUILDER SHUTDOWN
-  spawned-subagents: build-fix-parser-heredoc, build-add-dap-test
-  status: <completed|still-running|cancelled>
-  ```
-- The lead uses this list to watch for orphaned subagents that create PRs after their builder exits.
-
-### PR Creation Throttle
-
-Before creating any PR, check the current open PR count:
-
-```bash
-gh pr list --state open --json number --jq length
-```
-
-**If > 5 open PRs**: do NOT create another PR. Instead, message the lead with the work that is ready, and wait for guidance. CI queues are finite — piling on more PRs when the queue is already congested slows everything down.
 
 ## 7c. Cost Efficiency
 
@@ -275,42 +232,6 @@ Don't write memories for ephemeral state (which PRs are open, which slices are i
 9. **Lead** → Claude Code memories for cross-session knowledge
 
 The system gets better with each cycle AND each session.
-
-## 11. CI Budget and Agent Lanes
-
-Agents fall into two lanes with different constraints:
-
-### CI-bound agents (code writers)
-These create PRs and trigger CI runs. Throttle by merge pipeline throughput.
-- Builders (worktree subagents that edit code)
-- Fixers (when they push fixes)
-- Improver-tests (when adding tests)
-
-Rules:
-- Monitor merge pipeline: only create PRs as fast as they can be reviewed and merged
-- When CI queue > 10 runs, pause new PR creation and shift to planning/research
-- Each PR triggers a CI run (~5-8 min). Budget accordingly.
-
-### Non-CI-bound agents (read-only)
-These never trigger CI. Run them freely — they cost context, not CI budget.
-- Scouts (explore, analyze, create handoffs and tasks)
-- Researchers (web search, docs lookup, verification)
-- Planners (implementation design, architecture)
-- Doc drafters (write drafts in handoffs, not PRs)
-- Triage agents (issue investigation, error analysis)
-- Strategists (priority analysis, metrics)
-
-Rules:
-- No throttle needed — run as many as useful
-- Use read-only agents to pre-plan work so code writers are maximally efficient
-- When CI is congested, shift ALL capacity to read-only work
-- Read-only agents prepare handoffs that code writers consume in focused bursts
-
-### The optimal pattern
-1. Continuous read-only agents: scouts, researchers, planners always active
-2. Burst code-writing agents: spawn when CI has capacity, ship PRs, stop
-3. When CI is saturated: shift to planning, research, doc drafting, triage
-4. Pre-planning reduces code-writing agent time → fewer CI-minutes per feature
 
 ## 10. CI Gate Discipline
 

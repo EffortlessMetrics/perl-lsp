@@ -32,13 +32,20 @@ for label in "swarm-core:0E8A16" "swarm-improve-docs:C5DEF5" "swarm-improve-test
 done
 ```
 
-### Clean up stale worktrees
+### Clean up stale worktrees (REQUIRED before team creation)
+
+Stale agent worktrees from previous sessions pollute IDE diagnostics and cause false alarms. Remove them first:
 
 ```bash
-bash scripts/cleanup-worktrees.sh
+git worktree list                      # Inspect what exists
+git worktree prune                     # Remove refs to deleted worktrees
+ls .claude/worktrees/agent-* 2>/dev/null | head -20   # See stale agent dirs
+# Remove stale worktree directories (agents from previous sessions):
+for wt in .claude/worktrees/agent-*; do
+  git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
+done
+git worktree prune                     # Final prune
 ```
-
-Required before team creation. Stale worktrees from previous sessions pollute IDE diagnostics and waste disk space.
 
 ### Verify master CI is green before starting
 
@@ -50,25 +57,10 @@ gh run list --branch master --limit 5 --json status,conclusion,headBranch
 # Message fixer with: gh run view <run-id> --log-failed
 ```
 
-### Check CI queue depth before launching builders
-
-```bash
-gh run list --json status --jq '[.[] | select(.status == "in_progress")] | length'
-```
-
-**If > 5 runs in progress**: wait before launching builders. CI runners are finite — sending more work while the queue is already saturated delays all PRs and obscures failures. Check again in a few minutes, or message fixer to investigate stuck runs.
-
 ### Check for pending work from previous sessions
 - Agent patches: `ls .ops-perl-lsp/agent-patches/*.md 2>/dev/null`
 - In-progress slices: `grep "in-progress" .claude/swarm-state/completed-slices.md 2>/dev/null`
 - Discovered issues: `gh issue list --label swarm-discovered --state open`
-
-### Check ready queue
-```bash
-ls .claude/queues/ready/*.md 2>/dev/null | wc -l
-ls .claude/queues/scout/*.md 2>/dev/null | wc -l
-```
-Ready packets are pre-planned work. Builders should claim from ready/ before scouting new work.
 
 ### Resume or start fresh
 If there's pending work, prioritize it. Otherwise start fresh scouting.
@@ -93,71 +85,6 @@ Create an agent team with these teammates. Use `TeamCreate` with specific names 
 | `validator` | Post-merge verification | swarm-validator | sonnet |
 | `strategist` | Priority alignment | swarm-strategist | sonnet |
 | `pr-responder` | Review comment handler | swarm-pr-responder | sonnet |
-
-## Direct-Action Subagent Pattern
-
-This is the **preferred pattern** for all build subagents. Learned from cycle 1: heavyweight coordinator builders that spawn further subagents produced zero PRs. Small, scoped direct-action agents shipped quickly.
-
-### When to use direct-action vs coordinator
-
-| Situation | Pattern |
-|-----------|---------|
-| Specific crate, known files, clear fix | **Direct-action** — spawn worktree agent directly |
-| Simple test addition, doc update, cleanup | **Direct-action** — spawn worktree agent directly |
-| Multi-step exploration needed before work can be scoped | **Coordinator** — scout first, then direct-action once scoped |
-| Unknown file surface, requires investigation | **Coordinator** — explore first, claim files, then direct-action |
-
-Rule: if you know the files, use direct-action. If you don't, scout first, then use direct-action.
-
-### The template
-
-```
-Agent(
-  isolation: "worktree",
-  prompt: "
-    Goal: <one sentence>
-    Crate: <crate name>
-    Files: <exact files to edit — max 10>
-    Branch: <branch name>
-    Steps:
-    1. <specific step>
-    2. <specific step>
-    3. Verify: <cargo command>
-    4. Commit: <message>
-    5. Push and create PR
-    Optional: invoke /<skill> if branching needed
-  "
-)
-```
-
-### Guardrails
-
-- **Max 10 files per agent.** If a task touches more than 10 files, split into multiple agents with non-overlapping file surfaces.
-- **Each agent = one PR.** No agent produces multiple PRs or skips the PR step.
-- **No active agent without:** named worktree, branch, claimed file surface, verification command.
-- **Skills extend, not replace:** the final optional step may invoke a skill, but only after the task is already tightly scoped.
-
-### Example (builder-1 spawning a direct-action agent)
-
-```
-Agent(
-  isolation: "worktree",
-  prompt: "
-    Goal: Fix statement modifier parsing after complex expressions in perl-parser
-    Crate: perl-parser
-    Files: crates/perl-parser/src/statement.rs, crates/perl-parser/tests/statement_modifier.rs
-    Branch: fix-stmt-modifier-complex-expr
-    Steps:
-    1. Read the handoff at .ops-perl-lsp/handoffs/fix-stmt-modifier-complex-expr.md
-    2. Add a failing test reproducing the issue in tests/statement_modifier.rs
-    3. Fix the parsing logic in src/statement.rs
-    4. Verify: cargo fmt && cargo clippy -p perl-parser --tests && cargo test -p perl-parser
-    5. Commit: fix(parser): statement modifiers after complex expressions
-    6. Push and create PR with --label swarm-core
-    Optional: invoke /coding-standards if unsure about style
-  "
-)
-```
 
 ### Teammate spawn prompts
 
@@ -198,11 +125,6 @@ Before spawning any subagent, confirm it has ALL of the following:
   - Claimed file surface (exact list of files to touch — no open-ended scope)
   - Verification command (cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>)
   - PR size confirmation: if the change touches >10 files, split into multiple subagents with non-overlapping file surfaces
-
-Track all spawned subagent IDs. Before shutting down, list them in your shutdown message so the lead knows what's still running.
-
-Check open PR count before creating new PRs. If > 5 open, message lead for guidance instead of adding to the queue:
-  gh pr list --state open --json number --jq length
 
 Subagent prompt pattern (required fields):
   "Worktree: <worktree-name>. Branch: <X>. Crate: <Y>.
@@ -342,31 +264,33 @@ The lead's periodic duties:
 - **Daily**: `/swarm-report` for user check-in
 - **As needed**: Review `.ops-perl-lsp/agent-patches/`, apply improvements
 - **As needed**: Write Claude Code memories for cross-session knowledge
-- **When CI queue > 10**: Message all code-writing agents (builder-1, builder-2, reviewer, fixer, improver-tests) to pause PR creation and shift to planning
 
 ## Phase 4: Continuous Operation
 
 The full swarm — 12 teammates, all concurrent:
 
 ```
-DISCOVERY + PLANNING (no CI cost, run freely)
-  scout-1, scout-2    → find gaps, write handoffs, create tasks
-  strategist           → priority alignment, roadmap
-  researchers          → look up docs, verify approaches
+DISCOVERY
+  scout-1, scout-2       → find gaps, write handoffs, TaskCreate
 
-CODE + CI (throttled by merge pipeline)
-  builder-1, builder-2 → claim tasks, build in worktrees, create PRs
-  reviewer             → review diffs, create PRs with labels, enable auto-merge
-  pr-responder         → address review comments, push fixes
-  fixer                → fix CI failures
-  improver-tests       → add tests (creates PRs)
+BUILD
+  builder-1, builder-2   → claim tasks, build in worktrees, message reviewer
 
-MERGE (sequential, no parallel)
-  merger               → merge green PRs one at a time
-  validator            → verify merges helped
+REVIEW
+  reviewer               → review diffs, create PRs with labels, enable auto-merge
+  pr-responder           → address review comments, push fixes
 
-DOCS (low CI cost — doc-only PRs pass CI fast)
-  improver-docs        → ADRs, changelog, friction log
+MERGE
+  merger                 → merge PRs, update completed-slices, trigger validator
+  validator              → verify merges actually helped, catch regressions
+
+IMPROVE (~20%)
+  improver-docs          → ADRs, changelog, friction log, README, roadmap
+  improver-tests         → mutants, flaky tests, coverage, deps, dead code
+
+GOVERNANCE
+  strategist             → priority alignment, roadmap updates, agent health
+  fixer                  → CI failures, regression fixes, known-pitfalls
 ```
 
 ### Data flows
