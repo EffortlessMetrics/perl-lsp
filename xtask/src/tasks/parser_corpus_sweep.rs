@@ -45,6 +45,28 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
     ("expected expression, found '/'", "unexpected_slash_expr"),
     ("expected expression, found '?'", "unexpected_question_expr"),
     ("expected expression, found 'return'", "unexpected_return_expr"),
+    // Expression errors — keyword tokens (subcategories of catch-all, must precede it)
+    ("expected expression, found 'unless'", "unexpected_token_unless"),
+    ("expected expression, found 'until'", "unexpected_token_until"),
+    ("expected expression, found 'while'", "unexpected_token_while"),
+    ("expected expression, found 'else'", "unexpected_token_else"),
+    ("expected expression, found 'elsif'", "unexpected_token_elsif"),
+    ("expected expression, found 'for'", "unexpected_token_for"),
+    ("expected expression, found 'foreach'", "unexpected_token_foreach"),
+    ("expected expression, found 'use'", "unexpected_token_use"),
+    ("expected expression, found 'no'", "unexpected_token_no"),
+    // Expression errors — word operators
+    ("expected expression, found 'or'", "unexpected_word_op_or"),
+    ("expected expression, found 'and'", "unexpected_word_op_and"),
+    ("expected expression, found 'not'", "unexpected_word_op_not"),
+    ("expected expression, found 'xor'", "unexpected_word_op_xor"),
+    // Expression errors — punctuation
+    ("expected expression, found ','", "unexpected_comma_expr"),
+    ("expected expression, found ';'", "unexpected_semicolon_expr"),
+    ("expected expression, found '}'", "unexpected_rbrace_expr"),
+    ("expected expression, found ')'", "unexpected_rparen_expr"),
+    ("expected expression, found 'end of input'", "unexpected_eof_expr"),
+    // Catch-all for remaining unexpected expression tokens (MUST remain last)
     ("expected expression, found", "unexpected_token_in_expr"),
     // Unclosed delimiters — user-friendly names ('}', ')', ']')
     ("expected '}', found ';'", "unclosed_brace_semicolon"),
