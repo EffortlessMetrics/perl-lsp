@@ -315,3 +315,46 @@ mod scalar_builtin_arrow_method {
         assert_clean_parse(code);
     }
 }
+
+mod dollar_dollar_scalar_deref {
+    use super::*;
+
+    fn sexp(source: &str) -> String {
+        parse(source).to_sexp()
+    }
+
+    #[test]
+    fn scalar_deref_keeps_referenced_variable_name() {
+        let sexp = sexp("my $x = $$sv;");
+        assert!(
+            sexp.contains("(variable $ $sv)"),
+            "expected $$sv to survive as a scalar-deref target token, got: {sexp}"
+        );
+        assert!(
+            !sexp.contains("(my_declaration (variable $ x)(variable $ $))"),
+            "expected $$sv not to collapse to the bare $$ PID variable, got: {sexp}"
+        );
+    }
+
+    #[test]
+    fn bare_pid_special_variable_still_parses_as_pid() {
+        let sexp = sexp("my $pid = $$;");
+        assert!(
+            sexp.contains("(variable $ $)"),
+            "expected bare $$ to stay the PID special variable, got: {sexp}"
+        );
+    }
+
+    #[test]
+    fn b_terse_pattern_keeps_both_scalar_deref_uses() {
+        let sexp = sexp(
+            r#"
+my $s = sprintf("%s #%d %s", class($sv), $$sv, $specialsv_name[$$sv]);
+"#,
+        );
+        assert!(
+            sexp.matches("(variable $ $sv)").count() >= 2,
+            "expected both $$sv uses to survive as scalar-deref targets, got: {sexp}"
+        );
+    }
+}

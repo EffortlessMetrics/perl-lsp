@@ -1602,10 +1602,17 @@ impl<'a> PerlLexer<'a> {
                                 | '-'
                                 | '['
                                 | ']'
-                                | '$'
                         )
                     {
                         self.advance(); // consume the special character
+                    }
+                    // $$ is the PID special variable, but only when it is not immediately
+                    // followed by an identifier-start character. $$var is scalar dereference
+                    // of $var, so keep the second $ for the next token.
+                    else if sigil == '$' && ch == '$' {
+                        if !self.peek_char(1).is_some_and(is_perl_identifier_start) {
+                            self.advance(); // consume the second $ for bare $$ PID
+                        }
                     }
                     // Handle special array/hash punctuation variables
                     else if (sigil == '@' || sigil == '%') && matches!(ch, '+' | '-') {
