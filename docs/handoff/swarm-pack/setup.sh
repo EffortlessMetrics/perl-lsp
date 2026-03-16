@@ -16,8 +16,8 @@
 #   LINT_CMD         - lint command            (default: "cargo clippy -p PKG --tests -- -D warnings")
 #   TEST_CMD         - test command            (default: "cargo test -p PKG")
 #   POST_EDIT_CHECK  - PostToolUse hook cmd    (default: "cargo check --quiet ...")
-#   STATUS_REGEN_CMD - status regen command    (default: "echo 'TODO: set STATUS_REGEN_CMD'")
-#   BASELINE_RATCHET_CMD - baseline ratchet    (default: "echo 'TODO: set BASELINE_RATCHET_CMD'")
+#   STATUS_REGEN_CMD - status regen command    (default: "echo 'set STATUS_REGEN_CMD'")
+#   BASELINE_RATCHET_CMD - baseline ratchet    (default: "echo 'set BASELINE_RATCHET_CMD'")
 #   OPS_DIR          - ops directory name      (default: ".ops")
 #   MAIN_BRANCH      - main branch name        (default: "main")
 
@@ -31,8 +31,8 @@ FMT_CHECK_CMD="${FMT_CHECK_CMD:-cargo fmt --all -- --check}"
 LINT_CMD="${LINT_CMD:-cargo clippy -p PKG --tests -- -D warnings}"
 TEST_CMD="${TEST_CMD:-cargo test -p PKG}"
 POST_EDIT_CHECK="${POST_EDIT_CHECK:-cargo check --quiet --message-format=short 2>&1 | head -20 || true}"
-STATUS_REGEN_CMD="${STATUS_REGEN_CMD:-echo 'TODO: set STATUS_REGEN_CMD'}"
-BASELINE_RATCHET_CMD="${BASELINE_RATCHET_CMD:-echo 'TODO: set BASELINE_RATCHET_CMD'}"
+STATUS_REGEN_CMD="${STATUS_REGEN_CMD:-echo 'set STATUS_REGEN_CMD'}"
+BASELINE_RATCHET_CMD="${BASELINE_RATCHET_CMD:-echo 'set BASELINE_RATCHET_CMD'}"
 OPS_DIR="${OPS_DIR:-.ops}"
 MAIN_BRANCH="${MAIN_BRANCH:-main}"
 
