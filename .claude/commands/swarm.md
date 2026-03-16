@@ -87,6 +87,71 @@ Create an agent team with these teammates. Use `TeamCreate` with specific names 
 | `strategist` | Priority alignment | swarm-strategist | sonnet |
 | `pr-responder` | Review comment handler | swarm-pr-responder | sonnet |
 
+## Direct-Action Subagent Pattern
+
+This is the **preferred pattern** for all build subagents. Learned from cycle 1: heavyweight coordinator builders that spawn further subagents produced zero PRs. Small, scoped direct-action agents shipped quickly.
+
+### When to use direct-action vs coordinator
+
+| Situation | Pattern |
+|-----------|---------|
+| Specific crate, known files, clear fix | **Direct-action** — spawn worktree agent directly |
+| Simple test addition, doc update, cleanup | **Direct-action** — spawn worktree agent directly |
+| Multi-step exploration needed before work can be scoped | **Coordinator** — scout first, then direct-action once scoped |
+| Unknown file surface, requires investigation | **Coordinator** — explore first, claim files, then direct-action |
+
+Rule: if you know the files, use direct-action. If you don't, scout first, then use direct-action.
+
+### The template
+
+```
+Agent(
+  isolation: "worktree",
+  prompt: "
+    Goal: <one sentence>
+    Crate: <crate name>
+    Files: <exact files to edit — max 10>
+    Branch: <branch name>
+    Steps:
+    1. <specific step>
+    2. <specific step>
+    3. Verify: <cargo command>
+    4. Commit: <message>
+    5. Push and create PR
+    Optional: invoke /<skill> if branching needed
+  "
+)
+```
+
+### Guardrails
+
+- **Max 10 files per agent.** If a task touches more than 10 files, split into multiple agents with non-overlapping file surfaces.
+- **Each agent = one PR.** No agent produces multiple PRs or skips the PR step.
+- **No active agent without:** named worktree, branch, claimed file surface, verification command.
+- **Skills extend, not replace:** the final optional step may invoke a skill, but only after the task is already tightly scoped.
+
+### Example (builder-1 spawning a direct-action agent)
+
+```
+Agent(
+  isolation: "worktree",
+  prompt: "
+    Goal: Fix statement modifier parsing after complex expressions in perl-parser
+    Crate: perl-parser
+    Files: crates/perl-parser/src/statement.rs, crates/perl-parser/tests/statement_modifier.rs
+    Branch: fix-stmt-modifier-complex-expr
+    Steps:
+    1. Read the handoff at .ops-perl-lsp/handoffs/fix-stmt-modifier-complex-expr.md
+    2. Add a failing test reproducing the issue in tests/statement_modifier.rs
+    3. Fix the parsing logic in src/statement.rs
+    4. Verify: cargo fmt && cargo clippy -p perl-parser --tests && cargo test -p perl-parser
+    5. Commit: fix(parser): statement modifiers after complex expressions
+    6. Push and create PR with --label swarm-core
+    Optional: invoke /coding-standards if unsure about style
+  "
+)
+```
+
 ### Teammate spawn prompts
 
 Each teammate gets a focused prompt that tells them to:
