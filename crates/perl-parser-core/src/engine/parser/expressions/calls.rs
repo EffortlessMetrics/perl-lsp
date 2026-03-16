@@ -132,10 +132,47 @@ impl<'a> Parser<'a> {
         // AC1: General indirect method call heuristic: method $object
         // Lowercase identifier followed by a sigiled variable ($x, @arr, %hash)
         //
-        // Array/list manipulation builtins never use indirect object syntax.
-        // `push $aref->@*, $x` has $aref as the first arg, not an indirect object.
+        // Unary operators that can never take an indirect object are excluded so
+        // that `defined $obj->{field}` and `ref $obj->{list}` at statement start
+        // do not fire the indirect-call path (which would use parse_primary() and
+        // stop before the `->`, producing an error).
+        //
+        // Array/list manipulation builtins are also excluded because
+        // `push $aref->@*, $x` has `$aref->@*` as the first argument, not an
+        // indirect object.
         if name.chars().next().is_some_and(|c| c.is_lowercase())
-            && !matches!(name, "tie" | "untie" | "push" | "pop" | "shift" | "unshift" | "splice")
+            && !matches!(
+                name,
+                "tie"
+                    | "untie"
+                    | "push"
+                    | "pop"
+                    | "shift"
+                    | "unshift"
+                    | "splice"
+                    | "defined"
+                    | "ref"
+                    | "scalar"
+                    | "not"
+                    | "abs"
+                    | "chr"
+                    | "chop"
+                    | "chomp"
+                    | "lc"
+                    | "lcfirst"
+                    | "length"
+                    | "ord"
+                    | "uc"
+                    | "ucfirst"
+                    | "int"
+                    | "hex"
+                    | "oct"
+                    | "sqrt"
+                    | "cos"
+                    | "sin"
+                    | "exp"
+                    | "log"
+            )
         {
             if let Ok(next) = self.tokens.peek_second() {
                 let next_text = &next.text;
