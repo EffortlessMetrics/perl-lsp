@@ -35,6 +35,8 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 # 4. Open a Perl file — completions, diagnostics, hover, and navigation work immediately.
 ```
 
+New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
+
 <details>
 <summary><strong>Neovim / Emacs setup</strong></summary>
 
@@ -193,6 +195,7 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 
 | Resource | Description |
 |----------|-------------|
+| **[Getting Started](docs/tutorials/GETTING_STARTED.md)** | **Installation, editor setup, and first-run walkthrough** |
 | [Book](book/) | Comprehensive user and developer guide |
 | [docs/](docs/README.md) | Documentation index |
 | [features.toml](features.toml) | Canonical LSP feature catalog |
