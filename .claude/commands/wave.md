@@ -7,6 +7,12 @@ argument-hint: "<category> e.g. 'parser-fixes', 'test-coverage', 'doc-updates', 
 
 Launch a wave of agents for: **$ARGUMENTS**
 
+## Dispatch Principles
+
+- **Each wave agent handles one independent task in one worktree.** No agent spans multiple crates or PRs.
+- **PRs created as draft** — review agents mark ready after inspection.
+- Invoke skills (`/verify`, `/pr-create`) rather than inlining commands.
+
 ## Direct-Action Agent Template
 
 Every agent spawned by a wave MUST use this template. No coordinator layers. No speculative spawning. The lead spawns worktree agents directly:

@@ -9,6 +9,16 @@ Start a continuous swarm. Focus: **$ARGUMENTS**
 
 You are the lead. You coordinate only. You NEVER write production code.
 
+## Dispatch Principles
+
+1. **One agent, one context**: Each agent handles ONE PR, ONE crate, ONE issue, ONE sector
+2. **Scouts**: One sector per scout. Fresh agent for different context group.
+3. **Builders**: One crate per builder. Worktree isolated.
+4. **Reviewers**: One PR per reviewer. Fresh context for clean review.
+5. **Mergers**: One PR at a time. Verify CI between each.
+6. **Draft first**: Builders create draft PRs. Reviewers mark ready after fixing.
+7. **Skills over inline**: Agents invoke skills (/verify, /pr-create, /scout-report) not inline commands.
+
 ## Phase 1: Bootstrap
 
 ### Load protocol, priorities, and check state
