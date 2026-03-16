@@ -38,7 +38,7 @@ gh issue create --title "<type>: <description>" --label "swarm-discovered" \
 
 Create issues for: security vulnerabilities, design flaws, missing features, recurring patterns needing architectural decisions.
 
-**Discovery log** (`.claude/swarm-state/discovered-issues.md`):
+**Discovery log** (`.ops-perl-lsp/discovered-issues.md`):
 For smaller items not worth a full issue. Scouts read this as an input source.
 
 ## 2. Direct Communication
@@ -126,9 +126,9 @@ Bootstrapper integrates validated patches during `--refresh`. User reviews.
 ## 6. Dedup
 
 Before starting work:
-1. `.claude/swarm-state/completed-slices.md` — done already?
-2. `.claude/swarm-state/known-pitfalls.md` — known trap?
-3. `.claude/swarm-state/discovered-issues.md` — already flagged?
+1. `.ops-perl-lsp/completed-slices.md` — done already?
+2. `.ops-perl-lsp/known-pitfalls.md` — known trap?
+3. `.ops-perl-lsp/discovered-issues.md` — already flagged?
 4. `gh issue list --label "swarm-discovered"` — already an issue?
 5. `gh pr list --state open` — already a PR?
 
@@ -207,7 +207,7 @@ The swarm writes to four persistence layers, each with different lifetimes:
 |-------|----------|----------|------|
 | **Handoffs** | Until merge | `.ops-perl-lsp/handoffs/` | Context transfer: scout→builder→reviewer |
 | **Runtime** | Current session | `.ops-perl-lsp/` | metrics, agent-patches, salvage |
-| **Knowledge** | Across sessions | `.claude/swarm-state/` | known-pitfalls, completed-slices, discovered-issues, queue |
+| **Knowledge** | Across sessions | `.ops-perl-lsp/` | known-pitfalls, completed-slices, discovered-issues, queue |
 | **GitHub** | Permanent | Issues, PRs, labels | Work items, discoveries, architectural decisions |
 | **Memory** | Across sessions | Claude Code memories | Critical lessons future sessions need |
 
@@ -249,9 +249,110 @@ The system gets better with each cycle AND each session.
 
 One broken merge → all subsequent PRs inherit the failure → agents merge anyway → master accumulates unfixed issues → user finds a broken master and stale worktrees with phantom diagnostics.
 
+### Timing: verify immediately before merge
+
+CI status changes between inventory time and merge time. A PR that was green 30 minutes ago may now be red due to a rebase or master change. Always verify CI **immediately** before running `gh pr merge`.
+
+### After rapid merges
+
+When merging multiple PRs in quick succession, pause after every 3-5 merges and verify master CI passes before continuing. Rapid merges compound risk of cascading failures.
+
 ### Merger checklist (every merge)
 ```bash
-gh pr checks <N>           # Must show all checks passing
+gh pr checks <N>           # Must show all checks passing — run IMMEDIATELY before merge
 gh run list --limit 5      # Confirm master CI is green
 gh pr merge <N> --squash --delete-branch   # Only if both above are green
 ```
+
+## 11. Scout Deliverables
+
+**Every scout MUST write findings as a GitHub issue.** Agent output is ephemeral; GitHub issues persist.
+
+Scouts use `/scout-report` to file structured issues. If the skill is unavailable, create the issue manually:
+
+```bash
+gh issue create --title "<sector>: <finding>" --label "swarm-discovered" \
+  --body "$(cat <<'EOF'
+## Problem
+<what is wrong or missing — specific, not vague>
+
+## Options
+1. <option A> — trade-off: ...
+2. <option B> — trade-off: ...
+
+## Acceptance Criteria
+- [ ] <measurable condition>
+- [ ] <measurable condition>
+
+## Key Files
+- `<path>:<line>` — <why this file matters>
+EOF
+)"
+```
+
+### Scout sector discipline
+
+- Scouts stay within their assigned sector (crate family, feature area).
+- If a scout discovers work in a different sector, it files an issue and moves on — it does NOT context-switch.
+- To investigate a different context group, spawn a fresh scout with that sector assignment.
+
+## 12. Modularization Discipline
+
+**Before multiple agents modify the same file, split it first.**
+
+### God file thresholds
+
+| Type | Threshold | Action |
+|------|-----------|--------|
+| Test file | >500 lines | Split into per-feature test files |
+| Source file | >800 lines | Extract modules |
+
+God files are conflict magnets. Two agents editing the same 1000-line test file will produce merge conflicts, wasted CI runs, and fixer churn.
+
+### Rules
+
+1. **New parser fix tests go in NEW files**, not existing shared test files. Name pattern: `tests/<feature>_tests.rs`.
+2. **Shared test infrastructure** uses a `mod.rs` helper pattern (e.g., `cpan_test_helpers/mod.rs`). Tests import helpers; they don't duplicate setup code.
+3. **Before spawning parallel builders** on the same crate, check if they touch overlapping files. If yes, split the file first (one prep agent), THEN spawn parallel builders on non-overlapping surfaces.
+4. **PR reviews** should flag god-file growth. If a PR makes a file cross the threshold, request a split as a prerequisite.
+
+## 13. Agent Steps via Skills
+
+**Agents invoke skills for procedural steps, not inline commands.**
+
+Skills are the single source of truth for multi-step procedures. When an agent inlines a procedure (copy-pasting commands from memory), it risks using stale commands or skipping steps that the skill has since added.
+
+### Required skill invocations
+
+| Step | Skill | Never inline |
+|------|-------|-------------|
+| Format + clippy + test | `/verify` | Don't hand-roll `cargo fmt && cargo clippy && cargo test` |
+| Create PR | `/pr-create` | Don't hand-roll `gh pr create` with ad-hoc body |
+| Code review checklist | `/coding-standards` | Don't guess at project conventions |
+| Scout findings | `/scout-report` | Don't skip the issue template |
+| Parser fix TDD | `/parser-fix` | Don't skip the red-green-refactor cycle |
+
+### Why this matters
+
+- Skills get updated; inline commands get stale.
+- Skills enforce structure (templates, checklists); inline commands cut corners.
+- Skills are auditable; inline commands vanish with the agent context.
+
+## 14. Metrics Mandate
+
+**Every lane agent MUST append metrics to `.ops-perl-lsp/swarm-metrics.jsonl` before exit. No metrics = task incomplete.**
+
+This is not optional. The strategist relies on metrics for priority steering, bottleneck detection, and cycle retrospectives.
+
+### What counts as "before exit"
+
+- Builder: after PR is created (or after failure is reported)
+- Reviewer: after review is posted
+- Fixer: after fix is pushed (or after escalation)
+- Merger: after merge (or after merge rejection)
+- Scout: after issues are filed
+- Improver: after PR is created
+
+### Enforcement
+
+If an agent completes work but does not append to `swarm-metrics.jsonl`, the task is considered incomplete. The lead should treat missing metrics the same as a missing PR — the work is not done until it is recorded.
