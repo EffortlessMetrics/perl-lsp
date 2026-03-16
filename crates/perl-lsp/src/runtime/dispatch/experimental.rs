@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 impl LspServer {
     /// Handle test discovery request
     pub(super) fn handle_test_discovery_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_test_discovery(params)
@@ -18,7 +18,7 @@ impl LspServer {
 
     /// Handle slow operation test request
     pub(super) fn handle_slow_operation_dispatch(
-        &mut self,
+        &self,
         id: &Option<Value>,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {

@@ -61,7 +61,7 @@ use std::time::Instant;
 
 impl LspServer {
     /// Handle a JSON-RPC request
-    pub fn handle_request(&mut self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
+    pub fn handle_request(&self, request: JsonRpcRequest) -> Option<JsonRpcResponse> {
         let id = request.id.and_then(|id| if id.is_null() { None } else { Some(id) });
         let should_respond = id.is_some();
 
@@ -149,7 +149,7 @@ impl LspServer {
             "initialize" => self.handle_initialize_dispatch(request.params),
             "initialized" => self.handle_initialized_dispatch(),
             // All other requests require initialization
-            _ if !self.initialized && request.method != "shutdown" && request.method != "exit" => {
+            _ if !self.initialized.load(Ordering::Acquire) && request.method != "shutdown" && request.method != "exit" => {
                 Err(JsonRpcError {
                     code: -32002, // ServerNotInitialized per LSP spec
                     message: "Server not initialized".to_string(),

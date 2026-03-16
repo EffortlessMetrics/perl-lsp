@@ -10,7 +10,9 @@ pub mod file_discovery;
 mod language;
 mod lifecycle;
 mod notebook;
+pub(crate) mod outbound;
 mod refresh;
+pub(crate) mod scheduler;
 /// Routing module for lifecycle-aware index access
 pub mod routing;
 mod text_sync;
@@ -70,7 +72,7 @@ use crate::{
         ClientCapabilities, DocumentState, ServerConfig, WorkspaceConfig,
         normalize_package_separator,
     },
-    transport::{ContentLengthMessageReader, frame, log_response, write_message},
+    transport::{ContentLengthMessageReader, log_response},
     // Import text processing helpers
     util::{
         byte_to_line_col, byte_to_utf16_col, extract_module_reference,
@@ -138,11 +140,11 @@ pub struct LspServer {
     /// Document contents indexed by URI
     pub(crate) documents: Arc<Mutex<HashMap<String, DocumentState>>>,
     /// Whether the `initialize` request has been received
-    initialize_requested: bool,
+    initialize_requested: AtomicBool,
     /// Whether the server is initialized
-    initialized: bool,
+    initialized: AtomicBool,
     /// Whether shutdown was received (for LSP-compliant exit handling)
-    shutdown_received: bool,
+    shutdown_received: AtomicBool,
     /// Index coordinator for workspace-wide features with lifecycle management
     #[cfg(feature = "workspace")]
     pub(crate) index_coordinator: Option<Arc<IndexCoordinator>>,
@@ -154,10 +156,10 @@ pub struct LspServer {
     pub(crate) config: Arc<Mutex<ServerConfig>>,
     /// Synchronized input reader
     reader: Arc<Mutex<Box<dyn BufRead + Send>>>,
-    /// Synchronized output writer for notifications
-    output: Arc<Mutex<Box<dyn Write + Send>>>,
-    /// Client capabilities
-    client_capabilities: ClientCapabilities,
+    /// Outbound message sender (channel-based, decoupled from I/O)
+    outbound: outbound::OutboundSender,
+    /// Client capabilities (behind mutex for interior mutability — written once during initialize)
+    client_capabilities: Mutex<ClientCapabilities>,
     /// Cancelled request IDs
     cancelled: Arc<Mutex<HashSet<Value>>>,
     /// Workspace folders
@@ -186,6 +188,16 @@ pub struct LspServer {
     feature_profile: FeatureProfile,
 }
 
+// SAFETY: LspServer is not auto-Send/Sync because DocumentState contains
+// ParentMap which has `*const Node` raw pointers. However, these pointers
+// are only accessed through the `documents: Arc<Mutex<...>>` field, which
+// provides proper synchronization. All other fields are either atomic,
+// behind Mutex/Arc, or inherently Send+Sync.
+#[allow(unsafe_code)]
+unsafe impl Send for LspServer {}
+#[allow(unsafe_code)]
+unsafe impl Sync for LspServer {}
+
 // Note: DocumentState, ServerConfig, and normalize_package_separator are
 // imported from crate::lsp::state::{document, config}
 
@@ -206,9 +218,9 @@ impl LspServer {
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
-            initialize_requested: false,
-            initialized: false,
-            shutdown_received: false,
+            initialize_requested: AtomicBool::new(false),
+            initialized: AtomicBool::new(false),
+            shutdown_received: AtomicBool::new(false),
             #[cfg(feature = "workspace")]
             index_coordinator,
             // Cache up to 100 ASTs with 5 minute TTL
@@ -216,8 +228,11 @@ impl LspServer {
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
             reader: Arc::new(Mutex::new(Box::new(BufReader::new(io::stdin())))),
-            output: Arc::new(Mutex::new(Box::new(io::stdout()))),
-            client_capabilities: ClientCapabilities::default(),
+            outbound: {
+                let (sender, _handle) = outbound::spawn_writer(Box::new(io::stdout()));
+                sender
+            },
+            client_capabilities: Mutex::new(ClientCapabilities::default()),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
             root_path: Arc::new(Mutex::new(None)),
@@ -291,17 +306,20 @@ impl LspServer {
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
-            initialize_requested: false,
-            initialized: false,
-            shutdown_received: false,
+            initialize_requested: AtomicBool::new(false),
+            initialized: AtomicBool::new(false),
+            shutdown_received: AtomicBool::new(false),
             #[cfg(feature = "workspace")]
             index_coordinator,
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
             reader: Arc::new(Mutex::new(Box::new(BufReader::new(reader)))),
-            output: Arc::new(Mutex::new(writer as Box<dyn Write + Send>)),
-            client_capabilities: ClientCapabilities::default(),
+            outbound: {
+                let (sender, _handle) = outbound::spawn_writer(writer as Box<dyn Write + Send>);
+                sender
+            },
+            client_capabilities: Mutex::new(ClientCapabilities::default()),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
             root_path: Arc::new(Mutex::new(None)),
@@ -339,17 +357,20 @@ impl LspServer {
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
-            initialize_requested: false,
-            initialized: false,
-            shutdown_received: false,
+            initialize_requested: AtomicBool::new(false),
+            initialized: AtomicBool::new(false),
+            shutdown_received: AtomicBool::new(false),
             #[cfg(feature = "workspace")]
             index_coordinator,
             ast_cache: Arc::new(AstCache::new(100, 300)),
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
             reader: Arc::new(Mutex::new(Box::new(BufReader::new(io::stdin())))),
-            output,
-            client_capabilities: ClientCapabilities::default(),
+            outbound: {
+                let (sender, _handle) = outbound::spawn_writer_shared(output);
+                sender
+            },
+            client_capabilities: Mutex::new(ClientCapabilities::default()),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
             root_path: Arc::new(Mutex::new(None)),
@@ -379,20 +400,9 @@ impl LspServer {
         perl_lsp_tooling::OsSubprocessRuntime::new()
     }
 
-    /// Send a notification to the client with proper framing
+    /// Send a notification to the client via the outbound channel
     fn notify(&self, method: &str, params: Value) -> io::Result<()> {
-        let notification = json!({
-            "jsonrpc": "2.0",
-            "method": method,
-            "params": params
-        });
-
-        let payload = serde_json::to_vec(&notification)?;
-        let framed = frame(&payload);
-        // parking_lot locks cannot be poisoned
-        let mut output = self.output.lock();
-        output.write_all(&framed)?;
-        output.flush()
+        self.outbound.send_notification(method, params)
     }
 
     /// Acquire a lock on the documents map
@@ -514,7 +524,7 @@ impl LspServer {
     }
 
     /// Run the LSP server using stdio
-    pub fn run(&mut self) -> io::Result<()> {
+    pub fn run(&self) -> io::Result<()> {
         eprintln!("LSP server started (stdio)");
         let reader_arc = Arc::clone(&self.reader);
         let mut reader = reader_arc.lock();
@@ -522,7 +532,7 @@ impl LspServer {
     }
 
     /// Serve LSP requests from the given reader
-    pub fn serve(&mut self, reader: &mut dyn BufRead) -> io::Result<()> {
+    pub fn serve(&self, reader: &mut dyn BufRead) -> io::Result<()> {
         let mut message_reader = ContentLengthMessageReader::new();
 
         loop {
@@ -533,12 +543,9 @@ impl LspServer {
 
                     // Handle the request
                     if let Some(response) = self.handle_request(request) {
-                        // Log and send response using transport module
+                        // Log and send response via outbound channel
                         log_response(&response);
-
-                        // Use self.output which is thread-safe and configured (stdio or socket)
-                        let mut output = self.output.lock();
-                        write_message(&mut *output, &response)?;
+                        self.outbound.send_response(response)?;
                     }
                 }
                 None => {
@@ -552,15 +559,68 @@ impl LspServer {
         Ok(())
     }
 
+    /// Serve LSP requests with worker-queue dispatch.
+    ///
+    /// The ingress loop reads messages from `rx`, classifies them via
+    /// [`scheduler::classify`], and routes them to dedicated worker queues.
+    /// No heavy work runs inline — only classification and channel sends.
+    ///
+    /// Architecture:
+    /// - **Control** (`$/cancelRequest`): processed inline (only touches atomics)
+    /// - **Mutation/Lifecycle**: routed to single exclusive worker (sequential)
+    /// - **ReadOnly**: routed to bounded read pool (N concurrent workers)
+    /// - **Egress**: existing `OutboundSender` (already decoupled)
+    ///
+    /// ## Shutdown policy
+    ///
+    /// When the ingress channel closes (EOF), the scheduler's sender halves are
+    /// dropped. Workers drain remaining items and exit. `spawn_blocking` tasks
+    /// cannot be aborted — they run to completion.
+    pub async fn serve_async(
+        self: Arc<Self>,
+        mut rx: tokio::sync::mpsc::Receiver<JsonRpcRequest>,
+    ) {
+        use scheduler::{RequestClass, classify};
+
+        let sched = scheduler::Scheduler::new(Arc::clone(&self));
+
+        while let Some(request) = rx.recv().await {
+            let method = request.method.clone();
+            eprintln!("Received request: {}", method);
+
+            match classify(&method) {
+                RequestClass::Control => {
+                    // Process inline — no queue, no spawn.
+                    // Control methods ($/cancelRequest) only touch atomics
+                    // and must complete before the next message is read.
+                    let _ = self.handle_request(request);
+                }
+                RequestClass::Lifecycle | RequestClass::Mutation => {
+                    if sched.send_mutation(request).await.is_err() {
+                        break;
+                    }
+                }
+                RequestClass::ReadOnly => {
+                    if sched.send_read(request).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Cooperative shutdown: drop senders, drain remaining work.
+        // spawn_blocking tasks run to completion and cannot be aborted.
+        sched.shutdown().await;
+    }
+
     /// Handle a message from any reader (for testing)
-    pub fn handle_message<R: Read>(&mut self, reader: &mut R) -> io::Result<()> {
+    pub fn handle_message<R: Read>(&self, reader: &mut R) -> io::Result<()> {
         let mut buf_reader = BufReader::new(reader);
         let mut message_reader = ContentLengthMessageReader::new();
         if let Some(request) = message_reader.read_next(&mut buf_reader)? {
             if let Some(response) = self.handle_request(request) {
-                // Write response to the configured output using transport module
-                let mut output = self.output.lock();
-                write_message(&mut *output, &response)?;
+                // Send response via outbound channel
+                self.outbound.send_response(response)?;
             }
         }
         Ok(())
@@ -571,7 +631,7 @@ impl LspServer {
 
     /// Check if the server is initialized
     pub fn is_initialized(&self) -> bool {
-        self.initialized
+        self.initialized.load(Ordering::Acquire)
     }
 
     /// Mark a request as cancelled
@@ -1461,27 +1521,12 @@ impl LspServer {
     /// Send a server→client request with no parameters (for refresh requests)
     fn send_request(&self, method: &str, params: Value) -> io::Result<()> {
         let request_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
-        let request = json!({
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": method,
-            "params": params
-        });
-        let mut output = self.output.lock();
-        let payload = serde_json::to_vec(&request).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Failed to serialize request: {}", e),
-            )
-        })?;
-        let framed = frame(&payload);
-        output.write_all(&framed)?;
-        output.flush()
+        self.outbound.send_request(request_id, method, params)
     }
 
     /// Request client to refresh code lenses (workspace/codeLens/refresh)
     pub fn request_code_lens_refresh(&self) -> io::Result<()> {
-        if !self.client_capabilities.code_lens_refresh_support {
+        if !self.client_capabilities.lock().code_lens_refresh_support {
             return Ok(());
         }
         self.send_request("workspace/codeLens/refresh", json!(null))?;
@@ -1491,7 +1536,7 @@ impl LspServer {
 
     /// Request client to refresh semantic tokens (workspace/semanticTokens/refresh)
     pub fn request_semantic_tokens_refresh(&self) -> io::Result<()> {
-        if !self.client_capabilities.semantic_tokens_refresh_support {
+        if !self.client_capabilities.lock().semantic_tokens_refresh_support {
             return Ok(());
         }
         self.send_request("workspace/semanticTokens/refresh", json!(null))?;
@@ -1501,7 +1546,7 @@ impl LspServer {
 
     /// Request client to refresh inlay hints (workspace/inlayHint/refresh)
     pub fn request_inlay_hint_refresh(&self) -> io::Result<()> {
-        if !self.client_capabilities.inlay_hint_refresh_support {
+        if !self.client_capabilities.lock().inlay_hint_refresh_support {
             return Ok(());
         }
         self.send_request("workspace/inlayHint/refresh", json!(null))?;
@@ -1511,7 +1556,7 @@ impl LspServer {
 
     /// Request client to refresh inline values (workspace/inlineValue/refresh)
     pub fn request_inline_value_refresh(&self) -> io::Result<()> {
-        if !self.client_capabilities.inline_value_refresh_support {
+        if !self.client_capabilities.lock().inline_value_refresh_support {
             return Ok(());
         }
         self.send_request("workspace/inlineValue/refresh", json!(null))?;
@@ -1521,7 +1566,7 @@ impl LspServer {
 
     /// Request client to refresh diagnostics (workspace/diagnostic/refresh)
     pub fn request_diagnostic_refresh(&self) -> io::Result<()> {
-        if !self.client_capabilities.diagnostic_refresh_support {
+        if !self.client_capabilities.lock().diagnostic_refresh_support {
             return Ok(());
         }
         self.send_request("workspace/diagnostic/refresh", json!(null))?;
@@ -1531,7 +1576,7 @@ impl LspServer {
 
     /// Request client to refresh folding ranges (workspace/foldingRange/refresh)
     pub fn request_folding_range_refresh(&self) -> io::Result<()> {
-        if !self.client_capabilities.folding_range_refresh_support {
+        if !self.client_capabilities.lock().folding_range_refresh_support {
             return Ok(());
         }
         self.send_request("workspace/foldingRange/refresh", json!(null))?;

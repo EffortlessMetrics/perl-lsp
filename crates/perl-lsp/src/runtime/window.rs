@@ -108,7 +108,7 @@ impl LspServer {
     /// * `Ok(())` - Request sent successfully
     /// * `Err(_)` - Client doesn't support showDocument or communication error
     pub fn show_document(&self, uri: &str, options: ShowDocumentOptions) -> io::Result<()> {
-        if !self.client_capabilities.show_document_support {
+        if !self.client_capabilities.lock().show_document_support {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "Client doesn't support window/showDocument",
@@ -148,7 +148,7 @@ impl LspServer {
     /// * `Ok(())` - Token successfully created
     /// * `Err(_)` - Client doesn't support progress or token already exists
     pub fn create_work_done_progress(&self, token: &str) -> io::Result<()> {
-        if !self.client_capabilities.work_done_progress_support {
+        if !self.client_capabilities.lock().work_done_progress_support {
             return Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "Client doesn't support work done progress",
@@ -335,20 +335,7 @@ impl LspServer {
     /// infrastructure which auto-generates request IDs.
     fn send_request_internal(&self, method: &str, params: Value) -> io::Result<()> {
         let request_id = self.next_request_id.fetch_add(1, Ordering::SeqCst);
-        let request = json!({
-            "jsonrpc": "2.0",
-            "id": request_id,
-            "method": method,
-            "params": params,
-        });
-
-        let payload = serde_json::to_vec(&request)?;
-        let framed = frame(&payload);
-
-        // Send request
-        let mut output = self.output.lock();
-        output.write_all(&framed)?;
-        output.flush()
+        self.outbound.send_request(request_id, method, params)
     }
 }
 

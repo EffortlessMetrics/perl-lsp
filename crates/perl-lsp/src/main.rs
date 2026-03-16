@@ -3,6 +3,9 @@
 //! This binary wires startup options to the reusable launcher microcrate and
 //! delegates command parsing, profile compatibility, and CLI interoperability to a
 //! shared package boundary.
+//!
+//! Both stdio and TCP modes use the same async dispatch path (`serve_async`),
+//! with a blocking reader thread feeding an `mpsc` channel.
 
 #![deny(clippy::option_env_unwrap)]
 use perl_lsp::LspServer;
@@ -57,12 +60,43 @@ fn run_server(launch_config: LaunchConfig) {
 
     match launch_config.transport {
         TransportMode::Stdio => {
-            let mut server = LspServer::new_with_feature_profile(launch_config.feature_profile);
+            // Stdio uses the same async dispatch path as TCP: a blocking reader
+            // thread feeds an mpsc channel into serve_async().
+            let rt = match Runtime::new() {
+                Ok(rt) => rt,
+                Err(e) => {
+                    eprintln!("Failed to create Tokio runtime: {e}");
+                    process::exit(1);
+                }
+            };
 
-            if let Err(e) = server.run() {
-                eprintln!("LSP server error: {}", e);
-                process::exit(1);
-            }
+            rt.block_on(async {
+                let server = Arc::new(
+                    LspServer::new_with_feature_profile(launch_config.feature_profile),
+                );
+
+                // Spawn a blocking reader thread for stdin
+                let (tx, rx) = tokio::sync::mpsc::channel(64);
+                std::thread::spawn(move || {
+                    use perl_lsp::transport::ContentLengthMessageReader;
+                    let mut msg_reader = ContentLengthMessageReader::new();
+                    let mut buf_reader = std::io::BufReader::new(std::io::stdin());
+                    loop {
+                        match msg_reader.read_next(&mut buf_reader) {
+                            Ok(Some(request)) => {
+                                if tx.blocking_send(request).is_err() {
+                                    break;
+                                }
+                            }
+                            Ok(None) => break, // EOF
+                            Err(_) => break,
+                        }
+                    }
+                });
+
+                // Same async dispatch path as TCP
+                server.serve_async(rx).await;
+            });
         }
         TransportMode::Socket { port } => {
             let addr = format!("127.0.0.1:{port}");
@@ -124,18 +158,32 @@ fn run_server(launch_config: LaunchConfig) {
                                     Box::new(writer) as Box<dyn std::io::Write + Send>
                                 ));
 
-                                if let Err(e) = tokio::task::spawn_blocking(move || -> () {
-                                    let mut server =
-                                        LspServer::with_output_and_feature_profile(output, profile);
+                                // Create server, wrap in Arc for concurrent async dispatch
+                                let server = Arc::new(
+                                    LspServer::with_output_and_feature_profile(output, profile)
+                                );
+
+                                // Spawn a blocking reader thread that feeds an async channel
+                                let (tx, rx) = tokio::sync::mpsc::channel(64);
+                                std::thread::spawn(move || {
+                                    use perl_lsp::transport::ContentLengthMessageReader;
+                                    let mut msg_reader = ContentLengthMessageReader::new();
                                     let mut buf_reader = std::io::BufReader::new(reader);
-                                    if let Err(e) = server.serve(&mut buf_reader) {
-                                        eprintln!("Connection error: {e}");
+                                    loop {
+                                        match msg_reader.read_next(&mut buf_reader) {
+                                            Ok(Some(request)) => {
+                                                if tx.blocking_send(request).is_err() {
+                                                    break;
+                                                }
+                                            }
+                                            Ok(None) => break, // EOF
+                                            Err(_) => break,
+                                        }
                                     }
-                                })
-                                .await
-                                {
-                                    eprintln!("Task panic: {e}");
-                                }
+                                });
+
+                                // Run async serve loop with concurrent dispatch
+                                server.serve_async(rx).await;
                             });
                         }
                         Err(e) => {

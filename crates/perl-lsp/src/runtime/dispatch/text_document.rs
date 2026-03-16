@@ -7,7 +7,7 @@ use super::super::*;
 impl LspServer {
     // Text synchronization handlers
     pub(super) fn handle_did_open_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         match self.handle_did_open(params) {
@@ -17,7 +17,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_did_change_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         match self.handle_did_change(params) {
@@ -27,7 +27,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_did_close_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         match self.handle_did_close(params) {
@@ -37,7 +37,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_did_save_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         match self.handle_did_save(params) {
@@ -47,7 +47,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_will_save_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         match self.handle_will_save(params) {
@@ -57,7 +57,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_will_save_wait_until_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_will_save_wait_until(params)
@@ -65,7 +65,7 @@ impl LspServer {
 
     // Notebook document handlers
     pub(super) fn handle_notebook_did_open_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         match self.handle_notebook_did_open(params) {
@@ -75,7 +75,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_notebook_did_change_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         match self.handle_notebook_did_change(params) {
@@ -85,7 +85,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_notebook_did_save_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         match self.handle_notebook_did_save(params) {
@@ -95,7 +95,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_notebook_did_close_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         match self.handle_notebook_did_close(params) {
@@ -106,7 +106,7 @@ impl LspServer {
 
     // Completion handlers
     pub(super) fn handle_completion_cancellable_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
         id: Option<&Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
@@ -114,7 +114,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_completion_resolve_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_completion_resolve(params)
@@ -122,7 +122,7 @@ impl LspServer {
 
     // Hover and signature help
     pub(super) fn handle_hover_cancellable_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
         id: Option<&Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
@@ -130,7 +130,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_signature_help_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_signature_help(params)
@@ -138,7 +138,7 @@ impl LspServer {
 
     // Definition and navigation
     pub(super) fn handle_definition_cancellable_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
         id: Option<&Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
@@ -157,14 +157,14 @@ impl LspServer {
     }
 
     pub(super) fn handle_declaration_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_declaration(params)
     }
 
     pub(super) fn handle_references_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Use test fallback in test mode, production handler otherwise
@@ -181,7 +181,7 @@ impl LspServer {
     }
 
     pub(super) fn handle_document_highlight_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_document_highlight(params)
@@ -189,21 +189,21 @@ impl LspServer {
 
     // Type hierarchy
     pub(super) fn handle_prepare_type_hierarchy_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_prepare_type_hierarchy(params)
     }
 
     pub(super) fn handle_type_hierarchy_supertypes_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_type_hierarchy_supertypes(params)
     }
 
     pub(super) fn handle_type_hierarchy_subtypes_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_type_hierarchy_subtypes(params)
@@ -211,14 +211,14 @@ impl LspServer {
 
     // Diagnostics
     pub(super) fn handle_document_diagnostic_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_document_diagnostic(params)
     }
 
     pub(super) fn handle_workspace_diagnostic_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_workspace_diagnostic(params)
@@ -226,14 +226,14 @@ impl LspServer {
 
     // Rename
     pub(super) fn handle_prepare_rename_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_prepare_rename(params)
     }
 
     pub(super) fn handle_rename_workspace_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_rename_workspace(params)
@@ -241,14 +241,14 @@ impl LspServer {
 
     // Code actions
     pub(super) fn handle_code_action_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_code_action(params)
     }
 
     pub(super) fn handle_code_action_resolve_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_code_action_resolve(params)
@@ -256,14 +256,14 @@ impl LspServer {
 
     // Semantic tokens
     pub(super) fn handle_semantic_tokens_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_semantic_tokens(params)
     }
 
     pub(super) fn handle_semantic_tokens_range_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_semantic_tokens_range(params)
@@ -271,14 +271,14 @@ impl LspServer {
 
     // Inlay hints
     pub(super) fn handle_inlay_hints_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_inlay_hints(params)
     }
 
     pub(super) fn handle_inlay_hint_resolve_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_inlay_hint_resolve(params)
@@ -286,14 +286,14 @@ impl LspServer {
 
     // Document links
     pub(super) fn handle_document_links_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_document_links(params)
     }
 
     pub(super) fn handle_document_link_resolve_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_document_link_resolve(params)
@@ -301,7 +301,7 @@ impl LspServer {
 
     // Selection ranges
     pub(super) fn handle_selection_range_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_selection_range(params)
@@ -309,7 +309,7 @@ impl LspServer {
 
     // On-type formatting
     pub(super) fn handle_on_type_formatting_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_on_type_formatting(params)
@@ -317,14 +317,14 @@ impl LspServer {
 
     // Code lens
     pub(super) fn handle_code_lens_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_code_lens(params)
     }
 
     pub(super) fn handle_code_lens_resolve_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_code_lens_resolve(params)
@@ -332,7 +332,7 @@ impl LspServer {
 
     // Linked editing
     pub(super) fn handle_linked_editing_range_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_linked_editing_range(params)
@@ -340,7 +340,7 @@ impl LspServer {
 
     // Inline completion
     pub(super) fn handle_inline_completion_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_inline_completion(params)
@@ -348,7 +348,7 @@ impl LspServer {
 
     // Inline value
     pub(super) fn handle_inline_value_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_inline_value(params)
@@ -356,7 +356,7 @@ impl LspServer {
 
     // Moniker
     pub(super) fn handle_moniker_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_moniker(params)
@@ -364,14 +364,14 @@ impl LspServer {
 
     // Document colors
     pub(super) fn handle_document_color_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_document_color(params)
     }
 
     pub(super) fn handle_color_presentation_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_color_presentation(params)
@@ -379,7 +379,7 @@ impl LspServer {
 
     // Type definition
     pub(super) fn handle_type_definition_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_type_definition(params)
@@ -387,7 +387,7 @@ impl LspServer {
 
     // Implementation
     pub(super) fn handle_implementation_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_implementation(params)
@@ -395,7 +395,7 @@ impl LspServer {
 
     // Folding range
     pub(super) fn handle_folding_range_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         // Use test fallback in test mode, production handler otherwise
@@ -414,21 +414,21 @@ impl LspServer {
 
     // Formatting
     pub(super) fn handle_formatting_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_formatting(params)
     }
 
     pub(super) fn handle_range_formatting_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_range_formatting(params)
     }
 
     pub(super) fn handle_ranges_formatting_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_ranges_formatting(params)
@@ -436,21 +436,21 @@ impl LspServer {
 
     // Call hierarchy
     pub(super) fn handle_prepare_call_hierarchy_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_prepare_call_hierarchy(params)
     }
 
     pub(super) fn handle_incoming_calls_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_incoming_calls(params)
     }
 
     pub(super) fn handle_outgoing_calls_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_outgoing_calls(params)
@@ -458,7 +458,7 @@ impl LspServer {
 
     // Document symbol
     pub(super) fn handle_document_symbol_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         eprintln!("Processing documentSymbol request");
@@ -469,7 +469,7 @@ impl LspServer {
 
     // Execute command
     pub(super) fn handle_execute_command_dispatch(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
         self.handle_execute_command(params)

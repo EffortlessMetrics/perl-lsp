@@ -8,8 +8,6 @@ use lsp_types::{
     RegistrationParams, WatchKind,
     notification::{DidChangeWatchedFiles, Notification},
 };
-use serde_json::json;
-
 impl LspServer {
     /// Register file watchers for Perl files
     pub(crate) fn register_file_watchers_async(&self) {
@@ -51,6 +49,13 @@ impl LspServer {
         };
 
         let params = RegistrationParams { registrations: vec![reg] };
+        let params_value = match serde_json::to_value(&params) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("[perl-lsp] Failed to serialize registration params: {}", e);
+                return;
+            }
+        };
 
         // Send the registration request without waiting for a response
         // Use a random ID since we're not tracking the response
@@ -59,29 +64,9 @@ impl LspServer {
             .unwrap_or_default()
             .as_millis() as u64;
 
-        let request = json!({
-            "jsonrpc": "2.0",
-            "id": serde_json::Value::Number(serde_json::Number::from(request_id)),
-            "method": "client/registerCapability",
-            "params": params
-        });
-
-        // Send using the proper output mechanism with explicit error logging
-        let mut output = self.output.lock();
-        match serde_json::to_vec(&request) {
-            Ok(payload) => {
-                let framed = frame(&payload);
-                if let Err(e) = output.write_all(&framed) {
-                    eprintln!("[perl-lsp] Failed to write file watcher request: {}", e);
-                    return;
-                }
-                if let Err(e) = output.flush() {
-                    eprintln!("[perl-lsp] Failed to flush file watcher request: {}", e);
-                }
-            }
-            Err(e) => {
-                eprintln!("[perl-lsp] Failed to serialize file watcher request: {}", e);
-            }
+        // Send using the outbound channel
+        if let Err(e) = self.outbound.send_request(request_id as i64, "client/registerCapability", params_value) {
+            eprintln!("[perl-lsp] Failed to send file watcher request: {}", e);
         }
     }
 }
