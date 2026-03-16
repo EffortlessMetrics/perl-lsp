@@ -65,6 +65,9 @@ cargo test --workspace --lib
 | PR review | `/review-scope`, `/review-performance`, `/review-security`, `/standards-check` |
 | Dependency hygiene | `/dep-check`, `/dep-clean` |
 | Dead code cleanup | `/dead-code-check` |
+| Crate verification | `/verify <crate>` |
+| Master health check | `/verify-master-green` |
+| Single PR rebase | `/rebase-pr <number>` |
 
 ## Crate Structure
 
@@ -384,6 +387,9 @@ This project uses continuous agent swarms with agent teams for parallel codebase
 | `/health-check` | Quick codebase health scan (stdout, no issues) |
 | `/green-merge` | Merge all passing PRs |
 | `/rebase-open` | Rebase conflicted PRs |
+| `/rebase-pr` | Rebase a single PR onto master |
+| `/verify-master-green` | Check master CI status, block if red |
+| `/verify` | Run fmt/clippy/test pipeline for a crate |
 | `/status-drift` | Fix computed metric drift |
 | `/bootstrap-agents` | Discover codebase, generate domain agents |
 
