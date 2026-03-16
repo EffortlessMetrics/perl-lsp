@@ -98,10 +98,7 @@ async fn test_spawn_fails_when_perl_not_on_path() -> Result<()> {
     }
 
     assert!(result.is_err(), "spawn_pls_dap should fail when perl is not on PATH");
-    let err_msg = format!(
-        "{:#}",
-        result.err().unwrap_or_else(|| anyhow::anyhow!("unexpected Ok"))
-    );
+    let err_msg = format!("{:#}", result.err().unwrap_or_else(|| anyhow::anyhow!("unexpected Ok")));
     // The error chain should mention failing to find perl
     assert!(
         err_msg.contains("perl") || err_msg.contains("PATH") || err_msg.contains("spawn"),
