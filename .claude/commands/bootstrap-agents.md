@@ -9,7 +9,8 @@ disable-model-invocation: true
 Discover the codebase structure and generate domain-specific agent definitions. Context: **$ARGUMENTS**
 
 ## When to Use
-- **First time**: after `swarm-pack/setup.sh` installs portable agents — run this to add domain agents
+- **First time in this repo**: when the tracked `.claude/` control plane is present and you want to add repo-specific domain agents
+- **Imported bundle**: after copying the derived `swarm-pack` starter into another repo and you want to specialize it
 - **Refresh**: when the codebase structure changed (new packages, reorganization)
 - **Single domain**: `--domain <name>` to regenerate agents for one domain only
 
@@ -18,7 +19,7 @@ Discover the codebase structure and generate domain-specific agent definitions. 
 1. **Discovers** your repo: packages, tests, errors, standards, CI, docs
 2. **Identifies** natural domains (package families, layers, feature areas)
 3. **Generates** 3-5 agent files per domain: fix, test, scout, explorer
-4. **Customizes** the portable agents with repo-specific details
+4. **Customizes** the repo-local agent roster with codebase-specific details
 5. **Creates** `.claude/agents/AGENT_CATALOG.md` for orchestrator reference
 
 ## Process

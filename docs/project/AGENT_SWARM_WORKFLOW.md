@@ -1,11 +1,18 @@
 # Agent Swarm Workflow
 
-A practical reference for the parallel-agent development methodology used in
-perl-lsp. For historical context and analysis, see
+> Status: historical wave-pattern reference. The canonical swarm runtime for
+> `perl-lsp` lives in the tracked `.claude/` surfaces plus
+> [SWARM_DESIGN.md](../handoff/SWARM_DESIGN.md),
+> [SKILL_AND_AGENT_DESIGN.md](../reference/SKILL_AND_AGENT_DESIGN.md), and
+> [ADR-0033](../adr/0033-worktree-first-disposable-workers.md).
+>
+> This document is retained as operator history for the older `/wave` +
+> `/bulk-pr` workflow.
+
+A practical historical reference for the parallel-agent development methodology used in
+perl-lsp. For background analysis, see
 [AGENTIC_SWARM_ERA.md](AGENTIC_SWARM_ERA.md) and
-[AGENTIC_DEVELOPMENT.md](AGENTIC_DEVELOPMENT.md). For the governing execution
-doctrine, see [ADR-0033](../adr/0033-worktree-first-disposable-workers.md) and
-[SKILL_AND_AGENT_DESIGN.md](../reference/SKILL_AND_AGENT_DESIGN.md).
+[AGENTIC_DEVELOPMENT.md](AGENTIC_DEVELOPMENT.md).
 
 ---
 

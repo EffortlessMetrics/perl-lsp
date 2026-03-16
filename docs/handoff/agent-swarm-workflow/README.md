@@ -1,7 +1,16 @@
 # Agent Swarm Workflow
 
+> Status: archived portable bundle.
+>
+> For `perl-lsp`, the canonical swarm runtime lives in the tracked `.claude/`
+> directory plus [SWARM_DESIGN.md](../../SWARM_DESIGN.md) and
+> [SKILL_AND_AGENT_DESIGN.md](../../../reference/SKILL_AND_AGENT_DESIGN.md).
+> This directory is kept as a historical/exportable bundle for the older
+> wave-based workflow, not as the primary source of truth for the repo.
+
 A portable pattern for orchestrating multiple Claude Code agents in parallel to
-accomplish large-scale codebase changes efficiently and safely.
+accomplish large-scale codebase changes efficiently and safely when you want to
+transplant the older wave workflow into another repository.
 
 ## How it works
 
@@ -85,6 +94,9 @@ Orchestrator (main thread)
 | `slash-commands/quality-ratchet.md` | Baseline ratcheting after improvements |
 
 ## Getting started
+
+For `perl-lsp` itself, do not bootstrap from this bundle; use the tracked repo
+`.claude/` surfaces instead.
 
 1. Run `setup-script.sh` in your repository root
 2. Customize the placeholders (`$TEST_CMD`, `$LINT_CMD`, etc.) in the copied
