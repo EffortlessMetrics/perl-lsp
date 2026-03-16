@@ -142,11 +142,7 @@ fn deduplicate_and_sort_three_duplicates_keeps_best_sort_text() {
     assert_eq!(result.len(), 2, "3 duplicates must be deduped to 1");
     let foo = result.iter().find(|i| i.label == "foo").expect("foo must be kept");
     // The one with sort_text "001" (Variable kind) should win
-    assert_eq!(
-        foo.sort_text.as_deref(),
-        Some("001"),
-        "best sort_text must win among 3 duplicates"
-    );
+    assert_eq!(foo.sort_text.as_deref(), Some("001"), "best sort_text must win among 3 duplicates");
 }
 
 // ---------------------------------------------------------------------------
@@ -219,5 +215,8 @@ fn deduplicate_and_sort_dedup_prefers_none_sort_text_lower_label() {
     let result = deduplicate_and_sort(items);
     assert_eq!(result.len(), 1, "duplicate 'foo' must be deduped");
     // The item with sort_text=None (effective "foo" < "zzz") must win
-    assert!(result[0].sort_text.is_none(), "item with None sort_text should win (label 'foo' < 'zzz')");
+    assert!(
+        result[0].sort_text.is_none(),
+        "item with None sort_text should win (label 'foo' < 'zzz')"
+    );
 }

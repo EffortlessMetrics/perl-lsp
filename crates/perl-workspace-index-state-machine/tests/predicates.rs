@@ -10,8 +10,7 @@
 //! - `kind()`: returns correct IndexStateKind variant for each state
 
 use perl_workspace_index_state_machine::{
-    DegradationReason, IndexStateMachine, InvalidationReason,
-    IndexStateKind,
+    DegradationReason, IndexStateKind, IndexStateMachine, InvalidationReason,
 };
 
 // ---------------------------------------------------------------------------
@@ -61,9 +60,8 @@ fn is_ready_returns_false_for_degraded_state() {
     machine.transition_to_initializing();
     machine.transition_to_building(10);
     machine.transition_to_ready(10, 100);
-    machine.transition_to_degraded(DegradationReason::IoError {
-        message: "disk error".to_string(),
-    });
+    machine
+        .transition_to_degraded(DegradationReason::IoError { message: "disk error".to_string() });
     assert!(!machine.state().is_ready(), "Degraded state must not be ready");
 }
 
@@ -221,8 +219,6 @@ fn kind_returns_degraded_for_degraded_state() {
     machine.transition_to_initializing();
     machine.transition_to_building(10);
     machine.transition_to_ready(10, 100);
-    machine.transition_to_degraded(DegradationReason::IoError {
-        message: "disk full".to_string(),
-    });
+    machine.transition_to_degraded(DegradationReason::IoError { message: "disk full".to_string() });
     assert_eq!(machine.state().kind(), IndexStateKind::Degraded);
 }
