@@ -23,7 +23,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-006](ADR_006_LSP_CANCELLATION_INFRASTRUCTURE.md) | Draft | 2026-01-28 | LSP Cancellation | Cancellation infrastructure for responsive editor interactions |
 | [ADR-007](ADR_007_SUBSTITUTION_OPERATOR_PARSING.md) | Accepted | 2025-01-20 | Substitution Parsing | Comprehensive s/// parsing with all modifiers |
 
-### Architecture Series (0008–0032)
+### Architecture Series (0008–0033)
 
 | ADR | Status | Date | Title | Description |
 |-----|--------|------|-------|-------------|
@@ -52,6 +52,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0030](0030-receipt-gate-system.md) | Accepted | 2025-02-20 | Receipt Gate System | Machine-readable receipts for CI gate verification |
 | [ADR-0031](0031-async-runtime-concurrent-dispatch.md) | Accepted | 2026-03-16 | Async Runtime with Concurrent Dispatch | Two-lane scheduler (exclusive + 4-worker read pool) for concurrent LSP request handling |
 | [ADR-0032](0032-skill-scoping-and-hook-enforcement.md) | Accepted | 2026-03-16 | Skill Scoping and Hook Enforcement | Frontmatter-based skill access control plus hook-enforced swarm coordination |
+| [ADR-0033](0033-worktree-first-disposable-workers.md) | Accepted | 2026-03-16 | Worktree-First Disposable Worker Execution | Small persistent coordinators, fresh workers per context shift, and worktree isolation for PR-shaped changes |
 
 ## About ADRs
 

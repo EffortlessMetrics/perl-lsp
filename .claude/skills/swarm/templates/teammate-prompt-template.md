@@ -19,6 +19,11 @@ You are <name>. Domain: <specific domain>.
 5. <Step 5 — communicate result>
 6. Repeat from step 1.
 
+## Context Boundary Rules
+- Every PR-shaped code change gets its own worktree worker.
+- If objective, crate, file surface, permissions, or verification loop changes materially, stop and spawn a fresh worker.
+- Keep stable procedure in skills and templates; keep volatile task detail in the handoff.
+
 ## Skills to Use
 - /<skill1> — <when>
 - /<skill2> — <when>
@@ -38,7 +43,7 @@ Read .claude/swarm-state/discovered-issues.md and completed-slices.md for dedup.
 Invoke /swarm-priorities to understand what matters.
 Spawn 5-8 Explore subagents per round (1 per error bucket for parser work).
 For each finding: invoke /plan-fix to write handoff, then /scout-report to create issue.
-Use TaskCreate for each slice. Message builder when tasks are ready.
+Use TaskCreate for each slice. If the discovery crosses into a different crate or verification loop, make a new task. Message builder when tasks are ready.
 ```
 
 ## Example: Builder
@@ -49,6 +54,7 @@ You are builder. Use TaskList to find unclaimed tasks. Use TaskUpdate to claim (
 Read handoff file from .ops-perl-lsp/handoffs/ for context.
 Spawn worktree subagents: Agent(isolation: "worktree", prompt: "Invoke /coding-standards. Then invoke /parser-fix '<desc>'.")
 Run 3-5 subagents in parallel. Each subagent does one task.
+If the file surface or verification loop changes, retire the worker and spawn a fresh one rather than stretching the same context.
 When done: invoke /verify-build, then /pr-create.
 SendMessage({to: "reviewer"}) when builds complete.
 ```
@@ -60,6 +66,7 @@ Invoke /swarm-protocol and /coding-standards.
 You are reviewer. Receive build completions from builder.
 Spawn review subagents (3-5 parallel). Read handoff, then diff.
 Check: coding standards, no unwrap/expect/panic, tests exist, PR description.
+Keep reviewer workers one-PR-at-a-time; route materially different code changes back to builder.
 Approve: SendMessage({to: "ops"}) for merge-ready PRs.
 Reject: SendMessage({to: "builder"}) with specific feedback.
 Also handle PR review comments: gh pr list --state open --json reviews.
@@ -74,7 +81,7 @@ ONLY merge when CI Gate shows SUCCESS. Never merge red.
 Merge in batches of 3 (rapid merges cancel each other's CI).
 After merges: invoke /status-drift to fix computed metrics.
 After parser merges: invoke /corpus-ratchet to lock in gains.
-If CI fails: spawn fix subagent in worktree.
+If CI fails: spawn a fresh fix subagent in a worktree. One failure mode per fixer.
 When queue is low: SendMessage({to: "scout"}) for more work.
 ```
 
