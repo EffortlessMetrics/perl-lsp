@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Swarm v2 — SubagentStart hook**: Auto-injects `/coding-standards` into every builder subagent at spawn time so coding rules are enforced without inline repetition.
+- **Swarm v2 — Stop hook**: Reminds agents to verify deliverables (branch + PR) before stopping.
+- **Swarm v2 — PreToolUse hook**: Blocks destructive commands (`git push --force`, `rm -rf` of tracked directories, unauthorized `cargo publish`) at the platform level.
+- **Swarm v2 — SessionStart/compact hook**: Re-injects critical context after context compaction to prevent agent drift.
+- **Swarm v2 — `/plan-fix` skill**: Scouts write detailed implementation plans before handing off to builders.
+- **Swarm v2 — `/verify-build` skill**: Builders verify branch, tests, and PR exist before marking tasks complete.
+- **Swarm v2 — `/how-to-use-skills` skill**: Meta-documentation explaining skill invocation patterns to new agents.
+- **Swarm v2 — Skill templates**: `test-template.rs`, `handoff-template.md`, `slice-template.md`, `issue-template.md` for consistent artifact creation.
+- **Swarm v2 — Skill examples**: `undef-fix.md`, `parser-scout-output.md` illustrate expected output formats.
+- **Swarm v2 — Dynamic context injection**: Status skills use `` !`command` `` syntax to embed live data (git log, cargo test output) inline.
+- **Swarm v2 — agents7 generation**: Full coordinator team definitions for 5-coordinator architecture (scout, builder, reviewer, ops, improver).
 - **Async Runtime with Concurrent Dispatch**: LSP server migrated to a two-lane scheduler — exclusive worker for mutations + 4-worker read pool for concurrent hover/goto-def/completion requests. `$/cancelRequest` is now processed inline before enqueuing (#1555).
 - **Continuous Swarm Infrastructure**: 53 agents, 22 skills, 12 named teammates, GitHub-native tracking, handoff protocol, and portable agent pack for other repos (#1553).
 - **Goto AST Node**: Dedicated `Goto` node with full `TokenKind::display_name` support (#1521).
@@ -24,16 +35,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Completion for Moo/Moose Accessors**: Show `isa` type in completion for accessor methods (#1525).
 - **Signature Help Builtin Coverage**: Expanded coverage for common Perl builtins (#1532).
 
+### Changed
+- **Swarm v2 — Hooks read stdin JSON**: Hooks now parse the official Claude Code JSON payload via `jq` instead of reading empty environment variables (`$TASK_SUBJECT`, `$TEAMMATE_ID` were never populated).
+- **Swarm v2 — Skills use `context: fork`**: Skills run in isolated subagents with `allowed-tools` enforcement; plain markdown files without frontmatter are no longer sufficient.
+- **Swarm v2 — 5-coordinator team**: Team restructured from 12 flat teammates to 5 coordinators with subagent fanout, reducing idle token overhead by ~60%.
+- **Swarm v2 — Thin agent definitions**: Agent definitions are ~50-line orchestration loops that invoke skills; inline workflow instructions moved to skills.
+- **Swarm v2 — Skills directory**: Skills migrated to `.claude/skills/` with a `SKILL.md` index; `.claude/commands/` retained for backward compatibility.
+- **Swarm v2 — Permission rule syntax**: Permission rules corrected from `Bash(gh:*)` (colon) to `Bash(gh *)` (space) throughout `settings.json`.
+- **bypassPermissions**: Set as default permission mode (#1554).
+- **Native Debt Report**: `xtask` now has a native `debt-report` subcommand (#1528).
+- **Devex Targeted Checks**: Converted from shell script to native Rust xtask subcommand (#1527).
+
 ### Fixed
+- **Swarm v2 — TaskCompleted hook**: Now verifies a non-master branch and an open PR exist before allowing task completion; previously read an empty env var and was a no-op.
+- **Swarm v2 — TeammateIdle hook**: Now reads teammate ID from stdin JSON; previously used `$TEAMMATE_ID` which was never set.
 - **Parser**: Statement modifiers after complex expressions (#1550), package-qualified variable subscripts (#1548), fat arrow as list separator in all builtin argument paths (#1549), split regex slash disambiguation in expression contexts (#1547).
 - **Incremental Parsing**: Improved efficiency and fixed position underflow (#1539).
 - **On-Type Formatting**: Heredoc suppression, string/comment-aware brace matching, correct trigger semantics (#1530).
 - **Test Count Sync**: Updated test count to 1953, removed PerlIO from corpus manifest (#1552).
-
-### Changed
-- **bypassPermissions**: Set as default permission mode (#1554).
-- **Native Debt Report**: `xtask` now has a native `debt-report` subcommand (#1528).
-- **Devex Targeted Checks**: Converted from shell script to native Rust xtask subcommand (#1527).
 
 ## [0.11.0] - 2026-03-12
 
