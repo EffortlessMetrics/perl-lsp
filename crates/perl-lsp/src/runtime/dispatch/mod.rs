@@ -149,7 +149,10 @@ impl LspServer {
             "initialize" => self.handle_initialize_dispatch(request.params),
             "initialized" => self.handle_initialized_dispatch(),
             // All other requests require initialization
-            _ if !self.initialized.load(Ordering::Acquire) && request.method != "shutdown" && request.method != "exit" => {
+            _ if !self.initialized.load(Ordering::Acquire)
+                && request.method != "shutdown"
+                && request.method != "exit" =>
+            {
                 Err(JsonRpcError {
                     code: -32002, // ServerNotInitialized per LSP spec
                     message: "Server not initialized".to_string(),

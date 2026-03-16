@@ -150,7 +150,10 @@ fn camelcase_symbol_is_findable_by_individual_word() {
 
     // "getLogger" tokenizes to ["get", "logger"]
     let results = index.search_fuzzy("logger");
-    assert!(results.contains(&"getLogger".to_string()), "CamelCase split: 'logger' should find 'getLogger'");
+    assert!(
+        results.contains(&"getLogger".to_string()),
+        "CamelCase split: 'logger' should find 'getLogger'"
+    );
 }
 
 #[test]
@@ -160,7 +163,10 @@ fn camelcase_symbol_is_findable_by_prefix_of_each_component() {
 
     // Prefix "calc" should find "calculateTotal"
     let results = index.search_prefix("calc");
-    assert!(results.contains(&"calculateTotal".to_string()), "prefix 'calc' must find 'calculateTotal'");
+    assert!(
+        results.contains(&"calculateTotal".to_string()),
+        "prefix 'calc' must find 'calculateTotal'"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -189,10 +195,16 @@ fn underscore_symbol_tokens_are_each_searchable() {
 
     // "open_file_handle" tokenizes to ["open", "file", "handle"]
     let results = index.search_fuzzy("file");
-    assert!(results.contains(&"open_file_handle".to_string()), "token 'file' should find 'open_file_handle'");
+    assert!(
+        results.contains(&"open_file_handle".to_string()),
+        "token 'file' should find 'open_file_handle'"
+    );
 
     let results = index.search_fuzzy("handle");
-    assert!(results.contains(&"open_file_handle".to_string()), "token 'handle' should find 'open_file_handle'");
+    assert!(
+        results.contains(&"open_file_handle".to_string()),
+        "token 'handle' should find 'open_file_handle'"
+    );
 }
 
 // ---------------------------------------------------------------------------

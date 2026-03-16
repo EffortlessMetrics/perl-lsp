@@ -113,26 +113,17 @@ impl Scheduler {
 
         // Single exclusive mutation worker — processes lifecycle and mutation
         // requests one at a time, preserving ordering guarantees.
-        workers.push(tokio::spawn(Self::mutation_worker(
-            mutation_rx,
-            Arc::clone(&server),
-        )));
+        workers.push(tokio::spawn(Self::mutation_worker(mutation_rx, Arc::clone(&server))));
 
         // Read pool: N workers share a single receiver via Arc<Mutex<>>.
         // Each worker competes for the next item (work-stealing pattern).
         let shared_rx = Arc::new(tokio::sync::Mutex::new(read_rx));
         for _ in 0..READ_WORKERS {
-            workers.push(tokio::spawn(Self::read_worker(
-                Arc::clone(&shared_rx),
-                Arc::clone(&server),
-            )));
+            workers
+                .push(tokio::spawn(Self::read_worker(Arc::clone(&shared_rx), Arc::clone(&server))));
         }
 
-        Self {
-            mutation_tx,
-            read_tx,
-            workers,
-        }
+        Self { mutation_tx, read_tx, workers }
     }
 
     /// Send a mutation or lifecycle request to the exclusive worker.
@@ -231,10 +222,7 @@ mod tests {
     #[test]
     fn cancel_is_control() {
         assert_eq!(classify("$/cancelRequest"), RequestClass::Control);
-        assert_eq!(
-            classify("window/workDoneProgress/cancel"),
-            RequestClass::Control
-        );
+        assert_eq!(classify("window/workDoneProgress/cancel"), RequestClass::Control);
     }
 
     #[test]
