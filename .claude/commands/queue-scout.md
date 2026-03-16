@@ -48,3 +48,10 @@ Agent(
 3. If two slices overlap, keep the higher-impact one, defer the other
 4. Feed non-overlapping slices to swarm-builder agents
 5. Update `.claude/swarm-state/swarm-queue.json` with active slices
+
+## Relationship to /scout
+
+- `/queue-scout` = broad sweep across all areas (10-15 scouts in parallel)
+- `/scout <focus>` = single-area deep dive (1 agent, produces GitHub issues via `/scout-report`)
+
+Use `/scout <area>` when you already know where to look. Use `/queue-scout` when you want to discover what needs attention across the whole codebase.
