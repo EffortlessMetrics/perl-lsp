@@ -84,3 +84,84 @@ if ($start) { init(); run(); }
 "#;
     assert_clean_parse(code);
 }
+
+mod while_condition_indirect_call {
+    use super::*;
+
+    #[test]
+    fn while_shift_array() {
+        // File::Spec::Unix pattern — while( shift @chunks )
+        let code = "while (shift @arr) { last; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn while_pop_array() {
+        let code = "while (pop @arr) { last; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn while_assign_shift() {
+        // Common idiom: while (my $x = shift @args) { ... }
+        let code = "while (my $x = shift @args) { print $x; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn while_defined_my_shift() {
+        // File::Spec::Unix line pattern
+        let code = "while (defined(my $dir = shift @basechunks)) { push @chunks, $dir; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn if_shift_array() {
+        let code = "if (shift @arr) { return 1; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn if_pop_array() {
+        let code = "if (pop @arr) { return 1; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn elsif_shift_array() {
+        let code = "if (1) { } elsif (shift @arr) { return 1; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn unless_shift_array() {
+        let code = "unless (shift @arr) { return 1; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn until_shift_array() {
+        let code = "until (shift @arr) { last; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn for_condition_shift() {
+        let code = "for (my $i = 0; shift @arr; $i++) { }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn foreach_list_shift() {
+        // foreach with a complex list expression
+        let code = "foreach my $x (@arr) { print $x; }";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn while_scalar_shift() {
+        // scalar context shift is common
+        let code = "while (my $item = shift @items) { process($item); }";
+        assert_clean_parse(code);
+    }
+}
