@@ -2,6 +2,13 @@
 //!
 //! This module provides functionality for detecting common mistakes in Perl code
 //! such as assignment in conditions and comparing with undef.
+//!
+//! # Diagnostic codes
+//!
+//! | Code | Severity | Description |
+//! |------|----------|-------------|
+//! | `assignment-in-condition` | Warning | `=` in `if`/`while` condition (likely meant `==`) |
+//! | `numeric-undef` | Warning | `==`/`!=` with potentially undefined value |
 
 use perl_parser_core::ast::{Node, NodeKind};
 use perl_semantic_analyzer::symbol::{SymbolKind, SymbolTable};

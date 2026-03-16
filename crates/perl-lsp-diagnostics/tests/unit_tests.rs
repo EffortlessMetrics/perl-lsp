@@ -1327,3 +1327,275 @@ fn full_pipeline_initialized_variable_no_warning() -> Result<(), Box<dyn std::er
     );
     Ok(())
 }
+
+// =========================================================================
+// 16. Misspelled pragma detection ("Did you mean?")
+// =========================================================================
+
+#[test]
+fn misspelled_pragma_structs_suggests_strict() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("structs", 0, 14)]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&ast, &mut diagnostics);
+
+    let typo_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("misspelled-pragma")).collect();
+    assert!(!typo_diags.is_empty(), "Should detect 'structs' as a misspelling of 'strict'");
+
+    let first = &typo_diags[0];
+    assert_eq!(first.severity, DiagnosticSeverity::Warning);
+    assert!(first.message.contains("strict"), "Message should suggest 'strict': {}", first.message);
+    assert!(
+        first.message.contains("Did you mean"),
+        "Message should ask 'Did you mean?': {}",
+        first.message
+    );
+    assert!(first.suggestion.is_some());
+    let suggestion = first.suggestion.as_deref().unwrap_or_default();
+    assert!(suggestion.contains("strict"), "Suggestion should mention 'strict': {suggestion}");
+    Ok(())
+}
+
+#[test]
+fn misspelled_pragma_warning_suggests_warnings() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![use_node("strict", 0, 12), use_node("warning", 13, 26)]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&ast, &mut diagnostics);
+
+    let typo_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("misspelled-pragma")).collect();
+    assert!(!typo_diags.is_empty(), "Should detect 'warning' as a misspelling of 'warnings'");
+
+    let first = &typo_diags[0];
+    assert!(first.message.contains("warnings"), "Should suggest 'warnings': {}", first.message);
+    Ok(())
+}
+
+#[test]
+fn misspelled_pragma_no_false_positive_for_valid_module() -> Result<(), Box<dyn std::error::Error>>
+{
+    let ast = program(vec![
+        use_node("strict", 0, 12),
+        use_node("warnings", 13, 27),
+        use_node("File::Basename", 28, 46),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&ast, &mut diagnostics);
+
+    let typo_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("misspelled-pragma")).collect();
+    assert!(
+        typo_diags.is_empty(),
+        "Should NOT flag 'File::Basename' as misspelled: {typo_diags:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn misspelled_pragma_feaure_suggests_feature() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = program(vec![
+        use_node("strict", 0, 12),
+        use_node("warnings", 13, 27),
+        use_node("feaure", 28, 40),
+    ]);
+    let mut diagnostics = Vec::new();
+    perl_lsp_diagnostics::strict_warnings::check_strict_warnings(&ast, &mut diagnostics);
+
+    let typo_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("misspelled-pragma")).collect();
+    assert!(!typo_diags.is_empty(), "Should detect 'feaure' as a misspelling of 'feature'");
+
+    let first = &typo_diags[0];
+    assert!(first.message.contains("feature"));
+    Ok(())
+}
+
+// =========================================================================
+// 17. Enhanced parse error suggestions for additional error variants
+// =========================================================================
+
+#[test]
+fn recursion_limit_error_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "broken";
+    let errors = vec![ParseError::RecursionLimit];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+    assert!(
+        parse_diags[0].suggestion.is_some(),
+        "RecursionLimit should have a suggestion about reducing nesting"
+    );
+    let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
+    assert!(
+        suggestion.contains("nested") || suggestion.contains("refactor"),
+        "Suggestion should advise refactoring: {suggestion}"
+    );
+    Ok(())
+}
+
+#[test]
+fn invalid_number_error_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "my $x = 0xGG;";
+    let errors = vec![ParseError::InvalidNumber { literal: "0xGG".to_string() }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+    assert!(parse_diags[0].suggestion.is_some());
+    let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
+    assert!(
+        suggestion.contains("0xGG"),
+        "Suggestion should mention the invalid literal: {suggestion}"
+    );
+    Ok(())
+}
+
+#[test]
+fn invalid_string_error_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "my $x = \"hello";
+    let errors = vec![ParseError::InvalidString];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+    assert!(parse_diags[0].suggestion.is_some());
+    let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
+    assert!(
+        suggestion.contains("quote") || suggestion.contains("escape"),
+        "Suggestion should mention closing quotes or escape sequences: {suggestion}"
+    );
+    Ok(())
+}
+
+#[test]
+fn invalid_regex_error_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "my $x =~ /(/;";
+    let errors = vec![ParseError::InvalidRegex { message: "unmatched parenthesis".to_string() }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+    assert!(parse_diags[0].suggestion.is_some());
+    let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
+    assert!(
+        suggestion.contains("regex") || suggestion.contains("pattern"),
+        "Suggestion should mention regex patterns: {suggestion}"
+    );
+    Ok(())
+}
+
+#[test]
+fn unclosed_delimiter_error_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "my @arr = (1, 2";
+    let errors = vec![ParseError::UnclosedDelimiter { delimiter: ')' }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+    assert!(parse_diags[0].suggestion.is_some());
+    let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
+    assert!(
+        suggestion.contains(')'),
+        "Suggestion should mention the closing delimiter: {suggestion}"
+    );
+    Ok(())
+}
+
+#[test]
+fn nesting_too_deep_error_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "deeply nested";
+    let errors = vec![ParseError::NestingTooDeep { depth: 300, max_depth: 256 }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+    assert!(parse_diags[0].suggestion.is_some());
+    let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
+    assert!(
+        suggestion.contains("nesting") || suggestion.contains("subroutine"),
+        "Suggestion should advise reducing nesting: {suggestion}"
+    );
+    Ok(())
+}
+
+#[test]
+fn unexpected_closing_brace_has_helpful_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "my $x = 1; }";
+    let errors = vec![ParseError::UnexpectedToken {
+        location: 11,
+        expected: "statement".to_string(),
+        found: "}".to_string(),
+    }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+    assert!(parse_diags[0].suggestion.is_some());
+    let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
+    assert!(
+        suggestion.contains("missing") || suggestion.contains('}'),
+        "Suggestion should mention the mismatch: {suggestion}"
+    );
+    Ok(())
+}
+
+#[test]
+fn syntax_error_with_heredoc_hint_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "my $x = <<END\nsome text\n";
+    let errors =
+        vec![ParseError::SyntaxError { location: 8, message: "unterminated heredoc".to_string() }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+    assert!(parse_diags[0].suggestion.is_some());
+    let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
+    assert!(suggestion.contains("heredoc"), "Suggestion should mention heredoc: {suggestion}");
+    Ok(())
+}
+
+#[test]
+fn lexer_error_with_unterminated_string_has_suggestion() -> Result<(), Box<dyn std::error::Error>> {
+    let ast = Arc::new(program(vec![]));
+    let source = "my $x = \"hello";
+    let errors =
+        vec![ParseError::LexerError { message: "unterminated string literal".to_string() }];
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &errors, source);
+
+    let parse_diags: Vec<_> =
+        diagnostics.iter().filter(|d| d.code.as_deref() == Some("parse-error")).collect();
+    assert!(!parse_diags.is_empty());
+    assert!(parse_diags[0].suggestion.is_some());
+    let suggestion = parse_diags[0].suggestion.as_deref().unwrap_or_default();
+    assert!(
+        suggestion.contains("unclosed") || suggestion.contains("string"),
+        "Suggestion should mention unclosed string: {suggestion}"
+    );
+    Ok(())
+}
