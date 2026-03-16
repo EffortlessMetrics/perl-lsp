@@ -7,7 +7,7 @@
 //! - **Response Matching**: Match by ID for request/response pairing
 //! - **Timeouts**: Configurable via env vars, with sensible defaults
 //! - **Quiet Drain**: Wait for server to settle after changes before assertions
-//! - **Portable Spawn**: PERL_LSP_BIN → CARGO_BIN_EXE_* → PATH → cargo run fallback
+//! - **Portable Spawn**: PERL_LSP_BIN -> CARGO_BIN_EXE_* -> PATH -> cargo run fallback
 //!
 //! ## Environment Variables
 //!
@@ -24,6 +24,7 @@
 //! - `read_response_matching()`: Reads response matching specific ID
 
 #![allow(dead_code)] // Common test utilities - some may not be used by all test files
+#![allow(unused_imports)] // Re-exports needed for backwards compatibility across test files
 
 // Re-export test_utils for semantic tests
 pub mod test_utils;
@@ -32,13 +33,23 @@ pub mod test_utils;
 pub mod test_reliability;
 pub mod timeout_scaler;
 
-// Error codes aligned with crates/perl-parser/src/lsp/protocol/errors.rs
-/// JSON-RPC reserved: Server error range is -32000 to -32099
-const ERR_TEST_TIMEOUT: i64 = -32000;
-/// Connection closed - BrokenPipe or similar transport termination
-const ERR_CONNECTION_CLOSED: i64 = -32050;
-/// Transport error - general I/O failures that aren't connection closures
-const ERR_TRANSPORT_ERROR: i64 = -32051;
+// Extracted submodules
+mod binary_resolution;
+mod handshake;
+pub mod protocol_io;
+
+// Re-export everything from extracted submodules for backwards compatibility
+pub use handshake::{await_index_ready, initialize_lsp, shutdown_and_exit};
+pub use protocol_io::{
+    drain_until_quiet, read_notification_method, read_notification_timeout, read_response,
+    read_response_matching, read_response_matching_i64, read_response_timeout, send_raw,
+    send_raw_message, send_request_no_wait,
+};
+
+use binary_resolution::{CARGO_BIN_EXE, resolve_perl_lsp_cmds};
+use protocol_io::{
+    ERR_TEST_TIMEOUT, error_response_for_request, map_send_error, send_message_inner,
+};
 
 use perl_tdd_support::must;
 use serde_json::{Value, json};
@@ -47,10 +58,10 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};
 
 const PENDING_CAP: usize = 512; // Prevent unbounded growth of pending message queue
-use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
-use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::time::{Duration, Instant};
+use std::io::{self, BufRead, BufReader, BufWriter, Read};
+use std::process::{Child, ChildStdin, Stdio};
+use std::sync::mpsc;
+use std::time::Duration;
 
 // Auto-generate unique IDs for requests
 static NEXT_ID: AtomicI64 = AtomicI64::new(1000);
@@ -77,14 +88,14 @@ pub fn completion_items(resp: &serde_json::Value) -> &Vec<serde_json::Value> {
 
 pub struct LspServer {
     pub process: Mutex<Child>,
-    writer: Mutex<BufWriter<ChildStdin>>, // keep stdin pinned and flushed
-    rx: Mutex<Receiver<Value>>,
+    pub(crate) writer: Mutex<BufWriter<ChildStdin>>, // keep stdin pinned and flushed
+    rx: Mutex<mpsc::Receiver<Value>>,
     // Keep threads alive for the lifetime of the server
     _stdout_thread: std::thread::JoinHandle<()>,
     _stderr_thread: std::thread::JoinHandle<()>,
     pending: Mutex<VecDeque<Value>>,
     /// Flag to track if shutdown has been initiated (prevents double-shutdown)
-    shutdown_initiated: std::sync::atomic::AtomicBool,
+    pub(crate) shutdown_initiated: std::sync::atomic::AtomicBool,
 }
 
 impl LspServer {
@@ -100,94 +111,6 @@ impl LspServer {
     pub fn stdin_writer(&self) -> std::sync::MutexGuard<'_, BufWriter<ChildStdin>> {
         self.writer.lock().unwrap_or_else(|e| e.into_inner())
     }
-}
-
-/// Compile-time path to the perl-lsp binary, set by Cargo when building integration tests.
-/// This is the most reliable way to get the correct binary path.
-const CARGO_BIN_EXE: Option<&str> = option_env!("CARGO_BIN_EXE_perl-lsp");
-
-fn resolve_perl_lsp_cmds() -> impl Iterator<Item = Command> {
-    // Resolution order (fixed for test reliability):
-    // 1. PERL_LSP_BIN env var (explicit override, useful for custom target dirs)
-    // 2. Compile-time CARGO_BIN_EXE (guaranteed correct during `cargo test -p perl-lsp`)
-    // 3. Runtime CARGO_BIN_EXE_* (fallback for edge cases)
-    // 4. Workspace target directory binaries (DEBUG first, then release)
-    // 5. PATH lookup
-    // 6. cargo run fallback (slow but always works)
-    //
-    // IMPORTANT: Debug binary is checked BEFORE release to avoid stale release binaries
-    // causing test failures. When you run `cargo test -p perl-lsp`, cargo builds debug.
-    let mut v: Vec<Command> = Vec::new();
-
-    // 1. Explicit override via PERL_LSP_BIN
-    if let Ok(p) = std::env::var("PERL_LSP_BIN") {
-        let mut c = Command::new(p);
-        c.arg("--stdio");
-        v.push(c);
-    }
-
-    // 2. Compile-time CARGO_BIN_EXE (most reliable for `cargo test`)
-    // This is set at compile time by Cargo and points to the exact binary that was built
-    if let Some(p) = CARGO_BIN_EXE {
-        let mut c = Command::new(p);
-        c.arg("--stdio");
-        v.push(c);
-    }
-
-    // 3. Runtime CARGO_BIN_EXE_* (fallback, in case compile-time wasn't set)
-    if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl-lsp") {
-        let mut c = Command::new(p);
-        c.arg("--stdio");
-        v.push(c);
-    }
-    if let Ok(p) = std::env::var("CARGO_BIN_EXE_perl_lsp") {
-        let mut c = Command::new(p);
-        c.arg("--stdio");
-        v.push(c);
-    }
-
-    // 4. Try workspace target directory binaries (using absolute paths)
-    // IMPORTANT: Debug BEFORE release to avoid stale release binary issues
-    // CARGO_MANIFEST_DIR points to the crate directory, we need the workspace root
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        let crate_dir = std::path::Path::new(&manifest_dir);
-        // Walk up to find workspace root (contains Cargo.toml with [workspace])
-        let workspace_root =
-            crate_dir.ancestors().find(|p| p.join("Cargo.lock").exists()).unwrap_or(crate_dir);
-
-        // Try DEBUG binary first (this is what `cargo test` builds by default)
-        let debug_binary = workspace_root.join("target/debug/perl-lsp");
-        if debug_binary.exists() {
-            let mut c = Command::new(&debug_binary);
-            c.arg("--stdio");
-            v.push(c);
-        }
-
-        // Then try release binary (only if debug doesn't exist)
-        let release_binary = workspace_root.join("target/release/perl-lsp");
-        if release_binary.exists() {
-            let mut c = Command::new(&release_binary);
-            c.arg("--stdio");
-            v.push(c);
-        }
-    }
-
-    // 5. Try perl-lsp from PATH
-    {
-        let mut c = Command::new("perl-lsp");
-        c.arg("--stdio");
-        v.push(c);
-    }
-
-    // 6. Fallback: use cargo run with debug profile (matches what tests build)
-    // This is SLOW because it may need to compile, but always works
-    {
-        let mut c = Command::new("cargo");
-        c.args(["run", "-q", "-p", "perl-lsp", "--", "--stdio"]);
-        v.push(c);
-    }
-
-    v.into_iter()
 }
 
 pub fn start_lsp_server() -> LspServer {
@@ -444,18 +367,6 @@ pub fn send_request(server: &LspServer, mut request: Value) -> Value {
     }
 }
 
-/// Maps I/O send errors to proper JSON-RPC error responses.
-///
-/// BrokenPipe → CONNECTION_CLOSED (-32050)
-/// Other I/O errors → TRANSPORT_ERROR (-32051)
-fn map_send_error(id: Option<Value>, e: io::Error, context: &str) -> Value {
-    if e.kind() == io::ErrorKind::BrokenPipe {
-        connection_closed_error_for_request(id)
-    } else {
-        transport_error_for_request(id, &format!("{}: {}", context, e))
-    }
-}
-
 pub fn send_notification(server: &LspServer, notification: Value) {
     let body = notification.to_string();
     // Ignore write errors during notification sends - BrokenPipe during teardown is expected
@@ -539,366 +450,6 @@ pub fn adaptive_sleep_ms(base_ms: u64) -> Duration {
         _ => 1,     // Unconstrained: standard sleep
     };
     Duration::from_millis(base_ms * multiplier)
-}
-
-/// Helper function to send a JSON-RPC message over the wire.
-/// Returns io::Result to allow graceful error handling.
-fn send_message_inner(writer: &mut impl Write, body: &str) -> io::Result<()> {
-    write!(writer, "Content-Length: {}\r\n\r\n{}", body.len(), body)?;
-    writer.flush()
-}
-
-/// Creates a JSON-RPC 2.0 error response with proper envelope.
-///
-/// All error responses MUST include `jsonrpc` and `id` fields per JSON-RPC 2.0 spec.
-/// The `id` should be extracted from the original request before any error handling.
-fn error_response_for_request(id: Option<Value>, code: i64, message: &str) -> Value {
-    json!({
-        "jsonrpc": "2.0",
-        "id": id.unwrap_or(Value::Null),
-        "error": {
-            "code": code,
-            "message": message
-        }
-    })
-}
-
-/// Creates an error response for connection-closed scenarios (BrokenPipe).
-fn connection_closed_error_for_request(id: Option<Value>) -> Value {
-    error_response_for_request(id, ERR_CONNECTION_CLOSED, "Connection closed")
-}
-
-/// Creates an error response for internal transport errors.
-fn transport_error_for_request(id: Option<Value>, msg: &str) -> Value {
-    error_response_for_request(id, ERR_TRANSPORT_ERROR, msg)
-}
-
-// Legacy functions for backward compatibility with code that doesn't have request context
-// These return responses with null id (valid JSON-RPC but less informative)
-
-/// Creates an error response for connection-closed scenarios (legacy, no request context).
-fn connection_closed_error() -> Value {
-    connection_closed_error_for_request(None)
-}
-
-/// Creates an error response for internal transport errors (legacy, no request context).
-fn internal_transport_error(msg: &str) -> Value {
-    transport_error_for_request(None, msg)
-}
-
-/// Blocking receive with a sane default timeout to avoid hangs.
-pub fn read_response(server: &LspServer) -> Value {
-    read_response_timeout(server, default_timeout()).unwrap_or_else(
-        || json!({"error":{"code":ERR_TEST_TIMEOUT,"message":"test harness timeout"}}),
-    )
-}
-
-/// Try to receive a response within `dur`. Returns None on timeout.
-pub fn read_response_timeout(server: &LspServer, dur: Duration) -> Option<Value> {
-    server.rx.lock().unwrap_or_else(|e| e.into_inner()).recv_timeout(dur).ok()
-}
-
-/// Try to receive a notification (message without id) within `dur`. Returns None on timeout or if a response is received.
-pub fn read_notification_timeout(server: &LspServer, dur: Duration) -> Option<Value> {
-    match server.rx.lock().unwrap_or_else(|e| e.into_inner()).recv_timeout(dur) {
-        Ok(val) if val.get("id").is_none() => Some(val),
-        Ok(_) => None,  // Got a response, not a notification
-        Err(_) => None, // Timeout or disconnected
-    }
-}
-
-/// Receive the response matching `id` (number or string), buffering other traffic.
-pub fn read_response_matching(server: &LspServer, id: &Value, dur: Duration) -> Option<Value> {
-    // scan buffered
-    {
-        let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
-        let len = pending.len();
-        for _ in 0..len {
-            if let Some(msg) = pending.pop_front() {
-                if msg.get("id") == Some(id) {
-                    return Some(msg);
-                }
-                if pending.len() >= PENDING_CAP {
-                    pending.pop_front();
-                }
-                pending.push_back(msg);
-            }
-        }
-    }
-    // then poll
-    let deadline = Instant::now() + dur;
-    loop {
-        let now = Instant::now();
-        if now >= deadline {
-            return None;
-        }
-        let recv_result = {
-            let rx = server.rx.lock().unwrap_or_else(|e| e.into_inner());
-            rx.recv_timeout(deadline - now)
-        };
-        match recv_result {
-            Ok(msg) => {
-                if msg.get("id") == Some(id) {
-                    return Some(msg);
-                }
-                let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
-                if pending.len() >= PENDING_CAP {
-                    pending.pop_front();
-                }
-                pending.push_back(msg);
-            }
-            Err(RecvTimeoutError::Timeout) | Err(RecvTimeoutError::Disconnected) => return None,
-        }
-    }
-}
-
-/// Convenience for numeric ids.
-pub fn read_response_matching_i64(server: &LspServer, id: i64, dur: Duration) -> Option<Value> {
-    read_response_matching(server, &json!(id), dur)
-}
-
-/// Write raw bytes (for malformed/binary frame tests).
-pub fn send_raw(server: &LspServer, bytes: &[u8]) {
-    // Ignore write errors - BrokenPipe during teardown is expected
-    let mut writer = server.writer.lock().unwrap_or_else(|e| e.into_inner());
-    let _ = writer.write_all(bytes).and_then(|_| writer.flush());
-}
-
-/// Read a notification matching the given method name
-pub fn read_notification_method(server: &LspServer, method: &str, dur: Duration) -> Option<Value> {
-    let deadline = Instant::now() + dur;
-
-    // scan buffered first
-    {
-        let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
-        let len = pending.len();
-        for _ in 0..len {
-            if let Some(msg) = pending.pop_front() {
-                if msg.get("id").is_none() && msg.get("method") == Some(&json!(method)) {
-                    return Some(msg);
-                }
-                pending.push_back(msg);
-            }
-        }
-    }
-
-    // then poll
-    while Instant::now() < deadline {
-        let recv_result = {
-            let rx = server.rx.lock().unwrap_or_else(|e| e.into_inner());
-            rx.recv_timeout(deadline.saturating_duration_since(Instant::now()))
-        };
-        match recv_result {
-            Ok(msg) => {
-                let is_match = msg.get("id").is_none() && msg.get("method") == Some(&json!(method));
-                if is_match {
-                    return Some(msg);
-                }
-                let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
-                if pending.len() >= PENDING_CAP {
-                    pending.pop_front();
-                }
-                pending.push_back(msg);
-            }
-            Err(_) => break,
-        }
-    }
-    None
-}
-
-/// Drain messages until no traffic for a quiet period (stabilizes CI)
-pub fn drain_until_quiet(server: &LspServer, quiet: Duration, ceiling: Duration) {
-    let start = Instant::now();
-    let mut last = Instant::now();
-    while start.elapsed() < ceiling {
-        let recv_result = {
-            let rx = server.rx.lock().unwrap_or_else(|e| e.into_inner());
-            rx.recv_timeout(quiet.saturating_sub(last.elapsed()))
-        };
-        match recv_result {
-            Ok(msg) => {
-                let mut pending = server.pending.lock().unwrap_or_else(|e| e.into_inner());
-                if pending.len() >= PENDING_CAP {
-                    pending.pop_front();
-                }
-                pending.push_back(msg);
-                last = Instant::now();
-            }
-            Err(_) => break, // quiet period achieved
-        }
-    }
-}
-
-pub fn initialize_lsp(server: &LspServer) -> Value {
-    let init = json!({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "capabilities": {},
-            "clientInfo": {"name":"perl-parser-tests","version":"0"},
-            "rootUri": null,
-            "workspaceFolders": null
-        }
-    });
-
-    // write without reading
-    {
-        let body = init.to_string();
-        if let Err(e) =
-            send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body)
-        {
-            // Handle write errors gracefully with proper JSON-RPC envelope (id=1)
-            return map_send_error(Some(json!(1)), e, "initialize");
-        }
-    }
-
-    // wait specifically for id=1 - use extended timeout for initialization
-    // Enhanced timeout for LSP cancellation tests with environment-aware scaling
-    let base_multiplier = 3; // Increased base multiplier for cancellation infrastructure tests (increased from 2x to 3x)
-    let thread_count = max_concurrent_threads();
-    let env_multiplier = if thread_count <= 2 { 3 } else { 2 }; // Extra time for constrained environments with cancellation infrastructure (increased from 2x to 3x)
-
-    // Additional CI environment detection for graceful degradation
-    let ci_multiplier = if std::env::var("CI").is_ok()
-        || std::env::var("GITHUB_ACTIONS").is_ok()
-        || std::env::var("CONTINUOUS_INTEGRATION").is_ok()
-    {
-        2 // Extra time for CI environments with limited resources
-    } else {
-        1
-    };
-
-    let init_timeout = adaptive_timeout() * base_multiplier * env_multiplier * ci_multiplier;
-
-    // Enhanced retry logic for cancellation infrastructure tests
-    let mut retry_count = 0;
-    let max_retries = 2; // Allow 2 retries for infrastructure tests
-
-    let resp = loop {
-        match read_response_matching_i64(server, 1, init_timeout) {
-            Some(response) => break response,
-            None => {
-                retry_count += 1;
-                if retry_count > max_retries {
-                    eprintln!(
-                        "LSP server failed to respond to initialize request within {:?} after {} retries",
-                        init_timeout, max_retries
-                    );
-                    eprintln!(
-                        "Check if server started properly and is responding to JSON-RPC requests"
-                    );
-                    eprintln!("Server process alive: {}", server.is_alive());
-                    must(Err::<(), _>("initialize response timeout - server may have crashed or is not responding".to_string()))
-                } else {
-                    eprintln!(
-                        "Initialize timeout attempt {}/{}, retrying with fresh request...",
-                        retry_count,
-                        max_retries + 1
-                    );
-                    // Brief delay before retry
-                    std::thread::sleep(Duration::from_millis(200));
-                    // Send another initialize request with a new ID
-                    let retry_id = next_id();
-                    send_request(
-                        server,
-                        json!({"id":retry_id,"method":"initialize","params":{"capabilities":{}}}),
-                    );
-                    // Try reading the retry response
-                    if let Some(retry_resp) =
-                        read_response_matching_i64(server, retry_id, init_timeout)
-                    {
-                        break retry_resp;
-                    }
-                }
-            }
-        }
-    };
-
-    // Send initialized notification with a brief delay
-    std::thread::sleep(Duration::from_millis(50));
-    send_notification(server, json!({"jsonrpc":"2.0","method":"initialized"}));
-
-    // Wait for index-ready notification to ensure deterministic completion behavior
-    await_index_ready(server);
-
-    resp
-}
-
-/// Wait for the index-ready notification from the server
-pub fn await_index_ready(server: &LspServer) {
-    // Wait for perl-lsp/index-ready notification with a reasonable timeout
-    if let Some(_notification) =
-        read_notification_method(server, "perl-lsp/index-ready", Duration::from_millis(500))
-    {
-        eprintln!("Index ready notification received");
-    } else {
-        eprintln!("No index-ready notification received within timeout (proceeding anyway)");
-    }
-}
-
-/// Gracefully shut the server down (best-effort) without hanging tests.
-pub fn shutdown_and_exit(server: &LspServer) {
-    use std::sync::atomic::Ordering;
-
-    // Mark shutdown as initiated to prevent duplicate shutdown in Drop
-    if server.shutdown_initiated.swap(true, Ordering::SeqCst) {
-        // Already initiated, just wait for exit
-        for _ in 0..20 {
-            if server
-                .process
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .try_wait()
-                .ok()
-                .flatten()
-                .is_some()
-            {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
-        return;
-    }
-
-    // Try a graceful shutdown first; if the server ignores, we'll still exit the test.
-    let _ = send_request(
-        server,
-        json!({"jsonrpc":"2.0","id": 999_001,"method":"shutdown","params":{}}),
-    );
-    send_notification(server, json!({"jsonrpc":"2.0","method":"exit"}));
-
-    // Give it a moment, then force-kill if needed.
-    for _ in 0..20 {
-        if server
-            .process
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .try_wait()
-            .ok()
-            .flatten()
-            .is_some()
-        {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-    let _ = server.process.lock().unwrap_or_else(|e| e.into_inner()).kill();
-}
-
-/// Send raw message to server (for testing malformed input)
-pub fn send_raw_message(server: &LspServer, content: &str) {
-    // Ignore write errors - BrokenPipe during teardown is expected
-    let _ =
-        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), content);
-}
-
-/// Send request without waiting for response
-pub fn send_request_no_wait(server: &LspServer, req: Value) {
-    let body = req.to_string();
-    // Ignore write errors - BrokenPipe during teardown is expected
-    let _ =
-        send_message_inner(&mut *server.writer.lock().unwrap_or_else(|e| e.into_inner()), &body);
 }
 
 impl Drop for LspServer {
