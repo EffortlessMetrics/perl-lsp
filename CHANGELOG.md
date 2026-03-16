@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Async Runtime with Concurrent Dispatch**: LSP server migrated to a two-lane scheduler — exclusive worker for mutations + 4-worker read pool for concurrent hover/goto-def/completion requests. `$/cancelRequest` is now processed inline before enqueuing (#1555).
+- **Continuous Swarm Infrastructure**: 53 agents, 22 skills, 12 named teammates, GitHub-native tracking, handoff protocol, and portable agent pack for other repos (#1553).
+- **Goto AST Node**: Dedicated `Goto` node with full `TokenKind::display_name` support (#1521).
+- **Smarter Selection Range**: Expand/shrink selection chains with semantic awareness (#1545).
+- **Cross-file Go-to-Definition for Methods and Modules**: Improved navigation for method calls and `use parent`/`base` statements (#1542, #1544).
+- **Enhanced Diagnostics**: Added `suggestion` field to diagnostic messages (#1543).
+- **Inlay Hints for Builtins**: Derive parameter names from builtin function signatures (#1541).
+- **Semantic Tokens**: Comprehensive AST walker with new token types for broader coverage (#1540).
+- **DAP Improvements**: POD detection, conditional expression validation in breakpoints (#1536), and improved variable inspection rendering (#1535).
+- **Hover Enhancements**: Improved documentation quality in hover responses (#1537).
+- **Cross-sigil Variable Highlighting**: Highlight `@foo` and `%foo` references when cursor is on `$foo` (#1538).
+- **Extract Variable for Methods**: Code actions handle method calls and hash/array access (#1534).
+- **Workspace Symbols Ranking**: Improved ranking with comprehensive tests (#1529).
+- **Completion for Moo/Moose Accessors**: Show `isa` type in completion for accessor methods (#1525).
+- **Signature Help Builtin Coverage**: Expanded coverage for common Perl builtins (#1532).
+
+### Fixed
+- **Parser**: Statement modifiers after complex expressions (#1550), package-qualified variable subscripts (#1548), fat arrow as list separator in all builtin argument paths (#1549), split regex slash disambiguation in expression contexts (#1547).
+- **Incremental Parsing**: Improved efficiency and fixed position underflow (#1539).
+- **On-Type Formatting**: Heredoc suppression, string/comment-aware brace matching, correct trigger semantics (#1530).
+- **Test Count Sync**: Updated test count to 1953, removed PerlIO from corpus manifest (#1552).
+
+### Changed
+- **bypassPermissions**: Set as default permission mode (#1554).
+- **Native Debt Report**: `xtask` now has a native `debt-report` subcommand (#1528).
+- **Devex Targeted Checks**: Converted from shell script to native Rust xtask subcommand (#1527).
+
 ## [0.11.0] - 2026-03-12
 
 This release finalizes the 0.11.0 distribution pipeline across GitHub releases,
