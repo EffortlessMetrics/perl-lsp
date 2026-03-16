@@ -155,6 +155,26 @@ impl<'a> Parser<'a> {
                         }
 
                         Some(TokenKind::Identifier | TokenKind::Method) => {
+                            // Check for ->$#* (postfix last-index dereference, Perl 5.20+).
+                            // The lexer produces Identifier("$#") for `$#` when no array
+                            // name follows, so we handle it here before the method-call path.
+                            if self.tokens.peek().is_ok_and(|t| t.text.as_ref() == "$#") {
+                                if self.tokens.peek_second().is_ok_and(|t| t.kind == TokenKind::Star) {
+                                    self.tokens.next()?; // consume $#
+                                    self.tokens.next()?; // consume *
+                                    let start = expr.location.start;
+                                    let end = self.previous_position();
+                                    expr = Node::new(
+                                        NodeKind::Unary {
+                                            op: "->$#*".to_string(),
+                                            operand: Box::new(expr),
+                                        },
+                                        SourceLocation { start, end },
+                                    );
+                                    continue;
+                                }
+                            }
+
                             // Method call
                             let method = self.tokens.next()?.text.to_string();
 

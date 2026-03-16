@@ -131,8 +131,11 @@ impl<'a> Parser<'a> {
 
         // AC1: General indirect method call heuristic: method $object
         // Lowercase identifier followed by a sigiled variable ($x, @arr, %hash)
-        if name.chars().next().is_some_and(|c| c.is_lowercase()) 
-           && !matches!(name, "tie" | "untie") 
+        //
+        // Array/list manipulation builtins never use indirect object syntax.
+        // `push $aref->@*, $x` has $aref as the first arg, not an indirect object.
+        if name.chars().next().is_some_and(|c| c.is_lowercase())
+            && !matches!(name, "tie" | "untie" | "push" | "pop" | "shift" | "unshift" | "splice")
         {
             if let Ok(next) = self.tokens.peek_second() {
                 let next_text = &next.text;
@@ -156,6 +159,11 @@ impl<'a> Parser<'a> {
                             third.kind,
                             TokenKind::RightBrace | TokenKind::RightParen | TokenKind::RightBracket
                         ) {
+                            return false;
+                        }
+                        // Arrow after $var means method/deref chain: func $obj->method(...)
+                        // That's a regular call with a complex first argument, not indirect object.
+                        if third.kind == TokenKind::Arrow {
                             return false;
                         }
                         return true;
