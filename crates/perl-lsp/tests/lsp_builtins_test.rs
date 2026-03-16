@@ -9,7 +9,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Helper to create and initialize a test server
 fn setup_server() -> LspServer {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Send initialize request
     let init_request = JsonRpcRequest {
@@ -37,7 +37,7 @@ fn setup_server() -> LspServer {
 }
 
 /// Helper to open a document
-fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
+fn open_doc(server: &LspServer, uri: &str, text: &str) {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
@@ -55,12 +55,7 @@ fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
 }
 
 /// Helper to get signature help
-fn get_signature_help(
-    server: &mut LspServer,
-    uri: &str,
-    line: u32,
-    character: u32,
-) -> Option<Value> {
+fn get_signature_help(server: &LspServer, uri: &str, line: u32, character: u32) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -76,12 +71,12 @@ fn get_signature_help(
 
 #[test]
 fn test_file_operation_signatures() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test seek signature - cursor inside parentheses after FILE,
     let code = "seek(FILE, 0, 0);";
-    open_doc(&mut server, "file:///test.pl", code);
-    let result = get_signature_help(&mut server, "file:///test.pl", 0, 11);
+    open_doc(&server, "file:///test.pl", code);
+    let result = get_signature_help(&server, "file:///test.pl", 0, 11);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -97,8 +92,8 @@ fn test_file_operation_signatures() -> TestResult {
 
     // Test chmod signature - cursor after first comma
     let code = "chmod(0755, $file);";
-    open_doc(&mut server, "file:///test2.pl", code);
-    let result = get_signature_help(&mut server, "file:///test2.pl", 0, 12);
+    open_doc(&server, "file:///test2.pl", code);
+    let result = get_signature_help(&server, "file:///test2.pl", 0, 12);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -114,8 +109,8 @@ fn test_file_operation_signatures() -> TestResult {
 
     // Test stat signature - cursor just inside parentheses
     let code = "stat($file);";
-    open_doc(&mut server, "file:///test3.pl", code);
-    let result = get_signature_help(&mut server, "file:///test3.pl", 0, 5);
+    open_doc(&server, "file:///test3.pl", code);
+    let result = get_signature_help(&server, "file:///test3.pl", 0, 5);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -128,12 +123,12 @@ fn test_file_operation_signatures() -> TestResult {
 
 #[test]
 fn test_string_data_signatures() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test pack signature
     let code = r#"pack("C*", @bytes);"#;
-    open_doc(&mut server, "file:///pack.pl", code);
-    let result = get_signature_help(&mut server, "file:///pack.pl", 0, 11);
+    open_doc(&server, "file:///pack.pl", code);
+    let result = get_signature_help(&server, "file:///pack.pl", 0, 11);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -149,8 +144,8 @@ fn test_string_data_signatures() -> TestResult {
 
     // Test unpack signature
     let code = "unpack($template, $data);";
-    open_doc(&mut server, "file:///unpack.pl", code);
-    let result = get_signature_help(&mut server, "file:///unpack.pl", 0, 18);
+    open_doc(&server, "file:///unpack.pl", code);
+    let result = get_signature_help(&server, "file:///unpack.pl", 0, 18);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -160,8 +155,8 @@ fn test_string_data_signatures() -> TestResult {
 
     // Test hex signature
     let code = "hex($str);";
-    open_doc(&mut server, "file:///hex.pl", code);
-    let result = get_signature_help(&mut server, "file:///hex.pl", 0, 4);
+    open_doc(&server, "file:///hex.pl", code);
+    let result = get_signature_help(&server, "file:///hex.pl", 0, 4);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -172,7 +167,7 @@ fn test_string_data_signatures() -> TestResult {
 
 #[test]
 fn test_math_signatures() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let math_functions = [
         ("abs($x);", "abs", "VALUE", 4),
@@ -185,8 +180,8 @@ fn test_math_signatures() -> TestResult {
 
     for (i, (code, func_name, expected_params, cursor_pos)) in math_functions.iter().enumerate() {
         let uri = format!("file:///math{}.pl", i);
-        open_doc(&mut server, &uri, code);
-        let result = get_signature_help(&mut server, &uri, 0, *cursor_pos);
+        open_doc(&server, &uri, code);
+        let result = get_signature_help(&server, &uri, 0, *cursor_pos);
 
         assert!(result.is_some(), "Failed for function: {}", func_name);
         let sig = result.ok_or("Expected signature result")?;
@@ -205,12 +200,12 @@ fn test_math_signatures() -> TestResult {
 
 #[test]
 fn test_system_process_signatures() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test fork (no parameters)
     let code = "fork();";
-    open_doc(&mut server, "file:///fork.pl", code);
-    let result = get_signature_help(&mut server, "file:///fork.pl", 0, 5);
+    open_doc(&server, "file:///fork.pl", code);
+    let result = get_signature_help(&server, "file:///fork.pl", 0, 5);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -220,8 +215,8 @@ fn test_system_process_signatures() -> TestResult {
 
     // Test kill signature
     let code = "kill(9, @pids);";
-    open_doc(&mut server, "file:///kill.pl", code);
-    let result = get_signature_help(&mut server, "file:///kill.pl", 0, 8);
+    open_doc(&server, "file:///kill.pl", code);
+    let result = get_signature_help(&server, "file:///kill.pl", 0, 8);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -237,8 +232,8 @@ fn test_system_process_signatures() -> TestResult {
 
     // Test system signature
     let code = "system($cmd);";
-    open_doc(&mut server, "file:///system.pl", code);
-    let result = get_signature_help(&mut server, "file:///system.pl", 0, 7);
+    open_doc(&server, "file:///system.pl", code);
+    let result = get_signature_help(&server, "file:///system.pl", 0, 7);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -251,12 +246,12 @@ fn test_system_process_signatures() -> TestResult {
 
 #[test]
 fn test_network_signatures() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test socket signature
     let code = "socket(SOCK, AF_INET, SOCK_STREAM, 0);";
-    open_doc(&mut server, "file:///socket.pl", code);
-    let result = get_signature_help(&mut server, "file:///socket.pl", 0, 13);
+    open_doc(&server, "file:///socket.pl", code);
+    let result = get_signature_help(&server, "file:///socket.pl", 0, 13);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -272,8 +267,8 @@ fn test_network_signatures() -> TestResult {
 
     // Test bind signature
     let code = "bind(SOCK, $addr);";
-    open_doc(&mut server, "file:///bind.pl", code);
-    let result = get_signature_help(&mut server, "file:///bind.pl", 0, 11);
+    open_doc(&server, "file:///bind.pl", code);
+    let result = get_signature_help(&server, "file:///bind.pl", 0, 11);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -292,12 +287,12 @@ fn test_network_signatures() -> TestResult {
 
 #[test]
 fn test_control_flow_signatures() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test eval signature
     let code = "eval($code);";
-    open_doc(&mut server, "file:///eval.pl", code);
-    let result = get_signature_help(&mut server, "file:///eval.pl", 0, 5);
+    open_doc(&server, "file:///eval.pl", code);
+    let result = get_signature_help(&server, "file:///eval.pl", 0, 5);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -307,8 +302,8 @@ fn test_control_flow_signatures() -> TestResult {
 
     // Test require signature
     let code = "require($module);";
-    open_doc(&mut server, "file:///require.pl", code);
-    let result = get_signature_help(&mut server, "file:///require.pl", 0, 8);
+    open_doc(&server, "file:///require.pl", code);
+    let result = get_signature_help(&server, "file:///require.pl", 0, 8);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -321,12 +316,12 @@ fn test_control_flow_signatures() -> TestResult {
 
 #[test]
 fn test_misc_signatures() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test tie signature
     let code = "tie(%hash, 'DB_File');";
-    open_doc(&mut server, "file:///tie.pl", code);
-    let result = get_signature_help(&mut server, "file:///tie.pl", 0, 11);
+    open_doc(&server, "file:///tie.pl", code);
+    let result = get_signature_help(&server, "file:///tie.pl", 0, 11);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -340,8 +335,8 @@ fn test_misc_signatures() -> TestResult {
 
     // Test select signature
     let code = "select(STDOUT);";
-    open_doc(&mut server, "file:///select.pl", code);
-    let result = get_signature_help(&mut server, "file:///select.pl", 0, 7);
+    open_doc(&server, "file:///select.pl", code);
+    let result = get_signature_help(&server, "file:///select.pl", 0, 7);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -354,12 +349,12 @@ fn test_misc_signatures() -> TestResult {
 
 #[test]
 fn test_active_parameter_tracking() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test with multiple parameters
     let code = "atan2(1.5, 2.0);";
-    open_doc(&mut server, "file:///atan2.pl", code);
-    let result = get_signature_help(&mut server, "file:///atan2.pl", 0, 11);
+    open_doc(&server, "file:///atan2.pl", code);
+    let result = get_signature_help(&server, "file:///atan2.pl", 0, 11);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -367,8 +362,8 @@ fn test_active_parameter_tracking() -> TestResult {
 
     // Test with three parameters
     let code = "substr($text, 5, 10);";
-    open_doc(&mut server, "file:///substr.pl", code);
-    let result = get_signature_help(&mut server, "file:///substr.pl", 0, 17);
+    open_doc(&server, "file:///substr.pl", code);
+    let result = get_signature_help(&server, "file:///substr.pl", 0, 17);
 
     assert!(result.is_some());
     let sig = result.ok_or("Expected signature result")?;
@@ -379,7 +374,7 @@ fn test_active_parameter_tracking() -> TestResult {
 
 #[test]
 fn test_all_114_builtins_are_recognized() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // List of all 114 built-in functions we support
     let all_builtins = [
@@ -534,10 +529,10 @@ fn test_all_114_builtins_are_recognized() -> TestResult {
     for func in all_builtins {
         let code = format!("{}($x);", func); // Complete statement with argument
         let uri = format!("file:///{}.pl", func);
-        open_doc(&mut server, &uri, &code);
+        open_doc(&server, &uri, &code);
         // Position cursor just after opening paren
         let cursor_pos = func.len() as u32 + 1;
-        let result = get_signature_help(&mut server, &uri, 0, cursor_pos);
+        let result = get_signature_help(&server, &uri, 0, cursor_pos);
 
         assert!(result.is_some(), "No signature found for function: {}", func);
         let sig = result.ok_or("Expected signature result")?;

@@ -91,7 +91,7 @@ impl LspHarness {
 
         let (tx, rx) = mpsc::channel::<Vec<u8>>();
         let handle = thread::spawn(move || {
-            let mut server = server;
+            let server = server;
             while let Ok(msg) = rx.recv() {
                 if msg.is_empty() {
                     break;

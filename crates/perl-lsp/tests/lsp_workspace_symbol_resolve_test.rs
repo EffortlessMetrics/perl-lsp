@@ -3,7 +3,7 @@ use serde_json::json;
 
 /// Helper to properly initialize a server with the required initialized notification
 fn setup_server() -> LspServer {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize request
     let init_request = JsonRpcRequest {
@@ -33,7 +33,7 @@ fn setup_server() -> LspServer {
 /// Test Workspace Symbol Resolve support (LSP 3.17)
 #[test]
 fn test_workspace_symbol_resolve() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Open a document with symbols
     let uri = "file:///test.pl";
@@ -103,7 +103,7 @@ our $VERSION = '1.0';
 
 #[test]
 fn test_workspace_symbol_resolve_with_container() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Open a document with nested symbols
     let uri = "file:///test.pl";
@@ -176,7 +176,7 @@ sub another_method {
 
 #[test]
 fn test_workspace_symbol_resolve_capability() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -205,7 +205,7 @@ fn test_workspace_symbol_resolve_capability() -> Result<(), Box<dyn std::error::
 
 #[test]
 fn test_workspace_symbol_resolve_unknown_symbol() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Try to resolve a symbol without opening the document
     let unknown_symbol = json!({

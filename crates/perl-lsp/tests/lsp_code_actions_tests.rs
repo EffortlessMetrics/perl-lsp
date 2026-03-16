@@ -9,12 +9,12 @@ use common::{
 /// Test extract variable refactoring
 #[test]
 fn test_extract_variable() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -35,7 +35,7 @@ print $result;
 
     // Request code actions for the expression "length($str)"
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -58,19 +58,19 @@ print $result;
         let title = a["title"].as_str().unwrap_or("");
         title.contains("Extract") && title.contains("variable")
     }));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Test adding error checking to file operations
 #[test]
 fn test_add_error_checking() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -91,7 +91,7 @@ close($fh);
 
     // Request code actions for the open statement
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -111,19 +111,19 @@ close($fh);
 
     let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("error checking")));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Test converting old-style for loops to foreach
 #[test]
 fn test_convert_loop_style() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -144,7 +144,7 @@ for (my $i = 0; $i < @array; $i++) {
 
     // Request code actions for the for loop
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 3,
@@ -168,19 +168,19 @@ for (my $i = 0; $i < @array; $i++) {
         "Expected 'foreach loop' conversion action but got: {:?}",
         actions.iter().map(|a| a["title"].as_str()).collect::<Vec<_>>()
     );
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Test converting to postfix form
 #[test]
 fn test_convert_to_postfix() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -201,7 +201,7 @@ if ($debug) {
 
     // Request code actions for the if statement
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 4,
@@ -221,19 +221,19 @@ if ($debug) {
 
     let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("postfix")));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Test adding missing pragmas
 #[test]
 fn test_add_missing_pragmas() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -255,7 +255,7 @@ print $x;
 
     // Request code actions for the entire document
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 5,
@@ -275,19 +275,19 @@ print $x;
 
     let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("pragma")));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Test quick fix for undefined variable
 #[test]
 fn test_fix_undefined_variable() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -309,7 +309,7 @@ print $undefined_var;
 
     // First get diagnostics
     let diag_response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 6,
@@ -322,7 +322,7 @@ print $undefined_var;
 
     // Request code actions with diagnostics
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 7,
@@ -345,19 +345,19 @@ print $undefined_var;
         let title = a["title"].as_str().unwrap_or("");
         title.contains("Declare") && title.contains("my")
     }));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Test extract subroutine refactoring
 #[test]
 fn test_extract_subroutine() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -383,7 +383,7 @@ my $y = 20;
 
     // Request code actions for the block
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 8,
@@ -403,19 +403,19 @@ my $y = 20;
 
     let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("subroutine")));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Test organize imports refactoring
 #[test]
 fn test_organize_imports() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -442,7 +442,7 @@ print "test\n";
 
     // Request code actions for the import section
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 9,
@@ -462,19 +462,19 @@ print "test\n";
 
     let actions = response["result"].as_array().ok_or("Expected result to be an array")?;
     assert!(actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("Organize imports")));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Test multiple refactorings available
 #[test]
 fn test_multiple_refactorings() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -497,7 +497,7 @@ if ($processed > 100) {
 
     // Request code actions for the complex expression
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 10,
@@ -521,6 +521,6 @@ if ($processed > 100) {
     // Should have multiple refactoring options
     assert!(!actions.is_empty(), "Expected code actions but got none");
     assert!(actions.iter().any(|a| a["kind"].as_str() == Some("refactor.extract")));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }

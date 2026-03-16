@@ -35,8 +35,8 @@ struct E2ETestFixture {
 
 impl E2ETestFixture {
     fn new() -> Self {
-        let mut server = start_lsp_server();
-        initialize_lsp(&mut server);
+        let server = start_lsp_server();
+        initialize_lsp(&server);
 
         // Create comprehensive test workspace for E2E testing
         let test_workspace = E2ETestWorkspace::new();
@@ -44,7 +44,7 @@ impl E2ETestFixture {
         let performance_monitor = E2EPerformanceMonitor::new();
 
         // Setup comprehensive test environment
-        setup_e2e_test_workspace(&mut server);
+        setup_e2e_test_workspace(&server);
 
         // Wait for complete system initialization with adaptive timeout
         let adaptive_initialization_timeout = match max_concurrent_threads() {
@@ -53,18 +53,14 @@ impl E2ETestFixture {
             5..=8 => Duration::from_secs(30), // Lightly constrained environment
             _ => Duration::from_secs(20),     // Unconstrained environment
         };
-        drain_until_quiet(
-            &mut server,
-            Duration::from_millis(2000),
-            adaptive_initialization_timeout,
-        );
+        drain_until_quiet(&server, Duration::from_millis(2000), adaptive_initialization_timeout);
 
         Self { server, test_workspace, scenario_runner, performance_monitor }
     }
 }
 
 /// Setup comprehensive E2E test workspace
-fn setup_e2e_test_workspace(server: &mut LspServer) {
+fn setup_e2e_test_workspace(server: &LspServer) {
     // Create real-world Perl project structure for E2E testing
     let e2e_test_files = create_comprehensive_test_project();
 
@@ -250,11 +246,7 @@ impl E2EScenarioRunner {
         Self { active_scenarios: HashMap::new(), scenario_metrics: HashMap::new() }
     }
 
-    fn run_scenario(
-        &mut self,
-        scenario: &E2ETestScenario,
-        _server: &mut LspServer,
-    ) -> ScenarioResult {
+    fn run_scenario(&mut self, scenario: &E2ETestScenario, _server: &LspServer) -> ScenarioResult {
         let scenario_start = Instant::now();
 
         // Placeholder scenario execution
@@ -502,7 +494,7 @@ fn test_comprehensive_cancellation_workflow_e2e() {
     for scenario in &fixture.test_workspace.scenarios.clone() {
         println!("Executing E2E scenario: {}", scenario.name);
 
-        let scenario_result = fixture.scenario_runner.run_scenario(scenario, &mut fixture.server);
+        let scenario_result = fixture.scenario_runner.run_scenario(scenario, &fixture.server);
 
         // Validate scenario results
         assert!(scenario_result.success, "E2E scenario '{}' should succeed", scenario.name);
@@ -605,7 +597,7 @@ fn test_high_load_cancellation_behavior_e2e() {
     // Validate system remains responsive after high load
     let health_check_start = Instant::now();
     let health_response = send_request(
-        &mut fixture.server,
+        &fixture.server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",
@@ -723,7 +715,7 @@ impl Drop for E2ETestFixture {
         }
 
         // Graceful server shutdown
-        shutdown_and_exit(&mut self.server);
+        shutdown_and_exit(&self.server);
 
         println!("E2E test fixture cleaned up successfully");
     }

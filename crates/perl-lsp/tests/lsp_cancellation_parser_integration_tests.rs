@@ -37,10 +37,10 @@ struct ParserIntegrationFixture {
 
 impl ParserIntegrationFixture {
     fn new() -> Self {
-        let mut server = start_lsp_server();
+        let server = start_lsp_server();
         // Note: Use a fresh server instance for each fixture to avoid initialization conflicts
         // Each test gets its own independent LSP server instance
-        initialize_lsp(&mut server);
+        initialize_lsp(&server);
 
         // Create comprehensive test workspace for parser integration testing
         let test_workspace = TestWorkspace::new();
@@ -48,7 +48,7 @@ impl ParserIntegrationFixture {
 
         // Setup test files
         for (uri, content) in &parser_test_files {
-            setup_test_file(&mut server, uri, content);
+            setup_test_file(&server, uri, content);
         }
 
         // Wait for initial parsing and indexing to complete with adaptive timeout
@@ -58,7 +58,7 @@ impl ParserIntegrationFixture {
             5..=8 => Duration::from_secs(15), // Lightly constrained environment
             _ => Duration::from_secs(10),     // Unconstrained environment
         };
-        drain_until_quiet(&mut server, Duration::from_millis(1500), adaptive_timeout);
+        drain_until_quiet(&server, Duration::from_millis(1500), adaptive_timeout);
 
         Self { server, test_workspace, parser_test_files }
     }
@@ -305,7 +305,7 @@ sub cross_ref_function_{} {{
 }
 
 /// Setup test file helper
-fn setup_test_file(server: &mut LspServer, uri: &str, content: &str) {
+fn setup_test_file(server: &LspServer, uri: &str, content: &str) {
     send_notification(
         server,
         json!({
@@ -1603,7 +1603,7 @@ impl Drop for ParserIntegrationFixture {
         println!("  Total test content: {} KB", total_content_size / 1024);
 
         // Graceful server shutdown
-        shutdown_and_exit(&mut self.server);
+        shutdown_and_exit(&self.server);
     }
 }
 

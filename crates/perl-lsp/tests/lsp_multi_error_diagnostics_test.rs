@@ -10,7 +10,7 @@ use serde_json::json;
 #[test]
 fn test_451_lsp_reports_multiple_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
     // AC:451 - Integration test for multiple error collection
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server with diagnostic support
     let init_request = JsonRpcRequest {
@@ -114,7 +114,7 @@ my $c = ;       # Error 3: missing expression
 #[test]
 fn test_451_lsp_reports_errors_in_nested_blocks() -> Result<(), Box<dyn std::error::Error>> {
     // AC:451 - Nested block error collection
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -198,7 +198,7 @@ while (1) {
 #[test]
 fn test_451_lsp_respects_error_limit() -> Result<(), Box<dyn std::error::Error>> {
     // AC:451 - AC5: Error limit enforcement
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),

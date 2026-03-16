@@ -20,13 +20,13 @@ use common::*;
 #[test]
 // AC:17
 fn test_lsp_features_unaffected_by_dap() -> Result<()> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     let text = "use strict;\nmy $x = 1;\nprint $x;\n";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -43,12 +43,12 @@ fn test_lsp_features_unaffected_by_dap() -> Result<()> {
 
     // Wait for diagnostics or settle time to ensure file is processed
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
 
     // Verify basic LSP functionality (hover) with DAP feature enabled
     let hover_id = 100;
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": hover_id,
@@ -60,7 +60,7 @@ fn test_lsp_features_unaffected_by_dap() -> Result<()> {
         }),
     );
 
-    let response = read_response_matching_i64(&mut server, hover_id, Duration::from_secs(5));
+    let response = read_response_matching_i64(&server, hover_id, Duration::from_secs(5));
     assert!(response.is_some(), "Hover response should be present after didOpen");
 
     Ok(())
@@ -70,13 +70,13 @@ fn test_lsp_features_unaffected_by_dap() -> Result<()> {
 #[test]
 // AC:17
 fn test_lsp_response_time_maintained() -> Result<()> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///perf.pl";
     let text = "my $val = 42;\n";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -92,12 +92,12 @@ fn test_lsp_response_time_maintained() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
 
     let start = Instant::now();
     let hover_id = 200;
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": hover_id,
@@ -109,7 +109,7 @@ fn test_lsp_response_time_maintained() -> Result<()> {
         }),
     );
 
-    let response = read_response_matching_i64(&mut server, hover_id, Duration::from_secs(5));
+    let response = read_response_matching_i64(&server, hover_id, Duration::from_secs(5));
     let latency = start.elapsed();
 
     assert!(response.is_some(), "Hover response missing in performance test");
@@ -128,13 +128,13 @@ fn test_lsp_response_time_maintained() -> Result<()> {
 #[test]
 // AC:17
 fn test_workspace_navigation_with_dap() -> Result<()> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///nav.pl";
     let text = "package NavTest;\nsub target_func { }\n1;\n";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -151,12 +151,12 @@ fn test_workspace_navigation_with_dap() -> Result<()> {
 
     // Wait for indexing
     std::thread::sleep(Duration::from_millis(1000));
-    drain_until_quiet(&mut server, Duration::from_millis(200), Duration::from_millis(2000));
+    drain_until_quiet(&server, Duration::from_millis(200), Duration::from_millis(2000));
 
     // Verify workspace symbol search works
     let search_id = 300;
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": search_id,
@@ -165,7 +165,7 @@ fn test_workspace_navigation_with_dap() -> Result<()> {
         }),
     );
 
-    let response = read_response_matching_i64(&mut server, search_id, Duration::from_secs(5));
+    let response = read_response_matching_i64(&server, search_id, Duration::from_secs(5));
     assert!(response.is_some(), "Workspace symbol response should be present");
     let resp_val = response.ok_or_else(|| anyhow::anyhow!("Expected workspace symbol response"))?;
     assert!(
@@ -181,14 +181,14 @@ fn test_workspace_navigation_with_dap() -> Result<()> {
 #[test]
 // AC:17
 fn test_lsp_dap_memory_isolation() -> Result<()> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///memory_test.pl";
     let text = "my $data = 1;\n";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -204,13 +204,13 @@ fn test_lsp_dap_memory_isolation() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
 
     // Send multiple LSP requests to test responsiveness under load
     for i in 0..50 {
         let req_id = 400 + i;
         send_request_no_wait(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": req_id,
@@ -222,7 +222,7 @@ fn test_lsp_dap_memory_isolation() -> Result<()> {
             }),
         );
 
-        if read_response_matching_i64(&mut server, req_id, Duration::from_millis(500)).is_some() {
+        if read_response_matching_i64(&server, req_id, Duration::from_millis(500)).is_some() {
             // Response received
         }
     }
@@ -230,7 +230,7 @@ fn test_lsp_dap_memory_isolation() -> Result<()> {
     // Verify server still responsive after load
     let final_id = 500;
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": final_id,
@@ -242,7 +242,7 @@ fn test_lsp_dap_memory_isolation() -> Result<()> {
         }),
     );
 
-    let response = read_response_matching_i64(&mut server, final_id, Duration::from_secs(5));
+    let response = read_response_matching_i64(&server, final_id, Duration::from_secs(5));
     assert!(response.is_some(), "Server should remain responsive after load");
 
     Ok(())
@@ -252,14 +252,14 @@ fn test_lsp_dap_memory_isolation() -> Result<()> {
 #[test]
 // AC:17
 fn test_lsp_test_pass_rate_100_percent() -> Result<()> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///comprehensive.pl";
     let text = "package TestPkg;\nsub test_sub { my $var = 1; }\n1;\n";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -275,12 +275,12 @@ fn test_lsp_test_pass_rate_100_percent() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
 
     // Test hover
     let hover_id = 600;
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": hover_id,
@@ -292,14 +292,14 @@ fn test_lsp_test_pass_rate_100_percent() -> Result<()> {
         }),
     );
     assert!(
-        read_response_matching_i64(&mut server, hover_id, Duration::from_secs(5)).is_some(),
+        read_response_matching_i64(&server, hover_id, Duration::from_secs(5)).is_some(),
         "Hover should work with DAP feature enabled"
     );
 
     // Test completion
     let completion_id = 601;
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": completion_id,
@@ -311,7 +311,7 @@ fn test_lsp_test_pass_rate_100_percent() -> Result<()> {
         }),
     );
     assert!(
-        read_response_matching_i64(&mut server, completion_id, Duration::from_secs(5)).is_some(),
+        read_response_matching_i64(&server, completion_id, Duration::from_secs(5)).is_some(),
         "Completion should work with DAP feature enabled"
     );
 
@@ -322,14 +322,14 @@ fn test_lsp_test_pass_rate_100_percent() -> Result<()> {
 #[test]
 // AC:17
 fn test_concurrent_lsp_dap_sessions() -> Result<()> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///concurrent.pl";
     let text = "my $value = 42;\nprint $value;\n";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -345,14 +345,14 @@ fn test_concurrent_lsp_dap_sessions() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
 
     // Send concurrent requests
     let hover_id = 700;
     let completion_id = 701;
 
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": hover_id,
@@ -365,7 +365,7 @@ fn test_concurrent_lsp_dap_sessions() -> Result<()> {
     );
 
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": completion_id,
@@ -378,9 +378,9 @@ fn test_concurrent_lsp_dap_sessions() -> Result<()> {
     );
 
     // Both responses should arrive
-    let hover_resp = read_response_matching_i64(&mut server, hover_id, Duration::from_secs(5));
+    let hover_resp = read_response_matching_i64(&server, hover_id, Duration::from_secs(5));
     let completion_resp =
-        read_response_matching_i64(&mut server, completion_id, Duration::from_secs(5));
+        read_response_matching_i64(&server, completion_id, Duration::from_secs(5));
 
     assert!(hover_resp.is_some(), "Hover response should arrive in concurrent scenario");
     assert!(completion_resp.is_some(), "Completion response should arrive in concurrent scenario");
@@ -392,14 +392,14 @@ fn test_concurrent_lsp_dap_sessions() -> Result<()> {
 #[test]
 // AC:17
 fn test_incremental_parsing_during_debugging() -> Result<()> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///incremental.pl";
     let text = "my $original = 1;\n";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -415,12 +415,12 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(500));
-    drain_until_quiet(&mut server, Duration::from_millis(100), Duration::from_millis(1000));
+    drain_until_quiet(&server, Duration::from_millis(100), Duration::from_millis(1000));
 
     // Apply incremental edit
     let start_time = Instant::now();
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -434,13 +434,13 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
     );
 
     std::thread::sleep(Duration::from_millis(100));
-    drain_until_quiet(&mut server, Duration::from_millis(50), Duration::from_millis(500));
+    drain_until_quiet(&server, Duration::from_millis(50), Duration::from_millis(500));
     let parse_time = start_time.elapsed();
 
     // Verify LSP still responsive after edit
     let hover_id = 800;
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": hover_id,
@@ -452,7 +452,7 @@ fn test_incremental_parsing_during_debugging() -> Result<()> {
         }),
     );
 
-    let response = read_response_matching_i64(&mut server, hover_id, Duration::from_secs(5));
+    let response = read_response_matching_i64(&server, hover_id, Duration::from_secs(5));
     assert!(response.is_some(), "LSP should remain responsive after incremental edit");
     assert!(parse_time < Duration::from_secs(1), "Incremental parsing too slow: {:?}", parse_time);
 

@@ -6,7 +6,7 @@ use serde_json::json;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 fn setup_server() -> LspServer {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize the server
     let init_request = JsonRpcRequest {
@@ -32,7 +32,7 @@ fn setup_server() -> LspServer {
     server
 }
 
-fn open_document(server: &mut LspServer, uri: &str, content: &str) {
+fn open_document(server: &LspServer, uri: &str, content: &str) {
     let notification = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/didOpen".to_string(),
@@ -51,7 +51,7 @@ fn open_document(server: &mut LspServer, uri: &str, content: &str) {
 
 #[test]
 fn test_folding_ranges_subroutines() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 sub hello {
@@ -73,7 +73,7 @@ sub nested {
 }
 "#;
 
-    open_document(&mut server, "file:///test.pl", content);
+    open_document(&server, "file:///test.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -110,7 +110,7 @@ sub nested {
 #[cfg(feature = "lsp-extras")]
 #[test]
 fn test_folding_ranges_blocks() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 if ($condition) {
@@ -133,7 +133,7 @@ foreach my $item (@items) {
 };
 "#;
 
-    open_document(&mut server, "file:///blocks.pl", content);
+    open_document(&server, "file:///blocks.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -161,7 +161,7 @@ foreach my $item (@items) {
 
 #[test]
 fn test_folding_ranges_packages() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 package MyModule {
@@ -183,7 +183,7 @@ package AnotherModule {
 }
 "#;
 
-    open_document(&mut server, "file:///packages.pl", content);
+    open_document(&server, "file:///packages.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -211,7 +211,7 @@ package AnotherModule {
 
 #[test]
 fn test_folding_ranges_try_catch() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 try {
@@ -225,7 +225,7 @@ try {
 }
 "#;
 
-    open_document(&mut server, "file:///try.pl", content);
+    open_document(&server, "file:///try.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -253,7 +253,7 @@ try {
 
 #[test]
 fn test_folding_ranges_data_structures() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 my @array = (
@@ -272,7 +272,7 @@ my %hash = (
 );
 "#;
 
-    open_document(&mut server, "file:///data.pl", content);
+    open_document(&server, "file:///data.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -300,7 +300,7 @@ my %hash = (
 
 #[test]
 fn test_folding_ranges_imports() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 use strict;
@@ -315,7 +315,7 @@ sub main {
 }
 "#;
 
-    open_document(&mut server, "file:///imports.pl", content);
+    open_document(&server, "file:///imports.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -345,9 +345,9 @@ sub main {
 
 #[test]
 fn test_folding_ranges_empty_document() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
-    open_document(&mut server, "file:///empty.pl", "");
+    open_document(&server, "file:///empty.pl", "");
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),

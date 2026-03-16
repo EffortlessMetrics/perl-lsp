@@ -12,7 +12,7 @@ use std::sync::Arc;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Helper to send a request and get result
-fn send_request(server: &mut LspServer, method: &str, params: Value) -> Result<Value, String> {
+fn send_request(server: &LspServer, method: &str, params: Value) -> Result<Value, String> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -31,11 +31,11 @@ fn send_request(server: &mut LspServer, method: &str, params: Value) -> Result<V
 /// Create a test server with a document containing color codes
 fn setup_color_server() -> LspServer {
     let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
-    let mut server = LspServer::with_output(output);
+    let server = LspServer::with_output(output);
 
     // Initialize the server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         json!({
             "capabilities": {},
@@ -84,10 +84,10 @@ fn setup_color_server() -> LspServer {
 
 #[test]
 fn lsp_color_detect_hex_colors() -> TestResult {
-    let mut server = setup_color_server();
+    let server = setup_color_server();
 
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/documentColor",
         json!({
             "textDocument": {
@@ -125,10 +125,10 @@ fn lsp_color_detect_hex_colors() -> TestResult {
 
 #[test]
 fn lsp_color_detect_ansi_colors() -> TestResult {
-    let mut server = setup_color_server();
+    let server = setup_color_server();
 
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/documentColor",
         json!({
             "textDocument": {
@@ -156,11 +156,11 @@ fn lsp_color_detect_ansi_colors() -> TestResult {
 
 #[test]
 fn lsp_color_presentation_hex() -> TestResult {
-    let mut server = setup_color_server();
+    let server = setup_color_server();
 
     // Test color presentation for pure red
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/colorPresentation",
         json!({
             "textDocument": {
@@ -197,11 +197,11 @@ fn lsp_color_presentation_hex() -> TestResult {
 
 #[test]
 fn lsp_color_presentation_with_alpha() -> TestResult {
-    let mut server = setup_color_server();
+    let server = setup_color_server();
 
     // Test color presentation with alpha channel
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/colorPresentation",
         json!({
             "textDocument": {
@@ -237,11 +237,11 @@ fn lsp_color_presentation_with_alpha() -> TestResult {
 #[test]
 fn lsp_color_empty_document() -> TestResult {
     let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
-    let mut server = LspServer::with_output(output);
+    let server = LspServer::with_output(output);
 
     // Initialize
     send_request(
-        &mut server,
+        &server,
         "initialize",
         json!({
             "capabilities": {},
@@ -277,7 +277,7 @@ fn lsp_color_empty_document() -> TestResult {
     server.handle_request(did_open);
 
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/documentColor",
         json!({
             "textDocument": {
@@ -294,15 +294,15 @@ fn lsp_color_empty_document() -> TestResult {
 
 #[test]
 fn lsp_color_invalid_params() {
-    let mut server = setup_color_server();
+    let server = setup_color_server();
 
     // Missing textDocument field
-    let result = send_request(&mut server, "textDocument/documentColor", json!({}));
+    let result = send_request(&server, "textDocument/documentColor", json!({}));
     assert!(result.is_err(), "Should return error for missing textDocument");
 
     // Missing color field in presentation
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/colorPresentation",
         json!({
             "textDocument": {"uri": "file:///test/colors.pl"}
@@ -313,11 +313,11 @@ fn lsp_color_invalid_params() {
 
 #[test]
 fn lsp_color_round_trip() -> TestResult {
-    let mut server = setup_color_server();
+    let server = setup_color_server();
 
     // Get colors from document
     let detected = send_request(
-        &mut server,
+        &server,
         "textDocument/documentColor",
         json!({
             "textDocument": {
@@ -331,7 +331,7 @@ fn lsp_color_round_trip() -> TestResult {
     if let Some(first_color) = colors.first() {
         // Use detected color to get presentations
         let presentations = send_request(
-            &mut server,
+            &server,
             "textDocument/colorPresentation",
             json!({
                 "textDocument": {
@@ -357,11 +357,11 @@ fn lsp_color_round_trip() -> TestResult {
 #[test]
 fn lsp_color_utf16_position_with_non_ascii_prefix() -> TestResult {
     let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
-    let mut server = LspServer::with_output(output);
+    let server = LspServer::with_output(output);
 
     // Initialize
     send_request(
-        &mut server,
+        &server,
         "initialize",
         json!({
             "capabilities": {},
@@ -402,7 +402,7 @@ fn lsp_color_utf16_position_with_non_ascii_prefix() -> TestResult {
     server.handle_request(did_open);
 
     let result = send_request(
-        &mut server,
+        &server,
         "textDocument/documentColor",
         json!({
             "textDocument": {

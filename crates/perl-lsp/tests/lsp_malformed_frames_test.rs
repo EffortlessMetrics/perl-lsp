@@ -13,7 +13,7 @@ use std::time::Duration;
 fn test_malformed_headers_handling() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's enhanced malformed frame recovery implementation
     // Tests that the server gracefully handles malformed headers with enhanced error recovery
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Send header with extra spaces - this should be handled gracefully
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).to_string();
@@ -27,7 +27,7 @@ fn test_malformed_headers_handling() -> Result<(), Box<dyn std::error::Error>> {
 
     // PR #173: Enhanced malformed frame recovery should handle this gracefully
     // Server should continue processing or send an appropriate response
-    let _response = common::read_response_timeout(&mut server, Duration::from_millis(1000));
+    let _response = common::read_response_timeout(&server, Duration::from_millis(1000));
 
     // Verify server didn't crash and either processed request or handled error gracefully
     // The enhanced error handling should maintain session continuity
@@ -36,7 +36,7 @@ fn test_malformed_headers_handling() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test that server is still responsive after malformed header
     let test_response = common::send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "shutdown"
@@ -50,7 +50,7 @@ fn test_malformed_headers_handling() -> Result<(), Box<dyn std::error::Error>> {
 fn test_edge_case_malformed_frame_recovery() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's enhanced malformed frame recovery for edge cases
     // Tests header-only with missing body scenario - server should recover gracefully
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Send header without body - this is a malformed frame that should be handled
     let header = "Content-Length: 50\r\n\r\n";
@@ -68,12 +68,12 @@ fn test_edge_case_malformed_frame_recovery() -> Result<(), Box<dyn std::error::E
     // The server may terminate the connection but should not panic or crash
     // Try to initialize - this may fail if connection was terminated
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        initialize_lsp(&mut server);
+        initialize_lsp(&server);
     })) {
         Ok(()) => {
             // If initialization succeeded, verify server is responsive
             let response = common::send_request(
-                &mut server,
+                &server,
                 json!({
                     "jsonrpc": "2.0",
                     "method": "shutdown"
@@ -95,21 +95,21 @@ fn test_edge_case_malformed_frame_recovery() -> Result<(), Box<dyn std::error::E
 
 #[test]
 fn test_invalid_json_body() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send invalid JSON
-    send_raw_message(&mut server, "{this is not: valid json}}");
+    send_raw_message(&server, "{this is not: valid json}}");
 
     // Server should either send error response or ignore
-    let _response = common::read_response_timeout(&mut server, Duration::from_millis(500));
+    let _response = common::read_response_timeout(&server, Duration::from_millis(500));
     // We don't assert on the response - server may ignore or error
 
     // Test that server can handle subsequent requests after invalid JSON
     // Server may terminate connection, which is acceptable recovery behavior
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         common::send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/documentSymbol",
@@ -139,7 +139,7 @@ fn test_invalid_json_body() -> Result<(), Box<dyn std::error::Error>> {
 fn test_server_specific_header_parsing() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's enhanced header parsing implementation
     // Tests how our server handles duplicate Content-Length headers specifically
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Send duplicate Content-Length headers
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).to_string();
@@ -154,7 +154,7 @@ fn test_server_specific_header_parsing() -> Result<(), Box<dyn std::error::Error
 
     // PR #173: Our server should handle duplicate headers gracefully
     // Enhanced frame parsing should either process the request or handle error appropriately
-    let response = common::read_response_timeout(&mut server, Duration::from_millis(1000));
+    let response = common::read_response_timeout(&server, Duration::from_millis(1000));
 
     // Verify our specific implementation handles duplicate headers
     // Server should either parse successfully or provide enhanced error response
@@ -168,7 +168,7 @@ fn test_server_specific_header_parsing() -> Result<(), Box<dyn std::error::Error
         None => {
             // If response is None, verify server is still responsive (enhanced recovery)
             let test_response = common::send_request(
-                &mut server,
+                &server,
                 json!({
                     "jsonrpc": "2.0",
                     "method": "shutdown"
@@ -187,8 +187,8 @@ fn test_server_specific_header_parsing() -> Result<(), Box<dyn std::error::Error
 fn test_wrong_content_length_recovery() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's enhanced recovery from wrong Content-Length headers
     // Tests that server gracefully handles mismatched content length and recovers
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send body with wrong Content-Length
     let body = json!({"jsonrpc": "2.0", "id": 100, "method": "shutdown"}).to_string();
@@ -209,7 +209,7 @@ fn test_wrong_content_length_recovery() -> Result<(), Box<dyn std::error::Error>
     // Connection may be terminated, which is acceptable recovery
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         common::send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/documentSymbol",
@@ -230,7 +230,7 @@ fn test_wrong_content_length_recovery() -> Result<(), Box<dyn std::error::Error>
             // If first request succeeded, test shutdown too
             match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 common::send_request(
-                    &mut server,
+                    &server,
                     json!({
                         "jsonrpc": "2.0",
                         "method": "shutdown"
@@ -260,12 +260,12 @@ fn test_wrong_content_length_recovery() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn test_unknown_method() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send request with unknown method
     let response = common::send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/unknownMethod",
@@ -287,7 +287,7 @@ fn test_unknown_method() -> Result<(), Box<dyn std::error::Error>> {
 fn test_header_case_sensitivity() -> Result<(), Box<dyn std::error::Error>> {
     // Validates PR #173's header case sensitivity handling implementation
     // Tests that our server properly handles case-insensitive headers per HTTP/LSP standards
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     // Try different header casings - HTTP headers should be case-insensitive
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}).to_string();
@@ -301,7 +301,7 @@ fn test_header_case_sensitivity() -> Result<(), Box<dyn std::error::Error>> {
 
     // PR #173: Enhanced header parsing should handle case-insensitive headers correctly
     // Our implementation should follow HTTP/LSP standards for case-insensitive headers
-    let response = common::read_response_timeout(&mut server, Duration::from_millis(1000));
+    let response = common::read_response_timeout(&server, Duration::from_millis(1000));
 
     match response {
         Some(resp) => {
@@ -313,7 +313,7 @@ fn test_header_case_sensitivity() -> Result<(), Box<dyn std::error::Error>> {
         None => {
             // If parsing fails due to case sensitivity, verify enhanced recovery works
             let test_response = common::send_request(
-                &mut server,
+                &server,
                 json!({
                     "jsonrpc": "2.0",
                     "method": "shutdown"
@@ -338,6 +338,6 @@ fn test_header_case_sensitivity() -> Result<(), Box<dyn std::error::Error>> {
     let _ = server.stdin_writer().flush(); // Ignore flush errors
 
     // Server should handle mixed case headers consistently
-    let _final_response = common::read_response_timeout(&mut server, Duration::from_millis(500));
+    let _final_response = common::read_response_timeout(&server, Duration::from_millis(500));
     Ok(())
 }

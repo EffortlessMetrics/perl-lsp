@@ -4,7 +4,7 @@ use serde_json::json;
 /// Test Pull Diagnostics support (LSP 3.17)
 #[test]
 fn test_document_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_request = JsonRpcRequest {
@@ -84,7 +84,7 @@ print $y;  # Undefined variable
 
 #[test]
 fn test_document_diagnostic_unchanged() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_request = JsonRpcRequest {
@@ -168,7 +168,7 @@ print "Hello, World!\n";
 
 #[test]
 fn test_workspace_diagnostic() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_request = JsonRpcRequest {
@@ -265,7 +265,7 @@ print "OK\n";
 
 #[test]
 fn test_diagnostic_provider_capability() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     let init_request = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
@@ -295,7 +295,7 @@ fn test_diagnostic_provider_capability() -> Result<(), Box<dyn std::error::Error
 
 #[test]
 fn test_workspace_diagnostic_with_previous_ids() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = LspServer::new();
+    let server = LspServer::new();
 
     // Initialize server
     let init_request = JsonRpcRequest {

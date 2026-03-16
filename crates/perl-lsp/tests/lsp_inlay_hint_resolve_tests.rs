@@ -4,7 +4,7 @@ use serde_json::json;
 /// Test that inlayHint/resolve adds tooltip when requested
 #[test]
 fn lsp_inlay_hint_resolve_adds_tooltip() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -69,7 +69,7 @@ fn lsp_inlay_hint_resolve_adds_tooltip() -> Result<(), Box<dyn std::error::Error
 /// Test that resolve preserves data field
 #[test]
 fn lsp_inlay_hint_resolve_preserves_data() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -119,7 +119,7 @@ fn lsp_inlay_hint_resolve_preserves_data() -> Result<(), Box<dyn std::error::Err
 /// Test that resolve returns same hint if already has tooltip
 #[test]
 fn lsp_inlay_hint_resolve_no_op_when_complete() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),
@@ -167,7 +167,7 @@ fn lsp_inlay_hint_resolve_no_op_when_complete() -> Result<(), Box<dyn std::error
 /// Test that resolve handles missing params gracefully
 #[test]
 fn lsp_inlay_hint_resolve_handles_invalid_params() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
     let init = JsonRpcRequest {
         _jsonrpc: "2.0".into(),
         id: Some(json!(1)),

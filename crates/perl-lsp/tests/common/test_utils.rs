@@ -65,7 +65,7 @@ impl TestServerBuilder {
 
     pub fn build(self) -> TestServer {
         // Use the canonical common harness for server startup
-        let mut server = super::start_lsp_server();
+        let server = super::start_lsp_server();
 
         // Build initialization params
         let mut init_params = self.initialization_params.unwrap_or_else(|| {
@@ -95,7 +95,7 @@ impl TestServerBuilder {
         // Send initialize request via common harness
         let init_id = next_request_id();
         let init_response = super::send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": init_id,
@@ -111,7 +111,7 @@ impl TestServerBuilder {
 
         // Send initialized notification (required by LSP protocol)
         super::send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "initialized",
@@ -122,11 +122,11 @@ impl TestServerBuilder {
         // Wait for index-ready notification to ensure deterministic completion behavior
         // Only wait if workspace folders were specified (semantic tests usually don't need workspace index)
         if !self.workspace_folders.is_empty() {
-            super::await_index_ready(&mut server);
+            super::await_index_ready(&server);
         } else {
             // For non-workspace tests, just do a brief quiet drain
             super::drain_until_quiet(
-                &mut server,
+                &server,
                 std::time::Duration::from_millis(50),
                 std::time::Duration::from_millis(200),
             );
@@ -149,7 +149,7 @@ impl TestServer {
     /// Send a text document did open notification
     pub fn open_document(&mut self, uri: &str, content: &str) {
         super::send_notification(
-            &mut self.server,
+            &self.server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -170,7 +170,7 @@ impl TestServer {
     /// Send a text document did change notification
     pub fn change_document(&mut self, uri: &str, content: &str, version: i32) {
         super::send_notification(
-            &mut self.server,
+            &self.server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
@@ -190,7 +190,7 @@ impl TestServer {
     /// Request diagnostics for a document
     pub fn get_diagnostics(&mut self, uri: &str) -> Value {
         super::send_request(
-            &mut self.server,
+            &self.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": next_request_id(),
@@ -205,7 +205,7 @@ impl TestServer {
     /// Request document symbols
     pub fn get_symbols(&mut self, uri: &str) -> Value {
         super::send_request(
-            &mut self.server,
+            &self.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": next_request_id(),
@@ -220,7 +220,7 @@ impl TestServer {
     /// Request definition at position
     pub fn get_definition(&mut self, uri: &str, line: u32, character: u32) -> Value {
         super::send_request(
-            &mut self.server,
+            &self.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": next_request_id(),
@@ -242,7 +242,7 @@ impl TestServer {
         include_declaration: bool,
     ) -> Value {
         super::send_request(
-            &mut self.server,
+            &self.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": next_request_id(),
@@ -259,7 +259,7 @@ impl TestServer {
     /// Request hover information
     pub fn get_hover(&mut self, uri: &str, line: u32, character: u32) -> Value {
         super::send_request(
-            &mut self.server,
+            &self.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": next_request_id(),
@@ -275,7 +275,7 @@ impl TestServer {
     /// Request completion items at a position
     pub fn get_completion(&mut self, uri: &str, line: u32, character: u32) -> Value {
         super::send_request(
-            &mut self.server,
+            &self.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": next_request_id(),
@@ -291,7 +291,7 @@ impl TestServer {
     /// Request signature help
     pub fn get_signature_help(&mut self, uri: &str, line: u32, character: u32) -> Value {
         super::send_request(
-            &mut self.server,
+            &self.server,
             json!({
                 "jsonrpc": "2.0",
                 "id": next_request_id(),
@@ -305,8 +305,8 @@ impl TestServer {
     }
 
     /// Shutdown the server gracefully
-    pub fn shutdown(mut self) {
-        super::shutdown_and_exit(&mut self.server);
+    pub fn shutdown(self) {
+        super::shutdown_and_exit(&self.server);
     }
 }
 

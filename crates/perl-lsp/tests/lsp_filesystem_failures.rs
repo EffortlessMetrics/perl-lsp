@@ -20,8 +20,8 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 
 #[test]
 fn test_read_only_file() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create a read-only file
     let temp_dir = std::env::temp_dir();
@@ -37,7 +37,7 @@ fn test_read_only_file() -> TestResult {
 
     // Open read-only file (should work)
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -54,7 +54,7 @@ fn test_read_only_file() -> TestResult {
 
     // Try to save changes (should fail gracefully)
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didSave",
@@ -82,8 +82,8 @@ fn test_read_only_file() -> TestResult {
 
 #[test]
 fn test_directory_as_file() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
     let dir_path = temp_dir.join(format!("dir_{}", std::process::id()));
@@ -93,7 +93,7 @@ fn test_directory_as_file() -> TestResult {
 
     // Try to open a directory as a file
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -110,7 +110,7 @@ fn test_directory_as_file() -> TestResult {
 
     // Should handle gracefully
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -122,7 +122,7 @@ fn test_directory_as_file() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     // Cleanup
@@ -133,14 +133,14 @@ fn test_directory_as_file() -> TestResult {
 
 #[test]
 fn test_non_existent_file() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///completely/non/existent/path/file.pl";
 
     // Try to open non-existent file
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -157,7 +157,7 @@ fn test_non_existent_file() -> TestResult {
 
     // Should work with in-memory content
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -168,7 +168,7 @@ fn test_non_existent_file() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["result"].is_array() || response["result"].is_null());
 
     Ok(())
@@ -184,8 +184,8 @@ fn test_permission_denied_directory() -> TestResult {
         return Ok(());
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
     // Use unique directory name to avoid conflicts
@@ -208,7 +208,7 @@ fn test_permission_denied_directory() -> TestResult {
 
     // Try to access file in restricted directory
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -224,7 +224,7 @@ fn test_permission_denied_directory() -> TestResult {
     perms.set_mode(0o755);
     fs::set_permissions(restricted_dir, perms)?;
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     // Clean up directory
@@ -243,8 +243,8 @@ fn test_permission_denied_directory() {
 #[test]
 #[cfg(unix)]
 fn test_symlink_loop() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
     // Use unique names to avoid conflicts
@@ -266,7 +266,7 @@ fn test_symlink_loop() -> TestResult {
 
     // Try to open symlink loop
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -283,7 +283,7 @@ fn test_symlink_loop() -> TestResult {
 
     // Should handle without infinite loop
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -294,7 +294,7 @@ fn test_symlink_loop() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     // Clean up symlinks
@@ -313,8 +313,8 @@ fn test_symlink_loop() {
 
 #[test]
 fn test_broken_symlink() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
     let target = &temp_dir.join("target.pl");
@@ -336,7 +336,7 @@ fn test_broken_symlink() -> TestResult {
 
     // Try to open broken symlink
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -353,7 +353,7 @@ fn test_broken_symlink() -> TestResult {
 
     // Should handle gracefully
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -365,7 +365,7 @@ fn test_broken_symlink() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     Ok(())
@@ -373,8 +373,8 @@ fn test_broken_symlink() -> TestResult {
 
 #[test]
 fn test_very_long_path() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create extremely long path (may exceed PATH_MAX on some systems)
     let mut long_path = String::from("file:///");
@@ -385,7 +385,7 @@ fn test_very_long_path() -> TestResult {
 
     // Try to open file with very long path
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -402,7 +402,7 @@ fn test_very_long_path() -> TestResult {
 
     // Should handle gracefully
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -413,7 +413,7 @@ fn test_very_long_path() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     Ok(())
@@ -421,8 +421,8 @@ fn test_very_long_path() -> TestResult {
 
 #[test]
 fn test_special_filename_characters() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
 
@@ -472,7 +472,7 @@ fn test_special_filename_characters() -> TestResult {
         if fs::write(file_path, "print 'special';").is_ok() {
             if let Ok(uri) = path_to_uri(file_path) {
                 send_notification(
-                    &mut server,
+                    &server,
                     json!({
                         "jsonrpc": "2.0",
                         "method": "textDocument/didOpen",
@@ -495,8 +495,8 @@ fn test_special_filename_characters() -> TestResult {
 
 #[test]
 fn test_case_sensitive_filesystem() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
     let file_lower = &temp_dir.join("test.pl");
@@ -516,7 +516,7 @@ fn test_case_sensitive_filesystem() -> TestResult {
     let uri_upper = path_to_uri(file_upper)?;
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -532,7 +532,7 @@ fn test_case_sensitive_filesystem() -> TestResult {
     );
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -549,7 +549,7 @@ fn test_case_sensitive_filesystem() -> TestResult {
 
     // Should handle both files correctly
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -560,7 +560,7 @@ fn test_case_sensitive_filesystem() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     Ok(())
@@ -568,8 +568,8 @@ fn test_case_sensitive_filesystem() -> TestResult {
 
 #[test]
 fn test_file_deleted_while_open() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
     let file_path = &temp_dir.join("delete_me.pl");
@@ -579,7 +579,7 @@ fn test_file_deleted_while_open() -> TestResult {
 
     // Open file
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -599,7 +599,7 @@ fn test_file_deleted_while_open() -> TestResult {
 
     // Try to perform operations on deleted file
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -611,12 +611,12 @@ fn test_file_deleted_while_open() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     // Try to save
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didSave",
@@ -632,8 +632,8 @@ fn test_file_deleted_while_open() -> TestResult {
 
 #[test]
 fn test_file_modified_externally() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
     let file_path = &temp_dir.join("external.pl");
@@ -643,7 +643,7 @@ fn test_file_modified_externally() -> TestResult {
 
     // Open file
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -663,7 +663,7 @@ fn test_file_modified_externally() -> TestResult {
 
     // Server state may be out of sync
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -674,12 +674,12 @@ fn test_file_modified_externally() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     // Notify of external change
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -700,7 +700,7 @@ fn test_file_modified_externally() -> TestResult {
 
 #[test]
 fn test_workspace_folder_deleted() -> TestResult {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     let temp_dir = std::env::temp_dir();
     let workspace_path = &temp_dir.to_path_buf();
@@ -708,7 +708,7 @@ fn test_workspace_folder_deleted() -> TestResult {
 
     // Initialize with workspace folder
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -729,7 +729,7 @@ fn test_workspace_folder_deleted() -> TestResult {
     assert!(response["result"].is_object());
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "initialized",
@@ -741,7 +741,7 @@ fn test_workspace_folder_deleted() -> TestResult {
     // Note: We can't actually delete temp_dir while we're using it
     // Instead, simulate by removing workspace folder via LSP
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "workspace/didChangeWorkspaceFolders",
@@ -759,7 +759,7 @@ fn test_workspace_folder_deleted() -> TestResult {
 
     // Try to perform workspace operations
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -770,7 +770,7 @@ fn test_workspace_folder_deleted() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     // Should return an array (possibly empty) or null
     assert!(response.is_object());
     assert!(response["result"].is_array() || response["result"].is_null());
@@ -780,8 +780,8 @@ fn test_workspace_folder_deleted() -> TestResult {
 
 #[test]
 fn test_hidden_files() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
     let hidden_file = &temp_dir.join(".hidden.pl");
@@ -791,7 +791,7 @@ fn test_hidden_files() -> TestResult {
 
     // Open hidden file
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -808,7 +808,7 @@ fn test_hidden_files() -> TestResult {
 
     // Should work normally
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -819,7 +819,7 @@ fn test_hidden_files() -> TestResult {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["result"].is_array() || response["result"].is_null());
 
     Ok(())
@@ -827,8 +827,8 @@ fn test_hidden_files() -> TestResult {
 
 #[test]
 fn test_device_files() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try to open device files (Linux specific)
     let device_files = vec!["/dev/null", "/dev/zero", "/dev/random", "/dev/urandom"];
@@ -838,7 +838,7 @@ fn test_device_files() -> TestResult {
         if device_path.exists() {
             if let Ok(uri) = path_to_uri(&device_path) {
                 send_notification(
-                    &mut server,
+                    &server,
                     json!({
                         "jsonrpc": "2.0",
                         "method": "textDocument/didOpen",
@@ -861,8 +861,8 @@ fn test_device_files() -> TestResult {
 
 #[test]
 fn test_fifo_pipe() -> TestResult {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let temp_dir = std::env::temp_dir();
     let fifo_path = &temp_dir.join("pipe.pl");
@@ -875,7 +875,7 @@ fn test_fifo_pipe() -> TestResult {
 
         // Try to open FIFO
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -892,7 +892,7 @@ fn test_fifo_pipe() -> TestResult {
 
         // Should handle special file type
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -904,7 +904,7 @@ fn test_fifo_pipe() -> TestResult {
             }),
         );
 
-        let response = read_response(&mut server);
+        let response = read_response(&server);
         assert!(response.is_object());
     }
 

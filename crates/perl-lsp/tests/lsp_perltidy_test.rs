@@ -86,7 +86,7 @@ fn test_pragma_code_actions() -> Result<(), Box<dyn std::error::Error>> {
 fn test_formatting_provider_capability() -> Result<(), Box<dyn std::error::Error>> {
     let has_perltidy = perl_lsp::execute_command::command_exists("perltidy");
 
-    let mut srv = LspServer::new();
+    let srv = LspServer::new();
 
     let init_req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
