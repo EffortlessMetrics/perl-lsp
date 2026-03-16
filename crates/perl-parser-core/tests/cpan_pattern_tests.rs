@@ -1055,6 +1055,72 @@ END {
 }
 
 // ===========================================================================
+// use if pragma patterns
+// ===========================================================================
+
+mod use_if_pragma {
+    use super::*;
+
+    /// Basic `use if` with string equality condition (Win32 compatibility).
+    #[test]
+    fn use_if_os_check() {
+        let code = r#"use if $^O eq "MSWin32", "Win32";"#;
+        assert_clean_parse(code);
+    }
+
+    /// `use if` with version comparison and fat arrow.
+    #[test]
+    fn use_if_version_fat_arrow() {
+        let code = r"use if $] < 5.008 => 'IO::Scalar';";
+        assert_clean_parse(code);
+    }
+
+    /// `use if` with a constant condition.
+    #[test]
+    fn use_if_constant_condition() {
+        let code = "use if DEBUG, 'Data::Dumper';";
+        assert_clean_parse(code);
+    }
+
+    /// Multiple `use if` statements in the same file.
+    #[test]
+    fn use_if_multiple_in_file() {
+        let code = r#"
+package Test;
+use strict;
+use warnings;
+use if $^O eq "MSWin32", "Win32";
+use if $^O eq "MSWin32", "Win32::Console";
+use Carp;
+1;
+"#;
+        assert_clean_parse(code);
+    }
+
+    /// `use if` doesn't interfere with regular `if` statements.
+    #[test]
+    fn use_if_doesnt_break_if_statements() {
+        let code = r#"
+use if $^O eq "MSWin32", "Win32";
+sub foo {
+    if ($x > 0) {
+        return 1;
+    }
+    return 0;
+}
+"#;
+        assert_clean_parse(code);
+    }
+
+    /// Regular `use parent` still works (keyword 'parent' is not affected).
+    #[test]
+    fn use_parent_regression() {
+        let code = "use parent qw(Base::Class Other::Base);";
+        assert_clean_parse(code);
+    }
+}
+
+// ===========================================================================
 // Statement modifier patterns
 // ===========================================================================
 
