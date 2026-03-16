@@ -1,7 +1,48 @@
-//! Core parser engine for perl-parser.
+//! Core parser engine for Perl source code.
 //!
-//! Provides the AST, parser, token stream utilities, and position mapping
-//! needed by higher-level crates (semantic analysis, workspace indexing, LSP).
+//! `perl-parser-core` is the foundational crate that wires together the lexer,
+//! AST, error recovery, and position mapping into a single [`Parser`] entry
+//! point. Higher-level crates -- semantic analysis, workspace indexing, and the
+//! LSP server -- all build on top of this crate.
+//!
+//! # Key types
+//!
+//! | Type | Role |
+//! |------|------|
+//! | [`Parser`] | Recursive-descent parser; call [`Parser::parse`] to get an AST |
+//! | [`Node`] / [`NodeKind`] | AST node and its discriminant (re-exported from `perl-ast`) |
+//! | [`ParseError`] | Syntax error collected during parsing |
+//! | [`ParseOutput`] | AST + diagnostics bundle for IDE workflows |
+//! | [`Token`] / [`TokenKind`] | Lexer tokens consumed by the parser |
+//! | [`SourceLocation`] | Byte-offset span for every node |
+//!
+//! # Quick start
+//!
+//! ```rust
+//! use perl_parser_core::{Parser, Node, NodeKind};
+//!
+//! let mut parser = Parser::new("my $x = 42;");
+//! let ast = parser.parse().expect("should parse");
+//!
+//! // The root is always a Program node
+//! assert!(matches!(ast.kind, NodeKind::Program { .. }));
+//!
+//! // Non-fatal errors are collected, not returned as Err
+//! assert!(parser.errors().is_empty());
+//! ```
+//!
+//! For IDE workflows that need error-tolerant parsing, use
+//! [`Parser::parse_with_recovery`]:
+//!
+//! ```rust
+//! use perl_parser_core::Parser;
+//!
+//! let mut parser = Parser::new("if (");
+//! let output = parser.parse_with_recovery();
+//!
+//! // Always returns an AST (possibly with ERROR nodes)
+//! assert!(!output.diagnostics.is_empty());
+//! ```
 
 #![deny(unsafe_code)]
 #![deny(unreachable_pub)]
@@ -50,6 +91,7 @@ pub mod engine;
 /// Token stream and trivia utilities for the parser.
 pub mod tokens;
 
+/// Index into the diagnostics array in [`ParseOutput`] (from `ast_v2`).
 pub use ast_v2::{DiagnosticId, MissingKind};
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub use engine::ast;
@@ -70,32 +112,48 @@ pub use perl_heredoc as heredoc_collector;
 /// Parser utilities and helpers.
 pub use perl_tokenizer::util;
 
-/// Parser entrypoint for Perl source.
+/// Recursive-descent parser -- the main entry point for parsing Perl source.
 pub use engine::parser::Parser;
 
 /// Error classification and recovery strategies for parse failures.
 pub use error::classifier as error_classifier;
+/// Error recovery helpers and strategies.
 pub use error::recovery as error_recovery;
+/// Recovery-oriented parser wrapper for error-tolerant workflows.
 pub use error::recovery_parser;
+/// Result of an error recovery attempt.
 pub use error_recovery::RecoveryResult;
 
 /// Line indexing and position mapping utilities.
 pub mod line_index {
+    /// Fast lookup from byte offset to line number.
     pub use perl_position_tracking::LineIndex;
 }
+/// Line ending detection for mixed-EOL source files.
 pub use position::{LineEnding, PositionMapper};
 
+/// Core AST types re-exported for convenience.
 pub use ast::{Node, NodeKind, SourceLocation};
+/// Parse error, budget, and output types.
 pub use error::{BudgetTracker, ParseBudget, ParseError, ParseOutput, ParseResult};
 
+/// Builtin function signature lookup tables.
 pub use builtins::builtin_signatures;
+/// Perfect hash function (PHF) based builtin signature lookup.
 pub use builtins::builtin_signatures_phf;
 
+/// Token stream module for lexer-to-parser bridge.
 pub use tokens::token_stream;
+/// Lightweight token wrapper for AST integration.
 pub use tokens::token_wrapper;
+/// Trivia (whitespace and comments) representation.
 pub use tokens::trivia;
+/// Trivia-preserving parser and formatting utilities.
 pub use tokens::trivia_parser;
 
+/// Individual token, its classification, and the streaming iterator.
 pub use token_stream::{Token, TokenKind, TokenStream};
+/// Trivia types attached to AST nodes for formatting preservation.
 pub use trivia::{NodeWithTrivia, Trivia, TriviaToken};
+/// Trivia-preserving parser and source formatting helper.
 pub use trivia_parser::{TriviaPreservingParser, format_with_trivia};
