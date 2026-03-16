@@ -63,10 +63,7 @@ fn is_special_scheme_true_for_git() {
 
 #[test]
 fn is_special_scheme_true_for_vscode_notebook() {
-    assert!(
-        is_special_scheme("vscode-notebook:/path/to/nb.ipynb"),
-        "vscode-notebook: is special"
-    );
+    assert!(is_special_scheme("vscode-notebook:/path/to/nb.ipynb"), "vscode-notebook: is special");
 }
 
 #[test]
@@ -159,10 +156,7 @@ fn uri_key_unix_path_unchanged() {
 fn uri_key_uppercase_windows_drive_lowercased() {
     // file:///C:/path → file:///c:/path
     let key = uri_key("file:///C:/Users/test/file.pl");
-    assert!(
-        key.starts_with("file:///c:"),
-        "Windows drive letter must be lowercased, got: {key}"
-    );
+    assert!(key.starts_with("file:///c:"), "Windows drive letter must be lowercased, got: {key}");
 }
 
 #[test]

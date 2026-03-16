@@ -50,8 +50,7 @@ fn absolute_path_is_rejected_as_traversal() -> TestResult {
     let temp = tempfile::tempdir()?;
     let workspace = temp.path().canonicalize()?;
 
-    let result =
-        normalize_path_within_workspace(&PathBuf::from("/etc/passwd"), &workspace);
+    let result = normalize_path_within_workspace(&PathBuf::from("/etc/passwd"), &workspace);
     assert!(
         matches!(result, Err(NormalizePathError::PathTraversalAttempt(_))),
         "Absolute path must trigger PathTraversalAttempt"
@@ -83,10 +82,7 @@ fn single_step_in_then_parent_stays_in_workspace() -> TestResult {
     let workspace = temp.path().canonicalize()?;
 
     // "src/../lib/Foo.pm" → stays within workspace
-    let result = normalize_path_within_workspace(
-        &PathBuf::from("src/../lib/Foo.pm"),
-        &workspace,
-    )?;
+    let result = normalize_path_within_workspace(&PathBuf::from("src/../lib/Foo.pm"), &workspace)?;
     assert!(result.starts_with(&workspace), "src/../lib must stay within workspace");
     assert!(result.to_string_lossy().contains("lib"));
     assert!(result.to_string_lossy().contains("Foo.pm"));
@@ -99,10 +95,7 @@ fn two_steps_in_then_two_parents_stay_in_workspace() -> TestResult {
     let workspace = temp.path().canonicalize()?;
 
     // "a/b/../../c" → resolves to <workspace>/c
-    let result = normalize_path_within_workspace(
-        &PathBuf::from("a/b/../../c"),
-        &workspace,
-    )?;
+    let result = normalize_path_within_workspace(&PathBuf::from("a/b/../../c"), &workspace)?;
     assert!(result.starts_with(&workspace));
     assert!(result.to_string_lossy().ends_with("c"));
     Ok(())
@@ -117,10 +110,7 @@ fn deeply_nested_path_resolves_correctly() -> TestResult {
     let temp = tempfile::tempdir()?;
     let workspace = temp.path().canonicalize()?;
 
-    let result = normalize_path_within_workspace(
-        &PathBuf::from("a/b/c/d/e/f.pl"),
-        &workspace,
-    )?;
+    let result = normalize_path_within_workspace(&PathBuf::from("a/b/c/d/e/f.pl"), &workspace)?;
     assert!(result.starts_with(&workspace));
     assert!(result.to_string_lossy().ends_with("f.pl"));
     Ok(())
@@ -135,8 +125,8 @@ fn path_traversal_error_display_contains_path_info() -> TestResult {
     let temp = tempfile::tempdir()?;
     let workspace = temp.path().canonicalize()?;
 
-    let err = normalize_path_within_workspace(&PathBuf::from("../../../etc"), &workspace)
-        .unwrap_err();
+    let err =
+        normalize_path_within_workspace(&PathBuf::from("../../../etc"), &workspace).unwrap_err();
     let display = err.to_string();
     assert!(
         display.contains("workspace") || display.contains("etc") || display.contains("traversal"),
