@@ -29,7 +29,7 @@ If you've found a bug or have a feature request, please search the [existing iss
 
 ## Service Level Agreement (SLA)
 
-As a v0.9.x alpha release, we target the following response times for issues:
+As a v0.12.x public alpha release, we target the following response times for issues:
 
 | Priority | Response Time | Fix Time (Target) |
 |----------|---------------|-------------------|
@@ -46,9 +46,9 @@ We only provide active support for the current major version and the immediate p
 
 | Version | Status | Support Level |
 |---------|--------|---------------|
-| **0.9.x** | **Current** | Full Support (Bug fixes + Security) |
-| **0.9.x** | Maintenance | Security Patches Only |
-| **< 0.9** | End of Life | No Support |
+| **0.12.x** | **Current** | Full Support (Bug fixes + Security) |
+| **0.11.x** | Maintenance | Security Patches Only |
+| **< 0.11** | End of Life | No Support |
 
 ## Community
 
@@ -59,4 +59,4 @@ Join our community to stay updated and connect with other users:
 
 ---
 
-**Last Updated**: 2026-02-20
+**Last Updated**: 2026-03-16

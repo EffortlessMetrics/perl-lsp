@@ -460,7 +460,7 @@ confirms every crate at the correct version is visible on crates.io.
 The entire publish pipeline has a 120-minute timeout, accounting for
 crates.io index propagation delays across 111 crates.
 
-All crates share a single version (`0.10.0` as of this writing), managed
+All crates share a single version (`0.12.0` as of this writing), managed
 through workspace inheritance. The `workspace.package.version` field in the
 root Cargo.toml is the single source of truth, and `cargo xtask bump-version`
 updates all references in Cargo.toml files, package.json, README, and source
