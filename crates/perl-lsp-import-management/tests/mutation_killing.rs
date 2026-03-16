@@ -32,20 +32,12 @@ fn guess_module_dumper_returns_data_dumper() {
 
 #[test]
 fn guess_module_decode_returns_encode() {
-    assert_eq!(
-        guess_module_for_function("decode"),
-        Some("Encode".to_string()),
-        "decode → Encode"
-    );
+    assert_eq!(guess_module_for_function("decode"), Some("Encode".to_string()), "decode → Encode");
 }
 
 #[test]
 fn guess_module_encode_returns_encode() {
-    assert_eq!(
-        guess_module_for_function("encode"),
-        Some("Encode".to_string()),
-        "encode → Encode"
-    );
+    assert_eq!(guess_module_for_function("encode"), Some("Encode".to_string()), "encode → Encode");
 }
 
 #[test]
@@ -143,11 +135,8 @@ fn collect_imports_empty_input_returns_empty() {
 
 #[test]
 fn collect_imports_no_imports_returns_empty() {
-    let lines = vec![
-        "#!/usr/bin/perl".to_string(),
-        "my $x = 1;".to_string(),
-        "print $x;".to_string(),
-    ];
+    let lines =
+        vec!["#!/usr/bin/perl".to_string(), "my $x = 1;".to_string(), "print $x;".to_string()];
     assert!(collect_imports(&lines).is_empty());
 }
 
@@ -223,10 +212,10 @@ fn sort_imports_cpan_modules_sorted_lexicographically_within_bucket() {
 #[test]
 fn sort_imports_bucket_order_pragma_core_cpan_local() {
     let sorted = sort_imports(vec![
-        "use lib './lib';".to_string(),   // local
-        "use Foo::Bar;".to_string(),      // cpan
-        "use integer;".to_string(),       // core
-        "use strict;".to_string(),        // pragma
+        "use lib './lib';".to_string(), // local
+        "use Foo::Bar;".to_string(),    // cpan
+        "use integer;".to_string(),     // core
+        "use strict;".to_string(),      // pragma
     ]);
     // Order: pragma → core → cpan → local
     assert_eq!(sorted[0], "use strict;", "pragma must come first");
