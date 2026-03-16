@@ -1585,8 +1585,22 @@ impl<'a> PerlLexer<'a> {
                             }
                         }
                     }
+                    // Handle $^Letter (e.g. $^W, $^O, $^X) and bare $^ (format_top_name)
+                    // Not inside prototypes where ^ is a literal prototype char
+                    else if sigil == '$' && ch == '^' && !self.in_prototype {
+                        self.advance(); // consume ^
+                        // $^Letter: consume the single uppercase letter
+                        if let Some(letter) = self.current_char()
+                            && letter.is_ascii_uppercase()
+                        {
+                            self.advance();
+                        }
+                        // bare $^ (no uppercase letter follows): format_top_name — stop here
+                    }
                     // Handle special punctuation variables
+                    // Not inside prototypes where ; and , are literal prototype chars
                     else if sigil == '$'
+                        && !self.in_prototype
                         && matches!(
                             ch,
                             '?' | '!'
@@ -1602,6 +1616,13 @@ impl<'a> PerlLexer<'a> {
                                 | '-'
                                 | '['
                                 | ']'
+                                | '$'
+                                | '~'
+                                | '='
+                                | '%'
+                                | ','
+                                | '"'
+                                | ';'
                         )
                     {
                         self.advance(); // consume the special character
