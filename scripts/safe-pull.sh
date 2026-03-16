@@ -14,8 +14,17 @@ set -euo pipefail
 BRANCH="${1:-master}"
 REMOTE="origin"
 
+# Ensure we are inside a git repository
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "ERROR: Not inside a git repository."
+  exit 1
+fi
+
 echo "==> Fetching ${REMOTE}..."
-git fetch "${REMOTE}" "${BRANCH}"
+if ! git fetch "${REMOTE}" "${BRANCH}"; then
+  echo "ERROR: Failed to fetch ${REMOTE}/${BRANCH} (network issue or remote not configured)."
+  exit 1
+fi
 
 # Use explicit remote ref instead of @{u} to avoid stale tracking issues
 LOCAL_HEAD=$(git rev-parse HEAD)
@@ -30,16 +39,18 @@ fi
 BEHIND=$(git rev-list HEAD.."${REMOTE}/${BRANCH}" --count)
 echo "==> ${BEHIND} commit(s) behind ${REMOTE}/${BRANCH}"
 
-# Try a normal merge first
-if git merge "${REMOTE}/${BRANCH}" 2>/dev/null; then
+# Try a merge, capturing both stdout and stderr in a single attempt.
+# IMPORTANT: We do NOT attempt the merge twice. The first failed merge can leave
+# git in a merge-in-progress state (for content conflicts), so re-running merge
+# would get "You have not concluded your current merge" instead of the real error.
+MERGE_OUTPUT=$(git merge "${REMOTE}/${BRANCH}" 2>&1) && {
   echo "Pull succeeded."
   exit 0
-fi
+}
 
-# If merge failed, capture the error to check for untracked file conflicts
-MERGE_OUTPUT=$(git merge "${REMOTE}/${BRANCH}" 2>&1 || true)
-
+# Merge failed — check what kind of failure
 if echo "${MERGE_OUTPUT}" | grep -q "would be overwritten by merge"; then
+  # Untracked file conflicts: git refused to start the merge, so no cleanup needed.
   # Extract conflicting file paths from the error message.
   # Git formats these as indented file paths between the error header and footer.
   CONFLICTING_FILES=$(echo "${MERGE_OUTPUT}" \
@@ -68,7 +79,12 @@ if echo "${MERGE_OUTPUT}" | grep -q "would be overwritten by merge"; then
   exit 0
 fi
 
-# Some other merge failure — surface it
+# Content conflict or other merge failure — abort the in-progress merge if any
+if git rev-parse --verify MERGE_HEAD >/dev/null 2>&1; then
+  git merge --abort 2>/dev/null || true
+fi
+
+# Surface the error
 echo "ERROR: Merge failed for an unexpected reason:"
 echo "${MERGE_OUTPUT}"
 exit 1
