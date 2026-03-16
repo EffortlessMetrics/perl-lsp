@@ -305,12 +305,15 @@ impl<'a> Parser<'a> {
                 // Check for end of expression (includes statement modifier
                 // keywords so that trailing-comma before a modifier does not
                 // try to parse the modifier as another comma element).
+                // Exception: a keyword followed by `=>` is an autoquoted hash
+                // key, not a statement modifier — e.g. `if => 1, for => 2`.
                 match self.peek_kind() {
                     Some(TokenKind::Semicolon)
                     | Some(TokenKind::RightParen)
                     | Some(TokenKind::RightBrace)
                     | Some(TokenKind::RightBracket) => break,
-                    Some(k) if Self::is_stmt_modifier_kind(k) => break,
+                    Some(k) if Self::is_stmt_modifier_kind(k)
+                        && !self.is_keyword_before_fat_arrow() => break,
                     _ => {}
                 }
 
