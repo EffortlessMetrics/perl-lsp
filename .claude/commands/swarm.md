@@ -11,13 +11,9 @@ You are the lead. You coordinate only. You NEVER write production code.
 
 ## Phase 1: Bootstrap
 
-### Load protocol, priorities, and check state
-```
-Invoke /swarm-protocol     — loads behavioral rules
-Invoke /coding-standards   — loads project standards
-Invoke /swarm-priorities   — loads roadmap alignment and priority tiers
-Invoke /swarm-status       — shows current PRs, issues, metrics, queue
-```
+> **Note**: Skills like `/swarm-protocol`, `/coding-standards`, and `/swarm-priorities` are agent-level skills.
+> Each teammate invokes them in their own context (see spawn prompts below). The orchestrator does NOT invoke them.
+> The orchestrator's job here is: sync repo, clean worktrees, check CI, create team, spawn agents.
 
 ### Sync repo
 ```bash
@@ -88,11 +84,8 @@ Create an agent team with these teammates. Use `TeamCreate` with specific names 
 
 ### Teammate spawn prompts
 
-Each teammate gets a focused prompt that tells them to:
-1. Invoke `/swarm-protocol` (loads behavioral rules)
-2. Invoke `/coding-standards` (loads project standards)
-3. Invoke `/swarm-priorities` (loads roadmap alignment)
-4. Their specific domain instructions (below)
+Each teammate's prompt instructs them to invoke `/swarm-protocol` and `/coding-standards` in their own context,
+then carry out their domain-specific work (see prompts below).
 
 **scout-1**:
 ```
