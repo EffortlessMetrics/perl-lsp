@@ -154,6 +154,7 @@ Every code-writing subagent MUST use `isolation: "worktree"`. No editing files o
 - No code-writing agent is active until it has: a named worktree, a branch, a claimed file surface, and a verification command.
 - Builder prompts must explicitly state the exact files to touch — no open-ended "fix all the things."
 - PR size hard limit: **max 10 files per PR**. If a change touches >10 files, split it into multiple worktree agents with non-overlapping file surfaces.
+- **Worktree cleanup cadence**: Janitor runs `bash scripts/cleanup-completed-worktrees.sh` every 10 merged PRs (or invoke `/cleanup-worktrees`). This removes worktrees whose branches are merged or abandoned, while preserving active work. Use `--dry-run` first.
 
 ## 7b. Agent Lifecycle
 
