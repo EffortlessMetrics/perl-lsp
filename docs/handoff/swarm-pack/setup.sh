@@ -206,7 +206,13 @@ if [ -f "$SETTINGS" ]; then
     echo "  Add these hooks manually if not already present:"
     echo ""
     echo '  "TeammateIdle": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/teammate-idle.sh"}]}],'
-    echo '  "TaskCompleted": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/task-completed.sh"}]}]'
+    echo '  "TaskCompleted": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/task-completed.sh"}]}],'
+    echo '  "SubagentStart": [{"matcher": "swarm-builder|swarm-reviewer|swarm-fixer", "hooks": [{"type": "command", "command": "echo '\''Reminder: Invoke /coding-standards before writing code.'\''"}]}],'
+    echo '  "Stop": [{"hooks": [{"type": "command", "command": "INPUT=$(cat); STOP_ACTIVE=$(echo \"$INPUT\" | jq -r '\''.stop_hook_active // false'\''); ..."}]}],'
+    echo '  "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r '\''.tool_input.command // empty'\''); ..."}]}]'
+    echo '  "SessionStart": [{"matcher": "compact", "hooks": [{"type": "command", "command": "echo '\''Post-compaction context refresh...'\''"}]}]'
+    echo ""
+    echo "  See the generated settings.json template in this setup.sh for full hook commands."
     echo ""
 else
     echo "Creating .claude/settings.json..."
@@ -217,19 +223,17 @@ else
   },
   "permissions": {
     "allow": [
-      "Bash(gh:*)",
-      "Bash(git:*)",
-      "Bash(${FMT_CMD%% *}:*)",
-      "Bash(${TEST_CMD%% *}:*)",
-      "Bash(bash:*)",
-      "Bash(python3:*)",
-      "Bash(mkdir:*)",
-      "Bash(cp:*)",
-      "Bash(ls:*)",
-      "Bash(grep:*)",
-      "Bash(echo:*)",
-      "Bash(chmod:*)",
-      "Bash(find:*)",
+      "Bash(gh *)",
+      "Bash(git *)",
+      "Bash(bash *)",
+      "Bash(python3 *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(ls *)",
+      "Bash(grep *)",
+      "Bash(echo *)",
+      "Bash(chmod *)",
+      "Bash(find *)",
       "WebFetch",
       "WebSearch"
     ]
@@ -265,11 +269,54 @@ else
           }
         ]
       }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "swarm-builder|swarm-reviewer|swarm-fixer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Reminder: Invoke /coding-standards before writing any code. No unwrap(), expect(), panic!() in production code. Run fmt + lint before committing.'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=\$(cat); STOP_ACTIVE=\$(echo \"\$INPUT\" | jq -r '.stop_hook_active // false'); if [ \"\$STOP_ACTIVE\" = \"true\" ]; then exit 0; fi; echo 'Before stopping: verify all claimed tasks are completed with actual deliverables (branches pushed, PRs created). If not, keep working.' >&2; exit 0"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=\$(cat); CMD=\$(echo \"\$INPUT\" | jq -r '.tool_input.command // empty'); if echo \"\$CMD\" | grep -qE 'git push --force|git push -f |git checkout \\\\.|git reset --hard|rm -rf /'; then echo \"Blocked: dangerous command '\$CMD'.\" >&2; exit 2; fi; exit 0"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Post-compaction context refresh: This project uses agent-based development. The orchestrator routes work to agents, never writes code directly. Use TaskList/TaskUpdate for coordination. Invoke skills instead of inline instructions. See CLAUDE.md for full context.'"
+          }
+        ]
+      }
     ]
   }
 }
 SETTINGSEOF
-    echo "  Created with PostToolUse, TeammateIdle, and TaskCompleted hooks"
+    echo "  Created with PostToolUse, TeammateIdle, TaskCompleted, SubagentStart, Stop, PreToolUse, and SessionStart hooks"
 fi
 
 # --- Print customization guide -----------------------------------------------
@@ -283,8 +330,9 @@ AGENT_COUNT=$(ls -1 "${CLAUDE_DIR}/agents"/*.md 2>/dev/null | wc -l)
 SKILL_COUNT=$(ls -1 "${CLAUDE_DIR}/commands"/*.md 2>/dev/null | wc -l)
 echo " Installed:"
 echo "   - ${AGENT_COUNT} agent definitions in .claude/agents/"
-echo "   - ${SKILL_COUNT} skills in .claude/commands/"
+echo "   - ${SKILL_COUNT} skills in .claude/commands/ (or .claude/skills/ for structured skills)"
 echo "   - 2 hooks in .claude/hooks/"
+echo "   - 7 hooks registered in .claude/settings.json"
 echo "   - .claude/swarm-state/  — tracked knowledge (pitfalls, slices, discoveries, queue)"
 echo "   - ${OPS_DIR}/           — ephemeral runtime (handoffs, metrics, patches, salvage)"
 echo "   - GitHub labels (7)"
