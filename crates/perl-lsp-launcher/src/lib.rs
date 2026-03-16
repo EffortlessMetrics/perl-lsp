@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! CLI and startup configuration primitives for the Perl LSP binary.
 //!
 //! This crate extracts the runtime launch decision surface into a dedicated crate so
@@ -49,6 +50,7 @@ impl TransportArgs {
 #[derive(Parser, Debug, Clone)]
 #[command(name = "perl-lsp", version, about = "Perl Language Server", long_about = None)]
 pub struct LspArgs {
+    /// Transport configuration (stdio or socket).
     #[command(flatten)]
     pub transport: TransportArgs,
 

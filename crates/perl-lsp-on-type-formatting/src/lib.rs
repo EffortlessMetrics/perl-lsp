@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! On-type formatting provider for Perl LSP.
 //!
 //! Provides automatic indentation and formatting when typing trigger characters

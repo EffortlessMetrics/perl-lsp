@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! CLI profile-token parsing for Perl LSP feature governance.
 //!
 //! This microcrate owns one responsibility: parse user-facing profile tokens

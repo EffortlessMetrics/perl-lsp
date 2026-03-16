@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Central configuration for LSP operation limits and bounded behavior
 //!
 //! This module provides a single source of truth for all resource limits,

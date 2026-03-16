@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Enhanced LSP cancellation infrastructure with thread-safe atomic operations
 //!
 //! This module provides comprehensive cancellation support for Perl LSP operations,

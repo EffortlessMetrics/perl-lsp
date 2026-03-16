@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Shared feature contracts for profile parsing, BDD-grid rows, and capability mapping.
 //!
 //! This crate defines the canonical [`FeatureProfileKind`] enum and associated
@@ -112,7 +113,8 @@ pub const fn feature_profile_specs() -> &'static [FeatureProfileSpec] {
     FEATURE_PROFILE_SPECS
 }
 
-#[allow(dead_code, clippy::all)]
+/// Auto-generated feature catalog from `features.toml`.
+#[allow(dead_code, clippy::all, missing_docs)]
 pub mod catalog {
     include!(concat!(env!("OUT_DIR"), "/feature_contracts.rs"));
 }
@@ -120,13 +122,21 @@ pub mod catalog {
 /// Human-readable BDD-oriented feature row for automation and reporting.
 #[derive(Debug, Clone, Serialize)]
 pub struct BddFeatureRow {
+    /// Canonical feature identifier (e.g., `lsp.completion`).
     pub id: &'static str,
+    /// LSP specification section this feature implements.
     pub spec: &'static str,
+    /// Feature area grouping (e.g., `text_document`, `workspace`).
     pub area: &'static str,
+    /// Maturity level: `ga`, `beta`, `alpha`, or `planned`.
     pub maturity: &'static str,
+    /// Whether this feature is advertised to clients.
     pub advertised: bool,
+    /// Whether this feature counts toward compliance percentage.
     pub counts_in_coverage: bool,
+    /// Short human-readable description of the feature.
     pub description: &'static str,
+    /// Test identifiers that verify this feature.
     pub tests: &'static [&'static str],
 }
 

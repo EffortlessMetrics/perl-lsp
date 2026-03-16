@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Canonical feature identifiers shared across feature-flagging and BDD-grid layers.
 //!
 //! The constants in this crate are stable across feature-profiles and provide a

@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Text helpers for code-action style source edits.
 
 /// Helper wrapper for source text and pre-split lines.

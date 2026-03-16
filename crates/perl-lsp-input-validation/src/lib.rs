@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Input validation and sanitization utilities for production hardening.
 
 use anyhow::{Result, anyhow};

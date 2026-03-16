@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Typed URI parsing helpers for LSP components.
 
 use lsp_types::Uri;
