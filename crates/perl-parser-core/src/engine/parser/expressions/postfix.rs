@@ -443,6 +443,28 @@ impl<'a> Parser<'a> {
                         } else if self.peek_kind() == Some(TokenKind::FatArrow) {
                             // Identifier before => is a hash key — do NOT treat as
                             // a builtin function call.  Fall through to break.
+                        } else if Self::is_nullary_builtin(name) {
+                            // Nullary builtins (shift, pop, caller, wantarray, etc.) can also
+                            // take an explicit sigil-starting argument, e.g. `shift @arr`.
+                            let next_is_sigil_arg = self.tokens.peek().ok().is_some_and(|t| {
+                                t.text.starts_with('@')
+                                    || t.text.starts_with('$')
+                                    || t.text.starts_with('%')
+                            });
+                            let args = if next_is_sigil_arg && !self.is_at_statement_end() {
+                                vec![self.parse_ternary()?]
+                            } else {
+                                vec![]
+                            };
+                            let start = expr.location.start;
+                            let end = args
+                                .last()
+                                .map(|arg: &Node| arg.location.end)
+                                .unwrap_or(expr.location.end);
+                            expr = Node::new(
+                                NodeKind::FunctionCall { name: name.clone(), args },
+                                SourceLocation { start, end },
+                            );
                         } else if Self::is_builtin_function(name) {
                             // In call argument lists, `builtin => value` should keep the lhs as a
                             // bareword key so parse_args can auto-quote it for fat-comma pairs.

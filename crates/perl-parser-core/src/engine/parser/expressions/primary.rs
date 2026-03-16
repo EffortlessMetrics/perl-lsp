@@ -490,6 +490,11 @@ impl<'a> Parser<'a> {
                 let start_token = self.tokens.next()?; // consume (
                 let start = start_token.start;
 
+                // Inside parentheses we are no longer at statement start.
+                // This prevents the indirect-call heuristic from firing on
+                // builtins like `shift`/`pop` inside `(shift @arr)->method()`.
+                self.mark_not_stmt_start();
+
                 // Check for empty list
                 if self.peek_kind() == Some(TokenKind::RightParen) {
                     let end_token = self.tokens.next()?;
