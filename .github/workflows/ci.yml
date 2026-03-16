@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   statuses: write
 
@@ -30,6 +30,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -41,6 +44,19 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: just
+
+      - name: Auto-fix formatting
+        run: |
+          cargo fmt --all
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "chore: auto-format with cargo fmt"
+            git push
+            echo "::notice::Auto-formatted code pushed. CI will re-run."
+            exit 0
+          fi
 
       # Aggressive caching for dependencies and build artifacts
       - name: Cache cargo dependencies

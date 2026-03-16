@@ -22,7 +22,7 @@ mod moo_semantics_e2e_tests {
         let code = MOO_BASIC;
         let uri = "file:///moo_semantics.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         let completion_line = code
@@ -75,7 +75,7 @@ mod moo_semantics_e2e_tests {
         let code = MOO_HANDLES;
         let uri = "file:///moo_handles_semantics.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         let completion_line = code
@@ -133,7 +133,7 @@ mod moo_semantics_e2e_tests {
         let code = CLASS_ACCESSOR_BASIC;
         let uri = "file:///class_accessor_semantics.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         let completion_line = code
@@ -191,7 +191,7 @@ mod moo_semantics_e2e_tests {
         let code = MOOSE_BASIC;
         let uri = "file:///moose_semantics.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         let completion_line = code

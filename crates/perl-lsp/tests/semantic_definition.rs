@@ -62,7 +62,7 @@ mod semantic_definition_tests {
         let code = "my $x = 1;\n$x + 2;\n";
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Position on the `$x` reference in the second line
@@ -82,7 +82,7 @@ mod semantic_definition_tests {
         let code = "sub foo { 1 }\nmy $x = foo();\n";
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Position on "foo" in the call
@@ -107,7 +107,7 @@ sub foo {
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Position on `$inner` in the return expression
@@ -133,7 +133,7 @@ Foo::bar();
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Position on "bar" in Foo::bar()

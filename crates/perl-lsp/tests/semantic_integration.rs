@@ -44,7 +44,7 @@ mod semantic_integration_tests {
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on the number literal
@@ -67,7 +67,7 @@ mod semantic_integration_tests {
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on the string literal
@@ -88,7 +88,7 @@ mod semantic_integration_tests {
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on the array variable
@@ -113,7 +113,7 @@ mod semantic_integration_tests {
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on the hash variable
@@ -140,7 +140,7 @@ print $used;
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Wait a bit for diagnostics to be computed
@@ -181,7 +181,7 @@ print $value;
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Wait for diagnostics
@@ -216,7 +216,7 @@ print $value;
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on the binary expression
@@ -237,7 +237,7 @@ print $value;
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on the length function call
@@ -262,7 +262,7 @@ sub process {
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Wait for diagnostics

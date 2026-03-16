@@ -51,7 +51,7 @@ my $result = $count * 2;
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on the `$count` reference in the second line
@@ -85,7 +85,7 @@ my $sum = calculate(10, 20);
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "calculate" in the function call
@@ -113,7 +113,7 @@ my $sum = calculate(10, 20);
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "format_name" in the declaration
@@ -146,7 +146,7 @@ my $product = Math::Utils::multiply(5, 6);
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "multiply" in the qualified call Math::Utils::multiply
@@ -173,7 +173,7 @@ my $first = $numbers[0];
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "@numbers" in the declaration
@@ -198,7 +198,7 @@ my $debug_mode = $config{debug};
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "%config" in the declaration
@@ -231,7 +231,7 @@ my $debug_mode = $config{debug};
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "$inner_var" in the return statement
@@ -256,7 +256,7 @@ my @doubled = map { $_ * 2 } @items;
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "map" builtin function
@@ -287,7 +287,7 @@ my $result = $undefined + $defined;
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "$undefined" which is not declared
@@ -321,7 +321,7 @@ sub helper {
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "MyApp::Utils" in package declaration
@@ -360,7 +360,7 @@ $logger->log_message("test");
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "log_message" in the method call
@@ -391,7 +391,7 @@ my $result = $value + process();
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on the inner "$value" (line 4)
@@ -419,7 +419,7 @@ my $result = $value + process();
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on empty space (line 1, character 0)
@@ -441,7 +441,7 @@ my $circumference = 2 * PI * $radius;
 "#;
         let uri = "file:///test.pl";
 
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, code);
 
         // Hover on "PI" constant usage
