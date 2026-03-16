@@ -78,7 +78,7 @@ for line in "${WORKTREES[@]}"; do
 
     # Check 1: Is the branch merged to master?
     MERGED=false
-    if git branch --merged master 2>/dev/null | grep -q "$wt_branch"; then
+    if git branch --merged master 2>/dev/null | grep -qw "$wt_branch"; then
         MERGED=true
     fi
 
@@ -120,7 +120,8 @@ for line in "${WORKTREES[@]}"; do
         fi
     else
         # Has tracking branch — check if ahead of remote
-        AHEAD="$(git rev-list "@{upstream}..$wt_branch" --count 2>/dev/null || echo "0")"
+        REMOTE_REF="$(echo "$REMOTE_BRANCH" | sed 's|^refs/heads/|origin/|')"
+        AHEAD="$(git rev-list "${REMOTE_REF}..$wt_branch" --count 2>/dev/null || echo "0")"
         if [[ "$AHEAD" -gt 0 ]]; then
             UNPUSHED=true
         fi
