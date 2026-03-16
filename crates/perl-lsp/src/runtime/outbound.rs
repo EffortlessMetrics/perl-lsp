@@ -144,16 +144,26 @@ fn writer_loop_batched_shared(
 }
 
 /// Serialize an `OutboundMessage` to JSON bytes.
+///
+/// Returns an empty `Vec` on serialization failure and logs the error via
+/// `tracing::error!` so callers have diagnostic visibility rather than a
+/// silently-malformed empty frame being delivered to the client.
 fn serialize_message(msg: &OutboundMessage) -> Vec<u8> {
     match msg {
-        OutboundMessage::Response(resp) => serde_json::to_vec(resp).unwrap_or_default(),
+        OutboundMessage::Response(resp) => serde_json::to_vec(resp).unwrap_or_else(|e| {
+            tracing::error!("Failed to serialize outbound response: {e}");
+            Vec::new()
+        }),
         OutboundMessage::Notification { method, params } => {
             let val = json!({
                 "jsonrpc": "2.0",
                 "method": method,
                 "params": params,
             });
-            serde_json::to_vec(&val).unwrap_or_default()
+            serde_json::to_vec(&val).unwrap_or_else(|e| {
+                tracing::error!(method = %method, "Failed to serialize outbound notification: {e}");
+                Vec::new()
+            })
         }
         OutboundMessage::Request { id, method, params } => {
             let val = json!({
@@ -162,7 +172,10 @@ fn serialize_message(msg: &OutboundMessage) -> Vec<u8> {
                 "method": method,
                 "params": params,
             });
-            serde_json::to_vec(&val).unwrap_or_default()
+            serde_json::to_vec(&val).unwrap_or_else(|e| {
+                tracing::error!(id = %id, method = %method, "Failed to serialize outbound request: {e}");
+                Vec::new()
+            })
         }
     }
 }
