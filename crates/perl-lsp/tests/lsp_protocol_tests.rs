@@ -128,6 +128,12 @@ fn test_diagnostics_clear_protocol_framing() -> Result<(), Box<dyn std::error::E
         }),
     );
 
+    // The outbound channel is async: messages are written by a background
+    // writer thread.  Drop the server (which closes the sender) then give
+    // the writer thread a moment to drain before we inspect the buffer.
+    drop(server);
+    std::thread::sleep(std::time::Duration::from_millis(50));
+
     // Parse captured output
     let output_bytes = buffer.lock().clone();
     let messages = parse_messages(&output_bytes)?;

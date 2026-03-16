@@ -34,7 +34,10 @@ fn matches_query_case_insensitive_prefix_match() {
 fn matches_query_case_insensitive_contains_match() {
     // A mutation removing .to_lowercase() would miss contains match
     assert!(matches_query("get_LOG_line", "log"), "contains match must be case-insensitive");
-    assert!(matches_query("get_log_line", "LOG"), "contains match must be case-insensitive (upper query)");
+    assert!(
+        matches_query("get_log_line", "LOG"),
+        "contains match must be case-insensitive (upper query)"
+    );
 }
 
 #[test]

@@ -65,7 +65,9 @@ impl LspServer {
             .as_millis() as u64;
 
         // Send using the outbound channel
-        if let Err(e) = self.outbound.send_request(request_id as i64, "client/registerCapability", params_value) {
+        if let Err(e) =
+            self.outbound.send_request(request_id as i64, "client/registerCapability", params_value)
+        {
             eprintln!("[perl-lsp] Failed to send file watcher request: {}", e);
         }
     }

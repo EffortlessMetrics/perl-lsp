@@ -147,7 +147,7 @@ pub struct TestServer {
 
 impl TestServer {
     /// Send a text document did open notification
-    pub fn open_document(&mut self, uri: &str, content: &str) {
+    pub fn open_document(&self, uri: &str, content: &str) {
         super::send_notification(
             &self.server,
             json!({
@@ -168,7 +168,7 @@ impl TestServer {
     }
 
     /// Send a text document did change notification
-    pub fn change_document(&mut self, uri: &str, content: &str, version: i32) {
+    pub fn change_document(&self, uri: &str, content: &str, version: i32) {
         super::send_notification(
             &self.server,
             json!({
@@ -188,7 +188,7 @@ impl TestServer {
     }
 
     /// Request diagnostics for a document
-    pub fn get_diagnostics(&mut self, uri: &str) -> Value {
+    pub fn get_diagnostics(&self, uri: &str) -> Value {
         super::send_request(
             &self.server,
             json!({
@@ -203,7 +203,7 @@ impl TestServer {
     }
 
     /// Request document symbols
-    pub fn get_symbols(&mut self, uri: &str) -> Value {
+    pub fn get_symbols(&self, uri: &str) -> Value {
         super::send_request(
             &self.server,
             json!({
@@ -218,7 +218,7 @@ impl TestServer {
     }
 
     /// Request definition at position
-    pub fn get_definition(&mut self, uri: &str, line: u32, character: u32) -> Value {
+    pub fn get_definition(&self, uri: &str, line: u32, character: u32) -> Value {
         super::send_request(
             &self.server,
             json!({
@@ -235,7 +235,7 @@ impl TestServer {
 
     /// Request references at position
     pub fn get_references(
-        &mut self,
+        &self,
         uri: &str,
         line: u32,
         character: u32,
@@ -257,7 +257,7 @@ impl TestServer {
     }
 
     /// Request hover information
-    pub fn get_hover(&mut self, uri: &str, line: u32, character: u32) -> Value {
+    pub fn get_hover(&self, uri: &str, line: u32, character: u32) -> Value {
         super::send_request(
             &self.server,
             json!({
@@ -273,7 +273,7 @@ impl TestServer {
     }
 
     /// Request completion items at a position
-    pub fn get_completion(&mut self, uri: &str, line: u32, character: u32) -> Value {
+    pub fn get_completion(&self, uri: &str, line: u32, character: u32) -> Value {
         super::send_request(
             &self.server,
             json!({
@@ -289,7 +289,7 @@ impl TestServer {
     }
 
     /// Request signature help
-    pub fn get_signature_help(&mut self, uri: &str, line: u32, character: u32) -> Value {
+    pub fn get_signature_help(&self, uri: &str, line: u32, character: u32) -> Value {
         super::send_request(
             &self.server,
             json!({

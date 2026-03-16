@@ -75,7 +75,7 @@ move $obj 10, 20;
 "#;
 
         let uri = "file:///test_indirect.pl";
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, source);
 
         // Find position of "move" in "move $obj 10, 20"
@@ -103,7 +103,7 @@ close $fh;
 "#;
 
         let uri = "file:///test_builtin_indirect.pl";
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, source);
 
         // Try to find definition for "print" in "print $fh"
@@ -134,7 +134,7 @@ my $player = new Player "Alice";
 "#;
 
         let uri = "file:///test_constructor.pl";
-        let mut server = TestServerBuilder::new().build();
+        let server = TestServerBuilder::new().build();
         server.open_document(uri, source);
 
         // Find position of "new" in "new Player"
