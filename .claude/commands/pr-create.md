@@ -12,8 +12,9 @@ Create a well-structured PR. Context: **$ARGUMENTS**
 1. Gather context (branch, base, commits)
 2. Assess impact and risks
 3. Draft PR title and body
-4. Verify gate is green
-5. Push and create PR
+4. Commit hygiene check
+5. Verify gate is green
+6. Push and create PR
 
 ## Step 1: Gather context
 
@@ -73,7 +74,27 @@ Blast radius, failure modes, rollback path.
 Explicit deferrals if any.
 ```
 
-## Step 4: Verify gate
+## Step 4: Commit hygiene check
+
+Before committing or pushing, verify only intended files are staged:
+```bash
+git diff --cached --name-only
+```
+
+**NEVER** use `git add -A` or `git add .`. Always add specific files.
+
+Reject any of these from the staged set (unless they are the point of the PR):
+- `Cargo.lock` — unless your change modifies dependencies; worktree drift causes false conflicts
+- `.claude/` infrastructure files
+- `docs/project/CURRENT_STATUS.md` — auto-generated
+- `scripts/.ignored-baseline` — auto-generated
+
+If unintended files are staged, unstage them:
+```bash
+git reset HEAD <file>
+```
+
+## Step 5: Verify gate
 
 ```bash
 just ci-gate
@@ -81,7 +102,7 @@ just ci-gate
 
 If not green, fix or document what remains.
 
-## Step 5: Push and create
+## Step 6: Push and create
 
 ```bash
 git push -u origin HEAD

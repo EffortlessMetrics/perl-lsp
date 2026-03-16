@@ -42,6 +42,18 @@ cargo test -p <crate>
 
 Escalate to `nix develop -c just ci-gate` only for changes spanning 3+ crates.
 
+## Git Commit Hygiene
+- Only `git add` files you intentionally created or modified
+- **NEVER** use `git add -A` or `git add .` — these capture unintended changes
+- Specifically **EXCLUDE** from commits:
+  - `Cargo.lock` (unless your change modifies dependencies — worktree drift causes false conflicts)
+  - `.claude/` infrastructure files (unless that's your task)
+  - `docs/project/CURRENT_STATUS.md` (auto-generated)
+  - `scripts/.ignored-baseline` (auto-generated)
+- Use `git add <specific-files>` or `git add crates/<your-crate>/`
+- Before committing, run `git diff --cached --name-only` to verify only intended files are staged
+- If unintended files are staged, unstage with `git reset HEAD <file>`
+
 ## Dual Indexing (workspace features)
 ```rust
 file_index.references.entry(bare_name.to_string()).or_default().push(symbol_ref.clone());
