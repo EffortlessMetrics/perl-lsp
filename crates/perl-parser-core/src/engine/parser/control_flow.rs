@@ -272,7 +272,14 @@ impl<'a> Parser<'a> {
         self.in_for_loop_init = true;
         let variable = if self.peek_kind() == Some(TokenKind::My) {
             self.parse_variable_declaration()?
+        } else if self.peek_kind() == Some(TokenKind::LeftParen) {
+            // foreach (LIST) — implicit $_ topic variable
+            Node::new(
+                NodeKind::Variable { sigil: "$".to_string(), name: "_".to_string() },
+                SourceLocation { start, end: start },
+            )
         } else {
+            // foreach $var (LIST) — bare scalar without my
             self.parse_variable()?
         };
         self.in_for_loop_init = false;
@@ -310,6 +317,7 @@ impl<'a> Parser<'a> {
         let variable = if self.peek_kind() == Some(TokenKind::My) {
             self.parse_variable_declaration()?
         } else {
+            // for $var (LIST) — bare scalar without my
             self.parse_variable()?
         };
         self.in_for_loop_init = false;
