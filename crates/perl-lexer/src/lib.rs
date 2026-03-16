@@ -101,20 +101,17 @@
 //!
 //! # Integration with perl-parser
 //!
-//! The lexer is designed to work seamlessly with `perl_parser::Parser`:
+//! The lexer is designed to work seamlessly with `perl_parser_core::Parser`.
+//! You rarely need to use the lexer directly -- the parser creates and manages
+//! a `PerlLexer` instance internally:
 //!
 //! ```rust,ignore
-//! use perl_parser::Parser;
+//! use perl_parser_core::Parser;
 //!
-//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let code = "sub hello { print qq{Hello, world!\\n}; }";
+//! let code = r#"sub hello { print "Hello, world!\n"; }"#;
 //! let mut parser = Parser::new(code);
-//! let ast = parser.parse()?;
-//! # Ok(())
-//! # }
+//! let ast = parser.parse().expect("should parse");
 //! ```
-//!
-//! The parser automatically creates and manages a `PerlLexer` instance internally.
 
 #![warn(clippy::all)]
 #![allow(
@@ -188,14 +185,29 @@ const HEREDOC_TIMEOUT_MS: u64 = 5000; // 5 seconds timeout for heredoc parsing
 /// reachable before the byte budget for very large but still bounded literals.
 pub const MAX_REGEX_PARSE_STEPS: usize = 32 * 1024;
 
-/// Configuration for the lexer
+/// Configuration options for the Perl lexer.
+///
+/// Controls interpolation handling, position tracking, and lookahead limits.
+/// Use [`Default::default`] for sensible defaults.
+///
+/// # Examples
+///
+/// ```rust
+/// use perl_lexer::LexerConfig;
+///
+/// let config = LexerConfig {
+///     parse_interpolation: true,
+///     track_positions: true,
+///     max_lookahead: 1024,
+/// };
+/// ```
 #[derive(Debug, Clone)]
 pub struct LexerConfig {
-    /// Enable interpolation parsing in strings
+    /// Enable interpolation parsing in strings.
     pub parse_interpolation: bool,
-    /// Track token positions for error reporting
+    /// Track token positions for error reporting.
     pub track_positions: bool,
-    /// Maximum lookahead for disambiguation
+    /// Maximum lookahead for disambiguation.
     pub max_lookahead: usize,
 }
 
@@ -205,7 +217,22 @@ impl Default for LexerConfig {
     }
 }
 
-/// Mode-aware Perl lexer
+/// Context-aware Perl lexer that produces a token stream from source text.
+///
+/// The lexer tracks an internal [`LexerMode`] to disambiguate context-sensitive
+/// syntax (e.g., `/` as division vs. regex delimiter). Construct with
+/// [`PerlLexer::new`] and call [`PerlLexer::next_token`] or
+/// [`PerlLexer::collect_tokens`] to consume the stream.
+///
+/// # Examples
+///
+/// ```rust
+/// use perl_lexer::{PerlLexer, TokenType};
+///
+/// let mut lexer = PerlLexer::new("my $x = 42;");
+/// let tokens = lexer.collect_tokens();
+/// assert!(!tokens.is_empty());
+/// ```
 pub struct PerlLexer<'a> {
     input: &'a str,
     /// Cached input bytes for faster access

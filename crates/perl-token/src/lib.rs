@@ -1,7 +1,9 @@
-//! Perl Token Definitions
+//! Perl token definitions shared across the parser ecosystem.
 //!
-//! This crate provides the shared token definitions used by the Perl parser
-//! and related tools.
+//! This crate defines [`Token`] and [`TokenKind`], the fundamental types that
+//! flow from the lexer (`perl-lexer`) into the parser (`perl-parser-core`).
+//! Downstream crates re-export these types so consumers rarely need to depend
+//! on `perl-token` directly.
 //!
 //! # Examples
 //!
@@ -21,6 +23,16 @@
 //! let num = Token::new(TokenKind::Number, "42", 7, 9);
 //! assert_eq!(num.kind, TokenKind::Number);
 //! assert_eq!(&*num.text, "42");
+//! ```
+//!
+//! Use [`TokenKind::display_name`] for user-facing error messages:
+//!
+//! ```rust
+//! use perl_token::TokenKind;
+//!
+//! assert_eq!(TokenKind::LeftBrace.display_name(), "'{'");
+//! assert_eq!(TokenKind::Identifier.display_name(), "identifier");
+//! assert_eq!(TokenKind::Eof.display_name(), "end of input");
 //! ```
 
 use std::sync::Arc;
@@ -42,7 +54,17 @@ pub struct Token {
 }
 
 impl Token {
-    /// Create a new token
+    /// Create a new token with the given kind, source text, and byte span.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_token::{Token, TokenKind};
+    ///
+    /// let tok = Token::new(TokenKind::Sub, "sub", 0, 3);
+    /// assert_eq!(tok.kind, TokenKind::Sub);
+    /// assert_eq!(&*tok.text, "sub");
+    /// ```
     pub fn new(kind: TokenKind, text: impl Into<Arc<str>>, start: usize, end: usize) -> Self {
         Token { kind, text: text.into(), start, end }
     }
@@ -52,6 +74,20 @@ impl Token {
 ///
 /// The set is intentionally simplified for fast parser matching while covering
 /// keywords, operators, delimiters, literals, identifiers, and special tokens.
+///
+/// Use [`TokenKind::display_name`] to get a human-readable string suitable for
+/// error messages shown to the user.
+///
+/// # Categories
+///
+/// | Group | Examples |
+/// |-------|----------|
+/// | Keywords | [`My`](Self::My), [`Sub`](Self::Sub), [`If`](Self::If), ... |
+/// | Operators | [`Plus`](Self::Plus), [`Arrow`](Self::Arrow), [`And`](Self::And), ... |
+/// | Delimiters | [`LeftParen`](Self::LeftParen), [`LeftBrace`](Self::LeftBrace), ... |
+/// | Literals | [`Number`](Self::Number), [`String`](Self::String), [`Regex`](Self::Regex), ... |
+/// | Identifiers | [`Identifier`](Self::Identifier), [`ScalarSigil`](Self::ScalarSigil), ... |
+/// | Special | [`Eof`](Self::Eof), [`Unknown`](Self::Unknown) |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     // ===== Keywords =====
@@ -331,6 +367,16 @@ impl TokenKind {
     /// These names appear in parser error messages shown in the editor.
     /// They use the actual Perl syntax (e.g. `}` instead of `RightBrace`)
     /// so users can immediately understand what the parser expected.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use perl_token::TokenKind;
+    ///
+    /// assert_eq!(TokenKind::Semicolon.display_name(), "';'");
+    /// assert_eq!(TokenKind::Sub.display_name(), "'sub'");
+    /// assert_eq!(TokenKind::Number.display_name(), "number");
+    /// ```
     pub fn display_name(self) -> &'static str {
         match self {
             // Keywords

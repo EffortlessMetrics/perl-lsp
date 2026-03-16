@@ -26,7 +26,7 @@
 //!
 //! ## Basic AST Construction
 //!
-//! ```ignore
+//! ```rust
 //! use perl_ast::{Node, NodeKind, SourceLocation};
 //!
 //! // Create a simple variable declaration node
@@ -36,34 +36,33 @@
 //!         declarator: "my".to_string(),
 //!         variable: Box::new(Node::new(
 //!             NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
-//!             location
+//!             location,
 //!         )),
 //!         attributes: vec![],
 //!         initializer: None,
 //!     },
-//!     location
+//!     location,
 //! );
+//! assert_eq!(node.kind.kind_name(), "VariableDeclaration");
 //! ```
 //!
 //! ## Tree-sitter S-expression Generation
 //!
-//! ```ignore
-//! use crate::{Node, NodeKind};
+//! ```rust
+//! use perl_ast::{Node, NodeKind, SourceLocation};
 //!
-//! // Example assuming a parser exists
-//! // let code = "my $x = 42;";
-//! // let mut parser = Parser::new(code);
-//! // let ast = parser.parse()?;
+//! let loc = SourceLocation { start: 0, end: 2 };
+//! let num = Node::new(NodeKind::Number { value: "42".to_string() }, loc);
+//! let program = Node::new(NodeKind::Program { statements: vec![num] }, loc);
 //!
-//! // // Convert to tree-sitter compatible format
-//! // let sexp = ast.to_sexp();
-//! // println!("S-expression: {}", sexp);
+//! let sexp = program.to_sexp();
+//! assert!(sexp.starts_with("(source_file"));
 //! ```
 //!
 //! ## AST Traversal and Analysis
 //!
-//! ```ignore
-//! use perl_ast::{Node, NodeKind};
+//! ```rust
+//! use perl_ast::{Node, NodeKind, SourceLocation};
 //!
 //! fn count_variables(node: &Node) -> usize {
 //!     let mut count = 0;
@@ -78,30 +77,28 @@
 //!     }
 //!     count
 //! }
+//!
+//! let loc = SourceLocation { start: 0, end: 5 };
+//! let var = Node::new(
+//!     NodeKind::Variable { sigil: "$".to_string(), name: "x".to_string() },
+//!     loc,
+//! );
+//! let program = Node::new(NodeKind::Program { statements: vec![var] }, loc);
+//! assert_eq!(count_variables(&program), 1);
 //! ```
 //!
-//! ## LSP Integration Example
+//! ## Parsing Integration
 //!
-//! ```text
-//! use crate::Node;
+//! In practice the AST is produced by the parser rather than built by hand
+//! (requires `perl-parser-core`):
 //!
-//! // Parse Perl code and extract symbols for LSP
-//! // let code = "sub hello { my $name = shift; print \"Hello, $name!\\n\"; }";
-//! // let mut parser = Parser::new(code);
-//! // let ast = parser.parse()?;
+//! ```rust,ignore
+//! use perl_parser_core::Parser;
+//! use perl_ast::NodeKind;
 //!
-//! // Extract symbols for workspace indexing
-//! // let extractor = SymbolExtractor::new();
-//! // let symbol_table = extractor.extract(&ast);
-//!
-//! // Use symbols for LSP features like go-to-definition
-//! for (name, symbols) in &symbol_table.symbols {
-//!     for symbol in symbols {
-//!         println!("Found symbol: {} at {:?}", symbol.name, symbol.location);
-//!     }
-//! }
-//! # Ok(())
-//! # }
+//! let mut parser = Parser::new("my $x = 42;");
+//! let ast = parser.parse().expect("should parse");
+//! assert!(matches!(ast.kind, NodeKind::Program { .. }));
 //! ```
 
 // Re-export SourceLocation from perl-position-tracking for unified span handling
