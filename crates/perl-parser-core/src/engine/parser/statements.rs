@@ -540,10 +540,11 @@ impl<'a> Parser<'a> {
                                     || self.peek_kind() == Some(TokenKind::State))
                             {
                                 args.push(self.parse_variable_declaration()?);
-                            } else if matches!(func_name.as_ref(), "map" | "grep" | "sort")
+                            } else if Self::is_block_list_func(func_name.as_ref())
                                 && self.peek_kind() == Some(TokenKind::LeftBrace)
                             {
-                                // Special handling for map/grep/sort with block first argument
+                                // Special handling for map/grep/sort/first/any/all/etc.
+                                // with block first argument
                                 args.push(self.parse_builtin_block()?);
                                 parsed_block_arg = true;
                             } else if matches!(func_name.as_ref(), "split" | "grep" | "map" | "sort")
@@ -574,8 +575,8 @@ impl<'a> Parser<'a> {
                             }
 
                             // Parse remaining arguments
-                            // For map/grep/sort, parse list arguments without requiring commas
-                            if matches!(func_name.as_ref(), "map" | "grep" | "sort") {
+                            // For map/grep/sort/first/any/etc., parse list args without requiring commas
+                            if Self::is_block_list_func(func_name.as_ref()) {
                                 // Parse list arguments until statement boundary
                                 while !Self::is_statement_terminator(self.peek_kind())
                                     && !self.is_statement_modifier_keyword()
