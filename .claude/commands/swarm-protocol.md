@@ -104,10 +104,29 @@ gh pr list --state merged --limit 20 --json number,title,mergedAt
 After completing any task, append to `.ops-perl-lsp/swarm-metrics.jsonl`:
 
 ```json
-{"ts":"<ISO-8601>","agent":"<name>","type":"<build|review|fix|merge|improve|scout>","branch":"<branch>","outcome":"<green|red|blocked|merged>","duration_hint":"<fast|medium|slow>","side_prs":<N>,"issues_created":<N>,"notes":"<one line>"}
+{"ts":"<ISO-8601>","agent":"<name>","type":"<build|review|fix|merge|improve|scout>","branch":"<branch>","outcome":"<green|red|blocked|merged>","duration_hint":"<fast|medium|slow>","tokens_used":<N>,"side_prs":<N>,"issues_created":<N>,"notes":"<one line>"}
 ```
 
 Append-only. The lead/merger analyzes periodically for patterns.
+
+### Token Usage Extraction
+
+The Agent tool returns a usage block in its output:
+```
+<usage>total_tokens: 41036
+tool_uses: 35
+duration_ms: 221290</usage>
+```
+
+The lead should extract `total_tokens` from each agent result and log it as `tokens_used` in the metrics entry. If the usage block is unavailable, set `tokens_used` to `0`.
+
+### Cost Tracking
+
+- Track `tokens_used` per agent in metrics to build a per-agent cost profile.
+- Calculate `cost_per_merged_pr` by summing `tokens_used` across all entries for a branch (build + review + fix + merge) and dividing by the number of PRs that reached `merged`.
+- Use this to identify expensive vs efficient agent patterns — e.g., agents that require many fix cycles or blocked reviews are high-cost; agents that ship green on the first pass are low-cost.
+- Target: lower cost per merged artifact over time by adjusting agent prompts, slice sizes, and lane assignments based on observed patterns.
+- The lead should report `cost_per_merged_pr` trend in swarm-report summaries.
 
 ## 5. Agent Self-Improvement
 
