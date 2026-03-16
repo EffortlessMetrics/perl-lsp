@@ -42,7 +42,7 @@ Report success.
 
 **If conflicts are simple** (only in CLAUDE.md, `.claude/`, `docs/`, `Cargo.lock`, or other infrastructure files):
 - Resolve by accepting the master version for infrastructure files
-- For `Cargo.lock`: accept master's version (`git checkout --theirs Cargo.lock`), then run `cargo update` to regenerate
+- For `Cargo.lock`: accept master's version (`git checkout --ours Cargo.lock` — during rebase, `--ours` is the upstream), then run `cargo generate-lockfile` to regenerate
 - Re-run: `git add <resolved files> && git rebase --continue`
 - Then: `git push --force-with-lease`
 
