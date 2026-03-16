@@ -23,11 +23,11 @@ const EXPECTED_VERSION: &str = env!("CARGO_PKG_VERSION");
 #[test]
 fn lsp_server_version_matches_crate_version() {
     // Start the server using the same resolution logic as other tests
-    let mut server = common::start_lsp_server();
+    let server = common::start_lsp_server();
 
     // Send initialize request
     let response = common::send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -73,7 +73,7 @@ fn lsp_server_version_matches_crate_version() {
     );
 
     // Clean shutdown
-    common::shutdown_and_exit(&mut server);
+    common::shutdown_and_exit(&server);
 
     eprintln!("✓ Server version {} matches expected {}", server_version, EXPECTED_VERSION);
 }
@@ -81,11 +81,11 @@ fn lsp_server_version_matches_crate_version() {
 #[test]
 fn lsp_server_identifier_is_perl_lsp() {
     // Start the server
-    let mut server = common::start_lsp_server();
+    let server = common::start_lsp_server();
 
     // Send initialize request
     let response = common::send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -112,5 +112,5 @@ fn lsp_server_identifier_is_perl_lsp() {
     );
 
     // Clean shutdown
-    common::shutdown_and_exit(&mut server);
+    common::shutdown_and_exit(&server);
 }

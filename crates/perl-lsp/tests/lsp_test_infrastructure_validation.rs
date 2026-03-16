@@ -42,21 +42,21 @@ fn test_health_check_server_responsiveness() -> Result<(), String> {
     let _env = TestEnvironment::validate()?;
     let _monitor = ResourceMonitor::start("health_check_test");
 
-    let mut server = start_lsp_server();
-    let _init_response = initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    let _init_response = initialize_lsp(&server);
 
     // Give server time to fully initialize
     drain_until_quiet(
-        &mut server,
+        &server,
         std::time::Duration::from_millis(100),
         std::time::Duration::from_secs(1),
     );
 
     // Perform health check
     let health_result =
-        HealthCheck::new(&mut server).with_timeout(TimeoutProfile::Standard.timeout()).verify();
+        HealthCheck::new(&server).with_timeout(TimeoutProfile::Standard.timeout()).verify();
 
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
 
     match health_result {
         Ok(()) => Ok(()),
@@ -208,7 +208,7 @@ fn test_lsp_lifecycle_with_infrastructure_support() -> Result<(), String> {
     let _monitor = ResourceMonitor::start("lsp_lifecycle_test");
 
     // Start server with graceful degradation
-    let mut server = {
+    let server = {
         let mut degradation = GracefulDegradation::new(2);
         degradation.attempt(|| Ok::<_, String>(start_lsp_server()))?
     };
@@ -217,26 +217,25 @@ fn test_lsp_lifecycle_with_infrastructure_support() -> Result<(), String> {
     let init_timeout = TimeoutProfile::Initialization.timeout();
     eprintln!("Using initialization timeout: {:?}", init_timeout);
 
-    let _init_response = initialize_lsp(&mut server);
+    let _init_response = initialize_lsp(&server);
 
     // Wait for server to settle
     drain_until_quiet(
-        &mut server,
+        &server,
         std::time::Duration::from_millis(100),
         std::time::Duration::from_secs(1),
     );
 
     // Perform health check
-    HealthCheck::new(&mut server)
-        .with_timeout(TimeoutProfile::Standard.timeout())
-        .verify()
-        .map_err(|e| {
+    HealthCheck::new(&server).with_timeout(TimeoutProfile::Standard.timeout()).verify().map_err(
+        |e| {
             let error = TestError::new("LSP lifecycle health check", e);
             eprintln!("{}", error);
             "Health check failed".to_string()
-        })?;
+        },
+    )?;
 
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
 
     Ok(())
 }
@@ -251,11 +250,11 @@ fn test_server_startup_reliability() -> Result<(), String> {
     for i in 0..3 {
         eprintln!("Server startup attempt {}/3", i + 1);
 
-        let mut server = start_lsp_server();
-        let _init_response = initialize_lsp(&mut server);
+        let server = start_lsp_server();
+        let _init_response = initialize_lsp(&server);
 
         // Verify server is responsive
-        HealthCheck::new(&mut server)
+        HealthCheck::new(&server)
             .with_timeout(TimeoutProfile::Standard.timeout())
             .verify()
             .map_err(|e| {
@@ -264,7 +263,7 @@ fn test_server_startup_reliability() -> Result<(), String> {
                 format!("Server startup {} failed", i + 1)
             })?;
 
-        shutdown_and_exit(&mut server);
+        shutdown_and_exit(&server);
 
         // Brief delay between iterations in constrained environments
         if env.is_constrained() {

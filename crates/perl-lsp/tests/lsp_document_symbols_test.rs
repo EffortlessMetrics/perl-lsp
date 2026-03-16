@@ -41,7 +41,7 @@ fn setup_server() -> LspServer {
     server
 }
 
-fn open_document(server: &mut LspServer, uri: &str, content: &str) {
+fn open_document(server: &LspServer, uri: &str, content: &str) {
     let notification = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/didOpen".to_string(),
@@ -61,7 +61,7 @@ fn open_document(server: &mut LspServer, uri: &str, content: &str) {
 
 #[test]
 fn test_document_symbols_basic() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 package MyModule;
@@ -85,7 +85,7 @@ sub calculate {
 1;
 "#;
 
-    open_document(&mut server, "file:///test.pl", content);
+    open_document(&server, "file:///test.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -141,7 +141,7 @@ sub calculate {
 
 #[test]
 fn test_document_symbols_nested() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 package Outer;
@@ -161,7 +161,7 @@ sub another_sub {
 1;
 "#;
 
-    open_document(&mut server, "file:///nested.pl", content);
+    open_document(&server, "file:///nested.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -201,9 +201,9 @@ sub another_sub {
 
 #[test]
 fn test_document_symbols_empty_document() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
-    open_document(&mut server, "file:///empty.pl", "");
+    open_document(&server, "file:///empty.pl", "");
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -229,7 +229,7 @@ fn test_document_symbols_empty_document() -> TestResult {
 
 #[test]
 fn test_document_symbols_with_constants() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 use constant PI => 3.14159;
@@ -244,7 +244,7 @@ sub area {
 }
 "#;
 
-    open_document(&mut server, "file:///constants.pl", content);
+    open_document(&server, "file:///constants.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -273,7 +273,7 @@ sub area {
 
 #[test]
 fn test_document_symbols_with_labels() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 for my $i (1..10) {
@@ -290,7 +290,7 @@ sub process {
 }
 "#;
 
-    open_document(&mut server, "file:///labels.pl", content);
+    open_document(&server, "file:///labels.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -317,7 +317,7 @@ sub process {
 
 #[test]
 fn test_document_symbols_all_variable_types() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 my $scalar = 42;
@@ -332,7 +332,7 @@ local $/ = "\n";
 state $persistent = 0;
 "#;
 
-    open_document(&mut server, "file:///variables.pl", content);
+    open_document(&server, "file:///variables.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -383,7 +383,7 @@ state $persistent = 0;
 
 #[test]
 fn test_document_symbols_hierarchical_structure() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let content = r#"
 package Parent;
@@ -405,7 +405,7 @@ sub child_method {
 }
 "#;
 
-    open_document(&mut server, "file:///hierarchy.pl", content);
+    open_document(&server, "file:///hierarchy.pl", content);
 
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),

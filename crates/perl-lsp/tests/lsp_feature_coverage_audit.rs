@@ -45,7 +45,7 @@ fn setup_server() -> LspServer {
     server
 }
 
-fn open_document(server: &mut LspServer, uri: &str, content: &str) {
+fn open_document(server: &LspServer, uri: &str, content: &str) {
     let notification = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         method: "textDocument/didOpen".to_string(),
@@ -64,7 +64,7 @@ fn open_document(server: &mut LspServer, uri: &str, content: &str) {
 
 /// Send a request and return the result field, or an error.
 fn send_request(
-    server: &mut LspServer,
+    server: &LspServer,
     id: i64,
     method: &str,
     params: serde_json::Value,
@@ -85,11 +85,11 @@ fn send_request(
 
 #[test]
 fn semantic_tokens_empty_document() -> TestResult {
-    let mut server = setup_server();
-    open_document(&mut server, "file:///empty.pl", "");
+    let server = setup_server();
+    open_document(&server, "file:///empty.pl", "");
 
     let result = send_request(
-        &mut server,
+        &server,
         10,
         "textDocument/semanticTokens/full",
         json!({"textDocument": {"uri": "file:///empty.pl"}}),
@@ -107,17 +107,17 @@ fn semantic_tokens_empty_document() -> TestResult {
 
 #[test]
 fn semantic_tokens_multiline_subroutine() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"sub greet {
     my ($name) = @_;
     print "Hello, $name!\n";
     return 1;
 }
 "#;
-    open_document(&mut server, "file:///multi.pl", content);
+    open_document(&server, "file:///multi.pl", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         10,
         "textDocument/semanticTokens/full",
         json!({"textDocument": {"uri": "file:///multi.pl"}}),
@@ -139,7 +139,7 @@ fn semantic_tokens_multiline_subroutine() -> TestResult {
 
 #[test]
 fn semantic_tokens_moose_class() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"package Animal;
 use Moose;
 
@@ -155,10 +155,10 @@ no Moose;
 __PACKAGE__->meta->make_immutable;
 1;
 "#;
-    open_document(&mut server, "file:///moose.pm", content);
+    open_document(&server, "file:///moose.pm", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         10,
         "textDocument/semanticTokens/full",
         json!({"textDocument": {"uri": "file:///moose.pm"}}),
@@ -179,13 +179,13 @@ __PACKAGE__->meta->make_immutable;
 
 #[test]
 fn semantic_tokens_invalid_perl_does_not_crash() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     // Deliberately malformed Perl
     let content = "sub { { { my $x = ; } } }\n@#$%^&\n";
-    open_document(&mut server, "file:///bad.pl", content);
+    open_document(&server, "file:///bad.pl", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         10,
         "textDocument/semanticTokens/full",
         json!({"textDocument": {"uri": "file:///bad.pl"}}),
@@ -207,11 +207,11 @@ fn semantic_tokens_invalid_perl_does_not_crash() -> TestResult {
 
 #[test]
 fn inlay_hints_empty_document() -> TestResult {
-    let mut server = setup_server();
-    open_document(&mut server, "file:///empty_hints.pl", "");
+    let server = setup_server();
+    open_document(&server, "file:///empty_hints.pl", "");
 
     let result = send_request(
-        &mut server,
+        &server,
         20,
         "textDocument/inlayHint",
         json!({
@@ -231,17 +231,17 @@ fn inlay_hints_empty_document() -> TestResult {
 
 #[test]
 fn inlay_hints_multiple_builtins() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"my @data = (3, 1, 4, 1, 5);
 push(@data, 9, 2, 6);
 my $joined = join(",", @data);
 my $sub = substr("hello world", 0, 5);
 splice(@data, 1, 2, 99);
 "#;
-    open_document(&mut server, "file:///builtins.pl", content);
+    open_document(&server, "file:///builtins.pl", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         20,
         "textDocument/inlayHint",
         json!({
@@ -269,12 +269,12 @@ splice(@data, 1, 2, 99);
 
 #[test]
 fn inlay_hints_invalid_perl_does_not_crash() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = "sub broken {{ my $x = ;\n@! invalid perl }}\n";
-    open_document(&mut server, "file:///bad_hints.pl", content);
+    open_document(&server, "file:///bad_hints.pl", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         20,
         "textDocument/inlayHint",
         json!({
@@ -298,17 +298,17 @@ fn inlay_hints_invalid_perl_does_not_crash() -> TestResult {
 
 #[test]
 fn document_links_use_statements() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"use strict;
 use warnings;
 use File::Path qw(make_path);
 use Data::Dumper;
 require JSON::XS;
 "#;
-    open_document(&mut server, "file:///links.pl", content);
+    open_document(&server, "file:///links.pl", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         30,
         "textDocument/documentLink",
         json!({"textDocument": {"uri": "file:///links.pl"}}),
@@ -330,11 +330,11 @@ require JSON::XS;
 
 #[test]
 fn document_links_empty_document() -> TestResult {
-    let mut server = setup_server();
-    open_document(&mut server, "file:///empty_links.pl", "");
+    let server = setup_server();
+    open_document(&server, "file:///empty_links.pl", "");
 
     let result = send_request(
-        &mut server,
+        &server,
         30,
         "textDocument/documentLink",
         json!({"textDocument": {"uri": "file:///empty_links.pl"}}),
@@ -348,7 +348,7 @@ fn document_links_empty_document() -> TestResult {
 
 #[test]
 fn document_links_multiple_module_forms() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"use parent 'Exporter';
 use base qw(Class::Accessor);
 use Moose;
@@ -356,10 +356,10 @@ use Moo;
 require Carp;
 use Scalar::Util 'blessed';
 "#;
-    open_document(&mut server, "file:///modules.pl", content);
+    open_document(&server, "file:///modules.pl", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         30,
         "textDocument/documentLink",
         json!({"textDocument": {"uri": "file:///modules.pl"}}),
@@ -383,7 +383,7 @@ use Scalar::Util 'blessed';
 
 #[test]
 fn selection_range_nested_scopes() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"package MyApp;
 
 sub process {
@@ -396,10 +396,10 @@ sub process {
     return 1;
 }
 "#;
-    open_document(&mut server, "file:///scopes.pl", content);
+    open_document(&server, "file:///scopes.pl", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         40,
         "textDocument/selectionRange",
         json!({
@@ -442,16 +442,16 @@ sub process {
 
 #[test]
 fn selection_range_multiple_positions() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"my $x = 1;
 my $y = 2;
 sub add { return $_[0] + $_[1] }
 my $sum = add($x, $y);
 "#;
-    open_document(&mut server, "file:///multi_sel.pl", content);
+    open_document(&server, "file:///multi_sel.pl", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         40,
         "textDocument/selectionRange",
         json!({
@@ -483,11 +483,11 @@ my $sum = add($x, $y);
 
 #[test]
 fn selection_range_empty_document() -> TestResult {
-    let mut server = setup_server();
-    open_document(&mut server, "file:///empty_sel.pl", "");
+    let server = setup_server();
+    open_document(&server, "file:///empty_sel.pl", "");
 
     let result = send_request(
-        &mut server,
+        &server,
         40,
         "textDocument/selectionRange",
         json!({
@@ -516,7 +516,7 @@ fn selection_range_empty_document() -> TestResult {
 
 #[test]
 fn folding_ranges_heredoc() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"my $text = <<'END_TEXT';
 This is a heredoc
 that spans multiple
@@ -531,10 +531,10 @@ my $html = <<"HTML";
 </html>
 HTML
 "#;
-    open_document(&mut server, "file:///heredoc.pl", content);
+    open_document(&server, "file:///heredoc.pl", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         50,
         "textDocument/foldingRange",
         json!({"textDocument": {"uri": "file:///heredoc.pl"}}),
@@ -555,7 +555,7 @@ HTML
 
 #[test]
 fn folding_ranges_pod_comments() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"=head1 NAME
 
 MyModule - A test module
@@ -577,10 +577,10 @@ sub new {
     return bless {}, $class;
 }
 "#;
-    open_document(&mut server, "file:///pod.pm", content);
+    open_document(&server, "file:///pod.pm", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         50,
         "textDocument/foldingRange",
         json!({"textDocument": {"uri": "file:///pod.pm"}}),
@@ -609,7 +609,7 @@ sub new {
 
 #[test]
 fn moose_class_document_symbols() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"package Animal;
 use Moose;
 
@@ -630,10 +630,10 @@ no Moose;
 __PACKAGE__->meta->make_immutable;
 1;
 "#;
-    open_document(&mut server, "file:///animal.pm", content);
+    open_document(&server, "file:///animal.pm", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         60,
         "textDocument/documentSymbol",
         json!({"textDocument": {"uri": "file:///animal.pm"}}),
@@ -666,7 +666,7 @@ __PACKAGE__->meta->make_immutable;
 
 #[test]
 fn dbi_usage_completion() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"use DBI;
 
 my $dbh = DBI->connect("dbi:SQLite:dbname=test.db", "", "");
@@ -689,11 +689,11 @@ sub get_user {
 
 get_
 "#;
-    open_document(&mut server, "file:///dbi.pl", content);
+    open_document(&server, "file:///dbi.pl", content);
 
     // Request completion for the partial function name "get_"
     let result = send_request(
-        &mut server,
+        &server,
         60,
         "textDocument/completion",
         json!({
@@ -722,7 +722,7 @@ get_
 
 #[test]
 fn dbi_usage_document_symbols() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"package MyApp::DB;
 
 use DBI;
@@ -748,10 +748,10 @@ sub query {
 
 1;
 "#;
-    open_document(&mut server, "file:///db.pm", content);
+    open_document(&server, "file:///db.pm", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         60,
         "textDocument/documentSymbol",
         json!({"textDocument": {"uri": "file:///db.pm"}}),
@@ -777,7 +777,7 @@ sub query {
 
 #[test]
 fn moose_class_folding_ranges() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"package Animal;
 use Moose;
 
@@ -802,10 +802,10 @@ no Moose;
 __PACKAGE__->meta->make_immutable;
 1;
 "#;
-    open_document(&mut server, "file:///moose_fold.pm", content);
+    open_document(&server, "file:///moose_fold.pm", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         50,
         "textDocument/foldingRange",
         json!({"textDocument": {"uri": "file:///moose_fold.pm"}}),
@@ -829,14 +829,14 @@ __PACKAGE__->meta->make_immutable;
 
 #[test]
 fn diagnostics_strict_undeclared_variable() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"use strict;
 use warnings;
 
 my $declared = 42;
 print $undeclared;
 "#;
-    open_document(&mut server, "file:///strict.pl", content);
+    open_document(&server, "file:///strict.pl", content);
 
     // Diagnostics are typically published as notifications, but we can also
     // test via the pull diagnostics endpoint if available, or verify the
@@ -845,7 +845,7 @@ print $undeclared;
 
     // Verify server is still responsive after opening a file with issues
     let result = send_request(
-        &mut server,
+        &server,
         70,
         "textDocument/documentSymbol",
         json!({"textDocument": {"uri": "file:///strict.pl"}}),
@@ -862,18 +862,18 @@ print $undeclared;
 
 #[test]
 fn diagnostics_syntax_error_does_not_crash_server() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"sub broken {
     my $x = ;
     if ( {
     }
 }
 "#;
-    open_document(&mut server, "file:///broken.pl", content);
+    open_document(&server, "file:///broken.pl", content);
 
     // Server must remain responsive after opening a file with syntax errors
     let result = send_request(
-        &mut server,
+        &server,
         70,
         "textDocument/foldingRange",
         json!({"textDocument": {"uri": "file:///broken.pl"}}),
@@ -907,7 +907,7 @@ fn diagnostics_syntax_error_does_not_crash_server() -> TestResult {
 
 #[test]
 fn hover_on_package_name() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"package MyApp::Controller;
 
 sub new {
@@ -917,7 +917,7 @@ sub new {
 
 1;
 "#;
-    open_document(&mut server, "file:///pkg_hover.pm", content);
+    open_document(&server, "file:///pkg_hover.pm", content);
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -937,9 +937,9 @@ sub new {
 
 #[test]
 fn hover_on_use_statement_module() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = "use List::Util qw(sum max min);\nmy $total = sum(1, 2, 3);\n";
-    open_document(&mut server, "file:///use_hover.pl", content);
+    open_document(&server, "file:///use_hover.pl", content);
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -962,9 +962,9 @@ fn hover_on_use_statement_module() -> TestResult {
 
 #[test]
 fn code_actions_empty_range() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = "my $x = 42;\nprint $x;\n";
-    open_document(&mut server, "file:///actions.pl", content);
+    open_document(&server, "file:///actions.pl", content);
 
     let req = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
@@ -997,11 +997,11 @@ fn code_actions_empty_range() -> TestResult {
 
 #[test]
 fn document_symbols_empty_file() -> TestResult {
-    let mut server = setup_server();
-    open_document(&mut server, "file:///empty_sym.pl", "");
+    let server = setup_server();
+    open_document(&server, "file:///empty_sym.pl", "");
 
     let result = send_request(
-        &mut server,
+        &server,
         100,
         "textDocument/documentSymbol",
         json!({"textDocument": {"uri": "file:///empty_sym.pl"}}),
@@ -1015,7 +1015,7 @@ fn document_symbols_empty_file() -> TestResult {
 
 #[test]
 fn document_symbols_multiple_packages() -> TestResult {
-    let mut server = setup_server();
+    let server = setup_server();
     let content = r#"package Foo;
 
 sub foo_method { return 1 }
@@ -1030,10 +1030,10 @@ sub baz_method { return 3 }
 
 1;
 "#;
-    open_document(&mut server, "file:///multi_pkg.pm", content);
+    open_document(&server, "file:///multi_pkg.pm", content);
 
     let result = send_request(
-        &mut server,
+        &server,
         100,
         "textDocument/documentSymbol",
         json!({"textDocument": {"uri": "file:///multi_pkg.pm"}}),

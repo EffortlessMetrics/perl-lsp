@@ -21,7 +21,7 @@ fn setup_server() -> LspServer {
     server
 }
 
-fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
+fn open_doc(server: &LspServer, uri: &str, text: &str) {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
@@ -39,7 +39,7 @@ fn open_doc(server: &mut LspServer, uri: &str, text: &str) {
 }
 
 #[allow(dead_code)]
-fn get_diagnostics(server: &mut LspServer, uri: &str) -> Option<Value> {
+fn get_diagnostics(server: &LspServer, uri: &str) -> Option<Value> {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: Some(json!(1)),
@@ -55,10 +55,10 @@ fn get_diagnostics(server: &mut LspServer, uri: &str) -> Option<Value> {
 #[test]
 
 fn test_empty_file_handling() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test completely empty file
-    open_doc(&mut server, "file:///empty.pl", "");
+    open_doc(&server, "file:///empty.pl", "");
 
     // Should not crash and should handle gracefully
     let request = JsonRpcRequest {
@@ -77,7 +77,7 @@ fn test_empty_file_handling() {
 #[test]
 
 fn test_malformed_perl_recovery() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test file with severe syntax errors
     let malformed = r#"
@@ -91,7 +91,7 @@ my $var = ;  # Missing value
 for (;;  # Incomplete for loop
 "#;
 
-    open_doc(&mut server, "file:///malformed.pl", malformed);
+    open_doc(&server, "file:///malformed.pl", malformed);
 
     // Server should not crash and should provide some diagnostics
     // Even if parsing fails, it should handle gracefully
@@ -100,7 +100,7 @@ for (;;  # Incomplete for loop
 #[test]
 
 fn test_unicode_edge_cases() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test various Unicode scenarios
     let unicode_code = r#"
@@ -112,7 +112,7 @@ sub Σ { return sum(@_); }
 my $emoji = "🦀";
 "#;
 
-    open_doc(&mut server, "file:///unicode.pl", unicode_code);
+    open_doc(&server, "file:///unicode.pl", unicode_code);
 
     // Test that Unicode symbols work in navigation
     let request = JsonRpcRequest {
@@ -131,12 +131,12 @@ my $emoji = "🦀";
 #[test]
 
 fn test_large_line_handling() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Create a file with an extremely long line
     let long_line = "my $var = \"".to_string() + &"x".repeat(10000) + "\";";
 
-    open_doc(&mut server, "file:///longline.pl", &long_line);
+    open_doc(&server, "file:///longline.pl", &long_line);
 
     // Should handle without stack overflow or excessive memory
 }
@@ -144,11 +144,11 @@ fn test_large_line_handling() {
 #[test]
 
 fn test_rapid_edits() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Simulate rapid typing
     let uri = "file:///rapid.pl";
-    open_doc(&mut server, uri, "");
+    open_doc(&server, uri, "");
 
     // Send many rapid updates
     for i in 0..100 {
@@ -176,7 +176,7 @@ fn test_rapid_edits() {
 #[test]
 
 fn test_circular_references() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test code with potential circular references
     let circular = r#"
@@ -189,7 +189,7 @@ use A;
 sub bar { A::foo(); }
 "#;
 
-    open_doc(&mut server, "file:///circular.pl", circular);
+    open_doc(&server, "file:///circular.pl", circular);
 
     // Find references should not infinite loop
     let request = JsonRpcRequest {
@@ -210,7 +210,7 @@ sub bar { A::foo(); }
 #[test]
 
 fn test_special_variable_handling() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test Perl's special variables
     let special_vars = r#"
@@ -234,7 +234,7 @@ $| = 0;
 $. = 0;
 "#;
 
-    open_doc(&mut server, "file:///special.pl", special_vars);
+    open_doc(&server, "file:///special.pl", special_vars);
 
     // These should be recognized but not cause issues
     let request = JsonRpcRequest {
@@ -253,7 +253,7 @@ $. = 0;
 #[test]
 
 fn test_heredoc_edge_cases() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test complex heredoc scenarios
     let heredocs = r#"
@@ -279,7 +279,7 @@ Second heredoc
 SECOND
 "#;
 
-    open_doc(&mut server, "file:///heredoc.pl", heredocs);
+    open_doc(&server, "file:///heredoc.pl", heredocs);
 
     // Should parse heredocs correctly
 }
@@ -287,7 +287,7 @@ SECOND
 #[test]
 
 fn test_regex_with_special_delimiters() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test regex with various delimiters
     let regex_code = r#"
@@ -301,7 +301,7 @@ $text =~ tr/a-z/A-Z/;
 $text =~ y/a-z/A-Z/;
 "#;
 
-    open_doc(&mut server, "file:///regex.pl", regex_code);
+    open_doc(&server, "file:///regex.pl", regex_code);
 
     // Should handle all regex delimiters
 }
@@ -309,7 +309,7 @@ $text =~ y/a-z/A-Z/;
 #[test]
 
 fn test_incomplete_statements() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test code with incomplete statements (common while typing)
     let incomplete = r#"
@@ -321,7 +321,7 @@ sub foo {
     for my $i (
 "#;
 
-    open_doc(&mut server, "file:///incomplete.pl", incomplete);
+    open_doc(&server, "file:///incomplete.pl", incomplete);
 
     // Should not crash on incomplete code
 }
@@ -329,7 +329,7 @@ sub foo {
 #[test]
 
 fn test_mixed_encodings() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test file with mixed content
     let mixed = r#"
@@ -340,7 +340,7 @@ my $latin1 = "café";
 my $emoji = "🎉";
 "#;
 
-    open_doc(&mut server, "file:///mixed.pl", mixed);
+    open_doc(&server, "file:///mixed.pl", mixed);
 
     // Should handle different encodings
 }
@@ -348,10 +348,10 @@ my $emoji = "🎉";
 #[test]
 
 fn test_boundary_positions() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let code = "my $x = 1;";
-    open_doc(&mut server, "file:///boundary.pl", code);
+    open_doc(&server, "file:///boundary.pl", code);
 
     // Test position at start of file
     let request = JsonRpcRequest {
@@ -405,13 +405,13 @@ fn test_boundary_positions() {
 #[test]
 
 fn test_concurrent_file_operations() {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Open multiple files
     for i in 0..10 {
         let uri = format!("file:///file{}.pl", i);
         let code = format!("my $var{} = {};", i, i);
-        open_doc(&mut server, &uri, &code);
+        open_doc(&server, &uri, &code);
     }
 
     // Perform operations on different files

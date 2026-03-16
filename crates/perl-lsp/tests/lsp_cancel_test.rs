@@ -34,12 +34,12 @@ fn test_cancel_request_handling() {
     // Quick LSP availability check - skip if LSP fails to initialize within reasonable time
     // This prevents false failures in environments with slow LSP startup
     {
-        let mut test_server = start_lsp_server();
+        let test_server = start_lsp_server();
         let init_start = std::time::Instant::now();
 
         // Try a quick initialization with shorter timeout
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            initialize_lsp(&mut test_server)
+            initialize_lsp(&test_server)
         })) {
             Ok(_) => {
                 // LSP started successfully, continue with test
@@ -56,13 +56,13 @@ fn test_cancel_request_handling() {
         }
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // First, test if the slow operation endpoint exists
     let test_id = 8888;
     send_request_no_wait(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": test_id,
@@ -71,8 +71,7 @@ fn test_cancel_request_handling() {
         }),
     );
 
-    let test_response =
-        read_response_matching_i64(&mut server, test_id, Duration::from_millis(600));
+    let test_response = read_response_matching_i64(&server, test_id, Duration::from_millis(600));
     let has_test_endpoint = test_response.is_some_and(|resp| {
         resp.get("error").is_none_or(|e| {
             e["code"].as_i64() != Some(-32601) // -32601 = Method not found
@@ -85,7 +84,7 @@ fn test_cancel_request_handling() {
     if has_test_endpoint {
         // Use the slow operation for reliable cancellation
         send_request_no_wait(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -101,7 +100,7 @@ fn test_cancel_request_handling() {
         // Fall back to hover which may or may not be cancelled in time
         let uri = "file:///test.pl";
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -117,7 +116,7 @@ fn test_cancel_request_handling() {
         );
 
         send_request_no_wait(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": request_id,
@@ -132,7 +131,7 @@ fn test_cancel_request_handling() {
 
     // Send cancellation
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -143,7 +142,7 @@ fn test_cancel_request_handling() {
     );
 
     // Read the response
-    let response = read_response_matching_i64(&mut server, request_id, Duration::from_secs(2));
+    let response = read_response_matching_i64(&server, request_id, Duration::from_secs(2));
 
     if let Some(resp) = response {
         if let Some(error) = resp.get("error") {
@@ -184,12 +183,12 @@ fn test_cancel_request_no_response() {
         return;
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send a didOpen to keep server active
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -205,14 +204,14 @@ fn test_cancel_request_no_response() {
     );
 
     // Drain any diagnostics or other notifications from didOpen (reduced timeout for performance)
-    drain_until_quiet(&mut server, Duration::from_millis(50), Duration::from_millis(200));
+    drain_until_quiet(&server, Duration::from_millis(50), Duration::from_millis(200));
 
     // Check server is still alive before sending cancel
     assert!(server.is_alive(), "server exited before cancel test started");
 
     // Send a cancel request for a non-existent ID
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -223,7 +222,7 @@ fn test_cancel_request_no_response() {
     );
 
     // Use bounded read to check for no response
-    let response = read_response_timeout(&mut server, Duration::from_millis(200));
+    let response = read_response_timeout(&server, Duration::from_millis(200));
 
     // $/cancelRequest is a notification and should not produce any response
     assert!(response.is_none(), "$/cancelRequest produced an unexpected response");
@@ -294,12 +293,12 @@ fn test_cancel_multiple_requests() {
         return;
     }
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///test.pl";
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -319,7 +318,7 @@ fn test_cancel_multiple_requests() {
 
     for &id in &ids {
         send_request_no_wait(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": id,
@@ -334,7 +333,7 @@ fn test_cancel_multiple_requests() {
 
     // Cancel the middle request
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -346,7 +345,7 @@ fn test_cancel_multiple_requests() {
 
     // Check responses
     for &id in &ids {
-        let response = read_response_matching_i64(&mut server, id, Duration::from_secs(2));
+        let response = read_response_matching_i64(&server, id, Duration::from_secs(2));
         if let Some(resp) = response {
             if id == 8002 {
                 // This one might be cancelled (or might complete if fast enough)

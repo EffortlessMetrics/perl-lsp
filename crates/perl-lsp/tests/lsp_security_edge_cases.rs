@@ -17,8 +17,8 @@ use common::{initialize_lsp, read_response, send_notification, send_request, sta
 
 #[test]
 fn test_path_traversal_prevention() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try various path traversal attempts
     let malicious_uris = vec![
@@ -30,7 +30,7 @@ fn test_path_traversal_prevention() {
 
     for uri in malicious_uris {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -47,7 +47,7 @@ fn test_path_traversal_prevention() {
 
         // Should handle safely
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -60,15 +60,15 @@ fn test_path_traversal_prevention() {
             }),
         );
 
-        let response = read_response(&mut server);
+        let response = read_response(&server);
         assert!(response.is_object());
     }
 }
 
 #[test]
 fn test_code_injection_prevention() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try to inject malicious code patterns
     let malicious_content = [
@@ -81,7 +81,7 @@ fn test_code_injection_prevention() {
 
     for (i, content) in malicious_content.iter().enumerate() {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -98,7 +98,7 @@ fn test_code_injection_prevention() {
 
         // Should parse without executing
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i + 1,
@@ -111,21 +111,21 @@ fn test_code_injection_prevention() {
             }),
         );
 
-        let response = read_response(&mut server);
+        let response = read_response(&server);
         assert!(response.is_object());
     }
 }
 
 #[test]
 fn test_null_byte_injection() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try null byte injection
     let content_with_null = "print 'before';\0print 'after';";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -142,7 +142,7 @@ fn test_null_byte_injection() {
 
     // Should handle null bytes safely
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -155,14 +155,14 @@ fn test_null_byte_injection() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_format_string_vulnerability() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try format string attacks
     let format_attacks = [
@@ -173,7 +173,7 @@ fn test_format_string_vulnerability() {
 
     for (i, content) in format_attacks.iter().enumerate() {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -190,7 +190,7 @@ fn test_format_string_vulnerability() {
 
         // Should parse safely
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i + 1,
@@ -207,19 +207,19 @@ fn test_format_string_vulnerability() {
             }),
         );
 
-        let response = read_response(&mut server);
+        let response = read_response(&server);
         assert!(response.is_object());
     }
 }
 
 #[test]
 fn test_integer_overflow_prevention() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try to cause integer overflow
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -236,7 +236,7 @@ fn test_integer_overflow_prevention() {
 
     // Request with extreme positions
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -253,15 +253,15 @@ fn test_integer_overflow_prevention() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     // Should handle gracefully without panic
     assert!(response.is_object());
 }
 
 #[test]
 fn test_special_file_handling() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try to open special file URIs
     let special_uris = vec![
@@ -275,7 +275,7 @@ fn test_special_file_handling() {
 
     for uri in special_uris {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -292,7 +292,7 @@ fn test_special_file_handling() {
 
         // Should handle special files safely
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -305,19 +305,19 @@ fn test_special_file_handling() {
             }),
         );
 
-        let response = read_response(&mut server);
+        let response = read_response(&server);
         assert!(response.is_object());
     }
 }
 
 #[test]
 fn test_protocol_confusion() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Mix different protocol versions
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "1.0",  // Wrong version
             "id": 1,
@@ -326,12 +326,12 @@ fn test_protocol_confusion() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     // Send without jsonrpc field
     send_request(
-        &mut server,
+        &server,
         json!({
             "id": 2,
             "method": "textDocument/hover",
@@ -339,14 +339,14 @@ fn test_protocol_confusion() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_resource_uri_validation() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Various malformed URIs
     let bad_uris = vec![
@@ -361,7 +361,7 @@ fn test_resource_uri_validation() {
 
     for uri in bad_uris {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -378,7 +378,7 @@ fn test_resource_uri_validation() {
 
         // Should validate URI properly
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -391,15 +391,15 @@ fn test_resource_uri_validation() {
             }),
         );
 
-        let response = read_response(&mut server);
+        let response = read_response(&server);
         assert!(response.is_object());
     }
 }
 
 #[test]
 fn test_encoding_edge_cases() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Various encoding edge cases
     let encodings = [
@@ -417,7 +417,7 @@ fn test_encoding_edge_cases() {
 
     for (i, content) in encodings.iter().enumerate() {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -434,7 +434,7 @@ fn test_encoding_edge_cases() {
 
         // Should handle various encodings
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i + 1,
@@ -447,22 +447,22 @@ fn test_encoding_edge_cases() {
             }),
         );
 
-        let response = read_response(&mut server);
+        let response = read_response(&server);
         assert!(response.is_object());
     }
 }
 
 #[test]
 fn test_symlink_and_hardlink_handling() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open same content via different "paths"
     let content = "sub shared_function { return 42; }";
 
     // Simulate opening via symlink
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -479,7 +479,7 @@ fn test_symlink_and_hardlink_handling() {
 
     // Open "same" file via different path
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -496,7 +496,7 @@ fn test_symlink_and_hardlink_handling() {
 
     // Both should work independently
     let response1 = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -510,7 +510,7 @@ fn test_symlink_and_hardlink_handling() {
     );
 
     let response2 = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -530,8 +530,8 @@ fn test_symlink_and_hardlink_handling() {
 
 #[test]
 fn test_permission_denied_simulation() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Simulate files that might have permission issues
     let restricted_paths = vec![
@@ -542,7 +542,7 @@ fn test_permission_denied_simulation() {
 
     for path in restricted_paths {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -559,7 +559,7 @@ fn test_permission_denied_simulation() {
 
         // Should handle even if path suggests restricted access
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": 1,
@@ -572,15 +572,15 @@ fn test_permission_denied_simulation() {
             }),
         );
 
-        let response = read_response(&mut server);
+        let response = read_response(&server);
         assert!(response.is_object());
     }
 }
 
 #[test]
 fn test_time_based_attacks() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Try to detect timing differences (shouldn't exist)
     let valid_var = "my $valid = 42;";
@@ -588,7 +588,7 @@ fn test_time_based_attacks() {
 
     // Open both documents
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -604,7 +604,7 @@ fn test_time_based_attacks() {
     );
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -622,7 +622,7 @@ fn test_time_based_attacks() {
     // Measure timing for both
     let start_valid = std::time::Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -634,12 +634,12 @@ fn test_time_based_attacks() {
             }
         }),
     );
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let time_valid = start_valid.elapsed();
 
     let start_invalid = std::time::Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -651,7 +651,7 @@ fn test_time_based_attacks() {
             }
         }),
     );
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let time_invalid = start_invalid.elapsed();
 
     // Times should be similar (no timing leak)

@@ -14,12 +14,12 @@ use serde_json::json;
 /// Verify all responses have proper JSON-RPC structure
 #[test]
 fn test_response_structure_invariants() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Test successful response
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/documentSymbol",
@@ -41,19 +41,19 @@ fn test_response_structure_invariants() -> Result<(), Box<dyn std::error::Error>
 
     // Must have matching ID
     assert!(response.get("id").is_some(), "Response must have an id field");
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Verify error responses have proper structure
 #[test]
 fn test_error_response_structure() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send unknown method to trigger error
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/unknownMethod",
@@ -79,19 +79,19 @@ fn test_error_response_structure() -> Result<(), Box<dyn std::error::Error>> {
         || code < -32000, // Server-defined errors
         "Error code must be standard JSON-RPC or server-defined"
     );
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Verify ID matching between request and response
 #[test]
 fn test_id_matching_invariants() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Test with number ID
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 42,
@@ -107,7 +107,7 @@ fn test_id_matching_invariants() -> Result<(), Box<dyn std::error::Error>> {
 
     // Test with string ID
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": "test-id",
@@ -120,19 +120,19 @@ fn test_id_matching_invariants() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
     assert_eq!(response["id"], "test-id", "Response ID must match string request ID");
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Verify diagnostics always include version and errors are cleared when fixed
 #[test]
 fn test_diagnostics_version_invariant() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open document with a parse error (undefined variable usage)
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -149,7 +149,7 @@ fn test_diagnostics_version_invariant() -> Result<(), Box<dyn std::error::Error>
 
     // Wait for diagnostics
     if let Some(diag) = common::read_notification_method(
-        &mut server,
+        &server,
         "textDocument/publishDiagnostics",
         common::short_timeout(),
     ) {
@@ -159,7 +159,7 @@ fn test_diagnostics_version_invariant() -> Result<(), Box<dyn std::error::Error>
 
     // Fix the error by using all variables (avoids unused variable warnings)
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -177,7 +177,7 @@ fn test_diagnostics_version_invariant() -> Result<(), Box<dyn std::error::Error>
 
     // Wait for updated diagnostics
     if let Some(diag) = common::read_notification_method(
-        &mut server,
+        &server,
         "textDocument/publishDiagnostics",
         common::short_timeout(),
     ) {
@@ -189,25 +189,25 @@ fn test_diagnostics_version_invariant() -> Result<(), Box<dyn std::error::Error>
         let errors: Vec<_> = diags.iter().filter(|d| d["severity"] == 1).collect();
         assert!(errors.is_empty(), "Fixed code should have no error-level diagnostics");
     }
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Verify server doesn't crash on malformed JSON
 #[test]
 fn test_no_crash_on_malformed_json() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send various malformed inputs
-    common::send_raw_message(&mut server, "{invalid json");
-    common::send_raw_message(&mut server, "null");
-    common::send_raw_message(&mut server, "[]");
-    common::send_raw_message(&mut server, "42");
+    common::send_raw_message(&server, "{invalid json");
+    common::send_raw_message(&server, "null");
+    common::send_raw_message(&server, "[]");
+    common::send_raw_message(&server, "42");
 
     // Server should still be responsive
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/documentSymbol",
@@ -219,19 +219,19 @@ fn test_no_crash_on_malformed_json() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
     assert!(response["result"].is_array() || response["error"].is_object());
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Verify proper error for invalid method
 #[test]
 fn test_invalid_request_errors() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Unknown method should return -32601
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "unknownMethod",
@@ -241,19 +241,19 @@ fn test_invalid_request_errors() -> Result<(), Box<dyn std::error::Error>> {
 
     assert!(response["error"].is_object());
     assert_eq!(response["error"]["code"], -32601); // Method not found
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Verify notifications don't produce responses
 #[test]
 fn test_notifications_no_response() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send notification (no ID field)
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -269,7 +269,7 @@ fn test_notifications_no_response() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Should not get a response for notification
-    let resp = common::read_response_timeout(&mut server, common::short_timeout());
+    let resp = common::read_response_timeout(&server, common::short_timeout());
 
     // We might get a diagnostics notification, but not a response
     if let Some(r) = resp {
@@ -280,20 +280,20 @@ fn test_notifications_no_response() -> Result<(), Box<dyn std::error::Error>> {
             Some("textDocument/publishDiagnostics")
         );
     }
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 /// Verify server handles concurrent requests properly
 #[test]
 fn test_concurrent_request_handling() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send multiple requests with different IDs
     for i in 200..205 {
         common::send_request_no_wait(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i,
@@ -311,7 +311,7 @@ fn test_concurrent_request_handling() -> Result<(), Box<dyn std::error::Error>> 
     let mut received_ids = Vec::new();
     for _ in 0..5 {
         if let Some(resp) =
-            common::read_response_timeout(&mut server, std::time::Duration::from_secs(5))
+            common::read_response_timeout(&server, std::time::Duration::from_secs(5))
         {
             if let Some(id) = resp["id"].as_i64() {
                 received_ids.push(id);
@@ -322,6 +322,6 @@ fn test_concurrent_request_handling() -> Result<(), Box<dyn std::error::Error>> 
     // Should receive all IDs (order may vary)
     received_ids.sort();
     assert_eq!(received_ids, vec![200, 201, 202, 203, 204]);
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }

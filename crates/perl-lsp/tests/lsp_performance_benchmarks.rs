@@ -22,8 +22,8 @@ const MAX_HOVER_TIME: Duration = Duration::from_millis(20);
 #[test]
 fn benchmark_initialization() {
     let start = Instant::now();
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
     let duration = start.elapsed();
 
     println!("Initialization time: {:?}", duration);
@@ -37,8 +37,8 @@ fn benchmark_initialization() {
 
 #[test]
 fn benchmark_parsing_simple_file() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let simple_code = r#"
 #!/usr/bin/perl
@@ -53,7 +53,7 @@ print "Hello, World!\n";
     let start = Instant::now();
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -70,7 +70,7 @@ print "Hello, World!\n";
 
     // Request diagnostics to ensure parsing is complete
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -81,7 +81,7 @@ print "Hello, World!\n";
         }),
     );
 
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let duration = start.elapsed();
 
     let size_kb = simple_code.len() as f64 / 1024.0;
@@ -93,8 +93,8 @@ print "Hello, World!\n";
 
 #[test]
 fn benchmark_parsing_large_file() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Generate a 100KB file
     let large_code = generators::generate_large_file(2500);
@@ -103,7 +103,7 @@ fn benchmark_parsing_large_file() {
     let start = Instant::now();
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -120,7 +120,7 @@ fn benchmark_parsing_large_file() {
 
     // Request diagnostics
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -131,7 +131,7 @@ fn benchmark_parsing_large_file() {
         }),
     );
 
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let duration = start.elapsed();
 
     let size_kb = large_code.len() as f64 / 1024.0;
@@ -148,15 +148,15 @@ fn benchmark_parsing_large_file() {
 
 #[test]
 fn benchmark_incremental_parsing() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let initial_code = "my $x = 1;\n".repeat(100);
     let uri = "file:///incremental.pl";
 
     // Open initial document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -180,7 +180,7 @@ fn benchmark_incremental_parsing() {
         let start = Instant::now();
 
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
@@ -206,8 +206,8 @@ fn benchmark_incremental_parsing() {
 
 #[test]
 fn benchmark_diagnostics() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code_with_errors = r#"
 my $x = ;  # Missing value
@@ -219,7 +219,7 @@ for my $i (@) { }  # Missing array
     let uri = "file:///errors.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -237,7 +237,7 @@ for my $i (@) { }  # Missing array
     let start = Instant::now();
 
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -248,7 +248,7 @@ for my $i (@) { }  # Missing array
         }),
     );
 
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let duration = start.elapsed();
 
     println!("Diagnostic time: {:?}", duration);
@@ -262,14 +262,14 @@ for my $i (@) { }  # Missing array
 
 #[test]
 fn benchmark_document_symbols() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = generators::generate_symbols(50);
     let uri = "file:///symbols.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -287,7 +287,7 @@ fn benchmark_document_symbols() {
     let start = Instant::now();
 
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -298,7 +298,7 @@ fn benchmark_document_symbols() {
         }),
     );
 
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let duration = start.elapsed();
 
     println!("Symbol extraction time: {:?}", duration);
@@ -312,8 +312,8 @@ fn benchmark_document_symbols() {
 
 #[test]
 fn benchmark_goto_definition() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = r#"
 my $var = 42;
@@ -328,7 +328,7 @@ function();
     let uri = "file:///definition.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -346,7 +346,7 @@ function();
     let start = Instant::now();
 
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -358,7 +358,7 @@ function();
         }),
     );
 
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let duration = start.elapsed();
 
     println!("Go to definition time: {:?}", duration);
@@ -372,8 +372,8 @@ function();
 
 #[test]
 fn benchmark_find_references() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = r#"
 my $shared = 42;
@@ -386,7 +386,7 @@ for (1..10) { $shared++; }
     let uri = "file:///references.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -404,7 +404,7 @@ for (1..10) { $shared++; }
     let start = Instant::now();
 
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -417,7 +417,7 @@ for (1..10) { $shared++; }
         }),
     );
 
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let duration = start.elapsed();
 
     println!("Find references time: {:?}", duration);
@@ -431,8 +431,8 @@ for (1..10) { $shared++; }
 
 #[test]
 fn benchmark_hover() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = r#"
 use strict;
@@ -444,7 +444,7 @@ open(my $fh, '<', 'file.txt');
     let uri = "file:///hover.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -462,7 +462,7 @@ open(my $fh, '<', 'file.txt');
     let start = Instant::now();
 
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -474,7 +474,7 @@ open(my $fh, '<', 'file.txt');
         }),
     );
 
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let duration = start.elapsed();
 
     println!("Hover time: {:?}", duration);
@@ -488,8 +488,8 @@ open(my $fh, '<', 'file.txt');
 
 #[test]
 fn benchmark_concurrent_requests() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open multiple documents
     for i in 0..10 {
@@ -497,7 +497,7 @@ fn benchmark_concurrent_requests() {
         let uri = format!("file:///concurrent_{}.pl", i);
 
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -521,7 +521,7 @@ fn benchmark_concurrent_requests() {
 
         // Interleave different request types
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i * 3,
@@ -533,7 +533,7 @@ fn benchmark_concurrent_requests() {
         );
 
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i * 3 + 1,
@@ -545,7 +545,7 @@ fn benchmark_concurrent_requests() {
         );
 
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i * 3 + 2,
@@ -560,7 +560,7 @@ fn benchmark_concurrent_requests() {
 
     // Read all responses
     for _ in 0..30 {
-        let _ = read_response(&mut server);
+        let _ = read_response(&server);
     }
 
     let duration = start.elapsed();
@@ -574,8 +574,8 @@ fn benchmark_concurrent_requests() {
 
 #[test]
 fn benchmark_memory_usage() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open many large documents to test memory usage
     for i in 0..50 {
@@ -583,7 +583,7 @@ fn benchmark_memory_usage() {
         let uri = format!("file:///memory_{}.pl", i);
 
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -606,7 +606,7 @@ fn benchmark_memory_usage() {
         let uri = format!("file:///memory_{}.pl", i);
 
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i,
@@ -617,7 +617,7 @@ fn benchmark_memory_usage() {
             }),
         );
 
-        let _ = read_response(&mut server);
+        let _ = read_response(&server);
     }
 
     let duration = start.elapsed();
@@ -628,8 +628,8 @@ fn benchmark_memory_usage() {
 
 #[test]
 fn benchmark_deep_nesting() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let deep_code = generators::generate_nested_code(50);
     let uri = "file:///deep.pl";
@@ -637,7 +637,7 @@ fn benchmark_deep_nesting() {
     let start = Instant::now();
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -653,7 +653,7 @@ fn benchmark_deep_nesting() {
     );
 
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -664,7 +664,7 @@ fn benchmark_deep_nesting() {
         }),
     );
 
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     let duration = start.elapsed();
 
     println!("Deep nesting parse time: {:?}", duration);
@@ -700,21 +700,21 @@ fn benchmark_summary() {
 // Helper functions for summary benchmark
 fn benchmark_initialization_time() -> Duration {
     let start = Instant::now();
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
     start.elapsed()
 }
 
 fn benchmark_simple_file_time() -> Duration {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = "my $x = 42;\n";
     let uri = "file:///bench.pl";
 
     let start = Instant::now();
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -732,15 +732,15 @@ fn benchmark_simple_file_time() -> Duration {
 }
 
 fn benchmark_large_file_time() -> Duration {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = generators::generate_large_file(1000);
     let uri = "file:///large.pl";
 
     let start = Instant::now();
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -758,14 +758,14 @@ fn benchmark_large_file_time() -> Duration {
 }
 
 fn benchmark_incremental_time() -> Duration {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = "my $x = 1;\n";
     let uri = "file:///inc.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -783,7 +783,7 @@ fn benchmark_incremental_time() -> Duration {
     let start = Instant::now();
     for i in 0..10 {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
@@ -803,14 +803,14 @@ fn benchmark_incremental_time() -> Duration {
 }
 
 fn benchmark_diagnostics_time() -> Duration {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = "my $x = ;\n";
     let uri = "file:///diag.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -827,7 +827,7 @@ fn benchmark_diagnostics_time() -> Duration {
 
     let start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -837,19 +837,19 @@ fn benchmark_diagnostics_time() -> Duration {
             }
         }),
     );
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     start.elapsed()
 }
 
 fn benchmark_symbols_time() -> Duration {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = generators::generate_symbols(20);
     let uri = "file:///sym.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -866,7 +866,7 @@ fn benchmark_symbols_time() -> Duration {
 
     let start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -876,19 +876,19 @@ fn benchmark_symbols_time() -> Duration {
             }
         }),
     );
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     start.elapsed()
 }
 
 fn benchmark_definition_time() -> Duration {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = "my $x = 42;\nprint $x;\n";
     let uri = "file:///def.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -905,7 +905,7 @@ fn benchmark_definition_time() -> Duration {
 
     let start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -916,19 +916,19 @@ fn benchmark_definition_time() -> Duration {
             }
         }),
     );
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     start.elapsed()
 }
 
 fn benchmark_references_time() -> Duration {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = "my $x = 42;\n$x++;\nprint $x;\n";
     let uri = "file:///ref.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -945,7 +945,7 @@ fn benchmark_references_time() -> Duration {
 
     let start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -957,19 +957,19 @@ fn benchmark_references_time() -> Duration {
             }
         }),
     );
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     start.elapsed()
 }
 
 fn benchmark_hover_time() -> Duration {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let code = "print 'test';\n";
     let uri = "file:///hover.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -986,7 +986,7 @@ fn benchmark_hover_time() -> Duration {
 
     let start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -997,20 +997,20 @@ fn benchmark_hover_time() -> Duration {
             }
         }),
     );
-    let _ = read_response(&mut server);
+    let _ = read_response(&server);
     start.elapsed()
 }
 
 fn benchmark_concurrent_time() -> Duration {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open a document
     let code = "my $x = 42;\n";
     let uri = "file:///concurrent.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -1030,7 +1030,7 @@ fn benchmark_concurrent_time() -> Duration {
     // Send 10 requests
     for i in 0..10 {
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i,
@@ -1045,7 +1045,7 @@ fn benchmark_concurrent_time() -> Duration {
 
     // Read all responses
     for _ in 0..10 {
-        let _ = read_response(&mut server);
+        let _ = read_response(&server);
     }
 
     start.elapsed() / 10

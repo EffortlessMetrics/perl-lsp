@@ -80,7 +80,7 @@ fn test_diagnostics_clear_protocol_framing() -> Result<(), Box<dyn std::error::E
     let server = LspServer::with_output(output);
 
     // Helper to send requests/notifications
-    let mut send = |method: &str, id: Option<Value>, params: Value| {
+    let send = |method: &str, id: Option<Value>, params: Value| {
         let req = JsonRpcRequest {
             _jsonrpc: "2.0".into(),
             id,

@@ -21,7 +21,7 @@ fn init_server() -> LspServer {
     srv
 }
 
-fn open(server: &mut LspServer, uri: &str, text: &str) {
+fn open(server: &LspServer, uri: &str, text: &str) {
     let request = JsonRpcRequest {
         _jsonrpc: "2.0".to_string(),
         id: None,
@@ -42,11 +42,11 @@ fn open(server: &mut LspServer, uri: &str, text: &str) {
 
 #[test]
 fn test_cross_file_definition() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = init_server();
+    let srv = init_server();
 
     // File 1: defines Foo::bar
     open(
-        &mut srv,
+        &srv,
         "file:///lib/Foo.pm",
         r#"package Foo;
 use strict;
@@ -62,7 +62,7 @@ sub bar {
 
     // File 2: calls Foo::bar
     open(
-        &mut srv,
+        &srv,
         "file:///app.pl",
         r#"#!/usr/bin/perl
 use strict;
@@ -115,11 +115,11 @@ print "Result: $result\n";
 
 #[test]
 fn test_cross_file_references() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = init_server();
+    let srv = init_server();
 
     // File 1: defines and uses a function
     open(
-        &mut srv,
+        &srv,
         "file:///lib/Utils.pm",
         r#"package Utils;
 use strict;
@@ -140,7 +140,7 @@ sub test_self {
 
     // File 2: uses Utils::process_data
     open(
-        &mut srv,
+        &srv,
         "file:///script1.pl",
         r#"#!/usr/bin/perl
 use strict;
@@ -153,7 +153,7 @@ my $result = Utils::process_data(5);
 
     // File 3: also uses Utils::process_data
     open(
-        &mut srv,
+        &srv,
         "file:///script2.pl",
         r#"#!/usr/bin/perl
 use strict;
@@ -207,11 +207,11 @@ for (1..10) {
 
 #[test]
 fn test_workspace_symbols_after_indexing() -> Result<(), Box<dyn std::error::Error>> {
-    let mut srv = init_server();
+    let srv = init_server();
 
     // Index multiple files
     open(
-        &mut srv,
+        &srv,
         "file:///lib/Math.pm",
         r#"package Math;
 sub add { $_[0] + $_[1] }
@@ -222,7 +222,7 @@ sub multiply { $_[0] * $_[1] }
     );
 
     open(
-        &mut srv,
+        &srv,
         "file:///lib/String.pm",
         r#"package String;
 sub concat { $_[0] . $_[1] }

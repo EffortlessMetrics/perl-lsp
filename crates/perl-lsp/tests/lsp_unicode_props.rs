@@ -19,15 +19,15 @@ fn test_utf16_position_roundtrip() {
         "mixed\n\r\nlines", // Mixed line endings
     ];
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     for text in test_strings {
         let uri = "file:///test.pl";
 
         // Open document with the test string
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -45,7 +45,7 @@ fn test_utf16_position_roundtrip() {
         // Test hover at various positions to exercise UTF-16 conversion
         for i in 0..text.len().min(10) {
             let _response = send_request(
-                &mut server,
+                &server,
                 json!({
                     "jsonrpc": "2.0",
                     "method": "textDocument/hover",
@@ -82,14 +82,14 @@ fn test_utf16_handles_various_strings() {
     for text in test_cases {
         let formatted = format!("{}\n🦀{}\n", text, text);
 
-        let mut server = start_lsp_server();
-        initialize_lsp(&mut server);
+        let server = start_lsp_server();
+        initialize_lsp(&server);
 
         let uri = "file:///test.pl";
 
         // Open document
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -108,7 +108,7 @@ fn test_utf16_handles_various_strings() {
         for line in 0..3 {
             for character in [0, 1, 5, 10] {
                 let _response = send_request(
-                    &mut server,
+                    &server,
                     json!({
                         "jsonrpc": "2.0",
                         "method": "textDocument/hover",

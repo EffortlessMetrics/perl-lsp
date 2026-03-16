@@ -8,7 +8,7 @@ use std::time::Duration;
 
 #[test]
 fn handles_back_to_back_frames_in_single_write() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
+    let server = start_lsp_server();
 
     let first = json!({
         "jsonrpc": "2.0",
@@ -33,9 +33,9 @@ fn handles_back_to_back_frames_in_single_write() -> Result<(), Box<dyn std::erro
 
     let timeout = Duration::from_secs(2);
     let first_response =
-        read_response_matching_i64(&mut server, 901, timeout).ok_or("missing response 901")?;
+        read_response_matching_i64(&server, 901, timeout).ok_or("missing response 901")?;
     let second_response =
-        read_response_matching_i64(&mut server, 902, timeout).ok_or("missing response 902")?;
+        read_response_matching_i64(&server, 902, timeout).ok_or("missing response 902")?;
 
     assert_eq!(first_response.get("id"), Some(&json!(901)));
     assert_eq!(second_response.get("id"), Some(&json!(902)));

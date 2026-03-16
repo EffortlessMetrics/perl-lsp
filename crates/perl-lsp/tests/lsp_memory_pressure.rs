@@ -20,8 +20,8 @@ fn memory_scale() -> usize {
 
 #[test]
 fn test_extremely_large_document() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create a 10MB document
     let mut large_content = String::with_capacity(10 * 1024 * 1024);
@@ -34,7 +34,7 @@ fn test_extremely_large_document() {
 
     // Open extremely large document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -52,7 +52,7 @@ fn test_extremely_large_document() {
     // Try to get symbols for large document
     let start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -63,7 +63,7 @@ fn test_extremely_large_document() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     let elapsed = start.elapsed();
 
     // Should complete within reasonable time
@@ -73,8 +73,8 @@ fn test_extremely_large_document() {
 
 #[test]
 fn test_many_small_documents() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open 1000 small documents
     for i in 0..1000 {
@@ -82,7 +82,7 @@ fn test_many_small_documents() {
         let content = format!("#!/usr/bin/perl\nmy $var{} = {};\nprint $var{};\n", i, i, i);
 
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -105,7 +105,7 @@ fn test_many_small_documents() {
 
     // Server should still be responsive
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -116,14 +116,14 @@ fn test_many_small_documents() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_deep_ast_nesting() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create deeply nested expression (may cause stack overflow)
     let mut nested = String::from("1");
@@ -135,7 +135,7 @@ fn test_deep_ast_nesting() {
     let uri = "file:///deep_nesting.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -152,7 +152,7 @@ fn test_deep_ast_nesting() {
 
     // Should handle without stack overflow
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -163,14 +163,14 @@ fn test_deep_ast_nesting() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_wide_ast_tree() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create document with many top-level symbols
     let mut content = String::new();
@@ -181,7 +181,7 @@ fn test_wide_ast_tree() {
     let uri = "file:///wide_tree.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -198,7 +198,7 @@ fn test_wide_ast_tree() {
 
     // Request symbols (should handle many symbols)
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -209,14 +209,14 @@ fn test_wide_ast_tree() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response["result"].is_array() || response["error"].is_object());
 }
 
 #[test]
 fn test_memory_leak_detection() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///leak_test.pl";
 
@@ -224,7 +224,7 @@ fn test_memory_leak_detection() {
     for i in 0..100 {
         // Open document
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -241,7 +241,7 @@ fn test_memory_leak_detection() {
 
         // Perform operations
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i,
@@ -252,11 +252,11 @@ fn test_memory_leak_detection() {
             }),
         );
 
-        let _ = read_response(&mut server);
+        let _ = read_response(&server);
 
         // Close document
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didClose",
@@ -273,8 +273,8 @@ fn test_memory_leak_detection() {
 
 #[test]
 fn test_infinite_loop_in_content() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Document that might trigger infinite parsing
     let content = r#"
@@ -295,7 +295,7 @@ This heredoc never ends...
     let uri = "file:///infinite.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -313,7 +313,7 @@ This heredoc never ends...
     // Should parse without hanging
     let start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -324,7 +324,7 @@ This heredoc never ends...
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     let elapsed = start.elapsed();
 
     assert!(elapsed < Duration::from_secs(5));
@@ -333,8 +333,8 @@ This heredoc never ends...
 
 #[test]
 fn test_exponential_backtracking() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Pattern that could cause exponential backtracking
     let mut content = String::from("my $x = '");
@@ -344,7 +344,7 @@ fn test_exponential_backtracking() {
     let uri = "file:///backtrack.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -362,7 +362,7 @@ fn test_exponential_backtracking() {
     // Should handle without exponential time
     let start = Instant::now();
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -373,7 +373,7 @@ fn test_exponential_backtracking() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     let elapsed = start.elapsed();
 
     assert!(elapsed < Duration::from_secs(2));
@@ -382,8 +382,8 @@ fn test_exponential_backtracking() {
 
 #[test]
 fn test_recursive_macro_expansion() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Document with recursive-like patterns
     let content = r#"
@@ -401,7 +401,7 @@ BEGIN {
     let uri = "file:///recursive.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -418,7 +418,7 @@ BEGIN {
 
     // Should handle recursive patterns
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -430,14 +430,14 @@ BEGIN {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_cache_exhaustion() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create many unique documents to exhaust any caches
     for i in 0..1000 {
@@ -448,7 +448,7 @@ fn test_cache_exhaustion() {
             format!("package Package{};\nsub unique_func_{} {{ return {}; }}\n1;", i, i, i);
 
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didOpen",
@@ -465,7 +465,7 @@ fn test_cache_exhaustion() {
 
         // Request hover to trigger caching
         send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i,
@@ -477,12 +477,12 @@ fn test_cache_exhaustion() {
             }),
         );
 
-        let _ = read_response(&mut server);
+        let _ = read_response(&server);
     }
 
     // Cache should handle eviction properly
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 9999,
@@ -494,14 +494,14 @@ fn test_cache_exhaustion() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_string_explosion() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create document with many string concatenations
     let mut content = String::from("my $str = ");
@@ -513,7 +513,7 @@ fn test_string_explosion() {
     let uri = "file:///string_explosion.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -530,7 +530,7 @@ fn test_string_explosion() {
 
     // Should handle many string operations
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -541,14 +541,14 @@ fn test_string_explosion() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_symbol_table_explosion() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create document with many symbols
     let mut content = String::new();
@@ -571,7 +571,7 @@ fn test_symbol_table_explosion() {
     let uri = "file:///symbol_explosion.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -588,7 +588,7 @@ fn test_symbol_table_explosion() {
 
     // Request all symbols
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -599,12 +599,12 @@ fn test_symbol_table_explosion() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 
     // Search in large symbol table
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 2,
@@ -615,14 +615,14 @@ fn test_symbol_table_explosion() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_diagnostic_explosion() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create document with many syntax errors
     let mut content = String::new();
@@ -637,7 +637,7 @@ fn test_diagnostic_explosion() {
     let uri = "file:///many_errors.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -657,7 +657,7 @@ fn test_diagnostic_explosion() {
 
     // Request code actions for error
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -675,14 +675,14 @@ fn test_diagnostic_explosion() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_reference_chain() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Create long chain of references
     let mut content = String::new();
@@ -694,7 +694,7 @@ fn test_reference_chain() {
     let uri = "file:///ref_chain.pl";
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -711,7 +711,7 @@ fn test_reference_chain() {
 
     // Find references to first variable (should find many)
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -726,21 +726,21 @@ fn test_reference_chain() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }
 
 #[test]
 fn test_incremental_parsing_stress() {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///incremental.pl";
     let initial = "print 'hello';\n".repeat(100);
 
     // Open document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -758,7 +758,7 @@ fn test_incremental_parsing_stress() {
     // Send many rapid incremental changes
     for i in 2..1002 {
         send_notification(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/didChange",
@@ -781,7 +781,7 @@ fn test_incremental_parsing_stress() {
 
     // Server should handle rapid changes
     send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": 1,
@@ -792,6 +792,6 @@ fn test_incremental_parsing_stress() {
         }),
     );
 
-    let response = read_response(&mut server);
+    let response = read_response(&server);
     assert!(response.is_object());
 }

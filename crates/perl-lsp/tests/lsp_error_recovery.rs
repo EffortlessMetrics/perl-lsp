@@ -12,14 +12,14 @@ use common::{
 
 #[test]
 fn test_recover_from_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///recovery.pl";
 
     // Start with invalid syntax
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -39,7 +39,7 @@ fn test_recover_from_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
 
     // Fix the syntax error
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -56,11 +56,11 @@ fn test_recover_from_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Wait for diagnostics to clear after fix
-    common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
+    common::drain_until_quiet(&server, common::short_timeout(), Duration::from_secs(2));
 
     // Should now work correctly
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/documentSymbol",
@@ -74,14 +74,14 @@ fn test_recover_from_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
     assert!(response["result"].is_array(), "Response was not an array: {}", response);
     let symbols = response["result"].as_array().ok_or("Expected 'result' to be an array")?;
     assert!(!symbols.is_empty());
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_partial_document_parsing() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Document with mixed valid and invalid sections
     let content = r#"
@@ -104,7 +104,7 @@ sub another_valid {
 "#;
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -121,7 +121,7 @@ sub another_valid {
 
     // Should still find valid symbols
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/documentSymbol",
@@ -141,20 +141,20 @@ sub another_valid {
 
     assert!(function_names.contains(&"valid_function".to_string()));
     assert!(function_names.contains(&"another_valid".to_string()));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_incremental_edit_recovery() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///incremental.pl";
 
     // Start with valid document
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -171,7 +171,7 @@ fn test_incremental_edit_recovery() -> Result<(), Box<dyn std::error::Error>> {
 
     // Make edit that breaks syntax temporarily
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -193,7 +193,7 @@ fn test_incremental_edit_recovery() -> Result<(), Box<dyn std::error::Error>> {
 
     // Complete the edit to fix syntax
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -215,7 +215,7 @@ fn test_incremental_edit_recovery() -> Result<(), Box<dyn std::error::Error>> {
 
     // Should work correctly after recovery
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",
@@ -231,18 +231,18 @@ fn test_incremental_edit_recovery() -> Result<(), Box<dyn std::error::Error>> {
         }),
     );
     assert!(response["result"].is_object() || response["result"].is_null());
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_workspace_recovery_after_error() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Open multiple files, one with error
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -258,7 +258,7 @@ fn test_workspace_recovery_after_error() -> Result<(), Box<dyn std::error::Error
     );
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -274,7 +274,7 @@ fn test_workspace_recovery_after_error() -> Result<(), Box<dyn std::error::Error
     );
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -294,7 +294,7 @@ fn test_workspace_recovery_after_error() -> Result<(), Box<dyn std::error::Error
 
     // Workspace symbols should still work
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "workspace/symbol",
@@ -310,14 +310,14 @@ fn test_workspace_recovery_after_error() -> Result<(), Box<dyn std::error::Error
     if !symbols.is_empty() {
         assert!(symbols.iter().any(|s| s["name"] == "foo"), "Workspace symbols: {:?}", symbols);
     }
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_reference_search_with_errors() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Document with partial errors
     let content = r#"
@@ -335,7 +335,7 @@ print $var;  # Another valid reference
 "#;
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -352,7 +352,7 @@ print $var;  # Another valid reference
 
     // Find references should work despite errors
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/references",
@@ -375,14 +375,14 @@ print $var;  # Another valid reference
     // When there are syntax errors, references might not be found
     // The important thing is that the server doesn't crash and returns a valid response
     eprintln!("Found {} references (may be 0 due to parse errors): {:?}", refs.len(), refs);
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_completion_in_broken_context() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Document with syntax error before completion point
     let content = r#"
@@ -395,7 +395,7 @@ sub broken {
 "#;
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -412,7 +412,7 @@ sub broken {
 
     // Completion should still work
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/completion",
@@ -432,14 +432,14 @@ sub broken {
 
     // Should suggest "print" despite earlier error
     assert!(items.iter().any(|item| item["label"] == "print"));
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_rename_with_parse_errors() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let content = r#"
 my $old_name = 42;
@@ -456,7 +456,7 @@ $old_name++;
 "#;
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -473,7 +473,7 @@ $old_name++;
 
     // Prepare rename should work
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/prepareRename",
@@ -491,7 +491,7 @@ $old_name++;
     if response["result"].is_object() {
         // Perform rename
         let response = send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/rename",
@@ -509,14 +509,14 @@ $old_name++;
         );
         assert!(response["result"]["changes"].is_object());
     }
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_formatting_with_errors() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Document with formatting issues and syntax error
     let content = r#"my$x=1;my$y=2;
@@ -525,7 +525,7 @@ sub bar{print$y;;}  # Syntax error
 my   $z   =   3;"#;
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -542,7 +542,7 @@ my   $z   =   3;"#;
 
     // Format document request
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/formatting",
@@ -559,20 +559,20 @@ my   $z   =   3;"#;
     );
     // Should either format what it can or return error gracefully
     assert!(response["result"].is_array() || response["error"].is_object());
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let uri = "file:///diagnostic.pl";
 
     // Start with multiple errors
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -591,7 +591,7 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
 
     // Fix one error at a time
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -612,13 +612,13 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Wait for change to be processed
-    common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
+    common::drain_until_quiet(&server, common::short_timeout(), Duration::from_secs(2));
 
     std::thread::sleep(Duration::from_millis(100));
 
     // Fix second error
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -639,13 +639,13 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Wait for change to be processed
-    common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
+    common::drain_until_quiet(&server, common::short_timeout(), Duration::from_secs(2));
 
     std::thread::sleep(Duration::from_millis(100));
 
     // Fix last error
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didChange",
@@ -666,14 +666,14 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Wait for all changes to be processed
-    common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
+    common::drain_until_quiet(&server, common::short_timeout(), Duration::from_secs(2));
 
     // Extra settle time for the server to complete async processing
     std::thread::sleep(Duration::from_millis(200));
 
     // Document should be fully functional now
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/documentSymbol",
@@ -712,10 +712,10 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
 
         // Wait for server to process buffered notifications
         std::thread::sleep(Duration::from_millis(200 * attempt as u64));
-        common::drain_until_quiet(&mut server, common::short_timeout(), Duration::from_secs(2));
+        common::drain_until_quiet(&server, common::short_timeout(), Duration::from_secs(2));
 
         let retry_response = send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "method": "textDocument/documentSymbol",
@@ -739,14 +739,14 @@ fn test_diagnostic_recovery() -> Result<(), Box<dyn std::error::Error>> {
         max_attempts, final_count, last_summaries
     );
 
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_goto_definition_with_errors() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let content = r#"
 sub my_func {
@@ -757,7 +757,7 @@ my $result = my_func();  # Should still find definition
 "#;
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -774,7 +774,7 @@ my $result = my_func();  # Should still find definition
 
     // Go to definition should work despite error in target
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/definition",
@@ -790,14 +790,14 @@ my $result = my_func();  # Should still find definition
         }),
     );
     assert!(response["result"].is_array() || response["result"].is_object());
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }
 
 #[test]
 fn test_hover_in_error_context() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     let content = r#"
 use strict;
@@ -812,7 +812,7 @@ sub broken {
 "#;
 
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/didOpen",
@@ -829,7 +829,7 @@ sub broken {
 
     // Hover should work on valid variable despite nearby error
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "textDocument/hover",
@@ -845,6 +845,6 @@ sub broken {
         }),
     );
     assert!(response["result"].is_object() || response["result"].is_null());
-    shutdown_and_exit(&mut server);
+    shutdown_and_exit(&server);
     Ok(())
 }

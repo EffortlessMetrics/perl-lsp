@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 /// Helper to send a request and get result
 fn send_request(
-    server: &mut LspServer,
+    server: &LspServer,
     method: &str,
     params: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
@@ -32,11 +32,11 @@ fn send_request(
 /// Create a test server
 fn setup_server() -> LspServer {
     let output = Arc::new(Mutex::new(Box::new(Vec::new()) as Box<dyn std::io::Write + Send>));
-    let mut server = LspServer::with_output(output);
+    let server = LspServer::with_output(output);
 
     // Initialize the server
     send_request(
-        &mut server,
+        &server,
         "initialize",
         json!({
             "capabilities": {},
@@ -60,10 +60,10 @@ fn setup_server() -> LspServer {
 
 #[test]
 fn lsp_virtual_perldoc_strict() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/textDocumentContent",
         json!({
             "uri": "perldoc://strict"
@@ -95,10 +95,10 @@ fn lsp_virtual_perldoc_strict() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn lsp_virtual_perldoc_invalid_module() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/textDocumentContent",
         json!({
             "uri": "perldoc://ThisModuleDefinitelyDoesNotExist12345"
@@ -112,10 +112,10 @@ fn lsp_virtual_perldoc_invalid_module() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn lsp_virtual_unsupported_scheme() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/textDocumentContent",
         json!({
             "uri": "unsupported://some/path"
@@ -134,24 +134,24 @@ fn lsp_virtual_unsupported_scheme() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn lsp_virtual_missing_params() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Empty params
-    let result = send_request(&mut server, "workspace/textDocumentContent", json!({}));
+    let result = send_request(&server, "workspace/textDocumentContent", json!({}));
     assert!(result.is_err(), "Should return error for missing URI");
     Ok(())
 }
 
 #[test]
 fn lsp_virtual_perldoc_common_modules() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server();
+    let server = setup_server();
 
     // Test common modules that should be available on most systems
     let modules = vec!["warnings", "vars"];
 
     for module in modules {
         let result = send_request(
-            &mut server,
+            &server,
             "workspace/textDocumentContent",
             json!({
                 "uri": format!("perldoc://{}", module)
@@ -178,10 +178,10 @@ fn lsp_virtual_perldoc_common_modules() -> Result<(), Box<dyn std::error::Error>
 
 #[test]
 fn lsp_virtual_empty_module_name() -> Result<(), Box<dyn std::error::Error>> {
-    let mut server = setup_server();
+    let server = setup_server();
 
     let result = send_request(
-        &mut server,
+        &server,
         "workspace/textDocumentContent",
         json!({
             "uri": "perldoc://"

@@ -15,8 +15,8 @@ use common::{initialize_lsp, send_notification, send_request, start_lsp_server};
 fn test_concurrent_request_processing_ac3() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-concurrent-request-management
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send multiple concurrent requests
     let concurrent_requests = 5;
@@ -27,7 +27,7 @@ fn test_concurrent_request_processing_ac3() {
 
         // Send different types of requests
         let response = send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": i,
@@ -53,8 +53,8 @@ fn test_concurrent_request_processing_ac3() {
 fn test_lsp_workflow_stage_tracking_ac4() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-concurrent-request-management
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Test different LSP workflow stages
     let workflow_tests = vec![
@@ -68,7 +68,7 @@ fn test_lsp_workflow_stage_tracking_ac4() {
         let start_time = Instant::now();
 
         let response = send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": method,
@@ -98,8 +98,8 @@ fn test_lsp_workflow_stage_tracking_ac4() {
 fn test_request_timeout_cancellation_integration_ac3_ac4() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-concurrent-request-management
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Send request that might take time
     let request_id = json!("cancellable_test");
@@ -108,7 +108,7 @@ fn test_request_timeout_cancellation_integration_ac3_ac4() {
 
     // Send long-running request
     let response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": request_id,
@@ -126,7 +126,7 @@ fn test_request_timeout_cancellation_integration_ac3_ac4() {
 
     // Test cancellation (send cancellation notification)
     send_notification(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "method": "$/cancelRequest",
@@ -138,7 +138,7 @@ fn test_request_timeout_cancellation_integration_ac3_ac4() {
 
     // Verify server remains responsive after cancellation
     let health_response = send_request(
-        &mut server,
+        &server,
         json!({
             "jsonrpc": "2.0",
             "id": "health_check",
@@ -157,8 +157,8 @@ fn test_request_timeout_cancellation_integration_ac3_ac4() {
 fn test_performance_metrics_collection_ac3() {
     // Tests feature spec: SPEC_144_IGNORED_TESTS_ARCHITECTURAL_BLUEPRINT.md#enhanced-concurrent-request-management
 
-    let mut server = start_lsp_server();
-    initialize_lsp(&mut server);
+    let server = start_lsp_server();
+    initialize_lsp(&server);
 
     // Test different types of requests to collect varied metrics
     let request_types = [
@@ -175,7 +175,7 @@ fn test_performance_metrics_collection_ac3() {
         let request_start = Instant::now();
 
         let response = send_request(
-            &mut server,
+            &server,
             json!({
                 "jsonrpc": "2.0",
                 "id": format!("metrics_{}", i),
