@@ -21,36 +21,27 @@ Claude Code's agent teams documentation recommends 3-5 teammates. That's fine fo
 ```
 Lead (orchestrator) — coordinates only, never writes code
   │
-  ├── DISCOVERY
-  │   ├── scout-1, scout-2              — find gaps, write handoff files
-  │   └── (each spawns 5-8 Explore subagents in parallel)
+  ├── scout      — DISCOVERY: find gaps, write handoffs and issues
+  │               (spawns 5-8 Explore subagents per round)
   │
-  ├── BUILD
-  │   ├── builder-1, builder-2          — claim tasks, build in worktrees
-  │   └── (each spawns 3-5 build subagents with isolation: "worktree")
+  ├── builder    — BUILD: claim tasks, implement in worktrees
+  │               (spawns 3-5 worktree subagents per round)
   │
-  ├── REVIEW
-  │   ├── reviewer                      — review diffs, create PRs with labels, auto-merge
-  │   └── pr-responder                  — address review comments, push fixes
+  ├── reviewer   — REVIEW: review diffs, create PRs, address comments
+  │               (spawns 3-5 review subagents per round)
   │
-  ├── MERGE
-  │   ├── merger                        — merge PRs, handle drift, signal validator
-  │   └── validator                     — verify merges actually helped, catch regressions
+  ├── ops        — MERGE + VALIDATE + FIX: merge green PRs, validate,
+  │               fix CI failures (sequential merges, spawns fix subs)
   │
-  ├── IMPROVE (~20% of capacity, always active)
-  │   ├── improver-docs                 — ADRs, changelog, friction log, README, roadmap
-  │   └── improver-tests                — mutants, flaky tests, coverage, deps, dead code
-  │
-  └── GOVERNANCE
-      ├── strategist                    — priority alignment, roadmap tracking, agent health
-      └── fixer                         — CI failures, regressions, known-pitfalls
+  └── improver   — IMPROVE (~20% of capacity, always active)
+                  (spawns 2-4 worktree subagents for docs/tests/devex)
 ```
 
-**12 named teammates. 10 operational layers. 30-60 parallel workers at peak.**
+**5 coordinator teammates. 30-60 parallel workers at peak.**
 
 ### Why This Shape
 
-**Thin teammates, thick subagents.** Each teammate carries a full context window. 30 teammates = 30 context windows accumulating noise. Instead, 12 coordinators manage lanes while spawning fresh subagents for each task. Fresh subagents are more context-efficient: focused prompt, no accumulated history, good agent definitions ensure consistent behavior, exit when done.
+**Thin teammates, thick subagents.** Each teammate carries a full context window. 30 teammates = 30 context windows accumulating noise. Instead, 5 coordinators manage lanes while spawning fresh subagents for each task. Fresh subagents are more context-efficient: focused prompt, no accumulated history, good agent definitions ensure consistent behavior, exit when done.
 
 **Worktrees for all code changes.** Git worktrees give each subagent a physically separate working directory. The Agent tool's `isolation: "worktree"` handles creation and cleanup. No `git stash`/`checkout` conflicts between parallel workers.
 
@@ -58,9 +49,122 @@ Lead (orchestrator) — coordinates only, never writes code
 
 **Per-unit verification.** `cargo test --workspace` takes 3-5 min. `cargo test -p <crate>` takes 10-30 sec. For small, focused PRs, crate-level verification is 10x faster and sufficient. Escalate to workspace verification only for cross-cutting changes.
 
+## Skills Architecture
+
+Skills are structured as directories under `.claude/skills/<name>/`, each containing:
+
+- `SKILL.md` — the skill definition with frontmatter and content
+- `templates/` — reusable templates for the skill's outputs
+- `examples/` — worked examples (optional)
+- `reference/` — supporting reference material (optional)
+
+### Skill Frontmatter
+
+Skills use YAML frontmatter to declare their scope and constraints:
+
+```yaml
+---
+name: parser-fix
+description: TDD parser fix — failing test, minimal fix, verify, PR.
+user-invocable: true
+context: fork          # Runs in isolated context (doesn't pollute caller)
+agent: general-purpose # What kind of agent can run this
+allowed-tools: Read, Edit, Write, Grep, Glob, Bash(cargo *), Bash(git *)
+---
+```
+
+Key frontmatter fields:
+- `context: fork` — skill runs in its own isolated context
+- `allowed-tools` — restricts what tools the skill can use
+- `user-invocable: false` — hidden from user's skill list (internal use only)
+- `disable-model-invocation: true` — pure instruction, no model call
+
+### Command And Skill Scoping
+
+The portable pack ships slash commands under `.claude/commands/`. This repo additionally tracks a repo-local skill layer for the same coordinator flow. The important rule is the same in both cases: keep coordinator-only commands out of worker context, and worker-only commands out of the lead's context.
+
+**Orchestrator commands** (lead invokes these):
+- `/swarm-status` — shows current PRs, issues, metrics, queue
+- `/green-merge` — drain merge-ready PRs
+- `/swarm-report` — daily summary for the user
+- `/rebase-open` — rebase conflicting PRs
+- `/queue-scout` — steer discovery when the queue runs low
+- `/status-drift` — repair computed metric drift
+- `/salvage-worktrees` — preserve dirty worktrees before cleanup
+
+**Agent commands** (workers invoke these — do NOT load into orchestrator context):
+- `/swarm-protocol` — behavioral rules
+- `/coding-standards` — project standards
+- `/swarm-priorities` — roadmap alignment
+- `/pr-respond` — address review comments on open PRs
+
+**Shared setup command**:
+- `/bootstrap-agents` — discover the repo and mint domain-specific agents
+
+## Hooks Architecture
+
+Hooks enforce rules that prompts can't. Agents forget instructions; hooks don't.
+
+### Hook Types
+
+Hooks are registered in `.claude/settings.json` under `hooks.<EventType>`:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [...],
+    "TeammateIdle": [...],
+    "TaskCompleted": [...],
+    "SubagentStart": [...],
+    "Stop": [...],
+    "PreToolUse": [...],
+    "SessionStart": [...]
+  }
+}
+```
+
+Each hook entry has a `type` and `command`. Hooks receive JSON context via stdin:
+
+```bash
+INPUT=$(cat)   # Read JSON from stdin
+CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
+```
+
+### Active Hooks
+
+| Event | Matcher | What It Does |
+|-------|---------|-------------|
+| `PostToolUse` | `Edit\|Write\|NotebookEdit` | Auto-runs `cargo fmt` + `cargo check` on edited `.rs` files |
+| `TeammateIdle` | — | Tracks idle transitions, checks for unclaimed work |
+| `TaskCompleted` | — | Verifies deliverables exist (branch, PR, fmt clean) before marking done |
+| `SubagentStart` | `swarm-builder\|swarm-reviewer\|swarm-fixer` | Auto-injects coding standards reminder |
+| `Stop` | — | Reads `stop_hook_active` from stdin JSON; warns if tasks are incomplete |
+| `PreToolUse` | `Bash` | Reads command from stdin JSON; blocks dangerous commands |
+| `SessionStart` | `compact` | Injects context refresh after conversation compaction |
+
+### Hook Design Principles
+
+1. **Gates over suggestions** — exit code 2 BLOCKS the action; prompts get ignored
+2. **Fast execution** — hooks run on every matching event; keep under 5 seconds
+3. **Informative errors** — when a hook blocks, tell the agent exactly what to fix
+4. **Idempotent** — hooks may run multiple times; don't double-count metrics
+
 ## Context Efficiency
 
 The biggest performance issue in multi-agent systems is context waste: Agent B re-reads the same 10 files that Agent A already read. We solve this with **handoff files** and **skills-over-file-reads**.
+
+### Context Layering Model
+
+Context flows from general to specific across 6 layers:
+
+1. **CLAUDE.md** — project-wide rules, crate map, commands
+2. **Hooks** — enforcement (PostToolUse, TaskCompleted, TeammateIdle)
+3. **Agent definition** — role, domain, orchestration loop
+4. **Skills** — mechanics for each step (parser-fix, verify-build, etc.)
+5. **Handoffs** — per-task context (root cause, fix code, test templates)
+6. **Source code** — the actual codebase
+
+Each layer is more specific than the last. Don't duplicate information across layers.
 
 ### Handoff Protocol
 
@@ -85,28 +189,21 @@ Each handoff file (`.ops/handoffs/<branch>.md`) contains:
 - **Known pitfalls** (relevant entries from failure knowledge base)
 - **Builder briefing** (appended after build: what changed, key decisions, what to watch for)
 
-**The efficiency hierarchy:**
-1. Best: multiple context-chunked agents with effective handoffs
-2. Good: one agent with skills and cache efficiency
-3. Worst: multiple agents re-reading the same full context
+### Commands And Skills Over File Reads
 
-### Skills Over File Reads
-
-Protocol, standards, and priorities are **skills** (`/swarm-protocol`, `/coding-standards`, `/swarm-priorities`), not files. Agents invoke them directly into their context instead of spending a `Read` tool call. Subagent prompts are 7 lines pointing to handoff + skills, not 100 lines of inline instructions.
+Protocol, standards, and priorities should be loaded by invocation (`/swarm-protocol`, `/coding-standards`, `/swarm-priorities`) instead of by spending `Read` calls on long reference files. In repo-local installs, the same material can additionally live in skills; in the portable pack, the slash commands are the load-bearing surface.
 
 ### Minimal Subagent Prompts
 
 Builder coordinators compose prompts like:
 ```
-"Read .ops/handoffs/<branch>.md for context.
- Read .claude/swarm-state/known-pitfalls.md for traps.
- Invoke /swarm-protocol and /coding-standards.
- Branch: X. Crate: Y. Verify: fmt && clippy && test.
- Append reviewer briefing to handoff. Write metrics.
- gh issue create --label swarm-discovered for out-of-scope finds."
+"Invoke /coding-standards. Read .ops/handoffs/<branch>.md.
+ Goal: <description from handoff>. Files: <file list from handoff>.
+ Verify: cargo fmt && cargo clippy -p <crate> --tests && cargo test -p <crate>.
+ Commit and push."
 ```
 
-7 lines. The handoff file has all the context. The skill invocations load the rules. No context wasted.
+7 lines. The handoff file has all the context. The command or skill invocations load the rules. No context wasted.
 
 ## Self-Governance
 
@@ -122,21 +219,21 @@ The `/swarm-priorities` skill loads the roadmap (NOW/NEXT/LATER), open milestone
 | P3 | Codebase health: DAP tests, debt, dead code, unused deps |
 | P4 | Polish: test naming, error messages, observability |
 
-Scouts tag every SLICE with a priority tier. Builders claim higher-priority tasks first. The strategist monitors distribution and steers scouts when the swarm drifts toward easy P3/P4 work.
+Scouts tag every SLICE with a priority tier. Builders claim higher-priority tasks first. The lead watches the distribution and can spin up a strategist-style analysis subagent when the swarm drifts toward easy P3/P4 work.
 
 ### Post-Merge Validation
 
-The validator teammate runs after every merge:
+The ops teammate runs validation after every merge:
 - Parser fix → corpus sweep (did clean count increase?)
 - Test addition → mutation re-test (is the target mutant killed?)
 - LSP change → integration tests (all pass?)
 - Any merge → clippy (no new warnings?)
 
-Regressions trigger immediate `gh issue create --label priority:high` and a message to the fixer.
+Regressions trigger immediate `gh issue create --label priority:high`.
 
 ### Strategic Analysis
 
-Every ~10 merges, the strategist produces a data-driven report:
+Every ~10 merges, the lead triggers a data-driven check:
 - Priority distribution (are we doing P1 work or drifting to P4?)
 - Roadmap progress (NOW items completed?)
 - Agent effectiveness (who succeeds vs. fails?)
@@ -150,7 +247,7 @@ Every ~10 merges, the strategist produces a data-driven report:
 | Layer | Lifetime | What |
 |-------|----------|------|
 | **Handoffs** | Until merge | Context transfer: scout→builder→reviewer |
-| **Ops files** | Current cycle | known-pitfalls, completed-slices, discovered-issues, metrics, agent-patches |
+| **Ops files** | Current session | known-pitfalls, completed-slices, discovered-issues, metrics, agent-patches |
 | **GitHub** | Permanent | Issues (swarm-discovered, swarm-architectural), PRs (labeled), CI status |
 | **Claude Code memories** | Cross-session | Critical lessons, session progress, architectural decisions |
 
@@ -159,12 +256,11 @@ Every ~10 merges, the strategist produces a data-driven report:
 1. **Fixers** → `known-pitfalls.md` → scouts/builders avoid repeating known traps
 2. **All agents** → `discovered-issues.md` → scouts pick up pre-investigated leads
 3. **All agents** → GitHub issues (`--label swarm-discovered`) → persistent, searchable backlog
-4. **All agents** → `swarm-metrics.jsonl` → strategist spots performance patterns
+4. **All agents** → `swarm-metrics.jsonl` → ops + improver spot performance patterns
 5. **Failing agents** → `agent-patches/` → bootstrapper improves agent definitions
-6. **Improver-docs** → reads handoff lessons → crystallizes into ADRs and friction logs
-7. **Improver-devex** → reads handoff lessons → fixes the friction that slowed agents
-8. **Merger** → analyzes metrics → reports which domains/agents need attention
-9. **Lead** → Claude Code memories → carries critical knowledge to future sessions
+6. **Improver** → reads handoff lessons → crystallizes into ADRs and friction logs
+7. **Ops** → analyzes metrics → reports which domains/agents need attention
+8. **Lead** → Claude Code memories → carries critical knowledge to future sessions
 
 ### Agent Self-Improvement
 
@@ -181,7 +277,7 @@ When an agent hits friction caused by its own definition being wrong or incomple
 - **PR template**: summary, changes, verification, agent attribution
 
 ### Auto-Merge
-Small PRs (improvements, side fixes) use `gh pr merge --auto --squash --delete-branch` to merge when checks pass without waiting for the merger.
+Small PRs (improvements, side fixes) use `gh pr merge --auto --squash --delete-branch` to merge when checks pass without waiting for the main ops lane.
 
 ### State Queries
 ```bash
@@ -192,11 +288,9 @@ gh run list --status failure --limit 10
 
 ## Background Improvement (~20%)
 
-The swarm always dedicates ~20% of its branches to making the codebase better, not just fixing the primary task. This runs via two always-on improver teammates:
+The swarm always dedicates ~20% of its branches to making the codebase better, not just fixing the primary task. This runs via the always-on improver coordinator:
 
-**improver-docs**: README, CHANGELOG, ADRs, friction log, roadmap updates, CLAUDE.md, command reference. Reads handoff "Key Decisions" and "Lesson Learned" sections to find ADR candidates. ADRs are the highest-value output — they document decisions that would otherwise be lost when agents exit.
-
-**improver-tests**: Mutation survivors (highest priority), flaky test fixes, coverage gaps, test naming/BDD, integration tests. Also handles infrastructure: unused dep removal, dead code, security audits. Reads handoff lessons to find test gaps that were revealed during builds.
+**improver**: README, CHANGELOG, ADRs, friction log, roadmap updates, CLAUDE.md, command reference, mutation survivors, flaky test fixes, coverage gaps, test naming/BDD, integration tests, unused dep removal, dead code, security audits. Reads handoff "Key Decisions" and "Lesson Learned" sections to find ADR candidates and test gaps.
 
 This ensures the codebase gets healthier with every swarm cycle, not just bigger.
 
@@ -215,14 +309,14 @@ The key: include enough context in the issue that the NEXT agent doesn't have to
 ## Lifecycle
 
 ### Startup (`/swarm all`)
-1. Load protocol, priorities, and current state
+1. Load protocol, priorities, and current state (`/swarm-status`)
 2. Sync repo, ensure GitHub labels exist
 3. Check for pending work from previous sessions (in-progress slices, open PRs, stale worktrees)
-4. Create 12-teammate team
-5. Set up recurring loops: `/loop 10m /swarm-status`, `/loop 30m /green-merge`
+4. Create 5-coordinator team
+5. Lead monitors: messages scout when queue is low, asks ops to validate recent merges, and triggers strategist-style analysis when priority drift appears
 
 ### Continuous Operation
-All lanes run concurrently. Scouts feed builders feed reviewers feed merger. Improvers run alongside. Validator verifies. Strategist steers. Fixer repairs. No batching.
+All lanes run concurrently. Scouts feed builders feed reviewers feed ops. Improver runs alongside. No batching.
 
 ### Graceful Shutdown (`/swarm-wind-down`)
 ~20 minutes: stop scouts → let builders finish → review and PR everything → merge green → clean up → write memories
@@ -238,23 +332,22 @@ Next `/swarm` picks up: in-progress slices from `completed-slices.md`, open PRs 
 The `docs/handoff/swarm-pack/` directory contains everything needed to adopt this in another repo:
 
 ```bash
-bash swarm-pack/setup.sh    # Install 25 agents, 15 skills, hooks, ops, GH labels
+bash swarm-pack/setup.sh    # Install agents, slash commands, hooks, ops, GH labels
 /bootstrap-agents            # Discover codebase → generate ~25-30 domain agents
 /swarm all                   # Start continuous swarm
 ```
 
-The pack installs portable agents (core swarm, improvers, quality, review, research, docs, infra, bootstrapper) and expects each repo to generate its own domain-specific agents via `/bootstrap-agents`.
+The pack installs reusable specialist agent definitions plus slash commands and hooks, and expects each repo to generate its own domain-specific agents via `/bootstrap-agents`. The live swarm still runs as 5 named coordinators; optional specialists are spawned on demand.
 
 ### Agent Taxonomy (~50 total after bootstrap)
 
 | Category | Pack (portable) | Repo-specific (generated) |
 |----------|----------------|--------------------------|
-| Core swarm | 6 (scout, builder, reviewer, fixer, merger, janitor) | — |
-| Governance | 3 (validator, strategist, pr-responder) | — |
-| Improvers | 4 (docs, tests, devex, infra) | — |
+| Core swarm | 5 (scout, builder, reviewer, ops, improver) | — |
+| Optional specialist subagents | 6 (bootstrapper, pr-responder, janitor, validator, strategist, fixer) | — |
 | Quality | 2 (mutant-killer, coverage-filler) | 3-5 (fuzz, flaky, test-quality) |
 | Review | 3 (standards, security, scope) | 2-3 (performance, api) |
-| Research | 2 (codebase, issues) | 1-2 (deps, PRs) |
+| Research | 3 (web, docs, verify) | 1-2 (deps, PRs) |
 | Documentation | 2 (adr-writer, friction-logger) | 2 (changelog, api-docs) |
 | Infrastructure | 2 (dep-cleaner, dead-code) | 2-3 (ci-gate, security-audit, baseline-ratchet) |
 | Domain scouts | — | 3-6 (parser, LSP, DAP, etc.) |
@@ -271,19 +364,19 @@ The pack installs portable agents (core swarm, improvers, quality, review, resea
 5. **Overlap by files, not count.** Unlimited agents if files don't overlap.
 
 ### Efficiency
-6. **Skills over file reads.** `/swarm-protocol` not `Read .claude/SWARM_PROTOCOL.md`.
+6. **Skills over file reads.** `/swarm-protocol` not `Read .claude/skills/swarm/...`.
 7. **Handoffs carry context.** Next agent reads previous agent's summary, not raw sources.
 8. **Minimal subagent prompts.** 7 lines pointing to files/skills, not 100 lines inline.
 9. **Per-unit verification.** Test the package you changed, not the workspace.
 
 ### Quality
-10. **Validate merges.** Validator checks that work actually helped.
+10. **Validate merges.** Ops verifies that work actually helped.
 11. **Every agent is a scout.** Discoveries become GitHub issues for fresh agents.
 12. **~20% goes to improvement.** Docs, tests, devex, infra — always on.
 13. **Review comments get addressed.** PR responder monitors and fixes feedback.
 
 ### Governance
-14. **Priority-weighted discovery.** Scouts check roadmap; strategist steers.
+14. **Priority-weighted discovery.** Scouts check roadmap; the lead or a strategist-style subagent steers when the swarm drifts.
 15. **Self-improving.** Metrics, agent patches, friction logs, ADRs.
 16. **4 persistence layers.** Handoffs → ops files → GitHub → memories.
 17. **GitHub-native.** Labels, issues, templates, auto-merge, `gh` CLI everywhere.

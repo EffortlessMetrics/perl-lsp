@@ -16,9 +16,9 @@ You are the lead. You coordinate only. You NEVER write production code.
 2. **Scouts**: One sector per scout. Fresh agent for different context group.
 3. **Builders**: One crate per builder. Worktree isolated.
 4. **Reviewers**: One PR per reviewer. Fresh context for clean review.
-5. **Mergers**: One PR at a time. Verify CI between each.
-6. **Draft first**: Builders create draft PRs. Reviewers mark ready after fixing.
-7. **Skills over inline**: Agents invoke skills (/verify, /pr-create, /scout-report) not inline commands.
+5. **Ops**: One PR at a time for merges. Verify CI between each.
+6. **Draft first**: Builders create draft PRs. Reviewer marks ready after checking.
+7. **Skills over inline**: Agents invoke skills (/verify-build, /pr-create, /plan-fix, /scout-report) instead of repeating long inline workflows.
 
 ## Skill Scope
 
@@ -34,6 +34,12 @@ You are the lead. You coordinate only. You NEVER write production code.
 - `/swarm-protocol` — behavioral rules
 - `/coding-standards` — project standards
 - `/swarm-priorities` — roadmap alignment
+- `/parser-fix` — task-specific implementation flow
+- `/verify-build` — branch/test/PR verification
+- `/plan-fix` — scout handoff generation
+- `/scout-report` — GitHub issue creation for discovered work
+- `/pr-create` — draft PR creation
+- `/pr-ready` — mark reviewed PRs ready
 
 ## Phase 1: Bootstrap
 
@@ -57,7 +63,12 @@ done
 
 ### Clean up stale worktrees (REQUIRED before team creation)
 
+Stale agent worktrees from previous sessions pollute IDE diagnostics and cause false alarms. Remove them first:
+
 ```bash
+git worktree list
+git worktree prune
+ls .claude/worktrees/agent-* 2>/dev/null | head -20
 for wt in .claude/worktrees/agent-*; do
   git worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
 done
@@ -70,6 +81,7 @@ git worktree prune
 
 ```bash
 gh run list --branch master --limit 5 --json status,conclusion,headBranch
+# If any run shows conclusion != "success": fix master CI before proceeding.
 ```
 
 ### Check CI queue depth before launching builders
@@ -78,80 +90,65 @@ gh run list --branch master --limit 5 --json status,conclusion,headBranch
 gh run list --json status --jq '[.[] | select(.status == "in_progress")] | length'
 ```
 
-**If > 5 runs in progress**: wait before launching builders. CI runners are finite — sending more work while the queue is already saturated delays all PRs and obscures failures. Check again in a few minutes, or message fixer to investigate stuck runs.
+**If > 5 runs in progress**: wait before launching builders. CI runners are finite. Adding more work while the queue is saturated delays all PRs and obscures failures.
 
 ### Check for pending work from previous sessions
 - Agent patches: `ls .ops-perl-lsp/agent-patches/*.md 2>/dev/null`
+- In-progress slices: `grep "in-progress" .claude/swarm-state/completed-slices.md 2>/dev/null`
 - Discovered issues: `gh issue list --label swarm-discovered --state open`
 
 ### Resume or start fresh
 If there's pending work, prioritize it. Otherwise start fresh scouting.
 
-## Phase 2: Create Team
+## Phase 2: Create Team (5 coordinators)
 
-Use `TeamCreate` then spawn teammates with `Agent(name: ..., team_name: ..., subagent_type: ..., model: ...)`.
+Create an agent team with these 5 teammates. Use `TeamCreate` with specific names so teammates can message each other directly via `SendMessage({to: "name"})`.
 
-Each teammate's spawn prompt should include:
-1. Their role and domain
-2. `Invoke /swarm-protocol and /coding-standards.` (agent loads its own behavioral rules)
-3. Specific instructions for their domain
-4. Task tool reminders: `Use TaskList to find work. Use TaskUpdate to claim and complete tasks.`
-5. Metrics mandate: `After completing work, append to .ops-perl-lsp/swarm-metrics.jsonl`
+Each teammate fans out to subagents for actual parallelism. Net capacity is 20-40 parallel workers with only 5 coordination slots.
 
 ### Team structure
 
-| Name | Role | Agent Definition | Model |
-|------|------|-----------------|-------|
-| `scout-1` | Scout (parser + corpus) | swarm-scout | sonnet |
-| `scout-2` | Scout (DAP + issues + cleanup) | swarm-scout | sonnet |
-| `builder-1` | Build coordinator | swarm-builder | sonnet |
-| `builder-2` | Build coordinator | swarm-builder | sonnet |
-| `reviewer` | Review + PR | swarm-reviewer | sonnet |
-| `merger` | Merge + drift | swarm-merger | sonnet |
-| `fixer` | CI failure repair | swarm-fixer | sonnet |
-| `improver-docs` | Docs + devex | swarm-improver-docs | sonnet |
-| `improver-tests` | Tests + quality + infra | swarm-improver-tests | sonnet |
-| `validator` | Post-merge verification | swarm-validator | sonnet |
-| `strategist` | Priority alignment | swarm-strategist | sonnet |
-| `pr-responder` | Review comment handler | swarm-pr-responder | sonnet |
+| Name | Role | Model | Subagent Strategy |
+|------|------|-------|-------------------|
+| `scout` | Discovery coordinator | sonnet | 5-8 Explore subagents/round |
+| `builder` | Build coordinator | sonnet | 3-5 worktree subagents/round |
+| `reviewer` | Review + PR creation | sonnet | 3-5 review subagents/round |
+| `ops` | Merge + validate + fix CI | sonnet | Sequential merges, fix subagents as needed |
+| `improver` | Docs + tests + devex | sonnet | 2-4 worktree subagents |
 
 ### Teammate spawn prompts
 
-**scout-1**:
+Each teammate gets a focused prompt that tells them to:
+1. Invoke `/swarm-protocol` (loads behavioral rules)
+2. Invoke `/coding-standards` (loads project standards)
+3. Invoke `/swarm-priorities` (loads roadmap alignment)
+4. Their specific domain instructions (below)
+
+**scout**:
 ```
 Invoke /swarm-protocol and /coding-standards.
-You are scout-1. Domain: parser error buckets, corpus improvements.
+You are scout. Domain: all discovery — parser error buckets, DAP test gaps, open issues, dead code.
 Read .ci/parser-corpus-baseline.json for error buckets.
 Read .claude/swarm-state/discovered-issues.md and completed-slices.md for dedup.
-Launch 5-8 Explore subagents per round. Write handoff files.
-Use TaskCreate for each actionable slice. Use TaskList to check what already exists.
-Message builder-1 and builder-2 when tasks are ready.
+Invoke /swarm-priorities to understand what matters.
+Spawn 5-8 Explore subagents per round (1 per error bucket for parser work).
+For each finding: invoke /plan-fix to write handoff, then /scout-report to create issue.
+Use TaskCreate for each slice. Use TaskList to check what already exists.
+SendMessage({to: "builder"}) when tasks are ready.
 After each round, append to .ops-perl-lsp/swarm-metrics.jsonl.
 ```
 
-**scout-2**:
+**builder**:
 ```
 Invoke /swarm-protocol and /coding-standards.
-You are scout-2. Domain: DAP test gaps, open issues, dead code, unused deps, ignored tests.
-Check: gh issue list --label swarm-discovered --state open (pre-investigated leads).
-Check: .claude/swarm-state/discovered-issues.md (agent-flagged leads).
-Launch 5-8 Explore subagents per round. Write handoff files.
-Use TaskCreate for each actionable slice. Use TaskList to check what already exists.
-Message builder-1 and builder-2 when tasks are ready.
-After each round, append to .ops-perl-lsp/swarm-metrics.jsonl.
-```
+You are builder. Claim tasks, spawn build subagents with isolation: "worktree".
 
-**builder-1** and **builder-2**:
-```
-Invoke /swarm-protocol and /coding-standards.
-You are builder-N. Use TaskList to find unclaimed tasks. Use TaskUpdate to claim (set owner to your name) and complete tasks.
-
-Spawn build subagents with isolation: "worktree". Before spawning, confirm:
-  - Named worktree (e.g. `agent-fix-parser-heredoc`)
-  - Branch name, crate, exact file list (max 10 files)
-  - Verification command: cargo fmt && cargo clippy -p <crate> --tests && cargo test -p <crate>
-  - Subagent invokes /coding-standards
-  - If the change touches more than 10 files, split it into multiple subagents with non-overlapping file surfaces
+Before spawning any subagent, confirm it has ALL of the following:
+  - Named worktree (e.g., agent-fix-parser-heredoc)
+  - Branch name
+  - Claimed file surface (exact list of files to touch — no open-ended scope)
+  - Verification command (cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>)
+  - PR size confirmation: if the change touches >10 files, split into multiple subagents with non-overlapping file surfaces
 
 Track all spawned subagent IDs. Before shutting down, list them in your shutdown message so the lead knows what is still running.
 
@@ -160,182 +157,155 @@ Check open PR count before creating new PRs. If more than 5 are open, message th
 
 Subagent prompt pattern (required fields):
   "Worktree: <worktree-name>. Branch: <X>. Crate: <Y>.
-   Files: <exact list - max 10>.
+   Files: <exact list — max 10>.
    Goal: <one sentence>.
    Verify: cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>.
    Run ALL commands from your worktree path. Do NOT cd to the main repo.
    Read .ops-perl-lsp/handoffs/<branch>.md for context.
    Read .claude/swarm-state/known-pitfalls.md for traps.
-   Invoke /swarm-protocol and /coding-standards.
+   Invoke /swarm-protocol, /coding-standards, and the task-specific skill (usually /parser-fix).
    Append reviewer briefing to handoff. Write metrics. gh issue create --label swarm-discovered for out-of-scope finds."
 
-Use SendMessage({to: "reviewer"}) when builds complete.
-Run 3-5 subagents in parallel.
+Use TaskList to find unclaimed tasks. Use TaskUpdate to claim (owner: "builder") and complete.
+Run 3-5 subagents in parallel. Each subagent does one task.
+SendMessage({to: "reviewer"}) when builds complete.
 After each build, append to .ops-perl-lsp/swarm-metrics.jsonl.
 ```
 
 **reviewer**:
 ```
 Invoke /swarm-protocol and /coding-standards.
-You are reviewer. Receive build completions from builders.
-Spawn review subagents (3-5 parallel). Read handoff briefings, then diff.
-Create PRs: gh pr create --draft --label swarm-core (or swarm-improve-*).
+You are reviewer. Receive build completions from builder.
+Spawn review subagents (3-5 parallel). Read handoff briefings first, then focused diff.
+Check: coding standards, no unwrap/expect/panic, tests exist, PR description.
+Invoke /pr-create to open draft PRs with the right labels.
+Use /pr-ready only after feedback is addressed and checks are green.
 Use TaskUpdate to mark review tasks completed.
-SendMessage({to: "merger"}) for PRs ready to merge.
-SendMessage({to: "fixer"}) for failures.
+Approve: SendMessage({to: "ops"}) for merge-ready PRs.
+Reject: SendMessage({to: "builder"}) with specific feedback.
+Also handle PR review comments: gh pr list --state open --json reviews.
 After each review, append to .ops-perl-lsp/swarm-metrics.jsonl.
 ```
 
-**merger**:
+**ops**:
 ```
 Invoke /swarm-protocol.
-You are merger. ONLY merge PRs where CI Gate shows SUCCESS. Never merge red CI.
+You are ops. Merge + validate + fix CI + corpus ratchet.
+ONLY merge PRs where CI Gate shows SUCCESS. Never merge red CI.
 
-Before every merge:
+Before every merge, run:
   gh pr checks <N>          — must show all checks passing
   gh run list --limit 5     — confirm master CI is also green
 
-Merge: gh pr merge <N> --squash --delete-branch (only when CI Gate is SUCCESS)
-If CI fails: SendMessage({to: "fixer"}) — do NOT merge.
+If CI Gate is not SUCCESS: do NOT merge. Spawn fix subagent (isolation: "worktree").
+If master CI is red: stop all merges. Fix master CI first.
 
-Use TaskUpdate to track merge progress. After ~5 merges: invoke /status-drift.
-When queue is low: SendMessage({to: "scout-1"}) and SendMessage({to: "scout-2"}).
+Merge: gh pr merge <N> --squash --delete-branch (only when CI Gate is SUCCESS)
+Use TaskUpdate to track merge progress.
+Merge in batches of 3 (rapid merges cancel each other's CI runs).
+After ~5 merges: invoke /status-drift to fix computed metrics.
+After parser merges: invoke /corpus-ratchet to lock in gains.
+Every ~10 merges: analyze .ops-perl-lsp/swarm-metrics.jsonl and report trends.
+When queue is low: SendMessage({to: "scout"}) for more work.
 After each batch, append to .ops-perl-lsp/swarm-metrics.jsonl.
 ```
 
-**fixer**:
+**improver**:
 ```
 Invoke /swarm-protocol and /coding-standards.
-You are fixer. Receive failures from reviewer and merger.
-Spawn fix subagents (2-3 parallel, isolation: "worktree"). One failure per subagent.
-Monitor: gh run list --status failure --limit 10.
-Append lessons to .claude/swarm-state/known-pitfalls.md.
-If fix >30 lines: gh issue create --label swarm-discovered.
-SendMessage({to: "merger"}) when fixes land.
-After each fix, append to .ops-perl-lsp/swarm-metrics.jsonl.
-```
-
-**improver-docs**:
-```
-Invoke /swarm-protocol and /coding-standards.
-You are improver-docs. Always running alongside core work.
-Use TaskList to find doc-related tasks. Use TaskCreate for gaps you discover.
-Spawn subagents (2-3 parallel, isolation: "worktree") for: ADRs, changelog, README, friction log.
-Create PRs with --label swarm-improve-docs.
+You are improver. Always running alongside core work (~20% capacity).
+Domains: docs, tests, devex, infra.
+Read .ops-perl-lsp/handoffs/*.md for "Key Decisions" and "Lesson Learned" — ADR and friction-log candidates.
+Check: mutation results, flaky tests (.ci/debt-ledger.yaml), coverage gaps, stale docs.
+Use TaskList to find improvement tasks. Use TaskCreate for gaps you discover.
+Spawn 2-4 subagents (isolation: "worktree") for: ADRs, changelog, mutants, flaky fixes, coverage.
+Create PRs with --label swarm-improve-docs, swarm-improve-tests, or swarm-improve-infra.
+Write Claude Code memories when architectural decisions crystallize.
 After each PR, append to .ops-perl-lsp/swarm-metrics.jsonl.
-```
-
-**improver-tests**:
-```
-Invoke /swarm-protocol and /coding-standards.
-You are improver-tests. Always running alongside core work.
-Use TaskList to find test-related tasks. Use TaskCreate for gaps you discover.
-Check: mutation results, flaky tests (.ci/debt-ledger.yaml), coverage gaps.
-Spawn subagents (2-4 parallel, isolation: "worktree").
-Create PRs with --label swarm-improve-tests or swarm-improve-infra.
-After each PR, append to .ops-perl-lsp/swarm-metrics.jsonl.
-```
-
-**validator**:
-```
-Invoke /swarm-protocol.
-You are validator. After merges, verify work actually helped.
-Receive merge notifications from merger with PR category and crates.
-Parser fix → just corpus-sweep. Test addition → cargo mutants -p <crate>.
-LSP change → RUST_TEST_THREADS=2 cargo test -p perl-lsp.
-Any merge → cargo clippy --workspace --lib.
-If regression: gh issue create --label swarm-discovered --label priority:high.
-SendMessage({to: "fixer"}) for regressions.
-If corpus improved: invoke /corpus-ratchet to lock in gains.
-```
-
-**strategist**:
-```
-Invoke /swarm-protocol and /swarm-priorities.
-You are strategist. Activate every ~10 merges.
-Analyze: priority distribution in .ops-perl-lsp/swarm-metrics.jsonl, roadmap progress, stale work.
-If drifting to easy P3/P4: SendMessage scouts with priority steering.
-Produce STRATEGY REPORT for the lead.
-```
-
-**pr-responder**:
-```
-Invoke /swarm-protocol and /coding-standards.
-You are pr-responder. Monitor PRs for review comments.
-Check: gh pr list --state open --json number,reviews | find PRs with unaddressed reviews.
-For each: read context, address feedback, push, reply.
-SendMessage({to: "merger"}) when feedback is addressed.
-After each response, append to .ops-perl-lsp/swarm-metrics.jsonl.
 ```
 
 ## Phase 3: Recurring Loops
 
-The lead's periodic duties (use SendMessage to teammates):
-- **Every ~10 merges**: Message strategist for priority analysis
-- **Every ~5 merges**: Message validator to verify recent merges
-- **Queue low**: Message scouts to find more work
-- **As needed**: `/swarm-status` to check state
-- **As needed**: `/green-merge` to drain merge queue
+Set up recurring checks:
+
+```
+/loop 10m /swarm-status    — state check every 10 min (auto)
+/loop 30m /green-merge     — drain merge queue every 30 min (auto)
+```
+
+The lead's periodic duties:
+- **Every ~10 merges**: Check priority drift; send scout priority steering if needed
+- **Queue low**: Message scout to find more work
 - **Daily**: `/swarm-report` for user check-in
+- **As needed**: Review `.ops-perl-lsp/agent-patches/`, apply improvements
+- **As needed**: Write Claude Code memories for cross-session knowledge
 
 ## Phase 4: Continuous Operation
 
 ```
 DISCOVERY
-  scout-1, scout-2       → Explore subagents → TaskCreate → builders claim
+  scout                  → Explore subagents → TaskCreate → builder claims
 
 BUILD
-  builder-1, builder-2   → TaskList → claim → worktree subagents → SendMessage reviewer
+  builder                → TaskList → claim → worktree subagents → SendMessage reviewer
 
 REVIEW
-  reviewer               → review diffs → gh pr create → SendMessage merger
-  pr-responder           → address review comments → push fixes
+  reviewer               → review diffs → /pr-create → SendMessage ops
 
 MERGE
-  merger                 → gh pr merge (CI green only) → SendMessage validator
-  validator              → verify merges → /corpus-ratchet if improved
+  ops                    → gh pr merge (CI green only) → verify → /corpus-ratchet if improved
+  ops                    → spawn fix subagents for CI failures
 
 IMPROVE (~20%)
-  improver-docs          → ADRs, changelog, friction log
-  improver-tests         → mutants, flaky tests, coverage, deps
-
-GOVERNANCE
-  strategist             → priority alignment, roadmap updates
-  fixer                  → CI failures, known-pitfalls
+  improver               → ADRs, changelog, mutants, flaky tests, coverage, deps
 ```
 
 ### Data flows
 
 ```
-scouts ─────→ TaskCreate ─────→ builders claim via TaskList
-builders ───→ SendMessage ────→ reviewer
-reviewer ───→ gh pr create ───→ merger
-merger ─────→ gh pr merge ────→ validator (verify)
-merger ─────→ SendMessage ────→ scouts (queue low)
-validator ──→ /corpus-ratchet → lock in gains
-strategist ─→ SendMessage ───→ scouts (priority steering)
-fixer ──────→ known-pitfalls → scouts, builders (avoid traps)
-all agents ─→ gh issue create → scouts (swarm-discovered)
-all agents ─→ swarm-metrics  → strategist (analysis)
+scout ──────→ TaskCreate ─────→ builder claims via TaskList
+builder ────→ SendMessage ────→ reviewer
+reviewer ───→ /pr-create ────→ ops (merge queue)
+ops ────────→ gh pr merge ────→ ops (verify post-merge)
+ops ────────→ SendMessage ────→ scout (queue low)
+ops ────────→ /corpus-ratchet → lock in gains
+improver ───→ handoffs/ ──────→ ADRs, friction log, docs
+all agents ─→ gh issue create → scout (swarm-discovered)
+all agents ─→ swarm-metrics  → ops (analysis)
 all agents ─→ TaskUpdate ────→ shared task list
 ```
+
+### Auto-merge
+```bash
+gh pr merge <N> --auto --squash --delete-branch
+```
+Use for improvement PRs and small core PRs. Ops handles the rest.
+
+### CI monitoring
+```bash
+gh run list --limit 5 --json status,conclusion,headBranch
+gh pr checks <N>
+```
+
+### Issue-driven work
+Scout checks `gh issue list --label swarm-discovered` — these are pre-investigated leads with full context from other agents.
 
 ## Focus Area Variants
 
 ### `all` (default)
-All scouts active. Full builder fleet. Both improvers.
+Scout at full capacity. Builder with 3-5 subagents. Improver active.
 
 ### `parser`
-scout-1 only (parser focus). 2 builders. Both improvers still active.
+Scout focuses on parser error buckets. Builder at full capacity. Improver still active.
 
 ### `dap`
-scout-2 (DAP focus). 1-2 builders. Both improvers.
+Scout focuses on DAP test gaps. Builder at 1-2 subagents. Improver still active.
 
 ### `tests`
-scout-2 (test focus). 2 builders. improver-tests gets extra capacity.
+Scout focuses on test gaps. Builder at full capacity. Improver gets extra capacity.
 
 ### `cleanup`
-scout-2 (cleanup focus). 1-2 builders. improver-tests (infra) gets extra capacity.
+Scout focuses on dead code and cleanup. Builder at 1-2 subagents. Improver active.
 
 ### `improve`
-No scouts or builders. Both improvers at full capacity.
+No scout or builder discovery. Improver at full capacity for docs/tests/devex/infra.

@@ -22,6 +22,7 @@
 #   MAIN_BRANCH      - main branch name        (default: "main")
 
 set -euo pipefail
+shopt -s nullglob   # globs that match nothing expand to empty (not literal pattern)
 
 # --- Configuration -----------------------------------------------------------
 
@@ -43,9 +44,9 @@ CLAUDE_DIR="${REPO_ROOT}/.claude"
 
 # --- Pre-flight checks -------------------------------------------------------
 
-if [ ! -d "${SCRIPT_DIR}/agents" ]; then
-    echo "ERROR: Cannot find agents/ directory at ${SCRIPT_DIR}/agents"
-    echo "       Run this script from your repository root."
+if [ ! -d "${SCRIPT_DIR}/agents" ] && [ ! -d "${SCRIPT_DIR}/commands" ]; then
+    echo "ERROR: Cannot find agents/ or commands/ in pack directory: ${SCRIPT_DIR}"
+    echo "       Make sure you're pointing at the swarm-pack/ directory."
     exit 1
 fi
 
@@ -64,61 +65,75 @@ mkdir -p "${REPO_ROOT}/${OPS_DIR}/agent-patches"
 
 PROTOCOL_SRC="${SCRIPT_DIR}/SWARM_PROTOCOL.md"
 PROTOCOL_DEST="${CLAUDE_DIR}/commands/swarm-protocol.md"
-if [ -f "$PROTOCOL_SRC" ] && [ ! -f "$PROTOCOL_DEST" ]; then
+if [ -f "$PROTOCOL_DEST" ]; then
+    echo "SKIP: swarm-protocol.md (exists)"
+elif [ -f "$PROTOCOL_SRC" ]; then
     {
         printf '%s\n' '---' 'description: Load swarm behavioral rules' 'argument-hint: ""' '---' ''
         cat "$PROTOCOL_SRC"
     } > "$PROTOCOL_DEST"
     echo "COPY: swarm-protocol.md (as /swarm-protocol skill)"
-elif [ -f "$PROTOCOL_DEST" ]; then
-    echo "SKIP: swarm-protocol.md (exists)"
+else
+    echo "SKIP: SWARM_PROTOCOL.md not found in pack — install /swarm-protocol manually"
 fi
 
 # --- Copy agents (ALL .md files, not just swarm-*) ----------------------------
 
 echo ""
 echo "Installing agents..."
-for src_file in "${SCRIPT_DIR}"/agents/*.md; do
-    filename="$(basename "$src_file")"
-    dest="${CLAUDE_DIR}/agents/${filename}"
-    if [ -f "$dest" ]; then
-        echo "  SKIP: ${filename} (exists)"
-    else
-        cp "$src_file" "$dest"
-        echo "  COPY: ${filename}"
-    fi
-done
+if [ ! -d "${SCRIPT_DIR}/agents" ]; then
+    echo "  SKIP: no agents/ directory in pack"
+else
+    for src_file in "${SCRIPT_DIR}"/agents/*.md; do
+        filename="$(basename "$src_file")"
+        dest="${CLAUDE_DIR}/agents/${filename}"
+        if [ -f "$dest" ]; then
+            echo "  SKIP: ${filename} (exists)"
+        else
+            cp "$src_file" "$dest"
+            echo "  COPY: ${filename}"
+        fi
+    done
+fi
 
 # --- Copy commands ------------------------------------------------------------
 
 echo ""
 echo "Installing commands..."
-for src_file in "${SCRIPT_DIR}"/commands/*.md; do
-    filename="$(basename "$src_file")"
-    dest="${CLAUDE_DIR}/commands/${filename}"
-    if [ -f "$dest" ]; then
-        echo "  SKIP: ${filename} (exists)"
-    else
-        cp "$src_file" "$dest"
-        echo "  COPY: ${filename}"
-    fi
-done
+if [ ! -d "${SCRIPT_DIR}/commands" ]; then
+    echo "  SKIP: no commands/ directory in pack"
+else
+    for src_file in "${SCRIPT_DIR}"/commands/*.md; do
+        filename="$(basename "$src_file")"
+        dest="${CLAUDE_DIR}/commands/${filename}"
+        if [ -f "$dest" ]; then
+            echo "  SKIP: ${filename} (exists)"
+        else
+            cp "$src_file" "$dest"
+            echo "  COPY: ${filename}"
+        fi
+    done
+fi
 
 # --- Copy hooks ---------------------------------------------------------------
 
 echo ""
 echo "Installing hooks..."
-for src_file in "${SCRIPT_DIR}"/hooks/*.sh; do
-    filename="$(basename "$src_file")"
-    dest="${CLAUDE_DIR}/hooks/${filename}"
-    if [ -f "$dest" ]; then
-        echo "  SKIP: ${filename} (exists)"
-    else
-        cp "$src_file" "$dest"
-        chmod +x "$dest"
-        echo "  COPY: ${filename}"
-    fi
-done
+if [ ! -d "${SCRIPT_DIR}/hooks" ]; then
+    echo "  SKIP: no hooks/ directory in pack"
+else
+    for src_file in "${SCRIPT_DIR}"/hooks/*.sh; do
+        filename="$(basename "$src_file")"
+        dest="${CLAUDE_DIR}/hooks/${filename}"
+        if [ -f "$dest" ]; then
+            echo "  SKIP: ${filename} (exists)"
+        else
+            cp "$src_file" "$dest"
+            chmod +x "$dest"
+            echo "  COPY: ${filename}"
+        fi
+    done
+fi
 
 # --- Create tracked knowledge files (.claude/swarm-state/) --------------------
 # These are tracked in git — they persist across sessions and developers.
@@ -164,11 +179,18 @@ ARTEOF
     fi
 done
 
-# --- Create ephemeral runtime dirs (.ops/) ------------------------------------
-# These are gitignored — per-session runtime data only.
+# --- Gitignore ephemeral runtime dirs (.ops/) ---------------------------------
+# The ops dirs were created above; now make sure they're gitignored.
 
+GITIGNORE="${REPO_ROOT}/.gitignore"
+GITIGNORE_ENTRY="${OPS_DIR}/"
 echo ""
-echo "Creating ephemeral runtime directories (gitignored)..."
+if [ -f "$GITIGNORE" ] && grep -qF "$GITIGNORE_ENTRY" "$GITIGNORE"; then
+    echo "SKIP: .gitignore entry for ${GITIGNORE_ENTRY} (already present)"
+else
+    echo "${GITIGNORE_ENTRY}" >> "$GITIGNORE"
+    echo "ADDED: .gitignore entry for ${GITIGNORE_ENTRY}"
+fi
 
 # --- Create GitHub labels (if gh is available) --------------------------------
 
@@ -192,9 +214,9 @@ if command -v gh &>/dev/null && gh auth status &>/dev/null 2>&1; then
 else
     echo ""
     echo "SKIP: GitHub labels (gh CLI not available or not authenticated)"
-    echo "  Create these labels manually: swarm-core, swarm-side-fix,"
-    echo "  swarm-improve-docs, swarm-improve-tests, swarm-improve-devex,"
-    echo "  swarm-improve-infra, swarm-discovered, swarm-architectural"
+    echo "  Create these labels manually:"
+    echo "  swarm-core, swarm-improve-docs, swarm-improve-tests,"
+    echo "  swarm-improve-devex, swarm-improve-infra, swarm-discovered, swarm-architectural"
 fi
 
 # --- Create or merge settings.json -------------------------------------------
@@ -206,7 +228,13 @@ if [ -f "$SETTINGS" ]; then
     echo "  Add these hooks manually if not already present:"
     echo ""
     echo '  "TeammateIdle": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/teammate-idle.sh"}]}],'
-    echo '  "TaskCompleted": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/task-completed.sh"}]}]'
+    echo '  "TaskCompleted": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/task-completed.sh"}]}],'
+    echo '  "SubagentStart": [{"matcher": "swarm-builder|swarm-reviewer|swarm-fixer", "hooks": [{"type": "command", "command": "echo '\''Reminder: Invoke /coding-standards before writing code.'\''"}]}],'
+    echo '  "Stop": [{"hooks": [{"type": "command", "command": "INPUT=$(cat); STOP_ACTIVE=$(echo \"$INPUT\" | jq -r '\''.stop_hook_active // false'\''); ..."}]}],'
+    echo '  "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r '\''.tool_input.command // empty'\''); ..."}]}]'
+    echo '  "SessionStart": [{"matcher": "compact", "hooks": [{"type": "command", "command": "echo '\''Post-compaction context refresh...'\''"}]}]'
+    echo ""
+    echo "  See the generated settings.json template in this setup.sh for full hook commands."
     echo ""
 else
     echo "Creating .claude/settings.json..."
@@ -217,19 +245,17 @@ else
   },
   "permissions": {
     "allow": [
-      "Bash(gh:*)",
-      "Bash(git:*)",
-      "Bash(${FMT_CMD%% *}:*)",
-      "Bash(${TEST_CMD%% *}:*)",
-      "Bash(bash:*)",
-      "Bash(python3:*)",
-      "Bash(mkdir:*)",
-      "Bash(cp:*)",
-      "Bash(ls:*)",
-      "Bash(grep:*)",
-      "Bash(echo:*)",
-      "Bash(chmod:*)",
-      "Bash(find:*)",
+      "Bash(gh *)",
+      "Bash(git *)",
+      "Bash(bash *)",
+      "Bash(python3 *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(ls *)",
+      "Bash(grep *)",
+      "Bash(echo *)",
+      "Bash(chmod *)",
+      "Bash(find *)",
       "WebFetch",
       "WebSearch"
     ]
@@ -265,11 +291,54 @@ else
           }
         ]
       }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "swarm-builder|swarm-reviewer|swarm-fixer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Reminder: Invoke /coding-standards before writing any code. No unwrap(), expect(), panic!() in production code. Run fmt + lint before committing.'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=\$(cat); STOP_ACTIVE=\$(echo \"\$INPUT\" | jq -r '.stop_hook_active // false'); if [ \"\$STOP_ACTIVE\" = \"true\" ]; then exit 0; fi; echo 'Before stopping: verify all claimed tasks are completed with actual deliverables (branches pushed, PRs created). If not, keep working.' >&2; exit 0"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "INPUT=\$(cat); CMD=\$(echo \"\$INPUT\" | jq -r '.tool_input.command // empty'); if echo \"\$CMD\" | grep -qE 'git push --force|git push -f |git checkout \\\\.|git reset --hard|rm -rf /'; then echo \"Blocked: dangerous command '\$CMD'.\" >&2; exit 2; fi; exit 0"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Post-compaction context refresh: This project uses agent-based development. The orchestrator routes work to agents, never writes code directly. Use TaskList/TaskUpdate for coordination. Invoke skills instead of inline instructions. See CLAUDE.md for full context.'"
+          }
+        ]
+      }
     ]
   }
 }
 SETTINGSEOF
-    echo "  Created with PostToolUse, TeammateIdle, and TaskCompleted hooks"
+    echo "  Created with PostToolUse, TeammateIdle, TaskCompleted, SubagentStart, Stop, PreToolUse, and SessionStart hooks"
 fi
 
 # --- Print customization guide -----------------------------------------------
@@ -279,14 +348,16 @@ echo "========================================================================"
 echo " Swarm Pack — Setup Complete"
 echo "========================================================================"
 echo ""
-AGENT_COUNT=$(ls -1 "${CLAUDE_DIR}/agents"/*.md 2>/dev/null | wc -l)
-SKILL_COUNT=$(ls -1 "${CLAUDE_DIR}/commands"/*.md 2>/dev/null | wc -l)
+AGENT_COUNT=$(ls -1 "${CLAUDE_DIR}/agents"/*.md 2>/dev/null | wc -l | tr -d ' ')
+COMMAND_COUNT=$(ls -1 "${CLAUDE_DIR}/commands"/*.md 2>/dev/null | wc -l | tr -d ' ')
+HOOK_COUNT=$(ls -1 "${CLAUDE_DIR}/hooks"/*.sh 2>/dev/null | wc -l | tr -d ' ')
 echo " Installed:"
 echo "   - ${AGENT_COUNT} agent definitions in .claude/agents/"
-echo "   - ${SKILL_COUNT} skills in .claude/commands/"
-echo "   - 2 hooks in .claude/hooks/"
+echo "   - ${COMMAND_COUNT} slash command files in .claude/commands/"
+echo "   - ${HOOK_COUNT} hook scripts in .claude/hooks/"
+echo "   - hooks registered in .claude/settings.json (7 event types)"
 echo "   - .claude/swarm-state/  — tracked knowledge (pitfalls, slices, discoveries, queue)"
-echo "   - ${OPS_DIR}/           — ephemeral runtime (handoffs, metrics, patches, salvage)"
+echo "   - ${OPS_DIR}/           — ephemeral runtime (gitignored: handoffs, metrics, patches, salvage)"
 echo "   - GitHub labels (7)"
 echo ""
 echo " Next steps — customize for your project:"

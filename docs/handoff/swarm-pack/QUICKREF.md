@@ -3,7 +3,7 @@
 ## Lifecycle
 
 ```
-/swarm all              Start the swarm (12 teammates, continuous)
+/swarm all              Start the swarm (5 coordinators, continuous)
 /swarm parser           Focus on parser work
 /swarm improve          Full capacity to codebase health
 /swarm-wind-down        Graceful shutdown (~20 min)
@@ -37,22 +37,30 @@
 /swarm-protocol         Load swarm behavioral rules
 ```
 
-## Teammates (12)
+## Coordinator Teammates (5)
 
-| Name | Role | Talks to |
-|------|------|----------|
-| scout-1 | Parser + corpus gaps | builder-1, builder-2 |
-| scout-2 | DAP + issues + cleanup | builder-1, builder-2 |
-| builder-1 | Build in worktrees | reviewer |
-| builder-2 | Build in worktrees | reviewer |
-| reviewer | Review + create PRs | merger, fixer, pr-responder |
-| pr-responder | Address review comments | merger |
-| merger | Merge + drift | validator, scouts, fixer |
-| validator | Post-merge verification | fixer, improver-tests |
-| improver-docs | ADRs, changelog, friction | (creates PRs directly) |
-| improver-tests | Mutants, flaky, coverage | (creates PRs directly) |
-| strategist | Priority alignment | scouts (steering) |
-| fixer | CI failures | merger |
+| Name | Role | Spawns |
+|------|------|--------|
+| scout | Discovery — find gaps, write handoffs | 5-8 Explore subagents/round |
+| builder | Build — claim tasks, implement | 3-5 worktree subagents/round |
+| reviewer | Review — review diffs, create PRs | 3-5 review subagents/round |
+| ops | Merge + validate + fix CI | Sequential merges, fix subagents |
+| improver | Background improvement | 2-4 worktree subagents |
+
+## Data Flow
+
+```
+scout ──────→ TaskCreate ─────→ builder claims via TaskList
+builder ────→ SendMessage ────→ reviewer
+reviewer ───→ gh pr create ───→ ops (merge queue)
+ops ────────→ gh pr merge ────→ ops (verify post-merge)
+ops ────────→ SendMessage ────→ scout (queue low)
+ops ────────→ /status-drift ──→ repair computed drift when needed
+improver ───→ worktree subs ──→ improvement PRs
+all agents ─→ gh issue create → scout (swarm-discovered)
+all agents ─→ swarm-metrics  → ops (analysis)
+all agents ─→ TaskUpdate ────→ shared task list
+```
 
 ## State Files
 
@@ -61,7 +69,7 @@
 | File | Purpose | Writers | Readers |
 |------|---------|---------|---------|
 | `known-pitfalls.md` | Failure knowledge | fixer | scout, builder |
-| `completed-slices.md` | Dedup log | scout, merger | scout, improvers |
+| `completed-slices.md` | Dedup log | scout, ops | scout, improvers |
 | `discovered-issues.md` | Agent-flagged leads | all agents | scout |
 | `swarm-queue.json` | Overlap tracking | scout, lead | scout, lead |
 
@@ -70,16 +78,50 @@
 | File | Purpose | Writers | Readers |
 |------|---------|---------|---------|
 | `handoffs/<branch>.md` | Context transfer | scout, builder, fixer | builder, reviewer, improvers |
-| `swarm-metrics.jsonl` | Performance data | all agents | strategist, merger |
+| `swarm-metrics.jsonl` | Performance data | all agents | ops, lead |
 | `agent-patches/` | Self-improvement | fixer, any agent | bootstrapper |
 | `salvage/` | Emergency worktree dumps | janitor | user |
+
+## Commands — Scope Reference
+
+### Orchestrator-only (lead invokes these)
+```
+/swarm-status      /green-merge        /swarm-report
+/rebase-open       /queue-scout        /status-drift
+/salvage-worktrees /swarm-stop         /swarm-wind-down
+```
+
+### Agent-only (agents invoke — do NOT load into orchestrator context)
+```
+/swarm-protocol   /coding-standards   /swarm-priorities
+/pr-respond
+```
+
+### Shared setup commands
+```
+/bootstrap-agents
+```
+
+## Hooks (auto-fire, no agent memory required)
+
+| Event | What It Does |
+|-------|-------------|
+| `PostToolUse` (Edit/Write) | Auto-format + check edited source files |
+| `TaskCompleted` | Block ghost completions — verify deliverables exist |
+| `TeammateIdle` | Detect idle agents with unclaimed work |
+| `SubagentStart` (builder/reviewer/fixer) | Auto-inject coding standards |
+| `Stop` | Warn if tasks incomplete before stopping |
+| `PreToolUse` (Bash) | Block dangerous commands |
+| `SessionStart` (compact) | Inject context refresh after compaction |
+
+All hooks read JSON from stdin. Register in `.claude/settings.json`.
 
 ## Research Agents (spawn from any agent)
 
 ```
-Agent(prompt: "Research: <question>", run_in_background: true, name: "research-<topic>")
-Agent(prompt: "Look up docs: <API>", run_in_background: true, name: "docs-<topic>")
-Agent(prompt: "Verify: <claim>", run_in_background: true, name: "verify-<topic>")
+Agent(prompt: "Research: <question>", run_in_background: true, name: "research-web")
+Agent(prompt: "Look up docs: <API>", run_in_background: true, name: "research-docs")
+Agent(prompt: "Verify: <claim>", run_in_background: true, name: "research-verify")
 ```
 
 ## GitHub Labels
@@ -103,18 +145,3 @@ Agent(prompt: "Verify: <claim>", run_in_background: true, name: "verify-<topic>"
 | P2 | Test infrastructure, mutants, flaky | Secondary focus |
 | P3 | Health: DAP tests, debt, dead code | Background |
 | P4 | Polish: naming, errors, observability | When queue is light |
-
-## Data Flow
-
-```
-scouts → TaskCreate → builders claim → build in worktrees
-builders → SendMessage → reviewer → gh pr create → merger
-merger → gh pr merge → validator (verify) → lock in gains
-merger → SendMessage → scouts (queue low)
-validator → gh issue create → fixer (regression)
-strategist → SendMessage → scouts (priority steering)
-fixer → known-pitfalls → scouts, builders (avoid traps)
-all agents → gh issue create → scouts (swarm-discovered)
-improvers → read handoffs → ADRs, friction log, docs
-lead → memories → future sessions
-```
