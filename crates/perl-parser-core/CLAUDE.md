@@ -7,16 +7,16 @@ Recursive descent parser engine. Most parser fixes happen here.
 - This prevents merge conflicts when multiple agents add tests simultaneously
 - Test template:
   ```rust
-  use perl_parser_core::parse;
+  mod cpan_test_helpers;
+  use cpan_test_helpers::*;
 
   #[test]
-  fn test_<description>() -> Result<(), Box<dyn std::error::Error>> {
+  fn test_<description>() {
       let source = r#"<perl code>"#;
-      let result = parse(source);
-      assert!(result.errors.is_empty(), "Errors: {:?}", result.errors);
-      Ok(())
+      assert_clean_parse(source);
   }
   ```
+- Shared helpers live in `tests/cpan_test_helpers/mod.rs` (provides `parse`, `assert_clean_parse`, `top_level_kinds`)
 
 ## Verify
 ```bash
