@@ -13,6 +13,11 @@ behavior, and hook-based enforcement. The remaining architectural question is
 how aggressively to lean into fresh workers, worktree isolation, and
 pre-encoded procedure.
 
+This ADR defines the default operating model for **swarm mode**: continuous,
+parallel, PR-shaped execution. It is not a universal rule for every Claude Code
+interaction. Small sequential edits that stay in one file surface and one
+verification loop can still stay in the main conversation.
+
 The default "small team, occasional delegation" model is safe and broadly
 applicable, but it under-optimizes for a repo that routinely decomposes into
 dozens of independent PR-shaped units of work. In that environment, the main
@@ -35,6 +40,10 @@ For high-throughput coding, the architecture needs sharper boundaries.
 ---
 
 ## Decision
+
+**All code mutation in swarm mode happens in disposable workers running in
+isolated git worktrees; persistent coordinators own routing, review, merge
+control, and system improvement.**
 
 ### 1. The worktree is the write-isolation boundary
 
@@ -94,6 +103,10 @@ Volatile task state belongs in:
 Do not keep transient task detail alive by reusing the same worker when a fresh
 worker plus a handoff would be clearer.
 
+Subagents do not inherit the caller's loaded skills automatically. If a worker
+needs repo procedure or domain knowledge, list the required skills explicitly
+in the worker prompt or package the task as a `context: fork` skill.
+
 ### 5. Hooks own guarantees; prompts own judgment
 
 If a behavior must happen every time, it belongs in a hook or another
@@ -103,6 +116,11 @@ attempt to enforce invariants such as:
 - dangerous command blocking
 - mandatory logging
 - state refresh after compaction
+
+In swarm mode, the lifecycle hooks that operationalize this model are
+`SubagentStart`, `SubagentStop`, `WorktreeCreate`, `WorktreeRemove`, and
+`TaskCompleted`. Those are the mechanical boundaries for provisioning, cleanup,
+queue bookkeeping, metrics, and completion gates.
 
 ### 6. Handoffs are the continuity mechanism
 

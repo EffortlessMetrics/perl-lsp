@@ -16,6 +16,7 @@
 - Every PR-shaped code change gets its own worktree.
 - Every materially different context gets a fresh worker.
 - Stable procedure belongs in skills and templates; volatile task state belongs in handoffs, worktrees, and PRs.
+- Worker prompts must list the required skills explicitly; subagents do not inherit parent skill state.
 
 ### Context Shift Triggers
 

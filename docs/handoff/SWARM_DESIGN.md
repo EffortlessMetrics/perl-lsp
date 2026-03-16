@@ -157,7 +157,9 @@ Hooks are registered in `.claude/settings.json` under `hooks.<EventType>`:
     "TeammateIdle": [...],
     "TaskCompleted": [...],
     "SubagentStart": [...],
-    "Stop": [...],
+    "SubagentStop": [...],
+    "WorktreeCreate": [...],
+    "WorktreeRemove": [...],
     "PreToolUse": [...],
     "SessionStart": [...]
   }
@@ -179,7 +181,9 @@ CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 | `TeammateIdle` | — | Tracks idle transitions, checks for unclaimed work |
 | `TaskCompleted` | — | Verifies deliverables exist (branch, PR, fmt clean) before marking done |
 | `SubagentStart` | `swarm-builder\|swarm-reviewer\|swarm-fixer` | Auto-injects coding standards reminder |
-| `Stop` | — | Reads `stop_hook_active` from stdin JSON; warns if tasks are incomplete |
+| `SubagentStop` | `swarm-builder\|swarm-reviewer\|swarm-fixer` | Records worker teardown and handoff boundaries in metrics |
+| `WorktreeCreate` | — | Records new mutation lanes when worktree workers spin up |
+| `WorktreeRemove` | — | Records worktree cleanup when mutation lanes are torn down |
 | `PreToolUse` | `Bash` | Reads command from stdin JSON; blocks dangerous commands |
 | `SessionStart` | `compact` | Injects context refresh after conversation compaction |
 
@@ -221,6 +225,14 @@ Do not pre-encode:
 - branch-local findings
 - per-PR reviewer notes
 - a worker's temporary reasoning state
+
+Subagents do not inherit the caller's loaded skills automatically. If a worker
+needs repo rules or procedure, name the required skills explicitly in the spawn
+prompt or package the task itself as a `context: fork` skill.
+
+Workers should also keep a local todo list for the active slice. Each todo item
+should name the skill or command for that step so the procedure stays attached
+to the work item instead of floating in coordinator memory.
 
 ### Handoff Protocol
 

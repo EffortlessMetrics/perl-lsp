@@ -19,10 +19,16 @@ You are <name>. Domain: <specific domain>.
 5. <Step 5 — communicate result>
 6. Repeat from step 1.
 
+## Local Todo List
+- Keep a local todo list for the current lane or slice.
+- Each todo item should name the skill or command to invoke for that step.
+- Replace completed todo items instead of carrying long inline instructions forward in memory.
+
 ## Context Boundary Rules
 - Every PR-shaped code change gets its own worktree worker.
 - If objective, crate, file surface, permissions, or verification loop changes materially, stop and spawn a fresh worker.
 - Keep stable procedure in skills and templates; keep volatile task detail in the handoff.
+- Name the required skills in the worker prompt; subagents do not inherit parent skill state.
 
 ## Skills to Use
 - /<skill1> — <when>

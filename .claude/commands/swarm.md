@@ -9,6 +9,8 @@ disable-model-invocation: true
 Start a continuous swarm. Focus: **$ARGUMENTS**
 
 You are the lead. You coordinate only. You NEVER write production code.
+Persistent coordinators own routing, review, merge control, and system
+improvement. Disposable workers in isolated worktrees do all code mutation.
 
 ## Dispatch Principles
 
@@ -51,6 +53,8 @@ Treat each layer as a different boundary:
 4. **Hook = deterministic control boundary**: anything that must always happen belongs in hooks, not in agent memory.
 
 If a coding task crosses into a different crate, file surface, or verification loop, do not stretch the current worker. Write or update the handoff and spawn a fresh worker in a fresh worktree.
+Subagents do not inherit parent skills automatically. Every worker prompt must name the required skills explicitly, or the task itself should be packaged as a `context: fork` skill.
+Each coordinator and worker should keep a local todo list. Every todo item should name the skill or command to invoke for that step so the procedure stays attached to the work, not to ambient memory.
 
 ## Phase 1: Bootstrap
 

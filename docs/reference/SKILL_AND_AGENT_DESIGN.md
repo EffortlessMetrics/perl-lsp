@@ -2,6 +2,12 @@
 
 This document defines the current swarm execution model for `perl-lsp`.
 
+These rules are the default for **swarm mode**: parallel, PR-shaped execution
+with thin coordinators and disposable workers. They are intentionally stricter
+than the default single-session flow. Quick targeted edits that stay in one
+file surface and one verification loop can still stay in the main
+conversation.
+
 The important question is no longer "how many agents do we have?" It is:
 
 - what boundary gets a new worktree
@@ -111,6 +117,10 @@ Use a skill when:
 - multiple workers need the same procedure
 - supporting files or templates help keep the hot prompt small
 
+Subagents do not inherit the caller's loaded skills automatically. If a worker
+needs repo procedure or domain knowledge, name the required skills in the
+worker prompt or encode the task itself as a `context: fork` skill.
+
 Typical examples:
 - `/coding-standards`
 - `/swarm-protocol`
@@ -118,6 +128,16 @@ Typical examples:
 - `/parser-fix`
 - `/verify-build`
 - `/plan-fix`
+
+### Skill Frontmatter Cheat Sheet
+
+- `disable-model-invocation: true`: the user can invoke the skill, but the
+  model cannot trigger it automatically.
+- `user-invocable: false`: hides the skill from the slash-command menu, but
+  does not stop model invocation on its own.
+- `allowed-tools`: grants the listed tools while the skill is active.
+- `context: fork`: runs the skill in an isolated worker context instead of the
+  current conversation.
 
 ### Hooks
 
@@ -145,6 +165,18 @@ A handoff should carry:
 
 The handoff exists so the next worker does not need to reconstruct context from
 raw source files.
+
+### Local Todo Lists
+
+Workers and coordinators should keep a local todo list for the current slice or
+lane. Each todo item should name the skill or command to invoke for that step:
+- review handoff with `/plan-fix`
+- implement with `/parser-fix`
+- verify with `/verify-build`
+- publish with `/pr-create`
+
+This keeps procedure attached to the current task instead of relying on
+ambient remembered instructions.
 
 ## Spawn Rules
 

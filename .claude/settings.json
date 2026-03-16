@@ -83,12 +83,33 @@
         ]
       }
     ],
-    "Stop": [
+    "SubagentStop": [
+      {
+        "matcher": "swarm-builder|swarm-reviewer|swarm-fixer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/subagent-stop.sh"
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=$(cat); STOP_ACTIVE=$(echo \"$INPUT\" | jq -r '.stop_hook_active // false'); if [ \"$STOP_ACTIVE\" = \"true\" ]; then exit 0; fi; echo 'Before stopping: verify all claimed tasks are completed with actual deliverables (branches pushed, PRs created). If not, keep working.' >&2; exit 0"
+            "command": "bash .claude/hooks/worktree-create.sh"
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/worktree-remove.sh"
           }
         ]
       }
@@ -110,7 +131,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Post-compaction context refresh: This project uses agent-based development. The orchestrator routes work to agents, never writes code directly. Key rules: No unwrap/expect/panic in production code. Use TaskList/TaskUpdate for task coordination. Invoke skills (/parser-fix, /verify-build, /scout-report) instead of inline instructions. See CLAUDE.md for full context.'"
+            "command": "echo 'Post-compaction context refresh: swarm mode is worktree-first and worker-disposable. Coordinators route work; disposable workers mutate code in isolated worktrees. Use TaskList/TaskUpdate for coordination. Name required skills explicitly in worker prompts. See CLAUDE.md and the swarm skill for the current control plane.'"
           }
         ]
       }

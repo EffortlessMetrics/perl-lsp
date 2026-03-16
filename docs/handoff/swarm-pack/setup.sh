@@ -3,7 +3,7 @@
 # Swarm Pack Setup Script
 #
 # Installs the swarm agent infrastructure into your repository.
-# Copies agents, commands, hooks, and creates a queue artifact.
+# Copies agents, skills, commands, hooks, and creates a queue artifact.
 #
 # Usage:
 #   bash path/to/swarm-pack/setup.sh
@@ -44,8 +44,8 @@ CLAUDE_DIR="${REPO_ROOT}/.claude"
 
 # --- Pre-flight checks -------------------------------------------------------
 
-if [ ! -d "${SCRIPT_DIR}/agents" ] && [ ! -d "${SCRIPT_DIR}/commands" ]; then
-    echo "ERROR: Cannot find agents/ or commands/ in pack directory: ${SCRIPT_DIR}"
+if [ ! -d "${SCRIPT_DIR}/agents" ] && [ ! -d "${SCRIPT_DIR}/commands" ] && [ ! -d "${SCRIPT_DIR}/skills" ]; then
+    echo "ERROR: Cannot find agents/, commands/, or skills/ in pack directory: ${SCRIPT_DIR}"
     echo "       Make sure you're pointing at the swarm-pack/ directory."
     exit 1
 fi
@@ -54,6 +54,7 @@ fi
 
 echo "Creating directories..."
 mkdir -p "${CLAUDE_DIR}/agents"
+mkdir -p "${CLAUDE_DIR}/skills"
 mkdir -p "${CLAUDE_DIR}/commands"
 mkdir -p "${CLAUDE_DIR}/hooks"
 mkdir -p "${REPO_ROOT}/${OPS_DIR}"
@@ -61,7 +62,7 @@ mkdir -p "${REPO_ROOT}/${OPS_DIR}/handoffs"
 mkdir -p "${REPO_ROOT}/${OPS_DIR}/salvage"
 mkdir -p "${REPO_ROOT}/${OPS_DIR}/agent-patches"
 
-# --- Install protocol as a skill -----------------------------------------------
+# --- Install protocol as a command ---------------------------------------------
 
 PROTOCOL_SRC="${SCRIPT_DIR}/SWARM_PROTOCOL.md"
 PROTOCOL_DEST="${CLAUDE_DIR}/commands/swarm-protocol.md"
@@ -72,9 +73,29 @@ elif [ -f "$PROTOCOL_SRC" ]; then
         printf '%s\n' '---' 'description: Load swarm behavioral rules' 'argument-hint: ""' '---' ''
         cat "$PROTOCOL_SRC"
     } > "$PROTOCOL_DEST"
-    echo "COPY: swarm-protocol.md (as /swarm-protocol skill)"
+    echo "COPY: swarm-protocol.md (as /swarm-protocol command)"
 else
     echo "SKIP: SWARM_PROTOCOL.md not found in pack — install /swarm-protocol manually"
+fi
+
+# --- Copy skills --------------------------------------------------------------
+
+echo ""
+echo "Installing skills..."
+if [ ! -d "${SCRIPT_DIR}/skills" ]; then
+    echo "  SKIP: no skills/ directory in pack"
+else
+    for src_dir in "${SCRIPT_DIR}"/skills/*; do
+        [ -d "${src_dir}" ] || continue
+        skill_name="$(basename "${src_dir}")"
+        dest="${CLAUDE_DIR}/skills/${skill_name}"
+        if [ -e "${dest}" ]; then
+            echo "  SKIP: ${skill_name}/ (exists)"
+        else
+            cp -R "${src_dir}" "${dest}"
+            echo "  COPY: ${skill_name}/"
+        fi
+    done
 fi
 
 # --- Copy agents (ALL .md files, not just swarm-*) ----------------------------
@@ -230,7 +251,9 @@ if [ -f "$SETTINGS" ]; then
     echo '  "TeammateIdle": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/teammate-idle.sh"}]}],'
     echo '  "TaskCompleted": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/task-completed.sh"}]}],'
     echo '  "SubagentStart": [{"matcher": "swarm-builder|swarm-reviewer|swarm-fixer", "hooks": [{"type": "command", "command": "echo '\''Reminder: Invoke /coding-standards before writing code.'\''"}]}],'
-    echo '  "Stop": [{"hooks": [{"type": "command", "command": "INPUT=$(cat); STOP_ACTIVE=$(echo \"$INPUT\" | jq -r '\''.stop_hook_active // false'\''); ..."}]}],'
+    echo '  "SubagentStop": [{"matcher": "swarm-builder|swarm-reviewer|swarm-fixer", "hooks": [{"type": "command", "command": "bash .claude/hooks/subagent-stop.sh"}]}],'
+    echo '  "WorktreeCreate": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/worktree-create.sh"}]}],'
+    echo '  "WorktreeRemove": [{"hooks": [{"type": "command", "command": "bash .claude/hooks/worktree-remove.sh"}]}],'
     echo '  "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "INPUT=$(cat); CMD=$(echo \"$INPUT\" | jq -r '\''.tool_input.command // empty'\''); ..."}]}]'
     echo '  "SessionStart": [{"matcher": "compact", "hooks": [{"type": "command", "command": "echo '\''Post-compaction context refresh...'\''"}]}]'
     echo ""
@@ -303,12 +326,33 @@ else
         ]
       }
     ],
-    "Stop": [
+    "SubagentStop": [
+      {
+        "matcher": "swarm-builder|swarm-reviewer|swarm-fixer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/subagent-stop.sh"
+          }
+        ]
+      }
+    ],
+    "WorktreeCreate": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "INPUT=\$(cat); STOP_ACTIVE=\$(echo \"\$INPUT\" | jq -r '.stop_hook_active // false'); if [ \"\$STOP_ACTIVE\" = \"true\" ]; then exit 0; fi; echo 'Before stopping: verify all claimed tasks are completed with actual deliverables (branches pushed, PRs created). If not, keep working.' >&2; exit 0"
+            "command": "bash .claude/hooks/worktree-create.sh"
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/worktree-remove.sh"
           }
         ]
       }
@@ -330,7 +374,7 @@ else
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'Post-compaction context refresh: This project uses agent-based development. The orchestrator routes work to agents, never writes code directly. Use TaskList/TaskUpdate for coordination. Invoke skills instead of inline instructions. See CLAUDE.md for full context.'"
+            "command": "echo 'Post-compaction context refresh: swarm mode is worktree-first and worker-disposable. Coordinators route work; disposable workers mutate code in isolated worktrees. Use TaskList/TaskUpdate for coordination. Name required skills explicitly in worker prompts. See CLAUDE.md and the swarm skill for the current control plane.'"
           }
         ]
       }
@@ -338,7 +382,7 @@ else
   }
 }
 SETTINGSEOF
-    echo "  Created with PostToolUse, TeammateIdle, TaskCompleted, SubagentStart, Stop, PreToolUse, and SessionStart hooks"
+    echo "  Created with PostToolUse, TeammateIdle, TaskCompleted, SubagentStart, SubagentStop, WorktreeCreate, WorktreeRemove, PreToolUse, and SessionStart hooks"
 fi
 
 # --- Print customization guide -----------------------------------------------
@@ -349,13 +393,15 @@ echo " Swarm Pack — Setup Complete"
 echo "========================================================================"
 echo ""
 AGENT_COUNT=$(ls -1 "${CLAUDE_DIR}/agents"/*.md 2>/dev/null | wc -l | tr -d ' ')
+SKILL_COUNT=$(find "${CLAUDE_DIR}/skills" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')
 COMMAND_COUNT=$(ls -1 "${CLAUDE_DIR}/commands"/*.md 2>/dev/null | wc -l | tr -d ' ')
 HOOK_COUNT=$(ls -1 "${CLAUDE_DIR}/hooks"/*.sh 2>/dev/null | wc -l | tr -d ' ')
 echo " Installed:"
 echo "   - ${AGENT_COUNT} agent definitions in .claude/agents/"
+echo "   - ${SKILL_COUNT} skills in .claude/skills/"
 echo "   - ${COMMAND_COUNT} slash command files in .claude/commands/"
 echo "   - ${HOOK_COUNT} hook scripts in .claude/hooks/"
-echo "   - hooks registered in .claude/settings.json (7 event types)"
+echo "   - hooks registered in .claude/settings.json (9 event types)"
 echo "   - .claude/swarm-state/  — tracked knowledge (pitfalls, slices, discoveries, queue)"
 echo "   - ${OPS_DIR}/           — ephemeral runtime (gitignored: handoffs, metrics, patches, salvage)"
 echo "   - GitHub labels (7)"

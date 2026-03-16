@@ -81,7 +81,10 @@ Key frontmatter fields:
 
 ### Command And Skill Scoping
 
-The portable pack ships slash commands under `.claude/commands/`. This repo additionally tracks a repo-local skill layer for the same coordinator flow. The important rule is the same in both cases: keep coordinator-only commands out of worker context, and worker-only commands out of the lead's context.
+The portable pack now ships a `.claude/skills/swarm/` tree alongside
+compatible `.claude/commands/` files. The important rule is the same in both
+cases: keep coordinator-only control-plane material out of worker context, and
+keep worker-only procedures out of the lead's context.
 
 **Orchestrator commands** (lead invokes these):
 - `/swarm-status` — shows current PRs, issues, metrics, queue
@@ -116,7 +119,9 @@ Hooks are registered in `.claude/settings.json` under `hooks.<EventType>`:
     "TeammateIdle": [...],
     "TaskCompleted": [...],
     "SubagentStart": [...],
-    "Stop": [...],
+    "SubagentStop": [...],
+    "WorktreeCreate": [...],
+    "WorktreeRemove": [...],
     "PreToolUse": [...],
     "SessionStart": [...]
   }
@@ -138,7 +143,9 @@ CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 | `TeammateIdle` | — | Tracks idle transitions, checks for unclaimed work |
 | `TaskCompleted` | — | Verifies deliverables exist (branch, PR, fmt clean) before marking done |
 | `SubagentStart` | `swarm-builder\|swarm-reviewer\|swarm-fixer` | Auto-injects coding standards reminder |
-| `Stop` | — | Reads `stop_hook_active` from stdin JSON; warns if tasks are incomplete |
+| `SubagentStop` | `swarm-builder\|swarm-reviewer\|swarm-fixer` | Records worker teardown and handoff boundaries in metrics |
+| `WorktreeCreate` | — | Records new mutation lanes when worktree workers spin up |
+| `WorktreeRemove` | — | Records worktree cleanup when mutation lanes are torn down |
 | `PreToolUse` | `Bash` | Reads command from stdin JSON; blocks dangerous commands |
 | `SessionStart` | `compact` | Injects context refresh after conversation compaction |
 
@@ -191,7 +198,12 @@ Each handoff file (`.ops/handoffs/<branch>.md`) contains:
 
 ### Commands And Skills Over File Reads
 
-Protocol, standards, and priorities should be loaded by invocation (`/swarm-protocol`, `/coding-standards`, `/swarm-priorities`) instead of by spending `Read` calls on long reference files. In repo-local installs, the same material can additionally live in skills; in the portable pack, the slash commands are the load-bearing surface.
+Protocol, standards, and priorities should be loaded by invocation
+(``/swarm-protocol``, ``/coding-standards``, ``/swarm-priorities``) instead of
+by spending `Read` calls on long reference files. In repo-local installs, the
+same material can additionally live in skills; the portable pack now ships a
+skill-native `/swarm` control plane plus command-compatible surfaces for the
+same procedures.
 
 ### Minimal Subagent Prompts
 
