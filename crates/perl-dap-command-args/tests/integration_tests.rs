@@ -1,4 +1,10 @@
 //! Integration tests for `perl-dap-command-args`.
+//!
+//! Verifies that `format_command_args` correctly quotes arguments containing
+//! spaces while passing through arguments without spaces unchanged. Covers
+//! empty input, trivial single-arg cases, platform-specific quoting (Unix
+//! single/double quotes), UTF-8 and emoji handling, shell-sensitive characters,
+//! very long arguments, and argument-order preservation.
 
 use perl_dap_command_args::format_command_args;
 

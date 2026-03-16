@@ -1,4 +1,9 @@
 //! Integration tests for `perl-dap-shell`.
+//!
+//! Covers both `setup_environment` (PERL5LIB construction from include paths)
+//! and `format_command_args` (space-aware quoting). Tests include empty input,
+//! single/multiple paths, Unicode paths, special characters, platform-specific
+//! separators, and combined usage in a typical DAP launch scenario.
 
 use perl_dap_shell::{format_command_args, setup_environment};
 use std::path::PathBuf;

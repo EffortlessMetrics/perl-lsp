@@ -1,4 +1,8 @@
 //! Integration tests for `perl-dap-value`.
+//!
+//! Covers every `PerlValue` variant across: constructors, `Default`,
+//! `is_expandable`, `type_name`, `child_count`, `Clone`/`PartialEq`,
+//! serde round-trip, edge cases (empty, extreme, deeply-nested), and `Debug`.
 
 use perl_dap_value::PerlValue;
 
@@ -551,26 +555,30 @@ fn truncated_with_zero_total() {
 // ════════════════════════════════════════════════════════════════════
 
 #[test]
-fn debug_format_does_not_panic() {
-    let variants: Vec<PerlValue> = vec![
-        PerlValue::Undef,
-        PerlValue::Scalar("test".into()),
-        PerlValue::Number(1.0),
-        PerlValue::Integer(1),
-        PerlValue::Array(vec![]),
-        PerlValue::Hash(vec![]),
-        PerlValue::Reference(Box::new(PerlValue::Undef)),
-        PerlValue::Object { class: "C".into(), value: Box::new(PerlValue::Undef) },
-        PerlValue::Code { name: None },
-        PerlValue::Glob("g".into()),
-        PerlValue::Regex("r".into()),
-        PerlValue::Tied { class: "T".into(), value: None },
-        PerlValue::Truncated { summary: "s".into(), total_count: None },
-        PerlValue::Error("e".into()),
+fn debug_format_includes_variant_name_for_all_types() {
+    let cases: Vec<(PerlValue, &str)> = vec![
+        (PerlValue::Undef, "Undef"),
+        (PerlValue::Scalar("test".into()), "Scalar"),
+        (PerlValue::Number(1.0), "Number"),
+        (PerlValue::Integer(1), "Integer"),
+        (PerlValue::Array(vec![]), "Array"),
+        (PerlValue::Hash(vec![]), "Hash"),
+        (PerlValue::Reference(Box::new(PerlValue::Undef)), "Reference"),
+        (PerlValue::Object { class: "C".into(), value: Box::new(PerlValue::Undef) }, "Object"),
+        (PerlValue::Code { name: None }, "Code"),
+        (PerlValue::Glob("g".into()), "Glob"),
+        (PerlValue::Regex("r".into()), "Regex"),
+        (PerlValue::Tied { class: "T".into(), value: None }, "Tied"),
+        (PerlValue::Truncated { summary: "s".into(), total_count: None }, "Truncated"),
+        (PerlValue::Error("e".into()), "Error"),
     ];
 
-    for v in &variants {
-        // Just verify formatting doesn't panic.
-        let _ = format!("{:?}", v);
+    for (value, expected_variant) in &cases {
+        let debug_str = format!("{:?}", value);
+        assert!(!debug_str.is_empty(), "Debug output should be non-empty for {expected_variant}");
+        assert!(
+            debug_str.contains(expected_variant),
+            "Debug output for {expected_variant} should contain variant name, got: {debug_str}"
+        );
     }
 }
