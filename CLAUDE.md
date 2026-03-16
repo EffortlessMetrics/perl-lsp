@@ -61,6 +61,10 @@ cargo test --workspace --lib
 | Crate audit | `/audit <crate>` |
 | Design comparison | `/compare "A vs B"` |
 | Quick health check | `/health-check` |
+| Scout for work | `/parser-scout`, `/dap-scout`, `/security-scout` |
+| PR review | `/review-scope`, `/review-performance`, `/review-security`, `/standards-check` |
+| Dependency hygiene | `/dep-check`, `/dep-clean` |
+| Dead code cleanup | `/dead-code-check` |
 
 ## Crate Structure
 
@@ -382,6 +386,21 @@ This project uses continuous agent swarms with agent teams for parallel codebase
 | `/rebase-open` | Rebase conflicted PRs |
 | `/status-drift` | Fix computed metric drift |
 | `/bootstrap-agents` | Discover codebase, generate domain agents |
+
+### Scout & Review Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/parser-scout` | Scout parser error buckets for improvement opportunities |
+| `/dap-scout` | Scout DAP crates for test gaps |
+| `/security-scout` | Scout for security issues across codebase |
+| `/review-scope` | Review PR for scope creep and focus violations |
+| `/review-performance` | Review PR for performance issues |
+| `/review-security` | Review PR for security issues |
+| `/standards-check` | Review PR for coding standards compliance |
+| `/dead-code-check` | Find and report dead code |
+| `/dep-check` | Analyze dependency health, security, compliance |
+| `/dep-clean` | Remove unused dependencies |
 
 ### PR/Worktree Skills
 
