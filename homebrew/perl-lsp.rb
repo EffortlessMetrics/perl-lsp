@@ -1,31 +1,31 @@
 class PerlLsp < Formula
   desc "Fast, reliable Perl language server with 100% syntax coverage"
   homepage "https://github.com/EffortlessMetrics/perl-lsp"
-  version "0.8.3"
+  version "0.11.0"
   license "MIT"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-0.8.3-aarch64-apple-darwin.tar.gz"
-      sha256 "PLACEHOLDER_SHA256_AARCH64_DARWIN"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.11.0/perl-lsp-0.11.0-aarch64-apple-darwin.tar.gz"
+      sha256 "90ec6dfcb71882ff6e33ff3b4fcf410d4e92d7eb31cd7b37872148e854ec3b2d"
     else
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-0.8.3-x86_64-apple-darwin.tar.gz"
-      sha256 "PLACEHOLDER_SHA256_X86_64_DARWIN"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.11.0/perl-lsp-0.11.0-x86_64-apple-darwin.tar.gz"
+      sha256 "50edd25dc077cecf2227103b15598d2fd48aa7c94a33b591b37eff96e0342407"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-0.8.3-aarch64-unknown-linux-gnu.tar.gz"
-      sha256 "PLACEHOLDER_SHA256_AARCH64_LINUX"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.11.0/perl-lsp-0.11.0-aarch64-unknown-linux-gnu.tar.gz"
+      sha256 "a4d72384c0bb3b7b3fbec2c7b967579e49145844f8835230757d532281cb21c0"
     else
-      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.8.3/perl-lsp-0.8.3-x86_64-unknown-linux-gnu.tar.gz"
-      sha256 "8af781a0e0aed47f22517ab15cce80dbf78e7bcafb62e1eed5ab236b481b920d"
+      url "https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.11.0/perl-lsp-0.11.0-x86_64-unknown-linux-gnu.tar.gz"
+      sha256 "a9124a347bec0de26e8b01a1b9d5630c856611a01a454e68b8f586f258485fba"
     end
   end
 
   def install
-    # Find the extracted directory (should be perl-lsp-v0.8.3-{target})
+    # Find the extracted directory (should be perl-lsp-v0.11.0-{target})
     extracted_dir = Dir.glob("perl-lsp-*").first
     if extracted_dir && File.directory?(extracted_dir)
       bin.install "#{extracted_dir}/perl-lsp"
