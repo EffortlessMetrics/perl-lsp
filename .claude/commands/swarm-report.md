@@ -1,6 +1,7 @@
 ---
 description: Generate daily swarm summary for user check-in
 argument-hint: "[--since '24 hours ago']"
+disable-model-invocation: true
 ---
 
 # Swarm Report

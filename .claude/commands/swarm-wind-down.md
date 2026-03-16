@@ -1,6 +1,7 @@
 ---
 description: Gracefully wind down the swarm — finish in-progress work, merge what's ready, clean up
 argument-hint: "[--reason <why>]"
+disable-model-invocation: true
 ---
 
 # Swarm Wind Down (Graceful)

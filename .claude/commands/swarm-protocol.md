@@ -1,6 +1,7 @@
 ---
 description: Load swarm behavioral rules — autonomy, messaging, metrics, learning, GitHub-native tracking
 argument-hint: ""
+user-invocable: false
 ---
 
 # Swarm Protocol

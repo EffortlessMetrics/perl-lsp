@@ -1,6 +1,7 @@
 ---
 description: Run corpus sweep, compare baseline, update manifests
 argument-hint: "[--system|--cpan|--common] [--update]"
+disable-model-invocation: true
 ---
 
 # Corpus Ratchet
