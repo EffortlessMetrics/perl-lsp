@@ -49,8 +49,9 @@ If the merge **fails due to a Cargo.lock conflict**, attempt auto-resolution:
    gh pr checkout <number>
    git fetch origin master
    git rebase origin/master
-   # If rebase conflicts on Cargo.lock, accept master's version and regenerate
-   git checkout --theirs Cargo.lock
+   # If rebase conflicts on Cargo.lock, accept master's version and regenerate.
+   # During rebase, --ours refers to the upstream (master) side.
+   git checkout --ours Cargo.lock
    cargo generate-lockfile
    git add Cargo.lock
    git rebase --continue
