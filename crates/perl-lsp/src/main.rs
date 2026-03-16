@@ -9,7 +9,10 @@
 
 #![deny(clippy::option_env_unwrap)]
 use perl_lsp::LspServer;
-use perl_lsp_launcher::{LaunchAction, LaunchConfig, TransportMode, help_text, parse_args};
+use perl_lsp_launcher::{
+    LaunchAction, LaunchConfig, TransportMode, format_health_output, format_info_output, help_text,
+    parse_args, port_in_use_message, shell_completion,
+};
 use std::env;
 use std::process;
 use std::sync::Arc;
@@ -30,8 +33,39 @@ fn main() {
     match launch_plan.action {
         LaunchAction::Run => run_server(launch_plan.config),
         LaunchAction::Health => {
-            println!("ok {}", env!("CARGO_PKG_VERSION"));
+            let use_color = is_terminal_stdout();
+            println!("{}", format_health_output(env!("CARGO_PKG_VERSION"), use_color));
             process::exit(0);
+        }
+        LaunchAction::Info => {
+            let use_color = is_terminal_stdout();
+            let exe_path = env::current_exe()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| "<unknown>".to_string());
+            print!(
+                "{}",
+                format_info_output(
+                    env!("CARGO_PKG_VERSION"),
+                    env!("GIT_TAG"),
+                    &exe_path,
+                    launch_plan.config.feature_profile,
+                    use_color,
+                )
+            );
+            process::exit(0);
+        }
+        LaunchAction::Check => {
+            let exit_code = run_check(&launch_plan.files);
+            process::exit(exit_code);
+        }
+        LaunchAction::Completion { ref shell } => {
+            if let Some(script) = shell_completion(shell) {
+                print!("{script}");
+                process::exit(0);
+            } else {
+                eprintln!("Unknown shell: {shell}. Supported: bash, zsh, fish");
+                process::exit(1);
+            }
         }
         LaunchAction::Version => {
             print_version();
@@ -46,6 +80,58 @@ fn main() {
             process::exit(0);
         }
     }
+}
+
+/// Run the `--check` batch mode: parse the given files and report errors.
+fn run_check(files: &[String]) -> i32 {
+    if files.is_empty() {
+        eprintln!("Usage: perl-lsp --check <file.pl> [file2.pm ...]");
+        eprintln!("No files specified.");
+        return 1;
+    }
+
+    let mut total = 0usize;
+    let mut errors = 0usize;
+
+    for path in files {
+        total += 1;
+        let source = match std::fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("{path}: error reading file: {e}");
+                errors += 1;
+                continue;
+            }
+        };
+
+        let mut parser = perl_parser::Parser::new(&source);
+        match parser.parse() {
+            Ok(_) => {
+                println!("{path}: ok");
+            }
+            Err(e) => {
+                println!("{path}: FAIL - {e}");
+                errors += 1;
+            }
+        }
+    }
+
+    if total > 1 {
+        println!();
+        println!("{total} files checked, {errors} with errors");
+    }
+
+    if errors > 0 { 1 } else { 0 }
+}
+
+/// Detect whether stdout is a terminal (for colored output).
+fn is_terminal_stdout() -> bool {
+    // Use the TERM environment variable as a lightweight heuristic.
+    // This avoids adding a dependency on `atty` or `is-terminal`.
+    // Piped output (e.g., `perl-lsp --health | cat`) typically has
+    // TERM unset or set to "dumb".
+    env::var("NO_COLOR").is_err()
+        && env::var("TERM").map(|t| !t.is_empty() && t != "dumb").unwrap_or(false)
 }
 
 fn run_server(launch_config: LaunchConfig) {
@@ -112,7 +198,11 @@ fn run_server(launch_config: LaunchConfig) {
                 let listener = match TcpListener::bind(&addr).await {
                     Ok(l) => l,
                     Err(e) => {
-                        eprintln!("Failed to bind to {addr}: {e}");
+                        if e.kind() == std::io::ErrorKind::AddrInUse {
+                            eprintln!("{}", port_in_use_message(port));
+                        } else {
+                            eprintln!("Failed to bind to {addr}: {e}");
+                        }
                         process::exit(1);
                     }
                 };

@@ -494,9 +494,12 @@ fn default_port_is_expected_value() {
 #[test]
 fn launch_action_variants_are_distinct() {
     use perl_lsp_launcher::LaunchAction;
-    let actions = [
+    let actions: Vec<LaunchAction> = vec![
         LaunchAction::Run,
         LaunchAction::Health,
+        LaunchAction::Info,
+        LaunchAction::Check,
+        LaunchAction::Completion { shell: "bash".to_string() },
         LaunchAction::Version,
         LaunchAction::FeaturesJson,
         LaunchAction::Help,
@@ -526,7 +529,7 @@ fn launch_action_debug_output() {
 fn launch_plan_fields_accessible() {
     let plan = must(parse_args(["perl-lsp", "--health"]));
     // Verify both fields are public and usable
-    let _action = plan.action;
+    let _action = &plan.action;
     let _transport = plan.config.transport;
     let _logging = plan.config.enable_logging;
     let _profile = plan.config.feature_profile;
