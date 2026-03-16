@@ -1277,3 +1277,53 @@ fn diagnostic_equality_considers_suggestion() -> Result<(), Box<dyn std::error::
     assert_ne!(d1, d2, "Diagnostics with different suggestions should not be equal");
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Full pipeline: uninitialized variable integration tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn full_pipeline_uninitialized_variable_emits_warning() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse real Perl with an uninitialized variable usage
+    let source = "use strict;\nuse warnings;\nmy $x;\nprint $x;\n";
+    let output = perl_parser::Parser::new(source).parse_with_recovery();
+    let ast = Arc::new(output.ast);
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source);
+
+    let uninit: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("uninitialized-variable"))
+        .collect();
+
+    assert!(!uninit.is_empty(), "Expected at least one uninitialized-variable diagnostic");
+    assert_eq!(
+        uninit[0].severity,
+        DiagnosticSeverity::Warning,
+        "Uninitialized variable should be a Warning"
+    );
+    assert!(uninit[0].suggestion.is_some(), "Should carry a quick-fix suggestion");
+    assert!(!uninit[0].related_information.is_empty(), "Should have related info with guidance");
+    Ok(())
+}
+
+#[test]
+fn full_pipeline_initialized_variable_no_warning() -> Result<(), Box<dyn std::error::Error>> {
+    // Parse Perl with properly initialized variable — no uninitialized-variable diagnostic expected
+    let source = "use strict;\nuse warnings;\nmy $x = 42;\nprint $x;\n";
+    let output = perl_parser::Parser::new(source).parse_with_recovery();
+    let ast = Arc::new(output.ast);
+    let provider = DiagnosticsProvider::new(&ast, source.to_string());
+    let diagnostics = provider.get_diagnostics(&ast, &output.diagnostics, source);
+
+    let uninit: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code.as_deref() == Some("uninitialized-variable"))
+        .collect();
+
+    assert!(
+        uninit.is_empty(),
+        "Initialized variable should not produce uninitialized-variable diagnostic"
+    );
+    Ok(())
+}
