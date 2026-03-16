@@ -650,3 +650,131 @@ fn dead_code_file_path_matches_input() -> Result<(), String> {
     assert_eq!(results[0].file_path, PathBuf::from("/my/script.pl"));
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// DeadBranch detection
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dead_branch_if_zero_emits_dead_branch() -> Result<(), String> {
+    let code = "if (0) {\n    print \"never\";\n}\n";
+    let index = index_with_file("file:///test_dead_if0.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_if0.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(!dead_branches.is_empty(), "if (0) should produce a DeadBranch entry");
+    assert!(dead_branches[0].reason.contains("always false"), "reason should mention always false");
+    assert_eq!(dead_branches[0].confidence, 0.9);
+    Ok(())
+}
+
+#[test]
+fn dead_branch_while_zero_emits_dead_branch() -> Result<(), String> {
+    let code = "while (0) {\n    do_something();\n}\n";
+    let index = index_with_file("file:///test_dead_while0.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_while0.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(!dead_branches.is_empty(), "while (0) should produce a DeadBranch entry");
+    assert!(dead_branches[0].reason.contains("`while`"));
+    Ok(())
+}
+
+#[test]
+fn dead_branch_unless_one_emits_dead_branch() -> Result<(), String> {
+    let code = "unless (1) {\n    print \"never\";\n}\n";
+    let index = index_with_file("file:///test_dead_unless1.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_unless1.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(!dead_branches.is_empty(), "unless (1) should produce a DeadBranch entry");
+    assert!(dead_branches[0].reason.contains("`unless`"));
+    assert!(dead_branches[0].reason.contains("always true"), "reason should mention always true");
+    Ok(())
+}
+
+#[test]
+fn dead_branch_until_one_emits_dead_branch() -> Result<(), String> {
+    let code = "until (1) {\n    print \"never\";\n}\n";
+    let index = index_with_file("file:///test_dead_until1.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_until1.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(!dead_branches.is_empty(), "until (1) should produce a DeadBranch entry");
+    assert!(dead_branches[0].reason.contains("`until`"));
+    Ok(())
+}
+
+#[test]
+fn dead_branch_if_undef_emits_dead_branch() -> Result<(), String> {
+    let code = "if (undef) {\n    print \"never\";\n}\n";
+    let index = index_with_file("file:///test_dead_if_undef.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_if_undef.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(!dead_branches.is_empty(), "if (undef) should produce a DeadBranch entry");
+    Ok(())
+}
+
+#[test]
+fn dead_branch_if_empty_string_emits_dead_branch() -> Result<(), String> {
+    let code = "if (\"\") {\n    print \"never\";\n}\n";
+    let index = index_with_file("file:///test_dead_if_emptystr.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_if_emptystr.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(!dead_branches.is_empty(), "if (\"\") should produce a DeadBranch entry");
+    Ok(())
+}
+
+#[test]
+fn dead_branch_normal_if_does_not_emit() -> Result<(), String> {
+    let code = "if ($x > 0) {\n    print \"yes\";\n}\n";
+    let index = index_with_file("file:///test_normal_if.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_normal_if.pl"))?;
+    let dead_branches: Vec<_> =
+        results.iter().filter(|d| d.code_type == DeadCodeType::DeadBranch).collect();
+    assert!(dead_branches.is_empty(), "non-constant condition should not produce DeadBranch");
+    Ok(())
+}
+
+#[test]
+fn dead_branch_has_suggestion() -> Result<(), String> {
+    let code = "if (0) {\n    print \"never\";\n}\n";
+    let index = index_with_file("file:///test_dead_suggestion.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let results = detector.analyze_file(&PathBuf::from("/test_dead_suggestion.pl"))?;
+    let branch = results.iter().find(|d| d.code_type == DeadCodeType::DeadBranch);
+    assert!(branch.is_some());
+    assert!(branch.unwrap().suggestion.is_some(), "DeadBranch should have a suggestion");
+    Ok(())
+}
+
+#[test]
+fn dead_branch_stats_incremented_in_workspace_analysis() -> Result<(), String> {
+    let code = "if (0) {\n    print \"never\";\n}\nif (1) {\n    print \"yes\";\n}\n";
+    let index = index_with_file("file:///test_dead_stats.pl", code)?;
+    let detector = DeadCodeDetector::new(index);
+
+    let analysis = detector.analyze_workspace();
+    assert!(
+        analysis.stats.dead_branches >= 1,
+        "workspace analysis should count dead branches in stats"
+    );
+    Ok(())
+}
