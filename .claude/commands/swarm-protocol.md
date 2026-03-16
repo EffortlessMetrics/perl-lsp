@@ -268,7 +268,7 @@ gh pr merge <N> --squash --delete-branch   # Only if both above are green
 
 **Every scout MUST write findings as a GitHub issue.** Agent output is ephemeral; GitHub issues persist.
 
-Scouts use `/scout-report` to file structured issues. If the skill is unavailable, create the issue manually:
+Scouts file structured issues using `gh issue create`. Template:
 
 ```bash
 gh issue create --title "<sector>: <finding>" --label "swarm-discovered" \
@@ -329,7 +329,7 @@ Skills are the single source of truth for multi-step procedures. When an agent i
 | Format + clippy + test | `/verify` | Don't hand-roll `cargo fmt && cargo clippy && cargo test` |
 | Create PR | `/pr-create` | Don't hand-roll `gh pr create` with ad-hoc body |
 | Code review checklist | `/coding-standards` | Don't guess at project conventions |
-| Scout findings | `/scout-report` | Don't skip the issue template |
+| Scout findings | `gh issue create --label swarm-discovered` | Don't skip the issue template |
 | Parser fix TDD | `/parser-fix` | Don't skip the red-green-refactor cycle |
 
 ### Why this matters
