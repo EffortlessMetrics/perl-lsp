@@ -57,6 +57,14 @@ gh run list --branch master --limit 5 --json status,conclusion,headBranch
 # Message fixer with: gh run view <run-id> --log-failed
 ```
 
+### Check CI queue depth before launching builders
+
+```bash
+gh run list --json status --jq '[.[] | select(.status == "in_progress")] | length'
+```
+
+**If > 5 runs in progress**: wait before launching builders. CI runners are finite — sending more work while the queue is already saturated delays all PRs and obscures failures. Check again in a few minutes, or message fixer to investigate stuck runs.
+
 ### Check for pending work from previous sessions
 - Agent patches: `ls .ops-perl-lsp/agent-patches/*.md 2>/dev/null`
 - In-progress slices: `grep "in-progress" .claude/swarm-state/completed-slices.md 2>/dev/null`
@@ -125,6 +133,11 @@ Before spawning any subagent, confirm it has ALL of the following:
   - Claimed file surface (exact list of files to touch — no open-ended scope)
   - Verification command (cargo fmt && cargo clippy -p <Y> --tests && cargo test -p <Y>)
   - PR size confirmation: if the change touches >10 files, split into multiple subagents with non-overlapping file surfaces
+
+Track all spawned subagent IDs. Before shutting down, list them in your shutdown message so the lead knows what's still running.
+
+Check open PR count before creating new PRs. If > 5 open, message lead for guidance instead of adding to the queue:
+  gh pr list --state open --json number --jq length
 
 Subagent prompt pattern (required fields):
   "Worktree: <worktree-name>. Branch: <X>. Crate: <Y>.
