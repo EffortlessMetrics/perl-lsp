@@ -56,6 +56,7 @@ cargo test --workspace --lib
 | Multiple changes | Parallel worktree agents |
 | Swarm cycle | `/swarm all` |
 | Corpus improvement | `/corpus-ratchet` |
+| Worktree cleanup | `/cleanup-worktrees` |
 | Focused scouting | `/scout <area>` |
 | Issue discovery | `/find-issues` |
 | Crate audit | `/audit <crate>` |
@@ -418,6 +419,7 @@ This project uses continuous agent swarms with agent teams for parallel codebase
 | `/worktree-pr` | PR a worktree's changes (as draft) |
 | `/bulk-pr` | PR all worktrees with changes (as draft) |
 | `/salvage-worktrees` | Save dirty worktrees before cleanup |
+| `/cleanup-worktrees` | Remove merged/abandoned worktrees mid-cycle |
 | `/parser-fix` | TDD parser fix |
 | `/wave` | Launch parallel agent wave |
 | `/corpus-ratchet` | Corpus sweep and baseline update |
