@@ -63,6 +63,13 @@ gh run list --json status --jq '[.[] | select(.status == "in_progress")] | lengt
 - In-progress slices: `grep "in-progress" .claude/swarm-state/completed-slices.md 2>/dev/null`
 - Discovered issues: `gh issue list --label swarm-discovered --state open`
 
+### Check ready queue
+```bash
+ls .claude/queues/ready/*.md 2>/dev/null | wc -l
+ls .claude/queues/scout/*.md 2>/dev/null | wc -l
+```
+Ready packets are pre-planned work. Builders should claim from ready/ before scouting new work.
+
 ### Resume or start fresh
 If there's pending work, prioritize it. Otherwise start fresh scouting.
 
