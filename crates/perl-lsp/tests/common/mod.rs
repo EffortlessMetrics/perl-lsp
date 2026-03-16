@@ -46,13 +46,13 @@ pub use protocol_io::{
     send_raw_message, send_request_no_wait,
 };
 
-use binary_resolution::{resolve_perl_lsp_cmds, CARGO_BIN_EXE};
+use binary_resolution::{CARGO_BIN_EXE, resolve_perl_lsp_cmds};
 use protocol_io::{
-    error_response_for_request, map_send_error, send_message_inner, ERR_TEST_TIMEOUT,
+    ERR_TEST_TIMEOUT, error_response_for_request, map_send_error, send_message_inner,
 };
 
 use perl_tdd_support::must;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Mutex, OnceLock};

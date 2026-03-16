@@ -3,7 +3,7 @@
 //! Provides low-level message framing, response matching, notification filtering,
 //! and drain utilities used by the test harness.
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
