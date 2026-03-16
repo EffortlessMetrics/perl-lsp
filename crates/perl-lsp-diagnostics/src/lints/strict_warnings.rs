@@ -23,7 +23,7 @@ const PRAGMA_TYPOS: &[(&str, &[&str])] = &[
     ("strict", &["structs", "strickt", "stricts", "stirct", "stict", "strct", "srict"]),
     ("warnings", &["warning", "warningss", "warnigns", "warrnings", "warnins", "warnnigs"]),
     ("utf8", &["utf-8", "uft8", "utf88"]),
-    ("feature", &["feaure", "featrue", "feture", "features"]),
+    ("feature", &["feaure", "featrue", "feture"]),
     ("constant", &["constanst", "contstant", "costant", "consant"]),
     ("parent", &["parrent", "parnet"]),
     ("base", &["basse", "bace"]),
