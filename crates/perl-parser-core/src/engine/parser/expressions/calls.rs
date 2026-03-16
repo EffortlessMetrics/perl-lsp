@@ -181,13 +181,17 @@ impl<'a> Parser<'a> {
         // We're consuming the function name, no longer at statement start
         self.mark_not_stmt_start();
 
-        // `delete` and `exists` take a full postfix expression as their argument
-        // so that arrow-dereference chains are included:
-        //   delete $self->{key}   — $self->{key} is one postfix expr
-        //   exists $ref->[0]      — $ref->[0] is one postfix expr
+        // Some builtins take a full postfix expression as their argument so that
+        // arrow-dereference chains are included in the operand:
+        //   delete $self->{key}    — $self->{key} is one postfix expr
+        //   exists $ref->[0]       — $ref->[0] is one postfix expr
+        //   scalar $dh->read       — $dh->read is one postfix expr
         // Other indirect-call builtins (print, say, etc.) only consume
         // the object/filehandle here; remaining args are parsed in the loop below.
-        let object = if method == "delete" || method == "exists" {
+        let object = if matches!(
+            method.as_str(),
+            "delete" | "exists" | "scalar" | "ref" | "defined"
+        ) {
             self.parse_postfix()?
         } else {
             self.parse_primary()?

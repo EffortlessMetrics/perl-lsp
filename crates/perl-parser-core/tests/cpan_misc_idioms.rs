@@ -262,3 +262,56 @@ fn print_block_with_multiple_args() {
     let code = r#"print { $fh } "key=", $value, "\n";"#;
     assert_clean_parse(code);
 }
+
+mod scalar_builtin_arrow_method {
+    use super::*;
+
+    /// scalar $dh->read — builtin followed by arrow-method call chain
+    #[test]
+    fn scalar_arrow_method() {
+        let code = "my $n = scalar $dh->read;";
+        assert_clean_parse(code);
+    }
+
+    /// ref $obj->method — ref followed by arrow call
+    #[test]
+    fn ref_arrow_method() {
+        let code = r#"if (ref $obj->type eq "ARRAY") { 1; }"#;
+        assert_clean_parse(code);
+    }
+
+    /// defined $self->{key} — defined with hash deref
+    #[test]
+    fn defined_hash_deref() {
+        let code = "return unless defined $self->{value};";
+        assert_clean_parse(code);
+    }
+
+    /// defined $ref->[0] — defined with array deref
+    #[test]
+    fn defined_array_deref() {
+        let code = "my $ok = defined $ref->[0];";
+        assert_clean_parse(code);
+    }
+
+    /// scalar @{$ref} context — indirect scalar on array deref
+    #[test]
+    fn scalar_deref_array() {
+        let code = "my $count = scalar @{$aref};";
+        assert_clean_parse(code);
+    }
+
+    /// Chained arrow on defined — common OO check
+    #[test]
+    fn defined_arrow_chain() {
+        let code = "if (defined $self->{config}->{key}) { do_thing(); }";
+        assert_clean_parse(code);
+    }
+
+    /// scalar in boolean context with arrow method
+    #[test]
+    fn scalar_arrow_method_bool() {
+        let code = "if (scalar $dh->read) { process(); }";
+        assert_clean_parse(code);
+    }
+}
