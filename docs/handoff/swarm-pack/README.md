@@ -48,6 +48,8 @@ bash path/to/swarm-pack/setup.sh
 
 `setup.sh` gives you portable agents + skills. `/bootstrap-agents` explores YOUR codebase and generates ~25-30 domain-specific agents. Together: ~50 agents with full repo context pre-encoded, 5 named coordinator teammates, GitHub labels, issue/PR templates, and a self-improving learning loop.
 
+This branch is a later design step, not the first infrastructure landing: the portable pack still ships slash command files under `.claude/commands/`, while the repo-local swarm orchestration is additionally captured as a skill so coordinator prompts can compose other skills directly.
+
 ## What Gets Installed
 
 ```
@@ -90,8 +92,6 @@ bash path/to/swarm-pack/setup.sh
       SKILL.md              # /swarm — 5-coordinator orchestrator with data flows
       reference/
         team-structure.md   # Team layout, spawn prompts, data flow diagram
-        skill-scoping.md    # Which skills belong in which context
-        hook-design.md      # Hook types, events, design principles
       templates/
         teammate-prompt-template.md  # Standard teammate spawn prompt format
     swarm-protocol/

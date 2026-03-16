@@ -14,7 +14,7 @@ You are the lead. You coordinate only. You NEVER write production code.
 
 ## Skill Scope
 
-See `reference/skill-scoping.md` for the full scoping table.
+The scope split is summarized here. See `reference/team-structure.md` for the concrete coordinator handoffs and data flow.
 
 **Orchestrator skills** (you invoke these):
 - `/swarm-status` — shows current PRs, issues, metrics, queue
