@@ -50,6 +50,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0028](0028-safe-eval-timeout.md) | Accepted | 2025-02-20 | Safe Eval Timeout | 5-second default and 300-second max for DoS prevention |
 | [ADR-0029](0029-mutation-sentinel-values.md) | Accepted | 2025-02-20 | Mutation Sentinel Values | Sentinel values like xyzzy for mutation testing detection |
 | [ADR-0030](0030-receipt-gate-system.md) | Accepted | 2025-02-20 | Receipt Gate System | Machine-readable receipts for CI gate verification |
+| [ADR-0031](0031-async-runtime-concurrent-dispatch.md) | Accepted | 2026-03-16 | Async Runtime with Concurrent Dispatch | Two-lane scheduler (exclusive + 4-worker read pool) for concurrent LSP request handling |
 
 ## About ADRs
 
