@@ -32,7 +32,7 @@ Launch a parallel Agent (with `run_in_background: true`) for each worktree that:
 5. Runs appropriate `cargo test` for changed crates
 6. Creates a descriptive feature branch
 7. Commits with conventional commit message
-8. Pushes and creates PR via `gh pr create`
+8. Pushes and creates draft PR via `gh pr create --draft`
 9. Returns the PR URL
 
 ### 3. Report

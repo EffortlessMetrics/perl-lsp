@@ -387,15 +387,18 @@ This project uses continuous agent swarms with agent teams for parallel codebase
 
 | Skill | Purpose |
 |-------|---------|
-| `/pr-create` | Create a PR from current branch |
+| `/pr-create` | Create a draft PR from current branch |
 | `/pr-cleanup` | Clean up branch for review |
-| `/worktree-pr` | PR a worktree's changes |
-| `/bulk-pr` | PR all worktrees with changes |
+| `/pr-ready` | Mark a reviewed draft PR as ready for CI |
+| `/worktree-pr` | PR a worktree's changes (as draft) |
+| `/bulk-pr` | PR all worktrees with changes (as draft) |
 | `/salvage-worktrees` | Save dirty worktrees before cleanup |
 | `/parser-fix` | TDD parser fix |
 | `/wave` | Launch parallel agent wave |
 | `/corpus-ratchet` | Corpus sweep and baseline update |
 | `/scout-report` | Write scout findings as GitHub issues (used by all scout skills) |
+
+> **PR lifecycle**: Builder creates draft PR --> Review agent fixes issues --> `/pr-ready` marks ready --> CI triggers --> Merge
 
 ### Architecture
 

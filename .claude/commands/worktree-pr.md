@@ -63,10 +63,10 @@ EOF
 )"
 ```
 
-7. **Push and PR**:
+6. **Push and PR** (always as draft):
 ```bash
 git push -u origin <branch-name>
-gh pr create --title "<type>(<scope>): <description>" --body "$(cat <<'EOF'
+gh pr create --draft --title "<type>(<scope>): <description>" --body "$(cat <<'EOF'
 ## Summary
 <what and why>
 
@@ -78,4 +78,6 @@ EOF
 )"
 ```
 
-8. **Return the PR URL**.
+> **Note**: PRs open as draft. After review agent fixes issues, mark ready with `/pr-ready`.
+
+7. **Return the PR URL**.

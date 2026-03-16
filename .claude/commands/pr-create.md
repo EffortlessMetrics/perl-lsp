@@ -108,13 +108,15 @@ If not green, fix or document what remains.
 git push -u origin HEAD
 ```
 
-Then create PR:
+Then create PR (always as draft):
 ```bash
-gh pr create --title "<title>" --body "$(cat <<'EOF'
+gh pr create --draft --title "<title>" --body "$(cat <<'EOF'
 <body content>
 EOF
 )"
 ```
+
+> **Note**: PRs open as draft. After review agent fixes issues, mark ready with `/pr-ready`.
 
 If gh unavailable, output the title and body for manual creation.
 
