@@ -163,7 +163,7 @@ impl LspServer {
                     // Find declaration at the position
                     if let Some(location_links) = provider.find_declaration(offset, doc.version) {
                         // Check client capability and return appropriate format
-                        if self.client_capabilities.declaration_link_support {
+                        if self.client_capabilities.lock().declaration_link_support {
                             // Return LocationLink format
                             let result: Vec<Value> = location_links
                                 .iter()

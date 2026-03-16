@@ -267,7 +267,7 @@ impl LspServer {
                             });
 
                             // Add markdown content if client supports it (LSP 3.18)
-                            if self.client_capabilities.markup_message_support {
+                            if self.client_capabilities.lock().markup_message_support {
                                 let markdown = self
                                     .generate_diagnostic_markdown(d.code.as_deref(), &d.message);
                                 diag["data"] = json!({

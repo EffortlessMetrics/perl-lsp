@@ -614,7 +614,7 @@ mod tests {
         );
 
         // Last range should be the full file
-        let last = chain.last().expect("chain should not be empty");
+        let last = &chain[chain.len() - 1];
         assert_eq!(last.0, 0, "outermost should start at line 0");
     }
 

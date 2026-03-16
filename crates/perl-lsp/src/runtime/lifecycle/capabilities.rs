@@ -9,131 +9,139 @@ use serde_json::{Value, json};
 impl LspServer {
     /// Handle initialize request
     pub(crate) fn handle_initialize(
-        &mut self,
+        &self,
         params: Option<Value>,
     ) -> Result<Option<Value>, JsonRpcError> {
-        // Check if initialize was already requested
-        if self.initialize_requested {
+        // Atomically check and set initialize_requested
+        if self
+            .initialize_requested
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
             return Err(JsonRpcError {
                 code: -32600, // InvalidRequest per LSP spec 3.17
                 message: "initialize may only be sent once".to_string(),
                 data: None,
             });
         }
-        self.initialize_requested = true;
 
         // Parse client capabilities
         if let Some(params) = &params {
-            self.client_capabilities.declaration_link_support = params
-                .get("capabilities")
-                .and_then(|c| c.get("textDocument"))
-                .and_then(|td| td.get("declaration"))
-                .and_then(|d| d.get("linkSupport"))
-                .and_then(|b| b.as_bool())
-                .unwrap_or(false);
+            // Take lock once to write all capabilities
+            {
+                let mut caps = self.client_capabilities.lock();
 
-            self.client_capabilities.definition_link_support = params
-                .get("capabilities")
-                .and_then(|c| c.get("textDocument"))
-                .and_then(|td| td.get("definition"))
-                .and_then(|d| d.get("linkSupport"))
-                .and_then(|b| b.as_bool())
-                .unwrap_or(false);
-
-            self.client_capabilities.type_definition_link_support = params
-                .get("capabilities")
-                .and_then(|c| c.get("textDocument"))
-                .and_then(|td| td.get("typeDefinition"))
-                .and_then(|d| d.get("linkSupport"))
-                .and_then(|b| b.as_bool())
-                .unwrap_or(false);
-
-            self.client_capabilities.implementation_link_support = params
-                .get("capabilities")
-                .and_then(|c| c.get("textDocument"))
-                .and_then(|td| td.get("implementation"))
-                .and_then(|d| d.get("linkSupport"))
-                .and_then(|b| b.as_bool())
-                .unwrap_or(false);
-
-            // Check if client supports dynamic registration for file watching
-            self.client_capabilities.dynamic_registration_support = params
-                .get("capabilities")
-                .and_then(|c| c.get("workspace"))
-                .and_then(|w| w.get("didChangeWatchedFiles"))
-                .and_then(|d| d.get("dynamicRegistration"))
-                .and_then(|b| b.as_bool())
-                .unwrap_or(false);
-
-            // Check if client supports snippet syntax in completion items
-            self.client_capabilities.snippet_support = params
-                .get("capabilities")
-                .and_then(|c| c.get("textDocument"))
-                .and_then(|td| td.get("completion"))
-                .and_then(|comp| comp.get("completionItem"))
-                .and_then(|ci| ci.get("snippetSupport"))
-                .and_then(|b| b.as_bool())
-                .unwrap_or(false);
-
-            // Check if client supports markdown message content in diagnostics (LSP 3.18)
-            self.client_capabilities.markup_message_support = params
-                .get("capabilities")
-                .and_then(|c| c.get("textDocument"))
-                .and_then(|td| td.get("diagnostic"))
-                .and_then(|d| d.get("markupMessageSupport"))
-                .and_then(|b| b.as_bool())
-                .unwrap_or(false);
-
-            // Check if client supports refresh requests for various features
-            if let Some(caps) = params.get("capabilities") {
-                // workspace/codeLens/refresh
-                self.client_capabilities.code_lens_refresh_support = caps
-                    .pointer("/workspace/codeLens/refreshSupport")
-                    .and_then(|v| v.as_bool())
+                caps.declaration_link_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("textDocument"))
+                    .and_then(|td| td.get("declaration"))
+                    .and_then(|d| d.get("linkSupport"))
+                    .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
-                // workspace/semanticTokens/refresh
-                self.client_capabilities.semantic_tokens_refresh_support = caps
-                    .pointer("/workspace/semanticTokens/refreshSupport")
-                    .and_then(|v| v.as_bool())
+                caps.definition_link_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("textDocument"))
+                    .and_then(|td| td.get("definition"))
+                    .and_then(|d| d.get("linkSupport"))
+                    .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
-                // workspace/inlayHint/refresh
-                self.client_capabilities.inlay_hint_refresh_support = caps
-                    .pointer("/workspace/inlayHint/refreshSupport")
-                    .and_then(|v| v.as_bool())
+                caps.type_definition_link_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("textDocument"))
+                    .and_then(|td| td.get("typeDefinition"))
+                    .and_then(|d| d.get("linkSupport"))
+                    .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
-                // workspace/inlineValue/refresh
-                self.client_capabilities.inline_value_refresh_support = caps
-                    .pointer("/workspace/inlineValue/refreshSupport")
-                    .and_then(|v| v.as_bool())
+                caps.implementation_link_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("textDocument"))
+                    .and_then(|td| td.get("implementation"))
+                    .and_then(|d| d.get("linkSupport"))
+                    .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
-                // workspace/diagnostic/refresh
-                self.client_capabilities.diagnostic_refresh_support = caps
-                    .pointer("/workspace/diagnostic/refreshSupport")
-                    .and_then(|v| v.as_bool())
+                // Check if client supports dynamic registration for file watching
+                caps.dynamic_registration_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("workspace"))
+                    .and_then(|w| w.get("didChangeWatchedFiles"))
+                    .and_then(|d| d.get("dynamicRegistration"))
+                    .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
-                // workspace/foldingRange/refresh
-                self.client_capabilities.folding_range_refresh_support = caps
-                    .pointer("/workspace/foldingRange/refreshSupport")
-                    .and_then(|v| v.as_bool())
+                // Check if client supports snippet syntax in completion items
+                caps.snippet_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("textDocument"))
+                    .and_then(|td| td.get("completion"))
+                    .and_then(|comp| comp.get("completionItem"))
+                    .and_then(|ci| ci.get("snippetSupport"))
+                    .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
-                // window/showDocument
-                self.client_capabilities.show_document_support = caps
-                    .pointer("/window/showDocument/support")
-                    .and_then(|v| v.as_bool())
+                // Check if client supports markdown message content in diagnostics (LSP 3.18)
+                caps.markup_message_support = params
+                    .get("capabilities")
+                    .and_then(|c| c.get("textDocument"))
+                    .and_then(|td| td.get("diagnostic"))
+                    .and_then(|d| d.get("markupMessageSupport"))
+                    .and_then(|b| b.as_bool())
                     .unwrap_or(false);
 
-                // window/workDoneProgress
-                self.client_capabilities.work_done_progress_support = caps
-                    .pointer("/window/workDoneProgress")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-            }
+                // Check if client supports refresh requests for various features
+                if let Some(cap_val) = params.get("capabilities") {
+                    // workspace/codeLens/refresh
+                    caps.code_lens_refresh_support = cap_val
+                        .pointer("/workspace/codeLens/refreshSupport")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    // workspace/semanticTokens/refresh
+                    caps.semantic_tokens_refresh_support = cap_val
+                        .pointer("/workspace/semanticTokens/refreshSupport")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    // workspace/inlayHint/refresh
+                    caps.inlay_hint_refresh_support = cap_val
+                        .pointer("/workspace/inlayHint/refreshSupport")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    // workspace/inlineValue/refresh
+                    caps.inline_value_refresh_support = cap_val
+                        .pointer("/workspace/inlineValue/refreshSupport")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    // workspace/diagnostic/refresh
+                    caps.diagnostic_refresh_support = cap_val
+                        .pointer("/workspace/diagnostic/refreshSupport")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    // workspace/foldingRange/refresh
+                    caps.folding_range_refresh_support = cap_val
+                        .pointer("/workspace/foldingRange/refreshSupport")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    // window/showDocument
+                    caps.show_document_support = cap_val
+                        .pointer("/window/showDocument/support")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+
+                    // window/workDoneProgress
+                    caps.work_done_progress_support = cap_val
+                        .pointer("/window/workDoneProgress")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                }
+            } // caps lock released here
 
             // Check if client supports pull diagnostics
             let supports_pull = params

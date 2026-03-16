@@ -12,8 +12,6 @@ use super::*;
 #[cfg(feature = "workspace")]
 use crate::runtime::routing::{IndexAccessMode, route_index_access};
 use crate::state::workspace_symbol_cap;
-#[cfg(feature = "workspace")]
-use parking_lot::Mutex;
 use perl_module_path::file_path_to_module_name;
 use perl_module_rename::plan_module_rename_edits;
 #[cfg(feature = "workspace")]
@@ -23,8 +21,6 @@ use perl_source_file::{is_perl_source_path, is_perl_source_uri};
 use perl_workspace_folder::extract_workspace_folder_change;
 #[cfg(feature = "workspace")]
 use perl_workspace_ignore::is_skipped_dir_name;
-#[cfg(feature = "workspace")]
-use std::io::Write;
 #[cfg(feature = "workspace")]
 use std::path::Path;
 #[cfg(feature = "workspace")]
@@ -52,21 +48,9 @@ fn should_skip_dir(entry: &walkdir::DirEntry) -> bool {
 }
 
 #[cfg(feature = "workspace")]
-fn send_index_ready_notification(output: &Arc<Mutex<Box<dyn Write + Send>>>, ready: bool) {
-    let notification = json!({
-        "jsonrpc": "2.0",
-        "method": "perl-lsp/index-ready",
-        "params": { "ready": ready }
-    });
-
-    if let Ok(payload) = serde_json::to_vec(&notification) {
-        let mut out = output.lock();
-        let framed = frame(&payload);
-        if out.write_all(&framed).is_ok() {
-            if let Err(e) = out.flush() {
-                eprintln!("Failed to flush index-ready notification: {}", e);
-            }
-        }
+fn send_index_ready_notification(outbound: &super::outbound::OutboundSender, ready: bool) {
+    if let Err(e) = outbound.send_notification("perl-lsp/index-ready", json!({ "ready": ready })) {
+        eprintln!("Failed to send index-ready notification: {}", e);
     }
 }
 
@@ -978,7 +962,7 @@ impl LspServer {
             return;
         }
 
-        let output = self.output.clone();
+        let outbound = self.outbound.clone();
         let limits = coordinator.limits().clone();
         let caps = coordinator.performance_caps().clone();
 
@@ -1061,12 +1045,12 @@ impl LspServer {
                             .transition_to_degraded(DegradationReason::ScanTimeout { elapsed_ms });
                     }
                 }
-                send_index_ready_notification(&output, false);
+                send_index_ready_notification(&outbound, false);
             } else {
                 let file_count = coordinator.index().file_count();
                 let symbol_count = coordinator.index().symbol_count();
                 coordinator.transition_to_ready(file_count, symbol_count);
-                send_index_ready_notification(&output, true);
+                send_index_ready_notification(&outbound, true);
             }
         });
     }

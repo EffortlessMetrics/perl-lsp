@@ -329,7 +329,7 @@ impl LspServer {
                         // Determine insertTextFormat based on client capability and completion kind
                         let is_snippet = c.kind == CompletionItemKind::Snippet;
                         let insert_text_format =
-                            if is_snippet && self.client_capabilities.snippet_support {
+                            if is_snippet && self.client_capabilities.lock().snippet_support {
                                 2 // Snippet format
                             } else {
                                 1 // PlainText format
@@ -358,7 +358,7 @@ impl LspServer {
                         // Only include insertText if it has a value
                         if let Some(mut insert_text) = c.insert_text {
                             // Degrade snippets to plaintext if client doesn't support snippets
-                            if is_snippet && !self.client_capabilities.snippet_support {
+                            if is_snippet && !self.client_capabilities.lock().snippet_support {
                                 // Remove snippet syntax: $1, $0, ${1:placeholder}, etc.
                                 insert_text = Self::degrade_snippet_to_plaintext(&insert_text);
                             }
