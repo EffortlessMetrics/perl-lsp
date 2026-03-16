@@ -1,6 +1,7 @@
 ---
 description: Stash/patch dirty worktrees before cleanup
 argument-hint: "[--prune-merged] [--dry-run]"
+disable-model-invocation: true
 ---
 
 # Salvage Worktrees

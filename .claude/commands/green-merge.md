@@ -1,6 +1,7 @@
 ---
 description: Drain green PRs sequentially (merge all passing PRs)
 argument-hint: "[--dry-run] [--limit N] [--batch-size N]"
+disable-model-invocation: true
 ---
 
 # Green Merge

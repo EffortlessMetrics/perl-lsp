@@ -1,6 +1,7 @@
 ---
 description: PR all worktrees with uncommitted changes
 argument-hint: "[--dry-run] [--filter <pattern>]"
+disable-model-invocation: true
 ---
 
 # Bulk PR Worktrees

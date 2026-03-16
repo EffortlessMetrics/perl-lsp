@@ -1,6 +1,7 @@
 ---
 description: Rebase all open PRs onto current master
 argument-hint: "[--dry-run] [--filter <pattern>]"
+disable-model-invocation: true
 ---
 
 # Rebase Open PRs

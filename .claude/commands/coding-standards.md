@@ -1,6 +1,7 @@
 ---
 description: Load perl-lsp coding standards for builders and reviewers
 argument-hint: ""
+user-invocable: false
 ---
 
 # Coding Standards (perl-lsp)

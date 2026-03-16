@@ -1,6 +1,7 @@
 ---
 description: Launch a wave of parallel agents for codebase improvement
 argument-hint: "<category> e.g. 'parser-fixes', 'test-coverage', 'doc-updates', 'cleanup'"
+disable-model-invocation: true
 ---
 
 # Wave: Parallel Agent Dispatch

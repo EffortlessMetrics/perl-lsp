@@ -1,3 +1,8 @@
+---
+description: Generate a changelog entry for recent commits following Keep a Changelog format
+argument-hint: "[--since <tag>] [--dry-run]"
+---
+
 # Changelog Update
 
 Generate a changelog entry for recent commits following the project's Keep a Changelog format.

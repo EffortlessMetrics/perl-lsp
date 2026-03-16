@@ -1,6 +1,7 @@
 ---
 description: Discover codebase and generate domain-specific swarm agents
 argument-hint: "[--dry-run] [--domain <name>] [--refresh]"
+disable-model-invocation: true
 ---
 
 # Bootstrap Agents
