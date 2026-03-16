@@ -190,6 +190,35 @@ mod tests {
     use super::{ServerConfig, WorkspaceConfig};
     use serde_json::json;
 
+    // ── ServerConfig defaults ─────────────────────────────────
+
+    #[test]
+    fn server_config_default_inlay_hints_enabled() {
+        let config = ServerConfig::default();
+        assert!(config.inlay_hints_enabled, "inlay hints enabled by default");
+        assert!(config.inlay_hints_parameter_hints, "parameter hints enabled by default");
+        assert!(config.inlay_hints_type_hints, "type hints enabled by default");
+        assert!(!config.inlay_hints_chained_hints, "chained hints disabled by default");
+        assert_eq!(config.inlay_hints_max_length, 30);
+    }
+
+    #[test]
+    fn server_config_default_test_runner() {
+        let config = ServerConfig::default();
+        assert!(config.test_runner_enabled, "test runner enabled by default");
+        assert_eq!(config.test_runner_command, "perl");
+        assert!(config.test_runner_args.is_empty(), "no default test runner args");
+        assert_eq!(config.test_runner_timeout, 60000);
+    }
+
+    #[test]
+    fn server_config_default_telemetry_disabled() {
+        let config = ServerConfig::default();
+        assert!(!config.telemetry_enabled, "telemetry disabled by default");
+    }
+
+    // ── ServerConfig::update_from_value ──────────────────────
+
     #[test]
     fn server_config_updates_selected_fields() {
         let mut config = ServerConfig::default();
@@ -208,10 +237,81 @@ mod tests {
     }
 
     #[test]
+    fn server_config_partial_update_leaves_unspecified_fields_unchanged() {
+        let mut config = ServerConfig::default();
+        // Only update one inlay hint field
+        config.update_from_value(&json!({
+            "inlayHints": { "enabled": false }
+        }));
+        assert!(!config.inlay_hints_enabled, "updated field changes");
+        assert!(config.inlay_hints_parameter_hints, "unspecified field unchanged");
+        assert_eq!(config.inlay_hints_max_length, 30, "unspecified field unchanged");
+        assert_eq!(config.test_runner_command, "perl", "unrelated section unchanged");
+    }
+
+    #[test]
+    fn server_config_empty_update_leaves_all_defaults_unchanged() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({}));
+        assert!(config.inlay_hints_enabled);
+        assert_eq!(config.test_runner_command, "perl");
+        assert!(!config.telemetry_enabled);
+    }
+
+    #[test]
+    fn server_config_test_runner_timeout_updated() {
+        let mut config = ServerConfig::default();
+        config.update_from_value(&json!({
+            "testRunner": { "timeout": 30000 }
+        }));
+        assert_eq!(config.test_runner_timeout, 30000);
+    }
+
+    // ── WorkspaceConfig defaults ──────────────────────────────
+
+    #[test]
     fn workspace_config_defaults_include_common_paths() {
         let config = WorkspaceConfig::default();
         assert_eq!(config.include_paths, vec!["lib", ".", "local/lib/perl5"]);
         assert!(!config.use_system_inc);
         assert_eq!(config.resolution_timeout_ms, 50);
+    }
+
+    // ── WorkspaceConfig::update_from_value ───────────────────
+
+    #[test]
+    fn workspace_config_updates_include_paths() {
+        let mut config = WorkspaceConfig::default();
+        config.update_from_value(&json!({
+            "workspace": { "includePaths": ["/custom/lib", "/other/lib"] }
+        }));
+        assert_eq!(config.include_paths, vec!["/custom/lib", "/other/lib"]);
+    }
+
+    #[test]
+    fn workspace_config_updates_resolution_timeout() {
+        let mut config = WorkspaceConfig::default();
+        config.update_from_value(&json!({
+            "workspace": { "resolutionTimeout": 100 }
+        }));
+        assert_eq!(config.resolution_timeout_ms, 100);
+    }
+
+    #[test]
+    fn workspace_config_empty_update_leaves_defaults() {
+        let mut config = WorkspaceConfig::default();
+        config.update_from_value(&json!({}));
+        assert_eq!(config.include_paths, vec!["lib", ".", "local/lib/perl5"]);
+        assert!(!config.use_system_inc);
+    }
+
+    // ── WorkspaceConfig::get_system_inc ──────────────────────
+
+    #[test]
+    fn workspace_config_get_system_inc_returns_empty_when_disabled() {
+        let mut config = WorkspaceConfig::default();
+        // use_system_inc = false (default)
+        let inc = config.get_system_inc();
+        assert!(inc.is_empty(), "system inc is empty when use_system_inc=false");
     }
 }
