@@ -182,6 +182,7 @@ fn all_token_kinds() -> Vec<TokenKind> {
         TokenKind::Next,
         TokenKind::Last,
         TokenKind::Redo,
+        TokenKind::Goto,
         TokenKind::Class,
         TokenKind::Method,
         TokenKind::Format,
@@ -325,6 +326,7 @@ fn all_variants_are_listed() {
             | TokenKind::Next
             | TokenKind::Last
             | TokenKind::Redo
+            | TokenKind::Goto
             | TokenKind::Class
             | TokenKind::Method
             | TokenKind::Format
