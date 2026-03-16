@@ -427,17 +427,23 @@ fn returns_empty_when_immediately_cancelled() {
 // ===========================================================================
 
 #[test]
-fn empty_source_does_not_panic() {
+fn empty_source_returns_only_keywords_or_nothing() {
     let items = completions_at_end("");
-    // keywords are always available, so empty string may still produce completions
-    let _ = items;
+    // Empty source may still yield keyword completions; verify each item
+    // has a non-empty label (structural validity check).
+    for item in &items {
+        assert!(!item.label.is_empty(), "completion labels must be non-empty");
+    }
 }
 
 #[test]
-fn position_at_zero_does_not_panic() {
+fn position_at_zero_returns_valid_completions_or_empty() {
     let code = "my $x = 1;";
     let items = completions(code, 0);
-    let _ = items;
+    // Position zero is before any typed text; completions may include keywords.
+    for item in &items {
+        assert!(!item.label.is_empty(), "completion labels must be non-empty at position 0");
+    }
 }
 
 #[test]

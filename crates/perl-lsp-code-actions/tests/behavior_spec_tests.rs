@@ -498,11 +498,14 @@ fn when_no_diagnostics_no_diagnostic_driven_quickfixes_returned() {
 }
 
 #[test]
-fn when_empty_source_no_panic() {
+fn when_empty_source_actions_have_valid_structure() {
     let source = "";
     let actions = actions_for(source, &[]);
-    // Simply verifying no panic; empty source may or may not produce actions
-    let _ = actions;
+    // Empty source may produce refactoring actions (e.g. add pragmas); verify
+    // that any returned actions have valid structure.
+    for action in &actions {
+        assert!(!action.title.is_empty(), "action titles must be non-empty even for empty source");
+    }
 }
 
 #[test]
