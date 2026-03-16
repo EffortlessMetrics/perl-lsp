@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execFile } from 'child_process';
 import {
     LanguageClient,
     LanguageClientOptions,
@@ -41,6 +42,25 @@ export async function activate(context: vscode.ExtensionContext) {
                 vscode.commands.executeCommand('workbench.action.openSettings', 'perl-lsp.serverPath');
             }
         });
+        return;
+    }
+
+    // Validate that the binary is functional before starting the LSP client.
+    // This catches corrupted downloads, platform-incompatible binaries, and
+    // missing shared libraries with an actionable error message.
+    const healthOk = await runHealthCheck(serverPath);
+    if (!healthOk) {
+        const choice = await vscode.window.showErrorMessage(
+            `perl-lsp health check failed. The binary at '${serverPath}' does not respond to --health. ` +
+            'It may be corrupted or incompatible with your platform.',
+            'Show Output',
+            'Reinstall'
+        );
+        if (choice === 'Show Output') {
+            outputChannel.show();
+        } else if (choice === 'Reinstall') {
+            await vscode.commands.executeCommand('perl-lsp.reinstall');
+        }
         return;
     }
 
@@ -313,6 +333,29 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     
     outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
+}
+
+/**
+ * Run `perl-lsp --health` and return `true` if the binary responds with `ok`.
+ *
+ * Waits up to 5 seconds. Returns `false` on timeout, non-zero exit, or if
+ * stdout does not start with `ok`.
+ */
+async function runHealthCheck(serverPath: string): Promise<boolean> {
+    return new Promise(resolve => {
+        execFile(serverPath, ['--health'], { timeout: 5000 }, (err: Error | null, stdout: string) => {
+            if (err) {
+                outputChannel.appendLine(`[health-check] Failed: ${err.message}`);
+                resolve(false);
+                return;
+            }
+            const ok = stdout.trim().startsWith('ok');
+            if (!ok) {
+                outputChannel.appendLine(`[health-check] Unexpected output: ${stdout.trim()}`);
+            }
+            resolve(ok);
+        });
+    });
 }
 
 function getServerArgs(baseArgs: string[]): string[] {
