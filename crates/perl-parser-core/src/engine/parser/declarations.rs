@@ -620,12 +620,17 @@ impl<'a> Parser<'a> {
                         }
                     }
                     Some(TokenKind::Minus) => {
-                        // Handle -strict and other flags
+                        // Handle -strict, -dist => 'value', -conflicts => { ... }, etc.
                         let minus = self.consume_token()?;
                         if self.peek_kind() == Some(TokenKind::Identifier) {
                             let flag = self.consume_token()?;
                             // Combine minus and identifier as a single flag
                             args.push(format!("-{}", flag.text));
+                            // Handle fat arrow after -flag (e.g. -dist => 'Module::Name')
+                            if self.peek_kind() == Some(TokenKind::FatArrow) {
+                                self.consume_token()?; // consume =>
+                                self.consume_use_import_value(&mut args)?;
+                            }
                         } else {
                             // Just a minus sign (shouldn't happen in use statements)
                             args.push(minus.text.to_string());
@@ -634,7 +639,24 @@ impl<'a> Parser<'a> {
                     Some(TokenKind::Identifier) => {
                         // Check if this might be a constant declaration
                         let ident = self.consume_token()?;
-                        args.push(ident.text.to_string());
+                        let ident_text = ident.text.to_string();
+
+                        // Variable-led import expressions need to consume through the end
+                        // of the statement, e.g. `use warnings $ENV{X} ? qw(FATAL all) : ()`.
+                        if ident_text.starts_with('$')
+                            || ident_text.starts_with('@')
+                            || ident_text.starts_with('%')
+                        {
+                            args.push(ident_text);
+                            while !Self::is_statement_terminator(self.peek_kind())
+                                && !self.tokens.is_eof()
+                            {
+                                args.push(self.consume_token()?.text.to_string());
+                            }
+                            break;
+                        }
+
+                        args.push(ident_text);
 
                         // Check for comma or fat arrow
                         match self.peek_kind() {
@@ -691,6 +713,12 @@ impl<'a> Parser<'a> {
             }
 
             self.expect(TokenKind::RightParen)?;
+        } else if !Self::is_statement_terminator(self.peek_kind()) {
+            // Complex `use` arguments can start with tokens outside the bare-arg
+            // fast path, such as sigils in `use warnings $ENV{X} ? ...`.
+            while !Self::is_statement_terminator(self.peek_kind()) && !self.tokens.is_eof() {
+                args.push(self.consume_token()?.text.to_string());
+            }
         }
 
         // Don't consume semicolon here - let parse_statement handle it uniformly
@@ -949,6 +977,52 @@ impl<'a> Parser<'a> {
                             && self.peek_kind() != Some(TokenKind::Comma)
                             && self.peek_kind() != Some(TokenKind::FatArrow)
                         {
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                    }
+                }
+            }
+            Some(TokenKind::LeftBrace) => {
+                let mut depth: usize = 0;
+                loop {
+                    match self.peek_kind() {
+                        Some(TokenKind::LeftBrace) => {
+                            depth += 1;
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                        Some(TokenKind::RightBrace) => {
+                            args.push(self.consume_token()?.text.to_string());
+                            depth = depth.saturating_sub(1);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        None => break,
+                        _ if self.tokens.is_eof() => break,
+                        _ => {
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                    }
+                }
+            }
+            Some(TokenKind::LeftBracket) => {
+                let mut depth: usize = 0;
+                loop {
+                    match self.peek_kind() {
+                        Some(TokenKind::LeftBracket) => {
+                            depth += 1;
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                        Some(TokenKind::RightBracket) => {
+                            args.push(self.consume_token()?.text.to_string());
+                            depth = depth.saturating_sub(1);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        None => break,
+                        _ if self.tokens.is_eof() => break,
+                        _ => {
                             args.push(self.consume_token()?.text.to_string());
                         }
                     }

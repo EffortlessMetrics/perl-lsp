@@ -205,3 +205,53 @@ use constant SUPPORTS_CORE_BOOLS => defined &builtin::is_bool;
         assert_clean_parse(code);
     }
 }
+
+mod use_import_argument_regressions {
+    use super::*;
+
+    #[test]
+    fn use_module_dash_flag_string_value() {
+        let code = "use Dist::CheckConflicts -dist => 'Module::Name';";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn use_module_dash_flag_hash_value() {
+        let code = "use Dist::CheckConflicts -conflicts => { 'Foo::Bar' => '1.0' };";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn use_module_multiple_dash_flags() {
+        let code = r#"
+use Dist::CheckConflicts
+    -dist      => 'DateTime::Locale',
+    -conflicts => { 'Foo' => '1.0' };
+"#;
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn use_module_dash_flag_arrayref_value() {
+        let code = "use Dist::CheckConflicts -dist => 'MyModule', -also => [];";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn use_warnings_env_ternary() {
+        let code = "use warnings $ENV{GIT_PERL_FATAL_WARNINGS} ? qw(FATAL all) : ();";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn use_constant_hash_still_works() {
+        let code = "use constant { FOO => 1, BAR => 2 };";
+        assert_clean_parse(code);
+    }
+
+    #[test]
+    fn use_overload_still_works() {
+        let code = r#"use overload '""' => \&stringify, '+' => \&add;"#;
+        assert_clean_parse(code);
+    }
+}
