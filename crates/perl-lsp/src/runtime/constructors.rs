@@ -18,6 +18,7 @@ impl LspServer {
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
         let default_features = feature_profile.advertised_features();
+        let (outbound, outbound_writer_handle) = outbound::spawn_writer(Box::new(io::stdout()));
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -31,10 +32,8 @@ impl LspServer {
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
             reader: Arc::new(Mutex::new(Box::new(BufReader::new(io::stdin())))),
-            outbound: {
-                let (sender, _handle) = outbound::spawn_writer(Box::new(io::stdout()));
-                sender
-            },
+            outbound,
+            outbound_writer_handle: Some(outbound_writer_handle),
             client_capabilities: Mutex::new(ClientCapabilities::default()),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
@@ -106,6 +105,8 @@ impl LspServer {
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
         let default_features = feature_profile.advertised_features();
+        let (outbound, outbound_writer_handle) =
+            outbound::spawn_writer(writer as Box<dyn Write + Send>);
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -118,10 +119,8 @@ impl LspServer {
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
             reader: Arc::new(Mutex::new(Box::new(BufReader::new(reader)))),
-            outbound: {
-                let (sender, _handle) = outbound::spawn_writer(writer as Box<dyn Write + Send>);
-                sender
-            },
+            outbound,
+            outbound_writer_handle: Some(outbound_writer_handle),
             client_capabilities: Mutex::new(ClientCapabilities::default()),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
@@ -157,6 +156,7 @@ impl LspServer {
         let index_coordinator = Some(Arc::new(IndexCoordinator::new()));
 
         let default_features = feature_profile.advertised_features();
+        let (outbound, outbound_writer_handle) = outbound::spawn_writer_shared(output);
 
         Self {
             documents: Arc::new(Mutex::new(HashMap::new())),
@@ -169,10 +169,8 @@ impl LspServer {
             symbol_index: Arc::new(Mutex::new(SymbolIndex::new())),
             config: Arc::new(Mutex::new(ServerConfig::default())),
             reader: Arc::new(Mutex::new(Box::new(BufReader::new(io::stdin())))),
-            outbound: {
-                let (sender, _handle) = outbound::spawn_writer_shared(output);
-                sender
-            },
+            outbound,
+            outbound_writer_handle: Some(outbound_writer_handle),
             client_capabilities: Mutex::new(ClientCapabilities::default()),
             cancelled: Arc::new(Mutex::new(HashSet::new())),
             workspace_folders: Arc::new(Mutex::new(Vec::new())),
@@ -194,5 +192,65 @@ impl LspServer {
 impl Default for LspServer {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl Drop for LspServer {
+    fn drop(&mut self) {
+        let outbound = std::mem::replace(&mut self.outbound, outbound::closed_sender());
+        drop(outbound);
+
+        if let Some(handle) = self.outbound_writer_handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::io::{self, Cursor};
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    struct SlowVecWriter {
+        inner: Arc<Mutex<Vec<u8>>>,
+        pause: Duration,
+    }
+
+    impl Write for SlowVecWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            thread::sleep(self.pause);
+            self.inner.lock().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn drop_waits_for_writer_flush_after_closing_sender() {
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let writer = SlowVecWriter { inner: Arc::clone(&output), pause: Duration::from_millis(60) };
+        let server = LspServer::with_io(Box::new(Cursor::new(Vec::<u8>::new())), Box::new(writer));
+
+        server.notify("window/logMessage", json!({"type": 4, "message": "flush me"})).unwrap();
+
+        let start = Instant::now();
+        drop(server);
+
+        assert!(
+            start.elapsed() >= Duration::from_millis(40),
+            "drop returned before the writer thread had time to flush"
+        );
+
+        let bytes = output.lock().clone();
+        let text = String::from_utf8(bytes).unwrap();
+        assert!(text.contains("window/logMessage"));
+        assert!(text.contains("flush me"));
     }
 }
