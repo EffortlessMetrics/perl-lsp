@@ -131,10 +131,7 @@ fn server_config_wrong_type_for_enabled_is_ignored() {
         "inlayHints": { "enabled": "yes" }
     });
     cfg.update_from_value(&settings);
-    assert_eq!(
-        cfg.inlay_hints_enabled, was_enabled,
-        "wrong-type value must not change the field"
-    );
+    assert_eq!(cfg.inlay_hints_enabled, was_enabled, "wrong-type value must not change the field");
 }
 
 #[test]

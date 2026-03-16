@@ -40,21 +40,14 @@ impl OutboundSender {
     /// Send a JSON-RPC notification.
     pub fn send_notification(&self, method: &str, params: Value) -> io::Result<()> {
         self.tx
-            .send(OutboundMessage::Notification {
-                method: method.to_string(),
-                params,
-            })
+            .send(OutboundMessage::Notification { method: method.to_string(), params })
             .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "outbound channel closed"))
     }
 
     /// Send a server→client JSON-RPC request.
     pub fn send_request(&self, id: i64, method: &str, params: Value) -> io::Result<()> {
         self.tx
-            .send(OutboundMessage::Request {
-                id,
-                method: method.to_string(),
-                params,
-            })
+            .send(OutboundMessage::Request { id, method: method.to_string(), params })
             .map_err(|_| io::Error::new(io::ErrorKind::BrokenPipe, "outbound channel closed"))
     }
 }
@@ -153,9 +146,7 @@ fn writer_loop_batched_shared(
 /// Serialize an `OutboundMessage` to JSON bytes.
 fn serialize_message(msg: &OutboundMessage) -> Vec<u8> {
     match msg {
-        OutboundMessage::Response(resp) => {
-            serde_json::to_vec(resp).unwrap_or_default()
-        }
+        OutboundMessage::Response(resp) => serde_json::to_vec(resp).unwrap_or_default(),
         OutboundMessage::Notification { method, params } => {
             let val = json!({
                 "jsonrpc": "2.0",
