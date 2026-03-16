@@ -163,8 +163,14 @@ pub struct LspServer {
     pub(crate) config: Arc<Mutex<ServerConfig>>,
     /// Synchronized input reader
     reader: Arc<Mutex<Box<dyn BufRead + Send>>>,
-    /// Outbound message sender (channel-based, decoupled from I/O)
+    /// Outbound message sender (channel-based, decoupled from I/O).
     outbound: outbound::OutboundSender,
+    /// Join handle for the outbound writer thread.
+    ///
+    /// `Drop` swaps `outbound` with a closed sender, drops the live sender to
+    /// close the channel, then joins this thread so buffered bytes are flushed
+    /// before the server is deallocated.
+    outbound_writer_handle: Option<std::thread::JoinHandle<()>>,
     /// Client capabilities (behind mutex for interior mutability — written once during initialize)
     client_capabilities: Mutex<ClientCapabilities>,
     /// Cancelled request IDs

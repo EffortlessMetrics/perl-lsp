@@ -75,6 +75,13 @@ pub(crate) fn spawn_writer_shared(
     (OutboundSender { tx }, handle)
 }
 
+/// Create an already-closed sender for shutdown replacement paths.
+pub(crate) fn closed_sender() -> OutboundSender {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    drop(rx);
+    OutboundSender { tx }
+}
+
 /// Blocking receive loop with message batching.
 ///
 /// Drains the channel and writes all immediately-available messages
