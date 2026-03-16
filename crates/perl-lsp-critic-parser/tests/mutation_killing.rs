@@ -42,10 +42,7 @@ fn parse_whitespace_only_line_returns_none() {
 fn parse_line_with_invalid_policy_digit_first_returns_none() {
     // Policy segment starts with digit → is_valid_policy returns false
     let line = "test.pl:1:1:3:1InvalidPolicy:message here";
-    assert!(
-        parse_perlcritic_line(line).is_none(),
-        "policy starting with digit must be rejected"
-    );
+    assert!(parse_perlcritic_line(line).is_none(), "policy starting with digit must be rejected");
 }
 
 #[test]
@@ -74,10 +71,7 @@ fn parse_line_with_policy_containing_special_chars_returns_none() {
 fn parse_line_without_file_part_returns_none() {
     // Line starts with digits directly → file part is empty
     let line = ":5:1:3:SomePolicy:message";
-    assert!(
-        parse_perlcritic_line(line).is_none(),
-        "empty file path must return None"
-    );
+    assert!(parse_perlcritic_line(line).is_none(), "empty file path must return None");
 }
 
 // ---------------------------------------------------------------------------
