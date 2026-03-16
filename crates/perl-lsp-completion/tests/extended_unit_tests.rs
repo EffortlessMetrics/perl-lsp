@@ -1278,3 +1278,40 @@ fn use_statement_empty_workspace_index() {
         "empty workspace index should produce no module completions"
     );
 }
+
+#[test]
+fn use_pragma_does_not_trigger_module_completion() {
+    // `use strict`, `use warnings`, `use constant` etc. should NOT trigger
+    // module name completion because these are lowercase pragmas, not modules.
+    let index = Arc::new(WorkspaceIndex::new());
+    let uri = must(Url::parse("file:///workspace/lib/Strict.pm"));
+    must(index.index_file(uri, "package Strict;\n1;\n".to_string()));
+
+    for pragma in &["use strict", "use warnings", "use constant", "use lib", "use if"] {
+        let provider = parse_provider_with_index(pragma, Arc::clone(&index));
+        let items = provider.get_completions(pragma, pragma.len());
+        assert!(
+            !items.iter().any(|i| i.kind == CompletionItemKind::Module),
+            "pragma `{pragma}` should NOT trigger module completion, got: {:?}",
+            items.iter().map(|i| &i.label).collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn variable_assignment_inference_ignores_comparison_operators() {
+    // `if ($var == 0)` should NOT be confused with an assignment
+    let index = Arc::new(WorkspaceIndex::new());
+    let uri = must(Url::parse("file:///workspace/lib/Cmp.pm"));
+    must(index.index_file(uri, "package Cmp;\nsub check { }\n1;\n".to_string()));
+
+    let code = "if ($obj == Cmp->new()) { }\n$obj->";
+    let provider = parse_provider_with_index(code, Arc::clone(&index));
+    let items = provider.get_completions(code, code.len());
+    // Should NOT infer type from `== Cmp->new()` comparison
+    assert!(
+        !has_label(&items, "check"),
+        "should not infer package from comparison operator ==, got: {:?}",
+        items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+}

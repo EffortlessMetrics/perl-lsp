@@ -238,7 +238,9 @@ fn infer_receiver_package(context: &CompletionContext, source: &str) -> Option<S
             let trimmed = line.trim();
             // Match patterns like: `my $var = Package::Name->new(...)`
             // or `$var = Package::Name->new(...)`
-            if let Some(assign_pos) = trimmed.find('=') {
+            // We need a single `=` that is not part of `==`, `!=`, `<=`, `>=`, `=~`.
+            let assign_pos = find_assignment_eq(trimmed);
+            if let Some(assign_pos) = assign_pos {
                 let lhs = trimmed[..assign_pos].trim();
                 if lhs.ends_with(var_name) || lhs.contains(&format!("{var_name} ")) {
                     let rhs = trimmed[assign_pos + 1..].trim();
@@ -317,4 +319,27 @@ pub fn add_workspace_method_completions(
             text_edit_range: Some((context.prefix_start, context.position)),
         });
     }
+}
+
+/// Find the position of a single assignment `=` in a line, skipping compound
+/// operators like `==`, `!=`, `<=`, `>=`, `=~`, and `=>`.
+///
+/// Returns `None` if no assignment operator is found.
+fn find_assignment_eq(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    for (i, &b) in bytes.iter().enumerate() {
+        if b != b'=' {
+            continue;
+        }
+        // Skip if preceded by !, <, >, or = (compound operators)
+        if i > 0 && matches!(bytes[i - 1], b'!' | b'<' | b'>' | b'=') {
+            continue;
+        }
+        // Skip if followed by = or ~ or > (==, =~, =>)
+        if i + 1 < bytes.len() && matches!(bytes[i + 1], b'=' | b'~' | b'>') {
+            continue;
+        }
+        return Some(i);
+    }
+    None
 }

@@ -576,7 +576,15 @@ impl CompletionProvider {
     ///
     /// Detects patterns like `use Mod`, `use Some::Mo`, `require Mo` etc.
     /// Returns true when the cursor is positioned where a module name is expected.
+    ///
+    /// Returns false for pragma-like directives (`use constant`, `use lib`, `use if`,
+    /// `use strict`, `use warnings`, etc.) where module-name completion is not useful,
+    /// and for positions past the module name (after `;`, `(`, or `qw`).
     fn is_use_statement_context(source: &str, position: usize) -> bool {
+        // Guard against slicing at a non-char-boundary
+        if !source.is_char_boundary(position) {
+            return false;
+        }
         let before = &source[..position];
         // Find the start of the current line
         let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
@@ -589,7 +597,16 @@ impl CompletionProvider {
             // But not if we've already moved past the module name (e.g., `use Module qw(`)
             let rest = rest.trim_start();
             // If there's a semicolon, version number, or import list, we're past the module name
-            !rest.contains(';') && !rest.contains('(') && !rest.contains("qw")
+            if rest.contains(';') || rest.contains('(') || rest.contains("qw") {
+                return false;
+            }
+            // Skip pragma-like directives where the token after `use` is lowercase
+            // (e.g. `use strict`, `use warnings`, `use constant`, `use lib`, `use if`)
+            // Module names in Perl start with an uppercase letter by convention
+            let first_char = rest.chars().next();
+            // Empty rest means cursor is right after `use ` -- still a valid context
+            // Uppercase first char means a module name is being typed
+            first_char.is_none() || first_char.is_some_and(|c| c.is_ascii_uppercase())
         } else if let Some(rest) = line.strip_prefix("require ") {
             let rest = rest.trim_start();
             !rest.contains(';')
