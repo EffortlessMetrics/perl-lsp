@@ -82,12 +82,17 @@ For live metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
 ## Parser Coverage
 
-The parser is tested continuously against real-world Perl code to drive coverage improvements:
+The v3 parser is a native recursive-descent implementation covering broad Perl 5 syntax
+(5.8 through 5.40), including heredocs, regex, quoting constructs, formats, and more.
+It is tested continuously against real-world Perl code to drive coverage improvements:
 
-- **System Perl corpus sweep** -- the parser is benchmarked against all `.pm` and `.pl` files found in the system Perl installation. Current parse rates are tracked in [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) and the baseline file (`.ci/parser-corpus-baseline.json`).
+- **Corpus test suite** -- 600+ test sections in `tree-sitter-perl/test/corpus/` plus 70+ standalone `.pl` fixtures.
+- **System Perl corpus sweep** -- benchmarked against all `.pm` and `.pl` files found in the system Perl installation. Current parse rates are tracked in [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) and the baseline file (`.ci/parser-corpus-baseline.json`).
 - **Common-files gate** -- a curated set of core modules that must parse with zero errors on every PR (`.ci/common-corpus-manifest.txt`).
 - **Ratcheting CI gate** -- the overall parse rate can only go up, never down. Regressions fail the build.
 - **CPAN top 1000 goal** -- the long-term target is for 90%+ of the most-downloaded CPAN distributions to parse cleanly, driving parser improvements toward real-world Perl idioms.
+
+For detailed parse rates and the edge-case roadmap, see [PARSER_EDGE_CASE_ROADMAP.md](docs/project/PARSER_EDGE_CASE_ROADMAP.md).
 
 ### Corpus Commands
 
@@ -119,20 +124,6 @@ cargo install --path crates/perl-lsp
 ### Pre-built binaries
 
 Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
-
-## Parser Coverage
-
-The v3 parser is a native recursive-descent implementation covering broad Perl 5 syntax
-(5.8 through 5.40), including heredocs, regex, quoting constructs, formats, and more.
-
-Coverage is validated by:
-
-- **Corpus test suite** -- 600+ test sections in `tree-sitter-perl/test/corpus/` plus 70+ standalone `.pl` fixtures
-- **CPAN module sweep** -- automated `just corpus-sweep` against 7,000+ `.pm` files from system Perl and CPAN distributions, with error bucketing to prioritize fixes
-- **Ratcheting CI** -- mutation score (87%) and safety baselines (zero `unwrap`/`panic!`/`unsafe` in production code) are enforced as one-way ratchets
-
-For detailed parse rates and the edge-case roadmap, see
-[PARSER_EDGE_CASE_ROADMAP.md](docs/project/PARSER_EDGE_CASE_ROADMAP.md).
 
 ## Architecture
 
@@ -216,9 +207,3 @@ Dual licensed under MIT or Apache-2.0:
 - [LICENSE-MIT](LICENSE-MIT)
 - [LICENSE-APACHE](LICENSE-APACHE)
 
-## History
-
-This project began as a fork of
-[tree-sitter-perl](https://github.com/tree-sitter-perl/tree-sitter-perl)
-in July 2025 and has since been rewritten as a native Rust implementation
-focused on LSP and DAP performance.
