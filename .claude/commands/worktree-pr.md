@@ -44,7 +44,7 @@ git diff --cached --name-only
 **NEVER** use `git add -A` or `git add .`. Always add specific files.
 
 Reject any of these from the staged set (unless they are the point of the PR):
-- `Cargo.lock` — worktree drift causes false conflicts; let CI regenerate
+- `Cargo.lock` — unless your change modifies dependencies; worktree drift causes false conflicts
 - `.claude/` infrastructure files
 - `docs/project/CURRENT_STATUS.md` — auto-generated
 - `scripts/.ignored-baseline` — auto-generated

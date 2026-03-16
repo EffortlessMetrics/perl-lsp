@@ -46,7 +46,7 @@ Escalate to `nix develop -c just ci-gate` only for changes spanning 3+ crates.
 - Only `git add` files you intentionally created or modified
 - **NEVER** use `git add -A` or `git add .` — these capture unintended changes
 - Specifically **EXCLUDE** from commits:
-  - `Cargo.lock` (let CI regenerate — worktree drift causes false conflicts)
+  - `Cargo.lock` (unless your change modifies dependencies — worktree drift causes false conflicts)
   - `.claude/` infrastructure files (unless that's your task)
   - `docs/project/CURRENT_STATUS.md` (auto-generated)
   - `scripts/.ignored-baseline` (auto-generated)
