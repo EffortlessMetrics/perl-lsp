@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Configuration models for perl-lsp server runtime state.
 //!
 //! This microcrate isolates configuration parsing and defaults from the main

@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Shared feature flag types for LSP profile-driven capability selection.
 //!
 //! The `BuildFlags` shape is the single source of truth for runtime-constructed

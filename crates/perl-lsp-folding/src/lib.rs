@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Folding range extraction for LSP textDocument/foldingRange
 //!
 //! This module provides folding range extraction from the Perl AST,

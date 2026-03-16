@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! LSP feature policy and capability profile helpers.
 //!
 //! This microcrate centralizes capability set selection, turning high-level profile

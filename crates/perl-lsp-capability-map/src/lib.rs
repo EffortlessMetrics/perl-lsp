@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! LSP capability/feature translation helpers.
 //!
 //! This microcrate owns one responsibility: map between

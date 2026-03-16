@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Workspace symbols provider for LSP with comprehensive Perl symbol support.
 //!
 //! Provides workspace/symbol functionality for searching symbols across all files

@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Feature governance façade for Perl LSP.
 //!
 //! This crate consolidates profile policy and BDD-grid reporting APIs into a

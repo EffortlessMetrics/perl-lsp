@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Perl import-management helpers for LSP code actions.
 //!
 //! This crate intentionally focuses on a single responsibility:

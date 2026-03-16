@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Performance optimizations for large projects.
 //!
 //! This module is designed for large workspace scaling, including repositories

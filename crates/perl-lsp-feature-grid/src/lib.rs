@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! BDD grid and feature-profile interoperability primitives.
 //!
 //! This crate intentionally contains only compatibility and reporting logic used by

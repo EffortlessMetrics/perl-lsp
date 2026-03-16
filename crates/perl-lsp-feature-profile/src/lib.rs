@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Canonical feature profile definitions used by runtime profile selection, CLI parsing,
 //! and downstream reporting tools.
 //!

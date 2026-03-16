@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 //! Completion item domain types and sorting utilities.
 //!
 //! This microcrate isolates completion payload representation and deterministic
