@@ -12,9 +12,9 @@ mod lifecycle;
 mod notebook;
 pub(crate) mod outbound;
 mod refresh;
-pub(crate) mod scheduler;
 /// Routing module for lifecycle-aware index access
 pub mod routing;
+pub(crate) mod scheduler;
 mod text_sync;
 mod window;
 mod workspace;
@@ -576,10 +576,7 @@ impl LspServer {
     /// When the ingress channel closes (EOF), the scheduler's sender halves are
     /// dropped. Workers drain remaining items and exit. `spawn_blocking` tasks
     /// cannot be aborted — they run to completion.
-    pub async fn serve_async(
-        self: Arc<Self>,
-        mut rx: tokio::sync::mpsc::Receiver<JsonRpcRequest>,
-    ) {
+    pub async fn serve_async(self: Arc<Self>, mut rx: tokio::sync::mpsc::Receiver<JsonRpcRequest>) {
         use scheduler::{RequestClass, classify};
 
         let sched = scheduler::Scheduler::new(Arc::clone(&self));

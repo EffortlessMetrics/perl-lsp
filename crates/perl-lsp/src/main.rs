@@ -71,9 +71,8 @@ fn run_server(launch_config: LaunchConfig) {
             };
 
             rt.block_on(async {
-                let server = Arc::new(
-                    LspServer::new_with_feature_profile(launch_config.feature_profile),
-                );
+                let server =
+                    Arc::new(LspServer::new_with_feature_profile(launch_config.feature_profile));
 
                 // Spawn a blocking reader thread for stdin
                 let (tx, rx) = tokio::sync::mpsc::channel(64);
@@ -159,9 +158,9 @@ fn run_server(launch_config: LaunchConfig) {
                                 ));
 
                                 // Create server, wrap in Arc for concurrent async dispatch
-                                let server = Arc::new(
-                                    LspServer::with_output_and_feature_profile(output, profile)
-                                );
+                                let server = Arc::new(LspServer::with_output_and_feature_profile(
+                                    output, profile,
+                                ));
 
                                 // Spawn a blocking reader thread that feeds an async channel
                                 let (tx, rx) = tokio::sync::mpsc::channel(64);
