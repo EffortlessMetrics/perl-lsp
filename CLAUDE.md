@@ -6,6 +6,33 @@ This file provides guidance to Claude Code when working with code in this reposi
 **API Stability**: See [docs/reference/STABILITY.md](docs/reference/STABILITY.md)
 **Metrics**: See [docs/project/CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for computed status
 
+## Orchestration Model
+
+This project uses agent-based development. The lead orchestrates, never writes code directly.
+
+> **Core principle**: The orchestrator's job is to route work to agents, not to do work directly. Every task = an agent. The CLAUDE.md provides the context those agents need.
+
+### For any code change
+Spawn a worktree agent:
+```
+Agent(isolation: "worktree", prompt: "Goal: ... Crate: ... Files: ... Verify: cargo fmt && cargo clippy -p <crate> --tests && cargo test -p <crate>. Commit and create PR.")
+```
+
+### For research or exploration
+Spawn an explore agent:
+```
+Agent(subagent_type: "Explore", prompt: "Find ... in crates/...")
+```
+
+### For parser fixes
+Use the /parser-fix skill which handles TDD workflow.
+
+### For multiple independent changes
+Spawn parallel worktree agents — one per crate/file-surface. They don't conflict thanks to the microcrate architecture.
+
+### For CI-free work (research, planning, docs, triage)
+Spawn freely — these don't trigger CI runs. Use to pre-plan work so code-writing agents are maximally efficient.
+
 ## Quick Reference
 
 ```bash
@@ -20,38 +47,19 @@ cargo build -p perl-lsp --release
 cargo test --workspace --lib
 ```
 
-## Default Operating Mode
-
-The lead orchestrates. It does not do substantive implementation inline.
-
-Every task is classified before action:
-- **Scout**: read-only research, triage, issue analysis, docs — fan out aggressively
-- **Preplan**: branch-ready work packets — fan out aggressively
-- **Build**: code changes, commits, PR creation — gated by CI capacity
-- **Control**: CI monitoring, merge routing, green-master repair — narrow
-
-Scout and preplan agents may fan out widely — they cost context, not CI.
-Build agents are gated by active CI capacity, not by open PR count.
-If default branch is red, build capacity goes first to restoring green master.
-
-### Agent Spawn Patterns
-| Task | Lane | Pattern |
-|------|------|---------|
-| Research/explore | Scout | `Agent(subagent_type: "Explore", prompt: "...")` |
-| Plan implementation | Preplan | `Agent(subagent_type: "Plan", prompt: "...")` |
-| Code change | Build | `Agent(isolation: "worktree", prompt: "Goal/Crate/Files/Verify/Commit")` |
-| Parser fix | Build | `/parser-fix` skill |
-| CI monitoring | Control | `Bash(command: "gh run watch <id> --exit-status", run_in_background: true)` |
-| Full campaign | All | `/swarm all` |
-| Corpus check | Control | `/corpus-ratchet` |
-
-### CI Budget Rules
-- Throttle on active CI-producing actions (pushes), not open PR count
-- Use `gh run watch` in background instead of polling `gh pr checks`
-- When CI queue > 10: shift all capacity to scout/preplan
-- Keep a ready-to-build queue so CI slack gets consumed immediately
+### Agent Patterns
+| Task | Pattern |
+|------|---------|
+| Code change | `Agent(isolation: "worktree", prompt: "...")` |
+| Research | `Agent(subagent_type: "Explore", prompt: "...")` |
+| Parser fix | `/parser-fix` skill |
+| Multiple changes | Parallel worktree agents |
+| Swarm cycle | `/swarm all` |
+| Corpus improvement | `/corpus-ratchet` |
 
 ## Crate Structure
+
+> **Context for agents**: The workspace has 116 workspace members across 121 crate directories. Use this to orient spawned agents to the right crate.
 
 The workspace contains **116 workspace members** across **121 crate directories** (see `Cargo.toml`), organized in dependency tiers. Key crates:
 
@@ -80,6 +88,8 @@ The workspace contains **116 workspace members** across **121 crate directories*
 | Core leaf crates | Token, AST, quote, regex, heredoc, error, etc. |
 
 ## Essential Commands
+
+> **Context for agents**: Pass the relevant subset of these commands in agent prompts as the `Verify:` step.
 
 ### Build
 
@@ -218,6 +228,8 @@ These directories are excluded from the default workspace (require special build
 
 ## Key Paths
 
+> **Context for agents**: Use this table to tell spawned agents exactly which files to read/modify.
+
 | What | Where |
 |------|-------|
 | Parser source | `crates/perl-parser/src/` |
@@ -244,6 +256,8 @@ These directories are excluded from the default workspace (require special build
 | Portable agent workflow templates | `docs/handoff/` |
 
 ## Architecture Patterns
+
+> **Context for agents**: Reference these patterns in agent prompts when the change touches indexing or LSP threading.
 
 ### Dual Indexing (PR #122)
 
@@ -298,6 +312,8 @@ Metrics in this project are **computed, not hand-edited**:
 - `README.md` and crates.io copy must not contain volatile metrics or exact numeric claims — use qualitative descriptions and link to `docs/project/CURRENT_STATUS.md`
 
 ## Coding Standards
+
+> **Context for agents**: Spawned code-writing agents must follow these standards. Pass `/coding-standards` skill invocation in agent prompts for full detail.
 
 - Run `cargo clippy --workspace` before committing
 - Use `cargo fmt` for consistent formatting

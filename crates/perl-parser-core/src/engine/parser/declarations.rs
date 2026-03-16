@@ -348,6 +348,11 @@ impl<'a> Parser<'a> {
                 format!("v{}", version.text)
             } else if first_token.kind == TokenKind::Identifier {
                 first_token.text.to_string()
+            } else if first_token.text.chars().all(|c| c.is_alphanumeric() || c == '_') && !first_token.text.is_empty() {
+                // Keyword-named pragmas: `use if COND, MODULE`, `use unless COND, MODULE`, etc.
+                // The token kind is a keyword (e.g., TokenKind::If) but the text is a valid
+                // Perl module name (all word chars). Accept it as-is.
+                first_token.text.to_string()
             } else {
                 return Err(ParseError::syntax(
                     format!("Expected module name or version, found {}", first_token.kind.display_name()),
