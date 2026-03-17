@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from datetime import date
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent.parent
-FINDINGS_PATH = ROOT / ".claude" / "swarm-state" / "findings.json"
+DEFAULT_FINDINGS_PATH = ROOT / ".claude" / "swarm-state" / "findings.json"
 
 ALLOWED_ROOT_KEYS = {"_comment", "schema_version", "last_updated", "findings"}
 ALLOWED_FINDING_KEYS = {
@@ -35,6 +36,7 @@ ALLOWED_KINDS = {
 }
 ALLOWED_STATUSES = {"active", "landed", "watching", "superseded"}
 ALLOWED_EVIDENCE_TYPES = {"file", "pr", "issue", "doc", "hook", "setting"}
+FINDING_ID_RE = re.compile(r"^SWARM-FINDING-[0-9]{4}$")
 
 
 def fail(message: str) -> None:
@@ -56,8 +58,20 @@ def ensure_nonempty_string(value: object, field: str) -> str:
     return value
 
 
+def resolve_findings_path() -> Path:
+    if len(sys.argv) > 2:
+        fail("usage: validate_swarm_findings.py [path/to/findings.json]")
+    if len(sys.argv) == 2:
+        return Path(sys.argv[1]).resolve()
+    return DEFAULT_FINDINGS_PATH
+
+
 def main() -> None:
-    raw = FINDINGS_PATH.read_text(encoding="utf-8")
+    findings_path = resolve_findings_path()
+    try:
+        raw = findings_path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        fail(f"findings ledger not found: {exc.filename}")
     data = json.loads(raw)
 
     extra_root = set(data) - ALLOWED_ROOT_KEYS
@@ -86,6 +100,8 @@ def main() -> None:
             fail(f"finding #{index + 1} has unexpected keys: {sorted(extra_finding)}")
 
         finding_id = ensure_nonempty_string(finding.get("id"), f"finding #{index + 1}.id")
+        if not FINDING_ID_RE.fullmatch(finding_id):
+            fail(f"{finding_id} must match SWARM-FINDING-####")
         if finding_id in seen_ids:
             fail(f"duplicate finding id: {finding_id}")
         seen_ids.add(finding_id)
@@ -143,10 +159,10 @@ def main() -> None:
     if latest_recorded > last_updated:
         fail("last_updated must be on or after the newest finding.recorded_on date")
 
-    if not seen_surfaces:
+    if findings and not seen_surfaces:
         fail("at least one surface must be referenced across findings")
 
-    print(f"Validated {len(findings)} findings in {FINDINGS_PATH}")
+    print(f"Validated {len(findings)} findings in {findings_path}")
 
 
 if __name__ == "__main__":

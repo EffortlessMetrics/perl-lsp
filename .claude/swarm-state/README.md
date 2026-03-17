@@ -45,3 +45,6 @@ Validate the ledger with:
 ```bash
 python3 scripts/validate_swarm_findings.py
 ```
+
+An empty `findings` array is a valid bootstrap state. Add entries only when the
+repo learns a durable swarm-control finding worth carrying forward.
