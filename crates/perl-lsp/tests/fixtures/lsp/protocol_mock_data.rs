@@ -112,7 +112,6 @@ pub fn server_initialization_fixture() -> LspProtocolFixture {
                         "perl.runTests",
                         "perl.runFile",
                         "perl.runTestSub",
-                        "perl.debugTests",
                         "perl.runCritic"
                     ]
                 },
@@ -558,7 +557,6 @@ pub fn load_error_response_fixtures() -> Vec<LspProtocolFixture> {
                             "perl.runTests",
                             "perl.runFile",
                             "perl.runTestSub",
-                            "perl.debugTests",
                             "perl.runCritic"
                         ]
                     }

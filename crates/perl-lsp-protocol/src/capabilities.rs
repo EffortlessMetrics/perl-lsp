@@ -291,7 +291,6 @@ pub fn get_supported_commands() -> Vec<String> {
         "perl.runTests".to_string(),
         "perl.runFile".to_string(),
         "perl.runTestSub".to_string(),
-        "perl.debugTests".to_string(),
         "perl.runCritic".to_string(),
         "perl.runTest".to_string(),
         "perl.runTestFile".to_string(),

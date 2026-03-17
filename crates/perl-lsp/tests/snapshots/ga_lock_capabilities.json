@@ -46,7 +46,6 @@
       "perl.runTests",
       "perl.runFile",
       "perl.runTestSub",
-      "perl.debugTests",
       "perl.runCritic",
       "perl.runTest",
       "perl.runTestFile",

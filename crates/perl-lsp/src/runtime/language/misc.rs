@@ -1245,8 +1245,7 @@ impl LspServer {
                     }
                 }
                 // New commands handled by ExecuteCommandProvider
-                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.debugTests"
-                | "perl.runCritic" => {
+                "perl.runTests" | "perl.runFile" | "perl.runTestSub" | "perl.runCritic" => {
                     match provider.execute_command(command, arguments) {
                         Ok(result) => return Ok(Some(result)),
                         Err(e) => {

@@ -63,10 +63,11 @@
 //!
 //! - `perl.runCritic` - Code quality analysis with dual analyzer strategy
 //! - `perl.runFile` - Execute Perl scripts with structured output
+//! - `perl.runTest` - Execute a single discovered test case
+//! - `perl.runTestFile` - Execute a specific test file directly
 //! - `perl.runTests` - Run test suites with coverage reporting
 //! - `perl.runTestSub` - Execute individual test subroutines
-//! - `perl.debugTests` - Debug test execution with step-through
-//! - `perl.tidy` - Code formatting with perltidy integration
+//! - `perl.debugFile` - Launch file-level debugging
 //!
 //! # Examples
 //!
@@ -923,7 +924,6 @@ pub fn command_exists(command: &str) -> bool {
 /// - `perl.runTests`: Execute all tests in a file
 /// - `perl.runFile`: Run a Perl file directly
 /// - `perl.runTestSub`: Execute a specific test subroutine
-/// - `perl.debugTests`: Debug test files (future DAP integration)
 /// - `perl.runCritic`: Perform code quality analysis
 /// - `perl.runTest`: Run a single test
 /// - `perl.runTestFile`: Run a test file
@@ -936,7 +936,7 @@ pub fn command_exists(command: &str) -> bool {
 ///
 /// let commands = get_supported_commands();
 /// assert!(commands.contains(&"perl.runCritic".to_string()));
-/// assert_eq!(commands.len(), 8);
+/// assert_eq!(commands.len(), 7);
 /// ```
 ///
 /// # Performance

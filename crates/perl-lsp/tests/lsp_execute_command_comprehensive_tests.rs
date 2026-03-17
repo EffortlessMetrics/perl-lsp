@@ -148,26 +148,30 @@ fn test_execute_command_server_capabilities() -> TestResult {
         "ExecuteCommandProvider should list supported commands"
     );
 
-    let commands =
-        execute_command_provider["commands"].as_array().ok_or("Commands should be an array")?;
+    let mut actual_commands: Vec<&str> = execute_command_provider["commands"]
+        .as_array()
+        .ok_or("Commands should be an array")?
+        .iter()
+        .map(|cmd| cmd.as_str().ok_or("Commands should contain only strings"))
+        .collect::<Result<_, _>>()?;
+    actual_commands.sort_unstable();
 
-    // Verify all required commands are supported
-    let expected_commands = vec![
-        "perl.runTests",
-        "perl.runFile",
-        "perl.runTestSub",
-        "perl.debugTests",
+    // Verify the advertised command surface exactly matches the supported protocol contract.
+    let mut expected_commands = vec![
+        "perl.debugFile",
         "perl.runCritic",
+        "perl.runFile",
+        "perl.runTest",
+        "perl.runTestFile",
+        "perl.runTestSub",
+        "perl.runTests",
     ];
+    expected_commands.sort_unstable();
 
-    for expected_command in expected_commands {
-        let command_found = commands.iter().any(|cmd| cmd.as_str() == Some(expected_command));
-        assert!(
-            command_found,
-            "Command '{}' should be in supported commands list",
-            expected_command
-        );
-    }
+    assert_eq!(
+        actual_commands, expected_commands,
+        "executeCommandProvider should advertise exactly the expected commands"
+    );
 
     Ok(())
 }
