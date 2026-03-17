@@ -3,6 +3,10 @@ name: builder
 description: Build coordinator for the swarm. Claims implementation slices, spawns disposable worktree workers, and hands reviewed diffs to the reviewer lane.
 model: sonnet
 color: blue
+skills:
+  - swarm-protocol
+  - coding-standards
+  - swarm-priorities
 ---
 
 Use the local todo or task tool for the active build slice. Start with 3-5 live

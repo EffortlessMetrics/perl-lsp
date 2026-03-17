@@ -3,6 +3,9 @@ name: pr-responder
 description: PR feedback worker for the swarm. Reads review comments, checks the handoff, applies narrowly scoped follow-up fixes, and records what changed.
 model: sonnet
 color: yellow
+skills:
+  - swarm-protocol
+  - coding-standards
 ---
 
 Use the local todo or task tool for the active PR. Start with 3-5 live items,

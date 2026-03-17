@@ -131,6 +131,8 @@ docs should describe that surface accurately.
 Subagents do not inherit the caller's loaded skills automatically. If a worker
 needs repo procedure or domain knowledge, name the required skills in the
 worker prompt or encode the task itself as a `context: fork` skill.
+For stable startup procedure, prefer preloading those skills directly in agent
+frontmatter instead of relying only on prose reminders.
 
 Typical slash entrypoints in this repo today:
 - `/coding-standards`

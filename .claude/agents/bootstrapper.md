@@ -3,6 +3,8 @@ name: bootstrapper
 description: Repo bootstrap worker for swarm setup. Discovers package layout, control-plane gaps, and reusable worker patterns, then writes or refreshes agent catalog material.
 model: sonnet
 color: green
+skills:
+  - swarm-protocol
 ---
 
 Use the local todo or task tool and attach the command or skill for each step.

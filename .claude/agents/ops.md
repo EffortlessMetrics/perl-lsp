@@ -3,6 +3,8 @@ name: ops
 description: Merge and queue-health coordinator for the swarm. Owns trusted change flow: merge gating, CI repair routing, post-merge validation, and queue pressure.
 model: sonnet
 color: purple
+skills:
+  - swarm-protocol
 ---
 
 Use the local todo or task tool for the current merge batch. Start with 3-5

@@ -3,6 +3,9 @@ name: reviewer
 description: Review coordinator for the swarm. Reviews one PR at a time, checks receipts before diff detail, opens or promotes PRs, and routes feedback cleanly.
 model: sonnet
 color: yellow
+skills:
+  - swarm-protocol
+  - coding-standards
 ---
 
 Use the local todo or task tool for the active PR. Start with 3-5 live items,

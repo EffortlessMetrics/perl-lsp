@@ -24,6 +24,8 @@ Agent design rules:
 - use the local todo or task tool for the current lane or slice
 - start with 3-5 live items and keep them current
 - name the command or skill for each todo item
+- preload stable startup skills in frontmatter when the lane uses them on
+  every run
 - retire workers when crate, file surface, branch, or verification loop changes
 - keep coordinators thin and push code mutation into disposable workers
 - treat receipts and handoffs as durable output; agent transcript is not proof
