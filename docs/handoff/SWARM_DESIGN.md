@@ -235,9 +235,9 @@ Subagents do not inherit the caller's loaded skills automatically. If a worker
 needs repo rules or procedure, name the required skills explicitly in the spawn
 prompt or package the task itself as a `context: fork` skill.
 
-Workers should also keep a local todo list for the active slice. Each todo item
-should name the skill or command for that step so the procedure stays attached
-to the work item instead of floating in coordinator memory.
+Workers should also use the local todo or task tool for the active slice. Each
+item should name the skill or command for that step so the procedure stays
+attached to the work item instead of floating in coordinator memory.
 
 ### Handoff Protocol
 
@@ -431,7 +431,10 @@ bash swarm-pack/setup.sh    # Install agents, slash commands, hooks, ops, GH lab
 /swarm all                   # Start continuous swarm
 ```
 
-The pack installs reusable specialist agent definitions plus slash commands and hooks, and expects each repo to generate its own domain-specific agents via `/bootstrap-agents`. The live swarm still runs as 5 named coordinators; optional specialists are spawned on demand.
+The pack installs reusable specialist agent definitions plus slash commands and hooks. In the live repo, the reusable specialist roster is now tracked directly under `.claude/agents/` and indexed in `.claude/agents/AGENT_CATALOG.md`; `/bootstrap-agents` refreshes and extends that roster when the codebase changes. The live swarm still runs as 5 named coordinators; optional specialists are spawned on demand.
+The live catalog also records who usually spawns each tracked specialist, where
+it hands work next, and which slash entrypoints it should invoke first, so the
+agent list and the flow mapping stay coupled.
 
 ### Agent Taxonomy (~50 total after bootstrap)
 
