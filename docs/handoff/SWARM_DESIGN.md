@@ -435,6 +435,8 @@ The pack installs reusable specialist agent definitions plus slash commands and 
 The live catalog also records who usually spawns each tracked specialist, where
 it hands work next, and which slash entrypoints it should invoke first, so the
 agent list and the flow mapping stay coupled.
+Compatibility donor agents now live under `.claude/agents-compat/` rather than
+inside the active roster directory.
 
 ### Agent Taxonomy (~50 total after bootstrap)
 

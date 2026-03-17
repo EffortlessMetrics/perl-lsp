@@ -620,9 +620,9 @@ boundary for PR-shaped changes.
 
 Older agent generations (`.claude/agents2` through `.claude/agents6`) remain
 useful as donor material and operator history, but they are not the current
-runtime contract for this repository. Likewise, any compatibility files still
-tracked under `.claude/agents/` should be read through `AGENT_CATALOG.md`
-rather than treated as peer active lanes.
+runtime contract for this repository. Compatibility-only donor files now live
+under `.claude/agents-compat/`, leaving `.claude/agents/` as the active
+tracked roster.
 
 ## Development Guidelines
 

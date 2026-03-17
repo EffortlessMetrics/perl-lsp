@@ -14,9 +14,8 @@ These files define who owns each lane. Procedures live in skills and commands.
 Deterministic enforcement lives in hooks and settings. Task-specific context
 lives in handoffs, worktrees, receipts, PRs, and queue files.
 
-If a file lives in `.claude/agents/`, it is part of the tracked swarm surface.
-The canonical inventory is `AGENT_CATALOG.md`, which marks whether a file is in
-the active roster or present only as compatibility donor material.
+If a file lives in `.claude/agents/`, it is part of the active tracked swarm
+surface. The canonical active inventory is `AGENT_CATALOG.md`.
 
 Agent design rules:
 
@@ -26,10 +25,10 @@ Agent design rules:
 - retire workers when crate, file surface, branch, or verification loop changes
 - keep coordinators thin and push code mutation into disposable workers
 - treat receipts and handoffs as durable output; agent transcript is not proof
-- catalog every tracked agent with spawned-by, handoff-to, and first-entrypoint
-  metadata in `AGENT_CATALOG.md`
+- catalog every tracked active agent with spawned-by, handoff-to, and
+  first-entrypoint metadata in `AGENT_CATALOG.md`
 
-The older `swarm-*` files remain as compatibility donor material during the
-transition, but they are not the active roster. New prompts, docs, and
-commands should reference the canonical names and the tracked catalog in this
-directory first.
+Compatibility donor material lives in
+[`.claude/agents-compat/`](../agents-compat/). New prompts, docs, and commands
+should reference the canonical names and the tracked catalog in this directory
+first.

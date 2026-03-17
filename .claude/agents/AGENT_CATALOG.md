@@ -1,5 +1,5 @@
 # Agent Catalog
-This is the canonical tracked inventory for `.claude/agents/`. If a file lives in this directory, it is part of the tracked swarm surface and should be cataloged here or explicitly marked as compatibility material.
+This is the canonical tracked inventory for the active files in `.claude/agents/`. If a file lives in this directory, it is part of the active tracked swarm surface and should be cataloged here.
 Every live agent file should encode four things directly in the prompt surface: local todo or task discipline, required startup slash entrypoints, context or scope boundaries, and clear flow integration (who spawns it, where it hands work next).
 ## Core Coordinators
 | Agent | Owns | Routes to | First entrypoints | File |
@@ -65,22 +65,5 @@ Every live agent file should encode four things directly in the prompt surface: 
 | `test-quality` | `quality` | `improver` | `reviewer` | /swarm-protocol, /coding-standards, /verify-build | `test-quality.md` | Improve test naming, assertions, structure, and patterns. Converts implementation-detail tests to behavior-specification tests. Ensures BDD coverage and proper test infrastructure usage. |
 | `workspace-index` | `implementation` | `builder` | `reviewer` | /swarm-protocol, /coding-standards, /verify-build | `workspace-index.md` | Workspace indexing — dual indexing, cross-file symbol resolution, file discovery. Knows perl-workspace-index, perl-workspace-discover, and the qualified/bare name indexing pattern. |
 
-## Compatibility / Donor Files
-
-These remain tracked so older prompts and docs do not break during the transition, but they are not the active roster. New docs and orchestration should reference the canonical names first.
-
-| Agent | File |
-| --- | --- |
-| `swarm-builder` | `swarm-builder.md` |
-| `swarm-fixer` | `swarm-fixer.md` |
-| `swarm-improver-devex` | `swarm-improver-devex.md` |
-| `swarm-improver-docs` | `swarm-improver-docs.md` |
-| `swarm-improver-infra` | `swarm-improver-infra.md` |
-| `swarm-improver-tests` | `swarm-improver-tests.md` |
-| `swarm-janitor` | `swarm-janitor.md` |
-| `swarm-merger` | `swarm-merger.md` |
-| `swarm-pr-responder` | `swarm-pr-responder.md` |
-| `swarm-reviewer` | `swarm-reviewer.md` |
-| `swarm-scout` | `swarm-scout.md` |
-| `swarm-strategist` | `swarm-strategist.md` |
-| `swarm-validator` | `swarm-validator.md` |
+Compatibility donor files now live under
+[`../agents-compat/`](../agents-compat/README.md).
