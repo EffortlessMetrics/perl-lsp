@@ -102,7 +102,7 @@ Instead of every agent prompt repeating "Invoke /coding-standards", context is i
 | File | Change |
 |------|--------|
 | `.claude/commands/swarm.md` | Added Skill Scope section; removed orchestrator-level agent skill invocations |
-| `.claude/agents/swarm-*.md` (13 files) | Added `TaskList`/`TaskUpdate`/`TaskCreate` references; added metrics mandate |
+| `.claude/agents-compat/swarm-*.md` (13 files) | Added `TaskList`/`TaskUpdate`/`TaskCreate` references; added metrics mandate |
 | `.claude/hooks/task-completed.sh` | Enhanced with metrics gate |
 | `.claude/hooks/subagent-start.sh` | New hook; auto-injects coding standards and known pitfalls |
 | `.claude/hooks/teammate-idle.sh` | Enhanced with in-progress task check |

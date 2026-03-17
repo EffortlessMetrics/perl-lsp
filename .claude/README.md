@@ -60,6 +60,6 @@ entrypoints it should invoke first.
 
 ## Compatibility Note
 
-Older `swarm-*` agent files remain as donor material during the transition, but
-new docs, prompts, and commands should reference the canonical names and the
-tracked catalog first.
+Compatibility donor material now lives under
+[`.claude/agents-compat/`](./agents-compat/). New docs, prompts, and commands
+should reference the active roster in `.claude/agents/` first.

@@ -275,6 +275,8 @@ Those are signals that the task needs to be split.
 The repo still contains historical agent generations and experiments
 (`.claude/agents2` through `.claude/agents6`). Those are useful as history and
 donor material, but they are not the architectural center of gravity anymore.
+Compatibility-only donor agents also live outside the active roster under
+`.claude/agents-compat/`.
 
 The current control plane is defined by:
 - [`.claude/README.md`](../../.claude/README.md)
