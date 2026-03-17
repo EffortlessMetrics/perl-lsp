@@ -584,8 +584,8 @@ The current swarm runtime is defined by:
 - `.claude/agents/` — canonical tracked agent surface, with the active roster
   and any compatibility material explicitly marked in
   `AGENT_CATALOG.md`
-- `.claude/skills/swarm/` — main skill-backed swarm entrypoint
-- `.claude/commands/` — thin operator entrypoints and compatibility shims
+- `.claude/skills/` — main skill layer for swarm control and core worker procedures
+- `.claude/commands/` — slash entrypoints that currently live as command files
 - `.claude/settings.json` — shared permissions and hook enforcement
 - `.claude/swarm-state/` — tracked queue, dedup, and overlap state
 

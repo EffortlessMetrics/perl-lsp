@@ -16,10 +16,12 @@ improvement. Disposable workers in isolated worktrees do all code mutation.
 
 ## Slash Entry Point Scope
 
-`/swarm` is the main skill-backed control-plane entrypoint currently shipped in
-this repo. Most other procedures listed below are still command-backed slash
-entrypoints under `.claude/commands/`; keep them thin and accurate until they
-earn a full skill migration.
+`/swarm` is the main control-plane entrypoint. The core worker procedures
+listed below now also ship from `.claude/skills/`:
+`/swarm-protocol`, `/coding-standards`, `/swarm-priorities`, `/plan-fix`,
+`/parser-fix`, and `/verify-build`. Broader operator procedures currently live
+under `.claude/commands/`. Agents invoke both skills and commands the same way
+unless frontmatter intentionally changes who can call them or how they run.
 
 The scope split is summarized here. See `reference/team-structure.md` for the concrete coordinator handoffs and data flow.
 
