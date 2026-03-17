@@ -17,9 +17,9 @@ Every live agent file should encode four things directly in the prompt surface: 
 | `fixer` | `ops or reviewer` | `reviewer or ops` | /swarm-protocol, /coding-standards, /verify-build | `fixer.md` |
 | `validator` | `ops` | `ops or fixer` | /swarm-protocol, validation command | `validator.md` |
 | `pr-responder` | `reviewer or ops` | `reviewer` | /swarm-protocol, /coding-standards, /pr-ready | `pr-responder.md` |
-| `research-web` | `scout or improver` | `scout or builder` | /swarm-protocol, /swarm-priorities | `research-web.md` |
-| `research-docs` | `scout or improver` | `scout or builder` | /swarm-protocol, /swarm-priorities | `research-docs.md` |
-| `research-verify` | `scout or improver` | `scout or builder` | /swarm-protocol, /swarm-priorities | `research-verify.md` |
+| `research-web` | `scout or improver` | `scout or builder` | web search + cited summary | `research-web.md` |
+| `research-docs` | `scout or improver` | `scout or builder` | docs lookup + condensed reference | `research-docs.md` |
+| `research-verify` | `scout or improver` | `scout or builder` | claim check + verdict | `research-verify.md` |
 
 ## Specialist Workers
 | Agent | Category | Usually spawned by | Hands off to | First entrypoints | File | Description |
