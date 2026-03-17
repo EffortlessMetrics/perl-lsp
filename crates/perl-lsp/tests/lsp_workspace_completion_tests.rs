@@ -338,6 +338,7 @@ sub uppercase {
             }
         }),
     );
+    await_open_processing(&server);
 
     // Open a file that imports the module
     let script_uri = "file:///workspace/text_processor.pl";
@@ -361,6 +362,7 @@ tri
             }
         }),
     );
+    await_open_processing(&server);
 
     // Request completion after "tri"
     let response = send_request(
