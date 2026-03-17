@@ -58,7 +58,15 @@ how they run.
 The canonical roster mapping lives in
 [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md). It records who usually
 spawns each tracked agent, where it hands work next, and which slash
-entrypoints it should invoke first.
+entrypoints it should invoke first. The machine-readable version of that
+contract lives in [agents/agent-roster.json](./agents/agent-roster.json) and
+is validated against [agents/agent-roster.schema.json](./agents/agent-roster.schema.json).
+
+Validate the roster contract with:
+
+```bash
+python3 scripts/validate_swarm_agent_roster.py
+```
 
 The tracked swarm-state contract lives in
 [swarm-state/README.md](./swarm-state/README.md). Use `findings.json` there for

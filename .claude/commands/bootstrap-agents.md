@@ -20,7 +20,8 @@ Discover the codebase structure and generate domain-specific agent definitions. 
 2. **Identifies** natural domains (package families, layers, feature areas)
 3. **Generates or refreshes** 3-5 agent files per domain: fix, test, scout, explorer
 4. **Customizes** the repo-local tracked agent roster with codebase-specific details
-5. **Creates or refreshes** `.claude/agents/AGENT_CATALOG.md` for orchestrator reference
+5. **Creates or refreshes** `.claude/agents/AGENT_CATALOG.md` and `.claude/agents/agent-roster.json`
+   for orchestrator and validation reference
 6. **Preserves the shared contract**: todo or task discipline, first slash entrypoints, and flow-integration metadata
 
 ## Process
@@ -34,7 +35,7 @@ Agent(
 Write agents to .claude/agents/.
 Treat existing files in .claude/agents/ as part of the live swarm roster, not disposable scratch output.
 Update the canonical coordinator and worker roster only when the pattern is reusable.
-Create or refresh .claude/agents/AGENT_CATALOG.md.
+Create or refresh .claude/agents/AGENT_CATALOG.md and .claude/agents/agent-roster.json.
 Ensure every generated or refreshed agent says who usually spawns it, where it hands work next, and which slash entrypoints it should invoke first.
 Target ~25-35 domain agents.",
   mode: "auto"
@@ -45,8 +46,9 @@ Target ~25-35 domain agents.",
 
 1. Review generated agents in `.claude/agents/`
 2. Check `AGENT_CATALOG.md` for the full inventory
-3. Verify any `$PLACEHOLDER` values were filled in
-4. Test with `/swarm all` to start the swarm
+3. Validate `agent-roster.json` with `python3 scripts/validate_swarm_agent_roster.py`
+4. Verify any `$PLACEHOLDER` values were filled in
+5. Test with `/swarm all` to start the swarm
 
 ## Modes
 

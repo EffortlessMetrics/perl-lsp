@@ -17,7 +17,9 @@ enforcement lives in hooks and settings. Task-specific context lives in
 handoffs, worktrees, receipts, PRs, and queue files.
 
 If a file lives in `.claude/agents/`, it is part of the active tracked swarm
-surface. The canonical active inventory is `AGENT_CATALOG.md`.
+surface. The canonical active inventory is `AGENT_CATALOG.md`, and the
+machine-readable contract for that inventory lives in `agent-roster.json` and
+`agent-roster.schema.json`.
 
 Agent design rules:
 
@@ -31,6 +33,9 @@ Agent design rules:
 - treat receipts and handoffs as durable output; agent transcript is not proof
 - catalog every tracked active agent with spawned-by, handoff-to, and
   first-entrypoint metadata in `AGENT_CATALOG.md`
+- keep `agent-roster.json` and `agent-roster.schema.json` in sync with the
+  tracked catalog and the actual files on disk
+- run `python3 scripts/validate_swarm_agent_roster.py` after roster changes
 
 Compatibility donor material lives in
 [`.claude/agents-compat/`](../agents-compat/). New prompts, docs, and commands
