@@ -306,12 +306,7 @@ mod tests {
     // return in do block
     // ---------------------------------------------------------------
 
-    // Pre-existing parser limitation: `return $x if $cond` inside a
-    // do-block triggers an error because the `if` keyword is consumed
-    // as an if-statement rather than a statement modifier. Tracked
-    // separately from the expression-context fix.
     #[test]
-    #[ignore = "feature: statement modifier after return inside do-block"]
     fn test_return_inside_do_block() {
         // do { return $x if $cond; $y }
         let input = "do { return $x if $cond; $y };";
