@@ -1181,7 +1181,7 @@ The CPAN corpus workflow validates parser coverage against the top-1000 most-dow
 just cpan-corpus-fetch              # Writes .ci/cpan-top-1000-distributions.txt
 
 # Install CPAN top-1000 distributions locally via cpanm
-just cpan-corpus-install            # Installs into target/cpan-corpus/
+just cpan-corpus-install            # Installs into target/cpan-corpus/; auto-fetches the list if still placeholder-only
 
 # Sweep CPAN corpus and print parser error rates
 just cpan-corpus-sweep              # Parse all .pm files, report clean rate
@@ -1222,7 +1222,7 @@ cargo xtask cpan-corpus ratchet --manifest .ci/cpan-corpus-manifest.txt
 ```bash
 # First-time setup
 just cpan-corpus-fetch        # Download distribution list
-just cpan-corpus-install      # Install modules (takes a while)
+just cpan-corpus-install      # Install modules (takes a while; fetches the list if needed)
 just cpan-corpus-baseline-update  # Commit first ratchet floor
 
 # Ongoing validation (after parser changes)

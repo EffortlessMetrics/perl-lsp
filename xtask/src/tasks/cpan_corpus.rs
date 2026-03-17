@@ -149,10 +149,19 @@ pub fn fetch_list(config: &CpanCorpusConfig) -> Result<()> {
 
 /// Read the distribution list and install each via cpanm into a local lib.
 pub fn install(config: &CpanCorpusConfig) -> Result<()> {
-    let distributions = read_dist_list(&config.dist_list)?;
+    let mut distributions = read_dist_list(&config.dist_list)?;
+    if distributions.is_empty() {
+        println!(
+            "Distribution list is empty: {}. Fetching top {} distributions first...",
+            config.dist_list.display(),
+            config.top_n
+        );
+        fetch_list(config)?;
+        distributions = read_dist_list(&config.dist_list)?;
+    }
     if distributions.is_empty() {
         return Err(color_eyre::eyre::eyre!(
-            "Distribution list is empty: {}. Run `cargo xtask cpan-corpus fetch-list` first.",
+            "Distribution list is still empty after fetch: {}",
             config.dist_list.display(),
         ));
     }

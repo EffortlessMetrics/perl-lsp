@@ -138,7 +138,9 @@ just cpan-corpus-install
 
 Uses `cpanm` with a `local::lib` prefix to install the listed distributions into
 a local directory without polluting the system Perl. This creates a directory tree
-of `.pm` files that the sweep can scan.
+of `.pm` files that the sweep can scan. If the checked-in distribution list is
+still just the placeholder header, the install step fetches the top-1000 list
+first and then continues.
 
 ### Step 3: Run the Parser Sweep
 

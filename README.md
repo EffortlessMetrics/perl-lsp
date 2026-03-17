@@ -109,7 +109,7 @@ just corpus-sweep-check    # Check against baseline (fails on regression)
 just corpus-sweep-update   # Update baseline with current results
 just common-corpus-check   # Check pinned modules parse cleanly (PR gate)
 just cpan-corpus-fetch     # Fetch CPAN top-1000 distribution list
-just cpan-corpus-install   # Install CPAN corpus locally
+just cpan-corpus-install   # Install CPAN corpus locally; auto-fetch list if placeholder is empty
 just cpan-corpus-baseline-update  # Seed/update CPAN ratchet baseline
 just cpan-corpus-check     # Check CPAN baseline + known-clean manifest
 ```
