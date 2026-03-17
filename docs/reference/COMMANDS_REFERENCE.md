@@ -1181,7 +1181,7 @@ The CPAN corpus workflow validates parser coverage against the top-1000 most-dow
 just cpan-corpus-fetch              # Writes .ci/cpan-top-1000-distributions.txt
 
 # Install CPAN top-1000 distributions locally via cpanm
-just cpan-corpus-install            # Installs into target/cpan-corpus/; auto-fetches the list if still placeholder-only
+just cpan-corpus-install            # Installs into target/cpan-corpus/; auto-fetches the list, bootstraps cpanm, and reuses target/cpan-corpus/.cpanm
 
 # Sweep CPAN corpus and print parser error rates
 just cpan-corpus-sweep              # Parse all .pm files, report clean rate

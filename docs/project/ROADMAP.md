@@ -157,6 +157,7 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
   - Constant folding and compile-time evaluation approximations.
 
 ### v0.12.0: Public Alpha Epic Sprint
+
 - **Goal:** Make the alpha credible on real-world Perl by raising clean-parse coverage, keeping ratchets green, proving bounded behavior on pathological inputs, and covering the mainstream Moo/Moose-style semantic surface users expect.
 - **Features:**
   - CPAN top-1000 corpus sweeps with ratchet-only-forward enforcement. See [CPAN_CORPUS_STRATEGY.md](CPAN_CORPUS_STRATEGY.md).

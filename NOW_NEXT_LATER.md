@@ -299,7 +299,7 @@
 ```mermaid
 graph TD
     subgraph NOW
-        A1[v0.11.0 Stabilization] --> A2[v0.12.0 Semantic Engine]
+        A1[v0.11.0 Stabilization] --> A2[v0.12.0 Public Alpha Epic Sprint]
         A2 --> A3[Moo/Moose Attributes]
         A2 --> A4[Cross-file Types]
         A2 --> A5[Export Lists]

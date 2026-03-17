@@ -93,12 +93,14 @@ Make the alpha credible on real-world Perl while continuing the semantic framewo
 - Improved bareword disambiguation from export lists
 
 **Epic Sprint Tracks**:
+
 - Corpus and ratchets: system/common ratchets stay green, and the CPAN lane is bootstrapped with a committed baseline plus known-clean manifest
 - Parser robustness: edge-case recovery, parser stress, and hang-risk boundedness
 - Semantic frameworks: Moo/Moose/Class::Accessor, inheritance, export lists
 - Release readiness: docs, packaging, and `ci-gate` receipts stay green
 
 **Success Criteria**:
+
 - [ ] CPAN baseline: `.ci/cpan-corpus-baseline.json` committed and usable as the ratchet floor
 - [ ] CPAN corpus: 90%+ clean parse rate across the top-1000 corpus
 - [ ] Internal robustness suites: edge-case, parser stress, and hang-risk suites all pass

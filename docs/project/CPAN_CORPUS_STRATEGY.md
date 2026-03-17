@@ -140,7 +140,10 @@ Uses `cpanm` with a `local::lib` prefix to install the listed distributions into
 a local directory without polluting the system Perl. This creates a directory tree
 of `.pm` files that the sweep can scan. If the checked-in distribution list is
 still just the placeholder header, the install step fetches the top-1000 list
-first and then continues.
+first and then continues. If `cpanm` is not installed on the host, the workflow
+bootstraps a standalone `cpanm` script into `target/cpan-corpus/bin/cpanm`.
+It also reuses a project-local `cpanm` cache rooted at `target/cpan-corpus/.cpanm`
+so repeat runs do not need to start from a cold download state.
 
 ### Step 3: Run the Parser Sweep
 
@@ -236,7 +239,7 @@ surface?"
 
 ## Success Metrics
 
-The CPAN corpus effort tracks three metrics:
+The CPAN corpus effort tracks four metrics:
 
 1. **Clean parse rate** -- Percentage of `.pm` files in the CPAN top 1000 that
    parse with zero ERROR nodes. Target: 90%+.

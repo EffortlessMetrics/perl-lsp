@@ -140,7 +140,9 @@ fn deduplicate_and_sort_three_duplicates_keeps_best_sort_text() {
     ];
     let result = deduplicate_and_sort(items);
     assert_eq!(result.len(), 2, "3 duplicates must be deduped to 1");
-    let foo = result.iter().find(|i| i.label == "foo").expect("foo must be kept");
+    let foo = result.iter().find(|i| i.label == "foo");
+    assert!(foo.is_some(), "foo must be kept");
+    let foo = foo.unwrap_or(&result[0]);
     // The one with sort_text "001" (Variable kind) should win
     assert_eq!(foo.sort_text.as_deref(), Some("001"), "best sort_text must win among 3 duplicates");
 }
