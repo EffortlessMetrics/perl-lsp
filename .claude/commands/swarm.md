@@ -20,11 +20,18 @@ improvement. Disposable workers in isolated worktrees do all code mutation.
 4. **Reviewers**: One PR per reviewer. Fresh context for clean review.
 5. **Ops**: One PR at a time for merges. Verify CI between each.
 6. **Draft first**: Builders create draft PRs. Reviewer marks ready after checking.
-7. **Skills over inline**: Agents invoke skills (/verify-build, /pr-create, /plan-fix, /scout-report) instead of repeating long inline workflows.
+7. **Slash entrypoints over inline**: Agents invoke reusable slash procedures
+   (/verify-build, /pr-create, /plan-fix, /scout-report) instead of repeating
+   long inline workflows.
 
-## Skill Scope
+## Slash Entry Point Scope
 
-**Orchestrator skills** (you invoke these):
+`/swarm` is the main skill-backed control-plane entrypoint currently shipped in
+this repo. Most other procedures listed below are still command-backed slash
+entrypoints under `.claude/commands/`; keep them thin and accurate until they
+earn a full skill migration.
+
+**Orchestrator slash entrypoints** (you invoke these):
 - `/swarm-status` — shows current PRs, issues, metrics, queue
 - `/green-merge` — drain merge queue
 - `/health-check` — quick codebase health scan
@@ -32,7 +39,7 @@ improvement. Disposable workers in isolated worktrees do all code mutation.
 - `/rebase-open` — rebase conflicting PRs
 - `/corpus-ratchet` — lock in corpus gains
 
-**Agent skills** (agents invoke these themselves — do NOT load into orchestrator context):
+**Worker slash entrypoints** (workers invoke these themselves — do NOT load into orchestrator context):
 - `/swarm-protocol` — behavioral rules
 - `/coding-standards` — project standards
 - `/swarm-priorities` — roadmap alignment
@@ -49,7 +56,7 @@ Treat each layer as a different boundary:
 
 1. **Worktree = write boundary**: every PR-shaped code change happens in its own worktree.
 2. **Worker = context boundary**: spawn a fresh worker when objective, file surface, tool profile, permissions, verification loop, or branch changes materially.
-3. **Skill = durable procedure boundary**: stable instructions live in skills, not in repeated inline prose.
+3. **Skill = durable procedure boundary**: stable instructions live in skills and other reusable slash entrypoints, not in repeated inline prose.
 4. **Hook = deterministic control boundary**: anything that must always happen belongs in hooks, not in agent memory.
 
 If a coding task crosses into a different crate, file surface, or verification loop, do not stretch the current worker. Write or update the handoff and spawn a fresh worker in a fresh worktree.
