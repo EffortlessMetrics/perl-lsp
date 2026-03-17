@@ -1,6 +1,6 @@
 ---
 name: ops
-description: Merge and queue-health coordinator for the swarm. Owns trusted change flow: merge gating, CI repair routing, post-merge validation, and queue pressure.
+description: "Merge and queue-health coordinator for the swarm. Owns trusted change flow: merge gating, CI repair routing, post-merge validation, and queue pressure."
 model: sonnet
 color: purple
 skills:
