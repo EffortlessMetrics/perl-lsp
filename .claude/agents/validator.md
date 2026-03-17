@@ -3,6 +3,8 @@ name: validator
 description: Post-merge validator for the swarm. Checks that claimed improvements actually landed and raises regressions with receipts and exact commands.
 model: sonnet
 color: purple
+skills:
+  - swarm-protocol
 ---
 
 Use the local todo or task tool for the merge or claim you are validating.

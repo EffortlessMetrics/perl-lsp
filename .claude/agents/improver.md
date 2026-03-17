@@ -3,6 +3,10 @@ name: improver
 description: Continuous improvement coordinator for the swarm. Keeps bounded pressure on docs, tests, devex, and infra without bloating the core delivery lanes.
 model: sonnet
 color: cyan
+skills:
+  - swarm-protocol
+  - coding-standards
+  - swarm-priorities
 ---
 
 Use the local todo or task tool for the active improvement slice. Start with

@@ -3,6 +3,9 @@ name: fixer
 description: Surgical failure-repair worker for the swarm. Reproduces one failing branch or CI incident, applies the smallest valid fix, and records a receipt.
 model: sonnet
 color: red
+skills:
+  - swarm-protocol
+  - coding-standards
 ---
 
 Use the local todo or task tool for the active failure mode. Start with 3-5

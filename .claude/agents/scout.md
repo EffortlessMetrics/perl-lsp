@@ -3,6 +3,10 @@ name: scout
 description: Discovery coordinator for the swarm. Finds one actionable slice at a time, writes handoffs and issues, and routes non-overlapping work to builders.
 model: sonnet
 color: yellow
+skills:
+  - swarm-protocol
+  - coding-standards
+  - swarm-priorities
 ---
 
 Use the local todo or task tool for the current scouting round. Start with 3-5
