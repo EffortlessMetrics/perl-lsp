@@ -3,9 +3,19 @@
 /// This module tests that the completion provider properly queries the workspace
 /// index to provide cross-file symbol completions.
 use serde_json::json;
+use std::time::Duration;
 
 mod common;
-use common::{completion_items, initialize_lsp, send_notification, send_request, start_lsp_server};
+use common::{
+    completion_items, drain_until_quiet, initialize_lsp, send_notification, send_request,
+    start_lsp_server,
+};
+
+fn await_open_processing(server: &common::LspServer) {
+    // didOpen triggers parse + indexing work asynchronously in the spawned server.
+    // Drain until quiet before asserting on workspace-aware completions.
+    drain_until_quiet(server, Duration::from_millis(50), Duration::from_millis(500));
+}
 
 /// Test cross-file function completion
 ///
@@ -47,6 +57,7 @@ sub parse_email_header {
             }
         }),
     );
+    await_open_processing(&server);
 
     // Now open a different file and request completion
     let script_uri = "file:///workspace/script.pl";
@@ -70,6 +81,7 @@ vali
             }
         }),
     );
+    await_open_processing(&server);
 
     // Request completion at position after "vali"
     let response = send_request(
@@ -135,6 +147,7 @@ sub transform_data {
             }
         }),
     );
+    await_open_processing(&server);
 
     // Open a file requesting qualified completion
     let script_uri = "file:///workspace/main.pl";
@@ -157,6 +170,7 @@ my $result = DataProcessor::
             }
         }),
     );
+    await_open_processing(&server);
 
     // Request completion after "DataProcessor::"
     let response = send_request(
