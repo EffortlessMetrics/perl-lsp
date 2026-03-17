@@ -1,12 +1,16 @@
 ---
-description: Launch a wave of parallel agents for codebase improvement
+description: Compatibility shim for legacy wave-based dispatch; prefer /swarm for the live control plane
 argument-hint: "<category> e.g. 'parser-fixes', 'test-coverage', 'doc-updates', 'cleanup'"
 disable-model-invocation: true
 ---
 
-# Wave: Parallel Agent Dispatch
+# Wave: Compatibility Shim
 
 Launch a wave of agents for: **$ARGUMENTS**
+
+`/swarm` is the canonical orchestrator entrypoint in this repo. Use `/wave`
+only when you are following older operator docs or intentionally running a
+legacy wave-shaped batch. Keep any new procedure changes in `/swarm`, not here.
 
 ## Dispatch Principles
 
@@ -124,7 +128,7 @@ Spawn 3-8 agents in parallel. Do not wait for one to finish before spawning the 
 ## After wave completes
 
 ### Batch mode (default)
-Run `/bulk-pr` to create PRs for all worktrees with changes.
+Use `/bulk-pr` only when intentionally sweeping a legacy/manual wave batch.
 
 ### Continuous mode (`--continuous`)
 Instead of bulk-PR after wave ends, feed finished builders directly into reviewers:

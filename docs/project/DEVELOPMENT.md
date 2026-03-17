@@ -141,7 +141,7 @@ while a central orchestrator plans, monitors, and coordinates merges.
 
 | Role | Scope | Typical work |
 |------|-------|-------------|
-| **Orchestrator** (main thread) | Plans work, launches agents, monitors PRs, coordinates merges | Reading baselines, triaging errors, launching waves |
+| **Orchestrator** (main thread) | Plans work, launches agents, monitors PRs, coordinates merges | Reading baselines, triaging errors, routing swarm slices |
 | **Worker agents** (worktrees) | Focused work in isolation | Parser fix, test addition, doc update, cleanup |
 | **PR agents** | Validate and publish each worktree's changes | Running `ci-gate`, creating PRs, fixing CI failures |
 
@@ -159,17 +159,22 @@ just corpus-sweep  # parser coverage baseline
 # Read docs/project/PARSER_EDGE_CASE_ROADMAP.md for known issues
 ```
 
-#### 3. Launch a wave
+#### 3. Start a focused swarm lane
 ```bash
-/wave parser-fixes   # or: test-coverage, doc-updates, cleanup
+/swarm parser        # or: tests, cleanup, improve
 ```
 
-Each wave creates one worktree per task and starts a worker agent inside it.
+Each swarm slice creates one worktree per PR-shaped task and starts a focused
+worker inside it. `/wave` still exists as a compatibility shim for older docs,
+but it is no longer the primary entrypoint.
 
 #### 4. Monitor and PR
 ```bash
-/bulk-pr             # PR all completed worktrees
+gh pr list --state open --json number,title,statusCheckRollup
 ```
+
+Let the reviewer/ops flow drain PRs. `/bulk-pr` is now a legacy/manual sweep
+tool for older wave-style batches, not the default publishing path.
 
 #### 5. Fix CI failures
 ```bash

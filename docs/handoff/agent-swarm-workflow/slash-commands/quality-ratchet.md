@@ -7,6 +7,10 @@ argument-hint: "[--check | --update] [--metric <name>]"
 
 Run quality metrics and ratchet the baseline forward. Mode: **$ARGUMENTS**
 
+This exported workflow predates the repo's current `/swarm`-first control
+plane. Treat `/wave` and `/bulk-pr` below as historical compatibility examples,
+not the preferred live entrypoints.
+
 ## Concept
 
 A quality ratchet ensures that metrics can only improve. After agents make
@@ -87,12 +91,12 @@ git commit -m "ci: ratchet quality baseline (tests: <N>, warnings: <N>)"
 ## Integration with agent swarm
 
 Typical flow:
-1. `/wave bug-fixes` -- agents fix bugs
-2. `/bulk-pr` -- create PRs
+1. `/swarm cleanup` -- focused workers fix bugs or hygiene issues
+2. Reviewer/ops publish and drain PRs
 3. Merge PRs
 4. `/quality-ratchet --update` -- lock in improvements
-5. `/wave test-coverage` -- agents add tests
-6. `/bulk-pr` -- create PRs
+5. `/swarm tests` -- focused workers add tests
+6. Reviewer/ops publish and drain PRs
 7. Merge PRs
 8. `/quality-ratchet --update` -- lock in higher test count
 

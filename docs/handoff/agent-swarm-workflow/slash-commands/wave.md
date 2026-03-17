@@ -3,9 +3,13 @@ description: Launch a wave of parallel agents for codebase improvement
 argument-hint: "<category> e.g. 'bug-fixes', 'test-coverage', 'doc-updates', 'cleanup'"
 ---
 
-# Wave: Parallel Agent Dispatch
+# Wave: Historical Export / Compatibility Shim
 
 Launch a wave of agents for: **$ARGUMENTS**
+
+This exported command documents the older wave pattern. In the live repo,
+prefer `/swarm` as the primary control-plane entrypoint and treat `/wave` as a
+compatibility shim.
 
 ## Categories
 
@@ -58,7 +62,8 @@ Agent(
 
 ## After wave completes
 
-Run `/bulk-pr` to create PRs for all worktrees with changes.
+In the live repo, let reviewer/ops drain PRs through `/swarm`. Use `/bulk-pr`
+here only when replaying the historical wave flow.
 
 ## Guidelines
 
