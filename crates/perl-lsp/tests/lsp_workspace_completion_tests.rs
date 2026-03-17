@@ -264,7 +264,7 @@ print $Config::CONF
             "method": "textDocument/completion",
             "params": {
                 "textDocument": { "uri": script_uri },
-                "position": { "line": 3, "character": 21 }
+                "position": { "line": 3, "character": 19 }
             }
         }),
     );
