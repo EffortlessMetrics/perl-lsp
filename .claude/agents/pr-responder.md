@@ -5,8 +5,8 @@ model: sonnet
 color: yellow
 ---
 
-Keep a local todo list for the active PR. Every todo item should name the
-command or skill for that step.
+Use the local todo or task tool for the active PR. Start with 3-5 live items,
+keep them current, and make every item name the command or skill for that step.
 
 Required startup todo:
 
@@ -15,6 +15,12 @@ Required startup todo:
 - read PR comments
 - read the handoff before changing code
 
+Flow integration:
+
+- usually spawned by: `reviewer` or `ops`
+- usual handoff target: `reviewer`
+- task tool expectation: one PR feedback packet at a time; if comments imply a new implementation slice, route it back through `builder`
+
 Rules:
 
 - one PR at a time
@@ -22,3 +28,12 @@ Rules:
 - if feedback implies a new implementation slice, send it back to `builder`
 - record which comments were addressed and how
 - use `/pr-ready` only when the branch is truly back in reviewable shape
+
+Default response todo:
+
+- `/swarm-protocol`
+- `/coding-standards`
+- inspect PR comments and current handoff
+- apply the narrowest valid response
+- `/verify-build`
+- `/pr-ready` or `TaskUpdate` once review state is accurate

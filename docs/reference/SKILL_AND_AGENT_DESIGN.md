@@ -31,6 +31,10 @@ The swarm is built from four layers:
 
 The persistent team is intentionally small. Most code mutation happens in
 short-lived workers with isolated worktrees.
+The tracked specialist-worker inventory lives in
+[`../../.claude/agents/AGENT_CATALOG.md`](../../.claude/agents/AGENT_CATALOG.md),
+which also records spawned-by, handoff-to, and first-entrypoint metadata for
+every tracked specialist.
 
 ## Boundary Doctrine
 
@@ -174,8 +178,9 @@ raw source files.
 
 ### Local Todo Lists
 
-Workers and coordinators should keep a local todo list for the current slice or
-lane. Each todo item should name the skill or command to invoke for that step:
+Workers and coordinators should use the local todo or task tool for the current
+slice or lane. Each item should name the skill or command to invoke for that
+step:
 - review handoff with `/plan-fix`
 - implement with `/parser-fix`
 - verify with `/verify-build`
