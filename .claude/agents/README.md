@@ -10,9 +10,11 @@ The live split is:
 - specialist workers: tracked domain, review, docs, quality, and infrastructure
   agents cataloged in `AGENT_CATALOG.md`
 
-These files define who owns each lane. Procedures live in skills and commands.
-Deterministic enforcement lives in hooks and settings. Task-specific context
-lives in handoffs, worktrees, receipts, PRs, and queue files.
+These files define who owns each lane. Procedures live in skills and commands;
+the slash-entrypoint surface is interchangeable unless frontmatter or bundled
+resources make a specific skill-only behavior necessary. Deterministic
+enforcement lives in hooks and settings. Task-specific context lives in
+handoffs, worktrees, receipts, PRs, and queue files.
 
 If a file lives in `.claude/agents/`, it is part of the active tracked swarm
 surface. The canonical active inventory is `AGENT_CATALOG.md`.

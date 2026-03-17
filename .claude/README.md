@@ -5,8 +5,8 @@ This repo runs one swarm, not multiple parallel pack stories.
 The canonical runtime surfaces are:
 
 - `.claude/agents/` — who owns each lane
-- `.claude/skills/swarm/` — canonical swarm control-plane skill
-- `.claude/commands/` — compatibility slash-command layer and operator entrypoints
+- `.claude/skills/` — canonical skill layer for swarm control and core worker procedures
+- `.claude/commands/` — slash entrypoints that currently live as command files
 - `.claude/settings.json` — shared permissions and hook enforcement
 - `.claude/swarm-state/` — durable queue and dedup state
 
@@ -42,16 +42,18 @@ quality, review, research, and domain-specific execution. See
 
 - worktree = write boundary
 - worker = context boundary
-- skills = reusable procedure and durable instruction
-- commands = thin operator entrypoints and compatibility shims
+- skills and commands = interchangeable slash entrypoints unless frontmatter says otherwise
 - hooks and settings = deterministic enforcement
 - handoffs, receipts, worktrees, and PRs = volatile execution state
 
 Every agent should use the local todo or task tool and name the slash
 entrypoint for each item. That keeps procedure attached to the current slice
-instead of floating in remembered context. In the live repo today, `/swarm` is
-the main skill-backed control-plane entrypoint; many other reusable procedures
-are still command-backed while they remain lightweight.
+instead of floating in remembered context. In the live repo today, `/swarm`,
+`/swarm-protocol`, `/coding-standards`, `/swarm-priorities`, `/plan-fix`,
+`/parser-fix`, and `/verify-build` ship from `.claude/skills/`. Other
+operator procedures currently live under `.claude/commands/`. Agents invoke
+both the same way unless frontmatter intentionally changes who can call them or
+how they run.
 
 The canonical roster mapping lives in
 [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md). It records who usually

@@ -1,0 +1,69 @@
+---
+name: verify-build
+description: Run the standard per-crate verification pipeline and report a receipt. Use when a worker needs fmt, clippy, and test results for a specific crate before handoff, review, or PR creation.
+argument-hint: "<crate-name> [--skip-fmt] [--skip-clippy] [--skip-test]"
+---
+
+# Verify Build
+
+Run the standard verification pipeline for one crate. Context: **$ARGUMENTS**
+
+## Steps
+
+1. Parse the crate name from the first positional argument
+2. Confirm the crate exists with `cargo metadata`
+3. Run formatting unless `--skip-fmt` is present
+4. Run clippy unless `--skip-clippy` is present
+5. Run tests unless `--skip-test` is present
+6. Report a receipt with pass/fail status for each step
+
+## Commands
+
+Check the crate exists:
+
+```bash
+cargo metadata --no-deps --format-version 1 | jq -r '.packages[].name' | grep -qx "<crate>"
+```
+
+Formatting:
+
+```bash
+cargo fmt -p <crate> -- --check
+```
+
+If formatting fails, fix it with:
+
+```bash
+cargo fmt -p <crate>
+```
+
+Clippy:
+
+```bash
+cargo clippy -p <crate> --tests -- -D warnings
+```
+
+Tests:
+
+```bash
+cargo test -p <crate>
+```
+
+For `perl-lsp`, use:
+
+```bash
+RUST_TEST_THREADS=2 cargo test -p perl-lsp -- --test-threads=2
+```
+
+## Receipt Format
+
+Report:
+
+- crate name
+- fmt result
+- clippy result
+- test result
+- overall pass/fail
+- first failure details if anything failed
+
+Use that receipt in the handoff, reviewer briefing, or PR body.

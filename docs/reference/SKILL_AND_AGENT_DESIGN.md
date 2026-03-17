@@ -121,11 +121,12 @@ Use a skill when:
 - multiple workers need the same procedure
 - supporting files or templates help keep the hot prompt small
 
-In this repo today, `/swarm` is the main shipped project skill under
-`.claude/skills/`. Many other reusable slash procedures are still
-command-backed entrypoints under `.claude/commands/`. The design direction is
-skill-first, but the runtime docs should describe the current surface
-accurately.
+In this repo today, `/swarm`, `/swarm-protocol`, `/coding-standards`,
+`/swarm-priorities`, `/plan-fix`, `/parser-fix`, and `/verify-build` ship from
+`.claude/skills/`. Other slash entrypoints currently live under
+`.claude/commands/`. They are interchangeable at the call site unless
+frontmatter or bundled resources intentionally change the behavior. The runtime
+docs should describe that surface accurately.
 
 Subagents do not inherit the caller's loaded skills automatically. If a worker
 needs repo procedure or domain knowledge, name the required skills in the

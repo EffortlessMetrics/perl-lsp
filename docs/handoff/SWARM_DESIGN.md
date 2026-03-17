@@ -122,9 +122,12 @@ Key frontmatter fields:
 
 Slash entrypoints have scopes. Loading a worker procedure into orchestrator
 context wastes context and causes the orchestrator to do worker work directly.
-`/swarm` is the main skill-backed control-plane entrypoint currently shipped in
-this repo; most procedures below are still command-backed slash entrypoints
-today.
+`/swarm` is the main control-plane entrypoint. The core worker entrypoints
+below also ship from `.claude/skills/` today:
+`/swarm-protocol`, `/coding-standards`, `/swarm-priorities`, `/plan-fix`,
+`/parser-fix`, and `/verify-build`. Other slash entrypoints currently live
+under `.claude/commands/`. Agents invoke both the same way unless frontmatter
+intentionally changes who can call them or how they run.
 
 **Orchestrator slash entrypoints** (lead invokes these):
 - `/swarm-status` — shows current PRs, issues, metrics, queue
@@ -267,10 +270,10 @@ Each handoff file (`.ops-perl-lsp/handoffs/<branch>.md`) contains:
 Protocol, standards, and priorities are reusable slash entrypoints
 (`/swarm-protocol`, `/coding-standards`, `/swarm-priorities`), not
 ad-hoc file reads. Agents invoke them directly into their context instead of
-spending a `Read` tool call. In the live repo today, `/swarm` is the main
-skill-backed entrypoint and most of the procedures named here are
-command-backed; agents still invoke them the same way. Subagent prompts are 7
-lines pointing to handoff + slash entrypoints, not 100 lines of inline
+spending a `Read` tool call. In the live repo today, `/swarm` and the core
+worker procedures named here ship from `.claude/skills/`, while broader
+operator flows currently live under `.claude/commands/`. Subagent prompts are
+7 lines pointing to handoff + slash entrypoints, not 100 lines of inline
 instructions.
 
 ### Minimal Subagent Prompts
