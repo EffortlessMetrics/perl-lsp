@@ -152,12 +152,8 @@ fn test_execute_command_server_capabilities() -> TestResult {
         execute_command_provider["commands"].as_array().ok_or("Commands should be an array")?;
 
     // Verify all required commands are supported
-    let expected_commands = vec![
-        "perl.runTests",
-        "perl.runFile",
-        "perl.runTestSub",
-        "perl.runCritic",
-    ];
+    let expected_commands =
+        vec!["perl.runTests", "perl.runFile", "perl.runTestSub", "perl.runCritic"];
 
     for expected_command in expected_commands {
         let command_found = commands.iter().any(|cmd| cmd.as_str() == Some(expected_command));
