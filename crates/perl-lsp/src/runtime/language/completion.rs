@@ -37,17 +37,164 @@ fn get_snippet_simple_regex() -> Option<&'static Regex> {
 }
 
 impl LspServer {
+    fn split_sigil(name: &str) -> (Option<char>, &str) {
+        let mut chars = name.chars();
+        match chars.next() {
+            Some(sigil @ ('$' | '@' | '%')) => (Some(sigil), &name[sigil.len_utf8()..]),
+            _ => (None, name),
+        }
+    }
+
     fn workspace_symbol_qualified_name(symbol: &crate::workspace_index::WorkspaceSymbol) -> String {
-        symbol
-            .qualified_name
-            .clone()
-            .or_else(|| {
-                symbol
-                    .container_name
-                    .as_ref()
-                    .map(|container| format!("{container}::{}", symbol.name))
-            })
-            .unwrap_or_else(|| symbol.name.clone())
+        match symbol.kind {
+            crate::workspace_index::SymbolKind::Variable(_) => {
+                if let Some(container) = symbol.container_name.as_ref() {
+                    let (sigil, bare_name) = Self::split_sigil(&symbol.name);
+                    format!("{}{container}::{bare_name}", sigil.unwrap_or('$'))
+                } else {
+                    symbol.name.clone()
+                }
+            }
+            _ => symbol
+                .qualified_name
+                .clone()
+                .or_else(|| {
+                    symbol
+                        .container_name
+                        .as_ref()
+                        .map(|container| format!("{container}::{}", symbol.name))
+                })
+                .unwrap_or_else(|| symbol.name.clone()),
+        }
+    }
+
+    fn qualified_variable_workspace_symbols(
+        index: &crate::workspace_index::WorkspaceIndex,
+        prefix: &str,
+    ) -> Option<Vec<crate::workspace_index::WorkspaceSymbol>> {
+        let (requested_sigil, prefix_body) = Self::split_sigil(prefix);
+        let requested_sigil = requested_sigil?;
+        let mut parts: Vec<&str> = prefix_body.split("::").collect();
+        if parts.len() < 2 {
+            return None;
+        }
+
+        let member_prefix = parts.pop().unwrap_or("");
+        let package_name = parts.join("::");
+
+        Some(
+            index
+                .get_package_members(&package_name)
+                .into_iter()
+                .filter(|symbol| match symbol.kind {
+                    crate::workspace_index::SymbolKind::Variable(_) => {
+                        let (symbol_sigil, bare_name) = Self::split_sigil(&symbol.name);
+                        symbol_sigil == Some(requested_sigil)
+                            && bare_name.starts_with(member_prefix)
+                    }
+                    _ => false,
+                })
+                .collect(),
+        )
+    }
+
+    fn workspace_symbol_kind(
+        symbol: &crate::workspace_index::WorkspaceSymbol,
+    ) -> CompletionItemKind {
+        match symbol.kind {
+            crate::workspace_index::SymbolKind::Package => CompletionItemKind::Module,
+            crate::workspace_index::SymbolKind::Subroutine => CompletionItemKind::Function,
+            crate::workspace_index::SymbolKind::Variable(_) => CompletionItemKind::Variable,
+            crate::workspace_index::SymbolKind::Class => CompletionItemKind::Module,
+            crate::workspace_index::SymbolKind::Method => CompletionItemKind::Function,
+            crate::workspace_index::SymbolKind::Constant => CompletionItemKind::Constant,
+            crate::workspace_index::SymbolKind::Role => CompletionItemKind::Module,
+            crate::workspace_index::SymbolKind::Import => CompletionItemKind::Module,
+            crate::workspace_index::SymbolKind::Export => CompletionItemKind::Function,
+            crate::workspace_index::SymbolKind::Label => CompletionItemKind::Keyword,
+            crate::workspace_index::SymbolKind::Format => CompletionItemKind::Function,
+        }
+    }
+
+    fn add_runtime_workspace_completions(
+        &self,
+        completions: &mut Vec<crate::completion::CompletionItem>,
+        doc_text: &str,
+        offset: usize,
+        workspace_mode: &IndexAccessMode,
+        cap: usize,
+    ) {
+        match workspace_mode {
+            IndexAccessMode::Full(coordinator) => {
+                let index = coordinator.index();
+
+                let text_before = &doc_text[..offset.min(doc_text.len())];
+                let prefix = text_before
+                    .chars()
+                    .rev()
+                    .take_while(|&c| {
+                        c.is_alphanumeric()
+                            || c == '_'
+                            || c == ':'
+                            || c == '$'
+                            || c == '@'
+                            || c == '%'
+                    })
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect::<String>();
+
+                let qualified_variable_symbols =
+                    Self::qualified_variable_workspace_symbols(index, &prefix);
+                let replace_prefix_range = (offset.saturating_sub(prefix.len()), offset);
+                let qualified_variable_context = qualified_variable_symbols.is_some();
+                let workspace_symbols =
+                    qualified_variable_symbols.unwrap_or_else(|| index.find_symbols(&prefix));
+                use std::collections::HashSet;
+                let mut seen: HashSet<String> =
+                    completions.iter().map(|completion| completion.label.clone()).collect();
+
+                for symbol in workspace_symbols {
+                    if completions.len() >= cap {
+                        eprintln!("Completion: cap reached ({}), stopping workspace scan", cap);
+                        break;
+                    }
+
+                    if seen.contains(&symbol.name) {
+                        continue;
+                    }
+
+                    let label = symbol.name.clone();
+                    let qualified_name = Self::workspace_symbol_qualified_name(&symbol);
+                    let detail = Some(qualified_name.clone());
+                    let (insert_text, text_edit_range) = if qualified_variable_context
+                        && matches!(symbol.kind, crate::workspace_index::SymbolKind::Variable(_))
+                    {
+                        (Some(qualified_name), Some(replace_prefix_range))
+                    } else {
+                        (Some(label.clone()), None)
+                    };
+                    seen.insert(label.clone());
+
+                    completions.push(crate::completion::CompletionItem {
+                        label: label.clone(),
+                        kind: Self::workspace_symbol_kind(&symbol),
+                        detail,
+                        insert_text,
+                        sort_text: None,
+                        filter_text: None,
+                        documentation: Self::workspace_symbol_documentation(&symbol),
+                        additional_edits: Vec::new(),
+                        text_edit_range,
+                    });
+                }
+            }
+            IndexAccessMode::Partial(reason) => {
+                eprintln!("Completion: workspace index partial ({})", reason);
+            }
+            IndexAccessMode::None => {}
+        }
     }
 
     fn workspace_symbol_documentation(
@@ -218,105 +365,13 @@ impl LspServer {
                 // Add workspace-wide completions using routing policy
                 #[cfg(feature = "workspace")]
                 if start.elapsed() < deadline {
-                    match &workspace_mode {
-                        IndexAccessMode::Full(coordinator) => {
-                            // Find matching symbols in the workspace
-                            let index = coordinator.index();
-
-                            // Get the current context to filter relevant completions
-                            let text_before = &doc.text[..offset.min(doc.text.len())];
-                            let prefix = text_before
-                                .chars()
-                                .rev()
-                                .take_while(|&c| c.is_alphanumeric() || c == '_' || c == ':')
-                                .collect::<String>()
-                                .chars()
-                                .rev()
-                                .collect::<String>();
-
-                            let workspace_symbols = index.find_symbols(&prefix);
-                            use std::collections::HashSet;
-                            let mut seen = HashSet::new();
-                            for completion in &completions {
-                                seen.insert(completion.label.clone());
-                            }
-
-                            for symbol in workspace_symbols {
-                                // Check cap limit
-                                if completions.len() >= cap {
-                                    eprintln!(
-                                        "Completion: cap reached ({}), stopping workspace scan",
-                                        cap
-                                    );
-                                    break;
-                                }
-
-                                // Skip if already in local completions
-                                if seen.contains(&symbol.name) {
-                                    continue;
-                                }
-
-                                // Add workspace symbol as completion
-                                let kind = match symbol.kind {
-                                    crate::workspace_index::SymbolKind::Package => {
-                                        CompletionItemKind::Module
-                                    }
-                                    crate::workspace_index::SymbolKind::Subroutine => {
-                                        CompletionItemKind::Function
-                                    }
-                                    crate::workspace_index::SymbolKind::Variable(_) => {
-                                        CompletionItemKind::Variable
-                                    }
-                                    crate::workspace_index::SymbolKind::Class => {
-                                        CompletionItemKind::Module
-                                    }
-                                    crate::workspace_index::SymbolKind::Method => {
-                                        CompletionItemKind::Function
-                                    }
-                                    crate::workspace_index::SymbolKind::Constant => {
-                                        CompletionItemKind::Constant
-                                    }
-                                    crate::workspace_index::SymbolKind::Role => {
-                                        CompletionItemKind::Module
-                                    }
-                                    crate::workspace_index::SymbolKind::Import => {
-                                        CompletionItemKind::Module
-                                    }
-                                    crate::workspace_index::SymbolKind::Export => {
-                                        CompletionItemKind::Function
-                                    }
-                                    crate::workspace_index::SymbolKind::Label => {
-                                        CompletionItemKind::Keyword
-                                    }
-                                    crate::workspace_index::SymbolKind::Format => {
-                                        CompletionItemKind::Function
-                                    }
-                                };
-
-                                let documentation = Self::workspace_symbol_documentation(&symbol);
-                                let label = symbol.name.clone();
-
-                                completions.push(crate::completion::CompletionItem {
-                                    label: label.clone(),
-                                    kind,
-                                    detail: symbol.qualified_name,
-                                    insert_text: Some(label),
-                                    sort_text: None,
-                                    filter_text: None,
-                                    documentation,
-                                    additional_edits: Vec::new(),
-                                    text_edit_range: None, // Workspace completions don't need precise text edit
-                                });
-                            }
-                        }
-                        IndexAccessMode::Partial(reason) => {
-                            // Log but continue with local completions only
-                            eprintln!("Completion: workspace index partial ({})", reason);
-                        }
-                        IndexAccessMode::None => {
-                            // No workspace completions available
-                        }
-                    }
+                    self.add_runtime_workspace_completions(
+                        &mut completions,
+                        &doc.text,
+                        offset,
+                        &workspace_mode,
+                        cap,
+                    );
                 }
 
                 // Apply cap before converting to JSON
@@ -472,7 +527,7 @@ impl LspServer {
                 };
 
                 // Get completions with optimized cancellation support
-                let completions = if let Some(ast) = &doc.ast {
+                let mut completions = if let Some(ast) = &doc.ast {
                     // Only provide workspace index when Full access is available
                     // This ensures we don't bypass routing policy
                     #[cfg(feature = "workspace")]
@@ -510,6 +565,15 @@ impl LspServer {
                         data: None,
                     });
                 }
+
+                #[cfg(feature = "workspace")]
+                self.add_runtime_workspace_completions(
+                    &mut completions,
+                    &doc.text,
+                    offset,
+                    &workspace_mode,
+                    completion_cap(),
+                );
 
                 // Convert to JSON format with highly optimized cancellation checks
                 let items: Vec<Value> = completions
@@ -845,6 +909,52 @@ impl LspServer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_cancellable_completion_cross_file_variable() -> Result<(), Box<dyn std::error::Error>> {
+        let server = LspServer::default();
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": "file:///workspace/Config.pm",
+                "languageId": "perl",
+                "version": 1,
+                "text": "package Config;\nour $CONFIG_PATH = '/etc/app.conf';\nour $DEBUG_MODE = 1;\n1;\n"
+            }
+        })))?;
+
+        server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": "file:///workspace/app.pl",
+                "languageId": "perl",
+                "version": 1,
+                "text": "use Config;\nprint $Config::CONF\n"
+            }
+        })))?;
+
+        let response = server
+            .handle_completion_cancellable(
+                Some(json!({
+                    "textDocument": { "uri": "file:///workspace/app.pl" },
+                    "position": { "line": 1, "character": 19 }
+                })),
+                Some(&json!(1)),
+            )?
+            .ok_or("expected completion response")?;
+
+        let items = response["items"].as_array().ok_or("expected completion items")?;
+        let item = items
+            .iter()
+            .find(|item| item["label"].as_str() == Some("$CONFIG_PATH"))
+            .ok_or_else(|| format!("expected $CONFIG_PATH completion, got: {items:?}"))?;
+        assert_eq!(
+            item["insertText"].as_str(),
+            Some("$Config::CONFIG_PATH"),
+            "qualified workspace variable completion should preserve package qualifier"
+        );
+
+        Ok(())
+    }
 
     #[test]
     fn test_completion_resolve_builtin_function() -> Result<(), Box<dyn std::error::Error>> {

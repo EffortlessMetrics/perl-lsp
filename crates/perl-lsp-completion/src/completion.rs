@@ -392,6 +392,21 @@ impl CompletionProvider {
                 source,
                 &self.workspace_index,
             );
+        } else if context.prefix.starts_with('$') && context.prefix.contains("::") {
+            packages::add_package_completions(&mut completions, &context, &self.workspace_index);
+            if !completions.is_empty() {
+                return completions;
+            }
+            variables::add_variable_completions(
+                &mut completions,
+                &context,
+                SymbolKind::scalar(),
+                &self.symbol_table,
+            );
+            if is_cancelled() {
+                return vec![];
+            }
+            variables::add_special_variables(&mut completions, &context, "$");
         } else if context.prefix.starts_with('$') {
             // Scalar variable completion
             variables::add_variable_completions(
@@ -404,6 +419,21 @@ impl CompletionProvider {
                 return vec![];
             }
             variables::add_special_variables(&mut completions, &context, "$");
+        } else if context.prefix.starts_with('@') && context.prefix.contains("::") {
+            packages::add_package_completions(&mut completions, &context, &self.workspace_index);
+            if !completions.is_empty() {
+                return completions;
+            }
+            variables::add_variable_completions(
+                &mut completions,
+                &context,
+                SymbolKind::array(),
+                &self.symbol_table,
+            );
+            if is_cancelled() {
+                return vec![];
+            }
+            variables::add_special_variables(&mut completions, &context, "@");
         } else if context.prefix.starts_with('@') {
             // Array variable completion
             variables::add_variable_completions(
@@ -416,6 +446,21 @@ impl CompletionProvider {
                 return vec![];
             }
             variables::add_special_variables(&mut completions, &context, "@");
+        } else if context.prefix.starts_with('%') && context.prefix.contains("::") {
+            packages::add_package_completions(&mut completions, &context, &self.workspace_index);
+            if !completions.is_empty() {
+                return completions;
+            }
+            variables::add_variable_completions(
+                &mut completions,
+                &context,
+                SymbolKind::hash(),
+                &self.symbol_table,
+            );
+            if is_cancelled() {
+                return vec![];
+            }
+            variables::add_special_variables(&mut completions, &context, "%");
         } else if context.prefix.starts_with('%') {
             // Hash variable completion
             variables::add_variable_completions(

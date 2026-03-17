@@ -316,6 +316,25 @@ sub internal_func { }
 }
 
 #[test]
+fn package_variable_completion_with_workspace() {
+    let index = Arc::new(WorkspaceIndex::new());
+    let module_uri = must(Url::parse("file:///workspace/Config.pm"));
+    let module_code = r#"package Config;
+our $CONFIG_PATH = '/etc/app.conf';
+1;
+"#;
+    must(index.index_file(module_uri, module_code.to_string()));
+
+    let code = "use Config;\n$Config::CONF";
+    let provider = parse_provider_with_index(code, index);
+    let items = provider.get_completions(code, code.len());
+
+    let item = must_some(items.iter().find(|item| item.label == "$CONFIG_PATH"));
+    assert_eq!(item.kind, CompletionItemKind::Variable);
+    assert_eq!(item.insert_text.as_deref(), Some("$Config::CONFIG_PATH"));
+}
+
+#[test]
 fn package_completion_without_workspace_index() {
     // Without workspace index, package member completion returns nothing
     let code = "Foo::Bar::";

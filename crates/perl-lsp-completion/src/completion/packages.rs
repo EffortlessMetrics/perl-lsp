@@ -72,8 +72,7 @@ fn known_core_member_documentation(package_name: &str, member_name: &str, summar
 }
 
 fn fallback_member_documentation(package_name: &str, symbol: &WorkspaceSymbol) -> String {
-    let qualified_name =
-        symbol.qualified_name.clone().unwrap_or_else(|| format!("{package_name}::{}", symbol.name));
+    let qualified_name = qualified_member_name(package_name, symbol);
 
     match symbol.kind {
         WsSymbolKind::Export => {
@@ -100,6 +99,41 @@ fn package_member_documentation(package_name: &str, symbol: &WorkspaceSymbol) ->
         .documentation
         .clone()
         .or_else(|| Some(fallback_member_documentation(package_name, symbol)))
+}
+
+fn split_sigil(name: &str) -> (Option<char>, &str) {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(sigil @ ('$' | '@' | '%')) => (Some(sigil), &name[sigil.len_utf8()..]),
+        _ => (None, name),
+    }
+}
+
+fn symbol_member_name(symbol: &WorkspaceSymbol) -> &str {
+    match symbol.kind {
+        WsSymbolKind::Variable(_) => split_sigil(&symbol.name).1,
+        _ => &symbol.name,
+    }
+}
+
+fn symbol_sigil(symbol: &WorkspaceSymbol) -> Option<char> {
+    match symbol.kind {
+        WsSymbolKind::Variable(_) => split_sigil(&symbol.name).0,
+        _ => None,
+    }
+}
+
+fn qualified_member_name(package_name: &str, symbol: &WorkspaceSymbol) -> String {
+    match symbol.kind {
+        WsSymbolKind::Variable(_) => {
+            let (sigil, bare_name) = split_sigil(&symbol.name);
+            format!("{}{package_name}::{bare_name}", sigil.unwrap_or('$'))
+        }
+        _ => symbol
+            .qualified_name
+            .clone()
+            .unwrap_or_else(|| format!("{package_name}::{}", symbol.name)),
+    }
 }
 
 fn add_known_core_module_completions(
@@ -143,7 +177,8 @@ pub fn add_package_completions(
     workspace_index: &Option<Arc<WorkspaceIndex>>,
 ) {
     // Split the prefix into package name and member prefix
-    let mut parts: Vec<&str> = context.prefix.split("::").collect();
+    let (requested_sigil, prefix_body) = split_sigil(&context.prefix);
+    let mut parts: Vec<&str> = prefix_body.split("::").collect();
     if parts.len() < 2 {
         return;
     }
@@ -163,14 +198,19 @@ pub fn add_package_completions(
                 WsSymbolKind::Constant => CompletionItemKind::Constant,
                 _ => continue,
             };
-            if symbol.name.starts_with(member_prefix) {
+            if requested_sigil.is_some() && symbol_sigil(&symbol) != requested_sigil {
+                continue;
+            }
+
+            let member_name = symbol_member_name(&symbol);
+            if member_name.starts_with(member_prefix) {
                 workspace_member_count += 1;
                 completions.push(CompletionItem {
                     label: symbol.name.clone(),
                     kind: item_kind,
                     detail: Some(package_name.clone()),
                     documentation: package_member_documentation(&package_name, &symbol),
-                    insert_text: Some(symbol.name.clone()),
+                    insert_text: Some(qualified_member_name(&package_name, &symbol)),
                     sort_text: Some(format!("1_{}", symbol.name)),
                     filter_text: Some(symbol.name.clone()),
                     additional_edits: vec![],
