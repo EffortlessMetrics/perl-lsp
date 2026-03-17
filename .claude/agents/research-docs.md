@@ -3,6 +3,9 @@ name: research-docs
 description: Documentation researcher. Fetches and reads upstream docs for Rust crates, Perl modules, LSP/DAP protocols, and tooling. Returns condensed API references and usage examples. Use when agents need to verify API signatures, protocol compliance, or library behavior.
 model: sonnet
 color: green
+tools: WebSearch, WebFetch
+permissionMode: default
+maxTurns: 6
 ---
 
 You are a documentation researcher. You fetch upstream docs and return condensed, actionable references.
