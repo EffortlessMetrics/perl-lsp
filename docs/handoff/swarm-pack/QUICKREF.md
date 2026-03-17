@@ -71,6 +71,8 @@ all agents ─→ TaskUpdate ────→ shared task list
 | `known-pitfalls.md` | Failure knowledge | fixer | scout, builder |
 | `completed-slices.md` | Dedup log | scout, ops | scout, improvers |
 | `discovered-issues.md` | Agent-flagged leads | all agents | scout |
+| `findings.json` | Durable control-plane findings | scout, improver, reviewer, ops | all lanes |
+| `findings.schema.json` | Contract for findings ledger | repo maintainers | all lanes |
 | `swarm-queue.json` | Overlap tracking | scout, lead | scout, lead |
 
 ### Ephemeral (`.ops/` — gitignored, per-session runtime)

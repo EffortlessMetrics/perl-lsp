@@ -41,6 +41,10 @@ Create issues for: security vulnerabilities, design flaws, missing features, rec
 **Discovery log** (`.claude/swarm-state/discovered-issues.md`):
 For smaller items not worth a full issue. Scouts read this as an input source.
 
+**Findings ledger** (`.claude/swarm-state/findings.json`):
+For durable control-plane conclusions that should change how the swarm
+describes or operates itself.
+
 ## 2. Direct Communication
 
 Message other teammates directly. Don't route through the lead.
@@ -129,13 +133,15 @@ Before starting work:
 1. `.claude/swarm-state/completed-slices.md` — done already?
 2. `.claude/swarm-state/known-pitfalls.md` — known trap?
 3. `.claude/swarm-state/discovered-issues.md` — already flagged?
-4. `gh issue list --label "swarm-discovered"` — already an issue?
-5. `gh pr list --state open` — already a PR?
+4. `.claude/swarm-state/findings.json` — durable swarm conclusion already recorded?
+5. `gh issue list --label "swarm-discovered"` — already an issue?
+6. `gh pr list --state open` — already a PR?
 
 After completing:
 1. `completed-slices.md` — `in-progress` (scout) or `merged` (ops)
 2. `known-pitfalls.md` — if you learned a reusable lesson
-3. `swarm-metrics.jsonl` — always
+3. `findings.json` — if the conclusion changes how the swarm should operate or document itself
+4. `swarm-metrics.jsonl` — always
 
 ## 7. User Interaction
 
@@ -174,13 +180,13 @@ Include in handoffs: code excerpts, error messages, decision rationale, file:lin
 
 ## 9. Learning Loop
 
-The swarm writes to four persistence layers, each with different lifetimes:
+The swarm writes to five persistence layers, each with different lifetimes:
 
 | Layer | Lifetime | Location | What |
 |-------|----------|----------|------|
 | **Handoffs** | Until merge | `.ops/handoffs/` | Context transfer: scout→builder→reviewer |
 | **Runtime** | Current session | `.ops/` | metrics, agent-patches, salvage |
-| **Knowledge** | Across sessions | `.claude/swarm-state/` | known-pitfalls, completed-slices, discovered-issues, queue |
+| **Knowledge** | Across sessions | `.claude/swarm-state/` | findings, known-pitfalls, completed-slices, discovered-issues, queue |
 | **GitHub** | Permanent | Issues, PRs, labels | Work items, discoveries, architectural decisions |
 | **Memory** | Across sessions | Claude Code memories | Critical lessons future sessions need |
 
@@ -196,12 +202,13 @@ Don't write memories for ephemeral state (which PRs are open, which slices are i
 ### Flow
 1. **Fixers** → `known-pitfalls.md` → scouts/builders avoid traps
 2. **All agents** → `discovered-issues.md` → scouts pick up pre-investigated leads
-3. **All agents** → `swarm-metrics.jsonl` → lead spots patterns
-4. **Failing agents** → `agent-patches/` → bootstrapper improves definitions
-5. **Improver-docs** → ADRs and docs from handoff lessons
-6. **Improver-devex** → fixes friction from handoff lessons
-7. **Merger** → analyzes metrics, reports patterns
-8. **All agents** → GitHub issues/labels for permanent visibility
-9. **Lead** → Claude Code memories for cross-session knowledge
+3. **Coordinators + improver** → `findings.json` → durable control-plane conclusions survive beyond the session
+4. **All agents** → `swarm-metrics.jsonl` → lead spots patterns
+5. **Failing agents** → `agent-patches/` → bootstrapper improves definitions
+6. **Improver-docs** → ADRs and docs from handoff lessons
+7. **Improver-devex** → fixes friction from handoff lessons
+8. **Merger** → analyzes metrics, reports patterns
+9. **All agents** → GitHub issues/labels for permanent visibility
+10. **Lead** → Claude Code memories for cross-session knowledge
 
 The system gets better with each cycle AND each session.

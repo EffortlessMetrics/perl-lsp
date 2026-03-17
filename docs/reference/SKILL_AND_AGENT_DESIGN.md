@@ -96,6 +96,9 @@ Stable, reusable instructions belong in structural artifacts:
 - coordinator prompts: role boundaries and operating loops
 
 Durable knowledge is pre-encoded so it is not restated in every spawn prompt.
+Stable swarm conclusions should also be recorded in the tracked findings ledger
+at [`../../.claude/swarm-state/findings.json`](../../.claude/swarm-state/findings.json)
+instead of being left in chat transcripts.
 
 ### Volatile State
 
@@ -109,6 +112,19 @@ Task-specific or branch-specific state belongs in:
 
 Volatile state should move forward through handoffs, not by keeping a worker
 alive indefinitely.
+
+### Tracked Swarm Findings
+
+Use `.claude/swarm-state/findings.json` for durable control-plane findings:
+
+- roster invariants
+- slash-entrypoint surface rules
+- export-versus-trunk decisions
+- hook lifecycle constraints
+- other findings that should change how the swarm operates or documents itself
+
+Do not put product bugs there. Product or codebase leads belong in
+`discovered-issues.md`. Reusable failure lessons belong in `known-pitfalls.md`.
 
 ## Skills, Hooks, And Handoffs
 
@@ -191,6 +207,10 @@ step:
 
 This keeps procedure attached to the current task instead of relying on
 ambient remembered instructions.
+
+When a task produces a durable swarm finding, capture it in
+`.claude/swarm-state/findings.json` and validate it with
+`python3 scripts/validate_swarm_findings.py`.
 
 ## Spawn Rules
 

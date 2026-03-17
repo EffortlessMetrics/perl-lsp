@@ -105,6 +105,8 @@ entrypoint.
     known-pitfalls.md     # Failure knowledge base
     completed-slices.md   # Scout dedup log
     discovered-issues.md  # Agent-flagged leads
+    findings.json         # Durable control-plane findings ledger
+    findings.schema.json  # Machine-readable contract for findings.json
     swarm-queue.json      # Overlap tracking
   settings.json           # Hook registrations (PostToolUse, TeammateIdle,
                           # TaskCompleted, SubagentStart, SubagentStop,
@@ -119,9 +121,10 @@ entrypoint.
 ## Command And Skill Layer
 
 The portable pack installs both `.claude/skills/swarm/` and compatible
-`.claude/commands/` files. Prefer the skill layer for the coordinator
-playbook; keep the command layer as a compatibility surface and operator
-entrypoint.
+`.claude/commands/` files. Treat them as one slash-entrypoint surface at the
+call site. Skills become the better packaging when you need supporting files,
+agent preloading, or frontmatter controls such as `disable-model-invocation`,
+`user-invocable`, `allowed-tools`, `context: fork`, or hooks.
 
 Key frontmatter fields for that repo-local skill layer:
 
