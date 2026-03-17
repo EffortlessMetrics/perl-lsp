@@ -923,7 +923,6 @@ pub fn command_exists(command: &str) -> bool {
 /// - `perl.runTests`: Execute all tests in a file
 /// - `perl.runFile`: Run a Perl file directly
 /// - `perl.runTestSub`: Execute a specific test subroutine
-/// - `perl.debugTests`: Debug test files (future DAP integration)
 /// - `perl.runCritic`: Perform code quality analysis
 /// - `perl.runTest`: Run a single test
 /// - `perl.runTestFile`: Run a test file
@@ -936,7 +935,7 @@ pub fn command_exists(command: &str) -> bool {
 ///
 /// let commands = get_supported_commands();
 /// assert!(commands.contains(&"perl.runCritic".to_string()));
-/// assert_eq!(commands.len(), 8);
+/// assert_eq!(commands.len(), 7);
 /// ```
 ///
 /// # Performance

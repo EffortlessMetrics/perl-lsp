@@ -156,7 +156,6 @@ fn test_execute_command_server_capabilities() -> TestResult {
         "perl.runTests",
         "perl.runFile",
         "perl.runTestSub",
-        "perl.debugTests",
         "perl.runCritic",
     ];
 

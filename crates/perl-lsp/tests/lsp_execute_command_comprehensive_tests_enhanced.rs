@@ -136,7 +136,6 @@ fn test_enhanced_execute_command_server_capabilities() -> TestResult {
         "perl.runTests",
         "perl.runFile",
         "perl.runTestSub",
-        "perl.debugTests",
         "perl.runCritic", // Critical for Issue #145
     ];
 
