@@ -338,12 +338,13 @@ Every ~10 merges, the lead triggers a data-driven check:
 
 ## Self-Improvement
 
-### Four Persistence Layers
+### Five Persistence Layers
 
 | Layer | Lifetime | What |
 |-------|----------|------|
 | **Handoffs** | Until merge | Context transfer: scout→builder→reviewer |
-| **Ops files** | Current session | known-pitfalls, completed-slices, discovered-issues, metrics, agent-patches |
+| **Tracked swarm state** | Cross-session, committed | findings, known-pitfalls, completed-slices, discovered-issues, queue |
+| **Ops runtime** | Current session | metrics, agent-patches |
 | **GitHub** | Permanent | Issues (swarm-discovered, swarm-architectural), PRs (labeled), CI status |
 | **Claude Code memories** | Cross-session | Critical lessons, session progress, architectural decisions |
 
@@ -351,12 +352,13 @@ Every ~10 merges, the lead triggers a data-driven check:
 
 1. **Fixers** → `known-pitfalls.md` → scouts/builders avoid repeating known traps
 2. **All agents** → `discovered-issues.md` → scouts pick up pre-investigated leads
-3. **All agents** → GitHub issues (`--label swarm-discovered`) → persistent, searchable backlog
-4. **All agents** → `swarm-metrics.jsonl` → ops + improver spot performance patterns
-5. **Failing agents** → `agent-patches/` → bootstrapper improves agent definitions
-6. **Improver** → reads handoff lessons → crystallizes into ADRs and friction logs
-7. **Ops** → analyzes metrics → reports which domains/agents need attention
-8. **Lead** → Claude Code memories → carries critical knowledge to future sessions
+3. **Coordinators + improver** → `findings.json` → durable control-plane conclusions survive beyond the session
+4. **All agents** → GitHub issues (`--label swarm-discovered`) → persistent, searchable backlog
+5. **All agents** → `swarm-metrics.jsonl` → ops + improver spot performance patterns
+6. **Failing agents** → `agent-patches/` → bootstrapper improves agent definitions
+7. **Improver** → reads handoff lessons → crystallizes into ADRs and friction logs
+8. **Ops** → analyzes metrics → reports which domains/agents need attention
+9. **Lead** → Claude Code memories → carries critical knowledge to future sessions
 
 ### Agent Self-Improvement
 
@@ -421,7 +423,7 @@ All lanes run concurrently. Scouts feed builders feed reviewers feed ops. Improv
 ~5 minutes: broadcast STOP → snapshot state → enable auto-merge on green PRs → write memory → halt team → leave worktrees for next session
 
 ### Session Resumption
-Next `/swarm` picks up: in-progress slices from `completed-slices.md`, open PRs (some auto-merged), active worktrees, pending agent patches, discovered issues.
+Next `/swarm` picks up: in-progress slices from `completed-slices.md`, open PRs (some auto-merged), active worktrees, pending agent patches, discovered issues, and the tracked findings ledger.
 
 ## Portable Pack
 

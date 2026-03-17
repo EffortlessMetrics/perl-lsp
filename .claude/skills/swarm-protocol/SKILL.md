@@ -38,6 +38,10 @@ Use GitHub and tracked swarm state as the durable ledger:
 
 Do not treat transcript memory as proof.
 
+Use `.claude/swarm-state/findings.json` for durable control-plane conclusions.
+Use `discovered-issues.md` for product leads and `known-pitfalls.md` for
+repeatable failure lessons.
+
 ## Metrics And Receipts
 
 After each task, leave a durable receipt:
@@ -60,6 +64,9 @@ Check the queue and state before creating new work:
 4. existing handoffs and receipts
 
 If the slice already exists, update or route it instead of duplicating it.
+
+If the work changes how the swarm should describe or operate itself, update the
+findings ledger instead of hiding that conclusion in chat or a one-off handoff.
 
 ## Worktree And Worker Boundaries
 

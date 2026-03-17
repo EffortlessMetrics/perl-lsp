@@ -162,7 +162,9 @@ fi
 SWARM_STATE="${CLAUDE_DIR}/swarm-state"
 mkdir -p "${SWARM_STATE}"
 
-for artifact in swarm-queue.json known-pitfalls.md completed-slices.md discovered-issues.md; do
+TODAY="$(date +%F)"
+
+for artifact in swarm-queue.json known-pitfalls.md completed-slices.md discovered-issues.md findings.json findings.schema.json; do
     dest="${SWARM_STATE}/${artifact}"
     if [ -f "$dest" ]; then
         echo "  SKIP: swarm-state/${artifact} (exists)"
@@ -193,6 +195,153 @@ ARTEOF
 # Discovered Issues
 Any agent can append here when they notice something outside their scope.
 <!-- Agents append below -->
+ARTEOF
+                ;;
+            findings.json)
+                cat > "$dest" <<ARTEOF
+{
+  "_comment": "Durable control-plane findings for the tracked swarm surface. Product bugs belong in discovered-issues.md or GitHub issues instead.",
+  "schema_version": 1,
+  "last_updated": "${TODAY}",
+  "findings": []
+}
+ARTEOF
+                ;;
+            findings.schema.json)
+                cat > "$dest" <<'ARTEOF'
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Swarm Findings Ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "last_updated",
+    "findings"
+  ],
+  "properties": {
+    "_comment": {
+      "type": "string"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "last_updated": {
+      "type": "string",
+      "format": "date"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "status",
+        "recorded_on",
+        "summary",
+        "decision",
+        "surfaces",
+        "evidence",
+        "follow_up"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SWARM-FINDING-[0-9]{4}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "control_plane",
+            "runtime_invariant",
+            "docs_drift",
+            "workflow_gap",
+            "tracking_gap"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "landed",
+            "watching",
+            "superseded"
+          ]
+        },
+        "recorded_on": {
+          "type": "string",
+          "format": "date"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "follow_up": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "ref"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "file",
+            "pr",
+            "issue",
+            "doc",
+            "hook",
+            "setting"
+          ]
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
 ARTEOF
                 ;;
         esac
@@ -381,7 +530,7 @@ echo "   - ${SKILL_COUNT} skills in .claude/skills/"
 echo "   - ${COMMAND_COUNT} slash command files in .claude/commands/"
 echo "   - ${HOOK_COUNT} hook scripts in .claude/hooks/"
 echo "   - hooks registered in .claude/settings.json (7 event types)"
-echo "   - .claude/swarm-state/  — tracked knowledge (pitfalls, slices, discoveries, queue)"
+echo "   - .claude/swarm-state/  — tracked knowledge (pitfalls, slices, discoveries, findings, queue)"
 echo "   - ${OPS_DIR}/           — ephemeral runtime (gitignored: handoffs, metrics, patches, salvage)"
 echo "   - GitHub labels (7)"
 echo ""

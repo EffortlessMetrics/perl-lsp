@@ -8,7 +8,7 @@ The canonical runtime surfaces are:
 - `.claude/skills/` — canonical skill layer for swarm control and core worker procedures
 - `.claude/commands/` — slash entrypoints that currently live as command files
 - `.claude/settings.json` — shared permissions and hook enforcement
-- `.claude/swarm-state/` — durable queue and dedup state
+- `.claude/swarm-state/` — durable queue, dedup, pitfalls, and findings state
 
 The pack under `docs/handoff/swarm-pack/` is a derived export, not a co-equal
 design source.
@@ -59,6 +59,12 @@ The canonical roster mapping lives in
 [agents/AGENT_CATALOG.md](./agents/AGENT_CATALOG.md). It records who usually
 spawns each tracked agent, where it hands work next, and which slash
 entrypoints it should invoke first.
+
+The tracked swarm-state contract lives in
+[swarm-state/README.md](./swarm-state/README.md). Use `findings.json` there for
+durable control-plane conclusions, `discovered-issues.md` for product leads,
+`known-pitfalls.md` for reusable failure lessons, and `completed-slices.md` for
+dedup and lifecycle tracking.
 
 ## Compatibility Note
 
