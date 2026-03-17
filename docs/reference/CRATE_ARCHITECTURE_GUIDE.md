@@ -581,15 +581,22 @@ directories.
 
 The current swarm runtime is defined by:
 
-- `.claude/agents/` — canonical coordinator and reusable-worker roster
+- `.claude/agents/` — canonical tracked agent surface, with the active roster
+  and any compatibility material explicitly marked in
+  `AGENT_CATALOG.md`
 - `.claude/skills/swarm/` — main skill-backed swarm entrypoint
 - `.claude/commands/` — thin operator entrypoints and compatibility shims
 - `.claude/settings.json` — shared permissions and hook enforcement
 - `.claude/swarm-state/` — tracked queue, dedup, and overlap state
 
 See [../../.claude/README.md](../../.claude/README.md) for the live control
-plane contract, [SKILL_AND_AGENT_DESIGN.md](SKILL_AND_AGENT_DESIGN.md) for the
-boundary model, and [../adr/0033-worktree-first-disposable-workers.md](../adr/0033-worktree-first-disposable-workers.md)
+plane contract, [../../.claude/agents/README.md](../../.claude/agents/README.md)
+for the roster contract,
+[../../.claude/agents/AGENT_CATALOG.md](../../.claude/agents/AGENT_CATALOG.md)
+for the active-versus-compatibility inventory and routing metadata,
+[SKILL_AND_AGENT_DESIGN.md](SKILL_AND_AGENT_DESIGN.md) for the boundary model,
+and
+[../adr/0033-worktree-first-disposable-workers.md](../adr/0033-worktree-first-disposable-workers.md)
 for the worktree-first execution doctrine.
 
 ### Current Execution Model (*Diataxis: Explanation* - how the swarm runs)
@@ -603,14 +610,19 @@ The repo now treats:
 - **hooks and settings** as the deterministic enforcement layer
 
 The live coordinator model is intentionally small: `scout`, `builder`,
-`reviewer`, `ops`, and `improver` route work, while disposable workers in
-isolated worktrees perform the actual code mutation.
+`reviewer`, `ops`, and `improver` are the persistent lanes that route work.
+The broader tracked roster in `.claude/agents/` also includes reusable workers
+and specialist workers that those coordinators spawn on demand. Those workers
+carry narrow task context, while isolated worktrees remain the default write
+boundary for PR-shaped changes.
 
 ### Historical Note (*Diataxis: Explanation* - older generations)
 
 Older agent generations (`.claude/agents2` through `.claude/agents6`) remain
 useful as donor material and operator history, but they are not the current
-runtime contract for this repository.
+runtime contract for this repository. Likewise, any compatibility files still
+tracked under `.claude/agents/` should be read through `AGENT_CATALOG.md`
+rather than treated as peer active lanes.
 
 ## Development Guidelines
 
