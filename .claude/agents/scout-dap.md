@@ -1,6 +1,6 @@
 ---
 name: scout-dap
-description: DAP-focused scout. Knows DAP crate test gaps, protocol compliance areas, and related issues (#420, #435). Read-only.
+description: "DAP-focused scout. Knows DAP crate test gaps, protocol compliance areas, and related issues (#420, #435). Read-only."
 model: sonnet
 color: green
 ---

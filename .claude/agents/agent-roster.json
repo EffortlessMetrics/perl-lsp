@@ -1,0 +1,966 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-03-17",
+  "agents": [
+    {
+      "name": "scout",
+      "class": "coordinator",
+      "file": "scout.md",
+      "spawned_by": [
+        "swarm-orchestrator"
+      ],
+      "handoff_to": [
+        "builder"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/swarm-priorities"
+      ],
+      "owns": "discovery lane",
+      "description": "Discovery coordinator for the swarm. Finds one actionable slice at a time, writes handoffs and issues, and routes non-overlapping work to builders."
+    },
+    {
+      "name": "builder",
+      "class": "coordinator",
+      "file": "builder.md",
+      "spawned_by": [
+        "swarm-orchestrator"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/swarm-priorities"
+      ],
+      "owns": "implementation lane",
+      "description": "Build coordinator for the swarm. Claims implementation slices, spawns disposable worktree workers, and hands reviewed diffs to the reviewer lane."
+    },
+    {
+      "name": "reviewer",
+      "class": "coordinator",
+      "file": "reviewer.md",
+      "spawned_by": [
+        "swarm-orchestrator"
+      ],
+      "handoff_to": [
+        "ops",
+        "builder"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards"
+      ],
+      "owns": "review lane",
+      "description": "Review coordinator for the swarm. Reviews one PR at a time, checks receipts before diff detail, opens or promotes PRs, and routes feedback cleanly."
+    },
+    {
+      "name": "ops",
+      "class": "coordinator",
+      "file": "ops.md",
+      "spawned_by": [
+        "swarm-orchestrator"
+      ],
+      "handoff_to": [
+        "fixer",
+        "validator"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/green-merge"
+      ],
+      "owns": "merge and queue lane",
+      "description": "Merge and queue-health coordinator for the swarm. Owns trusted change flow: merge gating, CI repair routing, post-merge validation, and queue pressure."
+    },
+    {
+      "name": "improver",
+      "class": "coordinator",
+      "file": "improver.md",
+      "spawned_by": [
+        "swarm-orchestrator"
+      ],
+      "handoff_to": [
+        "builder",
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/swarm-priorities"
+      ],
+      "owns": "docs/tests/devex lane",
+      "description": "Continuous improvement coordinator for the swarm. Keeps bounded pressure on docs, tests, devex, and infra without bloating the core delivery lanes."
+    },
+    {
+      "name": "bootstrapper",
+      "class": "reusable_worker",
+      "file": "bootstrapper.md",
+      "spawned_by": [
+        "improver",
+        "lead"
+      ],
+      "handoff_to": [
+        "improver",
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol"
+      ],
+      "description": "Repo bootstrap worker for swarm setup. Discovers package layout, control-plane gaps, and reusable worker patterns, then writes or refreshes agent catalog material."
+    },
+    {
+      "name": "fixer",
+      "class": "reusable_worker",
+      "file": "fixer.md",
+      "spawned_by": [
+        "ops",
+        "reviewer"
+      ],
+      "handoff_to": [
+        "reviewer",
+        "ops"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Surgical failure-repair worker for the swarm. Reproduces one failing branch or CI incident, applies the smallest valid fix, and records a receipt."
+    },
+    {
+      "name": "validator",
+      "class": "reusable_worker",
+      "file": "validator.md",
+      "spawned_by": [
+        "ops"
+      ],
+      "handoff_to": [
+        "ops",
+        "fixer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/verify-build"
+      ],
+      "description": "Post-merge validator for the swarm. Checks that claimed improvements actually landed and raises regressions with receipts and exact commands."
+    },
+    {
+      "name": "pr-responder",
+      "class": "reusable_worker",
+      "file": "pr-responder.md",
+      "spawned_by": [
+        "reviewer",
+        "ops"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-ready"
+      ],
+      "description": "PR feedback worker for the swarm. Reads review comments, checks the handoff, applies narrowly scoped follow-up fixes, and records what changed."
+    },
+    {
+      "name": "research-web",
+      "class": "reusable_worker",
+      "file": "research-web.md",
+      "spawned_by": [
+        "scout",
+        "improver"
+      ],
+      "handoff_to": [
+        "scout",
+        "builder"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol"
+      ],
+      "description": "Single-shot web researcher. Takes a specific question, searches the web, reads relevant pages, and returns a condensed answer with sources. Keeps web search context out of the caller's window. Use when any agent needs factual verification or external documentation lookup."
+    },
+    {
+      "name": "research-docs",
+      "class": "reusable_worker",
+      "file": "research-docs.md",
+      "spawned_by": [
+        "scout",
+        "improver"
+      ],
+      "handoff_to": [
+        "scout",
+        "builder"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol"
+      ],
+      "description": "Documentation researcher. Fetches and reads upstream docs for Rust crates, Perl modules, LSP/DAP protocols, and tooling. Returns condensed API references and usage examples. Use when agents need to verify API signatures, protocol compliance, or library behavior."
+    },
+    {
+      "name": "research-verify",
+      "class": "reusable_worker",
+      "file": "research-verify.md",
+      "spawned_by": [
+        "scout",
+        "improver"
+      ],
+      "handoff_to": [
+        "scout",
+        "builder"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol"
+      ],
+      "description": "Verification researcher. Cross-checks claims, validates assumptions, and confirms behavior against authoritative sources. Use when a builder or reviewer needs to verify that their approach is correct before shipping."
+    },
+    {
+      "name": "adr-writer",
+      "class": "specialist_worker",
+      "category": "docs_devex",
+      "file": "adr-writer.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-create"
+      ],
+      "description": "Architecture Decision Record writer. Documents architectural choices with context, decision, and consequences. Reads recent PRs and code patterns to identify implicit decisions that need documentation."
+    },
+    {
+      "name": "api-docs",
+      "class": "specialist_worker",
+      "category": "docs_devex",
+      "file": "api-docs.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-create"
+      ],
+      "description": "API documentation \u2014 doc comments, doctests, module-level docs, and API reference. Ensures public items are documented and examples compile."
+    },
+    {
+      "name": "baseline-ratchet",
+      "class": "specialist_worker",
+      "category": "quality",
+      "file": "baseline-ratchet.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Corpus and CPAN baseline ratchet. Runs sweep, compares against baseline, updates manifests when improved. Knows the sweep/ratchet workflow and manifest files."
+    },
+    {
+      "name": "changelog-writer",
+      "class": "specialist_worker",
+      "category": "docs_devex",
+      "file": "changelog-writer.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-create"
+      ],
+      "description": "CHANGELOG maintenance. Reads recent git history and merged PRs, adds entries in Keep a Changelog format. Groups by Added/Changed/Fixed/Removed."
+    },
+    {
+      "name": "ci-gate",
+      "class": "specialist_worker",
+      "category": "quality_ops",
+      "file": "ci-gate.md",
+      "spawned_by": [
+        "ops"
+      ],
+      "handoff_to": [
+        "fixer",
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Full CI gate execution. Knows gate tiers (pr-fast, ci-gate, ci-full), gate policy, and how to diagnose gate failures."
+    },
+    {
+      "name": "coverage-filler",
+      "class": "specialist_worker",
+      "category": "quality",
+      "file": "coverage-filler.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Find and fill test coverage gaps. Identifies crates with low test counts relative to LOC, adds meaningful tests that exercise real behavior paths."
+    },
+    {
+      "name": "dap-feature",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "dap-feature.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "DAP feature implementation. Knows the DAP protocol, perl-dap crate structure, bridge mode architecture, and how the debug adapter communicates with Perl debugger."
+    },
+    {
+      "name": "dap-test",
+      "class": "specialist_worker",
+      "category": "quality",
+      "file": "dap-test.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "DAP (Debug Adapter Protocol) test coverage. Knows perl-dap-* crate structure, test gaps in perl-dap-value/shell/command-args/security, and DAP protocol test patterns."
+    },
+    {
+      "name": "dead-code",
+      "class": "specialist_worker",
+      "category": "docs_devex",
+      "file": "dead-code.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Dead code detection and removal. Runs dead code analysis, identifies unreachable functions/types/modules, and safely removes them."
+    },
+    {
+      "name": "dep-cleaner",
+      "class": "specialist_worker",
+      "category": "docs_devex",
+      "file": "dep-cleaner.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Unused dependency removal. Runs cargo machete, verifies each removal compiles, and cleans up Cargo.toml files."
+    },
+    {
+      "name": "explore-codebase",
+      "class": "specialist_worker",
+      "category": "explore",
+      "file": "explore-codebase.md",
+      "spawned_by": [
+        "scout",
+        "improver"
+      ],
+      "handoff_to": [
+        "scout",
+        "builder"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/swarm-priorities",
+        "/plan-fix"
+      ],
+      "description": "Deep codebase exploration with perl-lsp context. Knows crate structure, tier dependencies, key paths, and where to find things. Use for understanding how modules work, tracing call chains, and answering architecture questions."
+    },
+    {
+      "name": "explore-deps",
+      "class": "specialist_worker",
+      "category": "explore",
+      "file": "explore-deps.md",
+      "spawned_by": [
+        "scout",
+        "improver"
+      ],
+      "handoff_to": [
+        "scout",
+        "builder"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/swarm-priorities",
+        "/plan-fix"
+      ],
+      "description": "Dependency analysis. Checks for unused deps, security advisories, outdated versions, license compliance, and supply chain health."
+    },
+    {
+      "name": "explore-issues",
+      "class": "specialist_worker",
+      "category": "explore",
+      "file": "explore-issues.md",
+      "spawned_by": [
+        "scout"
+      ],
+      "handoff_to": [
+        "scout",
+        "builder"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/swarm-priorities",
+        "/plan-fix"
+      ],
+      "description": "GitHub issue research and analysis. Reads issue details, linked PRs, comments, and labels. Knows key open issues and their context."
+    },
+    {
+      "name": "flaky-fixer",
+      "class": "specialist_worker",
+      "category": "quality",
+      "file": "flaky-fixer.md",
+      "spawned_by": [
+        "improver",
+        "fixer"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Diagnose and fix flaky tests. Reads debt-ledger.yaml for known flaky tests, runs them repeatedly to reproduce, diagnoses root cause (timing, ordering, resources), and fixes."
+    },
+    {
+      "name": "friction-logger",
+      "class": "specialist_worker",
+      "category": "docs_devex",
+      "file": "friction-logger.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "improver",
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-create"
+      ],
+      "description": "Friction log maintenance. Tracks what trips up developers and agents \u2014 confusing errors, hard-to-find code, unclear APIs, missing docs, broken workflows. Creates actionable improvement items."
+    },
+    {
+      "name": "fuzz-tester",
+      "class": "specialist_worker",
+      "category": "quality",
+      "file": "fuzz-tester.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Fuzz testing for parser and LSP components. Runs bounded fuzz campaigns, analyzes crashes, and creates regression tests. Knows fuzz target structure and cargo-fuzz workflow."
+    },
+    {
+      "name": "lsp-feature",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "lsp-feature.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Full LSP feature implementation \u2014 provider + navigation + test. For implementing a complete new LSP feature or significantly improving an existing one. Knows the full stack from parser to LSP response."
+    },
+    {
+      "name": "lsp-navigation",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "lsp-navigation.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Go-to-definition, references, workspace symbols, and cross-file navigation. Knows dual indexing architecture, perl-workspace-index, and navigation provider integration."
+    },
+    {
+      "name": "lsp-provider",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "lsp-provider.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Implement and improve LSP feature providers \u2014 completion, hover, signature help, diagnostics, code actions. Knows provider trait patterns, perl-lsp-* crate structure, and features.toml."
+    },
+    {
+      "name": "lsp-test",
+      "class": "specialist_worker",
+      "category": "quality",
+      "file": "lsp-test.md",
+      "spawned_by": [
+        "improver",
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "LSP integration tests. Knows threading constraints (RUST_TEST_THREADS=2), LSP protocol test patterns, and how to test provider responses end-to-end."
+    },
+    {
+      "name": "module-resolution",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "module-resolution.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Module resolution \u2014 use/require handling, @INC search, module name\u2192path mapping. Knows perl-module-* microcrates and module resolution pipeline."
+    },
+    {
+      "name": "mutant-killer",
+      "class": "specialist_worker",
+      "category": "quality",
+      "file": "mutant-killer.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Kill mutation testing survivors. Runs cargo-mutants, identifies surviving mutations, and writes targeted tests that catch them. Focuses on boundary conditions, error paths, and return value checks."
+    },
+    {
+      "name": "parser-corpus",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "parser-corpus.md",
+      "spawned_by": [
+        "builder",
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Corpus sweep, error bucket analysis, and test fixture creation. Knows parser-corpus-baseline.json structure, cpan-corpus-manifest, and the sweep/ratchet workflow."
+    },
+    {
+      "name": "parser-fix-constructs",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "parser-fix-constructs.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/parser-fix",
+        "/verify-build"
+      ],
+      "description": "Fix parsing of complex Perl constructs \u2014 heredocs, regex, quotes, formats, special variables, and context-sensitive syntax. Knows perl-quote, perl-heredoc, perl-regex crates and their integration with the lexer."
+    },
+    {
+      "name": "parser-fix-engine",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "parser-fix-engine.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/parser-fix",
+        "/verify-build"
+      ],
+      "description": "Fix parser engine bugs in expressions, statements, declarations, and control flow. Knows perl-parser-core/src/engine/ structure, precedence climbing, and recursive descent patterns. TDD approach with crate-level verification."
+    },
+    {
+      "name": "parser-lexer",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "parser-lexer.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/parser-fix",
+        "/verify-build"
+      ],
+      "description": "Lexer and tokenizer fixes and tests. Knows perl-lexer, perl-tokenizer, perl-token crates, context-aware tokenization, and the token pipeline."
+    },
+    {
+      "name": "parser-test",
+      "class": "specialist_worker",
+      "category": "quality",
+      "file": "parser-test.md",
+      "spawned_by": [
+        "builder",
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Add parser tests \u2014 unit tests for engine functions and integration tests for Perl constructs. Knows test patterns, corpus fixtures, and the parse\u2192assert-no-errors pattern."
+    },
+    {
+      "name": "refactoring",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "refactoring.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Refactoring operations \u2014 rename, extract function/module, inline, move. Knows perl-refactoring crate and LSP refactoring protocol."
+    },
+    {
+      "name": "review-api",
+      "class": "specialist_worker",
+      "category": "review",
+      "file": "review-api.md",
+      "spawned_by": [
+        "reviewer"
+      ],
+      "handoff_to": [
+        "builder",
+        "ops"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-ready"
+      ],
+      "description": "API design review. Checks for ergonomic public APIs, proper error types, backwards compatibility, and SemVer compliance."
+    },
+    {
+      "name": "review-performance",
+      "class": "specialist_worker",
+      "category": "review",
+      "file": "review-performance.md",
+      "spawned_by": [
+        "reviewer"
+      ],
+      "handoff_to": [
+        "builder",
+        "ops"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-ready"
+      ],
+      "description": "Performance-focused code review. Checks for unnecessary allocations, clone-heavy patterns, missing caches, hot path inefficiencies, and O(n\u00b2) algorithms."
+    },
+    {
+      "name": "review-scope",
+      "class": "specialist_worker",
+      "category": "review",
+      "file": "review-scope.md",
+      "spawned_by": [
+        "reviewer"
+      ],
+      "handoff_to": [
+        "builder",
+        "ops"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-ready"
+      ],
+      "description": "Scope and focus review. Checks for scope creep, unrelated changes, oversized PRs, and file ownership violations. Ensures PRs do one thing well."
+    },
+    {
+      "name": "review-security",
+      "class": "specialist_worker",
+      "category": "review",
+      "file": "review-security.md",
+      "spawned_by": [
+        "reviewer"
+      ],
+      "handoff_to": [
+        "builder",
+        "ops"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-ready"
+      ],
+      "description": "Security-focused code review. Checks for banned constructs, input validation, path traversal prevention, UTF-16/UTF-8 boundary safety, and supply chain issues."
+    },
+    {
+      "name": "review-standards",
+      "class": "specialist_worker",
+      "category": "review",
+      "file": "review-standards.md",
+      "spawned_by": [
+        "reviewer"
+      ],
+      "handoff_to": [
+        "builder",
+        "ops"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/pr-ready"
+      ],
+      "description": "Coding standards review. Checks for perl-lsp coding conventions, conventional commits, crate boundary violations, and project patterns."
+    },
+    {
+      "name": "scout-dap",
+      "class": "specialist_worker",
+      "category": "scout",
+      "file": "scout-dap.md",
+      "spawned_by": [
+        "scout"
+      ],
+      "handoff_to": [
+        "builder",
+        "issue queue"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/swarm-priorities",
+        "/plan-fix",
+        "/scout-report"
+      ],
+      "description": "DAP-focused scout. Knows DAP crate test gaps, protocol compliance areas, and related issues (#420, #435). Read-only."
+    },
+    {
+      "name": "scout-parser",
+      "class": "specialist_worker",
+      "category": "scout",
+      "file": "scout-parser.md",
+      "spawned_by": [
+        "scout"
+      ],
+      "handoff_to": [
+        "builder",
+        "issue queue"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/swarm-priorities",
+        "/plan-fix",
+        "/scout-report"
+      ],
+      "description": "Parser-focused scout. Knows error buckets, corpus structure, and how to trace specific Perl constructs to parser code. Read-only \u2014 returns SLICE definitions."
+    },
+    {
+      "name": "scout-security",
+      "class": "specialist_worker",
+      "category": "scout",
+      "file": "scout-security.md",
+      "spawned_by": [
+        "scout"
+      ],
+      "handoff_to": [
+        "builder",
+        "issue queue"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/swarm-priorities",
+        "/plan-fix",
+        "/scout-report"
+      ],
+      "description": "Security-focused scout. Checks for banned constructs, unsafe blocks, dependency vulnerabilities, and supply chain issues. Read-only."
+    },
+    {
+      "name": "security-audit",
+      "class": "specialist_worker",
+      "category": "quality_ops",
+      "file": "security-audit.md",
+      "spawned_by": [
+        "ops",
+        "improver"
+      ],
+      "handoff_to": [
+        "fixer",
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Security audit and supply chain checks. Runs cargo audit, checks deny.toml policy, verifies SBOM generation, and identifies security advisories."
+    },
+    {
+      "name": "semantic-analysis",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "semantic-analysis.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Semantic analysis \u2014 scope analysis, symbol resolution, type inference, import tracking. Knows perl-semantic-analyzer crate and its integration with parser and workspace index."
+    },
+    {
+      "name": "test-quality",
+      "class": "specialist_worker",
+      "category": "quality",
+      "file": "test-quality.md",
+      "spawned_by": [
+        "improver"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Improve test naming, assertions, structure, and patterns. Converts implementation-detail tests to behavior-specification tests. Ensures BDD coverage and proper test infrastructure usage."
+    },
+    {
+      "name": "workspace-index",
+      "class": "specialist_worker",
+      "category": "implementation",
+      "file": "workspace-index.md",
+      "spawned_by": [
+        "builder"
+      ],
+      "handoff_to": [
+        "reviewer"
+      ],
+      "first_entrypoints": [
+        "/swarm-protocol",
+        "/coding-standards",
+        "/verify-build"
+      ],
+      "description": "Workspace indexing \u2014 dual indexing, cross-file symbol resolution, file discovery. Knows perl-workspace-index, perl-workspace-discover, and the qualified/bare name indexing pattern."
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 # Agent Catalog
 This is the canonical tracked inventory for the active files in `.claude/agents/`. If a file lives in this directory, it is part of the active tracked swarm surface and should be cataloged here.
 Every live agent file should encode four things directly in the prompt surface: local todo or task discipline, required startup slash entrypoints, context or scope boundaries, and clear flow integration (who spawns it, where it hands work next).
+The machine-readable roster contract lives in `agent-roster.json`; this file is the human-facing view of the same active surface.
 ## Core Coordinators
 | Agent | Owns | Routes to | First entrypoints | File |
 | --- | --- | --- | --- | --- |
@@ -15,11 +16,11 @@ Every live agent file should encode four things directly in the prompt surface: 
 | --- | --- | --- | --- | --- |
 | `bootstrapper` | `improver or lead` | `improver or reviewer` | /swarm-protocol | `bootstrapper.md` |
 | `fixer` | `ops or reviewer` | `reviewer or ops` | /swarm-protocol, /coding-standards, /verify-build | `fixer.md` |
-| `validator` | `ops` | `ops or fixer` | /swarm-protocol, validation command | `validator.md` |
+| `validator` | `ops` | `ops or fixer` | /swarm-protocol, /verify-build | `validator.md` |
 | `pr-responder` | `reviewer or ops` | `reviewer` | /swarm-protocol, /coding-standards, /pr-ready | `pr-responder.md` |
-| `research-web` | `scout or improver` | `scout or builder` | web search + cited summary | `research-web.md` |
-| `research-docs` | `scout or improver` | `scout or builder` | docs lookup + condensed reference | `research-docs.md` |
-| `research-verify` | `scout or improver` | `scout or builder` | claim check + verdict | `research-verify.md` |
+| `research-web` | `scout or improver` | `scout or builder` | /swarm-protocol | `research-web.md` |
+| `research-docs` | `scout or improver` | `scout or builder` | /swarm-protocol | `research-docs.md` |
+| `research-verify` | `scout or improver` | `scout or builder` | /swarm-protocol | `research-verify.md` |
 
 ## Specialist Workers
 | Agent | Category | Usually spawned by | Hands off to | First entrypoints | File | Description |
