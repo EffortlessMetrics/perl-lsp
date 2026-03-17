@@ -15,7 +15,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 
 | ADR | Status | Ref/Date | Title | Description |
 |-----|--------|----------|-------|-------------|
-| [ADR-001](ADR_001_AGENT_ARCHITECTURE.md) | Accepted | PR #153 | Agent Architecture | 97 specialized agents for Perl parser ecosystem workflow |
+| [ADR-001](ADR_001_AGENT_ARCHITECTURE.md) | Superseded | PR #153 | Agent Architecture | Historical `.claude/agents2/` specialization phase; see ADR-0032/0033 for the current swarm model |
 | [ADR-002](ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md) | Accepted | PR #160 | API Documentation (SPEC-149) | Documentation enforcement with acceptance criteria and quality gates |
 | [ADR-003](ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md) | Accepted | PR #159 | Missing Docs Infrastructure | Documentation enforcement validation framework |
 | [ADR-004](ADR_004_EXECUTE_COMMAND_CODE_ACTIONS.md) | Draft | 2025-01-15 | Execute Command & Code Actions | LSP executeCommand integration with perlcritic |

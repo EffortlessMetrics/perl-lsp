@@ -1,7 +1,18 @@
 # ADR-001: Agent Architecture Specialization
 
 ## Status
-Accepted - **Fully Implemented in PR #153** with 94 specialized agents and comprehensive agent customization framework
+Superseded - historical reference for the `.claude/agents2/` specialization
+phase. The current swarm control plane is defined by
+[ADR-0032](0032-skill-scoping-and-hook-enforcement.md),
+[ADR-0033](0033-worktree-first-disposable-workers.md), and
+[`.claude/README.md`](../../.claude/README.md).
+
+## Historical Note
+
+This ADR captures an intermediate agent-generation model built around
+specialized rosters under `.claude/agents2/`. Keep it for project history and
+operator archaeology, but do not treat it as the live runtime contract for the
+repo.
 
 ## Context
 The tree-sitter-perl project initially used generic Claude Code agents stored in `.claude/agents/` directory. As the project matured with 5 published crates, comprehensive LSP features, and specialized Perl parsing requirements, it became clear that generic agents could not adequately address the domain-specific needs of the Perl parser ecosystem.
