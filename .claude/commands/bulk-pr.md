@@ -1,12 +1,17 @@
 ---
-description: PR all worktrees with uncommitted changes
+description: Compatibility shim for legacy bulk PR sweeps; prefer /swarm-driven builder/reviewer flow
 argument-hint: "[--dry-run] [--filter <pattern>]"
 disable-model-invocation: true
 ---
 
-# Bulk PR Worktrees
+# Bulk PR Worktrees (Compatibility Shim)
 
 Scan all agent worktrees for uncommitted changes and create PRs for each. Context: **$ARGUMENTS**
+
+This command is a legacy/manual sweep entrypoint. The live swarm model prefers
+one PR-shaped worktree per worker, with PR creation and review handled through
+the `/swarm` control plane. Use `/bulk-pr` only when cleaning up older waves or
+manual worktree batches.
 
 ## Steps
 

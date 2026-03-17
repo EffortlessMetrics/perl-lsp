@@ -230,6 +230,7 @@ Launch the following agents in parallel, each in its own worktree:
 
 Use isolation: "worktree" and run_in_background: true for all of them.
 
-After all agents complete, run /bulk-pr to create PRs for all worktrees
-with changes.
+In the live repo, prefer `/swarm` plus builder/reviewer/ops flow over a manual
+`/bulk-pr` sweep. Use `/bulk-pr` here only when replaying the older exported
+wave pattern.
 ```

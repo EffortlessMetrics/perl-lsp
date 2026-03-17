@@ -5148,17 +5148,19 @@ When implementing a new LSP feature (e.g., a new completion provider, hover enha
 ```
 Launches agent in worktree: find root cause -> write failing test -> fix -> verify -> PR.
 
-**Test coverage wave**:
+**Test coverage lane**:
 ```
-/wave test-coverage
+/swarm tests
 ```
-Launches agents per crate to add regression tests.
+Launches focused workers per crate or slice to add regression tests.
 
-**Documentation wave**:
+**Documentation lane**:
 ```
-/wave doc-updates
+/swarm improve
 ```
-Launches agents to update COMMANDS_REFERENCE, CLAUDE.md, CONTRIBUTING, README.
+Launches focused workers to improve docs, developer experience, and supporting
+repo infrastructure. `/wave` remains available as a compatibility shim for
+older operator flows.
 
 ### Integration with CI
 
