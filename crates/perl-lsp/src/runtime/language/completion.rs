@@ -145,8 +145,12 @@ impl LspServer {
                     .rev()
                     .collect::<String>();
 
-                let workspace_symbols = Self::qualified_variable_workspace_symbols(&index, &prefix)
-                    .unwrap_or_else(|| index.find_symbols(&prefix));
+                let qualified_variable_symbols =
+                    Self::qualified_variable_workspace_symbols(index, &prefix);
+                let replace_prefix_range = (offset.saturating_sub(prefix.len()), offset);
+                let qualified_variable_context = qualified_variable_symbols.is_some();
+                let workspace_symbols =
+                    qualified_variable_symbols.unwrap_or_else(|| index.find_symbols(&prefix));
                 use std::collections::HashSet;
                 let mut seen: HashSet<String> =
                     completions.iter().map(|completion| completion.label.clone()).collect();
@@ -162,18 +166,27 @@ impl LspServer {
                     }
 
                     let label = symbol.name.clone();
+                    let qualified_name = Self::workspace_symbol_qualified_name(&symbol);
+                    let detail = Some(qualified_name.clone());
+                    let (insert_text, text_edit_range) = if qualified_variable_context
+                        && matches!(symbol.kind, crate::workspace_index::SymbolKind::Variable(_))
+                    {
+                        (Some(qualified_name), Some(replace_prefix_range))
+                    } else {
+                        (Some(label.clone()), None)
+                    };
                     seen.insert(label.clone());
 
                     completions.push(crate::completion::CompletionItem {
                         label: label.clone(),
                         kind: Self::workspace_symbol_kind(&symbol),
-                        detail: symbol.qualified_name.clone(),
-                        insert_text: Some(label),
+                        detail,
+                        insert_text,
                         sort_text: None,
                         filter_text: None,
                         documentation: Self::workspace_symbol_documentation(&symbol),
                         additional_edits: Vec::new(),
-                        text_edit_range: None,
+                        text_edit_range,
                     });
                 }
             }
@@ -930,9 +943,14 @@ mod tests {
             .ok_or("expected completion response")?;
 
         let items = response["items"].as_array().ok_or("expected completion items")?;
-        assert!(
-            items.iter().any(|item| item["label"].as_str() == Some("$CONFIG_PATH")),
-            "expected $CONFIG_PATH completion, got: {items:?}"
+        let item = items
+            .iter()
+            .find(|item| item["label"].as_str() == Some("$CONFIG_PATH"))
+            .ok_or_else(|| format!("expected $CONFIG_PATH completion, got: {items:?}"))?;
+        assert_eq!(
+            item["insertText"].as_str(),
+            Some("$Config::CONFIG_PATH"),
+            "qualified workspace variable completion should preserve package qualifier"
         );
 
         Ok(())
