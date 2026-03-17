@@ -65,7 +65,6 @@
 //! - `perl.runFile` - Execute Perl scripts with structured output
 //! - `perl.runTests` - Run test suites with coverage reporting
 //! - `perl.runTestSub` - Execute individual test subroutines
-//! - `perl.debugTests` - Debug test execution with step-through
 //! - `perl.tidy` - Code formatting with perltidy integration
 //!
 //! # Examples
