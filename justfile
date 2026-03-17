@@ -1585,11 +1585,15 @@ cpan-corpus-install:
 cpan-corpus-sweep:
     cargo run -p xtask -- cpan-corpus sweep
 
-# Check CPAN corpus against manifest (fails on regression)
+# Bootstrap/update the committed CPAN corpus baseline
+cpan-corpus-baseline-update:
+    cargo run -p xtask -- cpan-corpus sweep --output .ci/cpan-corpus-baseline.json
+
+# Check CPAN corpus against baseline and known-clean manifest (fails on regression)
 cpan-corpus-check:
     cargo run -p xtask -- cpan-corpus sweep --enforce
 
-# Auto-add newly-clean CPAN modules to manifest
+# Auto-add newly-clean CPAN modules to known-clean manifest
 cpan-corpus-ratchet:
     cargo run -p xtask -- cpan-corpus ratchet
 

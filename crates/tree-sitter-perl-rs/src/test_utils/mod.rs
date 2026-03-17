@@ -38,7 +38,7 @@ impl TestUtils {
         }
 
         for i in 0..node.child_count() {
-            if let Some(child) = node.child(i) {
+            if let Some(child) = node.child(i as u32) {
                 Self::collect_errors(&child, has_errors);
             }
         }

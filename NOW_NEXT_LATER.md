@@ -1,7 +1,7 @@
 # NOW / NEXT / LATER
 
-> **Last Updated**: 2026-03-13
-> **Current Version**: v0.11.0 (Release Orchestration)
+> **Last Updated**: 2026-03-17
+> **Current Version**: v0.12.0 (Public Alpha)
 > **Status**: Active Development
 
 ---
@@ -30,14 +30,26 @@
 | crates.io publishing validation | 🟢 Active | Release Team | All 80+ crates published successfully | None |
 | Extension marketplace stability | 🟢 Active | DX Team | VS Code extension installs without errors | None |
 
-### v0.12.0 — Advanced Semantic Engine
+### v0.12.0 — Public Alpha Epic Sprint
 
 | Item | Status | Owner | Success Criteria | Dependencies |
 |------|--------|-------|------------------|--------------|
-| Moo attribute resolution | 🟢 Active | Parser Team | 100% of test corpus passes | None |
+| CPAN baseline bootstrap | 🟢 Active | Parser Team | `.ci/cpan-corpus-baseline.json` committed and checkable | Installed CPAN corpus |
+| CPAN top-1000 clean parse rate | 🟢 Active | Parser Team | 90%+ of corpus parses with zero `ERROR` nodes | CPAN corpus tooling + Wave 2-4 fixes |
+| Common corpus ratchet growth | 🟢 Active | Parser Team | Zero-error manifest only grows | Clean CPAN/system modules |
+| CPAN known-clean manifest growth | 🟢 Active | Parser Team | `.ci/cpan-corpus-manifest.txt` grows from zero without regressions | First clean CPAN modules |
+| Internal parser torture suites | 🟢 Active | Parser Team | Edge-case, parser stress, and hang-risk suites stay green | Boundedness + recovery fixes |
+| Moo attribute resolution | 🟢 Active | Parser Team | 100% of maintained test corpus passes | None |
 | Moose meta-protocol support | 🟡 Planned | Parser Team | Core attributes resolved | Moo completion |
-| Cross-file type inference | 🟡 Planned | Semantic Team | `use parent`/`use base` resolution | None |
-| Export list parsing | 🟡 Planned | Semantic Team | Exporter + Sub::Exporter support | None |
+| Class::Accessor support | 🟡 Planned | Parser Team | Common accessor declarations parse and resolve | Moo/Moose foundations |
+| Cross-file type inference | 🟡 Planned | Semantic Team | `use parent`/`use base` resolution | Parser stability |
+| Export list parsing | 🟡 Planned | Semantic Team | Exporter + Sub::Exporter support | Parser stability |
+
+**Sprint Lanes**
+- Corpus lane: `just corpus-sweep`, `just corpus-sweep-check`, `just cpan-corpus-baseline-update`, `just cpan-corpus-sweep`, `just cpan-corpus-check`, `just cpan-corpus-ratchet`
+- Robustness lane: `cargo xtask test-edge-cases` plus parser/lexer hang-risk suites stay green
+- Semantic lane: Moo/Moose/Class::Accessor fixtures, inheritance resolution, export-list disambiguation
+- Release lane: packaging/docs work continues while `nix develop -c just ci-gate` stays green
 
 ### Community & Documentation
 
@@ -287,7 +299,7 @@
 ```mermaid
 graph TD
     subgraph NOW
-        A1[v0.11.0 Stabilization] --> A2[v0.12.0 Semantic Engine]
+        A1[v0.11.0 Stabilization] --> A2[v0.12.0 Public Alpha Epic Sprint]
         A2 --> A3[Moo/Moose Attributes]
         A2 --> A4[Cross-file Types]
         A2 --> A5[Export Lists]

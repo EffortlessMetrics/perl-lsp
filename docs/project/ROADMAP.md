@@ -3,7 +3,7 @@
 > **Canonical**: This is the authoritative roadmap. See `CURRENT_STATUS.md` for computed metrics.
 > **Stale roadmaps**: Archived at `docs/archive/roadmaps/`; retrieve from git history if needed.
 
-> **Status (2026-03-16)**: **Public Alpha (v0.12.0)**. Release preparation (crates.io, VS Code marketplace) and documentation alignment underway.
+> **Status (2026-03-17)**: **Public Alpha (v0.12.0)**. Release preparation, parser-quality ratchets, and documentation alignment underway.
 >
 > **Canonical receipt**: `nix develop -c just ci-gate` must be green before merging.
 > **CI** is intentionally optional/opt-in; the repo is local-first by design.
@@ -27,35 +27,42 @@ Perl LSP is currently in **Public Alpha**. Version 0.12.0 represents a substanti
 | **perl-dap** | Preview (Native + Bridge) | `cargo test -p perl-dap --features dap-phase2,dap-phase3` | Native adapter foundations with BridgeAdapter fallback |
 | **perl-parser-pest** (v2) | Legacy | N/A | Optional legacy crate |
 | **Semantic Analyzer** | Phase 2-6 Complete | `just ci-gate` | Full semantic analysis pipeline |
-| **Parser Coverage** | 51.1% system corpus (3,627/7,095) | 90%+ CPAN top 1000 | Wave 2-4 in progress |
+| **Parser Coverage** | 72.4% system corpus (5,139/7,095) | 90%+ CPAN top 1000 | System ratchet committed; CPAN baseline bootstrap next |
 
 ---
 
 ## Now / Next / Later (Summary)
 
-**Now (Release Preparation + Parser Coverage)**
+**Now (Release Preparation + Parser Quality)**
 - Release preparation: crates.io publish validation, VS Code marketplace packaging
 - Documentation cleanup and alignment for launch (article series, workspace snapshots)
 - Final CI validation and release-blocker fixes (rustdoc, clippy, crate metadata)
 - CPAN top-1000 corpus tooling (PR #1469 — `cargo xtask cpan-corpus`)
 - Parser fix PRs for Wave 2-4 error buckets
 - Merge and ratchet parser coverage baseline
+- Seed the first committed CPAN full-corpus baseline (`just cpan-corpus-baseline-update`)
+- Keep internal edge-case, parser stress, and hang-risk suites green
 - Keep close-out receipts green (`just ci-gate`)
 
-**Next (v0.12.0)**
+**Next (v0.12.0 exit criteria)**
+- CPAN corpus: achieve 90%+ clean parse rate on top 1000 distributions
+- Expand common corpus manifest as parser fixes land
+- Expand the CPAN known-clean manifest as clean modules accumulate
+- Protect system/common corpus ratchets while error buckets shrink
+- Internal parser torture coverage: edge-case, stress, and hang-risk suites stay green
+- No parser hangs, stack overflows, or crash regressions in corpus sweeps
 - Complete Moo/Moose/Class::Accessor attribute resolution (foundation: `requires` tracking and multi-attribute `has` landed in PR #946)
 - Cross-file type inference via `use parent`/`use base`
 - Native DAP enhancements (variables/evaluate)
 - Stability goal refinement: define requirements for v0.15.0 contract
-- CPAN corpus: achieve 90%+ clean parse rate on top 1000 distributions
-- Expand common corpus manifest as parser fixes land
-- Error bucket reduction: target <500 files with errors (from 3,420)
 
 **Later (Targeting v0.15.0 for Stability Contract)**
 - **Stability Contract**: Formal API stability and contract-locked wire protocol
 - Full LSP 3.18 compliance
 - Finalized shim distribution strategy
 - Package manager distribution (Homebrew/apt/etc.)
+
+> **v0.12.0 framing**: This milestone is the **Public Alpha Epic Sprint**. Parser coverage, parser boundedness, semantic framework support, and release readiness are being pushed together rather than as isolated tracks.
 
 ---
 
@@ -137,7 +144,7 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
 - **[features.toml](../features.toml)** - Canonical capability definitions
 - **[LESSONS.md](LESSONS.md)** - Project learnings
 
-<!-- Last Updated: 2026-03-16 -->
+<!-- Last Updated: 2026-03-17 -->
 
 ## Detailed Forward-Looking Roadmap
 
@@ -149,13 +156,32 @@ See [`CURRENT_STATUS.md`](CURRENT_STATUS.md) for detailed completion history.
   - Improved bareword disambiguation based on export lists.
   - Constant folding and compile-time evaluation approximations.
 
-### v0.12.0: Diagnostic Hardening
-- **Goal:** Parity with `perl -c` without the security risks of actual execution.
+### v0.12.0: Public Alpha Epic Sprint
+
+- **Goal:** Make the alpha credible on real-world Perl by raising clean-parse coverage, keeping ratchets green, proving bounded behavior on pathological inputs, and covering the mainstream Moo/Moose-style semantic surface users expect.
 - **Features:**
-  - Strict mode and warnings pragma emulation.
-  - Uninitialized variable detection across function boundaries.
-  - Dead code elimination recommendations. *(Foundation: `perl-dead-code` microcrate extracted in PR #945.)*
-  - Syntax deprecation warnings (e.g., smartmatch, indirect object notation).
+  - CPAN top-1000 corpus sweeps with ratchet-only-forward enforcement. See [CPAN_CORPUS_STRATEGY.md](CPAN_CORPUS_STRATEGY.md).
+  - Parser Wave 2-4 fixes prioritized by first-error-per-file analysis. See [PARSER_EDGE_CASE_ROADMAP.md](PARSER_EDGE_CASE_ROADMAP.md).
+  - Common corpus promotion pipeline so clean modules become permanent zero-error commitments.
+  - Internal parser torture coverage spanning edge-case fixtures, parser stress cases, and hang-risk suites.
+  - Moo/Moose/Class::Accessor attribute handling, including maintained coverage for `has`, `requires`, and common attribute forms.
+  - Cross-file type and inheritance inference via `use parent` / `use base`, plus export-list-driven bareword disambiguation.
+  - Release hardening: keep `just ci-gate` green while parser quality improves.
+- **Sprint Tracks:**
+  - **Corpus and ratchets**: `just corpus-sweep`, `just corpus-sweep-check`, `just cpan-corpus-baseline-update`, `just cpan-corpus-sweep`, `just cpan-corpus-check`, and `just cpan-corpus-ratchet`.
+  - **Parser robustness**: Wave 2-4 fixes, recovery improvements, and boundedness work proven against `cargo xtask test-edge-cases` plus hang-risk suites.
+  - **Semantic frameworks**: Moo/Moose/Class::Accessor coverage, inheritance resolution, and export-list-aware disambiguation.
+  - **Release readiness**: docs, packaging, and `nix develop -c just ci-gate` stay green while the parser work lands.
+- **Exit Criteria:**
+  - 90%+ of `.pm` files in the CPAN top-1000 corpus parse with zero `ERROR` nodes.
+  - `.ci/cpan-corpus-baseline.json` is committed so the CPAN lane has a real ratchet floor.
+  - Common corpus remains strict zero-error and only grows.
+  - CPAN known-clean manifest grows from `.ci/cpan-corpus-manifest.txt` without regressions once seeded.
+  - System corpus ratchet shows no regressions in crash count, unreadable files, clean-file count, total `ERROR` nodes, or per-bucket counts.
+  - Internal edge-case, parser stress, and hang-risk suites pass with no hang, stack-overflow, or infinite-loop regressions.
+  - Moo attribute resolution covers the maintained test corpus; Moose/Class::Accessor support handles core attribute and inheritance flows used in real code.
+  - Exporter/Sub::Exporter-style export lists improve bareword disambiguation for semantic analysis and navigation.
+  - Release receipts remain green during the hardening push.
 
 ### v0.13.0: Complete Refactoring Suite
 - **Goal:** Safe, reliable automated code modification.

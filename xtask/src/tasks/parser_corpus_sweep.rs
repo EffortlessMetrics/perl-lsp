@@ -92,6 +92,8 @@ pub struct SweepConfig {
     pub corpus_roots: Vec<PathBuf>,
     /// Optional manifest file listing module names to resolve via `perl`
     pub manifest_path: Option<PathBuf>,
+    /// Extra library roots exposed via PERL5LIB while resolving manifest modules
+    pub manifest_perl5lib: Vec<PathBuf>,
     /// Optional JSON output file
     pub output_path: Option<PathBuf>,
     /// Compare against baseline JSON file
@@ -257,44 +259,73 @@ pub fn parse_manifest(manifest_path: &Path) -> Result<Vec<String>> {
 /// Resolve module names to file paths via a single `perl` invocation.
 ///
 /// Returns an error if fewer than `min_resolved` modules resolve successfully.
-pub fn resolve_manifest_modules(manifest_path: &Path, min_resolved: usize) -> Result<Vec<PathBuf>> {
+pub fn resolve_manifest_modules(
+    manifest_path: &Path,
+    perl5lib_paths: &[PathBuf],
+    min_resolved: usize,
+) -> Result<Vec<PathBuf>> {
     let modules = parse_manifest(manifest_path)?;
     if modules.is_empty() {
         return Err(color_eyre::eyre::eyre!("Manifest is empty: {}", manifest_path.display()));
     }
 
-    // Build a single perl command to resolve all modules at once
-    let module_list = modules.iter().map(|m| m.as_str()).collect::<Vec<_>>().join(" ");
-    let perl_script = format!(
-        r#"for (qw({})) {{ eval "require $_"; (my $f = "$_.pm") =~ s|::|/|g; print "$f=$INC{{$f}}\n" if $INC{{$f}} }}"#,
-        module_list
-    );
+    let mut resolved = Vec::new();
+    let mut unresolved = Vec::new();
 
-    let output = std::process::Command::new("perl")
-        .args(["-e", &perl_script])
-        .output()
-        .context("Failed to run perl for module resolution")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        // Perl may emit warnings for missing modules but still succeed partially
-        eprintln!("perl warnings: {stderr}");
+    for module in &modules {
+        if let Some(path) = resolve_module_in_roots(module, perl5lib_paths) {
+            resolved.push(path);
+        } else {
+            unresolved.push(module.as_str());
+        }
     }
 
-    let stdout = String::from_utf8(output.stdout).context("Invalid UTF-8 in perl output")?;
-    let mut resolved = Vec::new();
-    for line in stdout.lines() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
+    if !unresolved.is_empty() {
+        // Fall back to perl require resolution for modules not found directly on disk.
+        let module_list = unresolved.join(" ");
+        let perl_script = format!(
+            r#"for (qw({})) {{ eval "require $_"; (my $f = "$_.pm") =~ s|::|/|g; print "$f=$INC{{$f}}\n" if $INC{{$f}} }}"#,
+            module_list
+        );
+
+        let mut command = std::process::Command::new("perl");
+        if !perl5lib_paths.is_empty() {
+            let mut paths = perl5lib_paths.to_vec();
+            if let Some(existing) = std::env::var_os("PERL5LIB") {
+                paths.extend(std::env::split_paths(&existing));
+            }
+            let joined = std::env::join_paths(paths)
+                .context("Failed to build PERL5LIB for manifest resolution")?;
+            command.env("PERL5LIB", joined);
         }
-        if let Some((_module_file, path)) = line.split_once('=') {
-            let p = PathBuf::from(path);
-            if p.exists() {
-                resolved.push(p);
+        let output = command
+            .args(["-e", &perl_script])
+            .output()
+            .context("Failed to run perl for module resolution")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // Perl may emit warnings for missing modules but still succeed partially
+            eprintln!("perl warnings: {stderr}");
+        }
+
+        let stdout = String::from_utf8(output.stdout).context("Invalid UTF-8 in perl output")?;
+        for line in stdout.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+            if let Some((_module_file, path)) = line.split_once('=') {
+                let p = PathBuf::from(path);
+                if p.exists() {
+                    resolved.push(p);
+                }
             }
         }
     }
+
+    resolved.sort();
+    resolved.dedup();
 
     if resolved.len() < min_resolved {
         return Err(color_eyre::eyre::eyre!(
@@ -308,6 +339,11 @@ pub fn resolve_manifest_modules(manifest_path: &Path, min_resolved: usize) -> Re
 
     resolved.sort();
     Ok(resolved)
+}
+
+fn resolve_module_in_roots(module: &str, roots: &[PathBuf]) -> Option<PathBuf> {
+    let relative = PathBuf::from(format!("{}.pm", module.replace("::", "/")));
+    roots.iter().map(|root| root.join(&relative)).find(|candidate| candidate.exists())
 }
 
 /// Enforce strict zero-error policy for common corpus.
@@ -349,7 +385,7 @@ pub fn run(config: SweepConfig) -> Result<()> {
 
     // Determine corpus profile and file list
     let (corpus_profile, pm_files) = if let Some(ref manifest) = config.manifest_path {
-        let files = resolve_manifest_modules(manifest, 6)?;
+        let files = resolve_manifest_modules(manifest, &config.manifest_perl5lib, 6)?;
         ("common".to_string(), files)
     } else {
         ("system".to_string(), discover_pm_files(&config.corpus_roots))

@@ -136,8 +136,8 @@ fn main() {
                     println!("\n{} parser:", parser);
                     println!("  Successful parses: {}/{}", times.len(), iterations);
                     println!("  Average time: {}", format_duration(avg));
-                    println!("  Min time: {}", format_duration(*min));
-                    println!("  Max time: {}", format_duration(*max));
+                    println!("  Min time: {}", format_duration(min));
+                    println!("  Max time: {}", format_duration(max));
                 } else {
                     println!("\n{} parser: No successful parses", parser);
                 }

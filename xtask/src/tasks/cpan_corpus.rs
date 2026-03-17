@@ -18,10 +18,14 @@ use super::parser_corpus_sweep;
 
 /// Default path for the pinned distribution list
 const DIST_LIST_PATH: &str = ".ci/cpan-top-1000-distributions.txt";
-/// Default path for the CPAN corpus manifest (ratchet floor)
+/// Default path for the CPAN known-clean manifest
 const CPAN_MANIFEST_PATH: &str = ".ci/cpan-corpus-manifest.txt";
+/// Default path for the full CPAN corpus baseline report
+const CPAN_BASELINE_PATH: &str = ".ci/cpan-corpus-baseline.json";
 /// Default install target directory
 const CPAN_INSTALL_DIR: &str = "target/cpan-corpus";
+/// Standalone cpanm bootstrap URL
+const CPANM_STANDALONE_URL: &str = "https://cpanmin.us";
 /// MetaCPAN API endpoint for distribution search (sorted by river.immediate)
 const METACPAN_API: &str = "https://fastapi.metacpan.org/v1/distribution/_search";
 
@@ -147,10 +151,19 @@ pub fn fetch_list(config: &CpanCorpusConfig) -> Result<()> {
 
 /// Read the distribution list and install each via cpanm into a local lib.
 pub fn install(config: &CpanCorpusConfig) -> Result<()> {
-    let distributions = read_dist_list(&config.dist_list)?;
+    let mut distributions = read_dist_list(&config.dist_list)?;
+    if distributions.is_empty() {
+        println!(
+            "Distribution list is empty: {}. Fetching top {} distributions first...",
+            config.dist_list.display(),
+            config.top_n
+        );
+        fetch_list(config)?;
+        distributions = read_dist_list(&config.dist_list)?;
+    }
     if distributions.is_empty() {
         return Err(color_eyre::eyre::eyre!(
-            "Distribution list is empty: {}. Run `cargo xtask cpan-corpus fetch-list` first.",
+            "Distribution list is still empty after fetch: {}",
             config.dist_list.display(),
         ));
     }
@@ -165,6 +178,9 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
 
     let local_lib =
         config.install_dir.canonicalize().unwrap_or_else(|_| config.install_dir.clone());
+    let cpanm = resolve_cpanm_launcher(config)?;
+    let cpanm_home = cpanm_home_path(&config.install_dir);
+    fs::create_dir_all(&cpanm_home).context("Failed to create cpanm cache directory")?;
 
     // Install in batches to avoid overly long command lines
     let batch_size = 50;
@@ -176,14 +192,20 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
         let total_batches = distributions.len().div_ceil(batch_size);
         println!("Batch {batch_num}/{total_batches}: installing {} distributions...", chunk.len());
 
-        let mut cmd = Command::new("cpanm");
-        cmd.args(["--notest", "--local-lib", &local_lib.display().to_string(), "--quiet"]);
+        let mut cmd = cpanm.command();
+        cmd.env("PERL_CPANM_HOME", &cpanm_home);
+        cmd.env("PERL_MM_USE_DEFAULT", "1");
+        cmd.env("NONINTERACTIVE_TESTING", "1");
+        cmd.arg("--notest");
+        cmd.arg("--local-lib");
+        cmd.arg(local_lib.display().to_string());
+        cmd.arg("--quiet");
 
         for dist in chunk {
             cmd.arg(dist);
         }
 
-        let output = cmd.output().context("Failed to run cpanm — is cpanm installed?")?;
+        let output = cmd.output().context("Failed to run cpanm")?;
 
         if output.status.success() {
             installed += chunk.len();
@@ -217,6 +239,72 @@ pub fn install(config: &CpanCorpusConfig) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+enum CpanmLauncher {
+    System,
+    Bootstrapped(PathBuf),
+}
+
+impl CpanmLauncher {
+    fn command(&self) -> Command {
+        match self {
+            Self::System => Command::new("cpanm"),
+            Self::Bootstrapped(path) => {
+                let mut cmd = Command::new("perl");
+                cmd.arg(path);
+                cmd
+            }
+        }
+    }
+}
+
+fn resolve_cpanm_launcher(config: &CpanCorpusConfig) -> Result<CpanmLauncher> {
+    if Command::new("cpanm").arg("--version").output().is_ok() {
+        return Ok(CpanmLauncher::System);
+    }
+
+    let script_path = bootstrap_cpanm_script(config)?;
+    Ok(CpanmLauncher::Bootstrapped(script_path))
+}
+
+fn bootstrap_cpanm_path(install_dir: &Path) -> PathBuf {
+    install_dir.join("bin").join("cpanm")
+}
+
+fn cpanm_home_path(install_dir: &Path) -> PathBuf {
+    install_dir.join(".cpanm")
+}
+
+fn bootstrap_cpanm_script(config: &CpanCorpusConfig) -> Result<PathBuf> {
+    let script_path = bootstrap_cpanm_path(&config.install_dir);
+    if script_path.exists() {
+        return Ok(script_path);
+    }
+
+    if let Some(parent) = script_path.parent() {
+        fs::create_dir_all(parent).context("Failed to create cpanm bootstrap directory")?;
+    }
+
+    println!("System cpanm not found; bootstrapping standalone cpanm to {}", script_path.display());
+
+    let output = Command::new("curl")
+        .args(["-fsSL", CPANM_STANDALONE_URL, "-o"])
+        .arg(&script_path)
+        .output()
+        .context("Failed to run curl for standalone cpanm bootstrap")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(color_eyre::eyre::eyre!(
+            "Failed to bootstrap standalone cpanm from {}: {}",
+            CPANM_STANDALONE_URL,
+            stderr,
+        ));
+    }
+
+    Ok(script_path)
+}
+
 // --------------------------------------------------------------------------
 // sweep
 // --------------------------------------------------------------------------
@@ -235,16 +323,25 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
     let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
 
     let baseline_path = if enforce {
-        let bp = PathBuf::from(".ci/cpan-corpus-baseline.json");
-        if bp.exists() { Some(bp) } else { None }
+        let bp = PathBuf::from(CPAN_BASELINE_PATH);
+        if bp.exists() {
+            Some(bp)
+        } else {
+            return Err(color_eyre::eyre::eyre!(
+                "CPAN baseline missing: {}. Run `cargo xtask cpan-corpus sweep --output {}` or `just cpan-corpus-baseline-update` first.",
+                bp.display(),
+                CPAN_BASELINE_PATH,
+            ));
+        }
     } else {
         None
     };
 
     let sweep_config = parser_corpus_sweep::SweepConfig {
-        base_roots,
-        corpus_roots,
-        manifest_path: if enforce { Some(config.manifest.clone()) } else { None },
+        base_roots: base_roots.clone(),
+        corpus_roots: corpus_roots.clone(),
+        manifest_path: None,
+        manifest_perl5lib: Vec::new(),
         output_path: output,
         baseline_path,
         enforce,
@@ -252,7 +349,53 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
         receipt: true,
     };
 
-    parser_corpus_sweep::run(sweep_config)
+    parser_corpus_sweep::run(sweep_config)?;
+
+    if enforce {
+        if !config.manifest.exists() {
+            return Err(color_eyre::eyre::eyre!(
+                "CPAN known-clean manifest missing: {}. Restore the tracked file or seed it with `just cpan-corpus-ratchet` after bootstrap.",
+                config.manifest.display(),
+            ));
+        }
+
+        let manifest_metadata = fs::metadata(&config.manifest)
+            .with_context(|| format!("Failed to stat manifest: {}", config.manifest.display()))?;
+        if manifest_metadata.len() == 0 {
+            return Err(color_eyre::eyre::eyre!(
+                "CPAN known-clean manifest is zero-length: {}. Restore the tracked placeholder or seed it with `just cpan-corpus-ratchet`.",
+                config.manifest.display(),
+            ));
+        }
+
+        let manifest_modules = parser_corpus_sweep::parse_manifest(&config.manifest)?;
+
+        if manifest_modules.is_empty() {
+            println!(
+                "CPAN known-clean manifest is still in bootstrap state; skipping strict clean check ({})",
+                config.manifest.display()
+            );
+        } else {
+            println!(
+                "\nChecking CPAN known-clean manifest ({} modules)...",
+                manifest_modules.len()
+            );
+            let manifest_sweep = parser_corpus_sweep::SweepConfig {
+                base_roots,
+                corpus_roots: corpus_roots.clone(),
+                manifest_path: Some(config.manifest.clone()),
+                manifest_perl5lib: corpus_roots,
+                output_path: None,
+                baseline_path: None,
+                enforce: true,
+                verbose: config.verbose,
+                receipt: false,
+            };
+            parser_corpus_sweep::run(manifest_sweep)?;
+        }
+    }
+
+    Ok(())
 }
 
 // --------------------------------------------------------------------------
@@ -283,6 +426,7 @@ pub fn ratchet(config: &CpanCorpusConfig) -> Result<()> {
         base_roots,
         corpus_roots,
         manifest_path: None,
+        manifest_perl5lib: Vec::new(),
         output_path: Some(report_path.clone()),
         baseline_path: None,
         enforce: false,
@@ -437,5 +581,22 @@ mod tests {
         assert_eq!(config.manifest, PathBuf::from(".ci/cpan-corpus-manifest.txt"));
         assert_eq!(config.install_dir, PathBuf::from("target/cpan-corpus"));
         assert_eq!(config.top_n, 1000);
+    }
+
+    #[test]
+    fn test_cpan_baseline_path_constant() {
+        assert_eq!(CPAN_BASELINE_PATH, ".ci/cpan-corpus-baseline.json");
+    }
+
+    #[test]
+    fn test_bootstrap_cpanm_path() {
+        let install_dir = PathBuf::from("target/cpan-corpus");
+        assert_eq!(bootstrap_cpanm_path(&install_dir), install_dir.join("bin").join("cpanm"));
+    }
+
+    #[test]
+    fn test_cpanm_home_path() {
+        let install_dir = PathBuf::from("target/cpan-corpus");
+        assert_eq!(cpanm_home_path(&install_dir), install_dir.join(".cpanm"));
     }
 }

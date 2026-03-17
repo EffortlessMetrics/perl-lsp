@@ -208,7 +208,7 @@ pub mod sexp_formatter;
 #[cfg(any(feature = "pure-rust", feature = "test-utils"))]
 pub mod comparison_harness;
 
-#[cfg(feature = "test-utils")]
+#[cfg(all(feature = "test-utils", feature = "c-parser"))]
 pub mod test_utils;
 
 #[cfg(test)]

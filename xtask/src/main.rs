@@ -743,6 +743,7 @@ fn main() -> Result<()> {
                 base_roots,
                 corpus_roots,
                 manifest_path: manifest,
+                manifest_perl5lib: Vec::new(),
                 output_path: output,
                 baseline_path: baseline,
                 enforce,
