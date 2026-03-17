@@ -63,9 +63,11 @@
 //!
 //! - `perl.runCritic` - Code quality analysis with dual analyzer strategy
 //! - `perl.runFile` - Execute Perl scripts with structured output
+//! - `perl.runTest` - Execute a single discovered test case
+//! - `perl.runTestFile` - Execute a specific test file directly
 //! - `perl.runTests` - Run test suites with coverage reporting
 //! - `perl.runTestSub` - Execute individual test subroutines
-//! - `perl.tidy` - Code formatting with perltidy integration
+//! - `perl.debugFile` - Launch file-level debugging
 //!
 //! # Examples
 //!
