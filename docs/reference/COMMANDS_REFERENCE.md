@@ -1178,7 +1178,7 @@ The CPAN corpus workflow validates parser coverage against the top-1000 most-dow
 
 ```bash
 # Fetch CPAN top-1000 distribution list from MetaCPAN
-just cpan-corpus-fetch              # Writes .ci/cpan-top1000.txt
+just cpan-corpus-fetch              # Writes .ci/cpan-top-1000-distributions.txt
 
 # Install CPAN top-1000 distributions locally via cpanm
 just cpan-corpus-install            # Installs into target/cpan-corpus/
@@ -1186,23 +1186,26 @@ just cpan-corpus-install            # Installs into target/cpan-corpus/
 # Sweep CPAN corpus and print parser error rates
 just cpan-corpus-sweep              # Parse all .pm files, report clean rate
 
-# Check CPAN corpus against manifest (fails on regression)
-just cpan-corpus-check              # Generates report, enforces baseline
+# Seed/update the committed CPAN ratchet floor
+just cpan-corpus-baseline-update    # Writes .ci/cpan-corpus-baseline.json
 
-# Auto-add newly-clean CPAN modules to manifest
+# Check CPAN corpus against baseline and known-clean manifest
+just cpan-corpus-check              # Enforces full-corpus ratchet + strict known-clean subset
+
+# Auto-add newly-clean CPAN modules to known-clean manifest
 just cpan-corpus-ratchet            # Appends to .ci/cpan-corpus-manifest.txt
 ```
 
 ### xtask Subcommands
 
 ```bash
-# Fetch distribution list from MetaCPAN (aggregation of top 1000 by favorites)
+# Fetch distribution list from MetaCPAN
 cargo xtask cpan-corpus fetch-list
 cargo xtask cpan-corpus fetch-list --output custom-path.txt
 
 # Install distributions locally using cpanm --notest --local-lib
 cargo xtask cpan-corpus install
-cargo xtask cpan-corpus install --dist-list .ci/cpan-top1000.txt --install-dir target/cpan-corpus
+cargo xtask cpan-corpus install --dist-list .ci/cpan-top-1000-distributions.txt --install-dir target/cpan-corpus
 
 # Sweep installed CPAN corpus with the v3 parser
 cargo xtask cpan-corpus sweep
@@ -1220,13 +1223,14 @@ cargo xtask cpan-corpus ratchet --manifest .ci/cpan-corpus-manifest.txt
 # First-time setup
 just cpan-corpus-fetch        # Download distribution list
 just cpan-corpus-install      # Install modules (takes a while)
+just cpan-corpus-baseline-update  # Commit first ratchet floor
 
 # Ongoing validation (after parser changes)
 just cpan-corpus-sweep        # Check current error rates
 just cpan-corpus-ratchet      # Lock in improvements
 
 # CI regression check
-just cpan-corpus-check        # Fails if clean-file count drops
+just cpan-corpus-check        # Fails if full-corpus ratchet or known-clean subset regresses
 ```
 
 ### Prerequisites
@@ -1239,7 +1243,8 @@ just cpan-corpus-check        # Fails if clean-file count drops
 
 | What | Where |
 |------|-------|
-| Distribution list | `.ci/cpan-top1000.txt` |
+| Distribution list | `.ci/cpan-top-1000-distributions.txt` |
+| Full-corpus baseline | `.ci/cpan-corpus-baseline.json` |
 | Known-clean manifest | `.ci/cpan-corpus-manifest.txt` |
 | Local install directory | `target/cpan-corpus/` |
 | Sweep JSON report | `target/cpan-corpus-report.json` (when using `--output`) |

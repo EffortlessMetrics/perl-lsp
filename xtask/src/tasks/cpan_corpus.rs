@@ -18,8 +18,10 @@ use super::parser_corpus_sweep;
 
 /// Default path for the pinned distribution list
 const DIST_LIST_PATH: &str = ".ci/cpan-top-1000-distributions.txt";
-/// Default path for the CPAN corpus manifest (ratchet floor)
+/// Default path for the CPAN known-clean manifest
 const CPAN_MANIFEST_PATH: &str = ".ci/cpan-corpus-manifest.txt";
+/// Default path for the full CPAN corpus baseline report
+const CPAN_BASELINE_PATH: &str = ".ci/cpan-corpus-baseline.json";
 /// Default install target directory
 const CPAN_INSTALL_DIR: &str = "target/cpan-corpus";
 /// MetaCPAN API endpoint for distribution search (sorted by river.immediate)
@@ -235,8 +237,16 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
     let corpus_roots = parser_corpus_sweep::resolve_corpus_roots(&base_roots);
 
     let baseline_path = if enforce {
-        let bp = PathBuf::from(".ci/cpan-corpus-baseline.json");
-        if bp.exists() { Some(bp) } else { None }
+        let bp = PathBuf::from(CPAN_BASELINE_PATH);
+        if bp.exists() {
+            Some(bp)
+        } else {
+            return Err(color_eyre::eyre::eyre!(
+                "CPAN baseline missing: {}. Run `cargo xtask cpan-corpus sweep --output {}` or `just cpan-corpus-baseline-update` first.",
+                bp.display(),
+                CPAN_BASELINE_PATH,
+            ));
+        }
     } else {
         None
     };
@@ -244,7 +254,7 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
     let sweep_config = parser_corpus_sweep::SweepConfig {
         base_roots,
         corpus_roots,
-        manifest_path: if enforce { Some(config.manifest.clone()) } else { None },
+        manifest_path: None,
         output_path: output,
         baseline_path,
         enforce,
@@ -252,7 +262,40 @@ pub fn sweep(config: &CpanCorpusConfig, output: Option<PathBuf>, enforce: bool) 
         receipt: true,
     };
 
-    parser_corpus_sweep::run(sweep_config)
+    parser_corpus_sweep::run(sweep_config)?;
+
+    if enforce {
+        let manifest_modules = if config.manifest.exists() {
+            parser_corpus_sweep::parse_manifest(&config.manifest)?
+        } else {
+            Vec::new()
+        };
+
+        if manifest_modules.is_empty() {
+            println!(
+                "CPAN known-clean manifest is empty; skipping strict clean check ({})",
+                config.manifest.display()
+            );
+        } else {
+            println!(
+                "\nChecking CPAN known-clean manifest ({} modules)...",
+                manifest_modules.len()
+            );
+            let manifest_sweep = parser_corpus_sweep::SweepConfig {
+                base_roots: vec![lib_perl5.clone()],
+                corpus_roots: parser_corpus_sweep::resolve_corpus_roots(&[lib_perl5]),
+                manifest_path: Some(config.manifest.clone()),
+                output_path: None,
+                baseline_path: None,
+                enforce: true,
+                verbose: config.verbose,
+                receipt: false,
+            };
+            parser_corpus_sweep::run(manifest_sweep)?;
+        }
+    }
+
+    Ok(())
 }
 
 // --------------------------------------------------------------------------
@@ -437,5 +480,10 @@ mod tests {
         assert_eq!(config.manifest, PathBuf::from(".ci/cpan-corpus-manifest.txt"));
         assert_eq!(config.install_dir, PathBuf::from("target/cpan-corpus"));
         assert_eq!(config.top_n, 1000);
+    }
+
+    #[test]
+    fn test_cpan_baseline_path_constant() {
+        assert_eq!(CPAN_BASELINE_PATH, ".ci/cpan-corpus-baseline.json");
     }
 }

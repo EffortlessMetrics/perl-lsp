@@ -1,7 +1,7 @@
 # Perl LSP Roadmap
 
-> **Current Version**: v0.11.0 (Public Alpha)  
-> **Last Updated**: 2026-03-13  
+> **Current Version**: v0.12.0 (Public Alpha)
+> **Last Updated**: 2026-03-17
 > **Status**: Active Development
 
 ---
@@ -21,6 +21,7 @@ Enable every Perl developer to have a world-class development experience with in
 | LSP User-Visible Coverage | 100% (53/53) | 100% |
 | Protocol Compliance | 100% (97/97) | 100% |
 | Perl 5 Syntax Coverage | ~100% | 100% |
+| Parser Coverage | 72.4% system corpus | 90%+ CPAN top 1000 |
 | Mutation Score | 87% | 90%+ |
 | Incremental Parsing | <1ms | <5ms |
 | Reference Coverage | 98% | 95%+ |
@@ -78,19 +79,35 @@ Turnkey release pipeline and distribution infrastructure.
 
 ---
 
-### v0.12.0 — Advanced Semantic Engine (Target: Q2 2026)
+### v0.12.0 — Public Alpha Epic Sprint (Target: Q2 2026)
 
-Deep semantic understanding of complex Perl constructs.
+Make the alpha credible on real-world Perl while continuing the semantic framework work users expect. This milestone is the coordinated public-alpha push across parser quality, boundedness, semantic frameworks, and release readiness.
 
 **Goals**:
+- Commit the first CPAN full-corpus baseline and use it as the ratchet floor
+- Parse 90%+ of the CPAN top 1000 corpus without `ERROR` nodes
+- Keep internal parser torture coverage green (`edge_cases`, parser stress, hang-risk suites)
+- Grow the common corpus manifest while preserving ratchet-only-forward parser quality
 - Full Moo/Moose/Class::Accessor attribute resolution
 - Cross-file type inference via `use parent`/`use base`
 - Improved bareword disambiguation from export lists
-- Constant folding and compile-time evaluation
+
+**Epic Sprint Tracks**:
+- Corpus and ratchets: system/common ratchets stay green, and the CPAN lane is bootstrapped with a committed baseline plus known-clean manifest
+- Parser robustness: edge-case recovery, parser stress, and hang-risk boundedness
+- Semantic frameworks: Moo/Moose/Class::Accessor, inheritance, export lists
+- Release readiness: docs, packaging, and `ci-gate` receipts stay green
 
 **Success Criteria**:
-- [ ] Moo attribute resolution: 100% of test corpus
+- [ ] CPAN baseline: `.ci/cpan-corpus-baseline.json` committed and usable as the ratchet floor
+- [ ] CPAN corpus: 90%+ clean parse rate across the top-1000 corpus
+- [ ] Internal robustness suites: edge-case, parser stress, and hang-risk suites all pass
+- [ ] Parser safety: no hang, stack-overflow, or crash regressions in corpus/torture runs
+- [ ] Common corpus: strict zero-error manifest only grows
+- [ ] CPAN known-clean manifest: `.ci/cpan-corpus-manifest.txt` grows from zero without regressions
+- [ ] Moo attribute resolution: 100% of maintained test corpus
 - [ ] Moose meta-protocol support: core attributes
+- [ ] Class::Accessor handling: common accessor declarations parse and resolve
 - [ ] Cross-file inheritance resolution: `use parent`/`use base`
 - [ ] Export list parsing for: Exporter, Sub::Exporter
 

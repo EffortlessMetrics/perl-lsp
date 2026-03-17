@@ -1,9 +1,9 @@
 # CPAN Top 1000 Corpus Strategy
 
 > **Goal**: Parse 90%+ of the top 1,000 most-depended-upon CPAN distributions cleanly.
-> **Date**: 2026-03-14
+> **Date**: 2026-03-17
 > **Depends on**: [PARSER_EDGE_CASE_ROADMAP.md](PARSER_EDGE_CASE_ROADMAP.md) (wave-based fix plan)
-> **Related**: `.ci/parser-corpus-baseline.json` (system corpus baseline), `.ci/common-corpus-manifest.txt` (CI-gated pinned modules)
+> **Related**: `.ci/parser-corpus-baseline.json` (system corpus baseline), `.ci/cpan-top-1000-distributions.txt` (distribution list), `.ci/cpan-corpus-manifest.txt` (known-clean CPAN subset), `.ci/common-corpus-manifest.txt` (CI-gated pinned modules)
 
 ---
 
@@ -38,24 +38,30 @@ the starting point:
 |--------|-------|
 | Total `.pm` files scanned | 7,095 |
 | Unreadable (encoding) | 48 |
-| Clean files (0 errors) | 3,627 (51.1%) |
-| Files with errors | 3,420 (48.2%) |
-| Unique first-error buckets | 26 |
-| Total ERROR nodes | 66,771 |
+| Clean files (0 errors) | 5,139 (72.4%) |
+| Files with errors | 1,908 (26.9%) |
+| Unique first-error buckets | 28 |
+| Total ERROR nodes | 28,383 |
 
 ### Common Corpus (CI-Gated)
 
 A small set of pinned modules (`.ci/common-corpus-manifest.txt`) is verified to
-parse with zero errors on every merge. This list currently contains 13 modules --
+parse with zero errors on every merge. This list currently contains 11 modules --
 core pragmas like `XSLoader`, `bytes`, `utf8`, and stable modules like
 `File::Spec`, `MIME::Base64`, and `Encode::Encoding`. It is intended to grow as
 parser fixes land.
 
 ### CPAN Corpus (New)
 
-The CPAN corpus manifest (`.ci/cpan-corpus-manifest.txt`) starts empty and will
-be populated by the `cpan-corpus-fetch` tooling. This manifest tracks the top
-1,000 CPAN distributions as a separate, larger corpus for nightly validation.
+The CPAN sprint now has three separate artifacts:
+
+1. **Distribution list** (`.ci/cpan-top-1000-distributions.txt`) -- the top
+   1,000 distributions fetched from MetaCPAN. This drives install.
+2. **Full-corpus baseline** (`.ci/cpan-corpus-baseline.json`) -- the ratchet
+   floor for the installed CPAN corpus. This is not committed yet; seeding it is
+   part of the sprint bootstrap.
+3. **Known-clean manifest** (`.ci/cpan-corpus-manifest.txt`) -- CPAN modules that
+   are expected to stay zero-error once discovered. It currently starts empty.
 
 ---
 
@@ -90,23 +96,28 @@ The ratchet enforces five metrics simultaneously:
 
 A ratchet violation in any of these five dimensions blocks the merge.
 
-### Manifest Modes
+### Corpus Modes
 
-The sweep infrastructure supports two manifest modes with different enforcement:
+The sweep infrastructure supports three related artifacts with different roles:
 
 - **Common corpus** (`.ci/common-corpus-manifest.txt`): Strict zero-error policy.
   Every listed module must parse cleanly. Used in the Tier B merge gate via
   `just common-corpus-check`. This is the "we promise these work" list.
 
-- **CPAN corpus** (`.ci/cpan-corpus-manifest.txt`): Ratchet enforcement against
-  a baseline. The clean-file count can only go up. Used in nightly/manual runs
-  via `just cpan-corpus-sweep`. This is the "we're working toward 90%" list.
+- **CPAN full corpus** (`.ci/cpan-corpus-baseline.json`): Ratchet enforcement
+  against a committed baseline for the installed top-1000 corpus. Used in
+  nightly/manual runs via `just cpan-corpus-check` after the bootstrap baseline
+  is committed. This is the headline "we're working toward 90%" lane.
+
+- **CPAN known-clean manifest** (`.ci/cpan-corpus-manifest.txt`): Strict
+  zero-error subset for CPAN modules that have already gone clean. Used by
+  `just cpan-corpus-check` as a second pass after the full-corpus ratchet.
 
 ---
 
 ## Tooling
 
-The CPAN corpus workflow is a four-step pipeline. Each step has a corresponding
+The CPAN corpus workflow is a five-step pipeline. Each step has a corresponding
 `just` recipe.
 
 ### Step 1: Fetch the Top 1000 List
@@ -117,7 +128,7 @@ just cpan-corpus-fetch
 
 Queries the MetaCPAN API for the most-depended-upon distributions, ranked by
 reverse dependency count. Writes the distribution names to
-`.ci/cpan-corpus-manifest.txt`, one per line.
+`.ci/cpan-top-1000-distributions.txt`, one per line.
 
 ### Step 2: Install Distributions Locally
 
@@ -141,16 +152,28 @@ semantic buckets, and produces a JSON report. The sweep uses the same
 infrastructure as the system corpus sweep (`xtask/src/tasks/parser_corpus_sweep.rs`),
 including the progress bar, error normalization, and bucket classification.
 
-### Step 4: Ratchet Clean Modules
+### Step 4: Commit the First CPAN Baseline
+
+```bash
+just cpan-corpus-baseline-update
+```
+
+Writes the current installed CPAN sweep to `.ci/cpan-corpus-baseline.json`. This
+is the bootstrap step that turns the CPAN lane from "exploratory" into a real
+ratchet. After this file is committed, `just cpan-corpus-check` becomes a
+well-defined sprint gate.
+
+### Step 5: Ratchet Clean Modules
 
 ```bash
 just cpan-corpus-ratchet
 ```
 
-Identifies modules that parse cleanly and auto-appends them to the common corpus
-manifest. Once a module is added to the common corpus, it is protected by strict
-zero-error enforcement in the merge gate. This is the mechanism by which the
-common corpus grows over time.
+Identifies CPAN modules that parse cleanly and auto-appends them to the
+CPAN known-clean manifest (`.ci/cpan-corpus-manifest.txt`). Once a module is
+added there, `just cpan-corpus-check` verifies it continues to parse cleanly.
+Promotion into the merge-gated common corpus remains a separate, deliberate step
+for a smaller curated subset.
 
 ---
 
@@ -160,9 +183,9 @@ Parser improvements follow the wave structure defined in
 [PARSER_EDGE_CASE_ROADMAP.md](PARSER_EDGE_CASE_ROADMAP.md). Each wave targets a
 cluster of related parse failures, prioritized by files-fixed-per-fix.
 
-### Wave 1 -- Merged (PRs #1215--#1218)
+### Historical Wave 1 Baseline -- Merged (PRs #1215--#1218)
 
-Established the 51.1% baseline. Fixes included POD block skipping, regex false
+Originally established the 51.1% baseline. Fixes included POD block skipping, regex false
 positive nested quantifiers, `&{expr}` code dereference, and expanded builtins
 with forward declarations.
 
@@ -192,7 +215,7 @@ Miscellaneous rare constructs: `return`/`next`/`last` in expression context,
 `eval` block edge cases, `goto &sub`, unclosed-brace cascades, and various
 patterns each affecting fewer than 5 files.
 
-### Projected Coverage
+### Historical Projection vs Current Reality
 
 | Milestone | Estimated Clean Rate | Delta |
 |-----------|---------------------|-------|
@@ -201,10 +224,11 @@ patterns each affecting fewer than 5 files.
 | After Wave 3 | ~62% | +~300 files |
 | After Wave 4 | ~64% | +~150 files |
 
-The gap between 64% (system corpus) and 90% (CPAN target) will be closed by the
-CPAN corpus sweep identifying additional failure patterns not present in the
-system corpus. The CPAN corpus is expected to surface new error categories that
-drive additional parser fixes beyond Wave 4.
+Those projections were made from the earlier 51.1% system baseline and have
+already been surpassed by the current committed system ratchet (72.4%). The
+remaining sprint question is no longer "can we improve the system corpus?" but
+"what does the first real CPAN baseline look like, and which new buckets does it
+surface?"
 
 ---
 
@@ -219,7 +243,11 @@ The CPAN corpus effort tracks three metrics:
    manifest. Each addition represents a module that will never regress. Growth
    indicates steady, irreversible progress.
 
-3. **Error bucket distribution** -- The shape of the first-error-per-file
+3. **CPAN known-clean manifest size** -- Number of modules in
+   `.ci/cpan-corpus-manifest.txt`. This is the strict-clean working set for the
+   CPAN sprint before modules graduate into the smaller common corpus.
+
+4. **Error bucket distribution** -- The shape of the first-error-per-file
    histogram. As waves land, large buckets (e.g., `unclosed_bracket` at 544,
    `unexpected_token_in_expr` at 596) should shrink. New buckets may appear as
    the corpus expands, revealing previously unseen patterns.
@@ -234,12 +262,13 @@ The CPAN corpus effort tracks three metrics:
 |------|--------|-------------|------|
 | Tier B (merge) | Common corpus | Strict zero-error | Every PR |
 | Tier B (merge) | System corpus | Ratchet (5 metrics) | Every PR |
-| Nightly / manual | CPAN corpus | Ratchet (5 metrics) | Scheduled or on-demand |
+| Nightly / manual | CPAN full corpus | Ratchet (5 metrics) | Scheduled or on-demand |
+| Nightly / manual | CPAN known-clean manifest | Strict zero-error | Scheduled or on-demand |
 
 The CPAN corpus sweep is deliberately excluded from the merge gate. The top 1000
 distributions represent a large install and a multi-minute parse sweep -- too slow
 for the 3-5 minute Tier B budget. It runs as a nightly job or on manual trigger,
-with ratchet enforcement to prevent silent regressions.
+with ratchet enforcement to prevent silent regressions once the baseline is seeded.
 
 ### Why Not in the Merge Gate
 

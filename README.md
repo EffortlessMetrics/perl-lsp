@@ -108,6 +108,10 @@ just corpus-sweep          # Sweep system Perl corpus and print results
 just corpus-sweep-check    # Check against baseline (fails on regression)
 just corpus-sweep-update   # Update baseline with current results
 just common-corpus-check   # Check pinned modules parse cleanly (PR gate)
+just cpan-corpus-fetch     # Fetch CPAN top-1000 distribution list
+just cpan-corpus-install   # Install CPAN corpus locally
+just cpan-corpus-baseline-update  # Seed/update CPAN ratchet baseline
+just cpan-corpus-check     # Check CPAN baseline + known-clean manifest
 ```
 
 See [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for the latest computed metrics.
@@ -217,4 +221,3 @@ Dual licensed under MIT or Apache-2.0:
 
 - [LICENSE-MIT](LICENSE-MIT)
 - [LICENSE-APACHE](LICENSE-APACHE)
-

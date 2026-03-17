@@ -1,7 +1,8 @@
-# CPAN corpus manifest — modules that MUST parse cleanly
+# CPAN known-clean manifest — modules that MUST parse cleanly once seeded
 # One module name per line. Lines starting with # are comments.
 #
-# This file is the ratchet floor for the CPAN top-1000 corpus.
+# This file is the strict-clean subset for the CPAN sprint lane.
+# The full-corpus ratchet lives in: .ci/cpan-corpus-baseline.json
 # Modules are added automatically by: cargo xtask cpan-corpus ratchet
 # Modules must NEVER be removed (ratchet only moves forward).
 #
