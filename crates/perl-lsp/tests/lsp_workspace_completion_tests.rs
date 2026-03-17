@@ -218,7 +218,6 @@ my $result = DataProcessor::
 
 /// Test cross-file variable completion
 #[test]
-#[ignore = "feature: cross-file variable completion not yet wired to workspace index"]
 fn test_completion_cross_file_variable() -> Result<(), Box<dyn std::error::Error>> {
     let server = start_lsp_server();
     initialize_lsp(&server);
@@ -247,6 +246,7 @@ our $DEBUG_MODE = 1;
             }
         }),
     );
+    await_open_processing(&server);
 
     // Open a file requesting variable completion
     let script_uri = "file:///workspace/app.pl";
@@ -269,6 +269,7 @@ print $Config::CONF
             }
         }),
     );
+    await_open_processing(&server);
 
     // Request completion after "$Config::CONF"
     let response = send_request(
