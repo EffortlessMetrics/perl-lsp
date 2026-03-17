@@ -117,11 +117,17 @@ Use a skill when:
 - multiple workers need the same procedure
 - supporting files or templates help keep the hot prompt small
 
+In this repo today, `/swarm` is the main shipped project skill under
+`.claude/skills/`. Many other reusable slash procedures are still
+command-backed entrypoints under `.claude/commands/`. The design direction is
+skill-first, but the runtime docs should describe the current surface
+accurately.
+
 Subagents do not inherit the caller's loaded skills automatically. If a worker
 needs repo procedure or domain knowledge, name the required skills in the
 worker prompt or encode the task itself as a `context: fork` skill.
 
-Typical examples:
+Typical slash entrypoints in this repo today:
 - `/coding-standards`
 - `/swarm-protocol`
 - `/swarm-priorities`
@@ -237,7 +243,7 @@ Crate: perl-parser
 Files: crates/perl-parser/src/heredoc.rs crates/perl-parser/tests/heredoc.rs
 Goal: fix queued heredoc replay after nested interpolation
 Verify: cargo fmt --all && cargo clippy -p perl-parser --tests && cargo test -p perl-parser
-Read .ops-perl-lsp/handoffs/fix-heredoc-queue.md, then invoke /coding-standards and /parser-fix
+Read .ops-perl-lsp/handoffs/fix-heredoc-queue.md, then invoke the slash entrypoints /coding-standards and /parser-fix
 ```
 
 ### Bad Spawn Prompt

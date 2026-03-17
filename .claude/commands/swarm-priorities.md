@@ -68,7 +68,7 @@ Scouts should weight slices in this order:
 ## How Scouts Use This
 
 When creating slices, scouts should:
-1. Read this skill to understand current priorities
+1. Read this slash entrypoint to understand current priorities
 2. Tag each SLICE with a priority tier: `priority: P0 | P1 | P2 | P3 | P4`
 3. Builders should claim higher-priority tasks first
 4. If the queue is mostly P3/P4, scouts should dig harder for P1/P2 work

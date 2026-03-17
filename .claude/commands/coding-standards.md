@@ -6,7 +6,8 @@ user-invocable: false
 
 # Coding Standards (perl-lsp)
 
-Invoke this skill to load project coding standards into your context.
+Invoke this slash entrypoint to load project coding standards into your
+context.
 
 ## Banned in Production Code (tests exempt)
 - `unwrap()`, `expect()` → use `?`, `.ok_or_else()`, or pattern matching

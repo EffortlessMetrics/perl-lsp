@@ -118,11 +118,15 @@ Key frontmatter fields:
 - `user-invocable: false` — hidden from user's skill list (internal use only)
 - `disable-model-invocation: true` — pure instruction, no model call
 
-### Skill Scoping
+### Slash Entry Point Scoping
 
-Skills have scopes. Loading an agent skill into orchestrator context wastes context and causes the orchestrator to do agent work directly.
+Slash entrypoints have scopes. Loading a worker procedure into orchestrator
+context wastes context and causes the orchestrator to do worker work directly.
+`/swarm` is the main skill-backed control-plane entrypoint currently shipped in
+this repo; most procedures below are still command-backed slash entrypoints
+today.
 
-**Orchestrator skills** (lead invokes these):
+**Orchestrator slash entrypoints** (lead invokes these):
 - `/swarm-status` — shows current PRs, issues, metrics, queue
 - `/green-merge` — drain merge queue
 - `/health-check` — quick codebase scan
@@ -130,7 +134,7 @@ Skills have scopes. Loading an agent skill into orchestrator context wastes cont
 - `/rebase-open` — rebase conflicting PRs
 - `/corpus-ratchet` — lock in corpus gains
 
-**Agent skills** (agents invoke these — do NOT load into orchestrator context):
+**Worker slash entrypoints** (workers invoke these — do NOT load into orchestrator context):
 - `/swarm-protocol` — behavioral rules
 - `/coding-standards` — project standards
 - `/swarm-priorities` — roadmap alignment
@@ -139,7 +143,7 @@ Skills have scopes. Loading an agent skill into orchestrator context wastes cont
 - `/plan-fix` — write implementation plans
 - `/scout-report` — create GitHub issues
 
-**Dual-use skills** (either context):
+**Dual-use slash entrypoints** (either context):
 - `/scout`, `/queue-scout`, `/audit`
 
 ## Hooks Architecture
@@ -258,9 +262,16 @@ Each handoff file (`.ops-perl-lsp/handoffs/<branch>.md`) contains:
 - **Known pitfalls** (relevant entries from failure knowledge base)
 - **Builder briefing** (appended after build: what changed, key decisions, what to watch for)
 
-### Skills Over File Reads
+### Slash Entry Points Over File Reads
 
-Protocol, standards, and priorities are **skills** (`/swarm-protocol`, `/coding-standards`, `/swarm-priorities`), not files. Agents invoke them directly into their context instead of spending a `Read` tool call. Subagent prompts are 7 lines pointing to handoff + skills, not 100 lines of inline instructions.
+Protocol, standards, and priorities are reusable slash entrypoints
+(`/swarm-protocol`, `/coding-standards`, `/swarm-priorities`), not
+ad-hoc file reads. Agents invoke them directly into their context instead of
+spending a `Read` tool call. In the live repo today, `/swarm` is the main
+skill-backed entrypoint and most of the procedures named here are
+command-backed; agents still invoke them the same way. Subagent prompts are 7
+lines pointing to handoff + slash entrypoints, not 100 lines of inline
+instructions.
 
 ### Minimal Subagent Prompts
 
@@ -272,7 +283,8 @@ Builder coordinators compose prompts like:
  Commit and push."
 ```
 
-7 lines. The handoff file has all the context. The skill invocations load the rules. No context wasted.
+7 lines. The handoff file has all the context. The slash entrypoints load the
+rules. No context wasted.
 
 ### Context Shift = New Worker
 
@@ -289,7 +301,8 @@ Worker reuse is the exception. Handoffs are the continuity mechanism.
 
 ### Priority Weighting
 
-The `/swarm-priorities` skill loads the roadmap (NOW/NEXT/LATER), open milestones, and high-priority issues. It defines P0-P4 tiers:
+The `/swarm-priorities` slash entrypoint loads the roadmap (NOW/NEXT/LATER),
+open milestones, and high-priority issues. It defines P0-P4 tiers:
 
 | Tier | What |
 |------|------|

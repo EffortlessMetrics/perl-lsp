@@ -39,13 +39,16 @@ See [agents/README.md](./agents/README.md) for the roster contract.
 
 - worktree = write boundary
 - worker = context boundary
-- skills and commands = reusable procedure
+- skills = reusable procedure and durable instruction
+- commands = thin operator entrypoints and compatibility shims
 - hooks and settings = deterministic enforcement
 - handoffs, receipts, worktrees, and PRs = volatile execution state
 
-Every agent should keep a local todo list and name the command or skill for
+Every agent should keep a local todo list and name the slash entrypoint for
 each todo item. That keeps procedure attached to the current slice instead of
-floating in remembered context.
+floating in remembered context. In the live repo today, `/swarm` is the main
+skill-backed control-plane entrypoint; many other reusable procedures are still
+command-backed while they remain lightweight.
 
 ## Compatibility Note
 
