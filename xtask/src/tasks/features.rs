@@ -388,9 +388,86 @@ fn generate_report() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{compare_snapshot_caps, ensure_fence, replace_fence, snapshot_caps_from_content};
-    use color_eyre::eyre::Result;
+    use super::*;
     use std::collections::BTreeSet;
+    use tempfile::TempDir;
+
+    fn sample_catalog() -> Catalog {
+        Catalog {
+            meta: perl_feature_catalog::Meta {
+                version: "0.11.0".to_string(),
+                lsp_version: "3.18".to_string(),
+                compliance_percent: None,
+            },
+            feature: vec![
+                perl_feature_catalog::Feature {
+                    id: "lsp.completion".to_string(),
+                    spec: "LSP 3.18 §3.16".to_string(),
+                    area: "text_document".to_string(),
+                    maturity: Maturity::Ga,
+                    advertised: true,
+                    tests: vec!["tests/lsp_completion_tests.rs".to_string()],
+                    counts_in_coverage: true,
+                    description: "Completion support".to_string(),
+                },
+                perl_feature_catalog::Feature {
+                    id: "lsp.hover".to_string(),
+                    spec: "LSP 3.18 §3.17".to_string(),
+                    area: "text_document".to_string(),
+                    maturity: Maturity::Preview,
+                    advertised: true,
+                    tests: vec!["tests/lsp_hover_tests.rs".to_string()],
+                    counts_in_coverage: true,
+                    description: "Hover support".to_string(),
+                },
+                perl_feature_catalog::Feature {
+                    id: "lsp.workspace_symbol".to_string(),
+                    spec: "LSP 3.18 §3.18".to_string(),
+                    area: "workspace".to_string(),
+                    maturity: Maturity::Experimental,
+                    advertised: false,
+                    tests: vec!["tests/lsp_workspace_symbol_tests.rs".to_string()],
+                    counts_in_coverage: true,
+                    description: "Workspace symbols".to_string(),
+                },
+                perl_feature_catalog::Feature {
+                    id: "lsp.inline_completion".to_string(),
+                    spec: "LSP 3.18 §3.19".to_string(),
+                    area: "text_document".to_string(),
+                    maturity: Maturity::Planned,
+                    advertised: false,
+                    tests: Vec::new(),
+                    counts_in_coverage: true,
+                    description: "Inline completion".to_string(),
+                },
+            ],
+        }
+    }
+
+    struct CurrentDirGuard {
+        original: std::path::PathBuf,
+    }
+
+    impl CurrentDirGuard {
+        fn change_to(path: &Path) -> Result<Self> {
+            let original = env::current_dir()?;
+            env::set_current_dir(path)?;
+            Ok(Self { original })
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            let _ = env::set_current_dir(&self.original);
+        }
+    }
+
+    fn setup_doc_fixture() -> Result<(TempDir, CurrentDirGuard)> {
+        let temp_dir = TempDir::new()?;
+        fs::create_dir_all(temp_dir.path().join("crates/perl-parser"))?;
+        let guard = CurrentDirGuard::change_to(temp_dir.path())?;
+        Ok((temp_dir, guard))
+    }
 
     #[test]
     fn snapshot_caps_from_content_extracts_caps_array() -> Result<()> {
@@ -443,6 +520,13 @@ mod tests {
     }
 
     #[test]
+    fn ensure_fence_accepts_matching_markers() -> Result<()> {
+        let content = "prefix\n<!-- BEGIN: COMPLIANCE_TABLE -->\nbody\n<!-- END: COMPLIANCE_TABLE -->\nsuffix\n";
+        ensure_fence(content, "COMPLIANCE_TABLE")?;
+        Ok(())
+    }
+
+    #[test]
     fn ensure_fence_requires_both_markers() {
         let content = "<!-- BEGIN: COMPLIANCE_TABLE -->\nbody\n";
         let error = ensure_fence(content, "COMPLIANCE_TABLE").expect_err("missing end marker");
@@ -461,6 +545,77 @@ mod tests {
                 .contains("<!-- BEGIN: COMPLIANCE_TABLE -->\nnew\n<!-- END: COMPLIANCE_TABLE -->")
         );
         assert!(!replaced.contains("\nold\n"));
+        Ok(())
+    }
+
+    #[test]
+    fn replace_fence_swaps_only_the_fenced_body() -> Result<()> {
+        let content = concat!(
+            "alpha\n",
+            "<!-- BEGIN: COMPLIANCE_TABLE -->\n",
+            "old line\n",
+            "<!-- END: COMPLIANCE_TABLE -->\n",
+            "omega\n"
+        );
+
+        let updated = replace_fence(content, "COMPLIANCE_TABLE", "new line\nnewer line\n")?;
+
+        assert!(updated.starts_with("alpha\n<!-- BEGIN: COMPLIANCE_TABLE -->\n"));
+        assert!(updated.contains("new line\nnewer line\n<!-- END: COMPLIANCE_TABLE -->"));
+        assert!(updated.ends_with("\nomega\n"));
+        assert!(!updated.contains("old line"));
+        Ok(())
+    }
+
+    #[test]
+    fn update_roadmap_refreshes_header_and_bdd_table() -> Result<()> {
+        let (_temp_dir, _guard) = setup_doc_fixture()?;
+        let catalog = sample_catalog();
+        let area_stats = catalog.area_statistics();
+        fs::write(
+            "ROADMAP.md",
+            concat!(
+                "# Perl LSP\n",
+                "Current status: partial LSP 3.18 compliance (~5%)\n\n",
+                "<!-- BEGIN: COMPLIANCE_TABLE -->\n",
+                "stale table\n",
+                "<!-- END: COMPLIANCE_TABLE -->\n"
+            ),
+        )?;
+
+        update_roadmap(&catalog, &area_stats)?;
+
+        let roadmap = fs::read_to_string("ROADMAP.md")?;
+        assert!(roadmap.contains("partial LSP 3.18 compliance (~50%)"));
+        assert!(roadmap.contains("| Area | Implemented | Total | Coverage |"));
+        assert!(roadmap.contains("| text document | 2 | 3 | 67% |"));
+        assert!(roadmap.contains("| workspace | 0 | 1 | 0% |"));
+        assert!(!roadmap.contains("stale table"));
+        Ok(())
+    }
+
+    #[test]
+    fn update_lsp_status_renders_grouped_sections_with_expected_statuses() -> Result<()> {
+        let (_temp_dir, _guard) = setup_doc_fixture()?;
+        let catalog = sample_catalog();
+
+        update_lsp_status(&catalog)?;
+
+        let status = fs::read_to_string("crates/perl-parser/LSP_ACTUAL_STATUS.md")?;
+        assert!(status.contains("# LSP Feature Status"));
+        assert!(status.contains("Version: 0.11.0 | LSP: 3.18"));
+        assert!(status.contains("## text document"));
+        assert!(status.contains("## workspace"));
+        assert!(
+            status.contains("| completion | LSP 3.18 §3.16 | ✅ Complete | Completion support |")
+        );
+        assert!(status.contains("| hover | LSP 3.18 §3.17 | 🔧 Preview | Hover support |"));
+        assert!(status.contains(
+            "| workspace_symbol | LSP 3.18 §3.18 | ⚠️ Experimental | Workspace symbols |"
+        ));
+        assert!(status.contains(
+            "| inline_completion | LSP 3.18 §3.19 | ❌ Not Implemented | Inline completion |"
+        ));
         Ok(())
     }
 }
