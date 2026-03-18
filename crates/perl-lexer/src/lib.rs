@@ -1840,7 +1840,8 @@ impl<'a> PerlLexer<'a> {
                 }
             }
 
-            let token_type = if (self.mode == LexerMode::ExpectOperator && is_infix_word_operator(text))
+            let token_type = if (self.mode == LexerMode::ExpectOperator
+                && is_infix_word_operator(text))
                 || text == "not"
             {
                 self.mode = LexerMode::ExpectTerm;
@@ -3083,10 +3084,7 @@ fn is_keyword(word: &str) -> bool {
 
 #[inline(always)]
 fn is_infix_word_operator(word: &str) -> bool {
-    matches!(
-        word,
-        "eq" | "ne" | "lt" | "gt" | "le" | "ge" | "cmp" | "x" | "and" | "or" | "xor"
-    )
+    matches!(word, "eq" | "ne" | "lt" | "gt" | "le" | "ge" | "cmp" | "x" | "and" | "or" | "xor")
 }
 
 /// Fast lookup table for compound operator second characters
