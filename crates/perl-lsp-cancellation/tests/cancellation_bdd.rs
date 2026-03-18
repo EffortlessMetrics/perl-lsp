@@ -3,18 +3,23 @@ use perl_lsp_cancellation::{
     RequestCleanupGuard,
 };
 use serde_json::json;
+use std::sync::Mutex;
+
+static TEST_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn given_an_active_request_when_cancelled_then_global_registry_cleans_and_marks_cancelled()
 -> Result<(), Box<dyn std::error::Error>> {
+    let _lock = TEST_LOCK.lock().map_err(|e| format!("lock error: {e}"))?;
     let request_id = json!(9001);
     let token = PerlLspCancellationToken::new(request_id.clone(), "given/request".to_string());
 
     GLOBAL_CANCELLATION_REGISTRY.remove_request(&request_id);
+    let count_before = GLOBAL_CANCELLATION_REGISTRY.active_count();
     assert!(!GLOBAL_CANCELLATION_REGISTRY.is_cancelled(&request_id));
 
     GLOBAL_CANCELLATION_REGISTRY.register_token(token)?;
-    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), 1);
+    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), count_before + 1);
     assert!(!GLOBAL_CANCELLATION_REGISTRY.is_cancelled(&request_id));
 
     let snapshot =
@@ -26,25 +31,27 @@ fn given_an_active_request_when_cancelled_then_global_registry_cleans_and_marks_
     assert!(GLOBAL_CANCELLATION_REGISTRY.is_cancelled(&request_id));
 
     GLOBAL_CANCELLATION_REGISTRY.remove_request(&request_id);
-    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), 0);
+    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), count_before);
     Ok(())
 }
 
 #[test]
 fn given_cleanup_guard_when_dropped_then_request_is_removed()
 -> Result<(), Box<dyn std::error::Error>> {
+    let _lock = TEST_LOCK.lock().map_err(|e| format!("lock error: {e}"))?;
     let request_id = json!(9002);
     let token = PerlLspCancellationToken::new(request_id.clone(), "guard-scope".to_string());
 
     GLOBAL_CANCELLATION_REGISTRY.remove_request(&request_id);
+    let count_before = GLOBAL_CANCELLATION_REGISTRY.active_count();
     GLOBAL_CANCELLATION_REGISTRY.register_token(token)?;
-    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), 1);
+    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), count_before + 1);
 
     {
         let _guard = RequestCleanupGuard::new(Some(request_id.clone()));
     }
 
-    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), 0);
+    assert_eq!(GLOBAL_CANCELLATION_REGISTRY.active_count(), count_before);
     Ok(())
 }
 

@@ -125,7 +125,10 @@ pub fn get_adaptive_timeout() -> Duration {
 /// let quick_timeout = get_scaled_timeout(0.25);
 /// ```
 pub fn get_scaled_timeout(factor: f64) -> Duration {
-    let base = get_adaptive_timeout();
+    scale_duration(get_adaptive_timeout(), factor)
+}
+
+fn scale_duration(base: Duration, factor: f64) -> Duration {
     Duration::from_secs_f64(base.as_secs_f64() * factor)
 }
 
@@ -295,9 +298,9 @@ mod tests {
 
     #[test]
     fn test_scaled_timeout_applies_factor() {
-        let base = get_adaptive_timeout();
-        let doubled = get_scaled_timeout(2.0);
-        let halved = get_scaled_timeout(0.5);
+        let base = Duration::from_secs_f64(11.25);
+        let doubled = scale_duration(base, 2.0);
+        let halved = scale_duration(base, 0.5);
 
         // Allow for floating-point imprecision
         assert!((doubled.as_secs_f64() - base.as_secs_f64() * 2.0).abs() < 0.01);

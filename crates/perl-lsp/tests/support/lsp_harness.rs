@@ -41,6 +41,12 @@ pub struct LspHarness {
 }
 
 impl LspHarness {
+    fn is_coverage_instrumented() -> bool {
+        std::env::var_os("LLVM_PROFILE_FILE").is_some()
+            || std::env::var_os("CARGO_LLVM_COV").is_some()
+            || std::env::var_os("CARGO_LLVM_COV_TARGET_DIR").is_some()
+    }
+
     /// Lowest-level constructor: spawn server and wire pipes, no messages sent.
     pub fn new_raw() -> Self {
         let output_buffer = Arc::new(Mutex::new(Vec::new()));
@@ -144,6 +150,11 @@ impl LspHarness {
             Duration::from_millis(800) // Performance tests: faster initialization
         } else {
             Duration::from_secs(2) // Local: balanced timeout
+        };
+        let init_timeout = if Self::is_coverage_instrumented() {
+            init_timeout.max(Duration::from_secs(6))
+        } else {
+            init_timeout
         };
 
         let response = self.send_request_with_timeout(init_request, init_timeout)?;

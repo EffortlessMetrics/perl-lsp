@@ -1070,7 +1070,9 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
             }),
         );
 
-        // Measure total cancellation latency
+        // Record the client-side latency to submit the cancellation notification.
+        // The server reports latency when it emits the cancellation response, so
+        // the final validation must compare against total roundtrip time below.
         let cancellation_latency = start_time.elapsed();
 
         // Validate enhanced error response
@@ -1111,10 +1113,13 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
                     if data.get("latency_ms").is_some() {
                         let latency_ms =
                             data["latency_ms"].as_u64().ok_or("Latency should be numeric")?;
+                        let total_roundtrip_latency = start_time.elapsed().as_millis() as u64;
                         assert!(
-                            latency_ms <= cancellation_latency.as_millis() as u64,
-                            "Reported latency should be reasonable: {}ms",
-                            latency_ms
+                            latency_ms <= total_roundtrip_latency,
+                            "Reported latency should fit within total roundtrip: server={}ms client={}ms cancel_submit={}ms",
+                            latency_ms,
+                            total_roundtrip_latency,
+                            cancellation_latency.as_millis()
                         );
                     }
 

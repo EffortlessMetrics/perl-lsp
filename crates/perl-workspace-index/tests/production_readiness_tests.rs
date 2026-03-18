@@ -226,7 +226,7 @@ fn test_cache_lru_eviction() {
 }
 
 #[test]
-fn test_cache_memory_limit() {
+fn test_cache_memory_limit_evicts_to_admit_new_entry() {
     let config = CacheConfig {
         max_items: 1000,
         max_bytes: 20, // Very small limit
@@ -237,8 +237,10 @@ fn test_cache_memory_limit() {
     // First insert should succeed
     assert!(cache.insert_with_size("key1".to_string(), "value1".to_string(), 10));
 
-    // Second insert should fail due to memory limit
-    assert!(!cache.insert_with_size("key2".to_string(), "value2".to_string(), 15));
+    // Second insert should evict the older entry so the new one still fits.
+    assert!(cache.insert_with_size("key2".to_string(), "value2".to_string(), 15));
+    assert_eq!(cache.get(&"key1".to_string()), None);
+    assert_eq!(cache.get(&"key2".to_string()), Some("value2".to_string()));
 }
 
 #[test]

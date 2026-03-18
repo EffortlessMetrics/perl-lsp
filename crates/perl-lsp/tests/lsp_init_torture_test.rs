@@ -20,8 +20,17 @@ const TORTURE_ITERATIONS: usize = 50;
 /// Reduced iterations for CI environments
 const CI_TORTURE_ITERATIONS: usize = 20;
 
+fn is_coverage_instrumented() -> bool {
+    std::env::var_os("LLVM_PROFILE_FILE").is_some()
+        || std::env::var_os("CARGO_LLVM_COV").is_some()
+        || std::env::var_os("CARGO_LLVM_COV_TARGET_DIR").is_some()
+}
+
 fn get_iterations() -> usize {
-    if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+    if std::env::var("CI").is_ok()
+        || std::env::var("GITHUB_ACTIONS").is_ok()
+        || is_coverage_instrumented()
+    {
         CI_TORTURE_ITERATIONS
     } else {
         TORTURE_ITERATIONS

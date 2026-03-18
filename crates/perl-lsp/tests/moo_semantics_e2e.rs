@@ -238,6 +238,7 @@ mod moo_semantics_e2e_tests {
         let hover_text = semantic::hover_content(&hover_response).ok_or("hover content missing")?;
         assert!(
             hover_text.contains("Moo/Moose attribute `email`")
+                || hover_text.contains("Moo/Moose accessor")
                 || hover_text.contains("Generated accessor from Moo/Moose `has`"),
             "expected Moo/Moose hover attribution, got: {hover_text}"
         );

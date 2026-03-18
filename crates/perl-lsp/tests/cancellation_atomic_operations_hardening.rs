@@ -20,7 +20,7 @@ use perl_lsp::cancellation::{
 };
 use proptest::prelude::*;
 use serde_json::json;
-use std::sync::Arc;
+use std::sync::{Arc, Barrier};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -30,6 +30,28 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 #[cfg(test)]
 mod atomic_state_transition_tests {
     use super::*;
+
+    fn sample_consistent_cancellation_state(
+        token: &PerlLspCancellationToken,
+    ) -> (bool, bool, bool) {
+        for attempt in 0..1_000 {
+            let state1 = token.is_cancelled();
+            let state2 = token.is_cancelled_relaxed();
+            let state3 = token.is_cancelled_hot_path();
+
+            if state1 == state2 && state2 == state3 {
+                return (state1, state2, state3);
+            }
+
+            if attempt % 100 == 99 {
+                thread::yield_now();
+            } else {
+                std::hint::spin_loop();
+            }
+        }
+
+        panic!("cancellation state did not converge across check variants");
+    }
 
     /// Test atomic boolean state transitions through public API
     #[test]
@@ -176,30 +198,38 @@ mod atomic_state_transition_tests {
         let token = Arc::new(PerlLspCancellationToken::new(json!(6), "concurrent".to_string()));
         let num_threads = 10;
         let iterations = 100;
+        let start_barrier = Arc::new(Barrier::new(num_threads));
 
         let mut handles = Vec::new();
 
         // Spawn threads that stress atomic operations
         for thread_id in 0..num_threads {
             let token_clone = Arc::clone(&token);
+            let start_barrier_clone = Arc::clone(&start_barrier);
             let handle = thread::spawn(move || {
+                start_barrier_clone.wait();
+
                 for i in 0..iterations {
                     if thread_id % 2 == 0 {
                         // Canceller threads
                         token_clone.cancel();
+
+                        let (state1, state2, state3) =
+                            sample_consistent_cancellation_state(&token_clone);
                         assert!(
-                            token_clone.is_cancelled(),
-                            "Cancel must be visible immediately in thread {}, iteration {}",
+                            state1 && state2 && state3,
+                            "Cancel must converge to visible=true in thread {}, iteration {}",
                             thread_id,
                             i
                         );
                     } else {
                         // Checker threads
-                        let state1 = token_clone.is_cancelled();
-                        let state2 = token_clone.is_cancelled_relaxed();
-                        let state3 = token_clone.is_cancelled_hot_path();
+                        let (state1, state2, state3) =
+                            sample_consistent_cancellation_state(&token_clone);
 
-                        // All checks must be consistent - targets ordering mutations
+                        // A single concurrent sample can straddle the one-way false->true
+                        // transition. Require rapid convergence instead of exact equality
+                        // across three unsynchronized loads.
                         assert_eq!(
                             state1, state2,
                             "Regular and relaxed checks inconsistent in thread {}, iteration {}",
@@ -227,7 +257,10 @@ mod atomic_state_transition_tests {
         }
 
         // Final state should be cancelled (since we have canceller threads)
-        assert!(token.is_cancelled(), "Final state should be cancelled");
+        let (state1, state2, state3) = sample_consistent_cancellation_state(&token);
+        assert!(state1, "Final regular state should be cancelled");
+        assert!(state2, "Final relaxed state should be cancelled");
+        assert!(state3, "Final hot path state should be cancelled");
         Ok(())
     }
 }

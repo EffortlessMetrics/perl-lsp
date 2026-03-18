@@ -755,9 +755,8 @@ my $result = Foo::process_data();
     let module_uri = workspace.uri("lib/Foo.pm");
     let main_uri = workspace.uri("main.pl");
 
-    harness.open(&module_uri, module)?;
     harness.open(&main_uri, main)?;
-    harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(2)).ok();
+    harness.wait_for_symbol("process_data", Some(&module_uri), Duration::from_secs(10))?;
     harness.barrier();
 
     let (line, character) = find_position(main, "process_data()");

@@ -491,3 +491,77 @@ impl LspServer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn open_test_document(server: &LspServer, uri: &str, text: &str) {
+        let result = server.test_handle_did_open(Some(json!({
+            "textDocument": {
+                "uri": uri,
+                "languageId": "perl",
+                "version": 1,
+                "text": text,
+            }
+        })));
+        assert!(result.is_ok(), "didOpen failed: {result:?}");
+    }
+
+    #[test]
+    fn code_action_runtime_offers_missing_pragmas() {
+        let server = LspServer::new();
+        let uri = "file:///test.pl";
+        let text = "print 'hello';\n";
+        open_test_document(&server, uri, text);
+
+        let response = server.handle_code_action(Some(json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 0, "character": 0 },
+                "end": { "line": 0, "character": 5 }
+            },
+            "context": { "diagnostics": [] }
+        })));
+
+        let actions =
+            response.ok().flatten().and_then(|v| v.as_array().cloned()).unwrap_or_default();
+
+        assert!(
+            actions.iter().any(|a| a["title"].as_str().unwrap_or("").contains("use strict")),
+            "expected missing pragma action, got: {actions:?}"
+        );
+    }
+
+    #[test]
+    fn code_action_runtime_offers_extract_variable() {
+        let server = LspServer::new();
+        let uri = "file:///test.pl";
+        let text = r#"
+my $str = "hello";
+my $result = length($str) + 10;
+print $result;
+"#;
+        open_test_document(&server, uri, text);
+
+        let response = server.handle_code_action(Some(json!({
+            "textDocument": { "uri": uri },
+            "range": {
+                "start": { "line": 2, "character": 13 },
+                "end": { "line": 2, "character": 25 }
+            },
+            "context": { "diagnostics": [] }
+        })));
+
+        let actions =
+            response.ok().flatten().and_then(|v| v.as_array().cloned()).unwrap_or_default();
+
+        assert!(
+            actions.iter().any(|a| {
+                let title = a["title"].as_str().unwrap_or("");
+                title.contains("Extract") && title.contains("variable")
+            }),
+            "expected extract-variable action, got: {actions:?}"
+        );
+    }
+}
