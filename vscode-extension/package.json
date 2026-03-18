@@ -20,7 +20,9 @@
     "perl5",
     "language-server",
     "lsp",
-    "tree-sitter"
+    "tree-sitter",
+    "vscodium",
+    "open-vsx"
   ],
   "extensionKind": [
     "workspace"
