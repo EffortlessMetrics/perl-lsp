@@ -32,7 +32,9 @@ pub mod performance {
 /// Perl::Critic integration for code quality analysis.
 pub mod perl_critic;
 /// Perltidy integration for code formatting.
-pub mod perltidy;
+pub mod perltidy {
+    pub use perl_lsp_perltidy::*;
+}
 
 pub use perl_subprocess_runtime::{SubprocessError, SubprocessOutput, SubprocessRuntime};
 
