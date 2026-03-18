@@ -14,6 +14,7 @@
 //! - **Analyze**: Drives diagnostics, code actions, and refactoring support
 
 use lsp_types::*;
+use perl_lsp_command::advertised_execute_command_strings;
 use serde_json::Value;
 
 pub use perl_lsp_feature_flags::{AdvertisedFeatures, BuildFlags};
@@ -287,15 +288,7 @@ pub fn capabilities_json(build: BuildFlags) -> Value {
 /// Returns all command identifiers that can be executed via the LSP executeCommand
 /// method. This list is used for capability registration and command validation.
 pub fn get_supported_commands() -> Vec<String> {
-    vec![
-        "perl.runTests".to_string(),
-        "perl.runFile".to_string(),
-        "perl.runTestSub".to_string(),
-        "perl.runCritic".to_string(),
-        "perl.runTest".to_string(),
-        "perl.runTestFile".to_string(),
-        "perl.debugFile".to_string(),
-    ]
+    advertised_execute_command_strings()
 }
 
 /// Check if a capability is a boolean or object (for flexible assertions)

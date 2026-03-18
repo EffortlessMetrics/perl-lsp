@@ -26,6 +26,7 @@ members = [
     "crates/perl-lsp-providers",
     "crates/perl-lsp-rename",
     "crates/perl-lsp-protocol",
+    "crates/perl-lsp-command",
     "crates/perl-lsp-transport",
     "crates/perl-lsp-on-type-formatting",
     "crates/perl-lsp-tooling",
@@ -140,6 +141,7 @@ allow = [
     "perl-percentile",
     "perl-subprocess-runtime",
     "perl-lsp-protocol",
+    "perl-lsp-command",
     "perl-lsp-symbol-query",
     "perl-keywords",
     "perl-regex",
@@ -331,6 +333,7 @@ perl-percentile = { path = "crates/perl-percentile", version = "0.11.0" }
 perl-lsp-import-management = { path = "crates/perl-lsp-import-management", version = "0.11.0" }
 perl-lsp-critic-parser = { path = "crates/perl-lsp-critic-parser", version = "0.11.0" }
 perl-lsp-protocol = { path = "crates/perl-lsp-protocol", version = "0.11.0" }
+perl-lsp-command = { path = "crates/perl-lsp-command", version = "0.11.0" }
 perl-path-normalize = { path = "crates/perl-path-normalize", version = "0.11.0" }
 perl-path-security = { path = "crates/perl-path-security", version = "0.11.0" }
 perl-corpus = { path = "crates/perl-corpus", version = "0.11.0" }

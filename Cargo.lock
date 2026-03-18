@@ -1878,6 +1878,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-command"
+version = "0.11.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "perl-lsp-completion"
 version = "0.11.0"
 dependencies = [
@@ -2067,6 +2074,7 @@ name = "perl-lsp-input-validation"
 version = "0.11.0"
 dependencies = [
  "anyhow",
+ "perl-lsp-command",
  "perl-path-security",
  "perl-tdd-support",
  "serde_json",
@@ -2125,6 +2133,7 @@ name = "perl-lsp-protocol"
 version = "0.11.0"
 dependencies = [
  "lsp-types",
+ "perl-lsp-command",
  "perl-lsp-feature-contracts",
  "perl-lsp-feature-flags",
  "serde",

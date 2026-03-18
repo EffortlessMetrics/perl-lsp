@@ -2,6 +2,7 @@
 //! Input validation and sanitization utilities for production hardening.
 
 use anyhow::{Result, anyhow};
+use perl_lsp_command::is_validated_execute_command;
 use perl_path_security::validate_workspace_path;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -135,18 +136,10 @@ fn validate_text_document_params(params: &serde_json::Value) -> Result<()> {
 }
 
 fn validate_execute_command_params(params: &serde_json::Value) -> Result<()> {
-    if let Some(command) = params.get("command").and_then(serde_json::Value::as_str) {
-        let allowed_commands = [
-            "perl.runCritic",
-            "perl.formatDocument",
-            "perl.extractVariable",
-            "perl.extractSubroutine",
-            "perl.optimizeImports",
-        ];
-
-        if !allowed_commands.contains(&command) {
-            return Err(anyhow!("Command not allowed: {}", command));
-        }
+    if let Some(command) = params.get("command").and_then(serde_json::Value::as_str)
+        && !is_validated_execute_command(command)
+    {
+        return Err(anyhow!("Command not allowed: {}", command));
     }
 
     Ok(())

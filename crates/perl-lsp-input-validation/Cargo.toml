@@ -15,6 +15,7 @@ categories = ["development-tools", "text-editors"]
 include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
 
 [dependencies]
+perl-lsp-command = { workspace = true }
 anyhow = "1.0.102"
 serde_json = { workspace = true }
 perl-path-security = { workspace = true }

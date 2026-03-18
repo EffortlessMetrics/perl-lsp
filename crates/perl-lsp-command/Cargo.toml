@@ -1,0 +1,23 @@
+[package]
+name = "perl-lsp-command"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-lsp-command"
+description = "Shared execute-command identifiers and validation helpers for perl-lsp"
+readme = "README.md"
+keywords = ["perl", "lsp", "command", "executecommand"]
+categories = ["development-tools", "text-editors"]
+include = ["src/**", "tests/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
