@@ -1,0 +1,30 @@
+[package]
+name = "perl-workspace-index-lifecycle"
+version = "0.11.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Lifecycle, limits, and instrumentation support for Perl workspace indexing"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-workspace-index-lifecycle"
+keywords = ["perl", "workspace", "index", "lifecycle", "instrumentation"]
+categories = ["development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+parking_lot = "0.12.5"
+serde = { version = "1.0.228", features = ["derive"] }
+
+[lints]
+workspace = true

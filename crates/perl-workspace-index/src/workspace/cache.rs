@@ -79,7 +79,11 @@ impl CacheStats {
     /// Calculate hit rate from hits and misses.
     pub fn calculate_hit_rate(hits: u64, misses: u64) -> f64 {
         let total = hits + misses;
-        if total == 0 { 0.0 } else { hits as f64 / total as f64 }
+        if total == 0 {
+            0.0
+        } else {
+            hits as f64 / total as f64
+        }
     }
 }
 
@@ -207,7 +211,7 @@ where
     ///
     /// # Returns
     ///
-    /// `true` if the value was inserted, `false` if evicted due to size limits.
+    /// `true` if the value was inserted, `false` only when the entry still cannot fit after eviction.
     ///
     /// # Examples
     ///
@@ -288,7 +292,7 @@ where
     ///
     /// # Returns
     ///
-    /// `true` if the value was inserted, `false` if evicted.
+    /// `true` if the value was inserted, `false` only when the value cannot fit after eviction.
     ///
     /// # Examples
     ///

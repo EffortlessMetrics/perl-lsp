@@ -27,6 +27,7 @@ perl-parser-core = { workspace = true }
 perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol-types = { workspace = true }
 perl-uri = { workspace = true }
+perl-workspace-index-lifecycle = { workspace = true }
 perl-workspace-index-slo = { workspace = true }
 perl-workspace-index-state-machine = { workspace = true }
 parking_lot = "0.12.5"

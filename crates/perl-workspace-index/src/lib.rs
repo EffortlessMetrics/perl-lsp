@@ -57,6 +57,9 @@ pub mod workspace;
 pub use workspace::document_store;
 /// Workspace-wide symbol index and lookup utilities.
 pub use workspace::workspace_index;
+
+/// Lightweight coordinator lifecycle support types.
+pub use perl_workspace_index_lifecycle as workspace_index_lifecycle;
 /// Workspace rename operations for cross-file symbol changes.
 pub use workspace::workspace_rename;
 
