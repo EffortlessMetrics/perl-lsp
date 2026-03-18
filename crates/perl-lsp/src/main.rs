@@ -14,11 +14,15 @@ use perl_lsp_launcher::{
     parse_args, port_in_use_message, shell_completion,
 };
 use std::env;
+use std::io;
+use std::io::IsTerminal;
 use std::process;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::time::{Duration, sleep};
+use tracing::{debug, error, info, warn};
+use tracing_subscriber::{EnvFilter, fmt};
 
 /// Spawn a blocking reader thread that reads LSP messages from `reader` and
 /// forwards them to `tx`. The thread exits when the channel closes or the
@@ -39,10 +43,48 @@ fn spawn_reader_thread<R: std::io::Read + Send + 'static>(
                     }
                 }
                 Ok(None) => break, // EOF
-                Err(_) => break,
+                Err(error) => {
+                    debug!(error = %error, "Stopping reader thread after transport read failure");
+                    break;
+                }
             }
         }
     });
+}
+
+fn logging_env_directive() -> Option<String> {
+    env::var("PERL_LSP_LOG").ok().or_else(|| env::var("RUST_LOG").ok())
+}
+
+fn should_enable_logging(launch_config: &LaunchConfig) -> bool {
+    launch_config.enable_logging || logging_env_directive().is_some()
+}
+
+fn logging_filter(launch_config: &LaunchConfig) -> String {
+    logging_env_directive().unwrap_or_else(|| {
+        if launch_config.enable_logging {
+            "perl_lsp=info,perl_lsp_launcher=info,info".to_string()
+        } else {
+            "warn".to_string()
+        }
+    })
+}
+
+fn init_logging(launch_config: &LaunchConfig) {
+    if !should_enable_logging(launch_config) {
+        return;
+    }
+
+    let use_ansi = env::var("NO_COLOR").is_err() && std::io::stderr().is_terminal();
+    let filter = EnvFilter::try_new(logging_filter(launch_config))
+        .unwrap_or_else(|_| EnvFilter::new("perl_lsp=info,info"));
+
+    let _ = fmt()
+        .with_writer(io::stderr)
+        .with_env_filter(filter)
+        .with_ansi(use_ansi)
+        .with_target(true)
+        .try_init();
 }
 
 fn main() {
@@ -159,13 +201,18 @@ fn is_terminal_stdout() -> bool {
 }
 
 fn run_server(launch_config: LaunchConfig) {
-    if launch_config.enable_logging {
-        eprintln!("Perl Language Server starting...");
-        eprintln!("Mode: {}", launch_config.transport.label());
-        if let Some(port) = launch_config.transport.port() {
-            eprintln!("Port: {port}");
-        }
-        eprintln!("Feature profile: {}", launch_config.feature_profile.as_str());
+    init_logging(&launch_config);
+
+    if should_enable_logging(&launch_config) {
+        info!(
+            version = env!("CARGO_PKG_VERSION"),
+            git_tag = env!("GIT_TAG"),
+            transport = launch_config.transport.label(),
+            port = launch_config.transport.port(),
+            feature_profile = launch_config.feature_profile.as_str(),
+            pid = process::id(),
+            "Perl Language Server starting"
+        );
     }
 
     match launch_config.transport {
@@ -222,30 +269,30 @@ fn run_server(launch_config: LaunchConfig) {
                         process::exit(1);
                     }
                 };
-                eprintln!("Perl LSP listening on {}", local_addr);
+                info!(address = %local_addr, "Perl LSP listening");
 
                 loop {
                     match listener.accept().await {
                         Ok((stream, peer_addr)) => {
-                            eprintln!("Accepted connection from {peer_addr}");
+                            info!(peer = %peer_addr, "Accepted LSP socket connection");
                             tokio::spawn(async move {
                                 let std_stream = match stream.into_std() {
                                     Ok(std_stream) => std_stream,
                                     Err(error) => {
-                                        eprintln!("Failed to convert stream to std: {error}");
+                                        error!(error = %error, "Failed to convert Tokio stream to std stream");
                                         return;
                                     }
                                 };
 
                                 if let Err(e) = std_stream.set_nonblocking(false) {
-                                    eprintln!("Failed to set blocking mode: {}", e);
+                                    error!(error = %e, "Failed to set accepted socket to blocking mode");
                                     return;
                                 }
 
                                 let writer = match std_stream.try_clone() {
                                     Ok(w) => w,
                                     Err(e) => {
-                                        eprintln!("Failed to clone stream: {e}");
+                                        error!(error = %e, "Failed to clone accepted socket stream");
                                         return;
                                     }
                                 };
@@ -270,7 +317,7 @@ fn run_server(launch_config: LaunchConfig) {
                             });
                         }
                         Err(e) => {
-                            eprintln!("Failed to accept: {e}");
+                            warn!(error = %e, "Failed to accept incoming LSP connection");
                             sleep(Duration::from_millis(100)).await;
                         }
                     }
@@ -285,4 +332,70 @@ fn print_version() {
     // build.rs always sets GIT_TAG (falls back to "unknown"), so env! is safe.
     println!("Git tag: {}", env!("GIT_TAG"));
     println!("Perl Language Server using perl-parser v3");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use perl_lsp_feature_governance::FeatureProfile;
+
+    #[test]
+    fn logging_disabled_by_default() {
+        let _perl = EnvVarGuard::set("PERL_LSP_LOG", None);
+        let _rust = EnvVarGuard::set("RUST_LOG", None);
+        let config = LaunchConfig::new(FeatureProfile::current());
+        assert!(!should_enable_logging(&config));
+    }
+
+    #[test]
+    fn explicit_log_flag_enables_logging() {
+        let _perl = EnvVarGuard::set("PERL_LSP_LOG", None);
+        let _rust = EnvVarGuard::set("RUST_LOG", None);
+        let mut config = LaunchConfig::new(FeatureProfile::current());
+        config.enable_logging = true;
+        assert!(should_enable_logging(&config));
+        assert_eq!(logging_filter(&config), "perl_lsp=info,perl_lsp_launcher=info,info");
+    }
+
+    #[test]
+    fn env_logging_overrides_default_filter() {
+        let _rust = EnvVarGuard::set("RUST_LOG", Some("warn"));
+        let _guard = EnvVarGuard::set("PERL_LSP_LOG", Some("perl_lsp=debug"));
+        let config = LaunchConfig::new(FeatureProfile::current());
+        assert!(should_enable_logging(&config));
+        assert_eq!(logging_filter(&config), "perl_lsp=debug");
+    }
+
+    #[test]
+    fn perl_lsp_log_takes_precedence_over_rust_log() {
+        let _rust = EnvVarGuard::set("RUST_LOG", Some("warn"));
+        let _perl = EnvVarGuard::set("PERL_LSP_LOG", Some("perl_lsp=trace"));
+        let config = LaunchConfig::new(FeatureProfile::current());
+        assert_eq!(logging_filter(&config), "perl_lsp=trace");
+    }
+
+    struct EnvVarGuard {
+        key: &'static str,
+        old: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn set(key: &'static str, value: Option<&str>) -> Self {
+            let old = env::var(key).ok();
+            match value {
+                Some(value) => unsafe { env::set_var(key, value) },
+                None => unsafe { env::remove_var(key) },
+            }
+            Self { key, old }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            match self.old.as_deref() {
+                Some(value) => unsafe { env::set_var(self.key, value) },
+                None => unsafe { env::remove_var(self.key) },
+            }
+        }
+    }
 }
