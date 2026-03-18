@@ -210,6 +210,17 @@ $name, $age, $salary
                 foreach my $item (1, 2, 3) { print $item; }
             "#,
         ),
+        (
+            "goto_and_labels",
+            r#"
+                goto FINISH;
+                FINISH:
+                1;
+
+                sub bounce { goto &target; }
+                sub target { return 1; }
+            "#,
+        ),
     ];
 
     let mut observed = BTreeSet::new();
