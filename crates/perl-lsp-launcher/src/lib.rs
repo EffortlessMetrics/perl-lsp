@@ -10,15 +10,49 @@
 use std::error::Error;
 use std::fmt;
 
+use std::io;
+
 use clap::{Args, Parser};
 pub use perl_lsp_feature_governance::{
     FeatureProfile, catalog_advertised_feature_ids, compliance_percent_for_profile,
     to_json_for_profile,
 };
 use perl_lsp_feature_governance::{feature_profile_supported_tokens, parse_feature_profile_arg};
+use tracing_subscriber::{EnvFilter, fmt as tracing_fmt};
 
 /// Default port used by socket transport.
 pub const DEFAULT_LSP_PORT: u16 = 9257;
+
+/// Initialize shared stderr logging for CLI binaries in this workspace.
+///
+/// The `RUST_LOG` environment variable wins when present; otherwise the provided
+/// `default_filter` is used.
+pub fn init_stderr_logging(
+    default_filter: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(default_filter))
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    tracing_fmt().with_env_filter(filter).with_writer(io::stderr).try_init()
+}
+
+/// Emit a standard startup banner through the shared tracing subscriber.
+pub fn log_startup(
+    component: &str,
+    transport: TransportMode,
+    feature_profile: Option<FeatureProfile>,
+) {
+    tracing::info!(component, transport = transport.label(), "starting server");
+
+    if let Some(port) = transport.port() {
+        tracing::info!(component, port, "listening port configured");
+    }
+
+    if let Some(profile) = feature_profile {
+        tracing::info!(component, feature_profile = profile.as_str(), "feature profile selected");
+    }
+}
 
 /// Transport options shared by server binaries.
 #[derive(Args, Debug, Clone)]

@@ -5,8 +5,7 @@
 
 use clap::Parser;
 use perl_dap::{DapConfig, DapMode, DapServer};
-use std::io;
-use tracing_subscriber::{EnvFilter, fmt};
+use perl_lsp_launcher::{init_stderr_logging, log_startup};
 
 /// Perl Debug Adapter Protocol server
 #[derive(Parser, Debug)]
@@ -24,19 +23,13 @@ struct Args {
     log_level: String,
 }
 
-fn init_logging(log_level: &str) {
-    let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new(log_level))
-        .unwrap_or_else(|_| EnvFilter::new("info"));
-
-    fmt().with_env_filter(filter).with_writer(io::stderr).init();
-}
-
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    init_logging(&args.log_level);
-    tracing::info!("perl-dap: Debug Adapter Protocol server starting");
+    if let Err(error) = init_stderr_logging(&args.log_level) {
+        eprintln!("Failed to initialize logging: {error}");
+    }
+    log_startup("perl-dap", args.transport.mode(), None);
 
     let config = DapConfig {
         log_level: args.log_level,
@@ -48,12 +41,12 @@ fn main() -> anyhow::Result<()> {
 
     if args.transport.socket || args.transport.port.is_some() {
         let port = args.transport.port.unwrap_or(perl_lsp_launcher::DEFAULT_LSP_PORT);
-        tracing::info!("Starting DAP server on port {}", port);
+        tracing::info!(port, "starting DAP server on socket");
         server.run_socket(port)?;
         return Ok(());
     }
 
-    tracing::info!("Starting DAP server on stdio");
+    tracing::info!("starting DAP server on stdio");
     server.run()?;
 
     Ok(())
