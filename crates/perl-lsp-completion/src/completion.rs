@@ -383,7 +383,17 @@ impl CompletionProvider {
         }
 
         // Determine what kind of completions to provide based on context
-        if context.in_use_statement && !context.prefix.starts_with('$') {
+        // Check for `use Module qw(...)` import list context first
+        if let Some((module_name, qw_prefix)) = Self::detect_use_qw_import_context(source, position)
+        {
+            workspace::add_use_qw_import_completions(
+                &mut completions,
+                &context,
+                &self.workspace_index,
+                &module_name,
+                &qw_prefix,
+            );
+        } else if context.in_use_statement && !context.prefix.starts_with('$') {
             // Module name completion after `use` or `require`
             workspace::add_use_module_completions(
                 &mut completions,
@@ -625,6 +635,69 @@ impl CompletionProvider {
     /// Example: `provider.get_completions(source, pos)`.
     pub fn get_completions(&self, source: &str, position: usize) -> Vec<CompletionItem> {
         self.get_completions_with_path(source, position, None)
+    }
+
+    /// Detect if the cursor is inside `qw(...)` in a `use Module qw(...)` statement.
+    ///
+    /// Returns `Some((module_name, prefix))` when the cursor is inside the import list,
+    /// where `module_name` is the module being imported from and `prefix` is the partial
+    /// symbol the user has typed so far inside the `qw()`.
+    ///
+    /// Returns `None` when not in a `use ... qw()` import context.
+    fn detect_use_qw_import_context(source: &str, position: usize) -> Option<(String, String)> {
+        if !source.is_char_boundary(position) {
+            return None;
+        }
+        let before = &source[..position];
+        let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
+        let line = before[line_start..].trim_start();
+
+        // Must start with `use `
+        let rest = line.strip_prefix("use ")?;
+        let rest = rest.trim_start();
+
+        // Extract module name (starts uppercase, contains ::, alphanumeric, _)
+        let mod_end =
+            rest.find(|c: char| !c.is_alphanumeric() && c != ':' && c != '_').unwrap_or(rest.len());
+        if mod_end == 0 {
+            return None;
+        }
+        let module_name = &rest[..mod_end];
+
+        // Module names start with uppercase by convention
+        if !module_name.starts_with(|c: char| c.is_ascii_uppercase()) {
+            return None;
+        }
+
+        let after_module = &rest[mod_end..];
+
+        // Find `qw` followed by a delimiter
+        let qw_pos = after_module.find("qw")?;
+        let after_qw = &after_module[qw_pos + 2..];
+        let after_qw = after_qw.trim_start();
+
+        // qw can use various delimiters: (, [, {, /, |, !, etc.
+        let first_char = after_qw.chars().next()?;
+        let close_delim = match first_char {
+            '(' => ')',
+            '[' => ']',
+            '{' => '}',
+            '<' => '>',
+            other => other, // For symmetric delimiters like / or |
+        };
+
+        let inside_qw = &after_qw[first_char.len_utf8()..];
+
+        // Check we haven't passed the closing delimiter
+        if inside_qw.contains(close_delim) {
+            return None;
+        }
+
+        // Extract the prefix: the last word being typed inside qw()
+        // Words in qw() are whitespace-separated
+        let prefix = inside_qw.rsplit(|c: char| c.is_ascii_whitespace()).next().unwrap_or("");
+
+        Some((module_name.to_string(), prefix.to_string()))
     }
 
     /// Check if the cursor is in a `use` or `require` statement context.
@@ -1666,5 +1739,142 @@ has 'name' => (re
             Some((code.len() - "(?:".len(), code.len())),
             "expected regex completion to replace the typed group opener"
         );
+    fn test_detect_use_qw_import_context_basic() {
+        // Cursor right after opening paren in qw()
+        let code = "use MyModule qw(";
+        let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
+        assert!(result.is_some(), "should detect qw() import context");
+        let (module, prefix) =
+            result.as_ref().map(|(m, p)| (m.as_str(), p.as_str())).unwrap_or_default();
+        assert_eq!(module, "MyModule");
+        assert_eq!(prefix, "");
+    }
+
+    #[test]
+    fn test_detect_use_qw_import_context_with_prefix() {
+        let code = "use File::Basename qw(bas";
+        let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
+        assert!(result.is_some(), "should detect qw() import context with prefix");
+        let (module, prefix) =
+            result.as_ref().map(|(m, p)| (m.as_str(), p.as_str())).unwrap_or_default();
+        assert_eq!(module, "File::Basename");
+        assert_eq!(prefix, "bas");
+    }
+
+    #[test]
+    fn test_detect_use_qw_import_context_with_existing_imports() {
+        let code = "use MyModule qw(foo bar ba";
+        let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
+        assert!(result.is_some(), "should detect qw() import context after existing imports");
+        let (module, prefix) =
+            result.as_ref().map(|(m, p)| (m.as_str(), p.as_str())).unwrap_or_default();
+        assert_eq!(module, "MyModule");
+        assert_eq!(prefix, "ba");
+    }
+
+    #[test]
+    fn test_detect_use_qw_not_after_close() {
+        // Cursor after the closing paren
+        let code = "use MyModule qw(foo bar);";
+        let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
+        assert!(result.is_none(), "should not detect context after closing paren");
+    }
+
+    #[test]
+    fn test_detect_use_qw_not_for_pragmas() {
+        let code = "use strict qw(";
+        let result = CompletionProvider::detect_use_qw_import_context(code, code.len());
+        assert!(result.is_none(), "should not detect context for lowercase pragmas");
+    }
+
+    #[test]
+    fn test_use_qw_import_completion_with_workspace() -> Result<(), Box<dyn std::error::Error>> {
+        // Create workspace index with a module that has subroutines
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyUtils.pm")?;
+        let module_code = r#"package MyUtils;
+use Exporter 'import';
+our @EXPORT_OK = qw(helper_one helper_two);
+sub helper_one { }
+sub helper_two { }
+sub _private_internal { }
+1;
+"#;
+        index.index_file(module_uri, module_code.to_string())?;
+
+        // Code where user is typing inside qw()
+        let code = "use MyUtils qw(hel";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "helper_one"),
+            "should suggest helper_one from MyUtils: got {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "helper_two"),
+            "should suggest helper_two from MyUtils"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_qw_import_completion_empty_prefix() -> Result<(), Box<dyn std::error::Error>> {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/Utils.pm")?;
+        let module_code = r#"package Utils;
+sub alpha { }
+sub beta { }
+1;
+"#;
+        index.index_file(module_uri, module_code.to_string())?;
+
+        // Empty prefix inside qw()
+        let code = "use Utils qw(";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "alpha"),
+            "should suggest alpha with empty prefix: got {:?}",
+            completions.iter().map(|c| &c.label).collect::<Vec<_>>()
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "beta"),
+            "should suggest beta with empty prefix"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_use_qw_import_completion_detail_shows_module() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let index = Arc::new(WorkspaceIndex::new());
+        let module_uri = Url::parse("file:///workspace/MyLib.pm")?;
+        let module_code = r#"package MyLib;
+sub do_work { }
+1;
+"#;
+        index.index_file(module_uri, module_code.to_string())?;
+
+        let code = "use MyLib qw(do";
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+
+        let provider = CompletionProvider::new_with_index(&ast, Some(index));
+        let completions = provider.get_completions(code, code.len());
+
+        let do_work = completions.iter().find(|c| c.label == "do_work");
+        assert!(do_work.is_some(), "should suggest do_work");
+        let detail = must_some(do_work.and_then(|c| c.detail.as_deref()));
+        assert!(detail.contains("MyLib"), "detail should mention module name, got: {detail:?}");
+        Ok(())
     }
 }

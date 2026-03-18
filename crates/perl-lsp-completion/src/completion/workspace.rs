@@ -208,6 +208,77 @@ pub fn add_use_module_completions(
     }
 }
 
+/// Add import completions for symbols inside `use Module qw(...)`.
+///
+/// When the cursor is inside the `qw()` import list of a `use` statement,
+/// queries the workspace index for symbols exported by or defined in that
+/// module and suggests matching function/variable/constant names.
+///
+/// For example, typing `use File::Basename qw(bas` will suggest `basename`,
+/// `fileparse`, `dirname`, etc.
+pub fn add_use_qw_import_completions(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    workspace_index: &Option<Arc<WorkspaceIndex>>,
+    module_name: &str,
+    qw_prefix: &str,
+) {
+    let Some(index) = workspace_index else {
+        return;
+    };
+
+    if !index.has_symbols() {
+        return;
+    }
+
+    let mut seen = HashSet::new();
+    let members = index.get_package_members(module_name);
+
+    for symbol in &members {
+        match symbol.kind {
+            WsSymbolKind::Subroutine
+            | WsSymbolKind::Method
+            | WsSymbolKind::Export
+            | WsSymbolKind::Constant => {}
+            _ => continue,
+        }
+
+        // Filter by prefix typed inside qw()
+        if !qw_prefix.is_empty() && !symbol.name.starts_with(qw_prefix) {
+            continue;
+        }
+
+        // Deduplicate
+        if !seen.insert(symbol.name.clone()) {
+            continue;
+        }
+
+        let kind_label = match symbol.kind {
+            WsSymbolKind::Constant => "constant",
+            WsSymbolKind::Export => "exported",
+            _ => "function",
+        };
+
+        completions.push(CompletionItem {
+            label: symbol.name.clone(),
+            kind: match symbol.kind {
+                WsSymbolKind::Constant => CompletionItemKind::Constant,
+                _ => CompletionItemKind::Function,
+            },
+            detail: Some(format!("{module_name} {kind_label}")),
+            documentation: symbol
+                .documentation
+                .clone()
+                .or_else(|| Some(format!("`{module_name}::{}`", symbol.name))),
+            insert_text: Some(symbol.name.clone()),
+            sort_text: Some(format!("1_{}", symbol.name)),
+            filter_text: Some(symbol.name.clone()),
+            additional_edits: vec![],
+            text_edit_range: Some((context.prefix_start, context.position)),
+        });
+    }
+}
+
 /// Infer the package type of a `->` receiver from the source context.
 ///
 /// Looks for patterns like `My::Package->method` (static call) or attempts to
