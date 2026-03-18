@@ -1836,6 +1836,7 @@ dependencies = [
  "perl-lsp-protocol",
  "perl-lsp-providers",
  "perl-lsp-rename",
+ "perl-lsp-selection-range",
  "perl-lsp-semantic-tokens",
  "perl-lsp-tooling",
  "perl-lsp-transport",
@@ -2230,6 +2231,13 @@ dependencies = [
  "perl-semantic-analyzer",
  "perl-symbol-cursor",
  "perl-tdd-support",
+]
+
+[[package]]
+name = "perl-lsp-selection-range"
+version = "0.11.0"
+dependencies = [
+ "lsp-types",
 ]
 
 [[package]]
