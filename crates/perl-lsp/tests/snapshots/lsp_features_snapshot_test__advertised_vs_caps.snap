@@ -1,6 +1,6 @@
 ---
 source: crates/perl-lsp/tests/lsp_features_snapshot_test.rs
-assertion_line: 37
+assertion_line: 42
 expression: "&snapshot_data"
 ---
 caps:
@@ -16,7 +16,6 @@ caps:
   - lsp.document_symbol
   - lsp.execute_command
   - lsp.folding_range
-  - lsp.formatting
   - lsp.hover
   - lsp.implementation
   - lsp.inlay_hint
@@ -26,7 +25,6 @@ caps:
   - lsp.notebook_document_sync
   - lsp.on_type_formatting
   - lsp.pull_diagnostics
-  - lsp.range_formatting
   - lsp.references
   - lsp.rename
   - lsp.selection_range
