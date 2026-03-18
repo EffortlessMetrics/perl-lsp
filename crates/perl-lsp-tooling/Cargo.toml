@@ -22,6 +22,7 @@ lsp-compat = ["dep:lsp-types"]
 
 [dependencies]
 perl-subprocess-runtime = { workspace = true }
+perl-lsp-perltidy = { workspace = true }
 perl-tdd-support = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-lsp-performance = { workspace = true }
