@@ -9,7 +9,7 @@
 
 use perl_lsp_feature_contracts::advertised_features;
 use perl_lsp_feature_flags::{AdvertisedFeatures, BuildFlags};
-use perl_lsp_feature_profile::FeatureProfileKind;
+use perl_lsp_feature_profile::{FeatureProfileKind, parse_profile_token};
 
 /// Parse a user-facing feature profile name into a `FeatureProfile`.
 ///
@@ -64,12 +64,12 @@ impl FeatureProfile {
     /// This API is intended for CLI and editor integration where users may provide
     /// explicit profile controls at runtime.
     pub fn from_cli_argument(raw_profile: &str) -> Self {
-        from_str_name(raw_profile).unwrap_or_else(Self::current)
+        parse_profile_token(raw_profile).map(Self::from_kind).unwrap_or_else(Self::current)
     }
 
-    /// Parse a CLI argument and return `None` for unknown values.
+    /// Parse a CLI argument using the same normalization rules as editor and CLI inputs.
     pub fn parse_profile(raw_profile: &str) -> Option<Self> {
-        from_str_name(raw_profile)
+        parse_profile_token(raw_profile).map(Self::from_kind)
     }
 
     /// Convert this policy into base `BuildFlags`.
@@ -202,7 +202,7 @@ mod tests {
     #[test]
     fn from_cli_argument_resolves_known_tokens() {
         assert_eq!(FeatureProfile::from_cli_argument("ga-lock"), FeatureProfile::GaLock);
-        assert_eq!(FeatureProfile::from_cli_argument("prod"), FeatureProfile::Production);
+        assert_eq!(FeatureProfile::from_cli_argument(" Prod "), FeatureProfile::Production);
         assert_eq!(FeatureProfile::from_cli_argument("all"), FeatureProfile::All);
     }
 
@@ -222,6 +222,7 @@ mod tests {
     #[test]
     fn parse_profile_returns_some_for_valid() {
         assert_eq!(FeatureProfile::parse_profile("all"), Some(FeatureProfile::All));
+        assert_eq!(FeatureProfile::parse_profile("  GA_LOCK  "), Some(FeatureProfile::GaLock));
     }
 
     // ── build_flags and profile shapes ──────────────────────────────
