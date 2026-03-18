@@ -58,6 +58,7 @@ Precise, complete information for lookup.
 - [FAQ](reference/FAQ.md) — Frequently asked questions
 - [Known Limitations](reference/KNOWN_LIMITATIONS.md) — Current constraints and workarounds
 - [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Diataxis framework and standards
+- [Codebase Curiosities and Learnings](reference/CODEBASE_CURIOSITIES.md) — Architectural patterns worth noticing
 
 ## Explanation — understand why
 
