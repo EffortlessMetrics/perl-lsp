@@ -32,6 +32,46 @@ fn test_function_definition() {
 }
 
 #[test]
+fn test_method_attributes_parse() {
+    let mut parser = Parser::new("method size :lvalue :prototype($self) ($self) { $self; }");
+    let ast = must(parser.parse());
+
+    match &ast.kind {
+        NodeKind::Program { statements } => match &statements
+            .first()
+            .expect("method statement")
+            .kind
+        {
+            NodeKind::Method { signature, attributes, .. } => {
+                assert!(signature.is_some(), "Expected method signature");
+                assert_eq!(attributes, &vec!["lvalue".to_string(), "prototype($self)".to_string()]);
+            }
+            other => panic!("Expected method declaration, got: {:?}", other),
+        },
+        other => panic!("Expected program node, got: {:?}", other),
+    }
+}
+
+#[test]
+fn test_method_attributes_without_signature_parse() {
+    let mut parser = Parser::new("method reset :lvalue { return; }");
+    let ast = must(parser.parse());
+
+    match &ast.kind {
+        NodeKind::Program { statements } => {
+            match &statements.first().expect("method statement").kind {
+                NodeKind::Method { signature, attributes, .. } => {
+                    assert!(signature.is_none(), "Did not expect method signature");
+                    assert_eq!(attributes, &vec!["lvalue".to_string()]);
+                }
+                other => panic!("Expected method declaration, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected program node, got: {:?}", other),
+    }
+}
+
+#[test]
 fn test_list_declarations() {
     // Test simple list declaration
     let mut parser = Parser::new("my ($x, $y);");

@@ -1,4 +1,52 @@
 impl<'a> Parser<'a> {
+    /// Parse declaration attributes like `:lvalue` or `:prototype($)`.
+    fn parse_declaration_attributes(&mut self) -> ParseResult<Vec<String>> {
+        let mut attributes = Vec::new();
+
+        while self.peek_kind() == Some(TokenKind::Colon) {
+            self.tokens.next()?; // consume colon
+
+            // Parse one or more space-separated attributes after the colon.
+            loop {
+                // Attributes can be identifiers or certain keywords.
+                let attr_token = match self.peek_kind() {
+                    Some(TokenKind::Identifier | TokenKind::Method) => self.tokens.next()?,
+                    _ => break,
+                };
+
+                let mut attr_name = attr_token.text.to_string();
+
+                // Check if attribute has a value in parentheses (like :prototype($)).
+                if self.peek_kind() == Some(TokenKind::LeftParen) {
+                    self.consume_token()?; // consume (
+                    attr_name.push('(');
+
+                    // Collect tokens until matching ).
+                    let mut paren_depth = 1;
+                    while paren_depth > 0 && !self.tokens.is_eof() {
+                        let token = self.tokens.next()?;
+                        attr_name.push_str(&token.text);
+
+                        match token.kind {
+                            TokenKind::LeftParen => paren_depth += 1,
+                            TokenKind::RightParen => paren_depth -= 1,
+                            _ => {}
+                        }
+                    }
+                }
+
+                attributes.push(attr_name);
+
+                match self.peek_kind() {
+                    Some(TokenKind::Identifier | TokenKind::Method) => continue,
+                    _ => break,
+                }
+            }
+        }
+
+        Ok(attributes)
+    }
+
     /// Parse subroutine definition
     fn parse_subroutine(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -28,59 +76,7 @@ impl<'a> Parser<'a> {
         };
 
         // Parse optional attributes first (they come before signature in modern Perl)
-        let mut attributes = Vec::new();
-        while self.peek_kind() == Some(TokenKind::Colon) {
-            self.tokens.next()?; // consume colon
-
-            // Parse one or more space-separated attributes after the colon
-            loop {
-                // Attributes can be identifiers or certain keywords
-                let attr_token = match self.peek_kind() {
-                    Some(TokenKind::Identifier | TokenKind::Method) => self.tokens.next()?,
-                    _ => {
-                        // If it's not an attribute name, we're done with this attribute list
-                        break;
-                    }
-                };
-
-                let mut attr_name = attr_token.text.to_string();
-
-                // Check if attribute has a value in parentheses (like :prototype($))
-                if self.peek_kind() == Some(TokenKind::LeftParen) {
-                    self.consume_token()?; // consume (
-                    attr_name.push('(');
-
-                    // Collect tokens until matching )
-                    let mut paren_depth = 1;
-                    while paren_depth > 0 && !self.tokens.is_eof() {
-                        let token = self.tokens.next()?;
-                        attr_name.push_str(&token.text);
-
-                        match token.kind {
-                            TokenKind::LeftParen => paren_depth += 1,
-                            TokenKind::RightParen => {
-                                paren_depth -= 1;
-                                if paren_depth == 0 {
-                                    attr_name.push(')');
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-
-                attributes.push(attr_name);
-
-                // Check if there's another attribute (not preceded by colon)
-                match self.peek_kind() {
-                    Some(TokenKind::Identifier | TokenKind::Method) => {
-                        // Continue parsing more attributes
-                        continue;
-                    }
-                    _ => break,
-                }
-            }
-        }
+        let attributes = self.parse_declaration_attributes()?;
 
         // Parse optional prototype or signature after attributes
         let (prototype, signature) = if self.peek_kind() == Some(TokenKind::LeftParen) {
@@ -155,6 +151,9 @@ impl<'a> Parser<'a> {
         let name_token = self.expect(TokenKind::Identifier)?;
         let name = name_token.text.to_string();
 
+        // Parse optional attributes before signature, mirroring `sub`.
+        let attributes = self.parse_declaration_attributes()?;
+
         // Parse optional signature
         let signature = if self.peek_kind() == Some(TokenKind::LeftParen) {
             let params = self.parse_signature()?;
@@ -170,7 +169,7 @@ impl<'a> Parser<'a> {
 
         let end = self.previous_position();
         Ok(Node::new(
-            NodeKind::Method { name, signature, attributes: Vec::new(), body: Box::new(body) },
+            NodeKind::Method { name, signature, attributes, body: Box::new(body) },
             SourceLocation { start, end },
         ))
     }
