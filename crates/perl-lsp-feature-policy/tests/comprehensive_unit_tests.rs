@@ -51,7 +51,7 @@ fn from_str_name_auto_resolves() -> Result<(), String> {
 fn from_str_name_unknown_returns_none() {
     assert!(from_str_name("bogus").is_none());
     assert!(from_str_name("").is_none());
-    assert!(from_str_name("GA-LOCK").is_none()); // case-sensitive
+    assert_eq!(from_str_name("GA-LOCK"), Some(FeatureProfile::GaLock));
 }
 
 // ---------------------------------------------------------------------------
@@ -105,6 +105,7 @@ fn current_is_a_valid_profile() {
 fn from_cli_argument_known_token() {
     assert_eq!(FeatureProfile::from_cli_argument("prod"), FeatureProfile::Production);
     assert_eq!(FeatureProfile::from_cli_argument("all"), FeatureProfile::All);
+    assert_eq!(FeatureProfile::from_cli_argument("  GA_LOCK  "), FeatureProfile::GaLock);
 }
 
 #[test]

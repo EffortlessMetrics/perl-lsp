@@ -14,20 +14,20 @@ use perl_lsp_feature_policy::{
 // ---------------------------------------------------------------------------
 
 #[test]
-fn from_str_name_whitespace_is_not_trimmed() {
-    assert!(from_str_name(" ga-lock").is_none());
-    assert!(from_str_name("ga-lock ").is_none());
-    assert!(from_str_name(" ga-lock ").is_none());
-    assert!(from_str_name("\tga-lock").is_none());
+fn from_str_name_normalizes_whitespace() {
+    assert_eq!(from_str_name(" ga-lock"), Some(FeatureProfile::GaLock));
+    assert_eq!(from_str_name("ga-lock "), Some(FeatureProfile::GaLock));
+    assert_eq!(from_str_name(" ga-lock "), Some(FeatureProfile::GaLock));
+    assert_eq!(from_str_name("\tga-lock"), Some(FeatureProfile::GaLock));
 }
 
 #[test]
-fn from_str_name_mixed_case_variants_all_invalid() {
-    assert!(from_str_name("GA-Lock").is_none());
-    assert!(from_str_name("Ga-lock").is_none());
-    assert!(from_str_name("Production").is_none());
-    assert!(from_str_name("PRODUCTION").is_none());
-    assert!(from_str_name("ALL").is_none());
+fn from_str_name_normalizes_case() {
+    assert_eq!(from_str_name("GA-Lock"), Some(FeatureProfile::GaLock));
+    assert_eq!(from_str_name("Ga-lock"), Some(FeatureProfile::GaLock));
+    assert_eq!(from_str_name("Production"), Some(FeatureProfile::Production));
+    assert_eq!(from_str_name("PRODUCTION"), Some(FeatureProfile::Production));
+    assert_eq!(from_str_name("ALL"), Some(FeatureProfile::All));
 }
 
 #[test]
@@ -198,11 +198,11 @@ fn from_cli_argument_whitespace_fallback() {
 }
 
 #[test]
-fn from_cli_argument_case_sensitive() {
+fn from_cli_argument_normalizes_case() {
     let lower = FeatureProfile::from_cli_argument("production");
     let upper = FeatureProfile::from_cli_argument("PRODUCTION");
     assert_eq!(lower, FeatureProfile::Production);
-    assert_eq!(upper, FeatureProfile::current()); // falls back
+    assert_eq!(upper, FeatureProfile::Production);
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +213,7 @@ fn from_cli_argument_case_sensitive() {
 fn parse_profile_strict_none_for_unknown() {
     assert!(FeatureProfile::parse_profile("").is_none());
     assert!(FeatureProfile::parse_profile("invalid").is_none());
-    assert!(FeatureProfile::parse_profile("PRODUCTION").is_none());
+    assert_eq!(FeatureProfile::parse_profile("PRODUCTION"), Some(FeatureProfile::Production));
 }
 
 #[test]
@@ -225,9 +225,9 @@ fn parse_profile_all_valid_aliases() {
 }
 
 #[test]
-fn parse_profile_with_whitespace_fails() {
-    assert!(FeatureProfile::parse_profile(" ga-lock").is_none());
-    assert!(FeatureProfile::parse_profile("ga-lock ").is_none());
+fn parse_profile_with_whitespace_normalizes() {
+    assert_eq!(FeatureProfile::parse_profile(" ga-lock"), Some(FeatureProfile::GaLock));
+    assert_eq!(FeatureProfile::parse_profile("ga-lock "), Some(FeatureProfile::GaLock));
 }
 
 // ---------------------------------------------------------------------------

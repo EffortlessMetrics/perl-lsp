@@ -9,7 +9,7 @@
 
 use perl_lsp_feature_contracts::advertised_features;
 use perl_lsp_feature_flags::{AdvertisedFeatures, BuildFlags};
-use perl_lsp_feature_profile::FeatureProfileKind;
+use perl_lsp_feature_profile::{FeatureProfileKind, parse_profile_token};
 
 /// Parse a user-facing feature profile name into a `FeatureProfile`.
 ///
@@ -21,7 +21,7 @@ use perl_lsp_feature_profile::FeatureProfileKind;
 ///
 /// Unknown values return `None`.
 pub fn from_str_name(s: &str) -> Option<FeatureProfile> {
-    FeatureProfileKind::from_str_name(s).map(FeatureProfile::from_kind)
+    parse_profile_token(s).map(FeatureProfile::from_kind)
 }
 
 /// Known feature profiles for runtime capability selection.

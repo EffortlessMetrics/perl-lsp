@@ -145,6 +145,103 @@ pub struct BuildFlags {
 }
 
 impl BuildFlags {
+    /// Return whether a canonical or compatibility feature identifier is enabled.
+    pub fn has_feature_id(&self, feature_id: &str) -> bool {
+        match feature_id {
+            LSP_COMPLETION => self.completion,
+            LSP_HOVER => self.hover,
+            LSP_DEFINITION => self.definition,
+            LSP_TYPE_DEFINITION => self.type_definition,
+            LSP_IMPLEMENTATION => self.implementation,
+            LSP_REFERENCES => self.references,
+            LSP_DOCUMENT_SYMBOL => self.document_symbol,
+            LSP_WORKSPACE_SYMBOL => self.workspace_symbol,
+            LSP_INLAY_HINT => self.inlay_hints,
+            LSP_PULL_DIAGNOSTICS => self.pull_diagnostics,
+            LSP_WORKSPACE_SYMBOL_RESOLVE => self.workspace_symbol_resolve,
+            LSP_SEMANTIC_TOKENS => self.semantic_tokens,
+            LSP_CODE_ACTION => self.code_actions,
+            LSP_EXECUTE_COMMAND => self.execute_command,
+            LSP_RENAME | LSP_PREPARE_RENAME => self.rename,
+            LSP_DOCUMENT_LINK | LSP_DOCUMENT_LINK_RESOLVE => self.document_links,
+            LSP_SELECTION_RANGE => self.selection_ranges,
+            LSP_ON_TYPE_FORMATTING => self.on_type_formatting,
+            LSP_CODE_LENS | LSP_CODE_LENS_RESOLVE | LSP_CODE_LENS_REFRESH => self.code_lens,
+            LSP_CALL_HIERARCHY => self.call_hierarchy,
+            LSP_TYPE_HIERARCHY => self.type_hierarchy,
+            LSP_LINKED_EDITING_RANGE => self.linked_editing,
+            LSP_INLINE_COMPLETION => self.inline_completion,
+            LSP_INLINE_VALUE | LSP_INLINE_VALUES | LSP_INLINE_VALUE_REFRESH => self.inline_values,
+            LSP_NOTEBOOK_DOCUMENT_SYNC => self.notebook_document_sync,
+            LSP_NOTEBOOK_CELL_EXECUTION => self.notebook_cell_execution,
+            LSP_MONIKER => self.moniker,
+            LSP_DOCUMENT_COLOR | LSP_COLOR | LSP_COLOR_PRESENTATION => self.document_color,
+            LSP_FORMATTING => self.formatting,
+            LSP_RANGE_FORMATTING | LSP_RANGES_FORMATTING => self.range_formatting,
+            LSP_FOLDING_RANGE | LSP_FOLDING_RANGE_REFRESH => self.folding_range,
+            LSP_SIGNATURE_HELP => self.signature_help,
+            LSP_DOCUMENT_HIGHLIGHT => self.document_highlight,
+            LSP_DECLARATION => self.declaration,
+            LSP_CODE_ACTION_RESOLVE => self.code_actions,
+            LSP_COMPLETION_ITEM_RESOLVE => self.completion,
+            LSP_INLAY_HINT_RESOLVE | LSP_INLAY_HINT_REFRESH => self.inlay_hints,
+            LSP_SEMANTIC_TOKENS_REFRESH => self.semantic_tokens,
+            LSP_DIAGNOSTIC_REFRESH => self.pull_diagnostics,
+            _ => false,
+        }
+    }
+
+    /// Update a canonical or compatibility feature identifier and report whether it was known.
+    pub fn set_feature_id(&mut self, feature_id: &str, enabled: bool) -> bool {
+        match feature_id {
+            LSP_COMPLETION | LSP_COMPLETION_ITEM_RESOLVE => self.completion = enabled,
+            LSP_HOVER => self.hover = enabled,
+            LSP_DEFINITION => self.definition = enabled,
+            LSP_TYPE_DEFINITION => self.type_definition = enabled,
+            LSP_IMPLEMENTATION => self.implementation = enabled,
+            LSP_REFERENCES => self.references = enabled,
+            LSP_DOCUMENT_SYMBOL => self.document_symbol = enabled,
+            LSP_WORKSPACE_SYMBOL => self.workspace_symbol = enabled,
+            LSP_INLAY_HINT | LSP_INLAY_HINT_RESOLVE | LSP_INLAY_HINT_REFRESH => {
+                self.inlay_hints = enabled
+            }
+            LSP_PULL_DIAGNOSTICS | LSP_DIAGNOSTIC_REFRESH => self.pull_diagnostics = enabled,
+            LSP_WORKSPACE_SYMBOL_RESOLVE => self.workspace_symbol_resolve = enabled,
+            LSP_SEMANTIC_TOKENS | LSP_SEMANTIC_TOKENS_REFRESH => self.semantic_tokens = enabled,
+            LSP_CODE_ACTION | LSP_CODE_ACTION_RESOLVE => self.code_actions = enabled,
+            LSP_EXECUTE_COMMAND => self.execute_command = enabled,
+            LSP_RENAME | LSP_PREPARE_RENAME => self.rename = enabled,
+            LSP_DOCUMENT_LINK | LSP_DOCUMENT_LINK_RESOLVE => self.document_links = enabled,
+            LSP_SELECTION_RANGE => self.selection_ranges = enabled,
+            LSP_ON_TYPE_FORMATTING => self.on_type_formatting = enabled,
+            LSP_CODE_LENS | LSP_CODE_LENS_RESOLVE | LSP_CODE_LENS_REFRESH => {
+                self.code_lens = enabled
+            }
+            LSP_CALL_HIERARCHY => self.call_hierarchy = enabled,
+            LSP_TYPE_HIERARCHY => self.type_hierarchy = enabled,
+            LSP_LINKED_EDITING_RANGE => self.linked_editing = enabled,
+            LSP_INLINE_COMPLETION => self.inline_completion = enabled,
+            LSP_INLINE_VALUE | LSP_INLINE_VALUES | LSP_INLINE_VALUE_REFRESH => {
+                self.inline_values = enabled
+            }
+            LSP_NOTEBOOK_DOCUMENT_SYNC => self.notebook_document_sync = enabled,
+            LSP_NOTEBOOK_CELL_EXECUTION => self.notebook_cell_execution = enabled,
+            LSP_MONIKER => self.moniker = enabled,
+            LSP_DOCUMENT_COLOR | LSP_COLOR | LSP_COLOR_PRESENTATION => {
+                self.document_color = enabled
+            }
+            LSP_FORMATTING => self.formatting = enabled,
+            LSP_RANGE_FORMATTING | LSP_RANGES_FORMATTING => self.range_formatting = enabled,
+            LSP_FOLDING_RANGE | LSP_FOLDING_RANGE_REFRESH => self.folding_range = enabled,
+            LSP_SIGNATURE_HELP => self.signature_help = enabled,
+            LSP_DOCUMENT_HIGHLIGHT => self.document_highlight = enabled,
+            LSP_DECLARATION => self.declaration = enabled,
+            _ => return false,
+        }
+
+        true
+    }
+
     /// Convert build flags to advertised features.
     pub fn to_advertised_features(&self) -> AdvertisedFeatures {
         AdvertisedFeatures {
@@ -413,7 +510,9 @@ impl BuildFlags {
 mod tests {
     use super::{AdvertisedFeatures, BuildFlags};
     use perl_lsp_feature_contracts::all_features;
-    use perl_lsp_feature_ids::LSP_DOCUMENT_COLOR;
+    use perl_lsp_feature_ids::{
+        LSP_COLOR, LSP_DOCUMENT_COLOR, LSP_INLINE_VALUES, LSP_RANGES_FORMATTING,
+    };
 
     #[test]
     fn feature_ids_are_stable_and_sorted() {
@@ -444,6 +543,33 @@ mod tests {
     fn document_color_uses_bdd_catalog_id() {
         let flags = BuildFlags { document_color: true, ..Default::default() };
         assert_eq!(flags.to_feature_ids(), vec![LSP_DOCUMENT_COLOR]);
+    }
+
+    #[test]
+    fn compatibility_aliases_are_queryable() {
+        let flags = BuildFlags {
+            document_color: true,
+            inline_values: true,
+            range_formatting: true,
+            ..Default::default()
+        };
+
+        assert!(flags.has_feature_id(LSP_COLOR));
+        assert!(flags.has_feature_id(LSP_INLINE_VALUES));
+        assert!(flags.has_feature_id(LSP_RANGES_FORMATTING));
+    }
+
+    #[test]
+    fn set_feature_id_updates_known_aliases() {
+        let mut flags = BuildFlags::default();
+
+        assert!(flags.set_feature_id(LSP_COLOR, true));
+        assert!(flags.document_color);
+        assert!(flags.set_feature_id(LSP_INLINE_VALUES, true));
+        assert!(flags.inline_values);
+        assert!(flags.set_feature_id(LSP_RANGES_FORMATTING, true));
+        assert!(flags.range_formatting);
+        assert!(!flags.set_feature_id("lsp.unknown_flag", true));
     }
 
     #[test]
