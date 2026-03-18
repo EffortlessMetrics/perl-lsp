@@ -489,4 +489,58 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Detect whether an unknown identifier (not a builtin) is being used as a
+    /// bare function call (list operator) with arguments.
+    ///
+    /// In Perl, any function can be called without parentheses: `foo $arg`
+    /// or `foo bar(...)`. This heuristic detects the common CPAN patterns:
+    ///
+    /// - `func $var` / `func @arr` / `func %hash` (sigiled argument)
+    /// - `func other_func(...)` (identifier followed by `(`)
+    /// - `func other_func $arg` (chained bare calls)
+    ///
+    /// We are conservative: the identifier must be lowercase (uppercase bare
+    /// identifiers are more likely to be constants or package names) and
+    /// must NOT be a string comparison operator (`eq`, `ne`, `lt`, `gt`, etc.)
+    /// or a keyword token.
+    fn looks_like_bare_call(&mut self, name: &str) -> bool {
+        // Only lowercase identifiers can be bare function calls.
+        // Uppercase identifiers like `FIRST_FD` are constants.
+        if name.is_empty() || !name.starts_with(|c: char| c.is_ascii_lowercase() || c == '_') {
+            return false;
+        }
+
+        // Exclude string comparison operators that are TokenKind::Identifier
+        if matches!(name, "eq" | "ne" | "lt" | "le" | "gt" | "ge" | "cmp" | "x" | "ISA") {
+            return false;
+        }
+
+        // Must not already be at a statement end or followed by a binary operator
+        if self.is_at_statement_end() || self.peek_kind().is_some_and(Self::is_binary_operator) {
+            return false;
+        }
+
+        // Peek at the next token to see if it could be an argument
+        let next = match self.tokens.peek() {
+            Ok(t) => t,
+            Err(_) => return false,
+        };
+
+        match next.kind {
+            // Sigiled variables: `func $x`, `func @arr`, `func %hash`
+            TokenKind::Identifier if next.text.starts_with('$')
+                || next.text.starts_with('@')
+                || next.text.starts_with('%') => true,
+            TokenKind::ScalarSigil | TokenKind::ArraySigil | TokenKind::HashSigil => true,
+
+            // `func other_func(args)` — identifier followed by `(`
+            TokenKind::Identifier if !next.text.starts_with(|c: char| c.is_ascii_uppercase()) => {
+                // Check if the next-next token is `(` — that signals a function call
+                self.tokens.peek_second().ok().is_some_and(|t| t.kind == TokenKind::LeftParen)
+            }
+
+            _ => false,
+        }
+    }
+
 }
