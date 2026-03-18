@@ -9,6 +9,7 @@
 
 use std::error::Error;
 use std::fmt;
+use std::io;
 
 use clap::{Args, Parser};
 pub use perl_lsp_feature_governance::{
@@ -16,6 +17,7 @@ pub use perl_lsp_feature_governance::{
     to_json_for_profile,
 };
 use perl_lsp_feature_governance::{feature_profile_supported_tokens, parse_feature_profile_arg};
+use tracing_subscriber::EnvFilter;
 
 /// Default port used by socket transport.
 pub const DEFAULT_LSP_PORT: u16 = 9257;
@@ -173,6 +175,64 @@ impl LaunchConfig {
     pub fn advertised_feature_ids(&self) -> Vec<&'static str> {
         catalog_advertised_feature_ids(self.feature_profile)
     }
+}
+
+fn logging_filter(default_directive: &str) -> EnvFilter {
+    let filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(default_directive))
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    filter
+}
+
+/// Initialize stderr logging using `RUST_LOG` or a fallback directive.
+///
+/// Returns `true` when the subscriber was installed and `false` when another
+/// global subscriber was already active.
+pub fn init_stderr_logging(default_directive: &str) -> bool {
+    tracing_subscriber::fmt()
+        .with_env_filter(logging_filter(default_directive))
+        .with_writer(io::stderr)
+        .try_init()
+        .is_ok()
+}
+
+/// Build a human-readable startup summary used by server binaries.
+pub fn format_startup_summary(
+    server_name: &str,
+    transport: TransportMode,
+    feature_profile: Option<FeatureProfile>,
+    log_level: Option<&str>,
+) -> String {
+    let mut summary = format!("{server_name} starting via {}", transport.label());
+
+    if let Some(port) = transport.port() {
+        summary.push_str(&format!(" on port {port}"));
+    }
+    if let Some(profile) = feature_profile {
+        summary.push_str(&format!(" with profile {}", profile.as_str()));
+    }
+    if let Some(level) = log_level {
+        summary.push_str(&format!(" at level {level}"));
+    }
+
+    summary
+}
+
+/// Emit a standardized startup log line for a server binary.
+pub fn log_server_startup(
+    server_name: &str,
+    transport: TransportMode,
+    feature_profile: Option<FeatureProfile>,
+    log_level: Option<&str>,
+) {
+    let summary = format_startup_summary(server_name, transport, feature_profile, log_level);
+    let port = transport.port();
+    let transport = transport.label();
+    let feature_profile = feature_profile.map(FeatureProfile::as_str);
+    let log_level = log_level.unwrap_or("env");
+
+    tracing::info!(server = server_name, transport, port, feature_profile, log_level, "{summary}");
 }
 
 /// Fully resolved launch request.
@@ -787,5 +847,31 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains("tcsh"));
         assert!(msg.contains("bash"));
+    }
+
+    #[test]
+    fn startup_summary_includes_optional_fields() {
+        let summary = super::format_startup_summary(
+            "perl-lsp",
+            TransportMode::Socket { port: 9257 },
+            Some(super::FeatureProfile::current()),
+            Some("debug"),
+        );
+
+        assert!(summary.contains("perl-lsp"));
+        assert!(summary.contains("socket"));
+        assert!(summary.contains("9257"));
+        assert!(summary.contains(super::FeatureProfile::current().as_str()));
+        assert!(summary.contains("debug"));
+    }
+
+    #[test]
+    fn startup_summary_omits_absent_optional_fields() {
+        let summary = super::format_startup_summary("perl-dap", TransportMode::Stdio, None, None);
+
+        assert!(summary.contains("perl-dap"));
+        assert!(summary.contains("stdio"));
+        assert!(!summary.contains("profile"));
+        assert!(!summary.contains("level"));
     }
 }

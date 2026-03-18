@@ -2080,6 +2080,8 @@ dependencies = [
  "clap",
  "perl-lsp-feature-governance",
  "perl-tdd-support",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

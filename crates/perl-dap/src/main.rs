@@ -5,8 +5,7 @@
 
 use clap::Parser;
 use perl_dap::{DapConfig, DapMode, DapServer};
-use std::io;
-use tracing_subscriber::{EnvFilter, fmt};
+use perl_lsp_launcher::{init_stderr_logging, log_server_startup};
 
 /// Perl Debug Adapter Protocol server
 #[derive(Parser, Debug)]
@@ -24,19 +23,11 @@ struct Args {
     log_level: String,
 }
 
-fn init_logging(log_level: &str) {
-    let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new(log_level))
-        .unwrap_or_else(|_| EnvFilter::new("info"));
-
-    fmt().with_env_filter(filter).with_writer(io::stderr).init();
-}
-
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    init_logging(&args.log_level);
-    tracing::info!("perl-dap: Debug Adapter Protocol server starting");
+    let _logging_initialized = init_stderr_logging(&args.log_level);
+    log_server_startup("perl-dap", args.transport.mode(), None, Some(&args.log_level));
 
     let config = DapConfig {
         log_level: args.log_level,

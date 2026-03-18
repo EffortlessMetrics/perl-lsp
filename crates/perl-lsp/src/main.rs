@@ -11,7 +11,7 @@
 use perl_lsp::LspServer;
 use perl_lsp_launcher::{
     LaunchAction, LaunchConfig, TransportMode, format_health_output, format_info_output, help_text,
-    parse_args, port_in_use_message, shell_completion,
+    init_stderr_logging, log_server_startup, parse_args, port_in_use_message, shell_completion,
 };
 use std::env;
 use std::process;
@@ -160,12 +160,13 @@ fn is_terminal_stdout() -> bool {
 
 fn run_server(launch_config: LaunchConfig) {
     if launch_config.enable_logging {
-        eprintln!("Perl Language Server starting...");
-        eprintln!("Mode: {}", launch_config.transport.label());
-        if let Some(port) = launch_config.transport.port() {
-            eprintln!("Port: {port}");
-        }
-        eprintln!("Feature profile: {}", launch_config.feature_profile.as_str());
+        let _logging_initialized = init_stderr_logging("info");
+        log_server_startup(
+            "perl-lsp",
+            launch_config.transport,
+            Some(launch_config.feature_profile),
+            None,
+        );
     }
 
     match launch_config.transport {
