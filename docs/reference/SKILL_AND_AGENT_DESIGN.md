@@ -31,10 +31,11 @@ The swarm is built from four layers:
 
 The persistent team is intentionally small. Most code mutation happens in
 short-lived workers with isolated worktrees.
-The tracked specialist-worker inventory lives in
-[`../../.claude/agents/AGENT_CATALOG.md`](../../.claude/agents/AGENT_CATALOG.md),
-which also records spawned-by, handoff-to, and first-entrypoint metadata for
-every tracked specialist.
+The archived specialist-worker inventory lives in
+[`../../.claude/agents/archive/agent-roster.json`](../../.claude/agents/archive/agent-roster.json),
+while [`../../.claude/agents/AGENT_CATALOG.md`](../../.claude/agents/AGENT_CATALOG.md)
+summarizes the roster and records spawned-by, handoff-to, and first-entrypoint
+metadata for every tracked specialist.
 
 ## Boundary Doctrine
 
@@ -298,7 +299,7 @@ Those are signals that the task needs to be split.
 The repo still contains historical agent generations and experiments
 (`.claude/agents2` through `.claude/agents6`). Those are useful as history and
 donor material, but they are not the architectural center of gravity anymore.
-Compatibility-only donor agents also live outside the active roster under
+Compatibility-only donor agents also live outside the archived roster under
 `.claude/agents-compat/`.
 
 The current control plane is defined by:
