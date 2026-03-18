@@ -90,7 +90,7 @@ impl<'a> Parser<'a> {
     fn is_keyword_handled_builtin(name: &str) -> bool {
         matches!(
             name,
-            "my" | "our" | "local" | "state" // variable declarations
+            "my" | "our" | "local" | "state" | "field" // variable declarations
                 | "use" // pragma handling
                 | "tie" | "untie" // dedicated AST nodes (matched before guard)
                 | "eval" | "do" // dedicated keyword tokens with own parsers
@@ -164,6 +164,7 @@ impl<'a> Parser<'a> {
                 | TokenKind::Our
                 | TokenKind::State
                 | TokenKind::Local
+                | TokenKind::Field
                 // Control flow
                 | TokenKind::If
                 | TokenKind::Unless

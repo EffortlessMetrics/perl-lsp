@@ -121,7 +121,7 @@ impl ErrorRecovery for ParserContext {
                     &token.token.token_type,
                     TokenType::Keyword(kw) if matches!(
                         kw.as_ref(),
-                        "my" | "our" | "local" | "state" | "sub" | "if" | "unless" |
+                        "my" | "our" | "local" | "state" | "field" | "sub" | "if" | "unless" |
                         "while" | "until" | "for" | "foreach" | "return" | "last" |
                         "next" | "redo" | "goto" | "die" | "eval" | "do"
                     )

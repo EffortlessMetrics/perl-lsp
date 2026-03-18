@@ -165,6 +165,8 @@ pub enum TokenKind {
     Class,
     /// Method declaration (5.38+): `method foo`
     Method,
+    /// Class field declaration (5.38+): `field $name`
+    Field,
     /// Format declaration: `format STDOUT =`
     Format,
     /// Undefined value: `undef`
@@ -417,6 +419,7 @@ impl TokenKind {
             TokenKind::Goto => "'goto'",
             TokenKind::Class => "'class'",
             TokenKind::Method => "'method'",
+            TokenKind::Field => "'field'",
             TokenKind::Format => "'format'",
             TokenKind::Undef => "'undef'",
 

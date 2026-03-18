@@ -236,6 +236,7 @@ fn token_stream_experimental_keywords() -> Result<(), Box<dyn std::error::Error>
         ("finally", TokenKind::Finally),
         ("class", TokenKind::Class),
         ("method", TokenKind::Method),
+        ("field", TokenKind::Field),
         ("given", TokenKind::Given),
         ("when", TokenKind::When),
         ("default", TokenKind::Default),
