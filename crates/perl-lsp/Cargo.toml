@@ -55,6 +55,7 @@ perl-workspace-discovery = { workspace = true }
 perl-workspace-folder = { workspace = true }
 perl-workspace-ignore = { workspace = true }
 perl-keywords = { workspace = true }
+perl-path-security = { workspace = true }
 lsp-types = "0.97.0"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

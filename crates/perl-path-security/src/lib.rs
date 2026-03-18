@@ -10,6 +10,15 @@ use perl_path_normalize::{NormalizePathError, normalize_path_within_workspace};
 /// Path validation errors for workspace-bound operations.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum WorkspacePathError {
+    /// Input path exceeded the maximum supported length.
+    #[error("Argument too long ({actual} bytes, max {max})")]
+    ArgumentTooLong {
+        /// Actual argument length in bytes.
+        actual: usize,
+        /// Maximum accepted argument length in bytes.
+        max: usize,
+    },
+
     /// Parent traversal or invalid component escaping workspace constraints.
     #[error("Path traversal attempt detected: {0}")]
     PathTraversalAttempt(String),
@@ -21,6 +30,92 @@ pub enum WorkspacePathError {
     /// Path contains null bytes or disallowed control characters.
     #[error("Invalid path characters detected")]
     InvalidPathCharacters,
+
+    /// The resolved path does not point to an existing file.
+    #[error("File not found: {0}")]
+    FileNotFound(String),
+
+    /// The resolved path exists but is not a file.
+    #[error("Path is not a file: {0}")]
+    NotAFile(String),
+
+    /// The resolved path metadata could not be accessed.
+    #[error("{0}")]
+    MetadataUnavailable(String),
+
+    /// No suitable workspace boundary could be established.
+    #[error("{0}")]
+    WorkspaceUnavailable(String),
+}
+
+/// Resolve a file argument into a canonical workspace-bounded file path.
+///
+/// Accepts plain filesystem paths and `file://` URIs, applies a length cap to
+/// user-controlled input, falls back to the current working directory when no
+/// explicit workspace roots are configured, and ensures the resolved path is an
+/// existing readable file within at least one workspace root.
+pub fn resolve_workspace_file_arg(
+    raw_path: &str,
+    workspace_roots: &[PathBuf],
+) -> Result<PathBuf, WorkspacePathError> {
+    const MAX_ARG_LENGTH: usize = 4096;
+    if raw_path.len() > MAX_ARG_LENGTH {
+        return Err(WorkspacePathError::ArgumentTooLong {
+            actual: raw_path.len(),
+            max: MAX_ARG_LENGTH,
+        });
+    }
+
+    let normalized_path = raw_path.strip_prefix("file://").unwrap_or(raw_path);
+    let candidate = Path::new(normalized_path);
+
+    let effective_roots = if workspace_roots.is_empty() {
+        vec![std::env::current_dir().map_err(|error| {
+            WorkspacePathError::WorkspaceUnavailable(format!(
+                "No workspace roots configured and cannot determine working directory: {error}"
+            ))
+        })?]
+    } else {
+        workspace_roots.to_vec()
+    };
+
+    let mut last_error = None;
+    for workspace_root in &effective_roots {
+        let candidate_for_root = match workspace_root.canonicalize() {
+            Ok(canonical_root) if candidate.is_absolute() => candidate
+                .strip_prefix(&canonical_root)
+                .map_or_else(|_| candidate.to_path_buf(), PathBuf::from),
+            _ => candidate.to_path_buf(),
+        };
+
+        match validate_workspace_path(&candidate_for_root, workspace_root) {
+            Ok(resolved) => {
+                if !resolved.exists() {
+                    return Err(WorkspacePathError::FileNotFound(resolved.display().to_string()));
+                }
+
+                if !resolved.is_file() {
+                    return Err(WorkspacePathError::NotAFile(resolved.display().to_string()));
+                }
+
+                std::fs::metadata(&resolved).map_err(|error| {
+                    WorkspacePathError::MetadataUnavailable(format!(
+                        "Cannot read file metadata '{}': {error}",
+                        resolved.display()
+                    ))
+                })?;
+
+                return Ok(resolved);
+            }
+            Err(error) => last_error = Some(error),
+        }
+    }
+
+    Err(last_error.unwrap_or_else(|| {
+        WorkspacePathError::WorkspaceUnavailable(
+            "No accessible workspace roots available for path resolution".to_string(),
+        )
+    }))
 }
 
 /// Validate and normalize a path so it remains within `workspace_root`.

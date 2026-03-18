@@ -94,6 +94,7 @@
 
 use crate::perl_critic::{BuiltInAnalyzer, CriticAnalyzer, CriticConfig};
 use crate::protocol::JsonRpcError;
+use perl_path_security::{WorkspacePathError, resolve_workspace_file_arg};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
@@ -710,90 +711,17 @@ impl ExecuteCommandProvider {
     /// and enforcing workspace boundaries. All paths are resolved relative
     /// to the workspace root when configured.
     fn resolve_path_from_args(&self, arguments: &[Value]) -> Result<PathBuf, String> {
-        // Extract the file path argument
         let raw_path = arguments
             .first()
             .and_then(|v| v.as_str())
             .ok_or_else(|| "Missing file path argument".to_string())?;
 
-        // Defense in depth: cap argument length to prevent abuse
-        const MAX_ARG_LENGTH: usize = 4096;
-        if raw_path.len() > MAX_ARG_LENGTH {
-            return Err(format!(
-                "Argument too long ({} bytes, max {})",
-                raw_path.len(),
-                MAX_ARG_LENGTH
-            ));
-        }
-
-        // Normalize file:// URIs
-        let normalized_path = raw_path.strip_prefix("file://").unwrap_or(raw_path);
-
-        // Defense in depth: reject paths with parent traversal components
-        // even though canonicalize() resolves them, this catches attempts early
-        if normalized_path.contains("..") {
-            return Err("Path traversal attempt detected: path contains '..' component".to_string());
-        }
-
-        // Convert to PathBuf and canonicalize to resolve .. and . components
-        let path = Path::new(normalized_path);
-        let canonical_path = path
-            .canonicalize()
-            .map_err(|e| format!("Failed to canonicalize path '{}': {}", normalized_path, e))?;
-
-        // Determine workspace boundaries
-        // Security: When workspace_roots is empty (single-file mode), use CWD as the
-        // fallback boundary to prevent unrestricted path traversal. This ensures that
-        // even without explicit workspace configuration, files outside the working
-        // directory cannot be accessed via executeCommand.
-        let effective_roots: Vec<PathBuf> = if self.workspace_roots.is_empty() {
-            // Fallback: use CWD as boundary when no workspace roots configured
-            // This prevents unrestricted path traversal in single-file mode
-            match std::env::current_dir() {
-                Ok(cwd) => vec![cwd],
-                Err(_) => {
-                    return Err(
-                        "No workspace roots configured and cannot determine working directory"
-                            .to_string(),
-                    );
-                }
+        resolve_workspace_file_arg(raw_path, &self.workspace_roots).map_err(|error| match error {
+            WorkspacePathError::PathOutsideWorkspace(message) => {
+                format!("Path traversal detected: {message}")
             }
-        } else {
-            self.workspace_roots.clone()
-        };
-
-        let mut allowed = false;
-        for workspace_root in &effective_roots {
-            if let Ok(canonical_root) = workspace_root.canonicalize() {
-                if canonical_path.starts_with(&canonical_root) {
-                    allowed = true;
-                    break;
-                }
-            }
-        }
-
-        if !allowed {
-            return Err(format!(
-                "Path traversal detected: {} is outside workspace boundaries",
-                canonical_path.display()
-            ));
-        }
-
-        // Validate file existence and readability
-        if !canonical_path.exists() {
-            return Err(format!("File not found: {}", canonical_path.display()));
-        }
-
-        if !canonical_path.is_file() {
-            return Err(format!("Path is not a file: {}", canonical_path.display()));
-        }
-
-        // Check basic readability (this will fail fast if permissions are wrong)
-        std::fs::metadata(&canonical_path).map_err(|e| {
-            format!("Cannot read file metadata '{}': {}", canonical_path.display(), e)
-        })?;
-
-        Ok(canonical_path)
+            other => other.to_string(),
+        })
     }
 
     /// Resolve a debug file path with the same workspace security as other commands.

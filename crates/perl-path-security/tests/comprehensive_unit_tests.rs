@@ -3,7 +3,7 @@
 //! These tests exercise adversarial inputs that a malicious LSP/DAP client
 //! might send to escape the workspace sandbox.
 
-use perl_path_security::{WorkspacePathError, validate_workspace_path};
+use perl_path_security::{WorkspacePathError, resolve_workspace_file_arg, validate_workspace_path};
 use std::path::PathBuf;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -663,5 +663,57 @@ fn filename_double_extension() -> TestResult {
     let (_tmp, ws) = workspace()?;
     let result = validate_workspace_path(&PathBuf::from("script.pl.bak"), &ws)?;
     assert!(result.starts_with(&ws));
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// File argument resolution
+// ---------------------------------------------------------------------------
+
+#[test]
+fn resolve_file_arg_accepts_file_uri_within_workspace() -> TestResult {
+    let (_tmp, ws) = workspace()?;
+    let file = ws.join("lib/Example.pm");
+    std::fs::create_dir_all(file.parent().ok_or("missing parent")?)?;
+    std::fs::write(
+        &file,
+        "package Example; 1;
+",
+    )?;
+
+    let resolved = resolve_workspace_file_arg(
+        &format!("file://{}", file.display()),
+        std::slice::from_ref(&ws),
+    )?;
+    assert_eq!(resolved, file.canonicalize()?);
+    Ok(())
+}
+
+#[test]
+fn resolve_file_arg_rejects_missing_file_inside_workspace() -> TestResult {
+    let (_tmp, ws) = workspace()?;
+    let missing = ws.join("missing.pl");
+
+    let result = resolve_workspace_file_arg(&missing.to_string_lossy(), std::slice::from_ref(&ws));
+    assert!(matches!(result, Err(WorkspacePathError::FileNotFound(_))));
+    Ok(())
+}
+
+#[test]
+fn resolve_file_arg_rejects_directory_targets() -> TestResult {
+    let (_tmp, ws) = workspace()?;
+
+    let result = resolve_workspace_file_arg(&ws.to_string_lossy(), std::slice::from_ref(&ws));
+    assert!(matches!(result, Err(WorkspacePathError::NotAFile(_))));
+    Ok(())
+}
+
+#[test]
+fn resolve_file_arg_rejects_overlong_arguments() -> TestResult {
+    let (_tmp, ws) = workspace()?;
+    let long_arg = "a".repeat(4097);
+
+    let result = resolve_workspace_file_arg(&long_arg, std::slice::from_ref(&ws));
+    assert!(matches!(result, Err(WorkspacePathError::ArgumentTooLong { actual: 4097, max: 4096 })));
     Ok(())
 }
