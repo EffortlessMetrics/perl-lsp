@@ -111,6 +111,7 @@ members = [
     "crates/perl-feature-catalog",
     "crates/tree-sitter-perl-rs",
     "crates/perl-ts-heredoc-analysis",
+    "crates/perl-ts-statement-tracker",
     "crates/perl-ts-logos-lexer",
     "crates/perl-ts-heredoc-parser",
     "crates/perl-ts-partial-ast",

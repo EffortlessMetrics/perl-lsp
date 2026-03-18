@@ -92,9 +92,9 @@ pub use perl_ts_heredoc_analysis::encoding_aware_lexer;
 #[cfg(feature = "pure-rust")]
 pub use perl_ts_heredoc_analysis::runtime_heredoc_handler;
 #[cfg(feature = "pure-rust")]
-pub use perl_ts_heredoc_analysis::statement_tracker;
-#[cfg(feature = "pure-rust")]
 pub use perl_ts_heredoc_analysis::string_utils;
+#[cfg(feature = "pure-rust")]
+pub use perl_ts_statement_tracker as statement_tracker;
 
 // ── Re-exports from perl-ts-logos-lexer ──
 #[cfg(feature = "token-parser")]

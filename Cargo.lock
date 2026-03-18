@@ -2623,6 +2623,7 @@ version = "0.11.0"
 dependencies = [
  "encoding_rs",
  "perl-tdd-support",
+ "perl-ts-statement-tracker",
  "regex",
  "thiserror",
 ]
@@ -2634,6 +2635,7 @@ dependencies = [
  "perl-parser-pest",
  "perl-tdd-support",
  "perl-ts-heredoc-analysis",
+ "perl-ts-statement-tracker",
  "regex",
 ]
 
@@ -2659,6 +2661,10 @@ dependencies = [
  "regex",
  "serde_json",
 ]
+
+[[package]]
+name = "perl-ts-statement-tracker"
+version = "0.11.0"
 
 [[package]]
 name = "perl-uri"
@@ -3912,6 +3918,7 @@ dependencies = [
  "perl-ts-heredoc-parser",
  "perl-ts-logos-lexer",
  "perl-ts-partial-ast",
+ "perl-ts-statement-tracker",
  "pest",
  "pest_derive",
  "postcard",
