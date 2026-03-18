@@ -2785,11 +2785,19 @@ dependencies = [
  "perl-symbol-types",
  "perl-tdd-support",
  "perl-uri",
+ "perl-workspace-index-monitoring",
  "perl-workspace-index-slo",
  "perl-workspace-index-state-machine",
  "serde",
  "tempfile",
  "url",
+]
+
+[[package]]
+name = "perl-workspace-index-monitoring"
+version = "0.11.0"
+dependencies = [
+ "parking_lot",
 ]
 
 [[package]]
