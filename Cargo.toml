@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/perl-ast",
+    "crates/perl-ast-v2",
     "crates/perl-token",
     "crates/perl-quote",
     "crates/perl-pragma",
@@ -147,6 +148,7 @@ allow = [
 
     # Tier 1b — Depend only on Tier 1 crates
     "perl-ast",
+    "perl-ast-v2",
     "perl-lexer",
     "perl-heredoc",
 
@@ -278,6 +280,7 @@ repository = "https://github.com/EffortlessMetrics/perl-lsp"
 homepage = "https://github.com/EffortlessMetrics/perl-lsp"
 
 [workspace.dependencies]
+perl-ast-v2 = { path = "crates/perl-ast-v2", version = "0.11.0" }
 # Tier 1: Leaf crates (no internal dependencies)
 perl-token = { path = "crates/perl-token", version = "0.11.0" }
 perl-quote = { path = "crates/perl-quote", version = "0.11.0" }

@@ -1,22 +1,20 @@
 [package]
-name = "perl-ast"
+name = "perl-ast-v2"
 version = "0.11.0"
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "AST node definitions for Perl parsing, providing typed representations of Perl syntax constructs"
+description = "Incremental parsing AST node definitions for the Perl parser ecosystem"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
 homepage.workspace = true
-documentation = "https://docs.rs/perl-ast"
-keywords = ["perl", "ast", "parser", "syntax-tree"]
+documentation = "https://docs.rs/perl-ast-v2"
+keywords = ["perl", "ast", "incremental", "parser", "syntax-tree"]
 categories = ["parsing", "development-tools"]
 
 [dependencies]
-perl-ast-v2 = { workspace = true }
 perl-position-tracking = { workspace = true }
-perl-token = { workspace = true }
 
 [lints]
 workspace = true

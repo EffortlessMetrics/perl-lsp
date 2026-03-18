@@ -77,8 +77,8 @@ fn v2_node_creation() -> Result<(), Box<dyn std::error::Error>> {
         perl_position_tracking::Position::new(0, 1, 1),
         perl_position_tracking::Position::new(2, 1, 3),
     );
-    let mut id_gen = perl_ast::v2::NodeIdGenerator::new();
-    let node = perl_ast::v2::Node::new(
+    let mut id_gen = perl_ast_v2::NodeIdGenerator::new();
+    let node = perl_ast_v2::Node::new(
         id_gen.next_id(),
         V2NodeKind::Number { value: "99".to_string() },
         range,
@@ -93,8 +93,8 @@ fn v2_error_node() -> Result<(), Box<dyn std::error::Error>> {
         perl_position_tracking::Position::new(0, 1, 1),
         perl_position_tracking::Position::new(0, 1, 1),
     );
-    let mut id_gen = perl_ast::v2::NodeIdGenerator::new();
-    let node = perl_ast::v2::Node::new(
+    let mut id_gen = perl_ast_v2::NodeIdGenerator::new();
+    let node = perl_ast_v2::Node::new(
         id_gen.next_id(),
         V2NodeKind::Error {
             message: "test".to_string(),

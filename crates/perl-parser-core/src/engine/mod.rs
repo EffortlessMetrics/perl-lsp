@@ -3,7 +3,7 @@
 /// Abstract Syntax Tree (AST) definitions for Perl parsing.
 pub mod ast;
 /// Experimental second-generation AST (work in progress).
-pub use perl_ast::v2 as ast_v2;
+pub use perl_ast_v2 as ast_v2;
 /// Edit tracking for incremental parsing.
 pub use perl_edit as edit;
 /// Error types and recovery strategies for parser failures.

@@ -4,7 +4,7 @@
 //! by attaching them to AST nodes as leading/trailing trivia.
 
 use crate::trivia::{NodeWithTrivia, Trivia, TriviaToken};
-use perl_ast::v2::{Node, NodeIdGenerator, NodeKind};
+use perl_ast_v2::{Node, NodeIdGenerator, NodeKind};
 use perl_lexer::{PerlLexer, Token, TokenType};
 use perl_position_tracking::{Position, Range};
 use std::collections::VecDeque;
