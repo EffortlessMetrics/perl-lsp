@@ -700,10 +700,9 @@ fn lexer_slash_ambiguity_real_world_regex_in_map_grep() -> TestResult {
 // ═══════════════════════════════════════════════════════════════════════
 // Split/join/grep/map/sort slash disambiguation tests
 //
-// These tests verify that `/pattern/` after list-operator keywords is
-// correctly interpreted as a regex, while `$x / $y` and `10 / 2` remain
-// division.  The lexer sets `LexerMode::ExpectTerm` after split, grep,
-// map, and sort, which causes `/` to be parsed as a regex delimiter.
+// These tests verify that `/pattern/` after list operators and bare
+// builtins is correctly interpreted as a regex, while `$x / $y` and
+// `10 / 2` remain division.
 // ═══════════════════════════════════════════════════════════════════════
 
 /// Test `split /,/, $string` — regex separator after split
@@ -757,22 +756,16 @@ fn lexer_slash_split_regex_whitespace_quantifier() -> TestResult {
     Ok(())
 }
 
-/// Test `join /,/, @parts` — slash after join
+/// Test `join /,/, @parts` — regex separator after bare builtin
 ///
-/// `join` is NOT in the lexer's `LEXER_KEYWORDS` list, so it is treated as
-/// an `Identifier` rather than a `Keyword`.  After an identifier the lexer
-/// enters `ExpectOperator` mode, so the slash is interpreted as division.
-///
-/// This is a known limitation: in Perl, `join /,/, @parts` uses a regex as
-/// the separator, but the lexer currently treats the `/` as division.  If
-/// `join` is added to `LEXER_KEYWORDS` and the `ExpectTerm` list in the
-/// future, this test should be updated to expect `RegexMatch`.
+/// `join` stays an identifier token, but as a builtin that takes a term
+/// argument it should still put the lexer into `ExpectTerm`.
 #[test]
-fn lexer_slash_join_slash_is_division() -> TestResult {
+fn lexer_slash_join_regex_separator() -> TestResult {
     let code = "join /,/, @parts";
     let mut lexer = PerlLexer::new(code);
 
-    // First token: join is treated as an identifier (not in LEXER_KEYWORDS)
+    // First token: join is still lexed as an identifier.
     let tok = lexer.next_token().ok_or("Expected join token")?;
     assert!(
         matches!(tok.token_type, TokenType::Identifier(ref id) if id.as_ref() == "join"),
@@ -780,18 +773,13 @@ fn lexer_slash_join_slash_is_division() -> TestResult {
         tok.token_type
     );
 
-    // After an identifier, lexer is in ExpectOperator mode, so the slash
-    // is treated as division.
-    let tok = lexer.next_token().ok_or("Expected division token after join")?;
+    let tok = lexer.next_token().ok_or("Expected regex token after join")?;
     assert!(
-        matches!(tok.token_type, TokenType::Division),
-        "Expected division after join (current behavior), got {:?}",
+        matches!(tok.token_type, TokenType::RegexMatch),
+        "Expected regex after join, got {:?}",
         tok.token_type
     );
 
-    // The lexer should not hang — collect remaining tokens to verify termination.
-    // Use `while let` since the lexer may return `None` before an explicit EOF
-    // when input is exhausted in an unusual token state.
     while let Some(tok) = lexer.next_token() {
         if matches!(tok.token_type, TokenType::EOF) {
             break;
