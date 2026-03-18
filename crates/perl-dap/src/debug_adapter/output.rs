@@ -1,6 +1,7 @@
 //! Output handling: source retrieval, loaded sources, modules, inline values, exception info.
 
 use super::*;
+use std::collections::HashSet;
 
 impl DebugAdapter {
     /// Handle inlineValues request (custom)
@@ -59,7 +60,21 @@ impl DebugAdapter {
 
         let start_line = args.start_line.min(args.end_line);
         let end_line = args.end_line.max(args.start_line);
-        let content = match std::fs::read_to_string(&source_path) {
+        let validated_path = match self.validate_source_path(&source_path) {
+            Ok(path) => path,
+            Err(e) => {
+                return DapMessage::Response {
+                    seq,
+                    request_seq,
+                    success: false,
+                    command: "inlineValues".to_string(),
+                    body: None,
+                    message: Some(e),
+                };
+            }
+        };
+
+        let content = match std::fs::read_to_string(&validated_path) {
             Ok(content) => content,
             Err(e) => {
                 return DapMessage::Response {
@@ -251,13 +266,13 @@ impl DebugAdapter {
                 self.cancel_requested.store(false, Ordering::Release);
                 return Vec::new();
             }
-            if let Some(caps) = re.captures(line) {
-                if let (Some(key), Some(val)) = (caps.get(1), caps.get(2)) {
-                    entries.push((key.as_str().to_string(), val.as_str().to_string()));
-                }
+            if let Some(caps) = re.captures(line)
+                && let (Some(key), Some(val)) = (caps.get(1), caps.get(2))
+            {
+                entries.push((key.as_str().to_string(), val.as_str().to_string()));
             }
         }
-        entries
+        normalize_inc_entries(entries)
     }
 
     /// Handle loadedSources request — returns all files loaded via `%INC`.
@@ -333,6 +348,88 @@ impl DebugAdapter {
             command: "modules".to_string(),
             body: serde_json::to_value(&body).ok(),
             message: None,
+        }
+    }
+}
+
+fn normalize_inc_entries(entries: Vec<(String, String)>) -> Vec<(String, String)> {
+    let mut seen = HashSet::new();
+    let mut normalized: Vec<_> = entries
+        .into_iter()
+        .filter(|(key, path)| seen.insert((key.clone(), path.clone())))
+        .collect();
+
+    normalized.sort_by(|(left_key, left_path), (right_key, right_path)| {
+        module_path_to_name(left_key)
+            .cmp(&module_path_to_name(right_key))
+            .then_with(|| left_key.cmp(right_key))
+            .then_with(|| left_path.cmp(right_path))
+    });
+
+    normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    #[test]
+    fn normalize_inc_entries_sorts_and_deduplicates_results() {
+        let entries = vec![
+            ("warnings.pm".to_string(), "/app/lib/warnings.pm".to_string()),
+            ("Foo/Bar.pm".to_string(), "/app/lib/Foo/Bar.pm".to_string()),
+            ("strict.pm".to_string(), "/app/lib/strict.pm".to_string()),
+            ("Foo/Bar.pm".to_string(), "/app/lib/Foo/Bar.pm".to_string()),
+            ("Foo/Baz.pm".to_string(), "/app/lib/Foo/Baz.pm".to_string()),
+        ];
+
+        let normalized = normalize_inc_entries(entries);
+        let actual: Vec<_> = normalized.iter().map(|(key, _)| key.as_str()).collect();
+
+        assert_eq!(actual, vec!["Foo/Bar.pm", "Foo/Baz.pm", "strict.pm", "warnings.pm"]);
+        assert_eq!(normalized.len(), 4, "duplicate %INC entries should be removed");
+    }
+
+    #[test]
+    fn inline_values_rejects_paths_outside_workspace_root() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let adapter = DebugAdapter::new();
+        let workspace = tempdir()?;
+        let outside = tempdir()?;
+        let outside_file = outside.path().join("secret.pl");
+        std::fs::write(
+            &outside_file,
+            "my $secret = 1;
+",
+        )?;
+
+        *lock_or_recover(&adapter.workspace_root, "tests.workspace_root") =
+            Some(workspace.path().to_path_buf());
+
+        let response = adapter.handle_inline_values(
+            1,
+            1,
+            Some(json!({
+                "source": { "path": outside_file.to_string_lossy() },
+                "startLine": 1,
+                "endLine": 1
+            })),
+        );
+
+        match response {
+            DapMessage::Response { success, command, message, .. } => {
+                assert!(!success, "inlineValues should reject workspace escapes");
+                assert_eq!(command, "inlineValues");
+                let message = message.unwrap_or_default();
+                assert!(
+                    message.contains("Path validation failed"),
+                    "unexpected message: {message}"
+                );
+                Ok(())
+            }
+            other => Err(format!("expected response, got {other:?}").into()),
         }
     }
 }
