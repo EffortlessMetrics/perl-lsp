@@ -5,7 +5,7 @@
 
 use clap::Parser;
 use perl_dap::{DapConfig, DapMode, DapServer};
-use perl_lsp_launcher::{init_stderr_logging, log_startup};
+use perl_lsp_launcher::enable_stderr_logging;
 
 /// Perl Debug Adapter Protocol server
 #[derive(Parser, Debug)]
@@ -26,10 +26,11 @@ struct Args {
 fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
-    if let Err(error) = init_stderr_logging(&args.log_level) {
+    if let Err(error) =
+        enable_stderr_logging("perl-dap", &args.log_level, args.transport.mode(), None)
+    {
         eprintln!("Failed to initialize logging: {error}");
     }
-    log_startup("perl-dap", args.transport.mode(), None);
 
     let config = DapConfig {
         log_level: args.log_level,

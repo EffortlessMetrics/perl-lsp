@@ -54,6 +54,18 @@ pub fn log_startup(
     }
 }
 
+/// Initialize shared stderr logging and emit the standard startup banner.
+pub fn enable_stderr_logging(
+    component: &str,
+    default_filter: &str,
+    transport: TransportMode,
+    feature_profile: Option<FeatureProfile>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    init_stderr_logging(default_filter)?;
+    log_startup(component, transport, feature_profile);
+    Ok(())
+}
+
 /// Transport options shared by server binaries.
 #[derive(Args, Debug, Clone)]
 pub struct TransportArgs {
