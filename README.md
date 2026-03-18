@@ -20,6 +20,31 @@
 
 > **Status:** `perl-lsp` v0.10.0 is the initial public alpha. Core editor workflows are in place, but interfaces and behavior may still evolve. Please [report issues](https://github.com/EffortlessMetrics/perl-lsp/issues) when you hit rough edges.
 
+## Table of Contents
+
+- [At a Glance](#at-a-glance)
+- [What this repository contains](#what-this-repository-contains)
+- [Why perl-lsp?](#why-perl-lsp)
+- [Quick Start](#quick-start)
+- [Features](#features)
+- [Parser Coverage](#parser-coverage)
+- [Architecture](#architecture)
+- [Published Crates](#published-crates)
+- [Development](#development)
+- [Security](#security)
+- [Documentation](#documentation)
+- [History](#history)
+- [License](#license)
+
+## At a Glance
+
+- **Native Rust binaries** for both LSP (`perl-lsp`) and debugging (`perl-dap`) -- no Perl runtime required
+- **Modern editor support** with completion, diagnostics, hover, rename, formatting, and symbols
+- **Deep Perl 5 coverage** across parser, lexer, semantic analysis, and workspace indexing
+- **Cross-file navigation** powered by dual indexing of bare and qualified symbols
+- **Unicode-safe and security-focused** with hardened path handling and supply-chain attestations
+- **Monorepo architecture** with 120+ focused crates for parser, LSP, DAP, and tooling
+
 ## What this repository contains
 
 This repository is more than a single binary crate. It is a Rust workspace for Perl tooling with:
@@ -58,22 +83,19 @@ If you want the user-facing setup guide first, jump to **[Quick start](#quick-st
 | **Debug adapter** | Built-in bridge | Built-in | No |
 | **Supply-chain attestations** | Yes | N/A | N/A |
 
-## Quick start
+## Quick Start
 
-### Install from crates.io
+### 1. Install the language server
 
 ```bash
 cargo install perl-lsp
-perl-lsp --health
+perl-lsp --health  # should print: ok X.Y.Z
 ```
 
-Expected output:
+<details>
+<summary><strong>Other install methods</strong></summary>
 
-```text
-ok 0.10.0
-```
-
-### Install from source
+**From source:**
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
@@ -82,15 +104,13 @@ cargo install --path crates/perl-lsp
 perl-lsp --health
 ```
 
-### Install a pre-built binary
+**Pre-built binary:**
 
-Download the appropriate artifact from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), place `perl-lsp` on your `PATH`, then run:
+Download the appropriate artifact from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases), place `perl-lsp` on your `PATH`, and run `perl-lsp --health`.
 
-```bash
-perl-lsp --health
-```
+</details>
 
-### Connect your editor
+### 2. Hook it up to your editor
 
 - **VS Code**
 
@@ -112,17 +132,13 @@ perl-lsp --health
   (add-to-list 'eglot-server-programs '(perl-mode "perl-lsp" "--stdio"))
   ```
 
-Open a Perl file after installation and you should immediately get completions, diagnostics, hover information, and navigation.
+### 3. Open a Perl file
 
-For full walkthroughs, troubleshooting, and more editors, see:
+You should immediately get completions, diagnostics, hover information, and navigation.
 
-- [Getting Started](docs/tutorials/GETTING_STARTED.md)
-- [VS Code setup](docs/EDITORS/VS_CODE_SETUP.md)
-- [Neovim setup](docs/EDITORS/NEOVIM_SETUP.md)
-- [Emacs setup](docs/EDITORS/EMACS_SETUP.md)
-- [Helix setup](docs/EDITORS/HELIX_SETUP.md)
-- [coc.nvim setup](docs/EDITORS/COC_NEOVIM_SETUP.md)
-- [Sublime Text setup](docs/EDITORS/SUBLIME_SETUP.md)
+New to language servers? Start with the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough, editor-specific setup notes, and troubleshooting tips.
+
+For more editors, see: [VS Code](docs/EDITORS/VS_CODE_SETUP.md) | [Neovim](docs/EDITORS/NEOVIM_SETUP.md) | [Emacs](docs/EDITORS/EMACS_SETUP.md) | [Helix](docs/EDITORS/HELIX_SETUP.md) | [coc.nvim](docs/EDITORS/COC_NEOVIM_SETUP.md) | [Sublime Text](docs/EDITORS/SUBLIME_SETUP.md)
 
 ## Features
 
