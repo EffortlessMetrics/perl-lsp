@@ -50,6 +50,8 @@ The Marketplace package is designed to work with `PATH`, `serverPath`, or runtim
 ### Language features
 The extension is a thin client for `perl-lsp`, so the exact feature surface depends on the installed server version. The intended day-one experience includes diagnostics, completion, hover, definition, references, symbols, semantic tokens, formatting, code actions, and debugger launch support.
 
+When you change binary selection settings such as `perl-lsp.serverPath`, `perl-lsp.channel`, `perl-lsp.downloadBaseUrl`, or `perl-lsp.featureProfile`, the extension now prompts you to restart the language server so the new configuration takes effect immediately.
+
 ### Extension UX
 - Output channel for server logs
 - Status bar menu for common actions
@@ -69,6 +71,7 @@ Refactoring is exposed through server-backed code actions when available. The ex
 | `Perl: Show Server Version` | Show the installed `perl-lsp` version. |
 | `Perl: Show Output Channel` | Open the extension output channel. |
 | `Perl: Show Status Menu` | Open the quick status/action menu. |
+| `Perl: Reinstall Managed Server Binary` | Re-download the auto-managed `perl-lsp` binary and optionally restart the client. |
 | `Perl: Organize Use Statements` | Trigger organize-imports for the active Perl document. |
 | `Perl: Run Tests in Current File` | Run tests for the active `.t` or `.pl` file. |
 

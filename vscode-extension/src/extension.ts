@@ -13,6 +13,15 @@ import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
 import { BinaryDownloader } from './downloader';
 
+const CONFIG_KEYS_REQUIRING_RESTART = [
+    'channel',
+    'versionTag',
+    'serverPath',
+    'autoDownload',
+    'downloadBaseUrl',
+    'featureProfile',
+] as const;
+
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
@@ -142,6 +151,36 @@ export async function activate(context: vscode.ExtensionContext) {
         await restartServer(context);
     });
 
+    const reinstallCommand = vscode.commands.registerCommand('perl-lsp.reinstall', async () => {
+        await reinstallServerBinary(context);
+    });
+
+    const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(async (event) => {
+        if (!event.affectsConfiguration('perl-lsp')) {
+            return;
+        }
+
+        const requiresRestart = CONFIG_KEYS_REQUIRING_RESTART.some((key) =>
+            event.affectsConfiguration(`perl-lsp.${key}`)
+        );
+
+        if (!requiresRestart) {
+            outputChannel.appendLine('Perl LSP configuration updated. No restart required.');
+            return;
+        }
+
+        outputChannel.appendLine('Detected Perl LSP configuration change that requires a restart.');
+        const selection = await vscode.window.showInformationMessage(
+            'Perl LSP settings changed. Restart the language server to apply the new configuration.',
+            'Restart Now',
+            'Later'
+        );
+
+        if (selection === 'Restart Now') {
+            await restartServer(context);
+        }
+    });
+
     const organizeImportsCommand = vscode.commands.registerCommand('perl-lsp.organizeImports', async () => {
         await vscode.commands.executeCommand('editor.action.organizeImports');
     });
@@ -242,6 +281,7 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
+            { label: '$(cloud-download) Reinstall Managed Binary', detail: 'Re-download the auto-managed perl-lsp binary', command: 'perl-lsp.reinstall' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] }
@@ -256,7 +296,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    context.subscriptions.push(restartCommand, organizeImportsCommand, runTestsCommand, showVersionCommand, statusMenuCommand);
+    context.subscriptions.push(restartCommand, reinstallCommand, configChangeDisposable, organizeImportsCommand, runTestsCommand, showVersionCommand, statusMenuCommand);
     
     outputChannel.appendLine('Perl Language Server started successfully');
 }
@@ -428,5 +468,42 @@ async function restartServer(context: vscode.ExtensionContext) {
                 outputChannel.show();
             }
         });
+    }
+}
+
+
+async function reinstallServerBinary(context: vscode.ExtensionContext) {
+    const config = vscode.workspace.getConfiguration('perl-lsp');
+    const userPath = config.get<string>('serverPath');
+
+    if (userPath) {
+        vscode.window.showWarningMessage(
+            'perl-lsp.serverPath is set, so reinstall only applies to the auto-managed binary. Clear serverPath to use managed downloads.'
+        );
+        return;
+    }
+
+    const downloader = new BinaryDownloader(context, outputChannel);
+    const managedPath = BinaryDownloader.getLocalBinaryPath(context);
+    outputChannel.appendLine(`Reinstalling managed perl-lsp binary at: ${managedPath}`);
+
+    const downloadedPath = await downloader.ensureBinary(true);
+    if (!downloadedPath) {
+        vscode.window.showErrorMessage('Failed to reinstall perl-lsp. See the output channel for details.', 'Show Output').then(selection => {
+            if (selection === 'Show Output') {
+                outputChannel.show();
+            }
+        });
+        return;
+    }
+
+    const restartChoice = await vscode.window.showInformationMessage(
+        'Perl LSP binary reinstalled successfully. Restart the language server now?',
+        'Restart Now',
+        'Later'
+    );
+
+    if (restartChoice === 'Restart Now') {
+        await restartServer(context);
     }
 }

@@ -32,7 +32,7 @@ export class BinaryDownloader {
         private readonly outputChannel: vscode.OutputChannel
     ) {}
     
-    async ensureBinary(): Promise<string | null> {
+    async ensureBinary(forceDownload = false): Promise<string | null> {
         const config = vscode.workspace.getConfiguration('perl-lsp');
         const channel = config.get<string>('channel', 'latest');
         const versionTag = config.get<string>('versionTag', '');
@@ -43,10 +43,15 @@ export class BinaryDownloader {
         }
         
         // Check if binary already exists
-        const existingPath = this.getLocalBinaryPath();
-        if (existingPath && fs.existsSync(existingPath)) {
+        const existingPath = BinaryDownloader.getLocalBinaryPath(this.context);
+        if (!forceDownload && existingPath && fs.existsSync(existingPath)) {
             this.outputChannel.appendLine(`Using existing binary: ${existingPath}`);
             return existingPath;
+        }
+
+        if (forceDownload && existingPath && fs.existsSync(existingPath)) {
+            this.outputChannel.appendLine(`Removing managed perl-lsp before reinstall: ${existingPath}`);
+            fs.rmSync(existingPath, { force: true });
         }
         
         // Show status bar while downloading
@@ -232,7 +237,7 @@ export class BinaryDownloader {
                 
                 // Move to final location
                 progress.report({ increment: 15, message: 'Installing binary...' });
-                const finalPath = this.getLocalBinaryPath();
+                const finalPath = BinaryDownloader.getLocalBinaryPath(this.context);
                 const finalDir = path.dirname(finalPath);
                 
                 if (!fs.existsSync(finalDir)) {
@@ -531,19 +536,19 @@ export class BinaryDownloader {
         return muslLibs.some(lib => fs.existsSync(lib));
     }
     
-    private getLocalBinaryPath(): string {
+    static getLocalBinaryPath(context: vscode.ExtensionContext): string {
         const platform = process.platform;
         const arch = process.arch;
         const binaryName = platform === 'win32' ? 'perl-lsp.exe' : 'perl-lsp';
-        
+
         return path.join(
-            this.context.globalStorageUri.fsPath,
+            context.globalStorageUri.fsPath,
             'bin',
             `${platform}-${arch}`,
             binaryName
         );
     }
-    
+
     /**
      * Returns the path where perl-dap would be placed inside the auto-download
      * directory.  Used by debugAdapter.ts to locate the binary without
