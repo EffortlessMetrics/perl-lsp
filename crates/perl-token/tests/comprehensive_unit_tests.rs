@@ -185,6 +185,7 @@ fn all_token_kinds() -> Vec<TokenKind> {
         TokenKind::Goto,
         TokenKind::Class,
         TokenKind::Method,
+        TokenKind::Field,
         TokenKind::Format,
         TokenKind::Undef,
         // Operators
@@ -332,6 +333,7 @@ fn all_variants_are_listed() {
             | TokenKind::Goto
             | TokenKind::Class
             | TokenKind::Method
+            | TokenKind::Field
             | TokenKind::Format
             | TokenKind::Undef
             | TokenKind::Assign
@@ -529,8 +531,10 @@ fn keyword_token_round_trip() {
         (TokenKind::Next, "next"),
         (TokenKind::Last, "last"),
         (TokenKind::Redo, "redo"),
+        (TokenKind::Goto, "goto"),
         (TokenKind::Class, "class"),
         (TokenKind::Method, "method"),
+        (TokenKind::Field, "field"),
         (TokenKind::Format, "format"),
         (TokenKind::Undef, "undef"),
     ];
