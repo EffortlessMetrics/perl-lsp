@@ -40,6 +40,11 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
     ("Expected '>' to close angle", "unclosed_angle"),
     ("Substitution operator should be", "substitution_misparse"),
     // Expression errors — user-friendly token names ('=>', '->', etc.)
+    ("expected expression, found FatArrow", "unexpected_fat_arrow_expr"),
+    ("expected expression, found Arrow", "unexpected_arrow_expr"),
+    ("expected expression, found Slash", "unexpected_slash_expr"),
+    ("expected expression, found Question", "unexpected_question_expr"),
+    ("expected expression, found Return", "unexpected_return_expr"),
     ("expected expression, found '=>'", "unexpected_fat_arrow_expr"),
     ("expected expression, found '->'", "unexpected_arrow_expr"),
     ("expected expression, found '/'", "unexpected_slash_expr"),
@@ -69,6 +74,19 @@ const SEMANTIC_BUCKETS: &[(&str, &str)] = &[
     // Catch-all for remaining unexpected expression tokens (MUST remain last)
     ("expected expression, found", "unexpected_token_in_expr"),
     // Unclosed delimiters — user-friendly names ('}', ')', ']')
+    ("Unexpected token: expected RightBrace, found Semicolon", "unclosed_brace_semicolon"),
+    ("expected RightBrace, found Semicolon", "unclosed_brace_semicolon"),
+    ("expected RightBrace, found Eof", "unclosed_brace_eof"),
+    ("expected RightBrace, found", "unclosed_brace"),
+    ("expected RightParen, found Identifier", "unclosed_paren_identifier"),
+    ("expected RightParen, found", "unclosed_paren"),
+    ("expected RightBracket, found", "unclosed_bracket"),
+    ("expected LeftParen, found", "expected_left_paren"),
+    ("expected LeftBrace, found", "expected_left_brace"),
+    ("expected Semicolon, found", "expected_semicolon"),
+    ("expected Colon, found", "expected_colon"),
+    ("expected Identifier, found", "expected_identifier"),
+    ("expected Comma, found", "expected_comma"),
     ("expected '}', found ';'", "unclosed_brace_semicolon"),
     ("expected '}', found end of input", "unclosed_brace_eof"),
     ("expected '}'", "unclosed_brace"),
@@ -723,6 +741,12 @@ pub fn normalize_error_bucket(error: &str) -> String {
     } else {
         error.to_string()
     };
+    let stripped = if let Some(ref re_at) = *RE_TRAILING_AT {
+        re_at.replace(&stripped, "").to_string()
+    } else {
+        stripped
+    };
+    let stripped = stripped.trim().to_string();
 
     // Pass 2: map to semantic bucket via first-match substring lookup
     for &(substring, bucket_name) in SEMANTIC_BUCKETS {
