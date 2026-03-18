@@ -2,6 +2,30 @@
 
 Documentation for Perl LSP v0.12.0 — a Language Server Protocol implementation for Perl.
 
+## Start here by goal
+
+Choose the path that matches what you want to do:
+
+| I want to... | Start here |
+|---|---|
+| Install or run the project quickly | [Getting Started](tutorials/GETTING_STARTED.md) |
+| Configure an editor | [Editor Setup](how-to/EDITOR_SETUP.md) |
+| Debug Perl code | [DAP User Guide](tutorials/DAP_USER_GUIDE.md) |
+| Work on the codebase as a contributor | [Project Orientation](project/ORIENTATION.md) |
+| Look up commands, configuration, or architecture | [Reference](#reference--look-it-up) |
+| Understand design decisions and tradeoffs | [Explanation](#explanation--understand-why) |
+
+## Documentation map
+
+This documentation set follows the [Diátaxis](https://diataxis.fr/) framework:
+
+- **Tutorials** teach by walking you through a workflow.
+- **How-to guides** help you complete a concrete task.
+- **Reference** provides exact facts, commands, and schemas.
+- **Explanation** gives architectural context and rationale.
+
+For authoring standards and placement rules, see the [Documentation Guide](reference/DOCUMENTATION_GUIDE.md).
+
 ## Repository snapshot
 
 - Workspace version: **v0.12.0**
@@ -36,27 +60,41 @@ Step-by-step guides to get you started.
 
 Task-oriented instructions for common operations.
 
+### Common developer tasks
+
 - [Installation](how-to/INSTALLATION.md) — Install from source or binary
 - [Editor Setup](how-to/EDITOR_SETUP.md) — Configure your editor
 - [Troubleshooting](how-to/TROUBLESHOOTING.md) — Common issues and solutions
+- [Debugging](how-to/DEBUGGING.md) — Diagnose parser, LSP, and test issues
+- [Performance Tuning](how-to/PERFORMANCE_TUNING.md) — Measure and improve runtime behavior
+
+### Maintenance and release tasks
+
 - [Dependency Management](how-to/DEPENDENCY_MANAGEMENT.md) — Automated updates with Dependabot
 - [SemVer Workflow](how-to/SEMVER_WORKFLOW.md) — SemVer checking and API compatibility
 - [Coverage](how-to/COVERAGE.md) — Code coverage reports
 - [Dead Code Detection](how-to/DEAD_CODE_DETECTION.md) — Find unused code
+- [Upgrading](how-to/UPGRADING.md) — Upgrade project versions and workflows
 
 ## Reference — look it up
 
 Precise, complete information for lookup.
 
+### Frequently-used references
+
 - [Commands Reference](reference/COMMANDS_REFERENCE.md) — Full command catalog
-- [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) — System design and components
-- [Crate Architecture Guide](reference/CRATE_ARCHITECTURE_GUIDE.md) — Workspace structure and tiers
-- [LSP Implementation Guide](reference/LSP_IMPLEMENTATION_GUIDE.md) — Language Server Protocol details
-- [LSP Features](reference/LSP_FEATURES.md) — Supported LSP capabilities
-- [Stability Policy](reference/STABILITY.md) — API versioning and compatibility
 - [Configuration](reference/CONFIG.md) — Configuration options
 - [FAQ](reference/FAQ.md) — Frequently asked questions
 - [Known Limitations](reference/KNOWN_LIMITATIONS.md) — Current constraints and workarounds
+- [Stability Policy](reference/STABILITY.md) — API versioning and compatibility
+
+### Architecture and implementation references
+
+- [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) — System design and components
+- [Crate Architecture Guide](reference/CRATE_ARCHITECTURE_GUIDE.md) — Workspace structure and tiers
+- [Workspace Navigation Guide](reference/WORKSPACE_NAVIGATION_GUIDE.md) — Cross-file navigation behavior
+- [LSP Implementation Guide](reference/LSP_IMPLEMENTATION_GUIDE.md) — Language Server Protocol details
+- [LSP Features](reference/LSP_FEATURES.md) — Supported LSP capabilities
 - [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Diataxis framework and standards
 
 ## Explanation — understand why
@@ -72,6 +110,7 @@ Conceptual discussions and design rationale.
 
 Process, metrics, and project health.
 
+- [Project Orientation](project/ORIENTATION.md) — Contributor overview and onboarding path
 - [Current Status](project/CURRENT_STATUS.md) — Computed metrics and project health
 - [Roadmap](project/ROADMAP.md) — Milestones and release planning
 - [Milestones](project/MILESTONES.md) — GitHub milestones
@@ -80,7 +119,7 @@ Process, metrics, and project health.
 - [CI](project/CI.md) — Continuous integration setup
 - [CI Test Lanes](project/CI_TEST_LANES.md) — Test lane configuration
 
-## Strategic Documents — planning and direction
+## Strategic documents — planning and direction
 
 High-level planning documents for project direction.
 
@@ -107,6 +146,7 @@ High-level planning documents for project direction.
 ## Contributing
 
 - [Contributing Guide](../CONTRIBUTING.md) — Development workflow and contribution process
+- [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Where new docs belong and how to keep them consistent
 
 ## Quick verification
 
@@ -115,7 +155,7 @@ nix develop -c just ci-gate       # Canonical local gate
 nix develop -c just status-check  # Verify metrics haven't drifted
 ```
 
-## Canonical Truth Sources
+## Canonical truth sources
 
 | What | Where | Verified By |
 |------|-------|-------------|
