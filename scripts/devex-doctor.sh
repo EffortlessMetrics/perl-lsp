@@ -86,6 +86,9 @@ if [ -f rust-toolchain.toml ]; then
   TOOLCHAIN=$(awk -F'"' '/channel/{print $2; exit}' rust-toolchain.toml)
   if [ -n "${TOOLCHAIN:-}" ]; then
     pass "Pinned toolchain: $TOOLCHAIN"
+    if ! bash scripts/check-rust-toolchain.sh doctor; then
+      MISSING_REQUIRED=1
+    fi
   else
     warn "Could not parse rust-toolchain.toml"
   fi
