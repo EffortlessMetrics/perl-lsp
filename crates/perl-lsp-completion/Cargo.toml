@@ -18,13 +18,12 @@ doctest = false
 
 [dependencies]
 perl-lsp-completion-item = { workspace = true }
+perl-lsp-file-path-completion = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-semantic-analyzer = { workspace = true }
 perl-workspace-index = { workspace = true }
 perl-keywords = { workspace = true }
-perl-path-security = { workspace = true }
 url = "2.5.8"
-walkdir = "2.5.0"
 
 [features]
 default = []

@@ -90,7 +90,6 @@
 
 mod builtins;
 mod context;
-mod file_path;
 mod functions;
 mod items;
 mod keywords;
@@ -105,6 +104,9 @@ mod workspace;
 pub use self::context::CompletionContext;
 pub use self::items::{CompletionItem, CompletionItemKind};
 
+use perl_lsp_file_path_completion::{
+    FilePathCallbacks, FilePathCompletionContext, add_file_completions_with_callbacks,
+};
 use perl_parser_core::ast::Node;
 use perl_semantic_analyzer::symbol::{SymbolExtractor, SymbolKind, SymbolTable};
 use perl_workspace_index::workspace_index::WorkspaceIndex;
@@ -739,7 +741,7 @@ impl CompletionProvider {
 
     /// Add file path completions with cancellation support
     ///
-    /// Uses the builder pattern via [`file_path::FilePathCallbacks`] to bundle
+    /// Uses the builder pattern via [`perl_lsp_file_path_completion::FilePathCallbacks`] to bundle
     /// security callbacks, reducing argument count and improving maintainability.
     #[cfg(not(target_arch = "wasm32"))]
     fn add_file_completions_with_cancellation(
@@ -748,13 +750,13 @@ impl CompletionProvider {
         context: &CompletionContext,
         is_cancelled: &dyn Fn() -> bool,
     ) {
-        let callbacks = file_path::FilePathCallbacks::default();
-        file_path::add_file_completions_with_callbacks(
-            completions,
-            context,
-            &callbacks,
-            is_cancelled,
+        let callbacks = FilePathCallbacks::default();
+        let file_context = FilePathCompletionContext::new(
+            context.position,
+            context.prefix_start,
+            context.prefix.clone(),
         );
+        add_file_completions_with_callbacks(completions, &file_context, &callbacks, is_cancelled);
     }
 
     /// Add file path completions with cancellation support
