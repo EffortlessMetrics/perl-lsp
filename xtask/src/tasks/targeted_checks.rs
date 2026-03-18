@@ -6,8 +6,10 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use color_eyre::eyre::{Context, Result, eyre};
+use console::Style;
 use duct::cmd;
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -22,6 +24,64 @@ pub enum CheckMode {
     Test,
     /// Run both clippy and tests
     All,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CheckOutcome {
+    label: &'static str,
+    success: bool,
+    duration: Duration,
+}
+
+fn format_duration(duration: Duration) -> String {
+    if duration.as_secs() >= 1 {
+        format!("{:.1}s", duration.as_secs_f64())
+    } else {
+        format!("{}ms", duration.as_millis())
+    }
+}
+
+fn print_visual_summary(
+    base_ref: &str,
+    mode: &CheckMode,
+    changed_files: usize,
+    crate_count: usize,
+    packages: &BTreeSet<String>,
+    outcomes: &[CheckOutcome],
+) {
+    let heading = Style::new().bold();
+    let accent = Style::new().cyan().bold();
+    let pass = Style::new().green().bold();
+    let fail = Style::new().red().bold();
+
+    println!();
+    println!("{}", heading.apply_to("Targeted checks summary"));
+    println!("{}", heading.apply_to("-----------------------"));
+    println!("  Base ref: {}", accent.apply_to(base_ref));
+    println!("  Mode: {:?}", mode);
+    println!(
+        "  Scope: {} changed files across {} crate(s) and {} package(s)",
+        changed_files,
+        crate_count,
+        packages.len()
+    );
+
+    println!();
+    println!("{}", heading.apply_to("Packages"));
+    for package in packages {
+        println!("  • {}", package);
+    }
+
+    if outcomes.is_empty() {
+        return;
+    }
+
+    println!();
+    println!("{}", heading.apply_to("Checks"));
+    for outcome in outcomes {
+        let status = if outcome.success { pass.apply_to("PASS") } else { fail.apply_to("FAIL") };
+        println!("  [{}] {} ({})", status, outcome.label, format_duration(outcome.duration));
+    }
 }
 
 /// Resolve a git ref, falling back to HEAD~1 if the primary ref is not valid.
@@ -158,7 +218,7 @@ fn run_checks(
     packages: &BTreeSet<String>,
     mode: &CheckMode,
     spinner: &ProgressBar,
-) -> Result<()> {
+) -> Result<Vec<CheckOutcome>> {
     // Build -p args for all packages at once (matches the bash script behavior)
     let mut package_args: Vec<String> = Vec::new();
     for pkg in packages {
@@ -168,10 +228,12 @@ fn run_checks(
 
     let run_clippy = matches!(mode, CheckMode::Clippy | CheckMode::All);
     let run_tests = matches!(mode, CheckMode::Test | CheckMode::All);
+    let mut outcomes = Vec::new();
 
     if run_clippy {
         spinner.println("");
         spinner.set_message("Running clippy for changed packages...");
+        let started_at = Instant::now();
 
         let mut args: Vec<&str> = vec!["clippy"];
         for a in &package_args {
@@ -188,12 +250,16 @@ fn run_checks(
         if !result.status.success() {
             return Err(eyre!("Clippy failed for changed packages"));
         }
-        spinner.println("Clippy passed for changed packages");
+        let duration = started_at.elapsed();
+        spinner
+            .println(format!("Clippy passed for changed packages ({})", format_duration(duration)));
+        outcomes.push(CheckOutcome { label: "cargo clippy", success: true, duration });
     }
 
     if run_tests {
         spinner.println("");
         spinner.set_message("Running tests for changed packages...");
+        let started_at = Instant::now();
 
         let mut args: Vec<&str> = vec!["test"];
         for a in &package_args {
@@ -210,10 +276,13 @@ fn run_checks(
         if !result.status.success() {
             return Err(eyre!("Tests failed for changed packages"));
         }
-        spinner.println("Tests passed for changed packages");
+        let duration = started_at.elapsed();
+        spinner
+            .println(format!("Tests passed for changed packages ({})", format_duration(duration)));
+        outcomes.push(CheckOutcome { label: "cargo test --lib", success: true, duration });
     }
 
-    Ok(())
+    Ok(outcomes)
 }
 
 /// Entry point for the targeted-checks subcommand.
@@ -253,12 +322,8 @@ pub fn run(base: String, mode: CheckMode) -> Result<()> {
         ));
     }
 
-    println!("Detected changed packages since {}:", base_ref);
-    for pkg in &packages {
-        println!("  - {}", pkg);
-    }
-
-    run_checks(&root, &packages, &mode, &spinner)?;
+    let outcomes = run_checks(&root, &packages, &mode, &spinner)?;
+    print_visual_summary(&base_ref, &mode, files.len(), crate_dirs.len(), &packages, &outcomes);
 
     spinner.finish_with_message("Targeted checks completed");
     Ok(())
@@ -315,5 +380,15 @@ mod tests {
 
         let dirs = extract_crate_dirs(&files);
         assert!(dirs.is_empty());
+    }
+
+    #[test]
+    fn test_format_duration_prefers_ms_for_subsecond_values() {
+        assert_eq!(format_duration(Duration::from_millis(125)), "125ms");
+    }
+
+    #[test]
+    fn test_format_duration_uses_seconds_for_longer_values() {
+        assert_eq!(format_duration(Duration::from_millis(1250)), "1.2s");
     }
 }
