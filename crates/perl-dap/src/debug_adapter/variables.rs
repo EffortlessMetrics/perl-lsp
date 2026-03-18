@@ -49,7 +49,7 @@ impl DebugAdapter {
             // Return cached variables first for stable references and fast repeated expansion.
             if let Some(vars) = session.variables.get(&variables_ref) {
                 used_session_cache = true;
-                parsed_from_output = vars.clone();
+                parsed_from_output = vars.iter().skip(start).take(count).cloned().collect();
             } else {
                 let mut framed_scope_lines = None;
 

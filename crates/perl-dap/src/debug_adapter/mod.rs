@@ -1075,6 +1075,16 @@ impl DebugAdapter {
         start: usize,
         count: usize,
     ) -> (Vec<Variable>, HashMap<i32, Vec<Variable>>) {
+        let (all_variables, child_cache) =
+            Self::parse_scope_variables_from_lines_all(lines, variables_ref);
+        let paged_variables = all_variables.into_iter().skip(start).take(count).collect();
+        (paged_variables, child_cache)
+    }
+
+    fn parse_scope_variables_from_lines_all(
+        lines: &[String],
+        variables_ref: i32,
+    ) -> (Vec<Variable>, HashMap<i32, Vec<Variable>>) {
         let parser = VariableParser::new();
         let renderer = PerlVariableRenderer::new();
         let scope_type = variables_ref % 10;
@@ -1105,7 +1115,7 @@ impl DebugAdapter {
 
         let mut top_level = Vec::new();
         let mut child_cache = HashMap::new();
-        for (idx, (name, value)) in parsed.into_iter().skip(start).take(count).enumerate() {
+        for (idx, (name, value)) in parsed.into_iter().enumerate() {
             let child_ref = variables_ref.saturating_mul(1000).saturating_add(
                 Self::i64_to_i32_saturating(i64::try_from(idx + 1).unwrap_or(i64::from(i32::MAX))),
             );
@@ -1139,7 +1149,10 @@ impl DebugAdapter {
         count: usize,
     ) -> (Vec<Variable>, HashMap<i32, Vec<Variable>>) {
         let lines = self.snapshot_recent_output_lines();
-        Self::parse_scope_variables_from_lines(&lines, variables_ref, start, count)
+        let (all_variables, child_cache) =
+            Self::parse_scope_variables_from_lines_all(&lines, variables_ref);
+        let paged_variables = all_variables.into_iter().skip(start).take(count).collect();
+        (paged_variables, child_cache)
     }
 
     /// Parse evaluate output from debugger lines into a DAP result payload.
@@ -2180,6 +2193,74 @@ mod tests {
             DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 0, 20);
         let names = vars.iter().map(|v| v.name.as_str()).collect::<Vec<_>>();
         assert_eq!(names, vec!["$alpha", "$mid", "$zeta"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_scope_variables_paginates_without_reassigning_child_references()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let lines = vec![
+            "@alpha = (1, 2)".to_string(),
+            "@beta = (3, 4)".to_string(),
+            "@gamma = (5, 6)".to_string(),
+        ];
+
+        let (all_vars, _child_cache) =
+            DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 0, 20);
+        let (paged_vars, _child_cache) =
+            DebugAdapter::parse_scope_variables_from_lines(&lines, 11, 1, 1);
+
+        assert_eq!(all_vars.len(), 3);
+        assert_eq!(paged_vars.len(), 1);
+        assert_eq!(paged_vars[0].name, "@beta");
+        assert_eq!(paged_vars[0].variables_reference, all_vars[1].variables_reference);
+        Ok(())
+    }
+
+    #[test]
+    fn test_handle_variables_cache_respects_pagination_arguments()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let mut adapter = DebugAdapter::new();
+        {
+            let mut output = lock_or_recover(
+                &adapter.recent_output,
+                "test_handle_variables_cache_pagination.recent_output",
+            );
+            output.push_back("$alpha = 1".to_string());
+            output.push_back("$beta = 2".to_string());
+            output.push_back("$gamma = 3".to_string());
+        }
+
+        let first_page = adapter.handle_request(
+            1,
+            "variables",
+            Some(json!({"variablesReference": 11, "start": 0, "count": 1})),
+        );
+        let second_page = adapter.handle_request(
+            2,
+            "variables",
+            Some(json!({"variablesReference": 11, "start": 1, "count": 1})),
+        );
+
+        let extract_names =
+            |response: DapMessage| -> Result<Vec<String>, Box<dyn std::error::Error>> {
+                match response {
+                    DapMessage::Response { success, body, .. } => {
+                        assert!(success, "variables request should succeed");
+                        Ok(body.ok_or("missing variables body")?["variables"]
+                            .as_array()
+                            .ok_or("missing variables array")?
+                            .iter()
+                            .filter_map(|value| value.get("name").and_then(|name| name.as_str()))
+                            .map(ToString::to_string)
+                            .collect())
+                    }
+                    _ => Err("Expected Response message".into()),
+                }
+            };
+
+        assert_eq!(extract_names(first_page)?, vec!["$alpha".to_string()]);
+        assert_eq!(extract_names(second_page)?, vec!["$beta".to_string()]);
         Ok(())
     }
 
