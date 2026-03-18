@@ -696,3 +696,265 @@ fn lexer_slash_ambiguity_real_world_regex_in_map_grep() -> TestResult {
     }
     Ok(())
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// Split/join/grep/map/sort slash disambiguation tests
+//
+// These tests verify that `/pattern/` after list-operator keywords is
+// correctly interpreted as a regex, while `$x / $y` and `10 / 2` remain
+// division.  The lexer sets `LexerMode::ExpectTerm` after split, grep,
+// map, and sort, which causes `/` to be parsed as a regex delimiter.
+// ═══════════════════════════════════════════════════════════════════════
+
+/// Test `split /,/, $string` — regex separator after split
+///
+/// In Perl, `split /,/, $string` uses a regex as the first argument to split.
+/// The lexer must recognise `/,/` as a regex, not as two division operators.
+#[test]
+fn lexer_slash_split_regex_comma_separator() -> TestResult {
+    let code = "split /,/, $string";
+    let mut lexer = PerlLexer::new(code);
+
+    // First token: split keyword
+    let tok = lexer.next_token().ok_or("Expected split keyword")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Keyword(ref k) if k.as_ref() == "split"),
+        "Expected 'split' keyword, got {:?}",
+        tok.token_type
+    );
+
+    // Next token should be a regex match (the /,/ pattern)
+    let tok = lexer.next_token().ok_or("Expected regex token after split")?;
+    assert!(
+        matches!(tok.token_type, TokenType::RegexMatch),
+        "Expected regex after split, got {:?}",
+        tok.token_type
+    );
+
+    Ok(())
+}
+
+/// Test `split /\s+/, $line` — regex with quantifier after split
+///
+/// A common Perl idiom: `split /\s+/, $line` splits on whitespace runs.
+/// The `\s+` inside the regex must not confuse the lexer.
+#[test]
+fn lexer_slash_split_regex_whitespace_quantifier() -> TestResult {
+    let code = r"split /\s+/, $line";
+    let mut lexer = PerlLexer::new(code);
+
+    // Skip split keyword
+    let _ = lexer.next_token();
+
+    // Next should be a regex
+    let tok = lexer.next_token().ok_or("Expected regex token after split")?;
+    assert!(
+        matches!(tok.token_type, TokenType::RegexMatch),
+        "Expected regex with quantifier after split, got {:?}",
+        tok.token_type
+    );
+
+    Ok(())
+}
+
+/// Test `join /,/, @parts` — slash after join
+///
+/// `join` is NOT in the lexer's `LEXER_KEYWORDS` list, so it is treated as
+/// an `Identifier` rather than a `Keyword`.  After an identifier the lexer
+/// enters `ExpectOperator` mode, so the slash is interpreted as division.
+///
+/// This is a known limitation: in Perl, `join /,/, @parts` uses a regex as
+/// the separator, but the lexer currently treats the `/` as division.  If
+/// `join` is added to `LEXER_KEYWORDS` and the `ExpectTerm` list in the
+/// future, this test should be updated to expect `RegexMatch`.
+#[test]
+fn lexer_slash_join_slash_is_division() -> TestResult {
+    let code = "join /,/, @parts";
+    let mut lexer = PerlLexer::new(code);
+
+    // First token: join is treated as an identifier (not in LEXER_KEYWORDS)
+    let tok = lexer.next_token().ok_or("Expected join token")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Identifier(ref id) if id.as_ref() == "join"),
+        "Expected 'join' identifier, got {:?}",
+        tok.token_type
+    );
+
+    // After an identifier, lexer is in ExpectOperator mode, so the slash
+    // is treated as division.
+    let tok = lexer.next_token().ok_or("Expected division token after join")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Division),
+        "Expected division after join (current behavior), got {:?}",
+        tok.token_type
+    );
+
+    // The lexer should not hang — collect remaining tokens to verify termination.
+    // Use `while let` since the lexer may return `None` before an explicit EOF
+    // when input is exhausted in an unusual token state.
+    while let Some(tok) = lexer.next_token() {
+        if matches!(tok.token_type, TokenType::EOF) {
+            break;
+        }
+    }
+
+    Ok(())
+}
+
+/// Test `grep /pattern/, @list` — regex after grep (without block form)
+///
+/// `grep /pattern/, @list` is the expression form of grep (no block).
+/// The `/pattern/` must be interpreted as a regex.
+#[test]
+fn lexer_slash_grep_regex_without_block() -> TestResult {
+    let code = "grep /pattern/, @list";
+    let mut lexer = PerlLexer::new(code);
+
+    // First token: grep keyword
+    let tok = lexer.next_token().ok_or("Expected grep keyword")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Keyword(ref k) if k.as_ref() == "grep"),
+        "Expected 'grep' keyword, got {:?}",
+        tok.token_type
+    );
+
+    // Next token should be a regex match
+    let tok = lexer.next_token().ok_or("Expected regex token after grep")?;
+    assert!(
+        matches!(tok.token_type, TokenType::RegexMatch),
+        "Expected regex after grep (expression form), got {:?}",
+        tok.token_type
+    );
+
+    Ok(())
+}
+
+/// Test `map /pattern/, @list` — regex after map (without block form)
+///
+/// `map /pattern/, @list` is the expression form of map.
+/// The `/pattern/` must be interpreted as a regex.
+#[test]
+fn lexer_slash_map_regex_without_block() -> TestResult {
+    let code = "map /pattern/, @list";
+    let mut lexer = PerlLexer::new(code);
+
+    // First token: map keyword
+    let tok = lexer.next_token().ok_or("Expected map keyword")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Keyword(ref k) if k.as_ref() == "map"),
+        "Expected 'map' keyword, got {:?}",
+        tok.token_type
+    );
+
+    // Next token should be a regex match
+    let tok = lexer.next_token().ok_or("Expected regex token after map")?;
+    assert!(
+        matches!(tok.token_type, TokenType::RegexMatch),
+        "Expected regex after map (expression form), got {:?}",
+        tok.token_type
+    );
+
+    Ok(())
+}
+
+/// Test `sort /pattern/` — slash after sort keyword
+///
+/// `sort` sets `ExpectTerm` mode, so `/pattern/` should be parsed as a
+/// regex. In practice, `sort` with a regex is unusual (sort typically
+/// uses a block or comparison function), but the lexer should still
+/// handle it without hanging.
+#[test]
+fn lexer_slash_sort_regex() -> TestResult {
+    let code = "sort /pattern/";
+    let mut lexer = PerlLexer::new(code);
+
+    // First token: sort keyword
+    let tok = lexer.next_token().ok_or("Expected sort keyword")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Keyword(ref k) if k.as_ref() == "sort"),
+        "Expected 'sort' keyword, got {:?}",
+        tok.token_type
+    );
+
+    // Since sort sets ExpectTerm, the slash should be a regex
+    let tok = lexer.next_token().ok_or("Expected regex token after sort")?;
+    assert!(
+        matches!(tok.token_type, TokenType::RegexMatch),
+        "Expected regex after sort, got {:?}",
+        tok.token_type
+    );
+
+    Ok(())
+}
+
+/// Test `$x / $y` — division between two variables (control case)
+///
+/// This is the canonical division case: a slash between two terms
+/// must be interpreted as the division operator, not a regex delimiter.
+#[test]
+fn lexer_slash_division_between_variables() -> TestResult {
+    let code = "$x / $y";
+    let mut lexer = PerlLexer::new(code);
+
+    // First token: $x variable
+    let tok = lexer.next_token().ok_or("Expected variable token")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Identifier(ref id) if id.as_ref() == "$x"),
+        "Expected '$x' identifier, got {:?}",
+        tok.token_type
+    );
+
+    // Second token: division operator
+    let tok = lexer.next_token().ok_or("Expected division operator")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Division),
+        "Expected division operator between variables, got {:?}",
+        tok.token_type
+    );
+
+    // Third token: $y variable
+    let tok = lexer.next_token().ok_or("Expected variable token")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Identifier(ref id) if id.as_ref() == "$y"),
+        "Expected '$y' identifier, got {:?}",
+        tok.token_type
+    );
+
+    Ok(())
+}
+
+/// Test `10 / 2` — division after numeric literal (control case)
+///
+/// After a numeric literal the lexer is in `ExpectOperator` mode, so the
+/// slash must be interpreted as division, not as a regex delimiter.
+#[test]
+fn lexer_slash_division_after_number_literal() -> TestResult {
+    let code = "10 / 2";
+    let mut lexer = PerlLexer::new(code);
+
+    // First token: 10
+    let tok = lexer.next_token().ok_or("Expected number token")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Number(_)),
+        "Expected number token, got {:?}",
+        tok.token_type
+    );
+
+    // Second token: division operator
+    let tok = lexer.next_token().ok_or("Expected division operator")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Division),
+        "Expected division operator after number, got {:?}",
+        tok.token_type
+    );
+
+    // Third token: 2
+    let tok = lexer.next_token().ok_or("Expected number token")?;
+    assert!(
+        matches!(tok.token_type, TokenType::Number(_)),
+        "Expected number token, got {:?}",
+        tok.token_type
+    );
+
+    Ok(())
+}
