@@ -17,6 +17,110 @@ let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
 
+
+type ServerVisualState = 'starting' | 'running' | 'stopped' | 'runningTests';
+
+interface ActivePerlContext {
+    isPerl: boolean;
+    fileLabel?: string;
+    fileKind?: 'test' | 'module' | 'script' | 'pod' | 'perl';
+    canRunTests: boolean;
+}
+
+function getActivePerlContext(): ActivePerlContext {
+    const editor = vscode.window.activeTextEditor;
+    if (!editor || editor.document.languageId !== 'perl') {
+        return { isPerl: false, canRunTests: false };
+    }
+
+    const fileName = path.basename(editor.document.uri.fsPath || editor.document.fileName || 'untitled');
+    const normalized = fileName.toLowerCase();
+
+    let fileKind: ActivePerlContext['fileKind'] = 'perl';
+    if (normalized.endsWith('.t')) {
+        fileKind = 'test';
+    } else if (normalized.endsWith('.pm')) {
+        fileKind = 'module';
+    } else if (normalized.endsWith('.pl')) {
+        fileKind = 'script';
+    } else if (normalized.endsWith('.pod')) {
+        fileKind = 'pod';
+    }
+
+    return {
+        isPerl: true,
+        fileLabel: fileName,
+        fileKind,
+        canRunTests: fileKind === 'test' || fileKind === 'script'
+    };
+}
+
+function buildStatusBarPresentation(state: ServerVisualState): {
+    text: string;
+    tooltip: vscode.MarkdownString;
+    backgroundColor?: vscode.ThemeColor;
+} {
+    const activeContext = getActivePerlContext();
+
+    if (state === 'runningTests') {
+        const tooltip = new vscode.MarkdownString(undefined, true);
+        tooltip.appendMarkdown('$(beaker~spin) **Perl Language Server**\n\n');
+        tooltip.appendMarkdown('Running tests for the active file.\n\n');
+        if (activeContext.fileLabel) {
+            tooltip.appendMarkdown(`- Active file: \`${activeContext.fileLabel}\`\n`);
+        }
+        tooltip.appendMarkdown('- Click to open the action menu.');
+        tooltip.isTrusted = false;
+        return {
+            text: '$(beaker~spin) Perl LSP · tests',
+            tooltip
+        };
+    }
+
+    const statusIcon = state === 'running' ? 'check' : state === 'starting' ? 'sync~spin' : 'error';
+    const statusLabel = state === 'running' ? 'Running' : state === 'starting' ? 'Starting' : 'Stopped';
+    const contextIcon = !activeContext.isPerl
+        ? 'code'
+        : activeContext.fileKind === 'test'
+            ? 'beaker'
+            : activeContext.fileKind === 'module'
+                ? 'package'
+                : activeContext.fileKind === 'script'
+                    ? 'terminal'
+                    : activeContext.fileKind === 'pod'
+                        ? 'book'
+                        : 'symbol-file';
+    const contextLabel = !activeContext.isPerl
+        ? 'No Perl file'
+        : activeContext.fileLabel ?? 'Perl file';
+
+    const tooltip = new vscode.MarkdownString(undefined, true);
+    tooltip.appendMarkdown(`$(${statusIcon}) **Perl Language Server**\n\n`);
+    tooltip.appendMarkdown(`- Status: **${statusLabel}**\n`);
+    tooltip.appendMarkdown(`- Active editor: $(${contextIcon}) **${contextLabel}**\n`);
+    if (activeContext.isPerl) {
+        const testStatus = activeContext.canRunTests ? 'Available' : 'Open a `.t` or `.pl` file';
+        tooltip.appendMarkdown(`- Run tests: **${testStatus}**\n`);
+    }
+    tooltip.appendMarkdown('\nClick to open the action menu.');
+    tooltip.isTrusted = false;
+
+    return {
+        text: `$(${statusIcon}) Perl LSP · $(${contextIcon})`,
+        tooltip,
+        backgroundColor: state === 'stopped'
+            ? new vscode.ThemeColor('statusBarItem.errorBackground')
+            : undefined
+    };
+}
+
+function renderStatusBar(statusBarItem: vscode.StatusBarItem, state: ServerVisualState) {
+    const presentation = buildStatusBarPresentation(state);
+    statusBarItem.text = presentation.text;
+    statusBarItem.tooltip = presentation.tooltip;
+    statusBarItem.backgroundColor = presentation.backgroundColor;
+}
+
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
 
@@ -102,30 +206,35 @@ export async function activate(context: vscode.ExtensionContext) {
     // Create status bar item - show immediately with starting state
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     statusBarItem.command = 'perl-lsp.showStatusMenu';
-    statusBarItem.text = '$(sync~spin) Perl LSP';
-    statusBarItem.tooltip = 'Perl Language Server is starting... (click for options)';
+    renderStatusBar(statusBarItem, 'starting');
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
     client.onDidChangeState(event => {
         switch (event.newState) {
             case State.Running:
-                statusBarItem.text = '$(check) Perl LSP';
-                statusBarItem.tooltip = 'Perl Language Server is running (click for options)';
-                statusBarItem.backgroundColor = undefined;
+                renderStatusBar(statusBarItem, 'running');
                 break;
             case State.Starting:
-                statusBarItem.text = '$(sync~spin) Perl LSP';
-                statusBarItem.tooltip = 'Perl Language Server is starting... (click for options)';
-                statusBarItem.backgroundColor = undefined;
+                renderStatusBar(statusBarItem, 'starting');
                 break;
             case State.Stopped:
-                statusBarItem.text = '$(error) Perl LSP';
-                statusBarItem.tooltip = 'Perl Language Server is stopped (click for options)';
-                statusBarItem.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground');
+                renderStatusBar(statusBarItem, 'stopped');
                 break;
         }
     });
+
+    const activeEditorListener = vscode.window.onDidChangeActiveTextEditor(() => {
+        const clientState = client?.state;
+        if (clientState === State.Running) {
+            renderStatusBar(statusBarItem, 'running');
+        } else if (clientState === State.Starting) {
+            renderStatusBar(statusBarItem, 'starting');
+        } else {
+            renderStatusBar(statusBarItem, 'stopped');
+        }
+    });
+    context.subscriptions.push(activeEditorListener);
 
     // Start the client
     await client.start();
@@ -164,10 +273,10 @@ export async function activate(context: vscode.ExtensionContext) {
             // Store original state
             const originalText = statusBarItem.text;
             const originalTooltip = statusBarItem.tooltip;
+            const originalBackgroundColor = statusBarItem.backgroundColor;
 
             // Show running state
-            statusBarItem.text = '$(beaker~spin) Running Tests...';
-            statusBarItem.tooltip = 'Executing Perl tests in current file';
+            renderStatusBar(statusBarItem, 'runningTests');
 
             try {
                 await testAdapter.runFileTests(editor.document.uri);
@@ -175,6 +284,7 @@ export async function activate(context: vscode.ExtensionContext) {
                 // Restore original state
                 statusBarItem.text = originalText;
                 statusBarItem.tooltip = originalTooltip;
+                statusBarItem.backgroundColor = originalBackgroundColor;
             }
         } else {
             vscode.window.showWarningMessage('Test adapter is not available. It might still be initializing.');
@@ -248,7 +358,8 @@ export async function activate(context: vscode.ExtensionContext) {
         ];
 
         const selection = await vscode.window.showQuickPick(items, {
-            placeHolder: 'Perl Language Server Actions'
+            title: 'Perl Language Server',
+            placeHolder: 'Choose an action or review the current Perl context'
         });
 
         if (selection && selection.command && !selection.disabled) {
