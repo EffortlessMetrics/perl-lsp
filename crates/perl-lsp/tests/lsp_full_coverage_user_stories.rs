@@ -46,10 +46,54 @@ use support::test_helpers::assert_hover_has_text;
 
 // ===================== Test Context =====================
 
+#[derive(Clone)]
+struct StoryBooking {
+    name: String,
+    intent: String,
+    given: Vec<String>,
+    when: Vec<String>,
+    then: Vec<String>,
+}
+
+impl StoryBooking {
+    fn new(name: &str, intent: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            intent: intent.to_string(),
+            given: Vec::new(),
+            when: Vec::new(),
+            then: Vec::new(),
+        }
+    }
+
+    fn add_given(&mut self, detail: &str) {
+        self.given.push(detail.to_string());
+    }
+
+    fn add_when(&mut self, detail: &str) {
+        self.when.push(detail.to_string());
+    }
+
+    fn add_then(&mut self, detail: &str) {
+        self.then.push(detail.to_string());
+    }
+
+    fn summary(&self) -> String {
+        format!(
+            "story={} intent={} given={} when={} then={}",
+            self.name,
+            self.intent,
+            self.given.len(),
+            self.when.len(),
+            self.then.len()
+        )
+    }
+}
+
 struct TestContext {
     server: LspServer,
     documents: HashMap<String, String>,
-    storybook: Vec<String>,
+    storybook: Vec<StoryBooking>,
     #[allow(dead_code)]
     workspace_root: String,
     request_id: i32,
@@ -73,13 +117,34 @@ impl TestContext {
         }
     }
 
-    fn book_story(&mut self, story_name: &str) {
-        self.storybook.push(story_name.to_string());
+    fn book_story(&mut self, story_name: &str, intent: &str) {
+        self.storybook.push(StoryBooking::new(story_name, intent));
+    }
+
+    fn add_given(&mut self, detail: &str) {
+        if let Some(story) = self.storybook.last_mut() {
+            story.add_given(detail);
+        }
+    }
+
+    fn add_when(&mut self, detail: &str) {
+        if let Some(story) = self.storybook.last_mut() {
+            story.add_when(detail);
+        }
+    }
+
+    fn add_then(&mut self, detail: &str) {
+        if let Some(story) = self.storybook.last_mut() {
+            story.add_then(detail);
+        }
     }
 
     fn story_context(&self) -> String {
-        let latest = self.storybook.last().map_or("unknown-story", std::string::String::as_str);
-        format!("story={latest} booked_stories={}", self.storybook.len())
+        let latest = self.storybook.last().map_or_else(
+            || "story=unknown-story booked_stories=0".to_string(),
+            StoryBooking::summary,
+        );
+        format!("{latest} booked_stories={}", self.storybook.len())
     }
 
     fn initialize(&mut self) {
@@ -301,7 +366,13 @@ impl TestContext {
 #[test]
 fn test_user_story_debugging_workflow() {
     let mut ctx = TestContext::new();
-    ctx.book_story("debugging_workflow");
+    ctx.book_story(
+        "debugging_workflow",
+        "Debug a complex Perl script with breakpoints and variable inspection",
+    );
+    ctx.add_given("a script with a Fibonacci helper and a call site");
+    ctx.add_when("the editor requests hover, references, and code actions during debugging");
+    ctx.add_then("the LSP should expose symbol info and debugging-oriented actions");
     ctx.initialize();
 
     // User story: Debug a complex Perl script with breakpoints and variable inspection
@@ -355,7 +426,13 @@ print "Fibonacci(10) = $result\n";
 #[test]
 fn test_user_story_refactoring_legacy_code() {
     let mut ctx = TestContext::new();
-    ctx.book_story("refactoring_legacy_code");
+    ctx.book_story(
+        "refactoring_legacy_code",
+        "Refactor legacy Perl code toward modern best practices",
+    );
+    ctx.add_given("a legacy script without strict or lexical declarations");
+    ctx.add_when("the editor requests code actions for modernization");
+    ctx.add_then("the LSP should suggest strict/warnings and modernization fixes");
     ctx.initialize();
 
     // User story: Refactor legacy Perl code to modern best practices
@@ -407,7 +484,10 @@ foreach $item (@array) {
 #[test]
 fn test_user_story_multi_file_project_navigation() {
     let mut ctx = TestContext::new();
-    ctx.book_story("multi_file_project_navigation");
+    ctx.book_story("multi_file_project_navigation", "Navigate through a multi-file Perl project");
+    ctx.add_given("a main script and a module opened in the same workspace");
+    ctx.add_when("the editor requests definitions and workspace/document symbols");
+    ctx.add_then("the LSP should surface module symbols for navigation");
     ctx.initialize();
 
     // User story: Navigate between modules in a large project
@@ -482,6 +562,13 @@ sub connect {
 #[test]
 fn test_user_story_test_driven_development() {
     let mut ctx = TestContext::new();
+    ctx.book_story(
+        "test_driven_development",
+        "Write tests first and explore testing helpers while implementing features",
+    );
+    ctx.add_given("a Perl test file using Test::More expectations");
+    ctx.add_when("the editor requests completions and hover inside the test file");
+    ctx.add_then("the LSP should explain and complete common Test::More helpers");
     ctx.initialize();
 
     // User story: Write tests first, then implementation
@@ -519,6 +606,13 @@ is($calc->multiply(3, 4), 12, 'Multiplication works');
 #[test]
 fn test_user_story_performance_profiling() {
     let mut ctx = TestContext::new();
+    ctx.book_story(
+        "performance_profiling",
+        "Profile slow Perl code and look for optimization help",
+    );
+    ctx.add_given("a script with intentionally slow nested loops");
+    ctx.add_when("the editor requests code actions around the hotspot");
+    ctx.add_then("the LSP should either offer optimizations or make the absence explicit");
     ctx.initialize();
 
     // User story: Profile and optimize slow code
@@ -563,6 +657,10 @@ print "Result: $result, Time: $elapsed seconds\n";
 #[test]
 fn test_user_story_regex_development() {
     let mut ctx = TestContext::new();
+    ctx.book_story("regex_development", "Develop and inspect complex regular expressions");
+    ctx.add_given("a Perl script containing email, phone, and HTML regex patterns");
+    ctx.add_when("the editor requests hover and completion inside regex-heavy code");
+    ctx.add_then("the LSP should remain responsive while surfacing regex assistance");
     ctx.initialize();
 
     // User story: Develop and test complex regular expressions
@@ -604,6 +702,10 @@ if ($html =~ m{<div\s+class=['"]([^'"]+)['"]\s*>(.*?)</div>}i) {
 #[test]
 fn test_user_story_database_integration() {
     let mut ctx = TestContext::new();
+    ctx.book_story("database_integration", "Work with DBI queries from the editor");
+    ctx.add_given("a script that prepares and executes DBI statements");
+    ctx.add_when("the editor requests DBI completions and hover help");
+    ctx.add_then("the LSP should provide database-oriented assistance when available");
     ctx.initialize();
 
     // User story: Work with database queries and DBI
@@ -651,6 +753,13 @@ $dbh->disconnect();
 #[test]
 fn test_user_story_web_development() {
     let mut ctx = TestContext::new();
+    ctx.book_story(
+        "web_development",
+        "Build a small Mojolicious application with editor assistance",
+    );
+    ctx.add_given("a lightweight Perl web application with route handlers");
+    ctx.add_when("the editor requests completions and definitions for route code");
+    ctx.add_then("the LSP should support discovery around framework entry points");
     ctx.initialize();
 
     // User story: Develop web applications with Mojolicious/Dancer
@@ -697,6 +806,10 @@ app->start;
 #[test]
 fn test_user_story_live_collaboration() {
     let mut ctx = TestContext::new();
+    ctx.book_story("live_collaboration", "Handle rapid edits from multiple collaborators");
+    ctx.add_given("a shared Perl file that will be edited repeatedly");
+    ctx.add_when("multiple simulated developers update the same document in quick succession");
+    ctx.add_then("the LSP should keep the document parseable after the edit burst");
     ctx.initialize();
 
     // User story: Multiple developers working on the same file
@@ -735,6 +848,10 @@ sub process_data {
 #[test]
 fn test_user_story_package_management() {
     let mut ctx = TestContext::new();
+    ctx.book_story("package_management", "Inspect CPAN dependencies declared in Makefile.PL");
+    ctx.add_given("a Makefile.PL with several prerequisite modules");
+    ctx.add_when("the editor requests hover and completion around dependency declarations");
+    ctx.add_then("the LSP should remain helpful around dependency metadata");
     ctx.initialize();
 
     // User story: Manage CPAN dependencies and local modules
@@ -768,6 +885,10 @@ WriteMakefile(
 #[test]
 fn test_user_story_documentation_generation() {
     let mut ctx = TestContext::new();
+    ctx.book_story("documentation_generation", "Maintain POD documentation alongside Perl code");
+    ctx.add_given("a module with POD sections and documented methods");
+    ctx.add_when("the editor requests document symbols for the module");
+    ctx.add_then("the LSP should expose code symbols relevant to the documentation workflow");
     ctx.initialize();
 
     // User story: Generate and maintain POD documentation
@@ -852,6 +973,10 @@ This is free software.
 #[test]
 fn test_user_story_error_handling() {
     let mut ctx = TestContext::new();
+    ctx.book_story("error_handling", "Author robust Try::Tiny-based error handling");
+    ctx.add_given("a Perl script using try/catch/finally flows");
+    ctx.add_when("the editor requests completions and hover for error handling constructs");
+    ctx.add_then("the LSP should explain and assist with the error-handling workflow");
     ctx.initialize();
 
     // User story: Robust error handling with Try::Tiny and custom exceptions
