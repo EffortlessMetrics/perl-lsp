@@ -310,3 +310,24 @@ fn test_scope_expensive_flags() -> Result<(), Box<dyn std::error::Error>> {
     }
     Ok(())
 }
+
+#[test]
+fn test_variables_placeholder_pagination() -> Result<(), Box<dyn std::error::Error>> {
+    let mut adapter = create_test_adapter();
+    let args = json!({ "variablesReference": 11, "start": 1, "count": 1 });
+    let response = adapter.handle_request(1, "variables", Some(args));
+
+    if let DapMessage::Response { success, body, .. } = response {
+        assert!(success);
+        let body_val = body.ok_or("Expected body in response")?;
+        let vars = body_val
+            .get("variables")
+            .ok_or("Expected variables field")?
+            .as_array()
+            .ok_or("Expected variables array")?;
+
+        assert_eq!(vars.len(), 1);
+        assert_eq!(vars[0].get("name").and_then(|name| name.as_str()), Some("@_"));
+    }
+    Ok(())
+}
