@@ -1587,8 +1587,7 @@ has 'name' => (re
         let provider = CompletionProvider::new(&ast);
         let completions = provider.get_completions(code, code.len());
 
-        let item =
-            must_some(completions.iter().find(|completion| completion.label == "(?:...)"));
+        let item = must_some(completions.iter().find(|completion| completion.label == "(?:...)"));
         assert_eq!(
             item.text_edit_range,
             Some((code.len() - "(?:".len(), code.len())),
