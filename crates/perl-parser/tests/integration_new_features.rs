@@ -57,6 +57,7 @@ fn test_transliteration_integration() {
         ("tr/a-z/A-Z/", "Basic transliteration"),
         ("y/0-9/a-j/", "y/// form"),
         ("tr{a-z}{A-Z}d", "Braces with delete"),
+        ("tr[a-z]{A-Z}dr", "Mixed paired delimiters with modifiers"),
         ("$str =~ tr/a-z/A-Z/", "Transliteration with =~"),
     ];
 
