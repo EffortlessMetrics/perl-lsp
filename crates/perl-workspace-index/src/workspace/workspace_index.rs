@@ -1103,6 +1103,11 @@ pub struct WorkspaceIndex {
     files: Arc<RwLock<HashMap<String, FileIndex>>>,
     /// Global symbol map (qualified name -> defining URI)
     symbols: Arc<RwLock<HashMap<String, String>>>,
+    /// Global reference index (symbol name -> locations across all files)
+    ///
+    /// Aggregated from per-file `FileIndex::references` during `index_file()`.
+    /// Provides O(1) lookup for `find_references()` instead of iterating all files.
+    global_references: Arc<RwLock<HashMap<String, Vec<Location>>>>,
     /// Document store for in-memory text
     document_store: DocumentStore,
 }
@@ -1169,6 +1174,7 @@ impl WorkspaceIndex {
         Self {
             files: Arc::new(RwLock::new(HashMap::new())),
             symbols: Arc::new(RwLock::new(HashMap::new())),
+            global_references: Arc::new(RwLock::new(HashMap::new())),
             document_store: DocumentStore::new(),
         }
     }
@@ -1176,6 +1182,25 @@ impl WorkspaceIndex {
     /// Normalize a URI to a consistent form using proper URI handling
     fn normalize_uri(uri: &str) -> String {
         perl_uri::normalize_uri(uri)
+    }
+
+    /// Remove a file's contributions from the global reference index.
+    ///
+    /// Retains only entries whose URI does not match `file_uri`.
+    /// Empty keys are removed to avoid unbounded map growth.
+    fn remove_file_global_refs(
+        global_refs: &mut HashMap<String, Vec<Location>>,
+        file_index: &FileIndex,
+        file_uri: &str,
+    ) {
+        for name in file_index.references.keys() {
+            if let Some(locs) = global_refs.get_mut(name) {
+                locs.retain(|loc| loc.uri != file_uri);
+                if locs.is_empty() {
+                    global_refs.remove(name);
+                }
+            }
+        }
     }
 
     /// Index a file from its URI and text content
@@ -1250,12 +1275,30 @@ impl WorkspaceIndex {
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone());
         visitor.visit(&ast, &mut file_index);
 
-        // Update the index and refresh the global symbol cache from the current file set.
+        // Update the index, refresh the global symbol cache, and replace this file's
+        // contribution in the global reference index.
         {
             let mut files = self.files.write();
+
+            // Remove stale global references from previous version of this file
+            if let Some(old_index) = files.get(&key) {
+                let mut global_refs = self.global_references.write();
+                Self::remove_file_global_refs(&mut global_refs, old_index, &uri_str);
+            }
+
             files.insert(key.clone(), file_index);
             let mut symbols = self.symbols.write();
             Self::rebuild_symbol_cache(&files, &mut symbols);
+
+            if let Some(file_index) = files.get(&key) {
+                let mut global_refs = self.global_references.write();
+                for (name, refs) in &file_index.references {
+                    let entry = global_refs.entry(name.clone()).or_default();
+                    for reference in refs {
+                        entry.push(Location { uri: reference.uri.clone(), range: reference.range });
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -1288,10 +1331,14 @@ impl WorkspaceIndex {
 
         // Remove file index
         let mut files = self.files.write();
-        if files.remove(&key).is_some() {
+        if let Some(file_index) = files.remove(&key) {
             // Rebuild the global symbol map so colliding names from other files stay available.
             let mut symbols = self.symbols.write();
             Self::rebuild_symbol_cache(&files, &mut symbols);
+
+            // Remove from global reference index
+            let mut global_refs = self.global_references.write();
+            Self::remove_file_global_refs(&mut global_refs, &file_index, &uri_str);
         }
     }
 
@@ -1438,46 +1485,40 @@ impl WorkspaceIndex {
     /// let _refs = index.find_references("Utils::process_data");
     /// ```
     pub fn find_references(&self, symbol_name: &str) -> Vec<Location> {
-        let mut locations = Vec::new();
+        let global_refs = self.global_references.read();
         let mut seen: HashSet<(String, u32, u32, u32, u32)> = HashSet::new();
-        let files = self.files.read();
+        let mut locations = Vec::new();
 
-        for (_uri_key, file_index) in files.iter() {
-            // Search for exact match first
-            if let Some(refs) = file_index.references.get(symbol_name) {
-                for reference in refs {
-                    let key = (
-                        reference.uri.clone(),
-                        reference.range.start.line,
-                        reference.range.start.column,
-                        reference.range.end.line,
-                        reference.range.end.column,
-                    );
-                    if seen.insert(key) {
-                        locations
-                            .push(Location { uri: reference.uri.clone(), range: reference.range });
-                    }
+        // O(1) lookup for exact symbol name
+        if let Some(refs) = global_refs.get(symbol_name) {
+            for loc in refs {
+                let key = (
+                    loc.uri.clone(),
+                    loc.range.start.line,
+                    loc.range.start.column,
+                    loc.range.end.line,
+                    loc.range.end.column,
+                );
+                if seen.insert(key) {
+                    locations.push(Location { uri: loc.uri.clone(), range: loc.range });
                 }
             }
+        }
 
-            // If the symbol is qualified, also search for bare name references
-            if let Some(idx) = symbol_name.rfind("::") {
-                let bare_name = &symbol_name[idx + 2..];
-                if let Some(refs) = file_index.references.get(bare_name) {
-                    for reference in refs {
-                        let key = (
-                            reference.uri.clone(),
-                            reference.range.start.line,
-                            reference.range.start.column,
-                            reference.range.end.line,
-                            reference.range.end.column,
-                        );
-                        if seen.insert(key) {
-                            locations.push(Location {
-                                uri: reference.uri.clone(),
-                                range: reference.range,
-                            });
-                        }
+        // If the symbol is qualified, also collect bare name references
+        if let Some(idx) = symbol_name.rfind("::") {
+            let bare_name = &symbol_name[idx + 2..];
+            if let Some(refs) = global_refs.get(bare_name) {
+                for loc in refs {
+                    let key = (
+                        loc.uri.clone(),
+                        loc.range.start.line,
+                        loc.range.start.column,
+                        loc.range.end.line,
+                        loc.range.end.column,
+                    );
+                    if seen.insert(key) {
+                        locations.push(Location { uri: loc.uri.clone(), range: loc.range });
                     }
                 }
             }
@@ -1600,6 +1641,7 @@ impl WorkspaceIndex {
     pub fn clear(&self) {
         self.files.write().clear();
         self.symbols.write().clear();
+        self.global_references.write().clear();
     }
 
     /// Return the number of indexed files in the workspace
