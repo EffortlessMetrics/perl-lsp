@@ -71,7 +71,22 @@ jobs:
         working-directory: vscode-extension
         run: |
           npm run verify:marketplace
+          npm run verify:openvsx
           echo "VSIX_FILE=$(ls -1 *.vsix | head -n 1)" >> "$GITHUB_ENV"
+
+      - name: Report publish targets
+        run: |
+          if [ -n "$VSCE_PAT" ]; then
+            echo "Visual Studio Marketplace publish enabled"
+          else
+            echo "::notice::VSCE_PAT not configured; skipping Visual Studio Marketplace publish."
+          fi
+
+          if [ -n "$OVSX_PAT" ]; then
+            echo "Open VSX publish enabled"
+          else
+            echo "::notice::OVSX_PAT not configured; skipping Open VSX publish."
+          fi
 
       - name: Publish to VSCode Marketplace
         if: ${{ env.VSCE_PAT != '' }}

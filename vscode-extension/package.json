@@ -20,7 +20,9 @@
     "perl5",
     "language-server",
     "lsp",
-    "tree-sitter"
+    "tree-sitter",
+    "vscodium",
+    "open-vsx"
   ],
   "extensionKind": [
     "workspace"
@@ -417,7 +419,9 @@
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
     "package": "npx @vscode/vsce package",
     "publish": "npx @vscode/vsce publish",
-    "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package"
+    "publish:openvsx": "npx ovsx publish",
+    "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package",
+    "verify:openvsx": "npm run verify:marketplace"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",

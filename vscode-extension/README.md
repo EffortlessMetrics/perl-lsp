@@ -2,6 +2,8 @@
 
 [![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/EffortlessMetrics.perl-lsp-rs?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
 [![Visual Studio Marketplace Downloads](https://img.shields.io/visual-studio-marketplace/d/EffortlessMetrics.perl-lsp-rs)](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs)
+[![Open VSX Version](https://img.shields.io/open-vsx/v/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
+[![Open VSX Downloads](https://img.shields.io/open-vsx/dt/EffortlessMetrics/perl-lsp-rs?label=Open%20VSX%20Downloads)](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs)
 
 Lightning-fast Perl language support with 26+ IDE features powered by perl-lsp.
 
@@ -48,7 +50,10 @@ Lightning-fast Perl language support with 26+ IDE features powered by perl-lsp.
 
 ## 📦 Installation
 
-Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs).
+Install from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs) or [Open VSX](https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs).
+
+- **VS Code**: install from the Visual Studio Marketplace or run `code --install-extension EffortlessMetrics.perl-lsp-rs`.
+- **VSCodium / Open VSX-compatible editors**: install from Open VSX or run `codium --install-extension EffortlessMetrics.perl-lsp-rs`.
 
 The extension automatically downloads the correct language server for your platform:
 - Windows (x64, ARM64)
@@ -119,7 +124,7 @@ Complete signatures for 150+ Perl built-ins with parameter documentation.
 
 Works with any LSP-compatible editor:
 - Visual Studio Code
-- VSCodium  
+- VSCodium / Open VSX-compatible editors
 - Cursor
 - Gitpod
 - GitHub Codespaces

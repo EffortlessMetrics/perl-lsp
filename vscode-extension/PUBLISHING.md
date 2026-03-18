@@ -9,6 +9,7 @@
    npm install -g @vscode/vsce
    ```
 4. **Publisher account** on Visual Studio Marketplace
+5. **Open VSX access token** if you want to publish to Open VSX / VSCodium users
 
 ## Build Process
 
@@ -30,7 +31,7 @@ npm install
 npm run verify:marketplace
 ```
 
-`verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates a `.vsix` package suitable for pre-release validation.
+`verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates a `.vsix` package suitable for pre-release validation. `verify:openvsx` currently reuses the same VSIX validation flow so the exact package that goes to Visual Studio Marketplace is also ready for Open VSX.
 
 ### 3. Test Locally
 
@@ -103,6 +104,18 @@ vsce publish major  # 0.5.0 -> 0.9.x
 vsce publish 0.5.1  # Specific version
 ```
 
+### 8. Publish to Open VSX
+
+```bash
+# Publish from the current workspace
+npx ovsx publish --pat "$OVSX_PAT"
+
+# Or publish the prebuilt VSIX explicitly
+npx ovsx publish perl-lsp-rs-*.vsix --pat "$OVSX_PAT"
+```
+
+Open VSX is the canonical distribution channel for VSCodium and many marketplace-compatible editors. Publishing the same verified VSIX keeps the VS Code and Open VSX releases aligned.
+
 ## Post-Publishing
 
 1. **Verify on Marketplace**
@@ -110,12 +123,16 @@ vsce publish 0.5.1  # Specific version
    - Search for "Perl Language Server"
    - Verify description, screenshots, etc.
 
-2. **Update Documentation**
+2. **Verify on Open VSX**
+   - Go to https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs
+   - Confirm version, readme rendering, and download/install instructions for VSCodium users
+
+3. **Update Documentation**
    - Update main README.md with marketplace link
    - Add installation instructions
    - Update CHANGELOG.md
 
-3. **Create GitHub Release**
+4. **Create GitHub Release**
    - Tag the release: `git tag vscode-extension-v0.5.0`
    - Create release on GitHub
    - Attach the .vsix file
@@ -153,9 +170,10 @@ Check `.vscodeignore` is excluding unnecessary files.
 Before first public launch:
 
 - [ ] Confirm `package.json` metadata is complete (`publisher`, `icon`, repository links, categories, keywords).
-- [ ] Ensure `README.md` has clear install + configuration guidance.
+- [ ] Ensure `README.md` has clear install + configuration guidance for both VS Code and Open VSX-compatible editors.
 - [ ] Ensure `CHANGELOG.md` includes release notes for the exact published version.
 - [ ] Run `npm run verify:marketplace` and install the generated `.vsix` locally.
 - [ ] Validate extension activation in a clean profile (`code --user-data-dir <tmpdir>`).
 - [ ] Verify binary download fallback works when no bundled binary exists for the host platform.
 - [ ] Publish as pre-release first (recommended for initial alpha), then promote to stable after validation feedback.
+- [ ] Confirm the Open VSX listing resolves and the README renders after publish.

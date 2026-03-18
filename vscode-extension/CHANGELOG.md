@@ -4,6 +4,14 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
+### Added
+- Open VSX badges and installation guidance in the extension README for VSCodium/Open VSX users.
+- `npm run publish:openvsx` and `npm run verify:openvsx` helper scripts for local publishing workflows.
+
+### Changed
+- Publishing workflow now validates the VSIX for both marketplace paths and emits notices when Open VSX or VS Marketplace tokens are not configured.
+- Publishing documentation now covers Open VSX login, publish, and post-release verification steps.
+
 ## [0.11.0] - 2026-03-11
 
 ### Fixed
