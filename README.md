@@ -199,17 +199,24 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 
 ## Documentation
 
-| Resource | Description |
-|----------|-------------|
-| **[Getting Started](docs/tutorials/GETTING_STARTED.md)** | **Installation, editor setup, and first-run walkthrough** |
-| [Book](book/) | Comprehensive user and developer guide |
-| [docs/](docs/README.md) | Documentation index |
-| [features.toml](features.toml) | Canonical LSP feature catalog |
-| [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) | Live project metrics |
-| [ROADMAP.md](ROADMAP.md) | Version milestones and planning |
-| [Getting Started](docs/tutorials/GETTING_STARTED.md) | Installation and first steps |
-| [Stability Policy](docs/reference/STABILITY.md) | API versioning and compatibility |
-| [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
+Start with the docs index if you are not sure where to go next: [docs/README.md](docs/README.md).
+
+| Need | Start here |
+|------|------------|
+| Install and configure the server | [Getting Started](docs/tutorials/GETTING_STARTED.md) |
+| Browse the full documentation map | [docs/README.md](docs/README.md) |
+| Understand current project health | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) |
+| Review release planning | [ROADMAP.md](ROADMAP.md) |
+| Check API and compatibility promises | [Stability Policy](docs/reference/STABILITY.md) |
+| Set up debugger workflows | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) |
+| Inspect the canonical LSP capability catalog | [features.toml](features.toml) |
+| Read the longer-form guide | [book/](book/) |
+
+### Documentation paths by audience
+
+- **New users**: start with [Getting Started](docs/tutorials/GETTING_STARTED.md), then [Editor Setup](docs/how-to/EDITOR_SETUP.md), and [Troubleshooting](docs/how-to/TROUBLESHOOTING.md).
+- **Contributors**: start with [CONTRIBUTING.md](CONTRIBUTING.md), then [Commands Reference](docs/reference/COMMANDS_REFERENCE.md), and [docs/README.md](docs/README.md).
+- **Maintainers**: use [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md), [CI Local Validation](docs/project/CI_LOCAL_VALIDATION.md), and [ROADMAP.md](ROADMAP.md).
 
 ## History
 

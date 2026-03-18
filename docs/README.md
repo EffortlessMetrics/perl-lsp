@@ -1,135 +1,125 @@
 # Perl LSP Documentation
 
-Documentation for Perl LSP v0.12.0 — a Language Server Protocol implementation for Perl.
+Documentation index for the `perl-lsp` workspace. Use this page as the starting point for user guides, contributor references, and project status material.
+
+## Quick navigation
+
+| If you want to... | Read this |
+|---|---|
+| Install `perl-lsp` and get your editor working | [tutorials/GETTING_STARTED.md](tutorials/GETTING_STARTED.md) |
+| Configure a specific editor | [how-to/EDITOR_SETUP.md](how-to/EDITOR_SETUP.md) and [EDITORS/](EDITORS/) |
+| Troubleshoot setup or runtime issues | [how-to/TROUBLESHOOTING.md](how-to/TROUBLESHOOTING.md) |
+| Understand supported LSP capabilities | [reference/LSP_FEATURES.md](reference/LSP_FEATURES.md) and [`../features.toml`](../features.toml) |
+| Learn the developer workflow | [../CONTRIBUTING.md](../CONTRIBUTING.md) and [reference/COMMANDS_REFERENCE.md](reference/COMMANDS_REFERENCE.md) |
+| Review architecture and design decisions | [reference/ARCHITECTURE_OVERVIEW.md](reference/ARCHITECTURE_OVERVIEW.md) and [adr/README.md](adr/README.md) |
+| Check current health, metrics, and roadmap | [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md) and [project/ROADMAP.md](project/ROADMAP.md) |
 
 ## Repository snapshot
 
 - Workspace version: **v0.12.0**
-- Workspace members: **112 crates**
+- Workspace members: **121 crates**
 - Family counts (from `crates/`):
   - `perl-module-*`: 13
-  - `perl-lsp-*`: 38
+  - `perl-lsp-*`: 41
   - `perl-lsp-feature-*`: 8
   - `perl-dap-*`: 9
   - `perl-ts-*`: 5
   - `perl-workspace-*`: 6
 
-To refresh counts:
+Refresh the counts with:
 
 ```bash
+find crates -maxdepth 1 -mindepth 1 -type d | wc -l
 for prefix in perl-module- perl-lsp- perl-lsp-feature- perl-dap- perl-ts- perl-workspace-; do
   printf "%-18s %s\n" "$prefix" "$(find crates -maxdepth 1 -mindepth 1 -type d -name "${prefix}*" | wc -l)"
 done
 ```
 
-## Tutorials — learn by doing
+## Learn by doing
 
-Step-by-step guides to get you started.
+Tutorials explain end-to-end workflows and are the best place to start when you want context, not just a command.
 
-- [Getting Started](tutorials/GETTING_STARTED.md) — Installation and first steps
-- [DAP User Guide](tutorials/DAP_USER_GUIDE.md) — Debug Adapter Protocol setup and usage
-- [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) — Build and extend the LSP server
-- [Execute Command Tutorial](tutorials/EXECUTE_COMMAND_TUTORIAL.md) — Custom LSP commands
-- [Comprehensive Testing Guide](tutorials/COMPREHENSIVE_TESTING_GUIDE.md) — Testing workflows
+- [Getting Started](tutorials/GETTING_STARTED.md) — install, verify, and connect an editor
+- [DAP User Guide](tutorials/DAP_USER_GUIDE.md) — configure debugger support
+- [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) — extend server behavior safely
+- [Execute Command Tutorial](tutorials/EXECUTE_COMMAND_TUTORIAL.md) — add custom LSP commands
+- [Comprehensive Testing Guide](tutorials/COMPREHENSIVE_TESTING_GUIDE.md) — understand test lanes and validation
+- [Workspace Refactoring Tutorial](tutorials/WORKSPACE_REFACTORING_TUTORIAL.md) — navigate larger codebase changes
 
-## How-to guides — solve a problem
+## Solve a specific problem
 
-Task-oriented instructions for common operations.
+How-to guides are task-oriented and optimized for common maintenance work.
 
-- [Installation](how-to/INSTALLATION.md) — Install from source or binary
-- [Editor Setup](how-to/EDITOR_SETUP.md) — Configure your editor
-- [Troubleshooting](how-to/TROUBLESHOOTING.md) — Common issues and solutions
-- [Dependency Management](how-to/DEPENDENCY_MANAGEMENT.md) — Automated updates with Dependabot
-- [SemVer Workflow](how-to/SEMVER_WORKFLOW.md) — SemVer checking and API compatibility
-- [Coverage](how-to/COVERAGE.md) — Code coverage reports
-- [Dead Code Detection](how-to/DEAD_CODE_DETECTION.md) — Find unused code
+- [Installation](how-to/INSTALLATION.md)
+- [Editor Setup](how-to/EDITOR_SETUP.md)
+- [Troubleshooting](how-to/TROUBLESHOOTING.md)
+- [Debugging](how-to/DEBUGGING.md)
+- [Performance Tuning](how-to/PERFORMANCE_TUNING.md)
+- [Threading Configuration](how-to/THREADING_CONFIGURATION_GUIDE.md)
+- [Dependency Management](how-to/DEPENDENCY_MANAGEMENT.md)
+- [Upgrading](how-to/UPGRADING.md)
 
-## Reference — look it up
+## Reference
 
-Precise, complete information for lookup.
+Reference documents are the canonical source for commands, contracts, and detailed technical behavior.
 
-- [Commands Reference](reference/COMMANDS_REFERENCE.md) — Full command catalog
-- [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) — System design and components
-- [Crate Architecture Guide](reference/CRATE_ARCHITECTURE_GUIDE.md) — Workspace structure and tiers
-- [LSP Implementation Guide](reference/LSP_IMPLEMENTATION_GUIDE.md) — Language Server Protocol details
-- [LSP Features](reference/LSP_FEATURES.md) — Supported LSP capabilities
-- [Stability Policy](reference/STABILITY.md) — API versioning and compatibility
-- [Configuration](reference/CONFIG.md) — Configuration options
-- [FAQ](reference/FAQ.md) — Frequently asked questions
-- [Known Limitations](reference/KNOWN_LIMITATIONS.md) — Current constraints and workarounds
-- [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Diataxis framework and standards
+- [Commands Reference](reference/COMMANDS_REFERENCE.md)
+- [Configuration](reference/CONFIG.md)
+- [FAQ](reference/FAQ.md)
+- [Known Limitations](reference/KNOWN_LIMITATIONS.md)
+- [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md)
+- [Crate Architecture Guide](reference/CRATE_ARCHITECTURE_GUIDE.md)
+- [LSP Implementation Guide](reference/LSP_IMPLEMENTATION_GUIDE.md)
+- [LSP Features](reference/LSP_FEATURES.md)
+- [Stability Policy](reference/STABILITY.md)
+- [Supply Chain Security](reference/SUPPLY_CHAIN_SECURITY.md)
 
-## Explanation — understand why
+## Explanation and background
 
-Conceptual discussions and design rationale.
+These documents explain why the codebase looks the way it does.
 
-- [Pure Rust Parser](explanation/PURE_RUST_PARSER.md) — Why we built a native parser
-- [Error Handling Strategy](explanation/ERROR_HANDLING_STRATEGY.md) — Error philosophy and patterns
-- [Debt Tracking](explanation/DEBT_TRACKING.md) — Technical debt management
-- [Slash Disambiguation](explanation/SLASH_DISAMBIGUATION.md) — Perl regex vs division parsing
+- [Pure Rust Parser](explanation/PURE_RUST_PARSER.md)
+- [Error Handling Strategy](explanation/ERROR_HANDLING_STRATEGY.md)
+- [Slash Disambiguation](explanation/SLASH_DISAMBIGUATION.md)
+- [Tree-sitter Compatibility](explanation/TREE_SITTER_COMPATIBILITY.md)
+- [LSP Crate Separation Guide](explanation/LSP_CRATE_SEPARATION_GUIDE.md)
 
-## Project — status and governance
+## Project status and governance
 
-Process, metrics, and project health.
+Use these documents when you need current metrics, planning context, or process details.
 
-- [Current Status](project/CURRENT_STATUS.md) — Computed metrics and project health
-- [Roadmap](project/ROADMAP.md) — Milestones and release planning
-- [Milestones](project/MILESTONES.md) — GitHub milestones
-- [Lessons](project/LESSONS.md) — What went wrong
-- [Casebook](project/CASEBOOK.md) — What went right
-- [CI](project/CI.md) — Continuous integration setup
-- [CI Test Lanes](project/CI_TEST_LANES.md) — Test lane configuration
+- [Current Status](project/CURRENT_STATUS.md)
+- [Roadmap](project/ROADMAP.md)
+- [Milestones](project/MILESTONES.md)
+- [CI](project/CI.md)
+- [CI Test Lanes](project/CI_TEST_LANES.md)
+- [CI Local Validation](project/CI_LOCAL_VALIDATION.md)
+- [Documentation Truth System](project/DOCUMENTATION_TRUTH_SYSTEM.md)
 
-## Strategic Documents — planning and direction
-
-High-level planning documents for project direction.
-
-- [Strategic Documentation Index](STRATEGIC_DOCUMENTATION.md) — Navigation hub for all strategic docs
-- [Technical Vision](../TECHNICAL_VISION.md) — Long-term technical direction (3-5 years)
-- [Roadmap](../ROADMAP.md) — Version milestones and deliverables
-- [Now/Next/Later](../NOW_NEXT_LATER.md) — Current quarter priorities
-
-## Other directories
+## Additional directories
 
 | Directory | Purpose |
 |-----------|---------|
 | [adr/](adr/) | Architecture Decision Records |
-| [archive/](archive/) | Historical documents |
-| [benchmarks/](benchmarks/) | Benchmark framework docs |
-| [ci/](ci/) | CI-specific documentation |
-| [design/](design/) | Semantic analyzer design |
-| [EDITORS/](EDITORS/) | Editor-specific setup |
-| [forensics/](forensics/) | PR archaeology |
-| [issues/](issues/) | Corpus gap tracking |
-| [semantic/](semantic/) | Semantic validation |
-| [specs/](specs/) | Specification documents |
+| [archive/](archive/) | Historical release notes and retired material |
+| [benchmarks/](benchmarks/) | Benchmark design and reports |
+| [ci/](ci/) | CI and local validation documentation |
+| [design/](design/) | Deep design notes for semantic analysis and related systems |
+| [EDITORS/](EDITORS/) | Editor-specific setup guides |
+| [forensics/](forensics/) | PR archaeology and forensic workflows |
+| [handoff/](handoff/) | Agent and swarm workflow packs |
+| [issues/](issues/) | Known issues and corpus gap tracking |
+| [semantic/](semantic/) | Semantic validation plans and results |
+| [specs/](specs/) | Specifications and acceptance criteria |
 
-## Contributing
+## Canonical truth sources
 
-- [Contributing Guide](../CONTRIBUTING.md) — Development workflow and contribution process
+| Topic | Source | Verification path |
+|------|--------|-------------------|
+| Capability catalog | [`../features.toml`](../features.toml) | `just ci-gate` |
+| Live metrics | [project/CURRENT_STATUS.md](project/CURRENT_STATUS.md) | `just status-check` |
+| Local validation flow | [project/CI_LOCAL_VALIDATION.md](project/CI_LOCAL_VALIDATION.md) | `nix develop -c just ci-gate` |
+| Release planning | [project/ROADMAP.md](project/ROADMAP.md) | Human review |
+| Milestones | [project/MILESTONES.md](project/MILESTONES.md) | GitHub milestones |
 
-## Quick verification
-
-```bash
-nix develop -c just ci-gate       # Canonical local gate
-nix develop -c just status-check  # Verify metrics haven't drifted
-```
-
-## Canonical Truth Sources
-
-| What | Where | Verified By |
-|------|-------|-------------|
-| Metrics | [CURRENT_STATUS.md](project/CURRENT_STATUS.md) | `just status-check` |
-| Plans | [ROADMAP.md](project/ROADMAP.md) | Human review |
-| Milestones | [MILESTONES.md](project/MILESTONES.md) | GitHub Milestones |
-| Capability catalog | [features.toml](../features.toml) | `just ci-gate` |
-| CI lanes | [CI_TEST_LANES.md](project/CI_TEST_LANES.md) | `just ci-gate` |
-| Local validation | [CI_LOCAL_VALIDATION.md](project/CI_LOCAL_VALIDATION.md) | `just ci-gate` |
-| What went wrong | [LESSONS.md](project/LESSONS.md) | Human review |
-| What went right | [CASEBOOK.md](project/CASEBOOK.md) | Human review |
-
-**Rule**: All metrics are computed and live in `CURRENT_STATUS.md`. If you see a number elsewhere, treat it as stale.
-
----
-
-Version: v0.12.0
+**Rule:** if a number in another document disagrees with `project/CURRENT_STATUS.md`, treat `project/CURRENT_STATUS.md` as the source of truth unless a newer generated artifact says otherwise.
