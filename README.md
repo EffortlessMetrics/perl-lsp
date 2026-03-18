@@ -24,57 +24,66 @@
 
 ## Quick Start
 
+### 1) Install the language server
+
 ```bash
-# 1. Install
 cargo install perl-lsp
-
-# 2. Verify the install
 perl-lsp --health  # should print: ok X.Y.Z
-
-# 3. Configure your editor (VS Code)
-code --install-extension effortlessmetrics.perl-lsp-rs
-
-# 4. Open a Perl file — completions, diagnostics, hover, and navigation work immediately.
 ```
 
-New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
+### 2) Hook it up to your editor
 
-<details>
-<summary><strong>Neovim / Emacs setup</strong></summary>
+- **VS Code**
 
-**Neovim** (nvim-lspconfig):
+  ```bash
+  code --install-extension effortlessmetrics.perl-lsp-rs
+  ```
 
-```lua
-require('lspconfig').perl_ls.setup {
-  cmd = { "perl-lsp", "--stdio" },
-}
-```
+- **Neovim** (`nvim-lspconfig`)
 
-**Emacs** (eglot):
+  ```lua
+  require('lspconfig').perl_ls.setup {
+    cmd = { "perl-lsp", "--stdio" },
+  }
+  ```
 
-```elisp
-(add-to-list 'eglot-server-programs '(perl-mode "perl-lsp" "--stdio"))
-```
+- **Emacs** (`eglot`)
 
-</details>
+  ```elisp
+  (add-to-list 'eglot-server-programs '(perl-mode "perl-lsp" "--stdio"))
+  ```
+
+### 3) Open a Perl file
+
+You should immediately get completions, hover, diagnostics, and navigation.
+
+New to language servers? Start with the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough, editor-specific setup notes, and troubleshooting tips.
+
+## At a Glance
+
+- **Native Rust binaries** for both LSP (`perl-lsp`) and debugging (`perl-dap`)
+- **Modern editor support** with completion, diagnostics, hover, rename, formatting, and symbols
+- **Deep Perl 5 coverage** across parser, lexer, semantic analysis, and workspace indexing
+- **Cross-file navigation** powered by dual indexing of bare and qualified symbols
+- **Unicode-safe and security-focused** implementation with hardened path and protocol handling
+- **Monorepo architecture** with 100+ focused crates for parser, LSP, DAP, and tooling
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Completion** | Symbols, keywords, modules, variables, snippets, built-in function signatures |
-| **Navigation** | Go-to-definition, find references, workspace symbols, document symbols |
-| **Hover** | Documentation and type information |
-| **Diagnostics** | Real-time error detection |
-| **Refactoring** | Rename, code actions, formatting |
-| **Debug Adapter** | Breakpoints, stepping, variable inspection via DAP bridge |
-| **Fast** | Sub-millisecond incremental parsing, native Rust binary |
-| **Zero Perl dependency** | No Perl runtime needed for parsing or LSP |
-| **Cross-file navigation** | Dual-indexed workspace with broad reference coverage |
-| **Unicode-safe** | Full UTF-8/UTF-16 position conversion |
+| Area | What you get |
+|------|---------------|
+| **Completion** | Symbols, keywords, modules, variables, snippets, and built-in function signatures |
+| **Navigation** | Go-to-definition, find references, workspace symbols, and document symbols |
+| **Hover** | Inline documentation and semantic context |
+| **Diagnostics** | Real-time syntax and analysis feedback while you type |
+| **Refactoring** | Rename, code actions, formatting, and on-type formatting hooks |
+| **Debugging** | Breakpoints, stepping, and variable inspection through the DAP bridge |
+| **Performance** | Native Rust binaries with sub-millisecond incremental parsing updates |
+| **Workspace intelligence** | Cross-file navigation via a dual-indexed symbol model |
+| **Portability** | No Perl runtime required for parsing or for the LSP server itself |
+| **Safety** | UTF-8/UTF-16-safe offsets plus hardened path and protocol handling |
 
-Full LSP coverage: all 53 advertised capabilities implemented (see [`features.toml`](features.toml)).
-For live metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
+Full LSP coverage: all 53 advertised capabilities are implemented in the public feature catalog. See [`features.toml`](features.toml) and [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for the current metrics and compatibility snapshot.
 
 ## Why perl-lsp?
 
@@ -118,7 +127,11 @@ See [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for the latest computed 
 
 ## Install
 
+Choose the path that matches how you want to consume the project.
+
 ### From crates.io
+
+Best when you want the published server quickly:
 
 ```bash
 cargo install perl-lsp
@@ -126,6 +139,8 @@ perl-lsp --health  # should print: ok X.Y.Z
 ```
 
 ### From source
+
+Best when you want the latest workspace code or plan to contribute:
 
 ```bash
 git clone https://github.com/EffortlessMetrics/perl-lsp.git
@@ -136,7 +151,7 @@ perl-lsp --health  # should print: ok X.Y.Z
 
 ### Pre-built binaries
 
-Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
+Best when you do not want a local Rust toolchain. Download artifacts from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases).
 
 ## Architecture
 
@@ -146,7 +161,7 @@ Editor / IDE
     v
 perl-lsp  (LSP server)
     |
-    +-- LSP Providers (completion, hover, diagnostics, ...)
+    +-- LSP Providers (completion, hover, diagnostics, rename, formatting, ...)
     +-- Workspace Index (dual-indexed symbol lookup)
     +-- perl-dap (Debug Adapter Protocol bridge)
     |
@@ -155,16 +170,9 @@ perl-parser  (v3 recursive-descent)
 perl-lexer   (mode-aware tokenizer)
 ```
 
-The workspace is organized as a family of focused Rust crates (115+), each with a
-single responsibility. This keeps compile times fast and boundaries clear.
+This repository is a large Rust workspace with 100+ small, focused crates. The structure keeps responsibilities narrow: parser crates stay parser-focused, LSP crates stay feature-focused, and shared utilities remain reusable across the ecosystem.
 
-For the full tier system, architecture decision records, and design rationale, see:
-
-- [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md)
-- [Architecture Decision Records](docs/adr/README.md) (microcrate architecture, dual indexing, incremental parsing, supply chain security)
-- [CLAUDE.md](CLAUDE.md) for the complete developer command reference
-
-## Published Crates
+### Core published crates
 
 | Crate | Purpose |
 |-------|---------|
@@ -174,19 +182,33 @@ For the full tier system, architecture decision records, and design rationale, s
 | [`perl-lexer`](https://crates.io/crates/perl-lexer) | Context-aware Perl tokenizer |
 | [`perl-corpus`](https://crates.io/crates/perl-corpus) | Parser and LSP test corpus |
 
+For the full tier system, architecture decision records, and design rationale, see:
+
+- [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md)
+- [Architecture Decision Records](docs/adr/README.md)
+- [Crate Architecture Guide](docs/reference/CRATE_ARCHITECTURE_GUIDE.md)
+
 ## Development
+
+### Common commands
 
 ```bash
 cargo build --workspace            # Build everything
 cargo test --workspace             # Run all tests
-cargo clippy --workspace --lib     # Lint
-cargo fmt --all                    # Format
+cargo clippy --workspace --lib     # Lint library targets
+cargo fmt --all                    # Format code
 nix develop -c just ci-gate        # Full local gate (required before push)
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines,
-[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards,
-and [SUPPORT.md](SUPPORT.md) for how to get help.
+### Where to work
+
+- Parser changes: `crates/perl-parser/`
+- LSP binary and CLI: `crates/perl-lsp/`
+- LSP feature providers: `crates/perl-lsp-*/`
+- DAP implementation: `crates/perl-dap/`
+- Workspace indexing and module resolution: `crates/perl-workspace-*/`, `crates/perl-module-*/`
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contributor workflows, [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards, and [SUPPORT.md](SUPPORT.md) for support channels.
 
 ## Security
 
@@ -207,7 +229,6 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 | [features.toml](features.toml) | Canonical LSP feature catalog |
 | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) | Live project metrics |
 | [ROADMAP.md](ROADMAP.md) | Version milestones and planning |
-| [Getting Started](docs/tutorials/GETTING_STARTED.md) | Installation and first steps |
 | [Stability Policy](docs/reference/STABILITY.md) | API versioning and compatibility |
 | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
 
