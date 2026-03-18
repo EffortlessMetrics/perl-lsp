@@ -32,7 +32,7 @@ export class BinaryDownloader {
         private readonly outputChannel: vscode.OutputChannel
     ) {}
     
-    async ensureBinary(): Promise<string | null> {
+    async ensureBinary(forceDownload = false): Promise<string | null> {
         const config = vscode.workspace.getConfiguration('perl-lsp');
         const channel = config.get<string>('channel', 'latest');
         const versionTag = config.get<string>('versionTag', '');
@@ -44,9 +44,13 @@ export class BinaryDownloader {
         
         // Check if binary already exists
         const existingPath = this.getLocalBinaryPath();
-        if (existingPath && fs.existsSync(existingPath)) {
+        if (!forceDownload && existingPath && fs.existsSync(existingPath)) {
             this.outputChannel.appendLine(`Using existing binary: ${existingPath}`);
             return existingPath;
+        }
+
+        if (forceDownload && existingPath && fs.existsSync(existingPath)) {
+            this.outputChannel.appendLine(`Refreshing existing binary: ${existingPath}`);
         }
         
         // Show status bar while downloading
