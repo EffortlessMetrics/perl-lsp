@@ -31,6 +31,11 @@ use crate::protocol::{
 use crate::tcp_attach::{DapEvent, TcpAttachConfig, TcpAttachSession};
 use perl_content_length_framing::{ContentLengthFramer, frame};
 use perl_dap_breakpoint::{AstBreakpointValidator, BreakpointValidator};
+use perl_dap_debugger::{
+    is_debugger_prompt, is_exception_line, is_valid_function_breakpoint_name,
+    is_valid_set_variable_name, is_warning_line, parse_context_line, parse_error_location,
+    parse_stack_frame_line, validate_safe_expression,
+};
 use perl_dap_eval::SafeEvaluator;
 use perl_dap_stack::{PerlStackParser, is_internal_frame_name_and_path};
 use perl_dap_variables::{
@@ -38,6 +43,7 @@ use perl_dap_variables::{
 };
 use perl_keywords::DAP_COMPLETION_KEYWORDS;
 use perl_module_path::module_path_to_name;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -57,7 +63,6 @@ use crate::security;
 use nix::sys::signal::{self, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
-use regex::Regex;
 
 /// Poison-safe mutex lock that recovers from poisoned state
 fn lock_or_recover<'a, T>(mutex: &'a Mutex<T>, ctx: &'static str) -> MutexGuard<'a, T> {
@@ -84,50 +89,14 @@ fn emit_event_safe(
     sender.send(DapMessage::Event { seq: *seq_lock, event: event.to_string(), body }).is_ok()
 }
 
-/// Compiled regex patterns for debugger output parsing
-static CONTEXT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static PROMPT_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static STACK_FRAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-#[allow(dead_code)] // Reserved for future variable parsing enhancements
 static VARIABLE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static ERROR_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static EXCEPTION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static DANGEROUS_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static REGEX_MUTATION_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static ASSIGNMENT_OPS_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static DEREF_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static GLOB_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static ANSI_ESCAPE_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static SET_VARIABLE_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static FUNCTION_BREAKPOINT_NAME_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
-static WARNING_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
 static INC_RE: OnceLock<Result<Regex, regex::Error>> = OnceLock::new();
+
 const RECENT_OUTPUT_MAX_LINES: usize = 2048;
 const DEBUG_SESSION_TERMINATE_WAIT_MS: u64 = 250;
 const DEBUGGER_QUERY_WAIT_MS: u64 = 75;
 const DEBUGGER_FRAME_POLL_MS: u64 = 10;
-
-fn context_re() -> Option<&'static Regex> {
-    CONTEXT_RE
-        .get_or_init(|| {
-            Regex::new(r"^(?:(?P<func>[A-Za-z_][\w:]*+?)::(?:\((?P<file>[^:)]+):(?P<line>\d+)\):?|__ANON__)|main::(?:\()?(?P<file2>[^:)\s]+)(?:\))?:(?P<line2>\d+):?)")
-        })
-        .as_ref()
-        .ok()
-}
-
-fn prompt_re() -> Option<&'static Regex> {
-    PROMPT_RE.get_or_init(|| Regex::new(r"^\s*DB<?\d*>?\s*$")).as_ref().ok()
-}
-
-fn stack_frame_re() -> Option<&'static Regex> {
-    STACK_FRAME_RE
-        .get_or_init(|| {
-            Regex::new(r"^\s*#?\s*(?P<frame>\d+)?\s+(?P<func>[A-Za-z_][\w:]*+?)(?:\s+called)?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)")
-        })
-        .as_ref()
-        .ok()
-}
 
 #[allow(dead_code)] // Reserved for future variable parsing enhancements
 fn variable_re() -> Option<&'static Regex> {
@@ -137,229 +106,9 @@ fn variable_re() -> Option<&'static Regex> {
         .ok()
 }
 
-fn error_re() -> Option<&'static Regex> {
-    ERROR_RE
-        .get_or_init(|| {
-            Regex::new(r"^(?:.*?\s+at\s+(?P<file>[^\s]+)\s+line\s+(?P<line>\d+)|Syntax error|Can't locate|Global symbol).*$")
-        })
-        .as_ref()
-        .ok()
-}
-
-fn exception_re() -> Option<&'static Regex> {
-    EXCEPTION_RE
-        .get_or_init(|| {
-            // Perl `die` often emits two lines:
-            //  - message text
-            //  - `at /path/file.pl line N.`
-            Regex::new(r"(?i)\b(?:died|uncaught exception|panic)\b|^\s*at\s+\S+?\s+line\s+\d+\.?$")
-        })
-        .as_ref()
-        .ok()
-}
-
-fn warning_re() -> Option<&'static Regex> {
-    WARNING_RE
-        .get_or_init(|| {
-            // Perl `warn`, `Carp::carp`, and `Carp::cluck` emit warning messages.
-            // Common patterns:
-            //  - "Something went wrong at script.pl line 42."
-            //  - "Use of uninitialized value..."
-            //  - Explicit warn/carp/cluck output
-            Regex::new(
-                r"(?i)\b(?:warn(?:ing)?|carp|cluck)\b.*\bat\s+\S+?\s+line\s+\d+|^.+\bat\s+\S+?\s+line\s+\d+\.?\s*$",
-            )
-        })
-        .as_ref()
-        .ok()
-}
-
-fn dangerous_ops_re() -> Option<&'static Regex> {
-    DANGEROUS_OPS_RE
-        .get_or_init(|| {
-            // Dangerous operations that can mutate state, perform I/O, or execute code
-            // Categories:
-            //   - State mutation: push, pop, shift, unshift, splice, delete, undef, srand
-            //   - Process control: system, exec, fork, exit, dump, kill, alarm, sleep, wait, waitpid
-            //   - I/O: qx, readpipe, syscall, open, close, print, say, printf, sysread, syswrite, glob, readline, ioctl, fcntl, flock, select, dbmopen, dbmclose
-            //   - Filesystem: mkdir, rmdir, unlink, rename, chdir, chmod, chown, chroot, truncate, symlink, link
-            //   - Code loading: eval, require, do (file)
-            //   - Tie/untie: can execute arbitrary code via FETCH/STORE
-            //   - Network: socket, connect, bind, listen, accept, send, recv, shutdown
-            //   - IPC: msg*, sem*, shm*
-            // Note: s/tr/y regex mutation operators handled separately via regex_mutation_re()
-            let ops = [
-                // State mutation
-                "push",
-                "pop",
-                "shift",
-                "unshift",
-                "splice",
-                "delete",
-                "undef",
-                "srand",
-                "bless",
-                "each",
-                "keys",
-                "values",
-                "reset", // Process control
-                "system",
-                "exec",
-                "fork",
-                "exit",
-                "dump",
-                "kill",
-                "alarm",
-                "sleep",
-                "wait",
-                "waitpid",
-                "setpgrp",
-                "setpriority",
-                "umask",
-                "lock", // I/O
-                "qx",
-                "readpipe",
-                "syscall",
-                "open",
-                "close",
-                "print",
-                "say",
-                "printf",
-                "sysread",
-                "syswrite",
-                "glob",
-                "readline",
-                "eof",
-                "ioctl",
-                "fcntl",
-                "flock",
-                "select",
-                "dbmopen",
-                "dbmclose",
-                "binmode",
-                "opendir",
-                "closedir",
-                "readdir",
-                "rewinddir",
-                "seekdir",
-                "telldir",
-                "seek",
-                "sysseek",
-                "formline",
-                "write",
-                "pipe",
-                "socketpair", // Filesystem
-                "mkdir",
-                "rmdir",
-                "unlink",
-                "rename",
-                "chdir",
-                "chmod",
-                "chown",
-                "chroot",
-                "truncate",
-                "utime",
-                "symlink",
-                "link", // Code loading/execution
-                "eval",
-                "require",
-                "do", // Tie mechanism (can execute arbitrary code)
-                "tie",
-                "untie", // Network
-                "socket",
-                "connect",
-                "bind",
-                "listen",
-                "accept",
-                "send",
-                "recv",
-                "shutdown",
-                "setsockopt",
-                // IPC
-                "msgget",
-                "msgsnd",
-                "msgrcv",
-                "msgctl",
-                "semget",
-                "semop",
-                "semctl",
-                "shmget",
-                "shmat",
-                "shmdt",
-                "shmctl",
-            ];
-            // Build pattern: \b(op1|op2|...)\b
-            let pattern = format!(r"\b(?:{})\b", ops.join("|"));
-            Regex::new(&pattern)
-        })
-        .as_ref()
-        .ok()
-}
-
-/// Regex to match mutating regex operators (s///, tr///, y///)
-/// Matches s, tr, y followed by a delimiter character
-fn regex_mutation_re() -> Option<&'static Regex> {
-    REGEX_MUTATION_RE
-        .get_or_init(|| {
-            // Match s, tr, y followed by a delimiter character (not alphanumeric/underscore/whitespace)
-            // Common delimiters: / # | ! { [ ( ' "
-            // Note: We filter out escape sequences like \s manually after matching
-            Regex::new(r"\b(?:s|tr|y)[^\w\s]")
-        })
-        .as_ref()
-        .ok()
-}
-
-/// Regex to match potential assignment operators (any sequence of operator chars)
-fn assignment_ops_re() -> Option<&'static Regex> {
-    ASSIGNMENT_OPS_RE
-        .get_or_init(|| {
-            // Match any sequence of operator characters to tokenize operators
-            Regex::new(r"([!~^&|+\-*/%=<>]+)")
-        })
-        .as_ref()
-        .ok()
-}
-
-/// Regex to match dynamic subroutine dereferencing: &{...}
-fn deref_re() -> Option<&'static Regex> {
-    DEREF_RE.get_or_init(|| Regex::new(r"&[\s]*\{")).as_ref().ok()
-}
-
-/// Regex to match glob operations: <*...>
-fn glob_re() -> Option<&'static Regex> {
-    GLOB_RE.get_or_init(|| Regex::new(r"<\*[^>]*>")).as_ref().ok()
-}
-
 /// Regex for matching ANSI escape sequences in debugger output.
 fn ansi_escape_re() -> Option<&'static Regex> {
     ANSI_ESCAPE_RE.get_or_init(|| Regex::new(r"\x1B\[[0-9;]*[A-Za-z]")).as_ref().ok()
-}
-
-/// Regex for validating setVariable variable names to avoid debugger command injection.
-fn set_variable_name_re() -> Option<&'static Regex> {
-    SET_VARIABLE_NAME_RE
-        .get_or_init(|| {
-            Regex::new(r"^[\$\@\%](?:[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*|\d+|_)$")
-        })
-        .as_ref()
-        .ok()
-}
-
-/// Validate DAP setVariable names (e.g. `$x`, `%ENV`, `$Package::value`) for safe passthrough.
-fn is_valid_set_variable_name(name: &str) -> bool {
-    set_variable_name_re().is_some_and(|re| re.is_match(name))
-}
-
-fn function_breakpoint_name_re() -> Option<&'static Regex> {
-    FUNCTION_BREAKPOINT_NAME_RE
-        .get_or_init(|| Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z_][A-Za-z0-9_]*)*$"))
-        .as_ref()
-        .ok()
-}
-
-fn is_valid_function_breakpoint_name(name: &str) -> bool {
-    function_breakpoint_name_re().is_some_and(|re| re.is_match(name))
 }
 
 fn inc_re() -> Option<&'static Regex> {
@@ -375,14 +124,6 @@ struct DataBreakpointRecord {
     access_type: Option<String>,
     #[allow(dead_code)]
     condition: Option<String>,
-}
-
-/// Check if the match is an escape sequence (preceded by backslash)
-fn is_escape_sequence(s: &str, match_start: usize) -> bool {
-    if match_start == 0 {
-        return false;
-    }
-    s.as_bytes()[match_start - 1] == b'\\'
 }
 
 /// DAP server that handles debug sessions
@@ -1158,7 +899,7 @@ impl DebugAdapter {
         for line in lines.iter().rev() {
             let normalized = Self::normalize_debugger_output_line(line);
             let text = normalized.trim();
-            if text.is_empty() || prompt_re().is_some_and(|re| re.is_match(text)) {
+            if text.is_empty() || is_debugger_prompt(text) {
                 continue;
             }
 
@@ -1256,342 +997,33 @@ impl DebugAdapter {
 
         for line in output.lines() {
             // Try to match stack frame format
-            if let Some(re) = stack_frame_re() {
-                if let Some(caps) = re.captures(line) {
-                    let func = caps.name("func").map(|m| m.as_str()).unwrap_or("main");
-                    let file = caps.name("file").map(|m| m.as_str()).unwrap_or("<unknown>");
-                    let line_num =
-                        caps.name("line").and_then(|m| m.as_str().parse::<i32>().ok()).unwrap_or(1);
+            if let Some(parsed) = parse_stack_frame_line(line) {
+                let file_name = parsed
+                    .file
+                    .split(['/', '\\'].as_ref())
+                    .next_back()
+                    .unwrap_or(parsed.file.as_str());
 
-                    // Extract file name from path for display
-                    let file_name = file.split(['/', '\\'].as_ref()).next_back().unwrap_or(file);
+                frames.push(StackFrame {
+                    id: frame_id,
+                    name: parsed.func,
+                    source: Source {
+                        name: Some(file_name.to_string()),
+                        path: parsed.file,
+                        source_reference: None,
+                    },
+                    line: parsed.line,
+                    column: 1,
+                    end_line: None,
+                    end_column: None,
+                });
 
-                    frames.push(StackFrame {
-                        id: frame_id,
-                        name: func.to_string(),
-                        source: Source {
-                            name: Some(file_name.to_string()),
-                            path: file.to_string(),
-                            source_reference: None,
-                        },
-                        line: line_num,
-                        column: 1, // Perl debugger doesn't provide column info by default
-                        end_line: None,
-                        end_column: None,
-                    });
-
-                    frame_id += 1;
-                }
+                frame_id += 1;
             }
         }
 
         frames
     }
-}
-
-/// Check if a position in a string is inside single quotes
-/// (conservative: only tracks single-quoted string literals)
-fn is_in_single_quotes(s: &str, idx: usize) -> bool {
-    let mut in_sq = false;
-    let mut escaped = false;
-
-    for (i, ch) in s.char_indices() {
-        if i >= idx {
-            break;
-        }
-        if in_sq {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '\'' {
-                in_sq = false;
-            }
-        } else if ch == '\'' {
-            in_sq = true;
-        }
-    }
-
-    in_sq
-}
-
-/// Check if the match is CORE:: or CORE::GLOBAL:: qualified (must block these)
-fn is_core_qualified(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-
-    // Must have :: immediately before op
-    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
-        return false;
-    }
-
-    // Extract the identifier right before that ::
-    let end = op_start - 2;
-    let mut start = end;
-    while start > 0 {
-        let b = bytes[start - 1];
-        if b.is_ascii_alphanumeric() || b == b'_' {
-            start -= 1;
-        } else {
-            break;
-        }
-    }
-    let seg = &s[start..end];
-    if seg == "CORE" {
-        return true;
-    }
-    if seg != "GLOBAL" {
-        return false;
-    }
-
-    // If GLOBAL, require CORE::GLOBAL::op
-    if start < 2 || bytes[start - 1] != b':' || bytes[start - 2] != b':' {
-        return false;
-    }
-    let end2 = start - 2;
-    let mut start2 = end2;
-    while start2 > 0 {
-        let b = bytes[start2 - 1];
-        if b.is_ascii_alphanumeric() || b == b'_' {
-            start2 -= 1;
-        } else {
-            break;
-        }
-    }
-    &s[start2..end2] == "CORE"
-}
-
-/// Check if the match is a sigil-prefixed identifier ($print, @say, %exit, *dump)
-/// BUT NOT if it's a dereference call (&$print) or method call (->$print)
-fn is_sigil_prefixed_identifier(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-    if op_start == 0 {
-        return false;
-    }
-
-    // Must be preceded by a sigil
-    if !matches!(bytes[op_start - 1], b'$' | b'@' | b'%' | b'*') {
-        return false;
-    }
-
-    // Security: If it's a sigil, we must ensure it's not being used in a way
-    // that triggers execution (like &$sub or ->$method).
-    // We scan backwards from the sigil (op_start - 1) skipping whitespace.
-    let mut i = op_start - 1;
-    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
-        i -= 1;
-    }
-
-    if i > 0 {
-        let prev = bytes[i - 1];
-
-        // Block dereference execution (&$sub)
-        if prev == b'&' {
-            return false;
-        }
-
-        // Block method call (->$method)
-        if prev == b'>' && i > 1 && bytes[i - 2] == b'-' {
-            return false;
-        }
-
-        // Handle braced dereference &{ $sub }
-        if prev == b'{' {
-            i -= 1;
-            while i > 0 && bytes[i - 1].is_ascii_whitespace() {
-                i -= 1;
-            }
-            if i > 0 && bytes[i - 1] == b'&' {
-                return false;
-            }
-        }
-    }
-
-    true
-}
-
-/// Check if the match is a simple braced scalar variable ${print}
-/// Does NOT skip ${print()} or ${print + 1}
-fn is_simple_braced_scalar_var(s: &str, op_start: usize, op_end: usize) -> bool {
-    let bytes = s.as_bytes();
-
-    // Scan left for `${` (allow whitespace between)
-    let mut i = op_start;
-    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
-        i -= 1;
-    }
-    if i < 1 || bytes[i - 1] != b'{' {
-        return false;
-    }
-    i -= 1;
-    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
-        i -= 1;
-    }
-    if i < 1 || bytes[i - 1] != b'$' {
-        return false;
-    }
-
-    // Scan right for `}` (allow whitespace between)
-    let mut j = op_end;
-    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-        j += 1;
-    }
-    j < bytes.len() && bytes[j] == b'}'
-}
-
-/// Check if the match is package-qualified (Foo::print) but not CORE::
-fn is_package_qualified_not_core(s: &str, op_start: usize) -> bool {
-    let bytes = s.as_bytes();
-    if op_start < 2 || bytes[op_start - 1] != b':' || bytes[op_start - 2] != b':' {
-        return false;
-    }
-    // It's qualified, but we need to check it's not CORE::
-    !is_core_qualified(s, op_start)
-}
-
-/// Validate that an expression is safe for evaluation (non-mutating)
-///
-/// AC10.2: Safe evaluation mode validates expressions don't have side effects
-///
-/// This function uses a pre-compiled regex for performance and includes
-/// context-aware filtering to reduce false positives for:
-/// - Sigil-prefixed identifiers ($print, @say, %exit)
-/// - Simple braced scalar variables ${print}
-/// - Package-qualified names (Foo::print) unless CORE::
-/// - Single-quoted string literals ('print')
-///
-/// Note: Method calls ($obj->print) are intentionally NOT exempted because
-/// dangerous operations remain dangerous regardless of invocation syntax.
-fn validate_safe_expression(expression: &str) -> Option<String> {
-    // Check for assignment operators using regex to properly handle multi-char ops
-    // This avoids false positives for comparison operators (e.g., == contains =)
-    if let Some(re) = assignment_ops_re() {
-        for mat in re.find_iter(expression) {
-            let op = mat.as_str();
-            let start = mat.start();
-
-            // Allow harmless occurrences in single-quoted literals
-            if is_in_single_quotes(expression, start) {
-                continue;
-            }
-
-            // Check if it's strictly an assignment operator
-            match op {
-                "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "**=" | ".=" | "&=" | "|=" | "^="
-                | "<<=" | ">>=" | "&&=" | "||=" | "//=" | "x=" => {
-                    return Some(format!(
-                        "Safe evaluation mode: assignment operator '{}' not allowed (use allowSideEffects: true)",
-                        op
-                    ));
-                }
-                _ => {}
-            }
-        }
-    }
-
-    // Check for dynamic subroutine calls &{...}
-    // This blocks tricks like &{"sys"."tem"}("ls")
-    if let Some(re) = deref_re() {
-        if re.is_match(expression) {
-            return Some(
-                "Safe evaluation mode: dynamic subroutine calls (&{...}) not allowed (use allowSideEffects: true)"
-                    .to_string(),
-            );
-        }
-    }
-
-    // Check for glob operations <*...> (anywhere in expression)
-    // This blocks filesystem access via globs
-    if let Some(re) = glob_re() {
-        if re.is_match(expression) {
-            return Some(
-                "Safe evaluation mode: glob operations (<*...>) not allowed (use allowSideEffects: true)"
-                    .to_string(),
-            );
-        }
-    }
-
-    // Check for file handle reads <$fh> or globs at start of expression
-    // This blocks state changes via reads like <STDIN> or <$fh>
-    if expression.trim().starts_with('<') {
-        return Some(
-            "Safe evaluation mode: file handle reads (<...>) and globs not allowed (use allowSideEffects: true)"
-                .to_string(),
-        );
-    }
-
-    // Check for mutating operations using pre-compiled regex
-    if let Some(re) = dangerous_ops_re() {
-        for mat in re.find_iter(expression) {
-            let op = mat.as_str();
-            let start = mat.start();
-            let end = mat.end();
-
-            // Allow harmless occurrences in single-quoted literals
-            if is_in_single_quotes(expression, start) {
-                continue;
-            }
-
-            // Allow sigil-prefixed identifiers ($print, @say, %exit, *printf)
-            if is_sigil_prefixed_identifier(expression, start) {
-                continue;
-            }
-
-            // Allow ${print} (simple scalar braced variable form)
-            if is_simple_braced_scalar_var(expression, start, end) {
-                continue;
-            }
-
-            // Allow package-qualified names unless it's CORE::
-            if is_package_qualified_not_core(expression, start) {
-                continue;
-            }
-
-            // Block: either bare op or CORE:: qualified
-            return Some(format!(
-                "Safe evaluation mode: potentially mutating operation '{}' not allowed (use allowSideEffects: true)",
-                op
-            ));
-        }
-    }
-
-    // Check for regex mutation operators (s///, tr///, y///)
-    // Handled separately to avoid false positives with escape sequences like \s in /\s+/
-    if let Some(re) = regex_mutation_re() {
-        if let Some(mat) = re.find(expression) {
-            let op = mat.as_str();
-            let start = mat.start();
-
-            // Allow sigil-prefixed identifiers ($s, $tr, $y)
-            if is_sigil_prefixed_identifier(expression, start) {
-                // It's a variable, allow it
-            } else if is_escape_sequence(expression, start) {
-                // It's an escape sequence like \s or \y, allow it
-            } else {
-                return Some(format!(
-                    "Safe evaluation mode: regex mutation operator '{}' not allowed (use allowSideEffects: true)",
-                    op.trim()
-                ));
-            }
-        }
-    }
-
-    // Check for increment/decrement operators
-    if expression.contains("++") || expression.contains("--") {
-        return Some(
-            "Safe evaluation mode: increment/decrement operators not allowed (use allowSideEffects: true)"
-                .to_string(),
-        );
-    }
-
-    // Check for backticks (shell execution)
-    if expression.contains('`') {
-        return Some(
-            "Safe evaluation mode: backticks (shell execution) not allowed (use allowSideEffects: true)"
-                .to_string(),
-        );
-    }
-
-    None
 }
 
 #[cfg(test)]

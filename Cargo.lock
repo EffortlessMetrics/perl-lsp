@@ -1576,6 +1576,7 @@ dependencies = [
  "perl-content-length-framing",
  "perl-dap-breakpoint",
  "perl-dap-command-args",
+ "perl-dap-debugger",
  "perl-dap-eval",
  "perl-dap-platform",
  "perl-dap-security",
@@ -1611,6 +1612,13 @@ dependencies = [
 [[package]]
 name = "perl-dap-command-args"
 version = "0.11.0"
+
+[[package]]
+name = "perl-dap-debugger"
+version = "0.11.0"
+dependencies = [
+ "regex",
+]
 
 [[package]]
 name = "perl-dap-eval"

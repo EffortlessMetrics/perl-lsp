@@ -344,6 +344,7 @@ perl-dap-command-args = { path = "crates/perl-dap-command-args", version = "0.11
 perl-dap-shell = { path = "crates/perl-dap-shell", version = "0.11.0" }
 perl-dap-security = { path = "crates/perl-dap-security", version = "0.11.0" }
 perl-dap-stack = { path = "crates/perl-dap-stack", version = "0.11.0" }
+perl-dap-debugger = { path = "crates/perl-dap-debugger", version = "0.11.0" }
 perl-dap-variables = { path = "crates/perl-dap-variables", version = "0.11.0" }
 perl-feature-catalog = { path = "crates/perl-feature-catalog", version = "0.11.0" }
 perl-lsp-feature-flags = { path = "crates/perl-lsp-feature-flags", version = "0.11.0" }

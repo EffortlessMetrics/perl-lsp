@@ -393,52 +393,35 @@ impl DebugAdapter {
                         let mut context_updated = false;
 
                         // Try main context pattern
-                        if let Some(re) = context_re()
-                            && let Some(caps) = re.captures(&text)
-                        {
-                            if let Some(func) = caps.name("func") {
-                                current_func = func.as_str().to_string();
+                        if let Some(parsed) = parse_context_line(&text) {
+                            if let Some(func) = parsed.func {
+                                current_func = func;
                                 context_updated = true;
                             }
-                            if let Some(file) = caps.name("file").or_else(|| caps.name("file2")) {
-                                current_file = file.as_str().to_string();
+                            if let Some(file) = parsed.file {
+                                current_file = file;
                                 context_updated = true;
                             }
-                            if let Some(line_num) = caps.name("line").or_else(|| caps.name("line2"))
-                            {
-                                current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
+                            if let Some(line_num) = parsed.line {
+                                current_line = line_num;
                                 context_updated = true;
                             }
                         }
 
                         // Try stack frame pattern as fallback
-                        if !context_updated
-                            && let Some(re) = stack_frame_re()
-                            && let Some(caps) = re.captures(&text)
-                        {
-                            if let Some(func) = caps.name("func") {
-                                current_func = func.as_str().to_string();
-                            }
-                            if let Some(file) = caps.name("file") {
-                                current_file = file.as_str().to_string();
-                            }
-                            if let Some(line_num) = caps.name("line") {
-                                current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
-                            }
+                        if !context_updated && let Some(parsed) = parse_stack_frame_line(&text) {
+                            current_func = parsed.func;
+                            current_file = parsed.file;
+                            current_line = parsed.line;
                             context_updated = true;
                         }
 
                         // Check for errors that might provide location info
                         if !context_updated
-                            && let Some(re) = error_re()
-                            && let Some(caps) = re.captures(&text)
+                            && let Some((file, line_num)) = parse_error_location(&text)
                         {
-                            if let Some(file) = caps.name("file") {
-                                current_file = file.as_str().to_string();
-                            }
-                            if let Some(line_num) = caps.name("line") {
-                                current_line = line_num.as_str().parse::<i32>().unwrap_or(0);
-                            }
+                            current_file = file;
+                            current_line = line_num;
                             context_updated = true;
 
                             // Send error event to client
@@ -460,12 +443,10 @@ impl DebugAdapter {
                                 exception_break_on_die.lock().map(|guard| *guard).unwrap_or(false);
                             let break_on_warn =
                                 exception_break_on_warn.lock().map(|guard| *guard).unwrap_or(false);
-                            let is_exception_line =
-                                exception_re().is_some_and(|re| re.is_match(&text));
-                            let is_warning_line = warning_re().is_some_and(|re| re.is_match(&text));
-                            let exception_match = break_on_die && is_exception_line;
-                            let warning_match =
-                                break_on_warn && is_warning_line && !is_exception_line;
+                            let exception_line = is_exception_line(&text);
+                            let warning_line = is_warning_line(&text);
+                            let exception_match = break_on_die && exception_line;
+                            let warning_match = break_on_warn && warning_line && !exception_line;
 
                             // Store exception message for exceptionInfo request
                             if exception_match || warning_match {
@@ -601,7 +582,7 @@ impl DebugAdapter {
                         }
 
                         // Detect debugger prompt (stopped state) with enhanced pattern matching
-                        if prompt_re().is_some_and(|re| re.is_match(&text))
+                        if is_debugger_prompt(&text)
                             || text.trim().starts_with("DB<")
                             || text.trim().starts_with("  DB<")
                         {

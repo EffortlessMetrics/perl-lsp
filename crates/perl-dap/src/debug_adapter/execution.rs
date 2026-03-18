@@ -1,6 +1,7 @@
 //! Execution control: continue, next, step in, step out, pause, goto, cancel.
 
 use super::*;
+use regex::Regex;
 
 impl DebugAdapter {
     /// Handle continue request
