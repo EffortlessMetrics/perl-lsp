@@ -373,9 +373,11 @@ impl CompletionProvider {
 
         let mut completions = Vec::new();
 
-        // Regex context: suggest regex constructs when inside a regex literal
-        if context.in_regex {
-            regex_patterns::add_regex_completions(&mut completions, &context);
+        // Regex context: suggest regex constructs when inside a regex literal,
+        // but keep sigil-prefixed symbol completions available for interpolated
+        // variables like `/^$fo/`.
+        if context.in_regex && !matches!(context.prefix.chars().next(), Some('$' | '@' | '%')) {
+            regex_patterns::add_regex_completions(&mut completions, &context, source);
             return sort::deduplicate_and_sort(completions);
         }
 
@@ -706,7 +708,7 @@ impl CompletionProvider {
 
         // Simple heuristics for context detection
         let in_string = self.is_in_string(source, position);
-        let in_regex = self.is_in_regex(source, position);
+        let in_regex = Self::is_in_regex(source, position);
         let in_comment = self.is_in_comment(source, position);
 
         CompletionContext::new(
@@ -945,7 +947,7 @@ impl CompletionProvider {
     /// - Binding operators: `=~ /…/` and `!~ /…/`
     /// - Explicit regex operators: `m/…/`, `qr/…/`, `s/…/…/`, `tr/…/…/`, `y/…/…/`
     /// - Bare regex after operators/keywords that expect a regex value
-    fn is_in_regex(&self, source: &str, position: usize) -> bool {
+    fn is_in_regex(source: &str, position: usize) -> bool {
         let before = &source[..position];
 
         // Find the last unescaped `/` before the cursor -- that could be the
@@ -964,6 +966,13 @@ impl CompletionProvider {
         // We look for the operator keyword immediately before the slash (with
         // optional whitespace).
         if Self::pre_slash_has_regex_op(pre_slash) {
+            return true;
+        }
+
+        if matches!(
+            pre_slash.split_ascii_whitespace().next_back(),
+            Some("or") | Some("and") | Some("not")
+        ) {
             return true;
         }
 
@@ -1497,41 +1506,93 @@ has 'name' => (re
     #[test]
     fn test_is_in_regex_binding_operator() {
         let code = r#"$x =~ /hello"#;
-        let provider = CompletionProvider::new(&must(Parser::new(code).parse()));
-        assert!(provider.is_in_regex(code, code.len()));
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
     }
 
     #[test]
     fn test_is_in_regex_m_operator() {
         let code = "m/pattern";
-        let provider = CompletionProvider::new(&must(Parser::new(code).parse()));
-        assert!(provider.is_in_regex(code, code.len()));
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
     }
 
     #[test]
     fn test_is_in_regex_qr_operator() {
         let code = "my $re = qr/pattern";
-        let provider = CompletionProvider::new(&must(Parser::new(code).parse()));
-        assert!(provider.is_in_regex(code, code.len()));
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
     }
 
     #[test]
     fn test_is_in_regex_s_operator() {
         let code = "$line =~ s/old";
-        let provider = CompletionProvider::new(&must(Parser::new(code).parse()));
-        assert!(provider.is_in_regex(code, code.len()));
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
+    }
+
+    #[test]
+    fn test_is_in_regex_keyword_operator() {
+        let code = "$x or /pattern";
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
     }
 
     #[test]
     fn test_is_not_in_regex_division() {
         // Division should NOT be detected as regex
         let code = "my $result = $x / $y";
-        let provider = CompletionProvider::new(&must(Parser::new("").parse()));
         // Position after "$x / $" -- should not be regex because $ precedes /
         // but our heuristic checks pre_slash context
         assert!(
-            !provider.is_in_regex(code, code.len()),
+            !CompletionProvider::is_in_regex(code, code.len()),
             "division should not be detected as regex context"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_preserves_sigil_completions_in_interpolation() {
+        let code = r#"my $foo = 1; my $bar = qr/^$fo/"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|item| item.label == "$foo"),
+            "expected interpolated regex variables to keep scalar completions"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_replaces_escape_prefix_range() {
+        let code = r#"$x =~ /\d"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        let item = must_some(completions.iter().find(|completion| completion.label == r"\d"));
+        assert_eq!(
+            item.text_edit_range,
+            Some((code.len() - r"\d".len(), code.len())),
+            "expected regex completion to replace the typed escape sequence"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_replaces_group_prefix_range() {
+        let code = r#"$x =~ /(?: "#;
+        let code = code.trim_end();
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        let item =
+            must_some(completions.iter().find(|completion| completion.label == "(?:...)"));
+        assert_eq!(
+            item.text_edit_range,
+            Some((code.len() - "(?:".len(), code.len())),
+            "expected regex completion to replace the typed group opener"
         );
     }
 }

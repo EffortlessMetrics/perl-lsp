@@ -255,8 +255,36 @@ fn regex_suggestions() -> &'static [RegexSuggestion] {
 /// Completions are filtered by the prefix text already typed inside the regex.
 /// For example, if the user typed `\\` inside a regex, only escape sequences
 /// (like `\\d`, `\\w`, `\\s`) are suggested.
-pub fn add_regex_completions(completions: &mut Vec<CompletionItem>, context: &CompletionContext) {
-    let prefix = &context.prefix;
+fn find_regex_prefix_start(line_prefix: &str) -> Option<usize> {
+    let mut starts: Vec<usize> = line_prefix.char_indices().map(|(idx, _)| idx).collect();
+    starts.push(line_prefix.len());
+
+    for start in starts {
+        let candidate = &line_prefix[start..];
+        if candidate.is_empty() {
+            continue;
+        }
+        if regex_suggestions().iter().any(|suggestion| suggestion.label.starts_with(candidate)) {
+            return Some(start);
+        }
+    }
+
+    None
+}
+
+pub fn add_regex_completions(
+    completions: &mut Vec<CompletionItem>,
+    context: &CompletionContext,
+    source: &str,
+) {
+    let line_start = source[..context.position].rfind('\n').map(|idx| idx + 1).unwrap_or(0);
+    let line_prefix = &source[line_start..context.position];
+    let regex_prefix_start = find_regex_prefix_start(line_prefix);
+    let (prefix, replace_start) = match regex_prefix_start {
+        Some(rel_start) => (&line_prefix[rel_start..], line_start + rel_start),
+        None if context.prefix.is_empty() => ("", context.position),
+        None => return,
+    };
 
     for suggestion in regex_suggestions() {
         if prefix.is_empty() || suggestion.label.starts_with(prefix) {
@@ -269,7 +297,7 @@ pub fn add_regex_completions(completions: &mut Vec<CompletionItem>, context: &Co
                 sort_text: Some(suggestion.sort_key.to_string()),
                 filter_text: Some(suggestion.label.to_string()),
                 additional_edits: vec![],
-                text_edit_range: Some((context.prefix_start, context.position)),
+                text_edit_range: Some((replace_start, context.position)),
             });
         }
     }
