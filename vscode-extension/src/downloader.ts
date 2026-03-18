@@ -99,6 +99,22 @@ export class BinaryDownloader {
             statusBar.dispose();
         }
     }
+
+    clearCachedBinaries(): void {
+        const installRoot = path.join(
+            this.context.globalStorageUri.fsPath,
+            'bin',
+            `${process.platform}-${process.arch}`
+        );
+
+        if (!fs.existsSync(installRoot)) {
+            this.outputChannel.appendLine(`No cached binaries to remove at: ${installRoot}`);
+            return;
+        }
+
+        fs.rmSync(installRoot, { recursive: true, force: true });
+        this.outputChannel.appendLine(`Removed cached binaries from: ${installRoot}`);
+    }
     
     private async downloadWithProgress(): Promise<string> {
         return vscode.window.withProgress({

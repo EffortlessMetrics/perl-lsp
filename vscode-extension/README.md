@@ -55,6 +55,9 @@ The extension automatically downloads the correct language server for your platf
 - macOS (Intel, Apple Silicon)
 - Linux (x64, ARM64)
 
+If an auto-downloaded server becomes corrupted or you want to force a fresh download,
+run **`Perl: Reinstall Server Binary`** from the Command Palette or the status bar menu.
+
 Manual installation options:
 ```bash
 # Homebrew (macOS/Linux)

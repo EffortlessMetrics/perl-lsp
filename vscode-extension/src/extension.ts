@@ -16,6 +16,7 @@ import { BinaryDownloader } from './downloader';
 let client: LanguageClient | undefined;
 let outputChannel: vscode.OutputChannel;
 let testAdapter: PerlTestAdapter | undefined;
+let resolvedServerPath: string | null = null;
 
 export async function activate(context: vscode.ExtensionContext) {
     outputChannel = vscode.window.createOutputChannel('Perl Language Server');
@@ -28,6 +29,7 @@ export async function activate(context: vscode.ExtensionContext) {
     
     // Get the path to perl-lsp
     const serverPath = await getServerPath(context);
+    resolvedServerPath = serverPath;
     if (!serverPath) {
         vscode.window.showErrorMessage(
             'Perl Language Server (perl-lsp) not found.',
@@ -142,6 +144,10 @@ export async function activate(context: vscode.ExtensionContext) {
         await restartServer(context);
     });
 
+    const reinstallCommand = vscode.commands.registerCommand('perl-lsp.reinstall', async () => {
+        await reinstallServer(context);
+    });
+
     const organizeImportsCommand = vscode.commands.registerCommand('perl-lsp.organizeImports', async () => {
         await vscode.commands.executeCommand('editor.action.organizeImports');
     });
@@ -218,6 +224,11 @@ export async function activate(context: vscode.ExtensionContext) {
                 command: 'perl-lsp.restart'
             },
             {
+                label: '$(cloud-download) Reinstall Server Binary',
+                detail: 'Clear the cached download and fetch perl-lsp again',
+                command: 'perl-lsp.reinstall'
+            },
+            {
                 label: '$(organization) Organize Imports',
                 description: 'Shift+Alt+O',
                 detail: isPerl ? 'Sort and organize use statements' : 'Sort and organize use statements (Only available for Perl files)',
@@ -256,7 +267,14 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    context.subscriptions.push(restartCommand, organizeImportsCommand, runTestsCommand, showVersionCommand, statusMenuCommand);
+    context.subscriptions.push(
+        restartCommand,
+        reinstallCommand,
+        organizeImportsCommand,
+        runTestsCommand,
+        showVersionCommand,
+        statusMenuCommand
+    );
     
     outputChannel.appendLine('Perl Language Server started successfully');
 }
@@ -333,6 +351,63 @@ async function getServerPath(context: vscode.ExtensionContext): Promise<string |
     
     outputChannel.appendLine('Failed to obtain perl-lsp');
     return null;
+}
+
+async function reinstallServer(context: vscode.ExtensionContext): Promise<void> {
+    outputChannel.show(true);
+    outputChannel.appendLine('Starting perl-lsp reinstall...');
+
+    const downloader = new BinaryDownloader(context, outputChannel);
+    const previousPath = resolvedServerPath;
+
+    try {
+        if (client) {
+            await client.stop();
+        }
+
+        downloader.clearCachedBinaries();
+        resolvedServerPath = await getServerPath(context);
+
+        if (!resolvedServerPath) {
+            throw new Error('perl-lsp could not be located after reinstall.');
+        }
+
+        const healthOk = await runHealthCheck(resolvedServerPath);
+        if (!healthOk) {
+            throw new Error(`Health check failed for reinstalled binary: ${resolvedServerPath}`);
+        }
+
+        if (client) {
+            await client.start();
+        }
+
+        const detail = previousPath && previousPath !== resolvedServerPath
+            ? `Reinstalled perl-lsp and switched from ${previousPath} to ${resolvedServerPath}.`
+            : `Reinstalled perl-lsp at ${resolvedServerPath}.`;
+
+        vscode.window.showInformationMessage(detail, 'Show Output').then(selection => {
+            if (selection === 'Show Output') {
+                outputChannel.show();
+            }
+        });
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        outputChannel.appendLine(`Failed to reinstall perl-lsp: ${message}`);
+        vscode.window.showErrorMessage(`Failed to reinstall Perl Language Server: ${message}`, 'Show Output').then(selection => {
+            if (selection === 'Show Output') {
+                outputChannel.show();
+            }
+        });
+
+        if (client) {
+            try {
+                await client.start();
+            } catch (restartError: unknown) {
+                const restartMessage = restartError instanceof Error ? restartError.message : String(restartError);
+                outputChannel.appendLine(`Failed to restart client after reinstall error: ${restartMessage}`);
+            }
+        }
+    }
 }
 
 /**

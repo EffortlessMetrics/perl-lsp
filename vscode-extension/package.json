@@ -49,6 +49,7 @@
   "activationEvents": [
     "onLanguage:perl",
     "onCommand:perl-lsp.restart",
+    "onCommand:perl-lsp.reinstall",
     "onCommand:perl-lsp.showVersion"
   ],
   "contributes": {
@@ -298,6 +299,12 @@
         "icon": "$(info)"
       },
       {
+        "command": "perl-lsp.reinstall",
+        "title": "Reinstall Server Binary",
+        "category": "Perl",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "perl-lsp.showOutput",
         "title": "Show Output Channel",
         "category": "Perl",
@@ -330,6 +337,10 @@
         },
         {
           "command": "perl-lsp.showOutput",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.reinstall",
           "when": "editorLangId == perl"
         },
         {
