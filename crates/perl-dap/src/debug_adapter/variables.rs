@@ -149,7 +149,7 @@ impl DebugAdapter {
         }
 
         let variables = if parsed_from_output.is_empty() {
-            Self::fallback_scope_variables(variables_ref)
+            Self::fallback_scope_variables(variables_ref, start, count)
         } else {
             parsed_from_output
         };

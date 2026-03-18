@@ -10,8 +10,12 @@ impl DebugAdapter {
         request_seq: i64,
         arguments: Option<Value>,
     ) -> DapMessage {
-        let _args: Option<StackTraceArguments> =
+        let args: Option<StackTraceArguments> =
             arguments.and_then(|v| serde_json::from_value(v).ok());
+        let start_frame =
+            args.as_ref().and_then(|value| value.start_frame).unwrap_or(0).max(0) as usize;
+        let levels = args.as_ref().and_then(|value| value.levels).unwrap_or(0);
+        let requested_count = if levels <= 0 { None } else { Some(levels as usize) };
         let mut framed_output_lines = None;
 
         // Ask the debugger for an explicit stack snapshot when a live session is present.
@@ -101,6 +105,7 @@ impl DebugAdapter {
                 end_column: None,
             }]
         };
+        let stack_frames = Self::paginate_stack_frames(stack_frames, start_frame, requested_count);
 
         DapMessage::Response {
             seq,
@@ -174,6 +179,20 @@ impl DebugAdapter {
             command: "scopes".to_string(),
             body: serde_json::to_value(&scopes_body).ok(),
             message: None,
+        }
+    }
+}
+
+impl DebugAdapter {
+    fn paginate_stack_frames(
+        stack_frames: Vec<StackFrame>,
+        start_frame: usize,
+        levels: Option<usize>,
+    ) -> Vec<StackFrame> {
+        let iter = stack_frames.into_iter().skip(start_frame);
+        match levels {
+            Some(limit) => iter.take(limit).collect(),
+            None => iter.collect(),
         }
     }
 }

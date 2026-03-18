@@ -200,7 +200,7 @@ fn test_dap_stack_trace_edge_cases() -> TestResult {
     // Test stack trace with various thread IDs and scenarios
     let test_cases = [
         Some(json!({"threadId": 1, "startFrame": 0, "levels": 10})),
-        Some(json!({"threadId": 1, "startFrame": 5, "levels": 5})),
+        Some(json!({"threadId": 1, "startFrame": 1, "levels": 5})),
         Some(json!({"threadId": 999})), // Invalid thread
         Some(json!({"levels": 0})),     // Zero levels
         None,                           // No arguments
@@ -217,11 +217,11 @@ fn test_dap_stack_trace_edge_cases() -> TestResult {
                         .get("stackFrames")
                         .and_then(|f| f.as_array())
                         .ok_or("Expected frames array")?;
-                    // Without active session, should return 1 placeholder frame
+                    let expected_len = if i == 1 { 0 } else { 1 };
                     assert_eq!(
                         frames.len(),
-                        1,
-                        "Should return 1 placeholder frame for case: {}",
+                        expected_len,
+                        "Should honor stackTrace pagination for case: {}",
                         i
                     );
                 }
@@ -387,5 +387,30 @@ fn test_dap_attach_process_id_mode() -> TestResult {
         }
         _ => return Err("Expected attach response".into()),
     }
+    Ok(())
+}
+
+#[test]
+fn test_dap_stack_trace_zero_levels_returns_remaining_frames() -> TestResult {
+    let mut adapter = DebugAdapter::new();
+    let response = adapter.handle_request(
+        1,
+        "stackTrace",
+        Some(json!({"threadId": 1, "startFrame": 0, "levels": 0})),
+    );
+
+    match response {
+        DapMessage::Response { success, body, .. } => {
+            assert!(success);
+            let body = body.ok_or("Expected body in successful response")?;
+            let frames = body
+                .get("stackFrames")
+                .and_then(|f| f.as_array())
+                .ok_or("Expected frames array")?;
+            assert_eq!(frames.len(), 1);
+        }
+        _ => return Err("Expected stackTrace response".into()),
+    }
+
     Ok(())
 }

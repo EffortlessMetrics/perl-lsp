@@ -1190,8 +1190,8 @@ impl DebugAdapter {
     }
 
     /// Build deterministic placeholder variables used when debugger output is unavailable.
-    fn fallback_scope_variables(variables_ref: i32) -> Vec<Variable> {
-        match variables_ref % 10 {
+    fn fallback_scope_variables(variables_ref: i32, start: usize, count: usize) -> Vec<Variable> {
+        let variables = match variables_ref % 10 {
             1 => vec![
                 Variable {
                     name: "$self".to_string(),
@@ -1227,7 +1227,9 @@ impl DebugAdapter {
                 indexed_variables: None,
             }],
             _ => Vec::new(),
-        }
+        };
+
+        variables.into_iter().skip(start).take(count).collect()
     }
 
     /// Parse stack trace output from Perl debugger "T" command
