@@ -8,6 +8,12 @@ Perl Language Server (perl-lsp) v0.10.0 provides a high-performance Language Ser
 cargo install perl-lsp
 ```
 
+If you already have an older version installed, upgrade in place:
+
+```bash
+cargo install perl-lsp --force
+```
+
 ## Manual Installation
 
 ### Pre-compiled Binaries
@@ -74,12 +80,15 @@ After installation, verify that perl-lsp is working:
 
 ```bash
 perl-lsp --version
+perl-lsp --health
+perl-lsp --info
 ```
 
 Expected output:
-```
-perl-lsp 0.10.0
-```
+
+- `--version` prints the installed package version.
+- `--health` prints `ok <version>`.
+- `--info` prints version, build metadata, feature profile, and coverage summary.
 
 ## Editor Configuration
 
@@ -89,16 +98,24 @@ perl-lsp 0.10.0
 3. The language server will start automatically
 
 ### Neovim
-Add to your `init.lua` or `init.vim`:
+Add to your `init.lua`:
 
 ```lua
-require'lspconfig'.perllsp.setup{
-  cmd = {"perl-lsp", "--stdio"},
-  filetypes = {"perl", "perl6"},
-  root_dir = function(fname)
-    return require'lspconfig'.util.find_git_ancestor(fname) or vim.fn.getcwd()
-  end,
-}
+local lspconfig = require('lspconfig')
+local configs = require('lspconfig.configs')
+
+if not configs.perl_lsp then
+  configs.perl_lsp = {
+    default_config = {
+      cmd = { 'perl-lsp', '--stdio' },
+      filetypes = { 'perl' },
+      root_dir = lspconfig.util.root_pattern('.git', 'Makefile.PL', 'cpanfile', 'dist.ini'),
+      single_file_support = true,
+    },
+  }
+end
+
+lspconfig.perl_lsp.setup({})
 ```
 
 ### Emacs
@@ -175,7 +192,19 @@ export PATH="$PATH:$HOME/.local/bin"
 [Environment]::SetEnvironmentVariable('Path', "$env:Path;$HOME\.local\bin", 'User')
 ```
 
-### Runtime Issues
+## Useful CLI Checks
+
+These commands are helpful both after installation and when debugging editor integration:
+
+```bash
+perl-lsp --version                 # Confirm the binary resolves on PATH
+perl-lsp --health                  # Fast readiness check
+perl-lsp --info                    # Print build and feature-profile information
+perl-lsp --check lib/My/Module.pm  # Validate a file without starting an editor
+perl-lsp --completion bash         # Generate shell completions
+```
+
+## Runtime Issues
 
 #### LSP server not starting
 1. Verify the binary is executable: `perl-lsp --version`
@@ -194,7 +223,8 @@ export PATH="$PATH:$HOME/.local/bin"
 
 ## Getting Help
 
-- **Documentation**: [Full Documentation](https://github.com/EffortlessMetrics/perl-lsp)
+- **Documentation Index**: [docs/INDEX.md](../INDEX.md)
+- **Full Documentation**: [Repository Docs](https://github.com/EffortlessMetrics/perl-lsp/tree/master/docs)
 - **Issues**: [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/EffortlessMetrics/perl-lsp/discussions)
 - **Changelog**: [Release Notes](https://github.com/EffortlessMetrics/perl-lsp/releases)
