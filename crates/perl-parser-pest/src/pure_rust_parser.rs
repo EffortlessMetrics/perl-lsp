@@ -441,6 +441,15 @@ impl PureRustPerlParser {
         groups
     }
 
+    fn parse_modifier_condition(
+        &mut self,
+        modifier: Pair<Rule>,
+    ) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+        let mut inner = modifier.into_inner();
+        let condition_pair = inner.next().ok_or("Missing modifier condition")?;
+        self.build_node(condition_pair)
+    }
+
     pub fn build_ast(&mut self, pairs: Pairs<Rule>) -> Result<AstNode, Box<dyn std::error::Error>> {
         let mut nodes = Vec::new();
         for pair in pairs {
@@ -600,9 +609,9 @@ impl PureRustPerlParser {
                         return Ok(expr);
                     };
 
-                // For now, create a simple identifier for the condition
-                // In a real implementation, we'd parse the condition expression
-                let condition = Some(AstNode::Identifier(Arc::from(condition_expr.trim())));
+                let condition = self
+                    .parse_modifier_condition(modifier)?
+                    .or_else(|| Some(AstNode::Identifier(Arc::from(condition_expr.trim()))));
 
                 if let (Some(expr), Some(condition)) = (expr, condition) {
                     match modifier_type {
@@ -2782,5 +2791,31 @@ mod tests {
         let sexp = parser.to_sexp(&ast);
         println!("Hash assignment AST: {:?}", ast);
         println!("S-expression: {}", sexp);
+    }
+
+    #[test]
+    fn test_postfix_if_modifier_preserves_expression_ast() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "print $value if $count > 1;";
+        let ast = must(parser.parse(source));
+        let sexp = parser.to_sexp(&ast);
+
+        assert!(
+            sexp.contains("(binary_expression (scalar_variable $count) (>) (number 1))"),
+            "Expected parsed binary expression in postfix if condition, got: {sexp}"
+        );
+    }
+
+    #[test]
+    fn test_postfix_while_modifier_preserves_expression_ast() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "$value++ while $limit <= 10;";
+        let ast = must(parser.parse(source));
+        let sexp = parser.to_sexp(&ast);
+
+        assert!(
+            sexp.contains("(binary_expression (scalar_variable $limit) (<=) (number 10))"),
+            "Expected parsed binary expression in postfix while condition, got: {sexp}"
+        );
     }
 }
