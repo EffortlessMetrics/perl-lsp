@@ -1,0 +1,36 @@
+[package]
+name = "perl-parser-recovery"
+version = "0.11.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Recovery-oriented parser context and recovery parser for the Perl parser ecosystem"
+readme = "README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-parser-recovery"
+keywords = ["perl", "parser", "recovery", "error-recovery", "ide"]
+categories = ["parsing", "development-tools", "text-editors"]
+include = [
+  "src/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-ast = { workspace = true }
+perl-error = { workspace = true }
+perl-lexer = { workspace = true }
+perl-position-tracking = { workspace = true }
+perl-tokenizer = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+perl-tdd-support = { workspace = true }
