@@ -74,6 +74,8 @@ echo
 printf '== Recommended ==\n'
 check_cmd just "just" || true
 check_cmd nix "nix" || true
+check_cmd git "git" || true
+check_cmd rg "ripgrep (rg)" || true
 check_cmd cargo-audit "cargo-audit" || true
 check_githook
 
@@ -98,8 +100,9 @@ fi
 
 echo
 printf '== Suggested next commands ==\n'
-echo "  just pr-fast"
-echo "  just ci-gate"
+echo "  just devex            # quick environment diagnostics"
+echo "  just pr-fast          # fast validation before a full gate"
+echo "  just ci-gate          # repo-native local gate"
 echo "  nix develop -c just ci-gate"
 
 if [ "$MISSING_REQUIRED" -ne 0 ]; then

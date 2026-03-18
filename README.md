@@ -39,6 +39,8 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 
 New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
 
+Contributing locally? Run `just devex` (or `just doctor`) for a quick environment check before diving into `just pr-fast` or the full CI gate.
+
 <details>
 <summary><strong>Neovim / Emacs setup</strong></summary>
 
