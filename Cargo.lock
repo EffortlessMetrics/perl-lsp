@@ -1821,7 +1821,7 @@ dependencies = [
  "perl-keywords",
  "perl-lsp-cancellation",
  "perl-lsp-code-actions",
- "perl-lsp-code-lens",
+ "perl-lsp-color-provider",
  "perl-lsp-completion",
  "perl-lsp-config",
  "perl-lsp-diagnostic-catalog",
@@ -1910,14 +1910,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "perl-lsp-code-lens"
+name = "perl-lsp-color-provider"
 version = "0.11.0"
 dependencies = [
- "perl-parser",
- "perl-parser-core",
+ "once_cell",
  "perl-position-tracking",
  "perl-tdd-support",
- "serde",
+ "regex",
  "serde_json",
 ]
 
@@ -2203,7 +2202,6 @@ dependencies = [
  "lsp-types",
  "nix",
  "perl-lsp-code-actions",
- "perl-lsp-code-lens",
  "perl-lsp-completion",
  "perl-lsp-diagnostics",
  "perl-lsp-folding",

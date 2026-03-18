@@ -65,6 +65,7 @@ members = [
     "crates/perl-lsp-ast-utils",
     "crates/perl-lsp-import-management",
     "crates/perl-lsp-text-utils",
+    "crates/perl-lsp-color-provider",
     "crates/perl-lsp-cancellation",
     "crates/perl-lsp-input-validation",
     "crates/perl-lsp-limits",
@@ -196,6 +197,7 @@ allow = [
     "perl-lsp-completion-item",
     "perl-lsp-inlay-hints",
     "perl-lsp-code-lens",
+    "perl-lsp-color-provider",
 
     # Tier 3 — Module resolution chain
     "perl-module-name",
@@ -386,6 +388,7 @@ perl-lsp-semantic-tokens = { path = "crates/perl-lsp-semantic-tokens", version =
 perl-lsp-inlay-hints = { path = "crates/perl-lsp-inlay-hints", version = "0.11.0" }
 perl-lsp-code-lens = { path = "crates/perl-lsp-code-lens", version = "0.11.0" }
 perl-lsp-feature-contracts = { path = "crates/perl-lsp-feature-contracts", version = "0.11.0" }
+perl-lsp-color-provider = { path = "crates/perl-lsp-color-provider", version = "0.11.0" }
 perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.11.0" }
 perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.11.0" }
 perl-lsp-uri = { path = "crates/perl-lsp-uri", version = "0.11.0" }
