@@ -143,6 +143,16 @@ fn when_cursor_on_undefined_variable_my_is_preferred_over_our() {
     );
 }
 
+#[test]
+fn when_cursor_on_undeclared_variable_alias_offers_same_declarations() {
+    let source = "print $missing;";
+    let diagnostics = [diag(6, 14, "undeclared-variable", "Undefined variable '$missing'")];
+    let actions = actions_for(source, &diagnostics);
+
+    assert!(has_action(&actions, "Declare '$missing' with 'my'"));
+    assert!(has_action(&actions, "Declare '$missing' with 'our'"));
+}
+
 // ===========================================================================
 // Quick-fix scenarios: assignment in condition
 // ===========================================================================
@@ -260,6 +270,19 @@ fn when_unclosed_brace_offers_add_closing_brace() {
 }
 
 #[test]
+fn when_unclosed_block_offers_add_closing_brace() {
+    let source = "if ($x) {";
+    let diagnostics = [diag(0, 9, "parse-error-unclosedblock", "Unclosed block")];
+    let actions = actions_for(source, &diagnostics);
+
+    assert!(
+        has_action(&actions, "Add closing brace"),
+        "should offer to close an unclosed block, got: {:?}",
+        actions.iter().map(|a| &a.title).collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn when_unclosed_string_offers_add_closing_quote() {
     let source = r#"my $x = "hello"#;
     let diagnostics = [diag(8, 14, "parse-error-unclosedstring", "Unclosed string")];
@@ -301,6 +324,30 @@ fn when_deprecated_defined_array_offers_replacement() {
         "should offer to replace deprecated defined() call, got: {:?}",
         actions.iter().map(|a| &a.title).collect::<Vec<_>>()
     );
+}
+
+// ===========================================================================
+// Quick-fix scenarios: numeric comparison with undef
+// ===========================================================================
+
+#[test]
+fn when_numeric_comparison_uses_undef_offers_defined_check_and_fallback() {
+    let source = "if ($value == undef) { }";
+    let diagnostics = [diag(4, 19, "numeric-undef", "Numeric comparison with undef")];
+    let actions = actions_for(source, &diagnostics);
+
+    assert!(has_action(&actions, "Add defined check"));
+    assert!(has_action(&actions, "defined-or operator"));
+}
+
+#[test]
+fn when_numeric_undef_range_has_no_equality_operator_skips_defined_or_fallback() {
+    let source = "print $value;";
+    let diagnostics = [diag(6, 12, "numeric-undef", "Numeric comparison with undef")];
+    let actions = actions_for(source, &diagnostics);
+
+    assert!(has_action(&actions, "Add defined check"));
+    assert!(!has_action(&actions, "defined-or operator"));
 }
 
 // ===========================================================================
@@ -461,6 +508,36 @@ fn when_source_lacks_strict_enhanced_offers_add_pragmas() {
         "should offer to add missing pragmas when strict is absent, got: {:?}",
         actions.iter().map(|a| &a.title).collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn when_source_starts_with_shebang_pragmas_are_inserted_after_it() {
+    let source = "#!/usr/bin/env perl\nmy $x = 1;";
+    let actions = enhanced_actions_for(source, (0, source.len()));
+    let pragma_action = actions
+        .iter()
+        .find(|action| action.title.contains("missing pragmas"))
+        .expect("expected pragma insertion action");
+
+    assert_eq!(pragma_action.edit.changes.len(), 1);
+    let change = &pragma_action.edit.changes[0];
+    assert_eq!(change.location.start, "#!/usr/bin/env perl\n".len());
+    assert!(change.new_text.contains("use strict;"));
+    assert!(change.new_text.contains("use warnings;"));
+}
+
+#[test]
+fn when_imports_are_out_of_order_enhanced_actions_offer_organization() {
+    let source = "use My::Local;\nuse strict;\nuse warnings;\n";
+    let actions = enhanced_actions_for(source, (0, source.len()));
+    let organize = actions
+        .iter()
+        .find(|action| action.title == "Organize imports")
+        .expect("expected organize imports action");
+
+    assert_eq!(organize.kind, CodeActionKind::SourceOrganizeImports);
+    let change = &organize.edit.changes[0];
+    assert_eq!(change.new_text, "use strict;\nuse warnings;\nuse My::Local;\n");
 }
 
 #[test]
