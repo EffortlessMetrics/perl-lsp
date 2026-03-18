@@ -2783,4 +2783,20 @@ mod tests {
         println!("Hash assignment AST: {:?}", ast);
         println!("S-expression: {}", sexp);
     }
+
+    #[test]
+    fn test_substitution_with_non_slash_delimiters() {
+        let mut parser = PureRustPerlParser::new();
+        let source = r#"$text =~ s!foo/bar!baz/qux!gr;"#;
+        let result = parser.parse(source);
+        assert!(result.is_ok(), "Failed to parse substitution with ! delimiters: {source}");
+    }
+
+    #[test]
+    fn test_transliteration_with_brace_delimiters() {
+        let mut parser = PureRustPerlParser::new();
+        let source = r#"$text =~ tr{a-z}{A-Z}d;"#;
+        let result = parser.parse(source);
+        assert!(result.is_ok(), "Failed to parse transliteration with brace delimiters: {source}");
+    }
 }

@@ -837,20 +837,130 @@ regex_flags = @{ ("i" | "m" | "s" | "x" | "g" | "o" | "a" | "u" | "l" | "n" | "p
 delimiter = @{ !ASCII_ALPHANUMERIC ~ ANY }
 
 substitution = {
-    ("_SUB_" ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?) |
-    ("s" ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter ~ regex_flags?)
+    (
+        "_SUB_" ~ (
+            "/" ~ sub_slash_pattern ~ "/" ~ replacement_slash_pattern ~ "/" |
+            "!" ~ sub_exclaim_pattern ~ "!" ~ replacement_exclaim_pattern ~ "!" |
+            "#" ~ sub_hash_pattern ~ "#" ~ replacement_hash_pattern ~ "#" |
+            "(" ~ sub_paren_pattern ~ ")" ~ replacement_paren_pattern ~ ")" |
+            "[" ~ sub_bracket_pattern ~ "]" ~ replacement_bracket_pattern ~ "]" |
+            "{" ~ sub_brace_pattern ~ "}" ~ replacement_brace_pattern ~ "}" |
+            "<" ~ sub_angle_pattern ~ ">" ~ replacement_angle_pattern ~ ">" |
+            delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter
+        ) ~ regex_flags?
+    ) |
+    (
+        "s" ~ !(ASCII_ALPHANUMERIC | "_") ~ (
+            "/" ~ sub_slash_pattern ~ "/" ~ replacement_slash_pattern ~ "/" |
+            "!" ~ sub_exclaim_pattern ~ "!" ~ replacement_exclaim_pattern ~ "!" |
+            "#" ~ sub_hash_pattern ~ "#" ~ replacement_hash_pattern ~ "#" |
+            "(" ~ sub_paren_pattern ~ ")" ~ replacement_paren_pattern ~ ")" |
+            "[" ~ sub_bracket_pattern ~ "]" ~ replacement_bracket_pattern ~ "]" |
+            "{" ~ sub_brace_pattern ~ "}" ~ replacement_brace_pattern ~ "}" |
+            "<" ~ sub_angle_pattern ~ ">" ~ replacement_angle_pattern ~ ">" |
+            delimiter ~ sub_pattern ~ delimiter ~ replacement ~ delimiter
+        ) ~ regex_flags?
+    )
 }
+sub_slash_pattern = @{ (!"/" ~ (regex_escape | regex_group | ANY))* }
+sub_exclaim_pattern = @{ (!"!" ~ (regex_escape | regex_group | ANY))* }
+sub_hash_pattern = @{ (!"#" ~ (regex_escape | regex_group | ANY))* }
+
+sub_paren_pattern = { sub_paren_part* }
+sub_paren_part = { regex_escape | regex_group | sub_nested_parens | (!(")" | "\\" | "(") ~ ANY) }
+sub_nested_parens = { "(" ~ sub_paren_pattern ~ ")" }
+
+sub_bracket_pattern = { sub_bracket_part* }
+sub_bracket_part = { regex_escape | regex_group | sub_nested_brackets | (!("]" | "\\" | "[") ~ ANY) }
+sub_nested_brackets = { "[" ~ sub_bracket_pattern ~ "]" }
+
+sub_brace_pattern = { sub_brace_part* }
+sub_brace_part = { regex_escape | regex_group | sub_nested_braces | (!("}" | "\\" | "{") ~ ANY) }
+sub_nested_braces = { "{" ~ sub_brace_pattern ~ "}" }
+
+sub_angle_pattern = { sub_angle_part* }
+sub_angle_part = { regex_escape | regex_group | sub_nested_angles | (!(">" | "\\" | "<") ~ ANY) }
+sub_nested_angles = { "<" ~ sub_angle_pattern ~ ">" }
+
 sub_pattern = @{ (!delimiter ~ (regex_escape | regex_group | ANY))* }
+
+replacement_slash_pattern = @{ (!"/" ~ (regex_escape | ANY))* }
+replacement_exclaim_pattern = @{ (!"!" ~ (regex_escape | ANY))* }
+replacement_hash_pattern = @{ (!"#" ~ (regex_escape | ANY))* }
+
+replacement_paren_pattern = { replacement_paren_part* }
+replacement_paren_part = { regex_escape | replacement_nested_parens | (!(")" | "\\" | "(") ~ ANY) }
+replacement_nested_parens = { "(" ~ replacement_paren_pattern ~ ")" }
+
+replacement_bracket_pattern = { replacement_bracket_part* }
+replacement_bracket_part = { regex_escape | replacement_nested_brackets | (!("]" | "\\" | "[") ~ ANY) }
+replacement_nested_brackets = { "[" ~ replacement_bracket_pattern ~ "]" }
+
+replacement_brace_pattern = { replacement_brace_part* }
+replacement_brace_part = { regex_escape | replacement_nested_braces | (!("}" | "\\" | "{") ~ ANY) }
+replacement_nested_braces = { "{" ~ replacement_brace_pattern ~ "}" }
+
+replacement_angle_pattern = { replacement_angle_part* }
+replacement_angle_part = { regex_escape | replacement_nested_angles | (!(">" | "\\" | "<") ~ ANY) }
+replacement_nested_angles = { "<" ~ replacement_angle_pattern ~ ">" }
 
 replacement = @{ (!delimiter ~ ANY)* }
 
 transliteration = {
-    ("_TRANS_" ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?) |
-    ("tr" ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?) |
-    ("y" ~ !(ASCII_ALPHANUMERIC | "_") ~ delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter ~ trans_flags?)
+    (
+        "_TRANS_" ~ (
+            "/" ~ search_list_slash ~ "/" ~ replace_list_slash ~ "/" |
+            "!" ~ search_list_exclaim ~ "!" ~ replace_list_exclaim ~ "!" |
+            "#" ~ search_list_hash ~ "#" ~ replace_list_hash ~ "#" |
+            "(" ~ search_list_paren ~ ")" ~ replace_list_paren ~ ")" |
+            "[" ~ search_list_bracket ~ "]" ~ replace_list_bracket ~ "]" |
+            "{" ~ search_list_brace ~ "}" ~ replace_list_brace ~ "}" |
+            "<" ~ search_list_angle ~ ">" ~ replace_list_angle ~ ">" |
+            delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter
+        ) ~ trans_flags?
+    ) |
+    (
+        "tr" ~ !(ASCII_ALPHANUMERIC | "_") ~ (
+            "/" ~ search_list_slash ~ "/" ~ replace_list_slash ~ "/" |
+            "!" ~ search_list_exclaim ~ "!" ~ replace_list_exclaim ~ "!" |
+            "#" ~ search_list_hash ~ "#" ~ replace_list_hash ~ "#" |
+            "(" ~ search_list_paren ~ ")" ~ replace_list_paren ~ ")" |
+            "[" ~ search_list_bracket ~ "]" ~ replace_list_bracket ~ "]" |
+            "{" ~ search_list_brace ~ "}" ~ replace_list_brace ~ "}" |
+            "<" ~ search_list_angle ~ ">" ~ replace_list_angle ~ ">" |
+            delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter
+        ) ~ trans_flags?
+    ) |
+    (
+        "y" ~ !(ASCII_ALPHANUMERIC | "_") ~ (
+            "/" ~ search_list_slash ~ "/" ~ replace_list_slash ~ "/" |
+            "!" ~ search_list_exclaim ~ "!" ~ replace_list_exclaim ~ "!" |
+            "#" ~ search_list_hash ~ "#" ~ replace_list_hash ~ "#" |
+            "(" ~ search_list_paren ~ ")" ~ replace_list_paren ~ ")" |
+            "[" ~ search_list_bracket ~ "]" ~ replace_list_bracket ~ "]" |
+            "{" ~ search_list_brace ~ "}" ~ replace_list_brace ~ "}" |
+            "<" ~ search_list_angle ~ ">" ~ replace_list_angle ~ ">" |
+            delimiter ~ search_list ~ delimiter ~ replace_list ~ delimiter
+        ) ~ trans_flags?
+    )
 }
 
+search_list_slash = @{ (!"/" ~ ANY)* }
+search_list_exclaim = @{ (!"!" ~ ANY)* }
+search_list_hash = @{ (!"#" ~ ANY)* }
+search_list_paren = { (!")" ~ ANY)* }
+search_list_bracket = { (!"]" ~ ANY)* }
+search_list_brace = { (!"}" ~ ANY)* }
+search_list_angle = { (!">" ~ ANY)* }
 search_list = @{ (!delimiter ~ ANY)* }
+
+replace_list_slash = @{ (!"/" ~ ANY)* }
+replace_list_exclaim = @{ (!"!" ~ ANY)* }
+replace_list_hash = @{ (!"#" ~ ANY)* }
+replace_list_paren = { (!")" ~ ANY)* }
+replace_list_bracket = { (!"]" ~ ANY)* }
+replace_list_brace = { (!"}" ~ ANY)* }
+replace_list_angle = { (!">" ~ ANY)* }
 replace_list = @{ (!delimiter ~ ANY)* }
 trans_flags = @{ ASCII_ALPHA* }
 
