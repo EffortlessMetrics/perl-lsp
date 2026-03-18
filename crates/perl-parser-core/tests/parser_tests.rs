@@ -118,6 +118,47 @@ fn parse_subroutine_declaration() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[test]
+fn parse_namespaced_class_declaration() -> Result<(), Box<dyn std::error::Error>> {
+    let mut parser = Parser::new("class My::App::Service { method run { 1; } }");
+    let ast = must(parser.parse());
+
+    match &ast.kind {
+        V1NodeKind::Program { statements } => {
+            let Some(class_node) = statements.first() else {
+                return Err("expected a class statement".into());
+            };
+
+            match &class_node.kind {
+                V1NodeKind::Class { name, .. } => {
+                    assert_eq!(name, "My::App::Service");
+                }
+                other => return Err(format!("expected Class node, got {:?}", other).into()),
+            }
+        }
+        other => return Err(format!("expected Program, got {:?}", other).into()),
+    }
+
+    assert!(parser.errors().is_empty(), "unexpected parser errors: {:?}", parser.errors());
+    Ok(())
+}
+
+#[test]
+fn reject_class_declaration_with_trailing_separator() -> Result<(), Box<dyn std::error::Error>> {
+    let mut parser = Parser::new("class My::App:: { method run { 1; } }");
+    let ast = parser.parse()?;
+    let rendered = format!("{ast:?}");
+    assert!(
+        rendered.contains("identifier after ::"),
+        "expected a missing identifier error, got: {rendered}"
+    );
+    assert!(
+        !rendered.contains("Class { name: \"My::App::\""),
+        "class declaration should not be accepted with a trailing ::: {rendered}"
+    );
+    Ok(())
+}
+
+#[test]
 fn parse_multiple_statements() -> Result<(), Box<dyn std::error::Error>> {
     let mut parser = Parser::new("my $x = 1; my $y = 2; my $z = 3;");
     let ast = must(parser.parse());
