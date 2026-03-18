@@ -5,7 +5,7 @@
 //! 2. Collection - Extract heredoc content from subsequent lines
 //! 3. Integration - Replace markers with content for PEG parsing
 
-use perl_ts_heredoc_analysis::statement_tracker::find_statement_end_line;
+use perl_ts_statement_tracker::find_statement_end_line;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
@@ -45,7 +45,7 @@ pub struct HeredocScanner<'a> {
     skip_lines: std::collections::HashSet<usize>,
     /// Issue #182/#219: Statement tracker for block-aware heredoc handling (used in #220)
     #[allow(dead_code)]
-    statement_tracker: perl_ts_heredoc_analysis::statement_tracker::StatementTracker,
+    statement_tracker: perl_ts_statement_tracker::StatementTracker,
 }
 
 impl<'a> HeredocScanner<'a> {
@@ -57,7 +57,7 @@ impl<'a> HeredocScanner<'a> {
             heredoc_counter: 0,
             skip_lines: HashSet::new(),
             // Issue #182/#219: Initialize tracker (no-op for now, used in #220)
-            statement_tracker: perl_ts_heredoc_analysis::statement_tracker::StatementTracker::new(),
+            statement_tracker: perl_ts_statement_tracker::StatementTracker::new(),
         }
     }
 
@@ -69,7 +69,7 @@ impl<'a> HeredocScanner<'a> {
         String,
         Vec<HeredocDeclaration>,
         HashSet<usize>,
-        Vec<perl_ts_heredoc_analysis::statement_tracker::HeredocContext>,
+        Vec<perl_ts_statement_tracker::HeredocContext>,
     ) {
         let (output, declarations) = self.do_scan();
         let skip_lines = self.skip_lines.clone();
@@ -324,7 +324,7 @@ pub struct HeredocCollector<'a> {
     lines: Vec<&'a str>,
     /// Issue #182/#219: Statement tracker for block-aware heredoc handling (used in #220)
     #[allow(dead_code)]
-    statement_tracker: perl_ts_heredoc_analysis::statement_tracker::StatementTracker,
+    statement_tracker: perl_ts_statement_tracker::StatementTracker,
 }
 
 impl<'a> HeredocCollector<'a> {
@@ -333,7 +333,7 @@ impl<'a> HeredocCollector<'a> {
             _input: input,
             lines: input.lines().collect(),
             // Issue #182/#219: Initialize tracker (no-op for now, used in #220)
-            statement_tracker: perl_ts_heredoc_analysis::statement_tracker::StatementTracker::new(),
+            statement_tracker: perl_ts_statement_tracker::StatementTracker::new(),
         }
     }
 
@@ -479,7 +479,7 @@ pub fn parse_with_heredocs(input: &str) -> (String, Vec<HeredocDeclaration>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_ts_heredoc_analysis::statement_tracker::HeredocContext;
+    use perl_ts_statement_tracker::HeredocContext;
     use std::collections::BTreeSet;
 
     /// Test harness: Run heredoc scanner and expose skip_lines + tracker contexts
