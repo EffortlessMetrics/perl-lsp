@@ -69,7 +69,7 @@ fn test_chained_postfix_deref() -> Result<(), Box<dyn std::error::Error>> {
     let ast = parser.parse()?;
     let sexp = ast.to_sexp();
     assert!(sexp.contains("unary_->@*"));
-    assert!(sexp.contains("binary_[]"));
+    assert!(sexp.contains("arrow_array_deref"));
     Ok(())
 }
 

@@ -56,7 +56,7 @@ mod bless_parsing_tests {
     fn test_bless_with_hashref_data() -> Result<(), Box<dyn std::error::Error>> {
         parse_and_check(
             "bless { foo => 1, bar => 2 }, $class",
-            "(source_file (call bless ((hash ((identifier foo) (number 1)) ((identifier bar) (number 2))) (variable $ class))))",
+            "(source_file (call bless ((hash ((string \"foo\") (number 1)) ((string \"bar\") (number 2))) (variable $ class))))",
         )
     }
 
@@ -64,7 +64,7 @@ mod bless_parsing_tests {
     fn test_nested_bless_calls() -> Result<(), Box<dyn std::error::Error>> {
         parse_and_check(
             "bless { inner => bless {}, 'Inner' }, 'Outer'",
-            "(source_file (call bless ((hash ((identifier inner) (call bless ((hash ) (string \"'Inner'\"))))) (string \"'Outer'\"))))",
+            "(source_file (call bless ((hash ((string \"inner\") (call bless ((hash ) (string \"'Inner'\"))))) (string \"'Outer'\"))))",
         )
     }
 

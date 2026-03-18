@@ -4,7 +4,7 @@
 //! in special contexts like eval strings and regex substitutions with /e flag.
 
 use perl_parser_pest::{AstNode, PureRustPerlParser};
-use perl_ts_heredoc_parser::heredoc_parser::{HeredocDeclaration, HeredocScanner};
+use perl_ts_heredoc_parser::heredoc_parser::{HeredocDeclaration, parse_with_heredocs};
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
@@ -22,8 +22,8 @@ pub enum ParseContext {
 
 /// Context-aware heredoc parser
 pub struct ContextAwareHeredocParser<'a> {
-    /// Base heredoc scanner
-    scanner: HeredocScanner<'a>,
+    /// Original input
+    input: &'a str,
     /// Current parsing context stack
     #[allow(dead_code)]
     context_stack: Vec<ParseContext>,
@@ -34,17 +34,14 @@ pub struct ContextAwareHeredocParser<'a> {
 
 impl<'a> ContextAwareHeredocParser<'a> {
     pub fn new(input: &'a str) -> Self {
-        Self {
-            scanner: HeredocScanner::new(input),
-            context_stack: vec![ParseContext::Normal],
-            eval_cache: HashMap::new(),
-        }
+        Self { input, context_stack: vec![ParseContext::Normal], eval_cache: HashMap::new() }
     }
 
     /// Parse input with context awareness
     pub fn parse(self) -> (String, Vec<HeredocDeclaration>) {
         // Phase 1: Normal heredoc scanning
-        let (processed, mut declarations) = self.scanner.scan();
+        let (processed, mut declarations) = parse_with_heredocs(self.input);
+        Self::filter_regex_false_positives(self.input, &mut declarations);
 
         // Phase 2: Detect special contexts
         let contexts = Self::detect_contexts_static(&processed);
@@ -87,6 +84,39 @@ impl<'a> ContextAwareHeredocParser<'a> {
         }
 
         (processed, declarations)
+    }
+
+    fn filter_regex_false_positives(input: &str, declarations: &mut Vec<HeredocDeclaration>) {
+        declarations.retain(|decl| !Self::is_regex_match_false_positive(input, decl));
+    }
+
+    fn is_regex_match_false_positive(input: &str, decl: &HeredocDeclaration) -> bool {
+        let Some(line) = input.lines().nth(decl.declaration_line.saturating_sub(1)) else {
+            return false;
+        };
+        let Some(heredoc_pos) = line.find("<<") else {
+            return false;
+        };
+
+        for operator in ["=~", "!~"] {
+            let Some(op_pos) = line.find(operator) else {
+                continue;
+            };
+            let Some(regex_start_rel) = line[op_pos + operator.len()..].find('/') else {
+                continue;
+            };
+            let regex_start = op_pos + operator.len() + regex_start_rel;
+            let Some(regex_end_rel) = line[regex_start + 1..].find('/') else {
+                continue;
+            };
+            let regex_end = regex_start + 1 + regex_end_rel;
+
+            if heredoc_pos > regex_start && heredoc_pos < regex_end {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// Detect special contexts in the input
@@ -190,9 +220,7 @@ impl<'a> ContextAwareHeredocParser<'a> {
 
     /// Parse heredocs within eval content
     fn parse_eval_content_static(content: &str) -> Vec<HeredocDeclaration> {
-        // Create a sub-scanner for the eval content
-        let eval_scanner = HeredocScanner::new(content);
-        let (_, declarations) = eval_scanner.scan();
+        let (_, declarations) = parse_with_heredocs(content);
 
         declarations
     }

@@ -305,7 +305,8 @@ fn test_regex_code_execution_detection() {
 fn test_heredoc_deep_nesting() {
     // Create a deeply nested expression ending with a heredoc
     // $a[0][0]...[0] . <<EOF
-    // 5000 nesting levels might be enough to trigger stack overflow if recursive
+    // 5000 nesting levels is far above the pending heredoc safety limit and should
+    // fail gracefully instead of recursing or hanging.
     let mut code = String::from("$a");
     for _ in 0..5000 {
         code.push_str("[0]");
@@ -314,7 +315,19 @@ fn test_heredoc_deep_nesting() {
 
     let mut parser = Parser::new(&code);
     let result = parser.parse();
-    assert!(result.is_ok());
+    let failed_gracefully = result.as_ref().err().is_some_and(|error| {
+        matches!(error, ParseError::NestingTooDeep { .. })
+            || error.to_string().contains("Heredoc depth limit exceeded")
+    }) || parser
+        .errors()
+        .iter()
+        .any(|error| error.to_string().contains("Heredoc depth limit exceeded"));
+
+    assert!(
+        failed_gracefully,
+        "Deep heredoc nesting should fail gracefully via nesting or heredoc limits. result={result:?}, parser_errors={:?}",
+        parser.errors()
+    );
 }
 
 #[test]

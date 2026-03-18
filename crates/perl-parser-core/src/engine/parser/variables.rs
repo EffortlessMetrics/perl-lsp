@@ -235,6 +235,17 @@ impl<'a> Parser<'a> {
         let mut full_name = name;
         let mut end = token.end;
 
+        // The lexer may hand us a sigil-only token (`&`) or a precombined `$$`
+        // token followed by the referenced identifier. Preserve the full target
+        // name instead of leaving the tail as a stray identifier node.
+        if (full_name.is_empty() || (sigil == "$" && full_name == "$"))
+            && self.peek_kind() == Some(TokenKind::Identifier)
+        {
+            let name_token = self.tokens.next()?;
+            full_name.push_str(&name_token.text);
+            end = name_token.end;
+        }
+
         // Handle :: in package-qualified variables
         while self.peek_kind() == Some(TokenKind::DoubleColon) {
             self.tokens.next()?; // consume ::
@@ -326,9 +337,34 @@ impl<'a> Parser<'a> {
             // Handle special variables like $$, $@, $!, $?, etc.
             match self.peek_kind() {
                 Some(TokenKind::ScalarSigil) => {
-                    // $$ - process ID
+                    // `$$` is the PID special variable, but `$$ident` is a scalar
+                    // dereference target that must preserve the referenced name.
                     let token = self.tokens.next()?;
-                    ("$".to_string(), token.end)
+                    if self.peek_kind() == Some(TokenKind::Identifier) {
+                        let name_token = self.tokens.next()?;
+                        let mut name = format!("${}", name_token.text);
+                        let mut end = name_token.end;
+
+                        while self.peek_kind() == Some(TokenKind::DoubleColon) {
+                            self.tokens.next()?; // consume ::
+                            name.push_str("::");
+
+                            if self.peek_kind() == Some(TokenKind::Identifier) {
+                                let next_token = self.tokens.next()?;
+                                name.push_str(&next_token.text);
+                                end = next_token.end;
+                            } else {
+                                return Err(ParseError::syntax(
+                                    "Expected identifier after :: in package-qualified variable",
+                                    self.current_position(),
+                                ));
+                            }
+                        }
+
+                        (name, end)
+                    } else {
+                        ("$".to_string(), token.end)
+                    }
                 }
                 Some(TokenKind::ArraySigil) => {
                     // $@ - eval error

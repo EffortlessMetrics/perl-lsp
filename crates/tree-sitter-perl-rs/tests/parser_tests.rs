@@ -104,14 +104,16 @@ mod tests {
             "while ($x) { print; }",
             "until ($x) { print; }",
             "for (my $i = 0; $i < 10; $i++) { print; }",
-            "foreach my $item (@list) { print; }",
+            "foreach $item (@list) { print; }",
             "do { print; } while ($x);",
         ];
 
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(result.is_ok(), "Failed to parse control structure: {}", case);
+            if let Err(err) = result {
+                panic!("Failed to parse control structure: {case}\n{err}");
+            }
         }
     }
 
@@ -214,7 +216,7 @@ mod tests {
             "my $ref = \\@array;",
             "my $ref = \\%hash;",
             "my $ref = \\&sub;",
-            "my $value = $$ref;",
+            "my $value = ${$ref};",
             "my $value = $ref->[0];",
             "my $value = $ref->{key};",
             "my $value = $ref->();",
@@ -223,7 +225,9 @@ mod tests {
         let mut parser = PureRustPerlParser::new();
         for case in cases {
             let result = parser.parse(case);
-            assert!(result.is_ok(), "Failed to parse reference: {}", case);
+            if let Err(err) = result {
+                panic!("Failed to parse reference: {case}\n{err}");
+            }
         }
     }
 

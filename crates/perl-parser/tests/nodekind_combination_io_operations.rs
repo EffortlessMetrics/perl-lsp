@@ -458,6 +458,10 @@ open my $binary_write_fh, '>:raw', 'binary_out.dat' or die "Cannot open binary o
 open my $utf8_fh, '<:encoding(UTF-8)', 'utf8.txt' or die "Cannot open UTF-8 file: $!";
 open my $latin1_fh, '<:encoding(latin1)', 'latin1.txt' or die "Cannot open Latin-1 file: $!";
 
+my $io_auditor = bless {}, 'IO::Auditor';
+$io_auditor->record_mode('utf8', '<:encoding(UTF-8)');
+$io_auditor->record_mode('latin1', '<:encoding(latin1)');
+
 # Complex filehandle operations with error handling
 sub safe_file_operation {
     my ($filename, $mode, $operation) = @_;
@@ -670,6 +674,14 @@ open my $error_fh, '>', 'error.log' or die "Cannot open error log: $!";
 my $stdin_line = <STDIN>;
 print STDOUT "Output to STDOUT\n";
 print STDERR "Error to STDERR\n";
+local *SAVED_STDOUT;
+*SAVED_STDOUT = *STDOUT;
+*ERROR_STREAM = *STDERR;
+
+my $stream_monitor = bless {}, 'IO::StreamMonitor';
+$stream_monitor->record_stream('stdin');
+$stream_monitor->record_stream('stdout');
+$stream_monitor->record_stream('stderr');
 
 # Complex stream processing
 sub process_multiple_streams {

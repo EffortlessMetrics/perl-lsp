@@ -492,9 +492,10 @@ fn test_high_contention_scenarios() {
             success_count += 1;
         }
 
-        // Even under contention, should complete reasonably
+        // This is a contention test, not a microbenchmark. Keep a coarse budget
+        // that tolerates llvm-cov overhead while still catching real stalls.
         assert!(
-            *parse_time < Duration::from_millis(200),
+            *parse_time < Duration::from_millis(500),
             "Thread {} operation {} took too long under contention: {:?}",
             thread_id,
             operation,
@@ -1093,20 +1094,28 @@ fn extract_symbols(ast: &perl_parser::ast::Node) -> Vec<String> {
     let mut symbols = Vec::new();
 
     match &ast.kind {
-        NodeKind::Program { statements } => {
-            for child in statements {
-                symbols.extend(extract_symbols(child));
+        NodeKind::Package { name, .. } | NodeKind::Class { name, .. } => {
+            symbols.push(name.clone());
+        }
+        NodeKind::Subroutine { name: Some(name), .. } | NodeKind::Method { name, .. } => {
+            symbols.push(name.clone());
+        }
+        NodeKind::VariableDeclaration { variable, .. } => {
+            if let NodeKind::Variable { sigil, name } = &variable.kind {
+                symbols.push(format!("{sigil}{name}"));
             }
         }
-        NodeKind::ExpressionStatement { expression } => {
-            symbols.extend(extract_symbols(expression));
+        NodeKind::VariableListDeclaration { variables, .. } => {
+            for variable in variables {
+                if let NodeKind::Variable { sigil, name } = &variable.kind {
+                    symbols.push(format!("{sigil}{name}"));
+                }
+            }
         }
-        // Add more symbol extraction logic based on actual NodeKind variants
-        _ => {
-            // Extract symbol names from node text or other properties
-            // This is a simplified version - real implementation would be more sophisticated
-        }
+        _ => {}
     }
+
+    ast.for_each_child(|child| symbols.extend(extract_symbols(child)));
 
     symbols
 }

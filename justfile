@@ -1073,7 +1073,7 @@ coverage:
         cargo install cargo-llvm-cov --locked; \
     fi
     @cargo llvm-cov --workspace --locked --exclude xtask --html --output-dir target/coverage \
-        --ignore-filename-regex '(archive|tree-sitter-perl-rs|tree-sitter-perl-c|tests|benches|examples|build\.rs)/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-rs/|(^|/)crates/tree-sitter-perl-c/'
     @echo "✅ Coverage report: target/coverage/index.html"
     @echo "📈 Opening report in browser..."
     @command -v xdg-open >/dev/null 2>&1 && xdg-open target/coverage/index.html || \
@@ -1088,7 +1088,7 @@ coverage-lcov:
         cargo install cargo-llvm-cov --locked; \
     fi
     @cargo llvm-cov --workspace --locked --exclude xtask --lcov --output-path lcov.info \
-        --ignore-filename-regex '(archive|tree-sitter-perl-rs|tree-sitter-perl-c|tests|benches|examples|build\.rs)/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-rs/|(^|/)crates/tree-sitter-perl-c/'
     @echo "✅ Coverage: lcov.info"
 
 # Show coverage summary (terminal)
@@ -1100,7 +1100,7 @@ coverage-summary:
         cargo install cargo-llvm-cov --locked; \
     fi
     @cargo llvm-cov --workspace --locked --exclude xtask \
-        --ignore-filename-regex '(archive|tree-sitter-perl-rs|tree-sitter-perl-c|tests|benches|examples|build\.rs)/'
+        --ignore-filename-regex '(^|/)(archive|tests|benches|examples)(/|$)|(^|/)build\.rs$|(^|/)crates/tree-sitter-perl-rs/|(^|/)crates/tree-sitter-perl-c/'
 
 # ============================================================================
 # Technical Debt Tracking (Issue #XXX)

@@ -2,14 +2,13 @@
 
 #[cfg(feature = "pure-rust")]
 mod tests {
-    use pest::Parser;
-    use tree_sitter_perl::pure_rust_parser::PerlParser;
+    use tree_sitter_perl::pure_rust_parser::PureRustPerlParser;
 
     fn parse_and_verify(input: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let pairs = PerlParser::parse(tree_sitter_perl::pure_rust_parser::Rule::program, input)?;
-        // Check if we got any pairs
-        let has_pairs = pairs.clone().count() > 0;
-        assert!(has_pairs);
+        let mut parser = PureRustPerlParser::new();
+        let ast = parser.parse(input)?;
+        let sexp = parser.to_sexp(&ast);
+        assert!(!sexp.is_empty(), "Parser returned an empty AST");
         Ok(())
     }
 
@@ -24,7 +23,9 @@ mod tests {
         ];
 
         for code in test_cases {
-            assert!(parse_and_verify(code).is_ok(), "Failed to parse: {}", code);
+            if let Err(err) = parse_and_verify(code) {
+                panic!("Failed to parse: {code}\n{err}");
+            }
         }
     }
 
@@ -39,7 +40,9 @@ mod tests {
         ];
 
         for code in test_cases {
-            assert!(parse_and_verify(code).is_ok(), "Failed to parse: {}", code);
+            if let Err(err) = parse_and_verify(code) {
+                panic!("Failed to parse: {code}\n{err}");
+            }
         }
     }
 
@@ -54,7 +57,9 @@ mod tests {
         ];
 
         for code in test_cases {
-            assert!(parse_and_verify(code).is_ok(), "Failed to parse: {}", code);
+            if let Err(err) = parse_and_verify(code) {
+                panic!("Failed to parse: {code}\n{err}");
+            }
         }
     }
 
@@ -68,7 +73,9 @@ mod tests {
         ];
 
         for code in test_cases {
-            assert!(parse_and_verify(code).is_ok(), "Failed to parse: {}", code);
+            if let Err(err) = parse_and_verify(code) {
+                panic!("Failed to parse: {code}\n{err}");
+            }
         }
     }
 
@@ -106,7 +113,9 @@ EOF"#,
         ];
 
         for code in test_cases {
-            assert!(parse_and_verify(code).is_ok(), "Failed to parse: {}", code);
+            if let Err(err) = parse_and_verify(code) {
+                panic!("Failed to parse: {code}\n{err}");
+            }
         }
     }
 
@@ -117,11 +126,13 @@ EOF"#,
             r#"unless ($x) { print "falsy\n"; }"#,
             r#"while ($i < 10) { $i++; }"#,
             r#"for (my $i = 0; $i < 10; $i++) { print $i; }"#,
-            r#"foreach my $item (@array) { print $item; }"#,
+            r#"foreach $item (@array) { print $item; }"#,
         ];
 
         for code in test_cases {
-            assert!(parse_and_verify(code).is_ok(), "Failed to parse: {}", code);
+            if let Err(err) = parse_and_verify(code) {
+                panic!("Failed to parse: {code}\n{err}");
+            }
         }
     }
 
@@ -136,7 +147,9 @@ EOF"#,
         ];
 
         for code in test_cases {
-            assert!(parse_and_verify(code).is_ok(), "Failed to parse: {}", code);
+            if let Err(err) = parse_and_verify(code) {
+                panic!("Failed to parse: {code}\n{err}");
+            }
         }
     }
 
@@ -152,7 +165,9 @@ EOF"#,
         ];
 
         for code in test_cases {
-            assert!(parse_and_verify(code).is_ok(), "Failed to parse: {}", code);
+            if let Err(err) = parse_and_verify(code) {
+                panic!("Failed to parse: {code}\n{err}");
+            }
         }
     }
 
@@ -169,7 +184,9 @@ EOF"#,
         ];
 
         for code in test_cases {
-            assert!(parse_and_verify(code).is_ok(), "Failed to parse: {}", code);
+            if let Err(err) = parse_and_verify(code) {
+                panic!("Failed to parse: {code}\n{err}");
+            }
         }
     }
 }

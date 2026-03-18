@@ -4,6 +4,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use perl_parser::{
     Parser, SourceLocation,
     ast::{Node, NodeKind},
+    error::ParseOutput,
     semantic::SemanticAnalyzer,
 };
 use perl_tdd_support::{must, must_some};
@@ -21,9 +22,9 @@ fn parse_ast(source: &str) -> Node {
     must(parser.parse())
 }
 
-fn parse_ast_with_recovery(source: &str) -> Node {
+fn parse_output_with_recovery(source: &str) -> ParseOutput {
     let mut parser = Parser::new(source);
-    parser.parse_with_recovery().ast
+    parser.parse_with_recovery()
 }
 
 fn manual_recovery_nodekind_fixture(location: SourceLocation) -> Node {
@@ -121,6 +122,11 @@ EOF
 
                 LABEL: while (1) {
                     last LABEL;
+                }
+
+                goto DISPATCH if 0;
+                DISPATCH: while (0) {
+                    last DISPATCH;
                 }
 
                 try {
@@ -263,10 +269,10 @@ fn test_manual_only_nodekinds_exist_and_analyze_without_panic() {
 }
 
 #[test]
-fn test_parser_recovery_produces_error_nodes_and_does_not_panic_semantic() {
+fn test_parser_recovery_reports_diagnostics_and_does_not_panic_semantic() {
     // These are intentionally malformed; we only require:
     // - parse_with_recovery returns an AST
-    // - the AST contains an Error node
+    // - diagnostics are reported for the malformed input
     // - semantic analysis does not panic
     let cases: &[(&str, &str)] = &[
         ("missing_expression", "my $x = ;"),
@@ -275,14 +281,14 @@ fn test_parser_recovery_produces_error_nodes_and_does_not_panic_semantic() {
     ];
 
     for (name, source) in cases {
-        let ast = parse_ast_with_recovery(source);
+        let output = parse_output_with_recovery(source);
         assert!(
-            has_node_kind(&ast, "Error"),
-            "[{name}] expected parse_with_recovery() AST to include NodeKind::Error"
+            !output.diagnostics.is_empty(),
+            "[{name}] expected parse_with_recovery() to report diagnostics"
         );
 
         let ok = catch_unwind(AssertUnwindSafe(|| {
-            let _ = SemanticAnalyzer::analyze_with_source(&ast, source);
+            let _ = SemanticAnalyzer::analyze_with_source(&output.ast, source);
         }))
         .is_ok();
 

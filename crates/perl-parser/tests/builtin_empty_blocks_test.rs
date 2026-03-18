@@ -78,16 +78,25 @@ mod builtin_empty_blocks_tests {
 
     #[test]
     fn test_return_sort_empty_block() {
-        parse_and_check("return sort {} @array", "(return (call sort ((block ))");
+        parse_and_check(
+            "return sort {} @array",
+            "(return (call sort ((block ) (variable @ array))))",
+        );
     }
 
     #[test]
     fn test_return_map_empty_block() {
-        parse_and_check("return map {} @array", "(return (call map ((block ))");
+        parse_and_check(
+            "return map {} @array",
+            "(return (call map ((block ) (variable @ array))))",
+        );
     }
 
     #[test]
     fn test_return_grep_empty_block() {
-        parse_and_check("return grep {} @array", "(return (call grep ((block ))");
+        parse_and_check(
+            "return grep {} @array",
+            "(return (call grep ((block ) (variable @ array))))",
+        );
     }
 }

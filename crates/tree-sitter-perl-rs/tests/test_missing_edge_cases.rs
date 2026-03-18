@@ -38,7 +38,7 @@ fn test_glob_assignment() {
     let mut found_glob = false;
 
     while let Some(token) = lexer.next_token() {
-        if matches!(&token.token_type, TokenType::Operator(op) if op.as_ref() == "*") {
+        if matches!(&token.token_type, TokenType::Identifier(id) if id.starts_with('*')) {
             found_glob = true;
         }
     }
