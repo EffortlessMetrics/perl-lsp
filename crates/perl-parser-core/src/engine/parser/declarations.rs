@@ -699,26 +699,16 @@ impl<'a> Parser<'a> {
         } else if self.peek_kind() == Some(TokenKind::LeftParen) {
             self.consume_token()?; // consume (
 
-            // Parse import list (with EOF guard to prevent infinite loop on truncated input)
+            // Parse parenthesized import list.
+            // Real Perl import lists can contain strings, identifiers, numbers,
+            // keywords-as-barewords, :tags, -flags, !negation, fat-arrow pairs,
+            // backslash references (\&func), and nested bracket/brace structures.
             while self.peek_kind() != Some(TokenKind::RightParen) && !self.tokens.is_eof() {
-                if self.peek_kind() == Some(TokenKind::String) {
-                    args.push(self.consume_token()?.text.to_string());
-                } else if self.peek_kind() == Some(TokenKind::Identifier) {
-                    args.push(self.consume_token()?.text.to_string());
-                } else {
-                    return Err(ParseError::syntax(
-                        "Expected string or identifier in import list",
-                        self.current_position(),
-                    ));
-                }
+                self.consume_paren_import_item(&mut args)?;
 
-                if self.peek_kind() == Some(TokenKind::Comma) {
-                    self.consume_token()?; // consume comma
-                } else if self.peek_kind() != Some(TokenKind::RightParen) {
-                    return Err(ParseError::syntax(
-                        "Expected comma or closing parenthesis",
-                        self.current_position(),
-                    ));
+                // Skip trailing comma(s) between items
+                while self.peek_kind() == Some(TokenKind::Comma) {
+                    self.consume_token()?;
                 }
             }
 
@@ -997,6 +987,337 @@ impl<'a> Parser<'a> {
             consumed_any = true;
         }
 
+        Ok(())
+    }
+
+    /// Consume a single import item inside a parenthesized import list.
+    ///
+    /// Perl import lists inside `use Foo (...)` can contain a wide variety of
+    /// token types beyond simple strings and identifiers:
+    /// - `:tag` patterns (Colon + Identifier or quoted string)
+    /// - `-flag` patterns (Minus + Identifier)
+    /// - `!tag` negation patterns (Not + Identifier)
+    /// - Fat-arrow pairs: `key => value`
+    /// - Backslash references: `\&func`, `\@array`
+    /// - Numbers and keywords used as barewords
+    /// - Nested `[...]` and `{...}` structures
+    /// - `qw(...)` inside the parenthesized list
+    fn consume_paren_import_item(&mut self, args: &mut Vec<String>) -> ParseResult<()> {
+        match self.peek_kind() {
+            Some(TokenKind::String) => {
+                args.push(self.consume_token()?.text.to_string());
+                // Handle fat arrow after string: '""' => \&stringify
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    self.consume_token()?; // consume =>
+                    self.consume_paren_import_value(args)?;
+                }
+            }
+            Some(TokenKind::Identifier) => {
+                // Check for qw before consuming
+                if self.tokens.peek().map(|t| t.text.as_ref() == "qw").unwrap_or(false) {
+                    self.consume_token()?; // consume 'qw'
+                    match self.parse_qw_words() {
+                        Ok(words) => {
+                            let qw_str = format!("qw({})", words.join(" "));
+                            args.push(qw_str);
+                        }
+                        Err(_) => {
+                            // Fallback: consume tokens until comma or close paren
+                            while !matches!(
+                                self.peek_kind(),
+                                Some(TokenKind::Comma | TokenKind::RightParen)
+                            ) && !self.tokens.is_eof()
+                            {
+                                args.push(self.consume_token()?.text.to_string());
+                            }
+                        }
+                    }
+                } else {
+                    args.push(self.consume_token()?.text.to_string());
+                    // Handle fat arrow after identifier: fallback => 1
+                    if self.peek_kind() == Some(TokenKind::FatArrow) {
+                        self.consume_token()?; // consume =>
+                        self.consume_paren_import_value(args)?;
+                    }
+                }
+            }
+            Some(TokenKind::Number) => {
+                args.push(self.consume_token()?.text.to_string());
+            }
+            Some(TokenKind::Colon) => {
+                // Bare :tag pattern (e.g., :sys_wait_h, :all)
+                let colon = self.consume_token()?;
+                if self.peek_kind() == Some(TokenKind::Identifier) {
+                    let tag = self.consume_token()?;
+                    args.push(format!(":{}", tag.text));
+                } else {
+                    args.push(colon.text.to_string());
+                }
+            }
+            Some(TokenKind::Minus) => {
+                // -flag pattern (e.g., -norequire)
+                let minus = self.consume_token()?;
+                if self.peek_kind() == Some(TokenKind::Identifier) {
+                    let flag = self.consume_token()?;
+                    args.push(format!("-{}", flag.text));
+                    // Handle fat arrow after -flag: -dist => 'Name'
+                    if self.peek_kind() == Some(TokenKind::FatArrow) {
+                        self.consume_token()?;
+                        self.consume_paren_import_value(args)?;
+                    }
+                } else if self.peek_kind() == Some(TokenKind::Number) {
+                    // Negative number: -1
+                    let num = self.consume_token()?;
+                    args.push(format!("-{}", num.text));
+                } else {
+                    args.push(minus.text.to_string());
+                }
+            }
+            Some(TokenKind::Not) => {
+                // Negation pattern (e.g., !:default, !func_name)
+                let bang = self.consume_token()?;
+                if self.peek_kind() == Some(TokenKind::Colon) {
+                    self.consume_token()?; // consume ':'
+                    if self.peek_kind() == Some(TokenKind::Identifier) {
+                        let tag = self.consume_token()?;
+                        args.push(format!("!:{}", tag.text));
+                    } else {
+                        args.push(format!("{}:", bang.text));
+                    }
+                } else if self.peek_kind() == Some(TokenKind::Identifier) {
+                    let name = self.consume_token()?;
+                    args.push(format!("!{}", name.text));
+                } else {
+                    args.push(bang.text.to_string());
+                }
+            }
+            Some(TokenKind::Backslash) => {
+                // Backslash reference (e.g., \&func, \@array)
+                args.push(self.consume_token()?.text.to_string()); // '\'
+                // Consume the referent: &func, @array, $scalar, etc.
+                while !matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Comma | TokenKind::RightParen | TokenKind::FatArrow)
+                ) && !Self::is_statement_terminator(self.peek_kind())
+                    && !self.tokens.is_eof()
+                {
+                    args.push(self.consume_token()?.text.to_string());
+                }
+            }
+            Some(TokenKind::LeftBrace) => {
+                // Hash ref: { KEY => val, ... }
+                let mut depth: usize = 0;
+                loop {
+                    match self.peek_kind() {
+                        Some(TokenKind::LeftBrace) => {
+                            depth += 1;
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                        Some(TokenKind::RightBrace) => {
+                            args.push(self.consume_token()?.text.to_string());
+                            depth = depth.saturating_sub(1);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        None => break,
+                        _ if self.tokens.is_eof() => break,
+                        _ => {
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                    }
+                }
+            }
+            Some(TokenKind::LeftBracket) => {
+                // Array ref: [ 'a', 'b' ]
+                let mut depth: usize = 0;
+                loop {
+                    match self.peek_kind() {
+                        Some(TokenKind::LeftBracket) => {
+                            depth += 1;
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                        Some(TokenKind::RightBracket) => {
+                            args.push(self.consume_token()?.text.to_string());
+                            depth = depth.saturating_sub(1);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        None => break,
+                        _ if self.tokens.is_eof() => break,
+                        _ => {
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                    }
+                }
+            }
+            Some(TokenKind::QuoteWords) => {
+                // qw(...) token inside parenthesized list
+                let qw_token = self.consume_token()?;
+                let text: &str = qw_token.text.as_ref();
+                if let Some(content) = text.strip_prefix("qw").and_then(|s| {
+                    if s.starts_with('(') && s.ends_with(')') {
+                        Some(&s[1..s.len() - 1])
+                    } else if s.starts_with('[') && s.ends_with(']') {
+                        Some(&s[1..s.len() - 1])
+                    } else if s.starts_with('{') && s.ends_with('}') {
+                        Some(&s[1..s.len() - 1])
+                    } else if s.starts_with('<') && s.ends_with('>') {
+                        Some(&s[1..s.len() - 1])
+                    } else {
+                        None
+                    }
+                }) {
+                    let words: Vec<&str> = content.split_whitespace().collect();
+                    let qw_str = format!("qw({})", words.join(" "));
+                    args.push(qw_str);
+                } else {
+                    args.push(qw_token.text.to_string());
+                }
+            }
+            Some(kind) if Self::is_keyword_token(kind) => {
+                // Keywords used as barewords in import lists (for => 1, if => 1, etc.)
+                args.push(self.consume_token()?.text.to_string());
+                // Handle fat arrow after keyword: for => 1
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    self.consume_token()?; // consume =>
+                    self.consume_paren_import_value(args)?;
+                }
+            }
+            _ => {
+                // Fallback: consume any token to avoid infinite loop
+                // This handles unforeseen token types gracefully
+                args.push(self.consume_token()?.text.to_string());
+            }
+        }
+        Ok(())
+    }
+
+    /// Consume a value on the right-hand side of a fat arrow inside a
+    /// parenthesized import list (e.g., the `1` in `fallback => 1` or
+    /// the `\&func` in `'""' => \&func`).
+    fn consume_paren_import_value(&mut self, args: &mut Vec<String>) -> ParseResult<()> {
+        match self.peek_kind() {
+            Some(TokenKind::Number | TokenKind::String) => {
+                args.push(self.consume_token()?.text.to_string());
+            }
+            Some(TokenKind::Identifier) => {
+                args.push(self.consume_token()?.text.to_string());
+            }
+            Some(TokenKind::Backslash) => {
+                // \&func, \@array, etc.
+                args.push(self.consume_token()?.text.to_string()); // '\'
+                while !matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Comma | TokenKind::RightParen)
+                ) && !Self::is_statement_terminator(self.peek_kind())
+                    && !self.tokens.is_eof()
+                {
+                    args.push(self.consume_token()?.text.to_string());
+                }
+            }
+            Some(TokenKind::LeftBrace) => {
+                // Hash ref value: { ... }
+                let mut depth: usize = 0;
+                loop {
+                    match self.peek_kind() {
+                        Some(TokenKind::LeftBrace) => {
+                            depth += 1;
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                        Some(TokenKind::RightBrace) => {
+                            args.push(self.consume_token()?.text.to_string());
+                            depth = depth.saturating_sub(1);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        None => break,
+                        _ if self.tokens.is_eof() => break,
+                        _ => {
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                    }
+                }
+            }
+            Some(TokenKind::LeftBracket) => {
+                // Array ref value: [ ... ]
+                let mut depth: usize = 0;
+                loop {
+                    match self.peek_kind() {
+                        Some(TokenKind::LeftBracket) => {
+                            depth += 1;
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                        Some(TokenKind::RightBracket) => {
+                            args.push(self.consume_token()?.text.to_string());
+                            depth = depth.saturating_sub(1);
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        None => break,
+                        _ if self.tokens.is_eof() => break,
+                        _ => {
+                            args.push(self.consume_token()?.text.to_string());
+                        }
+                    }
+                }
+            }
+            Some(TokenKind::Sub) => {
+                // Anonymous sub: sub { ... }
+                args.push(self.consume_token()?.text.to_string()); // 'sub'
+                if self.peek_kind() == Some(TokenKind::LeftBrace) {
+                    let mut depth: usize = 0;
+                    loop {
+                        match self.peek_kind() {
+                            Some(TokenKind::LeftBrace) => {
+                                depth += 1;
+                                args.push(self.consume_token()?.text.to_string());
+                            }
+                            Some(TokenKind::RightBrace) => {
+                                args.push(self.consume_token()?.text.to_string());
+                                depth = depth.saturating_sub(1);
+                                if depth == 0 {
+                                    break;
+                                }
+                            }
+                            None => break,
+                            _ if self.tokens.is_eof() => break,
+                            _ => {
+                                args.push(self.consume_token()?.text.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            Some(TokenKind::Minus) => {
+                // Negative number: -1
+                let minus = self.consume_token()?;
+                if self.peek_kind() == Some(TokenKind::Number) {
+                    let num = self.consume_token()?;
+                    args.push(format!("-{}", num.text));
+                } else {
+                    args.push(minus.text.to_string());
+                }
+            }
+            Some(kind) if Self::is_keyword_token(kind) => {
+                // Keyword used as a value (e.g., undef)
+                args.push(self.consume_token()?.text.to_string());
+            }
+            _ => {
+                // Fallback: consume tokens until comma or close paren
+                while !matches!(
+                    self.peek_kind(),
+                    Some(TokenKind::Comma | TokenKind::RightParen)
+                ) && !Self::is_statement_terminator(self.peek_kind())
+                    && !self.tokens.is_eof()
+                {
+                    args.push(self.consume_token()?.text.to_string());
+                }
+            }
+        }
         Ok(())
     }
 }
