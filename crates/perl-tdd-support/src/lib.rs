@@ -82,4 +82,4 @@ pub mod must;
 pub use must::{must, must_err, must_some};
 
 /// CI Guardrail Ignored Test Monitoring and Governance.
-pub mod governance;
+pub use perl_tdd_governance as governance;

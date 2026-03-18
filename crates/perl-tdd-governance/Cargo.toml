@@ -1,0 +1,33 @@
+[package]
+name = "perl-tdd-governance"
+version = "0.11.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "SRP microcrate for ignored-test governance, baseline tracking, and trend reporting"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-tdd-governance"
+keywords = ["perl", "testing", "governance", "ignored-tests", "tdd"]
+categories = ["development-tools::testing", "development-tools"]
+include = [
+  "src/**",
+  "tests/**",
+  "Cargo.toml",
+  "LICENSE*",
+  "README.md"
+]
+
+[lib]
+doctest = false
+
+[dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+
+[dev-dependencies]
+anyhow = "1.0.102"
+
+[lints]
+workspace = true

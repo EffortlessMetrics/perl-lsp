@@ -11,7 +11,7 @@ This crate provides TDD workflow support for Perl parser and LSP development:
 - **Test runner** -- Discover and execute Perl `.t` files with TAP output parsing
 - **TDD workflow manager** -- Red-green-refactor cycle state machine with coverage tracking
 - **Refactoring analyzer** -- Detect high complexity, long methods, excessive parameters, and naming issues
-- **Ignored test governance** -- Baseline tracking, quality gates, and trend reporting for ignored tests
+- **Ignored test governance** -- Re-exported from `perl-tdd-governance` for baseline tracking, quality gates, and trend reporting
 
 ## Features
 

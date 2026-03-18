@@ -22,6 +22,7 @@ members = [
     "crates/perl-workspace-index-slo",
     "crates/perl-refactoring",
     "crates/perl-incremental-parsing",
+    "crates/perl-tdd-governance",
     "crates/perl-tdd-support",
     "crates/perl-lsp-providers",
     "crates/perl-lsp-rename",
@@ -157,6 +158,7 @@ allow = [
 
     # Tier 2 — Core infrastructure
     "perl-parser-core",
+    "perl-tdd-governance",
     "perl-tdd-support",
     "perl-edit",
     "perl-source-editing",
@@ -357,6 +359,7 @@ perl-lsp-tooling = { path = "crates/perl-lsp-tooling", version = "0.11.0" }
 perl-lsp-on-type-formatting = { path = "crates/perl-lsp-on-type-formatting", version = "0.11.0" }
 perl-lsp-formatting-types = { path = "crates/perl-lsp-formatting-types", version = "0.11.0" }
 perl-lsp-formatting = { path = "crates/perl-lsp-formatting", version = "0.11.0" }
+perl-tdd-governance = { path = "crates/perl-tdd-governance", version = "0.11.0" }
 perl-tdd-support = { path = "crates/perl-tdd-support", version = "0.11.0" }
 perl-lsp-diagnostic-types = { path = "crates/perl-lsp-diagnostic-types", version = "0.11.0" }
 perl-lsp-diagnostics = { path = "crates/perl-lsp-diagnostics", version = "0.11.0" }

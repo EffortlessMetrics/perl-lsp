@@ -41,7 +41,7 @@ cargo doc -p perl-tdd-support --open     # View documentation
 | `tdd::tdd_basic` | Simplified `TestGenerator`, `RefactoringAnalyzer`, `TddWorkflow` state machine |
 | `tdd::tdd_workflow` | Full TDD workflow manager with coverage tracking, config, and LSP integration |
 | `tdd::test_runner` | `TestRunner` for AST-based test discovery and TAP execution |
-| `governance` | `IgnoredTestGuardian`, baseline tracking, quality gates, trend reporting |
+| `governance` | Re-export of `perl-tdd-governance` for `IgnoredTestGuardian`, baseline tracking, quality gates, and trend reporting |
 
 ### Re-exports from `perl-parser-core`
 

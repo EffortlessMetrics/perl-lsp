@@ -2569,12 +2569,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-tdd-governance"
+version = "0.11.0"
+dependencies = [
+ "anyhow",
+ "serde",
+]
+
+[[package]]
 name = "perl-tdd-support"
 version = "0.11.0"
 dependencies = [
  "anyhow",
  "lsp-types",
  "perl-parser-core",
+ "perl-tdd-governance",
  "serde",
  "serde_json",
  "url",
