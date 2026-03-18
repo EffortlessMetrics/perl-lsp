@@ -20,7 +20,32 @@
 
 ---
 
-> **Note**: perl-lsp is in public alpha. Core features work well, but expect some rough edges. [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues).
+> **Status:** perl-lsp is in public alpha (latest release: `v0.10.0`). Core features work well, but expect some rough edges. [Report issues](https://github.com/EffortlessMetrics/perl-lsp/issues).
+
+## Table of Contents
+
+- [Why perl-lsp?](#why-perl-lsp)
+- [Quick Start](#quick-start)
+- [Editor Setup](#editor-setup)
+- [Features](#features)
+- [Comparison](#comparison)
+- [Parser Coverage](#parser-coverage)
+- [Installation](#installation)
+- [Architecture](#architecture)
+- [Published Crates](#published-crates)
+- [Development](#development)
+- [Security](#security)
+- [Documentation](#documentation)
+- [History](#history)
+- [License](#license)
+
+## Why perl-lsp?
+
+- **Native Rust implementation** with no Perl runtime required for parsing or LSP features.
+- **Complete user-facing feature set** with all 53 advertised LSP capabilities implemented in `features.toml`.
+- **Fast incremental updates** designed for editor responsiveness, including sub-millisecond reparsing in common edit paths.
+- **Workspace-aware navigation** powered by dual indexing for qualified and bare Perl symbol names.
+- **Built-in debugging story** via the companion `perl-dap` bridge.
 
 ## Quick Start
 
@@ -39,8 +64,22 @@ code --install-extension effortlessmetrics.perl-lsp-rs
 
 New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
 
+## Editor Setup
+
+### VS Code
+
+Install the official extension from the Marketplace or from the command line:
+
+```bash
+code --install-extension effortlessmetrics.perl-lsp-rs
+```
+
+Then open any Perl file and the extension will launch `perl-lsp --stdio` automatically.
+
+### Neovim / Emacs
+
 <details>
-<summary><strong>Neovim / Emacs setup</strong></summary>
+<summary><strong>Neovim / Emacs configuration examples</strong></summary>
 
 **Neovim** (nvim-lspconfig):
 
@@ -76,7 +115,7 @@ require('lspconfig').perl_ls.setup {
 Full LSP coverage: all 53 advertised capabilities implemented (see [`features.toml`](features.toml)).
 For live metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
-## Why perl-lsp?
+## Comparison
 
 | | perl-lsp | Perl::LanguageServer | PLS |
 |---|----------|---------------------|-----|
@@ -116,7 +155,13 @@ just cpan-corpus-check     # Check CPAN baseline + known-clean manifest
 
 See [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) for the latest computed metrics.
 
-## Install
+## Installation
+
+### Requirements
+
+- Rust `1.92+` for building from source or installing with Cargo
+- A compatible editor or IDE that supports the Language Server Protocol
+- Optional: a Perl runtime if you want to debug Perl code through DAP workflows
 
 ### From crates.io
 
@@ -162,7 +207,7 @@ For the full tier system, architecture decision records, and design rationale, s
 
 - [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md)
 - [Architecture Decision Records](docs/adr/README.md) (microcrate architecture, dual indexing, incremental parsing, supply chain security)
-- [CLAUDE.md](CLAUDE.md) for the complete developer command reference
+- [Commands Reference](docs/reference/COMMANDS_REFERENCE.md) for build, test, and maintenance commands
 
 ## Published Crates
 
@@ -207,9 +252,9 @@ See [Supply Chain Security](docs/reference/SUPPLY_CHAIN_SECURITY.md) for details
 | [features.toml](features.toml) | Canonical LSP feature catalog |
 | [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md) | Live project metrics |
 | [ROADMAP.md](ROADMAP.md) | Version milestones and planning |
-| [Getting Started](docs/tutorials/GETTING_STARTED.md) | Installation and first steps |
 | [Stability Policy](docs/reference/STABILITY.md) | API versioning and compatibility |
 | [DAP User Guide](docs/tutorials/DAP_USER_GUIDE.md) | Debugger setup and usage |
+| [Commands Reference](docs/reference/COMMANDS_REFERENCE.md) | Build, test, lint, and CI commands |
 
 ## History
 
