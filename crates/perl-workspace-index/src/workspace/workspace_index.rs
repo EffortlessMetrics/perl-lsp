@@ -61,10 +61,10 @@
 //! See also the symbol extraction, reference finding, and semantic token classification
 //! modules in the workspace index implementation.
 
+use crate::Parser;
 use crate::ast::{Node, NodeKind};
 use crate::document_store::{Document, DocumentStore};
 use crate::position::{Position, Range};
-use crate::Parser;
 use parking_lot::RwLock;
 use perl_position_tracking::{WireLocation, WirePosition, WireRange};
 pub use perl_workspace_index_lifecycle::{
