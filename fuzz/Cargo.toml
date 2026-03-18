@@ -60,4 +60,11 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "quote_operator_parts"
+path = "fuzz_targets/quote_operator_parts.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]

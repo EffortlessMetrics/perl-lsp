@@ -276,6 +276,7 @@ fuzz-bounded:
     @cargo +nightly fuzz run lsp_cancellation_registry -- -max_total_time=60 || echo "  LSP cancellation registry fuzzing complete"
     @cargo +nightly fuzz run lsp_navigation -- -max_total_time=60 || echo "  LSP navigation fuzzing complete"
     @cargo +nightly fuzz run substitution_parsing -- -max_total_time=60 || echo "  Substitution fuzzing complete"
+    @cargo +nightly fuzz run quote_operator_parts -- -max_total_time=60 || echo "  Quote operator parts fuzzing complete"
     @cargo +nightly fuzz run unicode_positions -- -max_total_time=60 || echo "  Unicode positions fuzzing complete"
     @echo "✅ Fuzz testing complete"
 
@@ -1328,6 +1329,7 @@ fuzz-regression duration='30':
     @just fuzz heredoc_parsing {{duration}} || true
     @just fuzz lsp_cancellation_registry {{duration}} || true
     @just fuzz substitution_parsing {{duration}} || true
+    @just fuzz quote_operator_parts {{duration}} || true
     @just fuzz lsp_navigation {{duration}} || true
     @just fuzz unicode_positions {{duration}} || true
     @just fuzz-check-crashes
