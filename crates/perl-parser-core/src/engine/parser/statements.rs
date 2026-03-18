@@ -430,6 +430,7 @@ impl<'a> Parser<'a> {
         expr = self.parse_bitwise_or_with(expr)?;
         expr = self.parse_and_with(expr)?;
         expr = self.parse_or_with(expr)?;
+        expr = self.parse_ternary_with(expr)?;
         self.parse_word_or_expr(expr)
     }
 
