@@ -673,17 +673,31 @@ impl<'a> PerlLexer<'a> {
     pub fn peek_token(&mut self) -> Option<Token> {
         let saved_pos = self.position;
         let saved_mode = self.mode;
+        let saved_delimiter_stack = self.delimiter_stack.clone();
         let saved_prototype = self.in_prototype;
         let saved_depth = self.prototype_depth;
+        let saved_current_pos = self.current_pos;
         let saved_after_newline = self.after_newline;
+        let saved_pending_heredocs = self.pending_heredocs.clone();
+        let saved_line_start_offset = self.line_start_offset;
+        let saved_current_quote_op = self.current_quote_op.clone();
+        let saved_eof_emitted = self.eof_emitted;
+        let saved_start_time = self.start_time;
 
         let token = self.next_token();
 
         self.position = saved_pos;
         self.mode = saved_mode;
+        self.delimiter_stack = saved_delimiter_stack;
         self.in_prototype = saved_prototype;
         self.prototype_depth = saved_depth;
+        self.current_pos = saved_current_pos;
         self.after_newline = saved_after_newline;
+        self.pending_heredocs = saved_pending_heredocs;
+        self.line_start_offset = saved_line_start_offset;
+        self.current_quote_op = saved_current_quote_op;
+        self.eof_emitted = saved_eof_emitted;
+        self.start_time = saved_start_time;
 
         token
     }
@@ -708,9 +722,13 @@ impl<'a> PerlLexer<'a> {
         self.delimiter_stack.clear();
         self.in_prototype = false;
         self.prototype_depth = 0;
+        self.current_pos = Position::start();
         self.after_newline = true;
         self.pending_heredocs.clear();
         self.line_start_offset = 0;
+        self.current_quote_op = None;
+        self.eof_emitted = false;
+        self.start_time = std::time::Instant::now();
     }
 
     /// Switch lexer to format body parsing mode
