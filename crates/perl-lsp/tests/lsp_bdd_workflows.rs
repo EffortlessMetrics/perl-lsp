@@ -120,6 +120,14 @@ fn first_location_uri(response: &Value) -> Option<String> {
     }
 }
 
+fn location_start_line(response: &Value) -> Option<u64> {
+    if let Some(arr) = response.as_array() {
+        arr.first().and_then(|v| v.pointer("/range/start/line").and_then(Value::as_u64))
+    } else {
+        response.pointer("/range/start/line").and_then(Value::as_u64)
+    }
+}
+
 fn completion_labels(response: &Value) -> BTreeSet<String> {
     let mut labels = BTreeSet::new();
     let items = response.get("items").and_then(Value::as_array).or_else(|| response.as_array());
@@ -1000,6 +1008,74 @@ sub score {
     assert!(
         diagnostic_error_count(&changed) > 0,
         "syntax regression should produce error diagnostics"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_variable_navigation_and_highlights_stay_in_sync() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Variable navigation and highlights stay in sync");
+
+    let code = r#"use strict;
+use warnings;
+
+my $name = "Perl";
+my $message = "Hello, $name";
+$name =~ s/Perl/BDD/;
+print $name;
+"#;
+
+    scenario.given("a Perl document with one lexical variable used in reads and writes");
+    let (mut harness, workspace) = setup_workspace(&[("highlights.pl", code)])?;
+    let uri = workspace.uri("highlights.pl");
+    harness.open(&uri, code)?;
+
+    scenario.when("requesting declaration from a later variable use");
+    let (decl_line, decl_character) = find_position(code, "$name;");
+    let declaration = harness.request(
+        "textDocument/declaration",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": decl_line, "character": decl_character + 1 }
+        }),
+    )?;
+
+    scenario.then("declaration points back to the original lexical binding");
+    assert_eq!(first_location_uri(&declaration), Some(uri.clone()));
+    assert_eq!(
+        location_start_line(&declaration),
+        Some(3),
+        "declaration should resolve to 'my $name' on line 3"
+    );
+
+    scenario.when("requesting document highlights on that same variable");
+    let highlights = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": decl_line, "character": decl_character + 1 }
+        }),
+    )?;
+
+    scenario.then("highlights include declaration, mutation, and read occurrences");
+    let highlight_items = highlights.as_array().cloned().unwrap_or_default();
+    assert!(
+        highlight_items.len() >= 4,
+        "expected highlights for declaration and multiple uses; got {highlight_items:?}"
+    );
+    assert!(
+        highlight_items.iter().all(has_lsp_range),
+        "every highlight should include an LSP range; got {highlight_items:?}"
+    );
+    assert!(
+        highlight_items.iter().any(|item| item.get("kind").and_then(Value::as_u64) == Some(3)),
+        "expected at least one write highlight; got {highlight_items:?}"
+    );
+    assert!(
+        highlight_items.iter().any(|item| item.get("kind").and_then(Value::as_u64) == Some(2)),
+        "expected at least one read highlight; got {highlight_items:?}"
     );
 
     Ok(())
