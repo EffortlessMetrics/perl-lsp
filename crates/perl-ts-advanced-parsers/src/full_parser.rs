@@ -294,6 +294,7 @@ impl FullPerlParser {
                 self.restore_node_content_with_depth(index, placeholder_map, next_depth);
             }
             AstNode::PostfixDereference { expr, .. }
+            | AstNode::Dereference { expr, .. }
             | AstNode::TypeglobSlotAccess { typeglob: expr, .. } => {
                 self.restore_node_content_with_depth(expr, placeholder_map, next_depth);
             }

@@ -340,24 +340,35 @@ impl PureRustPerlParser {
     }
 
     fn normalize_source(source: &str) -> String {
-        static LOOP_DECL_RE: OnceLock<Regex> = OnceLock::new();
-        static SIMPLE_SCALAR_DEREF_RE: OnceLock<Regex> = OnceLock::new();
-        static ASSIGN_BITNOT_RE: OnceLock<Regex> = OnceLock::new();
+        static LOOP_DECL_RE: OnceLock<Option<Regex>> = OnceLock::new();
+        static SIMPLE_SCALAR_DEREF_RE: OnceLock<Option<Regex>> = OnceLock::new();
+        static ASSIGN_BITNOT_RE: OnceLock<Option<Regex>> = OnceLock::new();
 
-        let loop_decl_re = LOOP_DECL_RE.get_or_init(|| {
-            Regex::new(
-                r"\b(?P<kw>for(?:each)?)\s+(?:my|our|local|state)\s+(?P<var>\$[A-Za-z_][A-Za-z0-9_:]*)\s*(?P<paren>\()",
-            )
-            .expect("valid loop declarator normalization regex")
-        });
-        let scalar_deref_re = SIMPLE_SCALAR_DEREF_RE.get_or_init(|| {
-            Regex::new(r"\$\$(?P<name>[A-Za-z_][A-Za-z0-9_:]*)")
-                .expect("valid scalar dereference normalization regex")
-        });
-        let assign_bitnot_re = ASSIGN_BITNOT_RE.get_or_init(|| {
-            Regex::new(r"=\s+~\s*(?P<expr>\$[A-Za-z_][A-Za-z0-9_:]*)")
-                .expect("valid bitwise-not normalization regex")
-        });
+        // These are fixed patterns; if one ever fails to compile, skip normalization
+        // rather than panicking inside production parser code.
+        let Some(loop_decl_re) = LOOP_DECL_RE
+            .get_or_init(|| {
+                Regex::new(
+                    r"\b(?P<kw>for(?:each)?)\s+(?:my|our|local|state)\s+(?P<var>\$[A-Za-z_][A-Za-z0-9_:]*)\s*(?P<paren>\()",
+                )
+                .ok()
+            })
+            .as_ref()
+        else {
+            return source.to_string();
+        };
+        let Some(scalar_deref_re) = SIMPLE_SCALAR_DEREF_RE
+            .get_or_init(|| Regex::new(r"\$\$(?P<name>[A-Za-z_][A-Za-z0-9_:]*)").ok())
+            .as_ref()
+        else {
+            return source.to_string();
+        };
+        let Some(assign_bitnot_re) = ASSIGN_BITNOT_RE
+            .get_or_init(|| Regex::new(r"=\s+~\s*(?P<expr>\$[A-Za-z_][A-Za-z0-9_:]*)").ok())
+            .as_ref()
+        else {
+            return source.to_string();
+        };
 
         let normalized_loops = loop_decl_re.replace_all(source, "$kw $var $paren").into_owned();
         let normalized_derefs = scalar_deref_re

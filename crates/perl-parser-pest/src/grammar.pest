@@ -196,15 +196,23 @@ for_statement = {
         // C-style for loop
         ("(" ~ (for_init | assignment_expression)? ~ ";" ~ expression? ~ ";" ~ expression? ~ ")" ~ block) |
         // foreach-style for loop with variable declaration
-        (("my" | "our" | "local" | "state")? ~ variable ~ "(" ~ expression ~ ")" ~ block) |
+        (loop_variable_declarator ~ variable ~ "(" ~ expression ~ ")" ~ block) |
+        // foreach-style for loop with explicit variable
+        (variable ~ "(" ~ expression ~ ")" ~ block) |
         // foreach-style for loop without variable (uses $_)
         ("(" ~ expression ~ ")" ~ block)
     )
 }
 
 foreach_statement = {
-    label? ~ "foreach" ~ !(ASCII_ALPHANUMERIC | "_") ~ variable? ~ "(" ~ expression ~ ")" ~ block
+    label? ~ "foreach" ~ !(ASCII_ALPHANUMERIC | "_") ~ (
+        (loop_variable_declarator ~ variable ~ "(" ~ expression ~ ")" ~ block) |
+        (variable ~ "(" ~ expression ~ ")" ~ block) |
+        ("(" ~ expression ~ ")" ~ block)
+    )
 }
+
+loop_variable_declarator = { "my" | "our" | "local" | "state" }
 
 for_init = { declaration | assignment_expression | expression }
 
@@ -305,9 +313,10 @@ assignment_expression = {
 }
 
 assignment_operator = {
-    "=" ~ !("~") | "+=" | "-=" | "*=" | "_DIV_=" | "/=" | "%=" | "**=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
+    assignment_eq | "+=" | "-=" | "*=" | "_DIV_=" | "/=" | "%=" | "**=" | ".=" | "<<=" | ">>=" | "&=" | "|=" | "^="
     | "&&=" | "||=" | "//=" | "&.=" | "|.=" | "^.="
 }
+assignment_eq = @{ "=" ~ !"~" }
 
 ternary_expression = {
     logical_or_expression ~ ("?" ~ expression ~ ":" ~ expression)?

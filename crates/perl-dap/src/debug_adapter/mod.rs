@@ -959,7 +959,7 @@ impl DebugAdapter {
         if std::env::var_os("LLVM_PROFILE_FILE").is_some()
             || std::env::var_os("CARGO_LLVM_COV").is_some()
         {
-            base.max(15_000).min(30_000)
+            base.clamp(15_000, 30_000)
         } else {
             base
         }
