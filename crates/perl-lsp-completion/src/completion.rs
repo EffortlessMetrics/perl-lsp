@@ -96,6 +96,7 @@ mod items;
 mod keywords;
 mod methods;
 mod packages;
+mod regex_patterns;
 mod sort;
 mod test_more;
 mod variables;
@@ -371,6 +372,14 @@ impl CompletionProvider {
         }
 
         let mut completions = Vec::new();
+
+        // Regex context: suggest regex constructs when inside a regex literal,
+        // but keep sigil-prefixed symbol completions available for interpolated
+        // variables like `/^$fo/`.
+        if context.in_regex && !matches!(context.prefix.chars().next(), Some('$' | '@' | '%')) {
+            regex_patterns::add_regex_completions(&mut completions, &context, source);
+            return sort::deduplicate_and_sort(completions);
+        }
 
         // Determine what kind of completions to provide based on context
         if context.in_use_statement && !context.prefix.starts_with('$') {
@@ -699,7 +708,7 @@ impl CompletionProvider {
 
         // Simple heuristics for context detection
         let in_string = self.is_in_string(source, position);
-        let in_regex = self.is_in_regex(source, position);
+        let in_regex = Self::is_in_regex(source, position);
         let in_comment = self.is_in_comment(source, position);
 
         CompletionContext::new(
@@ -932,20 +941,72 @@ impl CompletionProvider {
         single_quotes % 2 == 1 || double_quotes % 2 == 1
     }
 
-    /// Simple heuristic to check if position is in a regex
-    fn is_in_regex(&self, source: &str, position: usize) -> bool {
-        // Look for regex patterns before position
+    /// Heuristic to check if position is inside a regex literal.
+    ///
+    /// Detects the following regex contexts:
+    /// - Binding operators: `=~ /…/` and `!~ /…/`
+    /// - Explicit regex operators: `m/…/`, `qr/…/`, `s/…/…/`, `tr/…/…/`, `y/…/…/`
+    /// - Bare regex after operators/keywords that expect a regex value
+    fn is_in_regex(source: &str, position: usize) -> bool {
         let before = &source[..position];
-        if let Some(last_slash) = before.rfind('/') {
-            if last_slash > 0 {
-                let prev_char = before.chars().nth(last_slash - 1);
-                matches!(prev_char, Some('~' | '!'))
-            } else {
-                false
-            }
-        } else {
-            false
+
+        // Find the last unescaped `/` before the cursor -- that could be the
+        // opening delimiter of the regex we are inside.
+        let Some(last_slash) = before.rfind('/') else {
+            return false;
+        };
+
+        // Check if the slash is preceded by a regex binding operator.
+        let pre_slash = before[..last_slash].trim_end();
+        if pre_slash.ends_with("=~") || pre_slash.ends_with("!~") {
+            return true;
         }
+
+        // Check for explicit regex operators: m/, qr/, s/, tr/, y/
+        // We look for the operator keyword immediately before the slash (with
+        // optional whitespace).
+        if Self::pre_slash_has_regex_op(pre_slash) {
+            return true;
+        }
+
+        if matches!(
+            pre_slash.split_ascii_whitespace().next_back(),
+            Some("or") | Some("and") | Some("not")
+        ) {
+            return true;
+        }
+
+        // Bare `/` after certain tokens that unambiguously start a regex.
+        if let Some(last_char) = pre_slash.chars().next_back() {
+            // After `(`, `,`, `=`, `!`, `&&`, `||`, `or`, `and`, `not`, `;`, `{`
+            // a `/` starts a regex rather than a division.
+            if matches!(last_char, '(' | ',' | '=' | '!' | '&' | '|' | ';' | '{' | '~') {
+                return true;
+            }
+        }
+
+        // If pre_slash is empty, the slash is at position 0 -- that is a regex.
+        pre_slash.is_empty()
+    }
+
+    /// Return true when the text immediately before a `/` is one of the
+    /// explicit regex operators (`m`, `qr`, `s`, `tr`, `y`).
+    fn pre_slash_has_regex_op(pre_slash: &str) -> bool {
+        let trimmed = pre_slash.trim_end();
+        for op in &["qr", "m", "s", "tr", "y"] {
+            if let Some(before_op) = trimmed.strip_suffix(op) {
+                // The operator must be at a word boundary -- the character
+                // before it (if any) must not be alphanumeric or `_`.
+                let boundary_ok = before_op
+                    .chars()
+                    .next_back()
+                    .is_none_or(|c| !c.is_ascii_alphanumeric() && c != '_');
+                if boundary_ok {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     /// Simple heuristic to check if position is in a comment
@@ -1240,6 +1301,297 @@ has 'name' => (re
         assert!(
             completions.iter().any(|item| item.label == "reader"),
             "expected `reader` option completion inside has(...) context"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_binding_operator() {
+        // Cursor right after the opening slash of a regex
+        let code = r#"my $x = "hello"; $x =~ /"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        // Should contain regex constructs
+        assert!(
+            completions.iter().any(|c| c.label == "\\d"),
+            "expected \\d regex completion inside =~ /.../"
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "\\w"),
+            "expected \\w regex completion inside =~ /.../"
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "(?:...)"),
+            "expected non-capturing group regex completion"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_negated_binding() {
+        let code = r#"my $x = "test"; $x !~ /"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "\\d"),
+            "expected regex completions after !~"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_m_operator() {
+        let code = "if ($line =~ m/";
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "\\d"),
+            "expected regex completions inside m/.../"
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "^"),
+            "expected anchor completions inside m/.../"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_qr_operator() {
+        let code = "my $re = qr/";
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "\\d+"),
+            "expected common pattern completions inside qr/.../"
+        );
+        assert!(
+            completions.iter().any(|c| c.label == "(?=...)"),
+            "expected lookahead group completion inside qr/.../"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_s_operator() {
+        let code = "($line = $input) =~ s/";
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|c| c.label == "\\s+"),
+            "expected common pattern completions inside s/.../"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_has_all_categories() {
+        let code = r#"$x =~ /"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        // Character classes
+        assert!(completions.iter().any(|c| c.label == "\\d"));
+        assert!(completions.iter().any(|c| c.label == "\\D"));
+        assert!(completions.iter().any(|c| c.label == "\\w"));
+        assert!(completions.iter().any(|c| c.label == "\\W"));
+        assert!(completions.iter().any(|c| c.label == "\\s"));
+        assert!(completions.iter().any(|c| c.label == "\\S"));
+        assert!(completions.iter().any(|c| c.label == "[...]"));
+        assert!(completions.iter().any(|c| c.label == "[^...]"));
+
+        // Anchors
+        assert!(completions.iter().any(|c| c.label == "^"));
+        assert!(completions.iter().any(|c| c.label == "$"));
+        assert!(completions.iter().any(|c| c.label == "\\b"));
+        assert!(completions.iter().any(|c| c.label == "\\B"));
+        assert!(completions.iter().any(|c| c.label == "\\A"));
+        assert!(completions.iter().any(|c| c.label == "\\z"));
+        assert!(completions.iter().any(|c| c.label == "\\Z"));
+
+        // Quantifiers
+        assert!(completions.iter().any(|c| c.label == "*"));
+        assert!(completions.iter().any(|c| c.label == "+"));
+        assert!(completions.iter().any(|c| c.label == "?"));
+        assert!(completions.iter().any(|c| c.label == "{n}"));
+        assert!(completions.iter().any(|c| c.label == "{n,}"));
+        assert!(completions.iter().any(|c| c.label == "{n,m}"));
+
+        // Groups
+        assert!(completions.iter().any(|c| c.label == "(...)"));
+        assert!(completions.iter().any(|c| c.label == "(?:...)"));
+        assert!(completions.iter().any(|c| c.label == "(?=...)"));
+        assert!(completions.iter().any(|c| c.label == "(?!...)"));
+        assert!(completions.iter().any(|c| c.label == "(?<=...)"));
+        assert!(completions.iter().any(|c| c.label == "(?<!...)"));
+
+        // Common patterns
+        assert!(completions.iter().any(|c| c.label == "\\d+"));
+        assert!(completions.iter().any(|c| c.label == "\\w+"));
+        assert!(completions.iter().any(|c| c.label == "\\s+"));
+        assert!(completions.iter().any(|c| c.label == ".*?"));
+        assert!(completions.iter().any(|c| c.label == ".+?"));
+    }
+
+    #[test]
+    fn test_regex_completion_items_have_correct_kind() {
+        let code = r#"$x =~ /"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        for item in &completions {
+            assert_eq!(
+                item.kind,
+                CompletionItemKind::Snippet,
+                "regex completion '{}' should be Snippet kind",
+                item.label
+            );
+        }
+    }
+
+    #[test]
+    fn test_regex_completion_items_have_documentation() {
+        let code = r#"$x =~ /"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        for item in &completions {
+            assert!(
+                item.documentation.is_some(),
+                "regex completion '{}' should have documentation",
+                item.label
+            );
+            assert!(item.detail.is_some(), "regex completion '{}' should have detail", item.label);
+        }
+    }
+
+    #[test]
+    fn test_regex_completion_not_in_normal_context() {
+        // Outside regex context, should not get regex completions
+        let code = "my $x = 1;\n";
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            !completions.iter().any(|c| c.label == "\\d"),
+            "regex completions should NOT appear outside regex context"
+        );
+    }
+
+    #[test]
+    fn test_is_in_regex_binding_operator() {
+        let code = r#"$x =~ /hello"#;
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
+    }
+
+    #[test]
+    fn test_is_in_regex_m_operator() {
+        let code = "m/pattern";
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
+    }
+
+    #[test]
+    fn test_is_in_regex_qr_operator() {
+        let code = "my $re = qr/pattern";
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
+    }
+
+    #[test]
+    fn test_is_in_regex_s_operator() {
+        let code = "$line =~ s/old";
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
+    }
+
+    #[test]
+    fn test_is_in_regex_keyword_operator() {
+        let code = "$x or /pattern";
+        assert!(CompletionProvider::is_in_regex(code, code.len()));
+    }
+
+    #[test]
+    fn test_is_not_in_regex_division() {
+        // Division should NOT be detected as regex
+        let code = "my $result = $x / $y";
+        // Position after "$x / $" -- should not be regex because $ precedes /
+        // but our heuristic checks pre_slash context
+        assert!(
+            !CompletionProvider::is_in_regex(code, code.len()),
+            "division should not be detected as regex context"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_preserves_sigil_completions_in_interpolation() {
+        let code = r#"my $foo = 1; my $bar = qr/^$fo/"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        assert!(
+            completions.iter().any(|item| item.label == "$foo"),
+            "expected interpolated regex variables to keep scalar completions"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_replaces_escape_prefix_range() {
+        let code = r#"$x =~ /\d"#;
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        let item = must_some(completions.iter().find(|completion| completion.label == r"\d"));
+        assert_eq!(
+            item.text_edit_range,
+            Some((code.len() - r"\d".len(), code.len())),
+            "expected regex completion to replace the typed escape sequence"
+        );
+    }
+
+    #[test]
+    fn test_regex_completion_replaces_group_prefix_range() {
+        let code = r#"$x =~ /(?: "#;
+        let code = code.trim_end();
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new(&ast);
+        let completions = provider.get_completions(code, code.len());
+
+        let item = must_some(completions.iter().find(|completion| completion.label == "(?:...)"));
+        assert_eq!(
+            item.text_edit_range,
+            Some((code.len() - "(?:".len(), code.len())),
+            "expected regex completion to replace the typed group opener"
         );
     }
 }
