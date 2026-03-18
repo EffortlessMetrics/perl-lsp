@@ -22,6 +22,45 @@ for prefix in perl-module- perl-lsp- perl-lsp-feature- perl-dap- perl-ts- perl-w
 done
 ```
 
+## Use the right doc type first
+
+This documentation hub follows the [Diátaxis framework](reference/DOCUMENTATION_GUIDE.md):
+
+| If you want to… | Start here | What you will get |
+|---|---|---|
+| Learn the system for the first time | [Tutorials](#tutorials--learn-by-doing) | Guided, sequential walkthroughs |
+| Solve a concrete problem | [How-to guides](#how-to-guides--solve-a-problem) | Task-focused steps and verification |
+| Look up commands, capabilities, or contracts | [Reference](#reference--look-it-up) | Precise facts and complete specifications |
+| Understand architecture or tradeoffs | [Explanation](#explanation--understand-why) | Context, rationale, and design intent |
+
+If a page seems to mix several of these jobs, use the [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) to decide whether it should be split or cross-linked.
+
+## Suggested reading paths
+
+### I am new here
+
+1. [Getting Started](tutorials/GETTING_STARTED.md)
+2. [Installation](how-to/INSTALLATION.md)
+3. [Editor Setup](how-to/EDITOR_SETUP.md)
+4. [LSP Features](reference/LSP_FEATURES.md)
+5. [Troubleshooting](how-to/TROUBLESHOOTING.md)
+
+### I want to contribute
+
+1. [Contributing Guide](../CONTRIBUTING.md)
+2. [Documentation Guide](reference/DOCUMENTATION_GUIDE.md)
+3. [Commands Reference](reference/COMMANDS_REFERENCE.md)
+4. [Current Status](project/CURRENT_STATUS.md)
+5. [Crate Architecture Guide](reference/CRATE_ARCHITECTURE_GUIDE.md)
+
+### I need architecture context
+
+1. [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md)
+2. [Crate Architecture Guide](reference/CRATE_ARCHITECTURE_GUIDE.md)
+3. [LSP Implementation Guide](reference/LSP_IMPLEMENTATION_GUIDE.md)
+4. [Pure Rust Parser](explanation/PURE_RUST_PARSER.md)
+5. [Error Handling Strategy](explanation/ERROR_HANDLING_STRATEGY.md)
+
 ## Tutorials — learn by doing
 
 Step-by-step guides to get you started.
@@ -57,7 +96,7 @@ Precise, complete information for lookup.
 - [Configuration](reference/CONFIG.md) — Configuration options
 - [FAQ](reference/FAQ.md) — Frequently asked questions
 - [Known Limitations](reference/KNOWN_LIMITATIONS.md) — Current constraints and workarounds
-- [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Diataxis framework and standards
+- [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Diátaxis framework and standards
 
 ## Explanation — understand why
 
@@ -90,6 +129,8 @@ High-level planning documents for project direction.
 - [Now/Next/Later](../NOW_NEXT_LATER.md) — Current quarter priorities
 
 ## Other directories
+
+These directories contain specialized material that complements the four Diátaxis categories above.
 
 | Directory | Purpose |
 |-----------|---------|
