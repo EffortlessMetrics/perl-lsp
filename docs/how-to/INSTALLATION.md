@@ -1,6 +1,6 @@
 # Installation Guide
 
-Perl Language Server (perl-lsp) v0.10.0 provides a high-performance Language Server Protocol implementation for Perl with ~100% syntax coverage.
+Perl Language Server (`perl-lsp`) provides a high-performance Language Server Protocol implementation for Perl with broad Perl 5 syntax coverage.
 
 ## Install from crates.io
 
@@ -12,47 +12,30 @@ cargo install perl-lsp
 
 ### Pre-compiled Binaries
 
-1. Download the appropriate binary for your system from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases)
+1. Download the archive for your platform from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/releases/latest)
 2. Extract the archive
-3. Move the `perl-lsp` binary to a directory in your PATH
+3. Move `perl-lsp` (or `perl-lsp.exe` on Windows) to a directory on your `PATH`
+4. Verify the install with `perl-lsp --health`
 
-#### Linux x86_64
+#### Linux / macOS
 ```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-x86_64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-0.10.0-x86_64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-0.10.0-x86_64-unknown-linux-gnu/perl-lsp /usr/local/bin/
-chmod +x /usr/local/bin/perl-lsp
+# Example flow after downloading a release archive
+mkdir -p "$HOME/.local/bin"
+tar xzf perl-lsp-*.tar.gz
+find . -type f -name perl-lsp -exec cp {} "$HOME/.local/bin/perl-lsp" \;
+chmod +x "$HOME/.local/bin/perl-lsp"
+export PATH="$HOME/.local/bin:$PATH"
+perl-lsp --health
 ```
 
-#### Linux aarch64
-```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-aarch64-unknown-linux-gnu.tar.gz
-tar xzf perl-lsp-0.10.0-aarch64-unknown-linux-gnu.tar.gz
-sudo cp perl-lsp-0.10.0-aarch64-unknown-linux-gnu/perl-lsp /usr/local/bin/
-chmod +x /usr/local/bin/perl-lsp
-```
-
-#### macOS x86_64
-```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-x86_64-apple-darwin.tar.gz
-tar xzf perl-lsp-0.10.0-x86_64-apple-darwin.tar.gz
-sudo cp perl-lsp-0.10.0-x86_64-apple-darwin/perl-lsp /usr/local/bin/
-chmod +x /usr/local/bin/perl-lsp
-```
-
-#### macOS aarch64 (Apple Silicon)
-```bash
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-aarch64-apple-darwin.tar.gz
-tar xzf perl-lsp-0.10.0-aarch64-apple-darwin.tar.gz
-sudo cp perl-lsp-0.10.0-aarch64-apple-darwin/perl-lsp /usr/local/bin/
-chmod +x /usr/local/bin/perl-lsp
-```
-
-#### Windows x86_64
+#### Windows (PowerShell)
 ```powershell
-wget https://github.com/EffortlessMetrics/perl-lsp/releases/download/v0.10.0/perl-lsp-0.10.0-x86_64-pc-windows-msvc.zip
-Expand-Archive perl-lsp-0.10.0-x86_64-pc-windows-msvc.zip
-Copy-Item perl-lsp-0.10.0-x86_64-pc-windows-msvc\perl-lsp.exe C:\Program Files\perl-lsp\
+# Example flow after downloading a release zip
+Expand-Archive .\perl-lsp-*.zip -DestinationPath .\perl-lsp-release
+New-Item -ItemType Directory -Force "$HOME\bin" | Out-Null
+Copy-Item .\perl-lsp-release\**\perl-lsp.exe "$HOME\bin\perl-lsp.exe"
+$env:Path = "$HOME\bin;" + $env:Path
+perl-lsp.exe --health
 ```
 
 ### Build from Source
@@ -78,8 +61,19 @@ perl-lsp --version
 
 Expected output:
 ```
-perl-lsp 0.10.0
+perl-lsp <version>
 ```
+
+## First-Run Checklist
+
+Before debugging editor integration, confirm the standalone binary works:
+
+- `perl-lsp --version` prints a version
+- `perl-lsp --health` prints `ok ...`
+- your install location is on `PATH`
+- your editor is configured to launch `perl-lsp --stdio`
+
+If you cloned this repository for development, run `just doctor` for a guided environment check.
 
 ## Editor Configuration
 
@@ -183,7 +177,7 @@ export PATH="$PATH:$HOME/.local/bin"
 3. Look for error messages in your editor's LSP logs
 
 #### Slow performance
-1. Ensure you're using the latest version (v0.10.0)
+1. Ensure you're using the latest released version
 2. Check if your workspace has very large Perl files (>100KB)
 3. Consider using `.perl-lspignore` to exclude unnecessary files
 

@@ -45,8 +45,16 @@ perl-lsp --version
 
 # Quick health check
 perl-lsp --health
-# Should output: ok 0.12.0
+# Should output: ok <version>
 ```
+
+If `perl-lsp` is not found, add Cargo's bin directory to your `PATH` before configuring your editor:
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+```
+
+A good first-run rule: do not move on to editor setup until both commands above work in a normal shell.
 
 ## Quick Editor Setup
 
@@ -124,6 +132,22 @@ language-servers = ["perl-lsp"]
 [language-server.perl-lsp]
 command = "perl-lsp"
 args = ["--stdio"]
+```
+
+## First-Run Success Checklist
+
+Before you debug editor-specific settings, confirm these basics:
+
+1. `perl-lsp --health` returns `ok ...`
+2. Your editor launches `perl-lsp --stdio` from the same `PATH` as your shell
+3. You opened a Perl file with a recognized filetype (`.pl`, `.pm`, or `.t`)
+4. You opened the project root, not just a single nested file, so indexing and cross-file navigation can work
+5. If your project uses non-standard module paths, add them with `perl.workspace.includePaths`
+
+If you cloned this repository and want a guided environment check, run:
+
+```bash
+just doctor
 ```
 
 ## Your First 5 Minutes

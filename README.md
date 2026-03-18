@@ -24,20 +24,30 @@
 
 ## Quick Start
 
+### Fastest path to a working editor
+
 ```bash
-# 1. Install
+# 1. Install the server
 cargo install perl-lsp
 
-# 2. Verify the install
-perl-lsp --health  # should print: ok X.Y.Z
+# 2. Verify the binary works before touching editor settings
+perl-lsp --health   # should print: ok X.Y.Z
+perl-lsp --version
 
-# 3. Configure your editor (VS Code)
+# 3. Install the VS Code extension (optional, but the quickest editor setup)
 code --install-extension effortlessmetrics.perl-lsp-rs
-
-# 4. Open a Perl file — completions, diagnostics, hover, and navigation work immediately.
 ```
 
-New to language servers? See the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a full walkthrough with editor-specific setup, a visual feature tour, and troubleshooting tips.
+Then open any `.pl`, `.pm`, or `.t` file. On first run you should get diagnostics, hover, completion, and navigation without extra project configuration.
+
+### First-run checklist
+
+- `perl-lsp --health` prints `ok ...`
+- Your editor can find the `perl-lsp` binary on `PATH`
+- The file is recognized as **Perl** by your editor
+- If you are working in a project, open the project root so workspace indexing can start immediately
+
+If something does not work on the first try, run `just doctor` in this repository for a guided environment check, or see the **[Getting Started guide](docs/tutorials/GETTING_STARTED.md)** for a fuller walkthrough with editor-specific setup and troubleshooting tips.
 
 <details>
 <summary><strong>Neovim / Emacs setup</strong></summary>
