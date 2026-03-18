@@ -540,7 +540,19 @@ impl<'a> Parser<'a> {
 
                                     // Parse remaining arguments without requiring commas
                                     // But respect statement boundaries including ] and )
-                                    while !self.is_at_statement_end() {
+                                    // Word operators terminate argument collection since
+                                    // they bind less tightly than list operators.
+                                    while !self.is_at_statement_end()
+                                        && !matches!(
+                                            self.peek_kind(),
+                                            Some(
+                                                TokenKind::WordOr
+                                                    | TokenKind::WordAnd
+                                                    | TokenKind::WordXor
+                                                    | TokenKind::WordNot
+                                            )
+                                        )
+                                    {
                                         // Skip comma or fat arrow if present
                                         if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                             self.consume_token()?;

@@ -787,8 +787,22 @@ impl<'a> Parser<'a> {
                             // commas. Use is_at_statement_end() so `map { ... } @arr` is
                             // accepted as the last statement before a block close even without
                             // a trailing semicolon.
+                            //
+                            // Word operators (or, and, xor, not) terminate the argument list
+                            // because they bind less tightly than list operators.
+                            // e.g., `sort @list or die` => (sort @list) or (die)
                             if Self::is_block_list_func(func_name.as_ref()) {
-                                while !self.is_at_statement_end() {
+                                while !self.is_at_statement_end()
+                                    && !matches!(
+                                        self.peek_kind(),
+                                        Some(
+                                            TokenKind::WordOr
+                                                | TokenKind::WordAnd
+                                                | TokenKind::WordXor
+                                                | TokenKind::WordNot
+                                        )
+                                    )
+                                {
                                     // Skip optional comma or fat arrow
                                     if matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                         self.consume_token()?;
