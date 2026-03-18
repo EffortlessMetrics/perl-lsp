@@ -558,8 +558,27 @@ impl<'a> Parser<'a> {
                     while self.peek_kind() == Some(TokenKind::Comma)
                         || self.peek_kind() == Some(TokenKind::FatArrow)
                     {
-                        if self.peek_kind() == Some(TokenKind::Comma) {
+                        let was_comma = self.peek_kind() == Some(TokenKind::Comma);
+                        if was_comma {
                             self.consume_token()?; // consume comma
+                        }
+
+                        // Handle `, =>` (comma then fat arrow) and chained `=>`
+                        // where the previous value is now a key.  Auto-quote the
+                        // last element when `=>` follows without a preceding comma.
+                        if self.peek_kind() == Some(TokenKind::FatArrow) {
+                            saw_fat_comma = true;
+                            if !was_comma {
+                                if let Some(last) = elements.last_mut() {
+                                    if let NodeKind::Identifier { ref name } = last.kind {
+                                        *last = Node::new(
+                                            NodeKind::String { value: name.clone(), interpolated: false },
+                                            last.location,
+                                        );
+                                    }
+                                }
+                            }
+                            self.consume_token()?; // consume =>
                         }
 
                         if self.peek_kind() == Some(TokenKind::RightParen) {

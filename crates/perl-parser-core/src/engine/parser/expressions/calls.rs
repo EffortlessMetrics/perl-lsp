@@ -145,6 +145,7 @@ impl<'a> Parser<'a> {
                 name,
                 "tie"
                     | "untie"
+                    | "bless"
                     | "push"
                     | "pop"
                     | "shift"
@@ -418,6 +419,11 @@ impl<'a> Parser<'a> {
                 match s.peek_kind() {
                     Some(TokenKind::Comma) | Some(TokenKind::FatArrow) => {
                         s.tokens.next()?;
+                        // Handle `, =>` (comma then fat arrow) — consume the
+                        // redundant separator.
+                        if s.peek_kind() == Some(TokenKind::FatArrow) {
+                            s.tokens.next()?;
+                        }
                     }
                     _ => break,
                 }

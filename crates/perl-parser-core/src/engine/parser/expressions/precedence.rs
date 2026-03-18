@@ -31,8 +31,34 @@ impl<'a> Parser<'a> {
             while self.peek_kind() == Some(TokenKind::Comma)
                 || self.peek_kind() == Some(TokenKind::FatArrow)
             {
-                if self.peek_kind() == Some(TokenKind::Comma) {
+                let was_comma = self.peek_kind() == Some(TokenKind::Comma);
+                if was_comma {
                     self.consume_token()?; // consume comma
+                }
+
+                // Handle `, =>` (comma then fat arrow) — Perl allows this as a
+                // redundant separator.  The `=>` after a comma acts just like
+                // another comma.  Example: `(KEY, => 'val')` from B::Deparse.
+                //
+                // Also handle chained `=>` (value followed by `=>`) — the value
+                // was already pushed to expressions; auto-quote the last element
+                // and consume the `=>` to parse the next value.
+                // Example: `[inc_override => INC => [@INC]]`.
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    saw_fat_comma = true;
+                    // Auto-quote the last expression if it's a bare identifier
+                    // (the `=>` auto-quotes its left operand)
+                    if !was_comma {
+                        if let Some(last) = expressions.last_mut() {
+                            if let NodeKind::Identifier { ref name } = last.kind {
+                                *last = Node::new(
+                                    NodeKind::String { value: name.clone(), interpolated: false },
+                                    last.location,
+                                );
+                            }
+                        }
+                    }
+                    self.consume_token()?; // consume =>
                 }
 
                 // Check for end of expression (includes statement modifier

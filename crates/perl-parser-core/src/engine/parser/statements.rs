@@ -336,8 +336,26 @@ impl<'a> Parser<'a> {
             while self.peek_kind() == Some(TokenKind::Comma)
                 || self.peek_kind() == Some(TokenKind::FatArrow)
             {
-                if self.peek_kind() == Some(TokenKind::Comma) {
+                let was_comma = self.peek_kind() == Some(TokenKind::Comma);
+                if was_comma {
                     self.consume_token()?; // consume comma
+                }
+
+                // Handle `, =>` (comma then fat arrow) and chained `=>`
+                // where the previous value is now a key.
+                if self.peek_kind() == Some(TokenKind::FatArrow) {
+                    saw_fat_comma = true;
+                    if !was_comma {
+                        if let Some(last) = expressions.last_mut() {
+                            if let NodeKind::Identifier { ref name } = last.kind {
+                                *last = Node::new(
+                                    NodeKind::String { value: name.clone(), interpolated: false },
+                                    last.location,
+                                );
+                            }
+                        }
+                    }
+                    self.consume_token()?; // consume =>
                 }
 
                 // Check for end of expression (includes statement modifier
@@ -744,11 +762,17 @@ impl<'a> Parser<'a> {
                                 while matches!(self.peek_kind(), Some(TokenKind::Comma) | Some(TokenKind::FatArrow)) {
                                     self.consume_token()?; // consume comma or fat arrow
 
+                                    // Handle `, =>` (comma then fat arrow) — consume
+                                    // the redundant separator.
+                                    if self.peek_kind() == Some(TokenKind::FatArrow) {
+                                        self.consume_token()?;
+                                    }
+
                                     if self.is_at_statement_end() {
                                         break;
                                     }
 
-                                    // Check if we hit a statement modifier
+                                    // Check if we hit a statement modifier.
                                     match self.peek_kind() {
                                         Some(TokenKind::If)
                                         | Some(TokenKind::Unless)
