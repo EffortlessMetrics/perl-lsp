@@ -1141,3 +1141,41 @@ pub struct TerminateThreadsArguments {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thread_ids: Option<Vec<i64>>,
 }
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+
+    use super::{Breakpoint, Request};
+
+    #[test]
+    fn request_round_trips_through_json() -> Result<()> {
+        let request = Request {
+            seq: 7,
+            msg_type: "request".to_string(),
+            command: "initialize".to_string(),
+            arguments: Some(serde_json::json!({"adapterId": "perl-rs"})),
+        };
+
+        let json = serde_json::to_string(&request)?;
+        let decoded: Request = serde_json::from_str(&json)?;
+
+        assert_eq!(decoded.seq, 7);
+        assert_eq!(decoded.command, "initialize");
+        assert_eq!(decoded.arguments, Some(serde_json::json!({"adapterId": "perl-rs"})));
+        Ok(())
+    }
+
+    #[test]
+    fn breakpoint_omits_optional_fields_when_empty() -> Result<()> {
+        let breakpoint =
+            Breakpoint { id: 1, verified: true, line: 12, column: None, message: None };
+
+        let value = serde_json::to_value(&breakpoint)?;
+
+        assert_eq!(value.get("id"), Some(&serde_json::json!(1)));
+        assert!(value.get("column").is_none());
+        assert!(value.get("message").is_none());
+        Ok(())
+    }
+}

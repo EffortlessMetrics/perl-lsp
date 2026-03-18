@@ -376,7 +376,7 @@ pub mod dispatcher;
 /// Inline value extraction for DAP `inlineValues` requests.
 pub mod inline_values;
 /// DAP protocol types following the JSON-RPC 2.0 message format.
-pub mod protocol;
+pub use perl_dap_protocol as protocol;
 /// TCP-based attachment to running Perl debugger processes.
 pub mod tcp_attach;
 

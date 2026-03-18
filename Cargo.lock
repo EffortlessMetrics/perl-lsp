@@ -1578,6 +1578,7 @@ dependencies = [
  "perl-dap-command-args",
  "perl-dap-eval",
  "perl-dap-platform",
+ "perl-dap-protocol",
  "perl-dap-security",
  "perl-dap-stack",
  "perl-dap-variables",
@@ -1629,6 +1630,15 @@ dependencies = [
  "anyhow",
  "perl-dap-shell",
  "perl-tdd-support",
+]
+
+[[package]]
+name = "perl-dap-protocol"
+version = "0.11.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -106,6 +106,7 @@ members = [
     "crates/perl-dap-command-args",
     "crates/perl-dap-shell",
     "crates/perl-dap-value",
+    "crates/perl-dap-protocol",
     "crates/perl-dap-security",
     "crates/perl-dap-variables",
     "crates/perl-feature-catalog",
@@ -217,6 +218,7 @@ allow = [
     "perl-dap-breakpoint",
     "perl-dap-eval",
     "perl-dap-command-args",
+    "perl-dap-protocol",
     "perl-dap-platform",
     "perl-dap-shell",
     "perl-dap-security",
@@ -340,6 +342,7 @@ perl-dap-breakpoint = { path = "crates/perl-dap-breakpoint", version = "0.11.0" 
 perl-dap-eval = { path = "crates/perl-dap-eval", version = "0.11.0" }
 perl-dap-platform = { path = "crates/perl-dap-platform", version = "0.11.0" }
 perl-dap-value = { path = "crates/perl-dap-value", version = "0.11.0" }
+perl-dap-protocol = { path = "crates/perl-dap-protocol", version = "0.11.0" }
 perl-dap-command-args = { path = "crates/perl-dap-command-args", version = "0.11.0" }
 perl-dap-shell = { path = "crates/perl-dap-shell", version = "0.11.0" }
 perl-dap-security = { path = "crates/perl-dap-security", version = "0.11.0" }
