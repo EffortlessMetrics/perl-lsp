@@ -94,4 +94,46 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn collapses_current_and_parent_components_inside_workspace() -> TestResult {
+        let temp_dir = tempfile::tempdir()?;
+        let workspace = temp_dir.path().canonicalize()?;
+
+        let normalized = normalize_path_within_workspace(
+            &PathBuf::from("./lib/../script/./tool.pl"),
+            &workspace,
+        )?;
+
+        assert_eq!(normalized, workspace.join("script/tool.pl"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn allows_returning_to_workspace_root_without_error() -> TestResult {
+        let temp_dir = tempfile::tempdir()?;
+        let workspace = temp_dir.path().canonicalize()?;
+
+        let normalized =
+            normalize_path_within_workspace(&PathBuf::from("src/../lib/../main.pl"), &workspace)?;
+
+        assert_eq!(normalized, workspace.join("main.pl"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_absolute_paths() -> TestResult {
+        let temp_dir = tempfile::tempdir()?;
+        let workspace = temp_dir.path().canonicalize()?;
+
+        let absolute_candidate = workspace.join("outside.pl");
+        let result = normalize_path_within_workspace(&absolute_candidate, &workspace);
+        assert!(
+            matches!(result, Err(NormalizePathError::PathTraversalAttempt(message)) if message.contains("Invalid component in relative path"))
+        );
+
+        Ok(())
+    }
 }
