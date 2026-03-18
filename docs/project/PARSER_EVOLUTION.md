@@ -422,7 +422,7 @@ The parser is validated against a comprehensive test corpus:
 
 Seven fuzz targets exercise the most fragile parsing paths:
 
-- `fuzz_target_1` -- general parsing
+- `parser_integration` -- parser, trivia, and symbol-extraction integration
 - `heredoc_parsing` -- heredoc edge cases
 - `substitution_parsing` -- s/// variants
 - `builtin_functions` -- list operator argument parsing
