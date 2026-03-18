@@ -110,6 +110,39 @@ longwordwithoutvowels
     assert!(!if_nodes.is_empty(), "Should have if statements");
 }
 
+/// Test goto statements with label and subroutine targets.
+#[test]
+fn test_goto_statements_cover_label_and_sub_targets() {
+    let code = r#"
+START:
+my $step = 0;
+goto FINISH if $step;
+
+sub target {
+    return 1;
+}
+
+sub bounce {
+    goto &target;
+}
+
+FINISH:
+$step++;
+"#;
+
+    let mut parser = Parser::new(code);
+    use perl_tdd_support::must;
+    let ast = must(parser.parse());
+
+    let goto_nodes = find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::Goto { .. }));
+    let labeled_nodes =
+        find_nodes_of_kind(&ast, |k| matches!(k, NodeKind::LabeledStatement { .. }));
+
+    assert!(!goto_nodes.is_empty(), "Should have goto statements");
+    assert!(goto_nodes.len() >= 2, "Should cover both label and subroutine goto targets");
+    assert!(!labeled_nodes.is_empty(), "Should have labeled statements for goto targets");
+}
+
 /// Test statement modifiers with complex expressions and subroutines
 #[test]
 fn test_statement_modifiers_complex_expressions() {

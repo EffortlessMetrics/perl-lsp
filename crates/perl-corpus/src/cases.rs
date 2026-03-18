@@ -24,7 +24,7 @@ pub struct ComplexDataStructureCase {
     pub source: &'static str,
 }
 
-static EDGE_CASES: [EdgeCase; 100] = [
+static EDGE_CASES: [EdgeCase; 101] = [
     EdgeCase {
         id: "heredoc.basic",
         description: "Basic quoted heredoc with multiple lines.",
@@ -646,6 +646,15 @@ print $_ for @items;
 START:
 $count++;
 goto START if $count < 2;
+"#,
+    },
+    EdgeCase {
+        id: "goto.label.simple",
+        description: "Goto with a plain label target and explicit statement terminators.",
+        tags: &["goto", "labels", "flow", "smoke", "edge-case"],
+        source: r#"goto FINISH;
+FINISH:
+1;
 "#,
     },
     EdgeCase {
