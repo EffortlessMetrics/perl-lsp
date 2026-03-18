@@ -138,8 +138,24 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'class'
 
-        let name_token = self.expect(TokenKind::Identifier)?;
-        let name = name_token.text.to_string();
+        let first = self.expect(TokenKind::Identifier)?;
+        let mut name = first.text.to_string();
+
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                self.tokens.next()?; // consume ::
+            } else {
+                self.tokens.next()?; // consume first :
+                self.tokens.next()?; // consume second :
+            }
+
+            let next = self.expect(TokenKind::Identifier)?;
+            name.push_str("::");
+            name.push_str(&next.text);
+        }
 
         let body = self.parse_block()?;
 
