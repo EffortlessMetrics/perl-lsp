@@ -1,32 +1,54 @@
 #!/usr/bin/env perl
 # Test: Additional low-frequency NodeKind angles
-# Impact: Adds clean second-angle corpus coverage for goto, tie/untie,
-#         typeglobs, glob(), and data sections in compact real syntax.
+# Impact: Adds alternative clean corpus coverage for low-frequency constructs
+#         using parser-proven syntax borrowed from existing dedicated fixtures.
 # NodeKinds: Goto, Tie, Untie, Typeglob, Glob, DataSection, Match
 
 use strict;
 use warnings;
 
-sub dispatch_tail {
-    goto &target_sub;
+# --- Goto in two clean forms ---
+sub tail_dispatch {
+    @_ = ('retargeted');
+    goto &tail_target;
 }
 
-sub target_sub {
-    return 'ok';
+sub tail_target {
+    return shift;
 }
 
-my $matched = 'alpha-42' =~ /^alpha/;
+my $state = 'start';
+FLOW: {
+    $state = 'middle';
+    goto FLOW_END if $state =~ /^mid/;
+    $state = 'unreachable';
+    FLOW_END:
+    $state = tail_dispatch();
+}
 
-my $cache = {};
-tie my %tied_cache, 'Tie::StdHash';
-$cache->{status} = dispatch_tail() if $matched;
-untie %tied_cache;
+# --- Tie / untie in multiple shapes ---
+tie my %cache, 'Tie::IxHash';
+$cache{status} = $state;
+untie %cache;
 
-*LOG_HANDLE = *STDOUT;
-print LOG_HANDLE "logged\n";
+tie my $scalar_value, 'Tie::Scalar';
+untie $scalar_value;
 
-my @perl_files = glob('test_corpus/*.pl');
-print scalar(@perl_files) . " files\n";
+tie *LOG_HANDLE, 'Tie::StdHandle';
+untie *LOG_HANDLE;
 
-__DATA__
-sample payload
+# --- Typeglob and glob alternative angles ---
+*alias_stdout = *STDOUT;
+*helper = \&tail_target;
+my $stdout_ref = \*STDOUT;
+
+my @glob_fn = glob('test_corpus/*.pl');
+my @glob_angle = <test_corpus/*.pl>;
+my $single_log = glob '*.log';
+
+print alias_stdout scalar(@glob_fn), "\n";
+print helper('helper-call'), "\n" if $stdout_ref;
+print scalar(@glob_angle) + ($single_log ? 1 : 0), "\n";
+
+__END__
+This trailing section is data, not Perl code.
