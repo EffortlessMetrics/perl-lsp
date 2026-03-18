@@ -36,6 +36,84 @@ impl<'a> Parser<'a> {
         )
     }
 
+    /// Returns `true` when `field` is followed by tokens that indicate a
+    /// field *declaration* (Perl 5.38+ `field $var` syntax) rather than a
+    /// function call or bareword identifier.
+    ///
+    /// A field declaration requires a variable sigil or a parenthesised
+    /// variable list immediately after the keyword.  Everything else
+    /// (`field("str")`, `field()`, `field;`, etc.) is a regular
+    /// expression / function call.
+    fn is_field_declaration_context(&mut self) -> bool {
+        let next = match self.tokens.peek_second() {
+            Ok(t) => t.kind,
+            Err(_) => return false,
+        };
+
+        // Direct sigil token after `field` — definitely a declaration
+        if matches!(
+            next,
+            TokenKind::ScalarSigil
+                | TokenKind::ArraySigil
+                | TokenKind::HashSigil
+                | TokenKind::SubSigil
+                | TokenKind::GlobSigil
+                | TokenKind::Percent
+                | TokenKind::BitwiseAnd
+                | TokenKind::Star
+        ) {
+            return true;
+        }
+
+        // Identifier that starts with a sigil char (e.g. `$name`, `@items`)
+        if next == TokenKind::Identifier {
+            if let Ok(t) = self.tokens.peek_second() {
+                if let Some(ch) = t.text.chars().next() {
+                    if matches!(ch, '$' | '@' | '%' | '*' | '&') {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // `field (` — could be a list declaration `field ($x, $y)` or a
+        // function call `field("arg")`.  Peek a third token (the one after
+        // the open-paren) to disambiguate: if it starts a variable it is a
+        // field list declaration.
+        if next == TokenKind::LeftParen {
+            let after_paren = match self.tokens.peek_third() {
+                Ok(t) => t.kind,
+                Err(_) => return false,
+            };
+            if matches!(
+                after_paren,
+                TokenKind::ScalarSigil
+                    | TokenKind::ArraySigil
+                    | TokenKind::HashSigil
+                    | TokenKind::SubSigil
+                    | TokenKind::GlobSigil
+                    | TokenKind::Percent
+                    | TokenKind::BitwiseAnd
+                    | TokenKind::Star
+                    | TokenKind::Undef
+            ) {
+                return true;
+            }
+            // Also check for an identifier with a leading sigil char
+            if after_paren == TokenKind::Identifier {
+                if let Ok(t) = self.tokens.peek_third() {
+                    if let Some(ch) = t.text.chars().next() {
+                        if matches!(ch, '$' | '@' | '%' | '*' | '&') {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
+    }
+
     /// Check recursion depth with optimized hot path
     #[inline(always)]
     fn check_recursion(&mut self) -> ParseResult<()> {

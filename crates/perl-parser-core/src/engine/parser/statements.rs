@@ -126,7 +126,16 @@ impl<'a> Parser<'a> {
             }
 
             // Variable declarations
-            TokenKind::My | TokenKind::Our | TokenKind::State | TokenKind::Field => {
+            TokenKind::My | TokenKind::Our | TokenKind::State => {
+                self.parse_variable_declaration()
+            }
+            // `field` is a variable declarator only in Perl 5.38+ class bodies.
+            // In legacy code it is commonly a regular identifier (function call,
+            // hash key, etc.).  We disambiguate by peeking at the next token:
+            // if it can start a variable (sigil, sigil-prefixed identifier, or
+            // a parenthesised variable list), treat it as a declaration;
+            // otherwise fall through to expression parsing.
+            TokenKind::Field if self.is_field_declaration_context() => {
                 self.parse_variable_declaration()
             }
             TokenKind::Local => self.parse_local_statement(),
