@@ -13,3 +13,6 @@ The original catalog documented:
   and docs/devex categories
 
 All files are preserved in `archive/` for reference.
+
+Older agent generations (`agents2` through `agents6` and `agents-compat`) have
+been removed from the live repo.

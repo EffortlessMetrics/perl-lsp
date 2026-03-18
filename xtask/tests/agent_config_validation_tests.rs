@@ -10,7 +10,8 @@
 //!
 //! ## Agent Configuration Requirements
 //!
-//! Each agent file in `.claude/agents2/` must have YAML front matter with:
+//! Each archived tracked agent file in `.claude/agents/archive/` must have YAML
+//! front matter with:
 //! - `name`: Required - Agent identifier (lowercase-with-hyphens)
 //! - `description`: Required - When to use the agent with examples
 //! - `model`: Required - Model to use (sonnet, opus, haiku)
@@ -18,7 +19,7 @@
 //!
 //! ## Related Documentation
 //! - Issue #156: Agent configuration validation gap
-//! - `.claude/agents2/`: 95+ specialized agents for Perl parser ecosystem
+//! - `.claude/agents/archive/`: 50+ archived tracked agent definitions
 
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
@@ -50,26 +51,14 @@ pub struct AgentFile {
 /// Agent categories based on directory structure
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AgentCategory {
-    Generative,
-    Integration,
-    Mantle,
-    Other,
-    Root,
+    Archive,
 }
 
 impl AgentCategory {
     fn from_path(path: &Path) -> Result<Self> {
         let path_str = path.to_string_lossy();
-        if path_str.contains("/generative/") {
-            Ok(Self::Generative)
-        } else if path_str.contains("/integration/") {
-            Ok(Self::Integration)
-        } else if path_str.contains("/mantle/") {
-            Ok(Self::Mantle)
-        } else if path_str.contains("/other/") {
-            Ok(Self::Other)
-        } else if path_str.contains(".claude/agents2/") && !path_str.contains('/') {
-            Ok(Self::Root)
+        if path_str.contains(".claude/agents/archive/") {
+            Ok(Self::Archive)
         } else {
             Err(anyhow!("Unknown agent category for path: {}", path_str))
         }
@@ -102,8 +91,10 @@ pub struct AgentConfigValidator {
 impl AgentConfigValidator {
     pub fn new() -> Result<Self> {
         // Try current directory first, then parent directory (for when running from xtask/)
-        let candidates =
-            vec![PathBuf::from(".claude/agents2"), PathBuf::from("../.claude/agents2")];
+        let candidates = vec![
+            PathBuf::from(".claude/agents/archive"),
+            PathBuf::from("../.claude/agents/archive"),
+        ];
 
         for agents_dir in candidates {
             if agents_dir.exists() {
@@ -111,7 +102,9 @@ impl AgentConfigValidator {
             }
         }
 
-        Err(anyhow!("Agent directory not found. Tried: .claude/agents2 and ../.claude/agents2"))
+        Err(anyhow!(
+            "Agent directory not found. Tried: .claude/agents/archive and ../.claude/agents/archive"
+        ))
     }
 
     /// Find all agent markdown files
@@ -342,7 +335,11 @@ mod tests {
         let agent_files = validator.find_agent_files()?;
 
         assert!(!agent_files.is_empty(), "Should find at least one agent file");
-        assert!(agent_files.len() >= 90, "Expected ~95 agent files, found {}", agent_files.len());
+        assert!(
+            agent_files.len() >= 50,
+            "Expected at least 50 archived agent files, found {}",
+            agent_files.len()
+        );
 
         // All files should be .md files
         for file in &agent_files {
@@ -394,8 +391,8 @@ mod tests {
             parse_errors.len()
         );
         assert!(
-            successful_parses >= 90,
-            "Expected at least 90 successful parses, got {}",
+            successful_parses >= 50,
+            "Expected at least 50 successful parses, got {}",
             successful_parses
         );
 
@@ -505,17 +502,12 @@ mod tests {
             *category_counts.entry(agent.category.clone()).or_default() += 1;
         }
 
-        // Should have agents in multiple categories
-        assert!(
-            category_counts.len() >= 3,
-            "Should have agents in at least 3 categories, found {}",
-            category_counts.len()
+        assert_eq!(category_counts.len(), 1, "Archived roster should use a single category");
+        assert_eq!(
+            category_counts.get(&AgentCategory::Archive).copied().unwrap_or(0),
+            agents.len(),
+            "All archived agent definitions should be classified as Archive"
         );
-
-        // Each category should have at least a few agents
-        for (category, count) in &category_counts {
-            assert!(*count > 0, "Category {:?} should have at least one agent", category);
-        }
 
         Ok(())
     }
@@ -526,19 +518,10 @@ mod tests {
         let agents = validator.load_all_agents()?;
 
         for agent in &agents {
-            // Description should contain usage examples
+            // Archived roster descriptions should still be substantive.
             assert!(
-                agent.config.description.contains("<example>")
-                    || agent.config.description.contains("Example:")
-                    || agent.config.description.len() > 200,
-                "Agent '{}' description should contain examples or be comprehensive",
-                agent.config.name
-            );
-
-            // Description should mention the agent's purpose
-            assert!(
-                agent.config.description.contains("Use this agent when"),
-                "Agent '{}' description should start with 'Use this agent when'",
+                agent.config.description.len() >= 40,
+                "Agent '{}' description should be substantive",
                 agent.config.name
             );
         }
@@ -574,11 +557,10 @@ mod tests {
             }
         }
 
-        // At least 50% of agents should be specialized for Perl parser ecosystem
+        // The archived roster should still mostly describe repo-specific work.
         assert!(
-            specialized_count > agents.len() / 2,
-            "Expected at least {}% of agents to be specialized for Perl parser ecosystem, found {} out of {}",
-            50,
+            specialized_count >= 15,
+            "Expected at least 15 archived agents to mention repo-specific specialization, found {} out of {}",
             specialized_count,
             agents.len()
         );

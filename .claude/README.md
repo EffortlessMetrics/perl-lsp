@@ -78,7 +78,7 @@ dedup and lifecycle tracking.
 
 ## Compatibility Note
 
-Compatibility donor material now lives under
-[`.claude/agents-compat/`](./agents-compat/). New docs, prompts, and commands
-should reference the archived roster material in `.claude/agents/archive/`
-first.
+Older agent generations (`agents2` through `agents6` and `agents-compat`) have
+been removed. Historical tracked agent definitions remain archived under
+`.claude/agents/archive/`; new docs, prompts, and commands should reference
+that archived roster material first.

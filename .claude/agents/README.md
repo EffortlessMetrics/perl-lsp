@@ -22,3 +22,8 @@ The archived files are still useful as reference for:
 - Reconstructing the original swarm roster
 
 All files are intact in `archive/`.
+
+Older agent generations (`agents2` through `agents6` and `agents-compat`) have
+been removed. Historical tracked agent definitions now live only under
+`archive/`; new docs should reference that archived roster instead of the
+deleted generations.
