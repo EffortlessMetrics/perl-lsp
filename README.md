@@ -60,21 +60,33 @@ require('lspconfig').perl_ls.setup {
 
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Completion** | Symbols, keywords, modules, variables, snippets, built-in function signatures |
-| **Navigation** | Go-to-definition, find references, workspace symbols, document symbols |
-| **Hover** | Documentation and type information |
-| **Diagnostics** | Real-time error detection |
-| **Refactoring** | Rename, code actions, formatting |
-| **Debug Adapter** | Breakpoints, stepping, variable inspection via DAP bridge |
-| **Fast** | Sub-millisecond incremental parsing, native Rust binary |
-| **Zero Perl dependency** | No Perl runtime needed for parsing or LSP |
-| **Cross-file navigation** | Dual-indexed workspace with broad reference coverage |
-| **Unicode-safe** | Full UTF-8/UTF-16 position conversion |
+### Capability Snapshot
 
-Full LSP coverage: all 53 advertised capabilities implemented (see [`features.toml`](features.toml)).
-For live metrics, see [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
+| Editing | Intelligence | Platform |
+|---------|--------------|----------|
+| **Completion** — symbols, keywords, modules, variables, snippets, and builtin signatures | **Navigation** — definition, references, document symbols, and workspace symbols | **Native Rust binary** — fast startup and no embedded Perl runtime |
+| **Refactoring** — rename, code actions, formatting, and import management | **Hover + diagnostics** — docs, signatures, and real-time error reporting | **Unicode-safe** — symmetric UTF-8/UTF-16 position handling |
+| **Debug Adapter** — breakpoints, stepping, stacks, and variables via DAP bridge | **Cross-file indexing** — dual-indexed symbol lookup across the workspace | **Incremental parsing** — sub-millisecond updates on common edit paths |
+
+### How the pieces fit together
+
+```mermaid
+flowchart TD
+    editor["Editor / IDE"] -->|JSON-RPC over stdio| lsp["perl-lsp\nLanguage Server"]
+    lsp --> providers["LSP providers\ncompletion · hover · diagnostics · rename"]
+    lsp --> index["Workspace index\ndual-indexed symbol graph"]
+    lsp --> dap["perl-dap\nDebug Adapter bridge"]
+    providers --> parser["perl-parser v3\nrecursive-descent parser"]
+    index --> parser
+    dap --> runtime["Perl debug session"]
+    parser --> lexer["perl-lexer\nmode-aware tokenizer"]
+```
+
+### At a glance
+
+- **53/53 advertised LSP capabilities** implemented in the canonical feature catalog ([`features.toml`](features.toml)).
+- **Broad Perl 5 syntax coverage** through the native v3 parser, including heredocs, regex, quoting forms, and formats.
+- **Operational visibility** via continuously updated project metrics in [CURRENT_STATUS.md](docs/project/CURRENT_STATUS.md).
 
 ## Why perl-lsp?
 
@@ -140,23 +152,13 @@ Download from [GitHub Releases](https://github.com/EffortlessMetrics/perl-lsp/re
 
 ## Architecture
 
-```text
-Editor / IDE
-    |  JSON-RPC (stdio)
-    v
-perl-lsp  (LSP server)
-    |
-    +-- LSP Providers (completion, hover, diagnostics, ...)
-    +-- Workspace Index (dual-indexed symbol lookup)
-    +-- perl-dap (Debug Adapter Protocol bridge)
-    |
-perl-parser  (v3 recursive-descent)
-    |
-perl-lexer   (mode-aware tokenizer)
-```
-
 The workspace is organized as a family of focused Rust crates (115+), each with a
-single responsibility. This keeps compile times fast and boundaries clear.
+single responsibility. The visualization above shows the runtime path most users care
+about: editor requests flow into `perl-lsp`, which fans out into providers, indexing,
+and debugging services before delegating parsing work to `perl-parser` and `perl-lexer`.
+
+That separation keeps compile times fast, sharpens ownership boundaries, and makes it
+easier to evolve parsing, LSP features, and DAP support independently.
 
 For the full tier system, architecture decision records, and design rationale, see:
 
