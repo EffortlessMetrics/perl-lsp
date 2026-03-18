@@ -198,22 +198,24 @@ fn from_cli_argument_whitespace_fallback() {
 }
 
 #[test]
-fn from_cli_argument_case_sensitive() {
+fn from_cli_argument_normalizes_case_and_spacing() {
     let lower = FeatureProfile::from_cli_argument("production");
     let upper = FeatureProfile::from_cli_argument("PRODUCTION");
+    let padded = FeatureProfile::from_cli_argument("  ga_lock  ");
     assert_eq!(lower, FeatureProfile::Production);
-    assert_eq!(upper, FeatureProfile::current()); // falls back
+    assert_eq!(upper, FeatureProfile::Production);
+    assert_eq!(padded, FeatureProfile::GaLock);
 }
 
 // ---------------------------------------------------------------------------
-// FeatureProfile::parse_profile – strict parsing
+// FeatureProfile::parse_profile – normalized CLI-style parsing
 // ---------------------------------------------------------------------------
 
 #[test]
-fn parse_profile_strict_none_for_unknown() {
+fn parse_profile_returns_none_for_unknown() {
     assert!(FeatureProfile::parse_profile("").is_none());
     assert!(FeatureProfile::parse_profile("invalid").is_none());
-    assert!(FeatureProfile::parse_profile("PRODUCTION").is_none());
+    assert!(FeatureProfile::parse_profile("prod-debug").is_none());
 }
 
 #[test]
@@ -225,9 +227,10 @@ fn parse_profile_all_valid_aliases() {
 }
 
 #[test]
-fn parse_profile_with_whitespace_fails() {
-    assert!(FeatureProfile::parse_profile(" ga-lock").is_none());
-    assert!(FeatureProfile::parse_profile("ga-lock ").is_none());
+fn parse_profile_normalizes_whitespace_and_case() {
+    assert_eq!(FeatureProfile::parse_profile(" ga-lock"), Some(FeatureProfile::GaLock));
+    assert_eq!(FeatureProfile::parse_profile("ga-lock "), Some(FeatureProfile::GaLock));
+    assert_eq!(FeatureProfile::parse_profile("PRODUCTION"), Some(FeatureProfile::Production));
 }
 
 // ---------------------------------------------------------------------------
