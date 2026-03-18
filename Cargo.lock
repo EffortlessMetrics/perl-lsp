@@ -1913,13 +1913,12 @@ version = "0.11.0"
 dependencies = [
  "perl-keywords",
  "perl-lsp-completion-item",
+ "perl-lsp-file-completion",
  "perl-parser-core",
- "perl-path-security",
  "perl-semantic-analyzer",
  "perl-tdd-support",
  "perl-workspace-index",
  "url",
- "walkdir",
 ]
 
 [[package]]
@@ -2048,6 +2047,16 @@ dependencies = [
  "perl-lsp-feature-policy",
  "perl-lsp-feature-profile",
  "perl-tdd-support",
+]
+
+[[package]]
+name = "perl-lsp-file-completion"
+version = "0.11.0"
+dependencies = [
+ "perl-lsp-completion-item",
+ "perl-path-security",
+ "tempfile",
+ "walkdir",
 ]
 
 [[package]]
