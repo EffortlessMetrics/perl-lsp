@@ -124,35 +124,81 @@ When implementing new LSP features:
 ## Storybooking Workflow (Improved)
 
 To keep user-story tests easy to review and maintain, use this lightweight
-"storybooking" flow before writing assertions:
+"storybooking" flow before writing assertions. The goal is to make every test
+read like a compact editor workflow instead of a pile of transport details.
 
-1. **Name the story from user intent**
-   - Prefer `test_user_story_<capability>_<outcome>`.
+### Definition of Ready
+
+Before adding a new scenario, capture these inputs in a short planning note or
+in the test comments themselves:
+
+1. **User intent**
+   - What is the Perl developer trying to accomplish?
+   - Prefer names like `test_user_story_<capability>_<outcome>`.
    - Example: `test_user_story_navigation_goto_definition_across_packages`.
-2. **Describe the scenario in Given / When / Then comments**
+2. **Workspace slice**
+   - Keep the setup to the minimum number of files needed to prove behavior.
+   - Reuse existing fixture patterns before inventing new mock layouts.
+3. **Protocol surface**
+   - Name the exact LSP method(s) under test.
+   - Call out whether the story is request/response, notification-driven, or
+     incremental across multiple edits.
+4. **Observable outcome**
+   - Define the editor-visible result first: cursor jump, completion list,
+     diagnostic range, rename edits, etc.
+   - Avoid implementation-only success criteria.
+
+### Definition of Done
+
+Use this checklist while turning the story into assertions:
+
+1. **Describe the scenario in Given / When / Then comments**
    - `Given`: workspace shape and Perl source setup.
    - `When`: LSP request(s) issued by the editor.
    - `Then`: exact observable protocol behavior.
-3. **Map each Then to one protocol assertion**
+2. **Map each Then to one protocol assertion**
    - Keep one core expectation per assertion block.
    - Include JSON fragments only for fields under test.
-4. **Capture failure intent**
+   - Prefer checking stable fields before optional metadata.
+3. **Capture failure intent**
    - Add one negative-path assertion (or sibling unhappy-path test) that proves
      error handling for the same capability.
-5. **Record feature ownership**
+   - If the unhappy path is intentionally deferred, leave a short `TODO(issue)`
+     comment rather than silently omitting it.
+4. **Keep the story deterministic**
+   - Avoid timing-sensitive sleeps, non-local filesystem dependencies, and
+     unrelated fixture noise.
+   - Use the smallest document text that still demonstrates the behavior.
+5. **Record ownership and coverage movement**
    - Add/update a short note in this README when the story moves from
      `#[ignore]` to active coverage.
+   - If the scenario closes a known gap, mention the related issue, AC, or
+     missing-coverage note in the test comment header.
 
 ### Story Template
+
+A reusable planning template lives in
+[`STORYBOOK_TEMPLATE.md`](./STORYBOOK_TEMPLATE.md). Use it when shaping a new
+story, then collapse the final version into concise test comments.
 
 ```rust
 #[test]
 fn test_user_story_<capability>_<outcome>() {
+    // Story: <one-sentence user goal>
     // Given: <workspace + source setup>
     // When: <LSP request sequence>
     // Then: <editor-visible expectation>
 }
 ```
+
+### Review Heuristics
+
+During review, ask:
+
+- Can a reader identify the user goal in under 10 seconds?
+- Does each assertion correspond to a visible editor outcome?
+- Is there a clear unhappy path for the same capability?
+- Would this story still make sense if the internal implementation changed?
 
 This approach keeps user stories deterministic, reviewable, and aligned with
 real editor behavior instead of implementation details.
