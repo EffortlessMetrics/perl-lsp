@@ -43,14 +43,48 @@ Documentation content comes from two sources:
 
 This approach maintains a single source of truth (the `docs/` directory) while providing a structured reading experience.
 
+The visualization below separates the pipeline into source, generation, build, and publish stages so it is easier to see which steps are editable by hand versus automated in CI.
+
 ### Build Process
 
 ```mermaid
-graph LR
-    A[docs/*.md] -->|populate-book.sh| B[book/src/]
-    C[book/src/*.md] --> B
-    B -->|mdbook build| D[book/book/]
-    D -->|GitHub Actions| E[GitHub Pages]
+flowchart LR
+    subgraph Sources[Source content]
+        DOCS[docs/**/*.md
+canonical project docs]
+        BOOK[book/src/*.md
+book-only pages]
+        SUMMARY[book/src/SUMMARY.md
+navigation tree]
+    end
+
+    subgraph Generate[Book generation]
+        POPULATE[scripts/populate-book.sh
+copy + normalize docs]
+        STAGING[book/src/**
+staged mdBook content]
+    end
+
+    subgraph Build[Static site build]
+        MDBOOK[mdbook build]
+        OUTPUT[book/book/**
+rendered HTML + search index]
+    end
+
+    subgraph Publish[Deployment]
+        ACTIONS[.github/workflows/docs-deploy.yml]
+        PAGES[GitHub Pages
+live documentation site]
+    end
+
+    DOCS --> POPULATE
+    BOOK --> STAGING
+    SUMMARY --> STAGING
+    POPULATE --> STAGING
+    STAGING --> MDBOOK
+    MDBOOK --> OUTPUT
+    OUTPUT --> ACTIONS
+    ACTIONS --> PAGES
 ```
 
 ## Usage
