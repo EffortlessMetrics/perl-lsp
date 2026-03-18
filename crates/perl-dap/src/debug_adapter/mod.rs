@@ -946,7 +946,7 @@ impl DebugAdapter {
         timeout_ms: u64,
     ) -> Option<Vec<String>> {
         let deadline =
-            Instant::now() + Duration::from_millis(timeout_ms.max(DEBUGGER_QUERY_WAIT_MS));
+            Instant::now() + Duration::from_millis(Self::debugger_timeout_budget_ms(timeout_ms));
 
         loop {
             // Check for cancellation before each poll iteration
@@ -986,6 +986,22 @@ impl DebugAdapter {
     fn wait_for_debugger_output_window(timeout_ms: u32) {
         let wait_ms = u64::from(timeout_ms.min(250)).max(DEBUGGER_QUERY_WAIT_MS);
         thread::sleep(Duration::from_millis(wait_ms));
+    }
+
+    /// Expand debugger query budgets in heavily instrumented environments.
+    ///
+    /// `cargo llvm-cov` adds noticeable overhead to framed debugger queries against a
+    /// real `perl -d` subprocess. Keep the normal fast path unchanged, but allow a
+    /// larger budget when coverage profiling is active.
+    fn debugger_timeout_budget_ms(timeout_ms: u64) -> u64 {
+        let base = timeout_ms.max(DEBUGGER_QUERY_WAIT_MS);
+        if std::env::var_os("LLVM_PROFILE_FILE").is_some()
+            || std::env::var_os("CARGO_LLVM_COV").is_some()
+        {
+            base.max(15_000).min(30_000)
+        } else {
+            base
+        }
     }
 
     /// Convert i64 values in protocol payloads to i32 with saturation.

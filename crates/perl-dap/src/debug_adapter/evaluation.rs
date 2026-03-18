@@ -89,8 +89,7 @@ impl DebugAdapter {
         let expression = &args.expression;
 
         // AC10.3: Get timeout configuration (5s default, 30s hard limit)
-        let timeout_ms = 5000u32;
-        let timeout_ms = timeout_ms.min(30000); // Enforce 30s hard limit
+        let timeout_ms = Self::debugger_timeout_budget_ms(5000) as u32;
 
         // Send evaluation command to debugger
         let output_frame_markers = if let Some(ref mut session) =
