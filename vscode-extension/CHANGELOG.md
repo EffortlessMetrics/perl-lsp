@@ -4,6 +4,9 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
+### Added
+- **Open VSX Publishing**: Extension now publishes to Open VSX Registry alongside VS Marketplace, enabling first-class support for VSCodium and other open-source VS Code derivatives. Added `ovsx` publish/check scripts and `@types/vscode` dev dependency fix for compatible builds.
+
 ## [0.11.0] - 2026-03-11
 
 ### Fixed

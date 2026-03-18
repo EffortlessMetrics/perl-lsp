@@ -71,7 +71,11 @@ jobs:
         working-directory: vscode-extension
         run: |
           npm run verify:marketplace
-          echo "VSIX_FILE=$(ls -1 *.vsix | head -n 1)" >> "$GITHUB_ENV"
+
+          MARKETPLACE_VSIX=$(ls -1 perl-lsp-rs-*.vsix | head -n 1)
+
+          echo "VSIX_FILE=$MARKETPLACE_VSIX" >> "$GITHUB_ENV"
+          echo "OPENVSX_VSIX_FILE=$MARKETPLACE_VSIX" >> "$GITHUB_ENV"
 
       - name: Publish to VSCode Marketplace
         if: ${{ env.VSCE_PAT != '' }}
@@ -79,11 +83,16 @@ jobs:
         run: |
           vsce publish --pat "$VSCE_PAT" --packagePath "${{ env.VSIX_FILE }}"
 
+      - name: Verify Open VSX CLI
+        working-directory: vscode-extension
+        run: |
+          npm run check:openvsx
+
       - name: Publish to Open VSX
         if: ${{ env.OVSX_PAT != '' }}
         working-directory: vscode-extension
         run: |
-          ovsx publish "${{ env.VSIX_FILE }}" --pat "$OVSX_PAT"
+          ovsx publish "${{ env.OPENVSX_VSIX_FILE }}" --pat "$OVSX_PAT"
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v7
@@ -112,3 +121,15 @@ jobs:
 
           echo "::error::Release ${RELEASE_TAG} was not available in time for VSIX attachment."
           exit 1
+
+      - name: Post publish summary
+        if: always()
+        run: |
+          {
+            echo "## VS Code extension publish"
+            echo ""
+            echo "- Marketplace VSIX: ${{ env.VSIX_FILE }}"
+            echo "- Open VSX VSIX: ${{ env.OPENVSX_VSIX_FILE }}"
+            echo "- Marketplace: https://marketplace.visualstudio.com/items?itemName=EffortlessMetrics.perl-lsp-rs"
+            echo "- Open VSX: https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs"
+          } >> "$GITHUB_STEP_SUMMARY"
