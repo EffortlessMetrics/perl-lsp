@@ -53,6 +53,22 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0031](0031-async-runtime-concurrent-dispatch.md) | Accepted | 2026-03-16 | Async Runtime with Concurrent Dispatch | Two-lane scheduler (exclusive + 4-worker read pool) for concurrent LSP request handling |
 | [ADR-0032](0032-skill-scoping-and-hook-enforcement.md) | Accepted | 2026-03-16 | Skill Scoping and Hook Enforcement | Frontmatter-based skill access control plus hook-enforced swarm coordination |
 | [ADR-0033](0033-worktree-first-disposable-workers.md) | Accepted | 2026-03-16 | Worktree-First Disposable Worker Execution | Small persistent coordinators, fresh workers per context shift, and worktree isolation for PR-shaped changes |
+| [ADR-0034](0034-cancellation-microcrate-extraction.md) | Accepted | 2026-03-18 | Cancellation Microcrate Extraction | Shared cancellation token/registry subsystem lives in `perl-lsp-cancellation` with a compatibility re-export in `perl-lsp` |
+
+
+## Codebase Evidence Map
+
+The following ADRs are especially visible in day-to-day code navigation. This table is meant to help contributors move from a code pattern they see in the repository to the ADR that explains *why* it exists.
+
+| Codebase pattern | Representative code paths | ADR |
+|------------------|---------------------------|-----|
+| SRP microcrate workspace split | `Cargo.toml`, `crates/perl-lsp/Cargo.toml`, `crates/perl-lsp-cancellation/Cargo.toml` | [ADR-0008](0008-microcrate-architecture.md), [ADR-0034](0034-cancellation-microcrate-extraction.md) |
+| Function references stored under both bare and qualified names | `crates/perl-parser/src/workspace_index.rs`, `docs/reference/LSP_IMPLEMENTATION_GUIDE.md` | [ADR-0009](0009-dual-indexing-strategy.md) |
+| Rope-backed documents with String/rope dual representation | `crates/perl-lsp/src/textdoc.rs`, `crates/perl-lsp/src/runtime/text_sync.rs` | [ADR-0020](0020-rope-document-management.md), [ADR-0025](0025-dual-document-representation.md) |
+| Lifecycle-aware workspace/index fallback routing | `crates/perl-lsp/src/runtime/routing.rs`, `crates/perl-lsp/src/runtime/workspace.rs` | [ADR-0026](0026-lifecycle-index-routing.md) |
+| Concurrent dispatch with exclusive mutation lane, read pool, and single writer thread | `crates/perl-lsp/src/runtime/scheduler.rs`, `crates/perl-lsp/src/runtime/serving.rs`, `crates/perl-lsp/src/runtime/outbound.rs` | [ADR-0031](0031-async-runtime-concurrent-dispatch.md) |
+| Cancellation token + registry shared across dispatch and providers | `crates/perl-lsp-cancellation/src/lib.rs`, `crates/perl-lsp/src/cancellation.rs`, `crates/perl-lsp/src/runtime/dispatch/cancellation.rs` | [ADR-006](ADR_006_LSP_CANCELLATION_INFRASTRUCTURE.md), [ADR-0034](0034-cancellation-microcrate-extraction.md) |
+| Parser composition through `include!` and FIFO heredoc staging | `crates/perl-parser-core/src/engine/parser/mod.rs` | [ADR-0023](0023-include-macro-architecture.md), [ADR-0024](0024-fifo-heredoc-queue.md) |
 
 ## About ADRs
 
