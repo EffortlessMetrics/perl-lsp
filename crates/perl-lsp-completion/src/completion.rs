@@ -97,6 +97,7 @@ mod keywords;
 mod methods;
 mod packages;
 mod regex_patterns;
+pub(crate) mod scope_distance;
 mod sort;
 mod test_more;
 mod variables;
@@ -711,7 +712,7 @@ impl CompletionProvider {
         let in_regex = Self::is_in_regex(source, position);
         let in_comment = self.is_in_comment(source, position);
 
-        CompletionContext::new(
+        let mut context = CompletionContext::new(
             &self.symbol_table,
             position,
             trigger_character,
@@ -720,7 +721,10 @@ impl CompletionProvider {
             in_comment,
             word_prefix,
             prefix_start,
-        )
+        );
+        context.cursor_scope_id =
+            scope_distance::scope_at_position(&self.symbol_table, source, position);
+        context
     }
 
     /// Add file path completions with comprehensive security and performance safeguards
@@ -1135,6 +1139,75 @@ $"#;
         let pos_bar = code.len();
         let ctx_bar = provider.analyze_context(code, pos_bar);
         assert_eq!(ctx_bar.current_package, "Bar");
+    }
+
+    #[test]
+    fn test_incomplete_nested_block_scope_context() {
+        let code = concat!(
+            "my $file_var = 0;\n",
+            "sub process {\n",
+            "    my $sub_var = 1;\n",
+            "    if (1) {\n",
+            "        my $block_var = 2;\n",
+            "        $"
+        );
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        let context = provider.analyze_context(code, code.len());
+
+        let sub_scope = must_some(
+            provider
+                .symbol_table
+                .symbols
+                .get("sub_var")
+                .and_then(|symbols| symbols.first())
+                .map(|symbol| symbol.scope_id),
+        );
+        let block_scope = must_some(
+            provider
+                .symbol_table
+                .symbols
+                .get("block_var")
+                .and_then(|symbols| symbols.first())
+                .map(|symbol| symbol.scope_id),
+        );
+
+        assert_eq!(
+            context.cursor_scope_id, block_scope,
+            "expected cursor scope to match block_var scope in incomplete nested block; cursor={:?} sub={:?} block={:?}",
+            context.cursor_scope_id, sub_scope, block_scope
+        );
+    }
+
+    #[test]
+    fn test_incomplete_nested_block_variable_sorting() {
+        let code = concat!(
+            "my $file_var = 0;\n",
+            "sub process {\n",
+            "    my $sub_var = 1;\n",
+            "    if (1) {\n",
+            "        my $block_var = 2;\n",
+            "        $"
+        );
+
+        let mut parser = Parser::new(code);
+        let ast = must(parser.parse());
+        let provider = CompletionProvider::new_with_index_and_source(&ast, code, None);
+        let completions = provider.get_completions(code, code.len());
+
+        let block_item =
+            must_some(completions.iter().find(|completion| completion.label == "$block_var"));
+        let sub_item =
+            must_some(completions.iter().find(|completion| completion.label == "$sub_var"));
+
+        assert!(
+            block_item.sort_text < sub_item.sort_text,
+            "expected incomplete block variable to outrank parent variable, got block={:?} sub={:?}",
+            block_item.sort_text,
+            sub_item.sort_text
+        );
     }
 
     #[test]
