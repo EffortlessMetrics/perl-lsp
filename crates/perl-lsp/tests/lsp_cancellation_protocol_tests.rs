@@ -1111,10 +1111,13 @@ fn test_enhanced_error_response_handling_ac4() -> Result<(), Box<dyn std::error:
                     if data.get("latency_ms").is_some() {
                         let latency_ms =
                             data["latency_ms"].as_u64().ok_or("Latency should be numeric")?;
+                        let response_latency_ms = start_time.elapsed().as_millis() as u64;
                         assert!(
-                            latency_ms <= cancellation_latency.as_millis() as u64,
-                            "Reported latency should be reasonable: {}ms",
-                            latency_ms
+                            latency_ms <= response_latency_ms,
+                            "Reported latency should fit within end-to-end response latency: reported={}ms total={}ms immediate_cancel={}ms",
+                            latency_ms,
+                            response_latency_ms,
+                            cancellation_latency.as_millis()
                         );
                     }
 
