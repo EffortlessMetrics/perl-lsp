@@ -2834,10 +2834,17 @@ fn full_sigs_all_entries_exist_in_builtin_sigs() -> Result<(), String> {
 fn full_sigs_all_variants_start_with_function_name() -> Result<(), String> {
     for (name, sigs) in BUILTIN_FULL_SIGS.entries() {
         for sig in *sigs {
-            if !sig.starts_with(name) {
+            let Some(rest) = sig.strip_prefix(name) else {
                 return Err(format!(
                     "Full sig {sig:?} for {name} should start with the function name"
                 ));
+            };
+            if let Some(next) = rest.chars().next() {
+                if next.is_ascii_alphanumeric() || next == '_' {
+                    return Err(format!(
+                        "Full sig {sig:?} for {name} should keep the builtin name as a token boundary"
+                    ));
+                }
             }
         }
     }
