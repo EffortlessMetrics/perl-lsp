@@ -1,7 +1,7 @@
 {
   "name": "perl-lsp-rs",
   "displayName": "perl-lsp-rs",
-  "description": "Comprehensive Perl language support powered by perl-lsp",
+  "description": "Marketplace-ready Perl language support with LSP, debugging, testing, and managed binary delivery",
   "version": "0.11.0",
   "publisher": "EffortlessMetrics",
   "preview": false,
@@ -20,6 +20,9 @@
     "perl5",
     "language-server",
     "lsp",
+    "debugger",
+    "testing",
+    "perltidy",
     "tree-sitter"
   ],
   "extensionKind": [

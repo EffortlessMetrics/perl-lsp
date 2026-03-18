@@ -4,6 +4,10 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
+### Changed
+- Improved marketplace storytelling in the extension README with a clearer value proposition, quick start, command guide, deployment controls, and debugging walkthrough.
+- Refined extension metadata keywords and description to better communicate debugging, testing, formatting, and managed deployment capabilities in VS Marketplace.
+
 ## [0.11.0] - 2026-03-11
 
 ### Fixed
