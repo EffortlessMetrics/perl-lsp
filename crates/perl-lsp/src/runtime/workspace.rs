@@ -23,7 +23,6 @@ use perl_workspace_folder::extract_workspace_folder_change;
 use perl_workspace_ignore::is_skipped_dir_name;
 #[cfg(feature = "workspace")]
 use std::path::Path;
-#[cfg(feature = "workspace")]
 use std::sync::Arc;
 #[cfg(feature = "workspace")]
 use std::time::Instant;
@@ -125,13 +124,18 @@ impl LspServer {
     ) -> Result<Option<Value>, JsonRpcError> {
         let mut all_symbols = Vec::new();
 
-        // Collect document snapshots without holding lock
-        let docs_snapshot: Vec<(String, DocumentState)> = {
+        // Collect lightweight snapshots without holding lock during iteration.
+        // Only clone the fields needed for symbol extraction (uri, text, ast Arc),
+        // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
+        let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
         };
 
-        for (i, (uri, doc)) in docs_snapshot.iter().enumerate() {
+        // Pre-compute lowercased query once, outside the document loop
+        let query_lower = query.to_lowercase();
+
+        for (i, (uri, text, ast)) in docs_snapshot.iter().enumerate() {
             // Cooperative yield every 8 documents
             if i & 0x7 == 0 {
                 std::thread::yield_now();
@@ -142,9 +146,8 @@ impl LspServer {
                 break;
             }
 
-            if let Some(ref ast) = doc.ast {
-                let doc_symbols = self.extract_document_symbols(ast, &doc.text, uri);
-                let query_lower = query.to_lowercase();
+            if let Some(ast) = ast {
+                let doc_symbols = self.extract_document_symbols(ast, text, uri);
 
                 for sym in doc_symbols {
                     if sym.name.to_lowercase().contains(&query_lower) {
@@ -156,7 +159,7 @@ impl LspServer {
                 }
             } else {
                 // Text-based fallback when AST is not available
-                let text_symbols = self.extract_text_based_symbols(&doc.text, uri, query);
+                let text_symbols = self.extract_text_based_symbols(text, uri, query);
                 let remaining = cap.saturating_sub(all_symbols.len());
                 all_symbols.extend(text_symbols.into_iter().take(remaining));
             }
@@ -190,19 +193,19 @@ impl LspServer {
 
         eprintln!("Workspace symbol search: '{}'", query);
 
-        // Snapshot documents without holding lock during iteration
-        // (Follows same pattern as handle_workspace_symbols_v2)
-        let docs_snapshot: Vec<(String, DocumentState)> = {
+        // Lightweight snapshot: only clone fields needed for symbol extraction,
+        // avoiding expensive Rope, ParentMap, LineStartsCache, and parse_errors clones.
+        let docs_snapshot: Vec<(String, String, Option<Arc<perl_parser::ast::Node>>)> = {
             let documents = self.documents.lock();
-            documents.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+            documents.iter().map(|(k, v)| (k.clone(), v.text.clone(), v.ast.clone())).collect()
         };
 
         // Simple synchronous extraction (legacy non-workspace path)
         let mut all_symbols = Vec::new();
-        for (uri, doc) in docs_snapshot.iter() {
-            if let Some(ref ast) = doc.ast {
+        for (uri, text, ast) in docs_snapshot.iter() {
+            if let Some(ast) = ast {
                 // Extract symbols using document symbol provider
-                self.extract_simple_symbols(ast, &doc.text, uri, query, &mut all_symbols);
+                self.extract_simple_symbols(ast, text, uri, query, &mut all_symbols);
             }
         }
 
