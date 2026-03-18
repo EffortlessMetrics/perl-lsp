@@ -2,6 +2,8 @@
 
 *An architectural deep dive into the decision to build a bespoke JSON-RPC runtime instead of using tower-lsp.*
 
+> This narrative overview is now captured as [ADR-0034](../adr/0034-custom-lsp-runtime.md). For the later bounded-concurrency scheduler layered on top of this runtime, see [ADR-0031](../adr/0031-async-runtime-concurrent-dispatch.md).
+
 ## Why Most Rust LSPs Use tower-lsp
 
 The Rust ecosystem has a de facto standard for building language servers: [tower-lsp](https://github.com/ebkalderon/tower-lsp). Built on the Tower service abstraction and Tokio async runtime, tower-lsp provides:

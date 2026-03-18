@@ -228,6 +228,7 @@ cargo doc --no-deps --package perl-parser
 - **[API Documentation Standards](API_DOCUMENTATION_STANDARDS.md)** - Enterprise quality requirements
 - **[ADR-002: API Documentation Infrastructure](adr/ADR_002_API_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation architecture
 - **[ADR-003: Missing Documentation Infrastructure](adr/ADR_003_MISSING_DOCUMENTATION_INFRASTRUCTURE.md)** - Implementation details
+- **[ADR-0034: Custom LSP Runtime](../adr/0034-custom-lsp-runtime.md)** - Why perl-lsp owns protocol, transport, and dispatch instead of using an external framework
 
 ## Context-Sensitive Features
 
