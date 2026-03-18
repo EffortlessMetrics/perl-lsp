@@ -1,43 +1,24 @@
-# Canonical Agent Roster
+# Agent Definitions (Archived)
 
-This directory is the canonical runtime roster for the repo's Claude swarm.
+Agent definitions have been archived. The orchestrator uses inline prompt
+templates and skills (e.g., `/swarm`, `/parser-fix`, `/verify`) instead of
+loading agent definition files at runtime.
 
-The live split is:
+See `archive/` for historical agent definitions.
 
-- persistent coordinators: `scout`, `builder`, `reviewer`, `ops`, `improver`
-- reusable workers: `bootstrapper`, `fixer`, `validator`, `pr-responder`,
-  `research-web`, `research-docs`, `research-verify`
-- specialist workers: tracked domain, review, docs, quality, and infrastructure
-  agents cataloged in `AGENT_CATALOG.md`
+## Why archived
 
-These files define who owns each lane. Procedures live in skills and commands;
-the slash-entrypoint surface is interchangeable unless frontmatter or bundled
-resources make a specific skill-only behavior necessary. Deterministic
-enforcement lives in hooks and settings. Task-specific context lives in
-handoffs, worktrees, receipts, PRs, and queue files.
+The 54 agent definition files in this directory were never loaded by the
+orchestrator. Every agent spawn uses an inline prompt constructed from
+CLAUDE.md context, skills, and handoff files. Keeping 54 unused files in the
+active directory added noise to searches and context windows without
+providing value.
 
-If a file lives in `.claude/agents/`, it is part of the active tracked swarm
-surface. The canonical active inventory is `AGENT_CATALOG.md`, and the
-machine-readable contract for that inventory lives in `agent-roster.json` and
-`agent-roster.schema.json`.
+## If you need an agent definition
 
-Agent design rules:
+The archived files are still useful as reference for:
+- Understanding agent roles and lane ownership
+- Seeing which skills each agent type invokes
+- Reconstructing the original swarm roster
 
-- use the local todo or task tool for the current lane or slice
-- start with 3-5 live items and keep them current
-- name the command or skill for each todo item
-- preload stable startup skills in frontmatter when the lane uses them on
-  every run
-- retire workers when crate, file surface, branch, or verification loop changes
-- keep coordinators thin and push code mutation into disposable workers
-- treat receipts and handoffs as durable output; agent transcript is not proof
-- catalog every tracked active agent with spawned-by, handoff-to, and
-  first-entrypoint metadata in `AGENT_CATALOG.md`
-- keep `agent-roster.json` and `agent-roster.schema.json` in sync with the
-  tracked catalog and the actual files on disk
-- run `python3 scripts/validate_swarm_agent_roster.py` after roster changes
-
-Compatibility donor material lives in
-[`.claude/agents-compat/`](../agents-compat/). New prompts, docs, and commands
-should reference the canonical names and the tracked catalog in this directory
-first.
+All files are intact in `archive/`.
