@@ -60,4 +60,11 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "parser_integration"
+path = "fuzz_targets/fuzz_target_1.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
