@@ -1,4 +1,54 @@
 impl<'a> Parser<'a> {
+    fn parse_qualified_name(&mut self, allow_trailing_separator: bool) -> ParseResult<(String, SourceLocation)> {
+        let first = self.expect(TokenKind::Identifier)?;
+        let mut name = first.text.to_string();
+        let name_start = first.start;
+        let mut name_end = first.end;
+
+        if !allow_trailing_separator && name.ends_with("::") {
+            return Err(ParseError::UnexpectedToken {
+                expected: "identifier after ::".to_string(),
+                found: "class body".to_string(),
+                location: name_end,
+            });
+        }
+
+        while self.peek_kind() == Some(TokenKind::DoubleColon)
+            || (self.peek_kind() == Some(TokenKind::Colon)
+                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
+        {
+            if self.peek_kind() == Some(TokenKind::DoubleColon) {
+                let double_colon = self.tokens.next()?; // consume ::
+                name_end = double_colon.end;
+            } else {
+                self.tokens.next()?; // consume first :
+                let second_colon = self.tokens.next()?; // consume second :
+                name_end = second_colon.end;
+            }
+
+            name.push_str("::");
+
+            if self.peek_kind() == Some(TokenKind::Identifier) {
+                let next = self.tokens.next()?;
+                name_end = next.end;
+                name.push_str(&next.text);
+            } else if allow_trailing_separator {
+                break;
+            } else {
+                return Err(ParseError::UnexpectedToken {
+                    expected: "identifier after ::".to_string(),
+                    found: self
+                        .peek_kind()
+                        .map(|kind| kind.display_name().to_string())
+                        .unwrap_or_else(|| "EOF".to_string()),
+                    location: self.current_position(),
+                });
+            }
+        }
+
+        Ok((name, SourceLocation { start: name_start, end: name_end }))
+    }
+
     /// Parse subroutine definition
     fn parse_subroutine(&mut self) -> ParseResult<Node> {
         let start = self.current_position();
@@ -138,24 +188,7 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'class'
 
-        let first = self.expect(TokenKind::Identifier)?;
-        let mut name = first.text.to_string();
-
-        while self.peek_kind() == Some(TokenKind::DoubleColon)
-            || (self.peek_kind() == Some(TokenKind::Colon)
-                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
-        {
-            if self.peek_kind() == Some(TokenKind::DoubleColon) {
-                self.tokens.next()?; // consume ::
-            } else {
-                self.tokens.next()?; // consume first :
-                self.tokens.next()?; // consume second :
-            }
-
-            let next = self.expect(TokenKind::Identifier)?;
-            name.push_str("::");
-            name.push_str(&next.text);
-        }
+        let (name, _) = self.parse_qualified_name(false)?;
 
         let body = self.parse_block()?;
 
@@ -233,43 +266,7 @@ impl<'a> Parser<'a> {
         let start = self.current_position();
         self.tokens.next()?; // consume 'package'
 
-        // Parse package name (can include ::)
-        let first = self.expect(TokenKind::Identifier)?;
-        let mut name = first.text.to_string();
-        let name_start = first.start;
-        let mut name_end = first.end;
-
-        // Handle :: in package names
-        // Handle both DoubleColon tokens and separate Colon tokens (in case lexer sends :: as separate colons)
-        while self.peek_kind() == Some(TokenKind::DoubleColon)
-            || (self.peek_kind() == Some(TokenKind::Colon)
-                && self.tokens.peek_second().map(|t| t.kind) == Ok(TokenKind::Colon))
-        {
-            if self.peek_kind() == Some(TokenKind::DoubleColon) {
-                let dc = self.tokens.next()?; // consume ::
-                name_end = dc.end;
-                name.push_str("::");
-            } else if self.peek_kind() == Some(TokenKind::Colon) {
-                // Handle two separate Colon tokens as ::
-                let _first_colon = self.tokens.next()?; // consume first :
-                let second_colon = self.tokens.next()?; // consume second :
-                name_end = second_colon.end;
-                name.push_str("::");
-            }
-
-            // Check if there's an identifier after ::
-            // If not, it's a trailing :: which is valid in Perl
-            if self.peek_kind() == Some(TokenKind::Identifier) {
-                let id = self.tokens.next()?;
-                name_end = id.end;
-                name.push_str(&id.text);
-            } else {
-                // Trailing :: is valid, just break
-                break;
-            }
-        }
-
-        let name_span = SourceLocation { start: name_start, end: name_end };
+        let (mut name, name_span) = self.parse_qualified_name(true)?;
 
         // Check for optional version number or v-string
         let version = if self.peek_kind() == Some(TokenKind::Number) {
