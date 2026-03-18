@@ -36,6 +36,19 @@ cargo install --path crates/perl-parser --bin perl-dap
 perl-dap --stdio  # Standard DAP transport
 ```
 
+## Developer Workflow
+
+```bash
+# Quick local environment diagnostics
+just devex          # Alias: just doctor
+
+# Fast validation before a larger test run
+just pr-fast
+
+# Canonical local gate
+nix develop -c just ci-gate
+```
+
 ## Build Commands (*Diataxis: How-to Guide* - Development builds)
 
 ### Published Crates

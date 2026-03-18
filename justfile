@@ -313,6 +313,8 @@ doctor:
     @echo "=============================================="
     @bash scripts/devex-doctor.sh
 
+# Short alias for the developer environment quick check
+devex: doctor
 
 # Targeted checks for changed crates (fast feedback for active branch)
 devex-targeted base='origin/master' mode='all':
