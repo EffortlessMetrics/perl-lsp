@@ -89,27 +89,22 @@ impl TestContext {
 
     /// Open a document
     pub fn open_document(&mut self, uri: &str, text: &str) {
-        match self.harness.open(uri, text) {
-            Ok(_) => {}
-            Err(e) => assert!(false, "open should succeed: {e}"),
-        }
+        must(self.harness.open(uri, text).map_err(|e| format!("open should succeed: {e}")));
     }
 
     /// Update document content with auto-incrementing version
     pub fn update_document(&mut self, uri: &str, text: &str) {
         self.version_counter += 1;
-        match self.harness.change_full(uri, self.version_counter, text) {
-            Ok(_) => {}
-            Err(e) => assert!(false, "change should succeed: {e}"),
-        }
+        must(
+            self.harness
+                .change_full(uri, self.version_counter, text)
+                .map_err(|e| format!("change should succeed: {e}")),
+        );
     }
 
     /// Close a document
     pub fn close_document(&mut self, uri: &str) {
-        match self.harness.close(uri) {
-            Ok(_) => {}
-            Err(e) => assert!(false, "close should succeed: {e}"),
-        }
+        must(self.harness.close(uri).map_err(|e| format!("close should succeed: {e}")));
     }
 
     /// Synchronization barrier - wait for server to be idle
