@@ -2487,6 +2487,7 @@ name = "perl-quote"
 version = "0.11.0"
 dependencies = [
  "perl-tdd-support",
+ "proptest",
 ]
 
 [[package]]
