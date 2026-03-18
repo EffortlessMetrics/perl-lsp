@@ -283,16 +283,16 @@ fn parser_continue_multiple_statements() {
         find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
     assert!(!for_nodes.is_empty(), "Should have at least one loop");
 
-    // Verify continue block exists and has content (only For has continue_block)
+    // Verify continue block exists and has content for either loop representation.
     match &for_nodes[0].kind {
-        NodeKind::For { continue_block, .. } => {
+        NodeKind::For { continue_block, .. } | NodeKind::Foreach { continue_block, .. } => {
             assert!(continue_block.is_some(), "Should have a continue block");
             let cont = must_some(continue_block.as_ref());
             if let NodeKind::Block { statements } = &cont.kind {
                 assert!(statements.len() >= 3, "Continue block should have multiple statements");
             }
         }
-        _ => unreachable!("Expected For node"),
+        _ => unreachable!("Expected For or Foreach node"),
     }
 }
 
@@ -305,12 +305,12 @@ fn parser_continue_empty_block() {
         find_nodes(&ast, |kind| matches!(kind, NodeKind::For { .. } | NodeKind::Foreach { .. }));
     assert!(!for_nodes.is_empty(), "Should have at least one loop");
 
-    // Verify empty continue block (only For has continue_block)
+    // Verify empty continue block for either loop representation.
     match &for_nodes[0].kind {
-        NodeKind::For { continue_block, .. } => {
+        NodeKind::For { continue_block, .. } | NodeKind::Foreach { continue_block, .. } => {
             assert!(continue_block.is_some(), "Should have a continue block");
         }
-        _ => unreachable!("Expected For node"),
+        _ => unreachable!("Expected For or Foreach node"),
     }
 }
 

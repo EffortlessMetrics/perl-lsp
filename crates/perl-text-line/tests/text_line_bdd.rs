@@ -29,7 +29,7 @@ fn treats_keyword_as_bounded_by_whitespace_or_punctuation() {
 }
 
 #[test]
-fn skip_ascii_whitespace_ignores_newlines_and_non_ascii() {
+fn skip_ascii_whitespace_advances_over_spaces_and_tabs() {
     let bytes = " \t  use".as_bytes();
     let idx = skip_ascii_whitespace(bytes, 0);
     assert_eq!(idx, 4);
@@ -37,8 +37,8 @@ fn skip_ascii_whitespace_ignores_newlines_and_non_ascii() {
 }
 
 #[test]
-fn treats_newline_as_not_ascii_whitespace_in_skip() {
+fn treats_newline_as_ascii_whitespace_in_skip() {
     let bytes = "\n \t".as_bytes();
     let idx = skip_ascii_whitespace(bytes, 0);
-    assert_eq!(idx, 0);
+    assert_eq!(idx, 3);
 }

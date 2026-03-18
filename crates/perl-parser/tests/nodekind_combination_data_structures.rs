@@ -676,6 +676,8 @@ TypeGlobManipulator::alias_variable('config_value', 'config_alias', 'scalar');
 # Complex package interactions
 my $result = function1(); # From BaseModule
 my $derived = DerivedModule::derived_function();
+my $derived_object = bless {}, 'DerivedModule';
+my $override_result = $derived_object->override_function();
 my $processed = process_func($result);
 
 # Dynamic symbol resolution

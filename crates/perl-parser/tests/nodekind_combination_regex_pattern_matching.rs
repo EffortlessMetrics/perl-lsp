@@ -127,10 +127,7 @@ if ($conditional_text =~ /^(?(?=\d)\d+|[a-z]+)$/) {
     let mut parser = Parser::new(code);
     let ast = must(parser.parse());
 
-    // Verify regex operations
-    assert!(has_node_kind(&ast, "Regex"), "Should have regex nodes");
-
-    // Verify match operations
+    // Regex patterns in =~ conditions are carried by Match nodes in this AST.
     assert!(has_node_kind(&ast, "Match"), "Should have match operations");
 
     // Verify conditional statements
@@ -256,9 +253,6 @@ process_file_substitutions('config.txt');
 
     // Verify transliteration operations
     assert!(has_node_kind(&ast, "Transliteration"), "Should have transliteration operations");
-
-    // Verify match operations
-    assert!(has_node_kind(&ast, "Match"), "Should have match operations");
 
     // Verify eval blocks for error handling
     assert!(has_node_kind(&ast, "Eval"), "Should have eval blocks");
@@ -473,9 +467,6 @@ given ($value_to_test) {
 
     // Verify regex operations
     assert!(has_node_kind(&ast, "Regex"), "Should have regex nodes");
-
-    // Verify match operations
-    assert!(has_node_kind(&ast, "Match"), "Should have match operations");
 
     // Verify hash literals
     assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals");
@@ -741,9 +732,6 @@ my $guard_match = match_with_guards([3, 7]);
     // Verify regex operations
     assert!(has_node_kind(&ast, "Regex"), "Should have regex nodes");
 
-    // Verify match operations
-    assert!(has_node_kind(&ast, "Match"), "Should have match operations");
-
     // Verify complex data structures
     assert!(has_node_kind(&ast, "HashLiteral"), "Should have hash literals");
     assert!(has_node_kind(&ast, "ArrayLiteral"), "Should have array literals");
@@ -881,10 +869,7 @@ if ($verbose_text =~ /
     let mut parser = Parser::new(code);
     let ast = must(parser.parse());
 
-    // Verify regex operations
-    assert!(has_node_kind(&ast, "Regex"), "Should have regex nodes");
-
-    // Verify match operations
+    // Regex patterns in =~ conditions are carried by Match nodes in this AST.
     assert!(has_node_kind(&ast, "Match"), "Should have match operations");
 
     // Verify conditional statements

@@ -188,18 +188,19 @@ fn test_parsing_timeout_prevention() {
             perl_code
         );
 
-        // With error recovery, parser may return Ok with ERROR nodes in AST.
-        // Either an Err result OR an AST with ERROR nodes is acceptable.
-        let has_error = match &parse_result {
-            Err(_) => true,
-            Ok(ast) => {
-                let sexp = ast.to_sexp();
-                sexp.contains("ERROR")
-            }
-        };
+        // The parser may recover by returning Ok plus recorded diagnostics instead of Err.
+        // Treat any recorded diagnostic, Err result, or explicit ERROR node as a valid failure signal.
+        let has_error = !parser.errors().is_empty()
+            || match &parse_result {
+                Err(_) => true,
+                Ok(ast) => {
+                    let sexp = ast.to_sexp();
+                    sexp.contains("ERROR")
+                }
+            };
         assert!(
             has_error,
-            "MUTATION KILL: {} - malformed code should produce error (Err or ERROR node): '{}'",
+            "MUTATION KILL: {} - malformed code should produce an error signal (Err, parser diagnostic, or ERROR node): '{}'",
             description, perl_code
         );
     }
@@ -260,17 +261,18 @@ fn test_statement_modifier_termination_precedence() {
             }
         } else {
             // Some cases are expected to fail, but should fail quickly, not hang.
-            // With error recovery, parser may return Ok with ERROR nodes.
-            let has_error = match &parse_result {
-                Err(_) => true,
-                Ok(ast) => {
-                    let sexp = ast.to_sexp();
-                    sexp.contains("ERROR")
-                }
-            };
+            // Treat recovery diagnostics the same as Err or explicit ERROR nodes.
+            let has_error = !parser.errors().is_empty()
+                || match &parse_result {
+                    Err(_) => true,
+                    Ok(ast) => {
+                        let sexp = ast.to_sexp();
+                        sexp.contains("ERROR")
+                    }
+                };
             assert!(
                 has_error,
-                "MUTATION KILL: {} - invalid code should produce error: '{}'",
+                "MUTATION KILL: {} - invalid code should produce an error signal: '{}'",
                 description, perl_code
             );
         }

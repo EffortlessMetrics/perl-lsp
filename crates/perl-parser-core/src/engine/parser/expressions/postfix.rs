@@ -2,6 +2,18 @@ impl<'a> Parser<'a> {
     /// Parse postfix expression
     fn parse_postfix(&mut self) -> ParseResult<Node> {
         let mut expr = self.parse_primary()?;
+        let mut postfix_chain_depth = 0usize;
+
+        let mut record_postfix_layer = || -> ParseResult<()> {
+            postfix_chain_depth += 1;
+            if postfix_chain_depth > MAX_RECURSION_DEPTH {
+                return Err(ParseError::NestingTooDeep {
+                    depth: postfix_chain_depth,
+                    max_depth: MAX_RECURSION_DEPTH,
+                });
+            }
+            Ok(())
+        };
 
         loop {
             match self.peek_kind() {
@@ -10,6 +22,7 @@ impl<'a> Parser<'a> {
                     let start = expr.location.start;
                     let end = op_token.end;
 
+                    record_postfix_layer()?;
                     expr = Node::new(
                         NodeKind::Unary { op: op_token.text.to_string(), operand: Box::new(expr) },
                         SourceLocation { start, end },
@@ -31,6 +44,7 @@ impl<'a> Parser<'a> {
                                 let start = expr.location.start;
                                 let end = self.previous_position();
 
+                                record_postfix_layer()?;
                                 expr = Node::new(
                                     NodeKind::Unary {
                                         op: "->@*".to_string(),
@@ -48,6 +62,7 @@ impl<'a> Parser<'a> {
                                 let end = self.previous_position();
 
                                 // Represent as a special binary operation for array slice dereference
+                                record_postfix_layer()?;
                                 expr = Node::new(
                                     NodeKind::Binary {
                                         op: "->@[]".to_string(),
@@ -69,6 +84,7 @@ impl<'a> Parser<'a> {
                                 let start = expr.location.start;
                                 let end = self.previous_position();
 
+                                record_postfix_layer()?;
                                 expr = Node::new(
                                     NodeKind::Unary {
                                         op: "->%*".to_string(),
@@ -86,6 +102,7 @@ impl<'a> Parser<'a> {
                                 let end = self.previous_position();
 
                                 // Represent as a special binary operation for hash slice dereference
+                                record_postfix_layer()?;
                                 expr = Node::new(
                                     NodeKind::Binary {
                                         op: "->%{}".to_string(),
@@ -106,6 +123,7 @@ impl<'a> Parser<'a> {
                                 let start = expr.location.start;
                                 let end = self.previous_position();
 
+                                record_postfix_layer()?;
                                 expr = Node::new(
                                     NodeKind::Unary {
                                         op: "->$*".to_string(),
@@ -125,6 +143,7 @@ impl<'a> Parser<'a> {
                                 let start = expr.location.start;
                                 let end = self.previous_position();
 
+                                record_postfix_layer()?;
                                 expr = Node::new(
                                     NodeKind::Unary {
                                         op: "->&*".to_string(),
@@ -144,6 +163,7 @@ impl<'a> Parser<'a> {
                                 let start = expr.location.start;
                                 let end = self.previous_position();
 
+                                record_postfix_layer()?;
                                 expr = Node::new(
                                     NodeKind::Unary {
                                         op: "->**".to_string(),
@@ -164,6 +184,7 @@ impl<'a> Parser<'a> {
                                     self.tokens.next()?; // consume *
                                     let start = expr.location.start;
                                     let end = self.previous_position();
+                                    record_postfix_layer()?;
                                     expr = Node::new(
                                         NodeKind::Unary {
                                             op: "->$#*".to_string(),
@@ -187,6 +208,7 @@ impl<'a> Parser<'a> {
                             let start = expr.location.start;
                             let end = self.previous_position();
 
+                            record_postfix_layer()?;
                             expr = Node::new(
                                 NodeKind::MethodCall { object: Box::new(expr), method, args },
                                 SourceLocation { start, end },
@@ -202,6 +224,7 @@ impl<'a> Parser<'a> {
                             let mut all_args = vec![expr];
                             all_args.extend(args);
 
+                            record_postfix_layer()?;
                             expr = Node::new(
                                 NodeKind::FunctionCall {
                                     name: "->()".to_string(),
@@ -220,6 +243,7 @@ impl<'a> Parser<'a> {
                             let start = expr.location.start;
                             let end = self.previous_position();
 
+                            record_postfix_layer()?;
                             expr = Node::new(
                                 NodeKind::Binary {
                                     op: "->[]".to_string(),
@@ -239,6 +263,7 @@ impl<'a> Parser<'a> {
                             let start = expr.location.start;
                             let end = self.previous_position();
 
+                            record_postfix_layer()?;
                             expr = Node::new(
                                 NodeKind::Binary {
                                     op: "->{}".to_string(),
@@ -302,6 +327,7 @@ impl<'a> Parser<'a> {
                     let end = self.previous_position();
 
                     // Represent as binary subscript operation
+                    record_postfix_layer()?;
                     expr = Node::new(
                         NodeKind::Binary {
                             op: "[]".to_string(),
@@ -395,6 +421,7 @@ impl<'a> Parser<'a> {
                     let end = self.previous_position();
 
                     // Represent as binary subscript operation
+                    record_postfix_layer()?;
                     expr = Node::new(
                         NodeKind::Binary {
                             op: "{}".to_string(),

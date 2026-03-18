@@ -793,6 +793,18 @@ impl SymbolExtractor {
                 }
             }
 
+            NodeKind::Tie { variable, package, args } => {
+                self.visit_node(variable);
+                self.visit_node(package);
+                for arg in args {
+                    self.visit_node(arg);
+                }
+            }
+
+            NodeKind::Untie { variable } | NodeKind::Goto { target: variable } => {
+                self.visit_node(variable);
+            }
+
             // Regex related nodes - we recurse into expression
             NodeKind::Regex { .. } => {}
             NodeKind::Match { expr, .. } => {
@@ -834,6 +846,14 @@ impl SymbolExtractor {
             | NodeKind::Glob { .. }
             | NodeKind::Readline { .. }
             | NodeKind::Identifier { .. }
+            | NodeKind::Typeglob { .. }
+            | NodeKind::DataSection { .. }
+            | NodeKind::LoopControl { .. }
+            | NodeKind::MissingExpression
+            | NodeKind::MissingStatement
+            | NodeKind::MissingIdentifier
+            | NodeKind::MissingBlock
+            | NodeKind::UnknownRest
             | NodeKind::Error { .. } => {
                 // No symbols to extract
             }
