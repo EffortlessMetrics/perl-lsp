@@ -2,6 +2,7 @@
 
 pub mod cache;
 pub mod document_store;
+pub mod monitoring;
 pub mod production_coordinator;
 pub mod slo;
 pub mod state_machine;
