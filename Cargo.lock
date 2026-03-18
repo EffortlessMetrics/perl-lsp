@@ -1797,6 +1797,7 @@ dependencies = [
  "perl-lsp-config",
  "perl-lsp-diagnostic-catalog",
  "perl-lsp-diagnostics",
+ "perl-lsp-execute-command",
  "perl-lsp-feature-governance",
  "perl-lsp-formatting",
  "perl-lsp-inlay-hints",
@@ -1946,6 +1947,17 @@ dependencies = [
  "perl-module-path",
  "serde_json",
  "url",
+]
+
+[[package]]
+name = "perl-lsp-execute-command"
+version = "0.11.0"
+dependencies = [
+ "perl-lsp-protocol",
+ "perl-parser",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

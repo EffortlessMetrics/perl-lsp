@@ -63,6 +63,7 @@ members = [
     "crates/perl-lsp-limits",
     "crates/perl-lsp-uri",
     "crates/perl-lsp-config",
+    "crates/perl-lsp-execute-command",
     "crates/perl-diagnostics-codes",
     "crates/perl-position-tracking",
     "crates/perl-symbol-types",
@@ -367,6 +368,7 @@ perl-lsp-cancellation = { path = "crates/perl-lsp-cancellation", version = "0.11
 perl-lsp-limits = { path = "crates/perl-lsp-limits", version = "0.11.0" }
 perl-lsp-uri = { path = "crates/perl-lsp-uri", version = "0.11.0" }
 perl-lsp-config = { path = "crates/perl-lsp-config", version = "0.11.0" }
+perl-lsp-execute-command = { path = "crates/perl-lsp-execute-command", version = "0.11.0" }
 perl-lsp-feature-profile = { path = "crates/perl-lsp-feature-profile", version = "0.11.0" }
 perl-lsp-feature-profile-cli = { path = "crates/perl-lsp-feature-profile-cli", version = "0.11.0" }
 perl-lsp-feature-policy = { path = "crates/perl-lsp-feature-policy", version = "0.11.0" }

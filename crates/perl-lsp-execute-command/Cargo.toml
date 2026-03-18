@@ -1,0 +1,27 @@
+[package]
+name = "perl-lsp-execute-command"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Execute-command provider microcrate for perl-lsp"
+documentation = "https://docs.rs/perl-lsp-execute-command"
+readme = "README.md"
+keywords = ["perl", "lsp", "execute-command", "json-rpc", "tooling"]
+categories = ["development-tools", "text-editors"]
+include = ["src/**", "Cargo.toml", "README.md", "LICENSE*"]
+
+[dependencies]
+perl-parser = { workspace = true, features = ["test-performance"] }
+perl-lsp-protocol = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.24.0"
+
+[lints]
+workspace = true
