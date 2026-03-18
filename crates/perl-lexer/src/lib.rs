@@ -1866,7 +1866,11 @@ impl<'a> PerlLexer<'a> {
                         self.mode = LexerMode::ExpectTerm;
                     }
                     "sub" => {
+                        // Enter a prototype-candidate state for the declaration head.
+                        // If we later see `(` before `{`/`;`, we stay in prototype mode, but
+                        // body delimiters without a prototype should cancel that state.
                         self.in_prototype = true;
+                        self.prototype_depth = 0;
                     }
                     // Quote operators expect a delimiter next (must be immediately adjacent)
                     op if quote_handler::is_quote_operator(op) => {
@@ -2315,6 +2319,9 @@ impl<'a> PerlLexer<'a> {
             }
             ';' => {
                 self.advance();
+                if self.in_prototype && self.prototype_depth == 0 {
+                    self.in_prototype = false;
+                }
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::Semicolon,
@@ -2355,6 +2362,9 @@ impl<'a> PerlLexer<'a> {
             }
             '{' => {
                 self.advance();
+                if self.in_prototype && self.prototype_depth == 0 {
+                    self.in_prototype = false;
+                }
                 self.mode = LexerMode::ExpectTerm;
                 Some(Token {
                     token_type: TokenType::LeftBrace,
@@ -3276,6 +3286,36 @@ mod tests {
         lexer.next_token(); // 10
         let token = lexer.next_token().ok_or("Expected modulo operator token")?;
         assert!(matches!(token.token_type, TokenType::Operator(ref op) if op.as_ref() == "%"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_sub_body_clears_prototype_mode() -> TestResult {
+        let mut lexer = PerlLexer::new("sub demo { print($^W); }");
+        let tokens = lexer.collect_tokens();
+
+        assert!(tokens.iter().any(|token| {
+            matches!(
+                token.token_type,
+                TokenType::Identifier(ref id) if id.as_ref() == "$^W"
+            )
+        }));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_sub_forward_declaration_clears_prototype_mode() -> TestResult {
+        let mut lexer = PerlLexer::new("sub demo; my $^W;");
+        let tokens = lexer.collect_tokens();
+
+        assert!(tokens.iter().any(|token| {
+            matches!(
+                token.token_type,
+                TokenType::Identifier(ref id) if id.as_ref() == "$^W"
+            )
+        }));
+
         Ok(())
     }
 
