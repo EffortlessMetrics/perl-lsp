@@ -16,9 +16,48 @@ use perl_lsp_launcher::{
 use std::env;
 use std::process;
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::time::{Duration, sleep};
+
+/// Minimal stderr logger for startup/runtime diagnostics that must stay
+/// separate from LSP protocol traffic on stdout.
+#[derive(Clone, Copy, Debug)]
+struct StderrLogger {
+    enabled: bool,
+}
+
+impl StderrLogger {
+    const fn new(enabled: bool) -> Self {
+        Self { enabled }
+    }
+
+    fn info(self, message: impl AsRef<str>) {
+        if self.enabled {
+            self.emit("INFO", message.as_ref());
+        }
+    }
+
+    fn warn(self, message: impl AsRef<str>) {
+        self.emit("WARN", message.as_ref());
+    }
+
+    fn error(self, message: impl AsRef<str>) {
+        self.emit("ERROR", message.as_ref());
+    }
+
+    fn emit(self, level: &str, message: &str) {
+        eprintln!("[{}] {level} perl-lsp: {message}", log_timestamp());
+    }
+}
+
+fn log_timestamp() -> String {
+    match SystemTime::now().duration_since(UNIX_EPOCH) {
+        Ok(duration) => format!("{}.{:03}", duration.as_secs(), duration.subsec_millis()),
+        Err(_) => "0.000".to_string(),
+    }
+}
 
 /// Spawn a blocking reader thread that reads LSP messages from `reader` and
 /// forwards them to `tx`. The thread exits when the channel closes or the
@@ -26,6 +65,7 @@ use tokio::time::{Duration, sleep};
 fn spawn_reader_thread<R: std::io::Read + Send + 'static>(
     reader: R,
     tx: tokio::sync::mpsc::Sender<perl_lsp::JsonRpcRequest>,
+    logger: StderrLogger,
 ) {
     use perl_lsp::transport::ContentLengthMessageReader;
     std::thread::spawn(move || {
@@ -35,11 +75,18 @@ fn spawn_reader_thread<R: std::io::Read + Send + 'static>(
             match msg_reader.read_next(&mut buf_reader) {
                 Ok(Some(request)) => {
                     if tx.blocking_send(request).is_err() {
+                        logger.info("reader thread exiting after request channel closed");
                         break;
                     }
                 }
-                Ok(None) => break, // EOF
-                Err(_) => break,
+                Ok(None) => {
+                    logger.info("reader thread reached EOF");
+                    break;
+                }
+                Err(error) => {
+                    logger.warn(format!("reader thread stopped after transport error: {error}"));
+                    break;
+                }
             }
         }
     });
@@ -159,23 +206,22 @@ fn is_terminal_stdout() -> bool {
 }
 
 fn run_server(launch_config: LaunchConfig) {
-    if launch_config.enable_logging {
-        eprintln!("Perl Language Server starting...");
-        eprintln!("Mode: {}", launch_config.transport.label());
-        if let Some(port) = launch_config.transport.port() {
-            eprintln!("Port: {port}");
-        }
-        eprintln!("Feature profile: {}", launch_config.feature_profile.as_str());
+    let logger = StderrLogger::new(launch_config.enable_logging);
+    logger.info(format!(
+        "starting server (mode={}, feature_profile={})",
+        launch_config.transport.label(),
+        launch_config.feature_profile.as_str()
+    ));
+    if let Some(port) = launch_config.transport.port() {
+        logger.info(format!("configured socket port={port}"));
     }
 
     match launch_config.transport {
         TransportMode::Stdio => {
-            // Stdio uses the same async dispatch path as TCP: a blocking reader
-            // thread feeds an mpsc channel into serve_async().
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
-                    eprintln!("Failed to create Tokio runtime: {e}");
+                    logger.error(format!("failed to create Tokio runtime: {e}"));
                     process::exit(1);
                 }
             };
@@ -184,12 +230,11 @@ fn run_server(launch_config: LaunchConfig) {
                 let server =
                     Arc::new(LspServer::new_with_feature_profile(launch_config.feature_profile));
 
-                // Spawn a blocking reader thread for stdin
                 let (tx, rx) = tokio::sync::mpsc::channel(64);
-                spawn_reader_thread(std::io::stdin(), tx);
-
-                // Same async dispatch path as TCP
+                spawn_reader_thread(std::io::stdin(), tx, logger);
+                logger.info("stdio transport initialized; waiting for requests");
                 server.serve_async(rx).await;
+                logger.info("stdio server loop exited");
             });
         }
         TransportMode::Socket { port } => {
@@ -198,7 +243,7 @@ fn run_server(launch_config: LaunchConfig) {
             let rt = match Runtime::new() {
                 Ok(rt) => rt,
                 Err(e) => {
-                    eprintln!("Failed to create Tokio runtime: {e}");
+                    logger.error(format!("failed to create Tokio runtime: {e}"));
                     process::exit(1);
                 }
             };
@@ -208,9 +253,9 @@ fn run_server(launch_config: LaunchConfig) {
                     Ok(l) => l,
                     Err(e) => {
                         if e.kind() == std::io::ErrorKind::AddrInUse {
-                            eprintln!("{}", port_in_use_message(port));
+                            logger.error(port_in_use_message(port));
                         } else {
-                            eprintln!("Failed to bind to {addr}: {e}");
+                            logger.error(format!("failed to bind to {addr}: {e}"));
                         }
                         process::exit(1);
                     }
@@ -218,34 +263,41 @@ fn run_server(launch_config: LaunchConfig) {
                 let local_addr = match listener.local_addr() {
                     Ok(a) => a,
                     Err(e) => {
-                        eprintln!("Failed to get local address: {e}");
+                        logger.error(format!("failed to get local address: {e}"));
                         process::exit(1);
                     }
                 };
-                eprintln!("Perl LSP listening on {}", local_addr);
+                logger.info(format!("socket listener ready on {local_addr}"));
 
                 loop {
                     match listener.accept().await {
                         Ok((stream, peer_addr)) => {
-                            eprintln!("Accepted connection from {peer_addr}");
+                            logger.info(format!("accepted connection from {peer_addr}"));
                             tokio::spawn(async move {
+                                let connection_logger = logger;
                                 let std_stream = match stream.into_std() {
                                     Ok(std_stream) => std_stream,
                                     Err(error) => {
-                                        eprintln!("Failed to convert stream to std: {error}");
+                                        connection_logger.error(format!(
+                                            "failed to convert socket stream for {peer_addr}: {error}"
+                                        ));
                                         return;
                                     }
                                 };
 
-                                if let Err(e) = std_stream.set_nonblocking(false) {
-                                    eprintln!("Failed to set blocking mode: {}", e);
+                                if let Err(error) = std_stream.set_nonblocking(false) {
+                                    connection_logger.error(format!(
+                                        "failed to set blocking mode for {peer_addr}: {error}"
+                                    ));
                                     return;
                                 }
 
                                 let writer = match std_stream.try_clone() {
                                     Ok(w) => w,
-                                    Err(e) => {
-                                        eprintln!("Failed to clone stream: {e}");
+                                    Err(error) => {
+                                        connection_logger.error(format!(
+                                            "failed to clone stream for {peer_addr}: {error}"
+                                        ));
                                         return;
                                     }
                                 };
@@ -256,21 +308,23 @@ fn run_server(launch_config: LaunchConfig) {
                                     Box::new(writer) as Box<dyn std::io::Write + Send>
                                 ));
 
-                                // Create server, wrap in Arc for concurrent async dispatch
                                 let server = Arc::new(LspServer::with_output_and_feature_profile(
                                     output, profile,
                                 ));
 
-                                // Spawn a blocking reader thread that feeds an async channel
                                 let (tx, rx) = tokio::sync::mpsc::channel(64);
-                                spawn_reader_thread(reader, tx);
-
-                                // Run async serve loop with concurrent dispatch
+                                spawn_reader_thread(reader, tx, connection_logger);
+                                connection_logger.info(format!(
+                                    "serving socket session for {peer_addr}"
+                                ));
                                 server.serve_async(rx).await;
+                                connection_logger.info(format!(
+                                    "socket session ended for {peer_addr}"
+                                ));
                             });
                         }
                         Err(e) => {
-                            eprintln!("Failed to accept: {e}");
+                            logger.warn(format!("failed to accept socket connection: {e}"));
                             sleep(Duration::from_millis(100)).await;
                         }
                     }
@@ -285,4 +339,21 @@ fn print_version() {
     // build.rs always sets GIT_TAG (falls back to "unknown"), so env! is safe.
     println!("Git tag: {}", env!("GIT_TAG"));
     println!("Perl Language Server using perl-parser v3");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StderrLogger, log_timestamp};
+
+    #[test]
+    fn timestamp_contains_millisecond_separator() {
+        let timestamp = log_timestamp();
+        assert!(timestamp.contains('.'));
+    }
+
+    #[test]
+    fn logger_preserves_enabled_flag() {
+        let logger = StderrLogger::new(true);
+        assert!(logger.enabled);
+    }
 }
