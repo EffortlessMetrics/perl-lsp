@@ -22,6 +22,19 @@ for prefix in perl-module- perl-lsp- perl-lsp-feature- perl-dap- perl-ts- perl-w
 done
 ```
 
+## Start with the right doc type
+
+This docs set follows the [Diátaxis](reference/DOCUMENTATION_GUIDE.md) framework. Pick the section that matches your goal:
+
+| If you want to... | Start here | Why |
+|---|---|---|
+| Learn Perl LSP from scratch | [Tutorials](#tutorials--learn-by-doing) | Guided walkthroughs with context and expected outcomes |
+| Solve a concrete task | [How-to guides](#how-to-guides--solve-a-problem) | Short, task-focused procedures |
+| Look up exact commands or behavior | [Reference](#reference--look-it-up) | Facts, interfaces, and authoritative details |
+| Understand design tradeoffs | [Explanation](#explanation--understand-why) | Rationale, architecture, and constraints |
+
+For contributor-facing documentation standards, use the [Documentation Guide](reference/DOCUMENTATION_GUIDE.md).
+
 ## Tutorials — learn by doing
 
 Step-by-step guides to get you started.
@@ -57,7 +70,7 @@ Precise, complete information for lookup.
 - [Configuration](reference/CONFIG.md) — Configuration options
 - [FAQ](reference/FAQ.md) — Frequently asked questions
 - [Known Limitations](reference/KNOWN_LIMITATIONS.md) — Current constraints and workarounds
-- [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Diataxis framework and standards
+- [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — Diátaxis framework and standards
 
 ## Explanation — understand why
 
@@ -107,6 +120,7 @@ High-level planning documents for project direction.
 ## Contributing
 
 - [Contributing Guide](../CONTRIBUTING.md) — Development workflow and contribution process
+- [Documentation Guide](reference/DOCUMENTATION_GUIDE.md) — How to classify, write, and maintain docs
 
 ## Quick verification
 
