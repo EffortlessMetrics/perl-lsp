@@ -134,6 +134,14 @@ impl<'a> Parser<'a> {
             // Control flow
             TokenKind::If => self.parse_if_statement(),
             TokenKind::Unless => self.parse_unless_statement(),
+
+            // Orphaned else/elsif — these appear at statement level when the
+            // preceding if/unless block failed to parse or was consumed by
+            // error recovery. Instead of crashing into expression parsing,
+            // consume the else/elsif clause gracefully and wrap it in an
+            // error-recovery If node so the rest of the file can keep parsing.
+            TokenKind::Else => self.parse_orphaned_else(),
+            TokenKind::Elsif => self.parse_orphaned_elsif(),
             TokenKind::While => self.parse_while_statement(),
             TokenKind::Until => self.parse_until_statement(),
             TokenKind::For => self.parse_for_statement(),

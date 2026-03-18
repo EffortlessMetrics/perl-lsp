@@ -206,6 +206,9 @@ impl<'a> Parser<'a> {
                 | TokenKind::Finally
                 | TokenKind::When
                 | TokenKind::Undef
+                // else/elsif — handled in parse_statement_inner for orphan recovery
+                | TokenKind::Else
+                | TokenKind::Elsif
         )
     }
 
@@ -361,6 +364,7 @@ impl<'a> Parser<'a> {
             Some(TokenKind::My) | Some(TokenKind::Our) | Some(TokenKind::Local) | Some(TokenKind::State) => true,
             Some(TokenKind::Sub) | Some(TokenKind::Package) | Some(TokenKind::Use) => true,
             Some(TokenKind::If) | Some(TokenKind::Unless) => true,
+            Some(TokenKind::Elsif) | Some(TokenKind::Else) => true,
             Some(TokenKind::While) | Some(TokenKind::Until) => true,
             Some(TokenKind::For) | Some(TokenKind::Foreach) => true,
             None => true,  // EOF is a sync point
