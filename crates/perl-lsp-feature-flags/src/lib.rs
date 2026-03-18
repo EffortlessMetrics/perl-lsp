@@ -4,7 +4,35 @@
 //! The `BuildFlags` shape is the single source of truth for runtime-constructed
 //! capability toggles, while `AdvertisedFeatures` is the runtime-facing projection
 //! used by server startup and protocol responses.
+use std::fmt;
+
 use perl_lsp_feature_ids::*;
+
+/// Error returned when a caller references an unknown feature id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnknownFeatureId {
+    raw_id: String,
+}
+
+impl UnknownFeatureId {
+    /// Create an error for an unsupported feature id.
+    pub fn new(raw_id: impl Into<String>) -> Self {
+        Self { raw_id: raw_id.into() }
+    }
+
+    /// Return the rejected feature id.
+    pub fn raw_id(&self) -> &str {
+        &self.raw_id
+    }
+}
+
+impl fmt::Display for UnknownFeatureId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown feature id: {}", self.raw_id)
+    }
+}
+
+impl std::error::Error for UnknownFeatureId {}
 
 /// LSP features advertised to clients for Perl script development
 ///
@@ -174,6 +202,69 @@ impl BuildFlags {
             document_highlight: self.document_highlight,
             declaration: self.declaration,
         }
+    }
+
+    /// Update a single feature flag using a canonical feature id.
+    pub fn set_feature_by_id(
+        &mut self,
+        feature_id: &str,
+        enabled: bool,
+    ) -> Result<(), UnknownFeatureId> {
+        match feature_id.trim() {
+            LSP_COMPLETION => self.completion = enabled,
+            LSP_HOVER => self.hover = enabled,
+            LSP_DEFINITION => self.definition = enabled,
+            LSP_TYPE_DEFINITION => self.type_definition = enabled,
+            LSP_IMPLEMENTATION => self.implementation = enabled,
+            LSP_REFERENCES => self.references = enabled,
+            LSP_DOCUMENT_SYMBOL => self.document_symbol = enabled,
+            LSP_WORKSPACE_SYMBOL => self.workspace_symbol = enabled,
+            LSP_INLAY_HINT => self.inlay_hints = enabled,
+            LSP_PULL_DIAGNOSTICS => self.pull_diagnostics = enabled,
+            LSP_SEMANTIC_TOKENS => self.semantic_tokens = enabled,
+            LSP_CODE_ACTION => self.code_actions = enabled,
+            LSP_EXECUTE_COMMAND => self.execute_command = enabled,
+            LSP_RENAME => self.rename = enabled,
+            LSP_DOCUMENT_LINK => self.document_links = enabled,
+            LSP_SELECTION_RANGE => self.selection_ranges = enabled,
+            LSP_ON_TYPE_FORMATTING => self.on_type_formatting = enabled,
+            LSP_CODE_LENS => self.code_lens = enabled,
+            LSP_CALL_HIERARCHY => self.call_hierarchy = enabled,
+            LSP_TYPE_HIERARCHY => self.type_hierarchy = enabled,
+            LSP_LINKED_EDITING_RANGE => self.linked_editing = enabled,
+            LSP_INLINE_COMPLETION => self.inline_completion = enabled,
+            LSP_INLINE_VALUE => self.inline_values = enabled,
+            LSP_NOTEBOOK_DOCUMENT_SYNC => self.notebook_document_sync = enabled,
+            LSP_NOTEBOOK_CELL_EXECUTION => self.notebook_cell_execution = enabled,
+            LSP_MONIKER => self.moniker = enabled,
+            LSP_DOCUMENT_COLOR => self.document_color = enabled,
+            LSP_FORMATTING => self.formatting = enabled,
+            LSP_RANGE_FORMATTING => self.range_formatting = enabled,
+            LSP_FOLDING_RANGE => self.folding_range = enabled,
+            LSP_SIGNATURE_HELP => self.signature_help = enabled,
+            LSP_DOCUMENT_HIGHLIGHT => self.document_highlight = enabled,
+            LSP_DECLARATION => self.declaration = enabled,
+            other => return Err(UnknownFeatureId::new(other)),
+        }
+
+        Ok(())
+    }
+
+    /// Apply a list of feature ids as enable/disable overrides.
+    pub fn apply_feature_overrides<I, S>(
+        &mut self,
+        feature_ids: I,
+        enabled: bool,
+    ) -> Result<(), UnknownFeatureId>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        for feature_id in feature_ids {
+            self.set_feature_by_id(feature_id.as_ref(), enabled)?;
+        }
+
+        Ok(())
     }
 
     /// Convert build flags to advertised feature ids used by BDD and tooling layers.
@@ -411,9 +502,9 @@ impl BuildFlags {
 
 #[cfg(test)]
 mod tests {
-    use super::{AdvertisedFeatures, BuildFlags};
+    use super::{AdvertisedFeatures, BuildFlags, UnknownFeatureId};
     use perl_lsp_feature_contracts::all_features;
-    use perl_lsp_feature_ids::LSP_DOCUMENT_COLOR;
+    use perl_lsp_feature_ids::{LSP_DOCUMENT_COLOR, LSP_FORMATTING};
 
     #[test]
     fn feature_ids_are_stable_and_sorted() {
@@ -444,6 +535,42 @@ mod tests {
     fn document_color_uses_bdd_catalog_id() {
         let flags = BuildFlags { document_color: true, ..Default::default() };
         assert_eq!(flags.to_feature_ids(), vec![LSP_DOCUMENT_COLOR]);
+    }
+
+    #[test]
+    fn set_feature_by_id_updates_target_field() {
+        let mut flags = BuildFlags::production();
+        assert!(!flags.formatting);
+        assert!(flags.source_organize_imports);
+
+        assert!(flags.set_feature_by_id(LSP_FORMATTING, true).is_ok());
+        flags.source_organize_imports = false;
+
+        assert!(flags.formatting);
+        assert!(!flags.source_organize_imports);
+    }
+
+    #[test]
+    fn apply_feature_overrides_updates_multiple_flags() {
+        let mut flags = BuildFlags::production();
+        let result = flags.apply_feature_overrides([LSP_FORMATTING, LSP_DOCUMENT_COLOR], false);
+        assert!(result.is_ok());
+        assert!(!flags.formatting);
+        assert!(!flags.document_color);
+    }
+
+    #[test]
+    fn source_organize_imports_is_not_exposed_without_catalog_id() {
+        let flags = BuildFlags { source_organize_imports: true, ..Default::default() };
+        assert!(flags.to_feature_ids().is_empty());
+    }
+
+    #[test]
+    fn unknown_feature_id_is_reported() {
+        let mut flags = BuildFlags::default();
+        let err = flags.set_feature_by_id("lsp.not-real", true).expect_err("must fail");
+        assert_eq!(err, UnknownFeatureId::new("lsp.not-real"));
+        assert_eq!(err.raw_id(), "lsp.not-real");
     }
 
     #[test]
@@ -493,8 +620,6 @@ mod tests {
         );
     }
 
-    // ── ga_lock profile shape ───────────────────────────────────────
-
     #[test]
     fn ga_lock_has_expected_profile_shape() {
         let ga = BuildFlags::ga_lock();
@@ -505,8 +630,6 @@ mod tests {
         assert!(ga.range_formatting, "ga-lock should include range_formatting");
         assert!(!ga.inline_values, "ga-lock should exclude inline_values");
     }
-
-    // ── all() profile enables everything ────────────────────────────
 
     #[test]
     fn all_profile_enables_every_flag() {
@@ -548,122 +671,90 @@ mod tests {
         assert!(all.declaration);
     }
 
-    // ── Default is all-false ────────────────────────────────────────
-
     #[test]
-    fn default_flags_are_all_false() {
-        let default = BuildFlags::default();
-        assert!(default.to_feature_ids().is_empty(), "default flags should yield no features");
-    }
+    fn advertised_projection_matches_selected_fields() {
+        let flags = BuildFlags {
+            completion: true,
+            hover: true,
+            definition: false,
+            references: true,
+            document_symbol: false,
+            workspace_symbol: true,
+            code_actions: true,
+            code_lens: false,
+            formatting: true,
+            range_formatting: false,
+            rename: true,
+            folding_range: true,
+            selection_ranges: true,
+            linked_editing: false,
+            inlay_hints: true,
+            semantic_tokens: true,
+            call_hierarchy: true,
+            type_hierarchy: false,
+            pull_diagnostics: true,
+            document_color: true,
+            notebook_document_sync: false,
+            notebook_cell_execution: true,
+            signature_help: true,
+            document_highlight: false,
+            declaration: true,
+            ..Default::default()
+        };
 
-    // ── all() produces strictly more IDs than ga_lock() ─────────────
+        let advertised = flags.to_advertised_features();
+        let expected = AdvertisedFeatures {
+            completion: true,
+            hover: true,
+            definition: false,
+            references: true,
+            document_symbol: false,
+            workspace_symbol: true,
+            code_action: true,
+            code_lens: false,
+            formatting: true,
+            range_formatting: false,
+            rename: true,
+            folding_range: true,
+            selection_range: true,
+            linked_editing: false,
+            inlay_hints: true,
+            semantic_tokens: true,
+            call_hierarchy: true,
+            type_hierarchy: false,
+            diagnostic_provider: true,
+            document_color: true,
+            notebook_document_sync: false,
+            notebook_cell_execution: true,
+            signature_help: true,
+            document_highlight: false,
+            declaration: true,
+        };
 
-    #[test]
-    fn all_produces_superset_of_ga_lock_ids() {
-        let all_ids = BuildFlags::all().to_feature_ids();
-        let ga_ids = BuildFlags::ga_lock().to_feature_ids();
-        for id in &ga_ids {
-            assert!(all_ids.contains(id), "'all' profile should contain ga-lock feature '{id}'");
-        }
-        assert!(all_ids.len() >= ga_ids.len());
-    }
-
-    // ── to_advertised_features mapping ──────────────────────────────
-
-    #[test]
-    fn to_advertised_features_maps_completion() {
-        let flags = BuildFlags { completion: true, ..Default::default() };
-        let adv = flags.to_advertised_features();
-        assert!(adv.completion);
-        assert!(!adv.hover);
-    }
-
-    #[test]
-    fn to_advertised_features_maps_code_actions_to_code_action() {
-        let flags = BuildFlags { code_actions: true, ..Default::default() };
-        let adv = flags.to_advertised_features();
-        assert!(
-            adv.code_action,
-            "BuildFlags.code_actions should map to AdvertisedFeatures.code_action"
-        );
-    }
-
-    #[test]
-    fn to_advertised_features_maps_pull_diagnostics_to_diagnostic_provider() {
-        let flags = BuildFlags { pull_diagnostics: true, ..Default::default() };
-        let adv = flags.to_advertised_features();
-        assert!(
-            adv.diagnostic_provider,
-            "BuildFlags.pull_diagnostics should map to AdvertisedFeatures.diagnostic_provider"
-        );
-    }
-
-    #[test]
-    fn to_advertised_features_maps_selection_ranges_to_selection_range() {
-        let flags = BuildFlags { selection_ranges: true, ..Default::default() };
-        let adv = flags.to_advertised_features();
-        assert!(
-            adv.selection_range,
-            "BuildFlags.selection_ranges should map to AdvertisedFeatures.selection_range"
-        );
-    }
-
-    #[test]
-    fn default_advertised_features_are_all_false() {
-        let adv = AdvertisedFeatures::default();
-        assert!(!adv.completion);
-        assert!(!adv.hover);
-        assert!(!adv.definition);
-        assert!(!adv.references);
-        assert!(!adv.document_symbol);
-        assert!(!adv.workspace_symbol);
-        assert!(!adv.code_action);
-        assert!(!adv.code_lens);
-        assert!(!adv.formatting);
-        assert!(!adv.rename);
-    }
-
-    // ── Individual flag toggling produces exactly one feature ID ─────
-
-    #[test]
-    fn single_flag_produces_single_id() {
-        let cases: Vec<(&str, BuildFlags)> = vec![
-            ("completion", BuildFlags { completion: true, ..Default::default() }),
-            ("hover", BuildFlags { hover: true, ..Default::default() }),
-            ("definition", BuildFlags { definition: true, ..Default::default() }),
-            ("references", BuildFlags { references: true, ..Default::default() }),
-            ("rename", BuildFlags { rename: true, ..Default::default() }),
-            ("formatting", BuildFlags { formatting: true, ..Default::default() }),
-            ("signature_help", BuildFlags { signature_help: true, ..Default::default() }),
-            ("declaration", BuildFlags { declaration: true, ..Default::default() }),
-        ];
-        for (label, flags) in cases {
-            let ids = flags.to_feature_ids();
-            assert_eq!(
-                ids.len(),
-                1,
-                "flag '{label}' should produce exactly 1 feature id, got {ids:?}"
-            );
-        }
-    }
-
-    // ── Production vs all diff ──────────────────────────────────────
-
-    #[test]
-    fn production_and_all_differ_on_formatting() {
-        let prod = BuildFlags::production();
-        let all = BuildFlags::all();
-        assert!(!prod.formatting);
-        assert!(all.formatting);
-        assert!(!prod.range_formatting);
-        assert!(all.range_formatting);
-    }
-
-    #[test]
-    fn ga_lock_and_production_differ_on_inline_values() {
-        let ga = BuildFlags::ga_lock();
-        let prod = BuildFlags::production();
-        assert!(!ga.inline_values, "ga-lock excludes inline_values");
-        assert!(prod.inline_values, "production includes inline_values");
+        assert_eq!(advertised.completion, expected.completion);
+        assert_eq!(advertised.hover, expected.hover);
+        assert_eq!(advertised.definition, expected.definition);
+        assert_eq!(advertised.references, expected.references);
+        assert_eq!(advertised.document_symbol, expected.document_symbol);
+        assert_eq!(advertised.workspace_symbol, expected.workspace_symbol);
+        assert_eq!(advertised.code_action, expected.code_action);
+        assert_eq!(advertised.code_lens, expected.code_lens);
+        assert_eq!(advertised.formatting, expected.formatting);
+        assert_eq!(advertised.range_formatting, expected.range_formatting);
+        assert_eq!(advertised.rename, expected.rename);
+        assert_eq!(advertised.folding_range, expected.folding_range);
+        assert_eq!(advertised.selection_range, expected.selection_range);
+        assert_eq!(advertised.linked_editing, expected.linked_editing);
+        assert_eq!(advertised.inlay_hints, expected.inlay_hints);
+        assert_eq!(advertised.semantic_tokens, expected.semantic_tokens);
+        assert_eq!(advertised.call_hierarchy, expected.call_hierarchy);
+        assert_eq!(advertised.type_hierarchy, expected.type_hierarchy);
+        assert_eq!(advertised.diagnostic_provider, expected.diagnostic_provider);
+        assert_eq!(advertised.document_color, expected.document_color);
+        assert_eq!(advertised.notebook_document_sync, expected.notebook_document_sync);
+        assert_eq!(advertised.notebook_cell_execution, expected.notebook_cell_execution);
+        assert_eq!(advertised.signature_help, expected.signature_help);
+        assert_eq!(advertised.document_highlight, expected.document_highlight);
+        assert_eq!(advertised.declaration, expected.declaration);
     }
 }

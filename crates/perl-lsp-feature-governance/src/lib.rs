@@ -17,7 +17,7 @@ pub use perl_lsp_feature_grid::{
 };
 pub use perl_lsp_feature_policy::{
     FeatureProfile, catalog_advertised_feature_ids, feature_ids_from_flags, flags_for_profile,
-    flags_for_runtime,
+    flags_for_runtime, flags_for_runtime_with_overrides,
 };
 pub use perl_lsp_feature_profile::{
     FeatureProfileKind, from_str_name as parse_profile_name, parse_profile_token,

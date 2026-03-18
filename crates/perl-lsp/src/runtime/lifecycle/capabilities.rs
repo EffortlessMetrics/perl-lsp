@@ -3,8 +3,25 @@
 //! Handles client capability parsing and server capabilities construction.
 
 use super::super::*;
+use perl_lsp_feature_governance::flags_for_runtime_with_overrides;
 use perl_workspace_folder::{extract_workspace_folder_uris, root_path_to_file_uri};
 use serde_json::{Value, json};
+use std::env;
+
+const ENABLED_FEATURES_ENV: &str = "PERL_LSP_ENABLE_FEATURES";
+const DISABLED_FEATURES_ENV: &str = "PERL_LSP_DISABLE_FEATURES";
+
+fn parse_feature_override_env(var_name: &str) -> Vec<String> {
+    match env::var(var_name) {
+        Ok(raw) => raw
+            .split(',')
+            .map(str::trim)
+            .filter(|token| !token.is_empty())
+            .map(ToOwned::to_owned)
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
 
 impl LspServer {
     /// Handle initialize request
@@ -193,7 +210,27 @@ impl LspServer {
 
         // Build capabilities using catalog-driven approach
         let profile = self.feature_profile();
-        let build_flags = profile.runtime_flags(has_perltidy);
+        let enabled_feature_ids = parse_feature_override_env(ENABLED_FEATURES_ENV);
+        let disabled_feature_ids = parse_feature_override_env(DISABLED_FEATURES_ENV);
+        if !enabled_feature_ids.is_empty() || !disabled_feature_ids.is_empty() {
+            eprintln!(
+                "Feature overrides: enable={:?}, disable={:?}",
+                enabled_feature_ids, disabled_feature_ids
+            );
+        }
+
+        let build_flags = flags_for_runtime_with_overrides(
+            profile,
+            has_perltidy,
+            enabled_feature_ids.iter().map(String::as_str),
+            disabled_feature_ids.iter().map(String::as_str),
+        )
+        .map_err(|error| {
+            crate::protocol::invalid_params(&format!(
+                "Invalid feature override via environment: {}",
+                error
+            ))
+        })?;
 
         // Persist advertised features for gating
         let features = build_flags.to_advertised_features();

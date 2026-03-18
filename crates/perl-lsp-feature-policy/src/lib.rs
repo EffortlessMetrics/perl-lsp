@@ -8,7 +8,7 @@
 //! `initialize` response.
 
 use perl_lsp_feature_contracts::advertised_features;
-use perl_lsp_feature_flags::{AdvertisedFeatures, BuildFlags};
+use perl_lsp_feature_flags::{AdvertisedFeatures, BuildFlags, UnknownFeatureId};
 use perl_lsp_feature_profile::FeatureProfileKind;
 
 /// Parse a user-facing feature profile name into a `FeatureProfile`.
@@ -94,6 +94,23 @@ impl FeatureProfile {
         flags
     }
 
+    /// Convert this policy into runtime flags plus explicit feature-id overrides.
+    pub fn runtime_flags_with_overrides<I, S>(
+        self,
+        has_perltidy: bool,
+        enabled_feature_ids: I,
+        disabled_feature_ids: I,
+    ) -> Result<BuildFlags, UnknownFeatureId>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut flags = self.runtime_flags(has_perltidy);
+        flags.apply_feature_overrides(enabled_feature_ids, true)?;
+        flags.apply_feature_overrides(disabled_feature_ids, false)?;
+        Ok(flags)
+    }
+
     /// Convert this policy into server advertised features.
     pub fn advertised_features(self) -> AdvertisedFeatures {
         self.build_flags().to_advertised_features()
@@ -133,6 +150,20 @@ pub fn flags_for_profile(profile: FeatureProfile) -> BuildFlags {
 /// on external tooling availability.
 pub fn flags_for_runtime(profile: FeatureProfile, has_perltidy: bool) -> BuildFlags {
     profile.runtime_flags(has_perltidy)
+}
+
+/// Resolve runtime flags and apply explicit enable/disable feature-id overrides.
+pub fn flags_for_runtime_with_overrides<I, S>(
+    profile: FeatureProfile,
+    has_perltidy: bool,
+    enabled_feature_ids: I,
+    disabled_feature_ids: I,
+) -> Result<BuildFlags, UnknownFeatureId>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<str>,
+{
+    profile.runtime_flags_with_overrides(has_perltidy, enabled_feature_ids, disabled_feature_ids)
 }
 
 /// Convert `BuildFlags` into canonical LSP feature identifiers.
@@ -287,6 +318,18 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn runtime_flags_with_overrides_applies_feature_id_toggles() -> Result<(), UnknownFeatureId> {
+        let flags = FeatureProfile::Production.runtime_flags_with_overrides(
+            true,
+            ["lsp.formatting"],
+            ["lsp.hover"],
+        )?;
+        assert!(flags.formatting);
+        assert!(!flags.hover);
+        Ok(())
     }
 
     // ── advertised_features ─────────────────────────────────────────
