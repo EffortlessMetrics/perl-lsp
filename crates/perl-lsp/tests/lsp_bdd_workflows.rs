@@ -171,6 +171,24 @@ fn diagnostic_error_count(report: &Value) -> usize {
         .count()
 }
 
+fn selection_range_depth(selection_range: &Value) -> usize {
+    let mut depth = 0;
+    let mut current = selection_range;
+
+    loop {
+        depth += 1;
+        let Some(parent) = current.get("parent") else {
+            break;
+        };
+        if parent.is_null() {
+            break;
+        }
+        current = parent;
+    }
+
+    depth
+}
+
 fn collect_symbol_names(symbol: &Value, names: &mut Vec<String>) {
     if let Some(name) = symbol.get("name").and_then(Value::as_str) {
         names.push(name.to_string());
@@ -989,6 +1007,75 @@ return$x*2}
             "formatting error should mention perltidy availability"
         );
     }
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_navigation_workflow_expands_selection_and_highlights_symbol_usage()
+-> Result<(), Box<dyn std::error::Error>> {
+    let scenario =
+        BddScenario::new("Navigation workflow expands selection and highlights symbol usage");
+
+    let code = r#"use strict;
+use warnings;
+
+sub calculate_total {
+    my ($left, $right) = @_;
+    my $total = $left + $right;
+    $total += 1;
+    return $total;
+}
+
+my $value = calculate_total(1, 2);
+print $value;
+"#;
+
+    scenario.given("a Perl file with a local variable used in assignment, mutation, and return");
+    let (mut harness, workspace) = setup_workspace(&[("navigation.pl", code)])?;
+    let uri = workspace.uri("navigation.pl");
+    harness.open(&uri, code)?;
+    harness.wait_for_symbol("calculate_total", Some(&uri), Duration::from_secs(2)).ok();
+
+    scenario.when("requesting document highlights on the local variable inside the subroutine");
+    let (highlight_line, highlight_col) = find_position(code, "$total =");
+    let highlights = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": highlight_line, "character": highlight_col }
+        }),
+    )?;
+
+    scenario.then("the server highlights the declaration, mutation, and return usage sites");
+    let highlight_items =
+        highlights.as_array().ok_or("documentHighlight should return an array")?;
+    assert_eq!(highlight_items.len(), 3, "expected three highlights for $total");
+    assert!(
+        highlight_items.iter().all(has_lsp_range),
+        "all highlights should include valid ranges"
+    );
+
+    scenario.when("requesting selection ranges from the function call arguments");
+    let (selection_line, selection_col) = find_position(code, "1, 2");
+    let selection_ranges = harness.request(
+        "textDocument/selectionRange",
+        json!({
+            "textDocument": { "uri": uri },
+            "positions": [{
+                "line": selection_line,
+                "character": selection_col + 1
+            }]
+        }),
+    )?;
+
+    scenario.then("the server returns a nested selection hierarchy for editor expand-selection");
+    let ranges = selection_ranges.as_array().ok_or("selectionRange should return an array")?;
+    assert_eq!(ranges.len(), 1, "expected one selection range result");
+    let depth = selection_range_depth(&ranges[0]);
+    assert!(depth >= 2, "selection range should provide nested expansion, got depth {depth}");
+    assert!(has_lsp_range(&ranges[0]), "selection range should include a valid range");
 
     Ok(())
 }
