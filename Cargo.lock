@@ -1580,6 +1580,7 @@ dependencies = [
  "perl-dap-platform",
  "perl-dap-security",
  "perl-dap-stack",
+ "perl-dap-types",
  "perl-dap-variables",
  "perl-feature-catalog",
  "perl-keywords",
@@ -1656,6 +1657,14 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "perl-dap-types"
+version = "0.11.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
