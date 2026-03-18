@@ -1,5 +1,18 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { LanguageClient } from 'vscode-languageclient/node';
+
+interface DiscoveredTestItem {
+    id: string;
+    label: string;
+    uri: string;
+    kind: 'file' | 'suite' | 'test';
+    range: {
+        start: { line: number; character: number };
+        end: { line: number; character: number };
+    };
+    children?: DiscoveredTestItem[];
+}
 
 export class PerlTestAdapter {
     private testController: vscode.TestController;
@@ -24,16 +37,16 @@ export class PerlTestAdapter {
         // Watch for document changes
         vscode.workspace.onDidOpenTextDocument(doc => this.parseDocument(doc));
         vscode.workspace.onDidChangeTextDocument(e => this.parseDocument(e.document));
-        
+
         // Discover tests in all open documents
         vscode.workspace.textDocuments.forEach(doc => this.parseDocument(doc));
-        
+
         // Watch for new files
         const watcher = vscode.workspace.createFileSystemWatcher('**/*.{t,pl,pm}');
         watcher.onDidCreate(uri => this.discoverTests(uri));
         watcher.onDidChange(uri => this.discoverTests(uri));
         watcher.onDidDelete(uri => this.deleteTest(uri));
-        
+
         // Refresh handler
         this.testController.refreshHandler = async () => {
             await this.discoverAllTests();
@@ -42,7 +55,7 @@ export class PerlTestAdapter {
 
     private async parseDocument(document: vscode.TextDocument) {
         if (document.languageId !== 'perl') return;
-        
+
         await this.discoverTests(document.uri);
     }
 
@@ -53,30 +66,42 @@ export class PerlTestAdapter {
                 textDocument: {
                     uri: uri.toString()
                 }
-            });
+            }) as DiscoveredTestItem[] | undefined;
 
             if (!tests || !Array.isArray(tests)) return;
 
             // Get or create file test item
             const fileId = uri.toString();
             let fileItem = this.fileTestData.get(fileId);
-            
+
             if (tests.length > 0) {
                 if (!fileItem) {
                     fileItem = this.testController.createTestItem(
                         fileId,
-                        uri.path.split('/').pop() || 'test',
+                        path.basename(uri.fsPath || uri.path) || 'test',
                         uri
                     );
                     this.testController.items.add(fileItem);
                     this.fileTestData.set(fileId, fileItem);
                 }
 
+                this.decorateTestItem(fileItem, {
+                    id: fileId,
+                    label: path.basename(uri.fsPath || uri.path) || 'test',
+                    uri: uri.toString(),
+                    kind: 'file',
+                    range: tests[0]?.range ?? {
+                        start: { line: 0, character: 0 },
+                        end: { line: 0, character: 0 }
+                    },
+                    children: tests
+                });
+
                 // Clear existing children
                 fileItem.children.replace([]);
 
-                // Add test items
-                for (const test of tests) {
+                // Add test items in source order for a stable visual tree
+                for (const test of this.sortTestsByLocation(tests)) {
                     this.addTestItem(fileItem, test);
                 }
             } else if (fileItem) {
@@ -89,7 +114,7 @@ export class PerlTestAdapter {
         }
     }
 
-    private addTestItem(parent: vscode.TestItem, testData: any) {
+    private addTestItem(parent: vscode.TestItem, testData: DiscoveredTestItem) {
         const range = new vscode.Range(
             testData.range.start.line,
             testData.range.start.character,
@@ -104,24 +129,67 @@ export class PerlTestAdapter {
         );
 
         testItem.range = range;
-        
-        // Add icon based on test kind
-        if (testData.kind === 'file') {
-            testItem.description = 'Test File';
-        } else if (testData.kind === 'suite') {
-            testItem.description = 'Test Suite';
-        } else {
-            testItem.description = 'Test';
-        }
+        testItem.sortText = this.sortKeyFor(testData);
+        this.decorateTestItem(testItem, testData);
 
         parent.children.add(testItem);
 
-        // Recursively add children
-        if (testData.children && testData.children.length > 0) {
-            for (const child of testData.children) {
-                this.addTestItem(testItem, child);
-            }
+        // Recursively add children in source order
+        const children = this.sortTestsByLocation(testData.children);
+        for (const child of children) {
+            this.addTestItem(testItem, child);
         }
+    }
+
+    private decorateTestItem(testItem: vscode.TestItem, testData: DiscoveredTestItem) {
+        const uri = vscode.Uri.parse(testData.uri);
+        const relativePath = this.relativePathFor(uri);
+        const startLine = testData.range.start.line + 1;
+        const endLine = testData.range.end.line + 1;
+        const lineLabel = startLine === endLine ? `line ${startLine}` : `lines ${startLine}-${endLine}`;
+
+        switch (testData.kind) {
+            case 'file':
+                testItem.description = relativePath;
+                break;
+            case 'suite':
+                testItem.description = `suite • ${lineLabel}`;
+                break;
+            default:
+                testItem.description = lineLabel;
+                break;
+        }
+    }
+
+    private relativePathFor(uri: vscode.Uri): string {
+        const relative = vscode.workspace.asRelativePath(uri, false);
+        return relative || path.basename(uri.fsPath || uri.path);
+    }
+
+    private sortTestsByLocation(tests: DiscoveredTestItem[] | undefined): DiscoveredTestItem[] {
+        if (!tests) {
+            return [];
+        }
+
+        return [...tests].sort((left, right) => {
+            const lineDelta = left.range.start.line - right.range.start.line;
+            if (lineDelta !== 0) {
+                return lineDelta;
+            }
+
+            const charDelta = left.range.start.character - right.range.start.character;
+            if (charDelta !== 0) {
+                return charDelta;
+            }
+
+            return left.label.localeCompare(right.label);
+        });
+    }
+
+    private sortKeyFor(testData: DiscoveredTestItem): string {
+        const line = testData.range.start.line.toString().padStart(6, '0');
+        const character = testData.range.start.character.toString().padStart(4, '0');
+        return `${line}:${character}:${testData.label}`;
     }
 
     private async discoverAllTests() {
@@ -131,7 +199,7 @@ export class PerlTestAdapter {
 
         // Discover tests in all workspace files
         const files = await vscode.workspace.findFiles('**/*.{t,pl,pm}', '**/node_modules/**');
-        
+
         for (const file of files) {
             await this.discoverTests(file);
         }
@@ -140,7 +208,7 @@ export class PerlTestAdapter {
     private deleteTest(uri: vscode.Uri) {
         const fileId = uri.toString();
         const fileItem = this.fileTestData.get(fileId);
-        
+
         if (fileItem) {
             this.testController.items.delete(fileId);
             this.fileTestData.delete(fileId);
@@ -173,7 +241,7 @@ export class PerlTestAdapter {
             // Check if this is a file-level test or individual test
             const isFile = test.id.endsWith('.t') || test.id.endsWith('.pl');
             const command = isFile ? 'perl.runTestFile' : 'perl.runTest';
-            
+
             // Execute test via LSP server
             const result = await this.client.sendRequest('workspace/executeCommand', {
                 command: command,
@@ -185,7 +253,7 @@ export class PerlTestAdapter {
             }
 
             const testResult = result as any;
-            
+
             if (testResult.status === 'error') {
                 run.failed(test, new vscode.TestMessage(testResult.message || 'Test execution failed'));
             } else if (testResult.results && Array.isArray(testResult.results)) {
@@ -198,7 +266,7 @@ export class PerlTestAdapter {
                     }
 
                     const duration = r.duration || 0;
-                    
+
                     switch (r.status) {
                         case 'passed':
                             run.passed(targetTest, duration);
@@ -230,12 +298,12 @@ export class PerlTestAdapter {
 
     private findTestById(parent: vscode.TestItem, id: string): vscode.TestItem | undefined {
         if (parent.id === id) return parent;
-        
+
         for (const [, child] of parent.children) {
             const found = this.findTestById(child, id);
             if (found) return found;
         }
-        
+
         return undefined;
     }
 
