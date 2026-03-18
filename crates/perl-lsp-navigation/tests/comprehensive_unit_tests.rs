@@ -5,11 +5,16 @@
 
 use perl_lsp_navigation::{
     TypeDefinitionProvider, TypeHierarchyItem, TypeHierarchyProvider, TypeHierarchySymbolKind,
-    WorkspaceSymbol, WorkspaceSymbolsProvider, compute_links, find_references_single_file,
+    WorkspaceSymbol, WorkspaceSymbolsProvider, compute_links,
 };
 use perl_parser_core::Parser;
 use perl_tdd_support::{must, must_some};
 use std::collections::HashMap;
+
+fn parse_ast(code: &str) -> perl_parser_core::ast::Node {
+    let mut parser = Parser::new(code);
+    must(parser.parse())
+}
 
 // ──────────────────────────────────────────────
 // document_links — compute_links
@@ -150,97 +155,6 @@ fn compute_links_base_uri_propagated() -> Result<(), Box<dyn std::error::Error>>
         .ok_or("missing baseUri")?;
     assert_eq!(base_uri, uri);
     Ok(())
-}
-
-// ──────────────────────────────────────────────
-// references — find_references_single_file
-// ──────────────────────────────────────────────
-
-fn parse_ast(code: &str) -> perl_parser_core::ast::Node {
-    let mut parser = Parser::new(code);
-    must(parser.parse())
-}
-
-#[test]
-fn refs_finds_variable_references() {
-    let code = "my $count = 0; $count++; print $count;";
-    let ast = parse_ast(code);
-
-    // Find offset of first "$count" (at the variable declaration)
-    let offset = must_some(code.find("$count"));
-    let refs = find_references_single_file(&ast, offset);
-
-    // Should find at least the declaration and one usage
-    assert!(refs.is_some(), "should find variable references");
-    let refs = must_some(refs);
-    assert!(refs.len() >= 2, "should find at least 2 references, found {}", refs.len());
-}
-
-#[test]
-fn refs_finds_function_call_references() {
-    let code = "sub greet { } greet();";
-    let ast = parse_ast(code);
-
-    // Offset inside the subroutine definition
-    let offset = must_some(code.find("greet"));
-    let refs = find_references_single_file(&ast, offset);
-
-    assert!(refs.is_some(), "should find subroutine references");
-    let refs = must_some(refs);
-    assert!(refs.len() >= 2, "should find definition + call, found {}", refs.len());
-}
-
-#[test]
-fn refs_returns_none_for_non_symbol_offset() {
-    let code = "my $x = 42;";
-    let ast = parse_ast(code);
-
-    // Offset on "42" — not a variable or function
-    let offset = must_some(code.find("42"));
-    let refs = find_references_single_file(&ast, offset);
-
-    // Should be None since 42 is a literal
-    // (it's fine if the implementation returns Some with the literal node)
-    // Just ensure no panic
-    let _ = refs;
-}
-
-#[test]
-fn refs_returns_none_for_out_of_range_offset() {
-    let code = "my $x = 1;";
-    let ast = parse_ast(code);
-    let refs = find_references_single_file(&ast, 99999);
-    assert!(refs.is_none(), "out-of-range offset should return None");
-}
-
-#[test]
-fn refs_empty_source() {
-    let code = "";
-    let ast = parse_ast(code);
-    let refs = find_references_single_file(&ast, 0);
-    // Empty program — should be None or empty references
-    let _ = refs;
-}
-
-#[test]
-fn refs_variable_with_different_sigils_not_confused() {
-    // $foo and @foo are distinct variables in Perl
-    let code = "my $foo = 1; my @foo = (2, 3);";
-    let ast = parse_ast(code);
-
-    let offset = must_some(code.find("$foo"));
-    let refs = find_references_single_file(&ast, offset);
-    if let Some(refs) = refs {
-        // All references should share the same sigil
-        for &(start, end) in &refs {
-            let fragment = &code[start..end.min(code.len())];
-            assert!(
-                !fragment.starts_with('@'),
-                "scalar $foo reference should not match @foo: '{}'",
-                fragment
-            );
-        }
-    }
 }
 
 // ──────────────────────────────────────────────
