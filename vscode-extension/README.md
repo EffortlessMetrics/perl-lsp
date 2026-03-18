@@ -90,10 +90,20 @@ cargo install --git https://github.com/EffortlessMetrics/perl-lsp --bin perl-lsp
   // Additional library include paths
   "perl-lsp.includePaths": ["lib", "local/lib/perl5"],
 
+  // Enable VS Code testing integration
+  "perl-lsp.enableTestIntegration": true,
+
   // LSP trace level for debugging
   "perl-lsp.trace.server": "off"
 }
 ```
+
+## 🧰 VS Code Integration
+
+- **Status bar control center** — click the `Perl LSP` status item to restart the server, show logs, organize imports, run tests, or re-download the bundled server binary.
+- **Testing view support** — `.t` and runnable `.pl` files can appear in the VS Code Testing panel when `perl-lsp.enableTestIntegration` is enabled.
+- **Trace-aware diagnostics** — `perl-lsp.trace.server` now feeds the VS Code LSP trace controls so protocol logs are visible in the output channel.
+- **Binary recovery** — run `Perl: Reinstall Language Server Binary` from the command palette if an auto-downloaded binary becomes corrupted.
 
 ## 🎯 Supported Perl Features
 

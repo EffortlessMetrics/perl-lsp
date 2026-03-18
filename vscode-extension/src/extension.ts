@@ -7,7 +7,8 @@ import {
     LanguageClientOptions,
     ServerOptions,
     TransportKind,
-    State
+    State,
+    Trace
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
@@ -78,6 +79,8 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     };
 
+    const traceLevel = getTraceLevel();
+
     // Client options
     const clientOptions: LanguageClientOptions = {
         documentSelector: [
@@ -88,7 +91,8 @@ export async function activate(context: vscode.ExtensionContext) {
             // Notify the server about file changes to .perltidyrc files
             fileEvents: vscode.workspace.createFileSystemWatcher('**/.perltidyrc')
         },
-        outputChannel
+        outputChannel,
+        traceOutputChannel: outputChannel
     };
 
     // Create and start the language client
@@ -98,6 +102,7 @@ export async function activate(context: vscode.ExtensionContext) {
         serverOptions,
         clientOptions
     );
+    client.setTrace(traceLevel);
 
     // Create status bar item - show immediately with starting state
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -130,9 +135,15 @@ export async function activate(context: vscode.ExtensionContext) {
     // Start the client
     await client.start();
     
-    // Initialize test adapter
-    testAdapter = new PerlTestAdapter(client);
-    context.subscriptions.push(testAdapter);
+    // Initialize test adapter when enabled
+    const enableTestIntegration = vscode.workspace.getConfiguration('perl-lsp').get<boolean>('enableTestIntegration', true);
+    if (enableTestIntegration) {
+        testAdapter = new PerlTestAdapter(client);
+        context.subscriptions.push(testAdapter);
+    } else {
+        testAdapter = undefined;
+        outputChannel.appendLine('Perl test integration is disabled by configuration.');
+    }
     
     // Initialize debug adapter
     activateDebugger(context);
@@ -197,11 +208,16 @@ export async function activate(context: vscode.ExtensionContext) {
         });
     });
 
+    const reinstallCommand = vscode.commands.registerCommand('perl-lsp.reinstall', async () => {
+        await reinstallServerBinary(context);
+    });
+
     const statusMenuCommand = vscode.commands.registerCommand('perl-lsp.showStatusMenu', async () => {
         const editor = vscode.window.activeTextEditor;
         const isPerl = editor ? editor.document.languageId === 'perl' : false;
         const filePath = editor ? editor.document.uri.fsPath : '';
-        const isTestFile = isPerl && (filePath.endsWith('.t') || filePath.endsWith('.pl'));
+        const testIntegrationEnabled = vscode.workspace.getConfiguration('perl-lsp').get<boolean>('enableTestIntegration', true);
+        const isTestFile = testIntegrationEnabled && isPerl && (filePath.endsWith('.t') || filePath.endsWith('.pl'));
 
         interface MenuAction extends vscode.QuickPickItem {
             command?: string;
@@ -242,6 +258,7 @@ export async function activate(context: vscode.ExtensionContext) {
             { label: 'Information', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(output) Show Output', detail: 'Open the extension output channel', command: 'perl-lsp.showOutput' },
             { label: '$(info) Show Version', detail: 'Check installed perl-lsp version', command: 'perl-lsp.showVersion' },
+            { label: '$(cloud-download) Reinstall Server Binary', detail: 'Re-download the perl-lsp binary for this machine', command: 'perl-lsp.reinstall' },
 
             { label: 'Configuration', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(gear) Configure Settings', detail: 'Open Perl LSP settings', command: 'workbench.action.openSettings', args: ['@ext:EffortlessMetrics.perl-lsp-rs'] }
@@ -256,7 +273,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
     
-    context.subscriptions.push(restartCommand, organizeImportsCommand, runTestsCommand, showVersionCommand, statusMenuCommand);
+    context.subscriptions.push(restartCommand, organizeImportsCommand, runTestsCommand, showVersionCommand, reinstallCommand, statusMenuCommand);
     
     outputChannel.appendLine('Perl Language Server started successfully');
 }
@@ -268,6 +285,61 @@ export async function deactivate() {
     if (client) {
         await client.stop();
     }
+}
+
+
+function getTraceLevel(): Trace {
+    const traceSetting = vscode.workspace.getConfiguration('perl-lsp').get<string>('trace.server', 'off');
+
+    switch ((traceSetting || 'off').toLowerCase()) {
+        case 'messages':
+            return Trace.Messages;
+        case 'verbose':
+            return Trace.Verbose;
+        default:
+            return Trace.Off;
+    }
+}
+
+async function reinstallServerBinary(context: vscode.ExtensionContext) {
+    const localDapPath = BinaryDownloader.getLocalDapPath(context);
+    const localBinaryPath = localDapPath.replace(/perl-dap(\.exe)?$/, (_match, exeSuffix: string | undefined) => `perl-lsp${exeSuffix || ''}`);
+
+    for (const targetPath of [localBinaryPath, localDapPath]) {
+        if (fs.existsSync(targetPath)) {
+            fs.rmSync(targetPath, { force: true });
+            outputChannel.appendLine(`Removed cached binary: ${targetPath}`);
+        }
+    }
+
+    const nextPath = await getServerPath(context);
+    if (!nextPath) {
+        vscode.window.showErrorMessage('Unable to reinstall perl-lsp. See output for details.', 'Show Output').then(selection => {
+            if (selection === 'Show Output') {
+                outputChannel.show();
+            }
+        });
+        return;
+    }
+
+    const healthOk = await runHealthCheck(nextPath);
+    if (!healthOk) {
+        vscode.window.showErrorMessage('Reinstalled perl-lsp failed its health check.', 'Show Output').then(selection => {
+            if (selection === 'Show Output') {
+                outputChannel.show();
+            }
+        });
+        return;
+    }
+
+    vscode.window.showInformationMessage('perl-lsp was reinstalled successfully.', 'Restart Server', 'Show Output').then(async selection => {
+        if (selection === 'Restart Server') {
+            await restartServer(context);
+        }
+        if (selection === 'Show Output') {
+            outputChannel.show();
+        }
+    });
 }
 
 async function getServerPath(context: vscode.ExtensionContext): Promise<string | null> {

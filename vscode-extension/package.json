@@ -310,6 +310,12 @@
         "icon": "$(menu)"
       },
       {
+        "command": "perl-lsp.reinstall",
+        "title": "Reinstall Language Server Binary",
+        "category": "Perl",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "perl-lsp.organizeImports",
         "title": "Organize Use Statements",
         "category": "Perl",
@@ -334,6 +340,10 @@
         },
         {
           "command": "perl-lsp.showStatusMenu",
+          "when": "editorLangId == perl"
+        },
+        {
+          "command": "perl-lsp.reinstall",
           "when": "editorLangId == perl"
         },
         {
