@@ -8,6 +8,16 @@ use perl_dap::{DapConfig, DapMode, DapServer};
 use std::io;
 use tracing_subscriber::{EnvFilter, fmt};
 
+const DEFAULT_DAP_PORT: u16 = 13_603;
+
+fn resolve_socket_port(args: &perl_lsp_launcher::TransportArgs) -> Option<u16> {
+    if args.socket || args.port.is_some() {
+        Some(args.port.unwrap_or(DEFAULT_DAP_PORT))
+    } else {
+        None
+    }
+}
+
 /// Perl Debug Adapter Protocol server
 #[derive(Parser, Debug)]
 #[command(name = "perl-dap", version, about, long_about = None)]
@@ -46,8 +56,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut server = DapServer::new(config)?;
 
-    if args.transport.socket || args.transport.port.is_some() {
-        let port = args.transport.port.unwrap_or(perl_lsp_launcher::DEFAULT_LSP_PORT);
+    if let Some(port) = resolve_socket_port(&args.transport) {
         tracing::info!("Starting DAP server on port {}", port);
         server.run_socket(port)?;
         return Ok(());
@@ -57,4 +66,31 @@ fn main() -> anyhow::Result<()> {
     server.run()?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DEFAULT_DAP_PORT, resolve_socket_port};
+
+    #[test]
+    fn socket_mode_uses_dap_default_port() {
+        let args = perl_lsp_launcher::TransportArgs { stdio: false, socket: true, port: None };
+
+        assert_eq!(resolve_socket_port(&args), Some(DEFAULT_DAP_PORT));
+    }
+
+    #[test]
+    fn explicit_socket_port_is_preserved() {
+        let args =
+            perl_lsp_launcher::TransportArgs { stdio: false, socket: true, port: Some(9_999) };
+
+        assert_eq!(resolve_socket_port(&args), Some(9_999));
+    }
+
+    #[test]
+    fn stdio_mode_does_not_resolve_a_socket_port() {
+        let args = perl_lsp_launcher::TransportArgs { stdio: true, socket: false, port: None };
+
+        assert_eq!(resolve_socket_port(&args), None);
+    }
 }
