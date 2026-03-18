@@ -330,6 +330,7 @@ _check-tools-basic:
         echo "  Install Rust: https://rustup.rs"; \
         exit 1; \
     fi
+    @bash scripts/check-rust-toolchain.sh
 
 # ============================================================================
 # CI Validation Commands (Issue #211)

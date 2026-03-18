@@ -110,12 +110,16 @@ rustup update stable
 
 # Use exact version
 rustup override set 1.92.0
+
+# Or let repo tooling validate it for you
+just pr-fast
+just doctor
 ```
 
 #### Proposed Solutions
 | Solution | Effort | Status |
 |----------|--------|--------|
-| Automatic version check in justfile | Low | Proposed |
+| Automatic version check in justfile | Low | Implemented via `scripts/check-rust-toolchain.sh` |
 | Better error messages for version mismatch | Low | Proposed |
 
 #### Related Documentation
