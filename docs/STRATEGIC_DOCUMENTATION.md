@@ -32,6 +32,7 @@ Located in [`docs/adr/`](adr/), these documents capture significant architectura
 | [0010](adr/0010-incremental-parsing-architecture.md) | Incremental Parsing | <1ms update target |
 | [0011](adr/0011-dap-bridge-mode-architecture.md) | DAP Bridge Mode | Debug Adapter Protocol bridge |
 | [0012](adr/0012-error-handling-strategy.md) | Error Handling Strategy | No-panic reliability |
+| [0034](adr/0034-custom-lsp-runtime-and-protocol-stack.md) | Custom LSP Runtime | Project-owned LSP transport, dispatch, and cancellation stack |
 
 See [docs/adr/README.md](adr/README.md) for the complete ADR index.
 

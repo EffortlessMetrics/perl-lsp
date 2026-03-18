@@ -53,6 +53,7 @@ This directory contains Architecture Decision Records (ADRs) for significant des
 | [ADR-0031](0031-async-runtime-concurrent-dispatch.md) | Accepted | 2026-03-16 | Async Runtime with Concurrent Dispatch | Two-lane scheduler (exclusive + 4-worker read pool) for concurrent LSP request handling |
 | [ADR-0032](0032-skill-scoping-and-hook-enforcement.md) | Accepted | 2026-03-16 | Skill Scoping and Hook Enforcement | Frontmatter-based skill access control plus hook-enforced swarm coordination |
 | [ADR-0033](0033-worktree-first-disposable-workers.md) | Accepted | 2026-03-16 | Worktree-First Disposable Worker Execution | Small persistent coordinators, fresh workers per context shift, and worktree isolation for PR-shaped changes |
+| [ADR-0034](0034-custom-lsp-runtime-and-protocol-stack.md) | Accepted | 2026-03-18 | Custom LSP Runtime and Protocol Stack | Project-owned transport, dispatch, cancellation, and capability stack instead of tower-lsp |
 
 ## About ADRs
 

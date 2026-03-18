@@ -161,7 +161,7 @@ single responsibility. This keeps compile times fast and boundaries clear.
 For the full tier system, architecture decision records, and design rationale, see:
 
 - [LSP Implementation Guide](docs/reference/LSP_IMPLEMENTATION_GUIDE.md)
-- [Architecture Decision Records](docs/adr/README.md) (microcrate architecture, dual indexing, incremental parsing, supply chain security)
+- [Architecture Decision Records](docs/adr/README.md) (microcrate architecture, dual indexing, incremental parsing, custom LSP runtime, supply chain security)
 - [CLAUDE.md](CLAUDE.md) for the complete developer command reference
 
 ## Published Crates
