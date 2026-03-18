@@ -120,4 +120,290 @@ mod tests {
         assert!(contains_module_token("use parent 'Foo::Bar';", "Foo::Bar"));
         assert!(!contains_module_token("use Foo::Barista;", "Foo::Bar"));
     }
+
+    // ── Simple module names ──────────────────────────────────────
+
+    #[test]
+    fn contains_simple_bare_name_foo() {
+        assert!(contains_module_token("use Foo;", "Foo"));
+    }
+
+    #[test]
+    fn contains_simple_two_segment_foo_bar() {
+        assert!(contains_module_token("use Foo::Bar;", "Foo::Bar"));
+    }
+
+    #[test]
+    fn replace_simple_bare_name_foo() {
+        let (out, changed) = replace_module_token("use Foo;", "Foo", "Bar");
+        assert!(changed);
+        assert_eq!(out, "use Bar;");
+    }
+
+    #[test]
+    fn replace_simple_two_segment_foo_bar() {
+        let (out, changed) = replace_module_token("use Foo::Bar;", "Foo::Bar", "Baz::Qux");
+        assert!(changed);
+        assert_eq!(out, "use Baz::Qux;");
+    }
+
+    #[test]
+    fn contains_rejects_simple_name_as_substring() {
+        assert!(!contains_module_token("use Foobar;", "Foo"));
+    }
+
+    // ── Deeply nested: Foo::Bar::Baz::Qux ───────────────────────
+
+    #[test]
+    fn contains_four_segment_deeply_nested() {
+        assert!(contains_module_token("use Foo::Bar::Baz::Qux;", "Foo::Bar::Baz::Qux"));
+    }
+
+    #[test]
+    fn replace_four_segment_deeply_nested() {
+        let (out, changed) = replace_module_token(
+            "use Foo::Bar::Baz::Qux;",
+            "Foo::Bar::Baz::Qux",
+            "One::Two::Three::Four",
+        );
+        assert!(changed);
+        assert_eq!(out, "use One::Two::Three::Four;");
+    }
+
+    #[test]
+    fn contains_rejects_prefix_of_deeply_nested() {
+        // "Foo::Bar" is a prefix of "Foo::Bar::Baz::Qux", not standalone
+        assert!(!contains_module_token("use Foo::Bar::Baz::Qux;", "Foo::Bar"));
+    }
+
+    #[test]
+    fn contains_rejects_suffix_of_deeply_nested() {
+        // "Baz::Qux" is embedded in the larger token
+        assert!(!contains_module_token("use Foo::Bar::Baz::Qux;", "Baz::Qux"));
+    }
+
+    #[test]
+    fn replace_does_not_modify_prefix_of_deeply_nested() {
+        let (out, changed) = replace_module_token("use Foo::Bar::Baz::Qux;", "Foo::Bar", "X::Y");
+        assert!(!changed);
+        assert_eq!(out, "use Foo::Bar::Baz::Qux;");
+    }
+
+    #[test]
+    fn contains_deeply_nested_in_method_call() {
+        assert!(contains_module_token("Foo::Bar::Baz::Qux->new()", "Foo::Bar::Baz::Qux"));
+    }
+
+    #[test]
+    fn replace_deeply_nested_in_method_call() {
+        let (out, changed) =
+            replace_module_token("Foo::Bar::Baz::Qux->new()", "Foo::Bar::Baz::Qux", "A::B::C::D");
+        assert!(changed);
+        assert_eq!(out, "A::B::C::D->new()");
+    }
+
+    #[test]
+    fn variant_pairs_deeply_nested_four_segments() {
+        let pairs = module_variant_pairs("Foo::Bar::Baz::Qux", "One::Two::Three::Four");
+        assert_eq!(pairs.len(), 2);
+        assert_eq!(
+            pairs[0],
+            ("Foo::Bar::Baz::Qux".to_string(), "One::Two::Three::Four".to_string())
+        );
+        assert_eq!(pairs[1], ("Foo'Bar'Baz'Qux".to_string(), "One'Two'Three'Four".to_string()));
+    }
+
+    // ── Module name validation via boundary checks ───────────────
+
+    #[test]
+    fn contains_rejects_empty_module_name() {
+        assert!(!contains_module_token("use Foo::Bar;", ""));
+    }
+
+    #[test]
+    fn contains_rejects_empty_line() {
+        assert!(!contains_module_token("", "Foo::Bar"));
+    }
+
+    #[test]
+    fn replace_empty_from_is_noop() {
+        let (out, changed) = replace_module_token("use Foo::Bar;", "", "X::Y");
+        assert!(!changed);
+        assert_eq!(out, "use Foo::Bar;");
+    }
+
+    #[test]
+    fn replace_empty_line_is_noop() {
+        let (out, changed) = replace_module_token("", "Foo::Bar", "X::Y");
+        assert!(!changed);
+        assert_eq!(out, "");
+    }
+
+    #[test]
+    fn contains_validates_boundary_before_token() {
+        // Digit before module name means it's part of a larger identifier
+        assert!(!contains_module_token("use 1Foo::Bar;", "Foo::Bar"));
+    }
+
+    #[test]
+    fn contains_validates_boundary_after_token() {
+        // Letter after module name means it's part of a larger identifier
+        assert!(!contains_module_token("use Foo::BarX;", "Foo::Bar"));
+    }
+
+    // ── Module name components via rename workflow ────────────────
+
+    #[test]
+    fn rename_workflow_four_segment_canonical() {
+        let pairs = module_variant_pairs("Foo::Bar::Baz::Qux", "A::B::C::D");
+        let line = "use Foo::Bar::Baz::Qux;";
+
+        let mut result = line.to_string();
+        for (old, new) in &pairs {
+            let (candidate, changed) = replace_module_token(&result, old, new);
+            if changed {
+                result = candidate;
+            }
+        }
+        assert_eq!(result, "use A::B::C::D;");
+    }
+
+    #[test]
+    fn rename_workflow_four_segment_legacy() {
+        let pairs = module_variant_pairs("Foo::Bar::Baz::Qux", "A::B::C::D");
+        let line = "use Foo'Bar'Baz'Qux;";
+
+        let mut result = line.to_string();
+        for (old, new) in &pairs {
+            let (candidate, changed) = replace_module_token(&result, old, new);
+            if changed {
+                result = candidate;
+            }
+        }
+        assert_eq!(result, "use A'B'C'D;");
+    }
+
+    // ── Edge cases: single word module ───────────────────────────
+
+    #[test]
+    fn contains_single_word_module() {
+        assert!(contains_module_token("use strict;", "strict"));
+        assert!(contains_module_token("use warnings;", "warnings"));
+        assert!(contains_module_token("use DBI;", "DBI"));
+    }
+
+    #[test]
+    fn replace_single_word_module() {
+        let (out, changed) = replace_module_token("use strict;", "strict", "warnings");
+        assert!(changed);
+        assert_eq!(out, "use warnings;");
+    }
+
+    #[test]
+    fn single_word_not_matched_as_substring() {
+        assert!(!contains_module_token("use strictures;", "strict"));
+        assert!(!contains_module_token("use astrict;", "strict"));
+    }
+
+    #[test]
+    fn variant_pairs_single_word_produces_one_pair() {
+        let pairs = module_variant_pairs("DBI", "DBIx");
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0], ("DBI".to_string(), "DBIx".to_string()));
+    }
+
+    // ── Edge cases: trailing :: in search context ────────────────
+
+    #[test]
+    fn contains_does_not_match_when_followed_by_colon_colon() {
+        // Foo::Bar is followed by :: making it part of Foo::Bar::Baz
+        assert!(!contains_module_token("use Foo::Bar::Baz;", "Foo::Bar"));
+    }
+
+    #[test]
+    fn replace_does_not_modify_when_followed_by_colon_colon() {
+        let (out, changed) = replace_module_token("use Foo::Bar::Baz;", "Foo::Bar", "X::Y");
+        assert!(!changed);
+        assert_eq!(out, "use Foo::Bar::Baz;");
+    }
+
+    // ── CPAN real-world deeply nested modules ────────────────────
+
+    #[test]
+    fn contains_cpan_catalyst_plugin() {
+        assert!(contains_module_token(
+            "use Catalyst::Plugin::Authentication;",
+            "Catalyst::Plugin::Authentication"
+        ));
+    }
+
+    #[test]
+    fn replace_cpan_catalyst_plugin() {
+        let (out, changed) = replace_module_token(
+            "use Catalyst::Plugin::Authentication;",
+            "Catalyst::Plugin::Authentication",
+            "Catalyst::Plugin::AuthN",
+        );
+        assert!(changed);
+        assert_eq!(out, "use Catalyst::Plugin::AuthN;");
+    }
+
+    #[test]
+    fn replace_cpan_app_prove_five_segments() {
+        let (out, changed) = replace_module_token(
+            "use App::Prove::State::Result::Test;",
+            "App::Prove::State::Result::Test",
+            "TAP::Result::Test",
+        );
+        assert!(changed);
+        assert_eq!(out, "use TAP::Result::Test;");
+    }
+
+    #[test]
+    fn contains_and_replace_agree_on_deeply_nested() {
+        let line = "my $obj = Foo::Bar::Baz::Qux->new;";
+        let module = "Foo::Bar::Baz::Qux";
+        let present = contains_module_token(line, module);
+        let (_, changed) = replace_module_token(line, module, "X");
+        assert_eq!(present, changed);
+    }
+
+    #[test]
+    fn contains_and_replace_agree_on_prefix_of_deeply_nested() {
+        let line = "my $obj = Foo::Bar::Baz::Qux->new;";
+        let module = "Foo::Bar";
+        let present = contains_module_token(line, module);
+        let (_, changed) = replace_module_token(line, module, "X");
+        assert_eq!(present, changed);
+    }
+
+    // ── Underscore-only and special identifier modules ───────────
+
+    #[test]
+    fn contains_underscore_prefixed_module() {
+        assert!(contains_module_token("use _Private::Module;", "_Private::Module"));
+    }
+
+    #[test]
+    fn replace_underscore_prefixed_module() {
+        let (out, changed) =
+            replace_module_token("use _Private::Module;", "_Private::Module", "Public::Module");
+        assert!(changed);
+        assert_eq!(out, "use Public::Module;");
+    }
+
+    #[test]
+    fn contains_all_underscore_segments() {
+        assert!(contains_module_token("use _::_::_;", "_::_::_"));
+    }
+
+    // ── Multiple occurrences with deeply nested ──────────────────
+
+    #[test]
+    fn replace_multiple_occurrences_deeply_nested() {
+        let line = "use Foo::Bar::Baz; my $x = Foo::Bar::Baz->new;";
+        let (out, changed) = replace_module_token(line, "Foo::Bar::Baz", "A::B::C");
+        assert!(changed);
+        assert_eq!(out, "use A::B::C; my $x = A::B::C->new;");
+    }
 }
