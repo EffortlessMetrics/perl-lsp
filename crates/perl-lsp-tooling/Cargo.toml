@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
-description = "Tooling integration for Perl LSP (perltidy, perlcritic, subprocess abstraction)"
+description = "Tooling integration for Perl LSP (perlcritic, performance, subprocess abstraction, perltidy re-exports)"
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository.workspace = true
@@ -25,6 +25,7 @@ perl-subprocess-runtime = { workspace = true }
 perl-tdd-support = { workspace = true }
 perl-parser-core = { workspace = true }
 perl-lsp-performance = { workspace = true }
+perl-lsp-perltidy = { workspace = true }
 perl-lsp-critic-parser = { workspace = true }
 lsp-types = { version = "0.97.0", optional = true }
 serde = { version = "1.0.228", features = ["derive"] }

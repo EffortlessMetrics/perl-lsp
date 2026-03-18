@@ -5,14 +5,14 @@ External tool integration and performance infrastructure for the Perl LSP ecosys
 ## Features
 
 - **Subprocess abstraction**: `SubprocessRuntime` trait with `OsSubprocessRuntime` (non-WASM) and test mocks
-- **Perltidy integration**: `PerlTidyFormatter` for code formatting with caching, range formatting, and a `BuiltInFormatter` fallback
+- **Perltidy compatibility re-exports**: forwards `PerlTidyFormatter`, `PerlTidyConfig`, and related types from the dedicated `perl-lsp-perltidy` microcrate
 - **Perlcritic integration**: `CriticAnalyzer` for static analysis with `BuiltInAnalyzer` and `Policy` trait for custom policies
 - **Performance**: `AstCache` (moka-based concurrent cache with TTL), `IncrementalParser`, `SymbolIndex` (trie + fuzzy), parallel file processing
 - **LSP compatibility**: Optional `lsp-compat` feature for `lsp_types` diagnostic conversion
 
 ## Workspace Role
 
-Tier 2 infrastructure crate in the `tree-sitter-perl-rs` workspace. Used by formatting, diagnostics, and code analysis layers of the Perl LSP server.
+Tier 2 infrastructure crate in the `tree-sitter-perl-rs` workspace. Used by diagnostics, performance, and code analysis layers of the Perl LSP server while re-exporting the extracted perltidy formatting microcrate.
 
 ## Quick Start
 

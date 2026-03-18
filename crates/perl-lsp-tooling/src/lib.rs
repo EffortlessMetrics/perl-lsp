@@ -1,22 +1,9 @@
 //! Tooling integration for Perl LSP
 //!
-//! This crate provides abstractions for integrating with external Perl tooling
-//! such as perltidy (formatting) and perlcritic (linting).
-//!
-//! ## Features
-//!
-//! - Subprocess execution abstraction
-//! - Mock implementations for testing
-//! - WASM compatibility
-//!
-//! ## Usage
-//!
-//! ```rust,ignore
-//! use perl_lsp_tooling::{SubprocessRuntime, OsSubprocessRuntime};
-//!
-//! let runtime = OsSubprocessRuntime::new();
-//! let output = runtime.run_command("perltidy", &["-st"], Some(b"code"))?;
-//! ```
+//! This crate provides reusable integrations for external Perl tooling and
+//! performance infrastructure. Perltidy-specific formatting types now live in
+//! the dedicated `perl-lsp-perltidy` microcrate and are re-exported here for
+//! compatibility.
 
 #![deny(unsafe_code)]
 #![cfg_attr(test, allow(clippy::panic, clippy::unwrap_used, clippy::expect_used))]
@@ -32,7 +19,9 @@ pub mod performance {
 /// Perl::Critic integration for code quality analysis.
 pub mod perl_critic;
 /// Perltidy integration for code formatting.
-pub mod perltidy;
+pub mod perltidy {
+    pub use perl_lsp_perltidy::*;
+}
 
 pub use perl_subprocess_runtime::{SubprocessError, SubprocessOutput, SubprocessRuntime};
 
