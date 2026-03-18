@@ -16,6 +16,7 @@ categories = ["parsing", "development-tools"]
 [dependencies]
 thiserror = "2.0.18"
 perl-ast = { workspace = true }
+perl-ast-v2 = { workspace = true }
 perl-regex = { workspace = true }
 perl-position-tracking = { workspace = true }
 perl-lexer = { workspace = true } # Needed for TokenType in recovery

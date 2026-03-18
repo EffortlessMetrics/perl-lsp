@@ -4,12 +4,12 @@
 //! and supports error recovery for IDE scenarios.
 
 use crate::{
-    ast_v2::NodeIdGenerator,
     error::{BudgetTracker, ParseBudget},
     error_recovery::ParseError,
     position::{Position, Range},
     token_wrapper::TokenWithPosition,
 };
+use perl_ast_v2::NodeIdGenerator;
 use perl_lexer::TokenType;
 use perl_position_tracking::LineStartsCache;
 use std::collections::VecDeque;

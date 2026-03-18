@@ -85,8 +85,8 @@ fn format_with_trivia_includes_trivia_text() -> Result<(), Box<dyn std::error::E
         perl_position_tracking::Position::new(0, 1, 1),
         perl_position_tracking::Position::new(0, 1, 1),
     );
-    let node = perl_ast::v2::Node::new(
-        perl_ast::v2::NodeIdGenerator::new().next_id(),
+    let node = perl_ast_v2::Node::new(
+        perl_ast_v2::NodeIdGenerator::new().next_id(),
         V2NodeKind::Program { statements: vec![] },
         range,
     );

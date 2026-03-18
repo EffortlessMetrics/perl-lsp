@@ -43,7 +43,9 @@
 //! [`NodeKind`] variants and recurse into child nodes.
 
 pub mod ast;
-pub mod v2;
+
+/// Incremental parsing AST types extracted into a dedicated microcrate.
+pub use perl_ast_v2 as v2;
 
 /// Primary AST node -- the building block of every syntax tree.
 pub use ast::{Node, NodeKind};

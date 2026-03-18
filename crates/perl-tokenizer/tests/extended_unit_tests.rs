@@ -741,7 +741,7 @@ fn ext_trivia_parser_empty_produces_program() -> Result<(), Box<dyn std::error::
     let parser = TriviaPreservingParser::new(String::new());
     let result = parser.parse();
     // Node should be a Program
-    assert!(matches!(result.node.kind, perl_ast::v2::NodeKind::Program { .. }));
+    assert!(matches!(result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
     Ok(())
 }
 
@@ -749,7 +749,7 @@ fn ext_trivia_parser_empty_produces_program() -> Result<(), Box<dyn std::error::
 fn ext_trivia_parser_whitespace_only_source() -> Result<(), Box<dyn std::error::Error>> {
     let parser = TriviaPreservingParser::new("   \n\n  \t  ".into());
     let result = parser.parse();
-    assert!(matches!(result.node.kind, perl_ast::v2::NodeKind::Program { .. }));
+    assert!(matches!(result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
     Ok(())
 }
 

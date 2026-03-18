@@ -17,7 +17,7 @@
 //! immediately with an appropriate error node.
 
 use crate::{BudgetTracker, ParseBudget};
-use perl_ast::v2::Node;
+use perl_ast_v2::Node;
 use perl_lexer::TokenType;
 use perl_position_tracking::Range;
 

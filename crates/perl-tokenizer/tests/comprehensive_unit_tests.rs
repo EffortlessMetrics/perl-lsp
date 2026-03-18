@@ -741,7 +741,7 @@ fn trivia_preserving_parser_basic() -> Result<(), Box<dyn std::error::Error>> {
     let parser = TriviaPreservingParser::new("my $x = 1;".to_string());
     let result = parser.parse();
     // Should produce a Program node
-    assert!(matches!(&result.node.kind, perl_ast::v2::NodeKind::Program { .. }));
+    assert!(matches!(&result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
     Ok(())
 }
 
@@ -749,7 +749,7 @@ fn trivia_preserving_parser_basic() -> Result<(), Box<dyn std::error::Error>> {
 fn trivia_preserving_parser_empty_source() -> Result<(), Box<dyn std::error::Error>> {
     let parser = TriviaPreservingParser::new(String::new());
     let result = parser.parse();
-    assert!(matches!(&result.node.kind, perl_ast::v2::NodeKind::Program { .. }));
+    assert!(matches!(&result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
     Ok(())
 }
 
@@ -758,7 +758,7 @@ fn trivia_preserving_parser_comment_only() -> Result<(), Box<dyn std::error::Err
     let parser = TriviaPreservingParser::new("# just a comment\n".to_string());
     let result = parser.parse();
     // Should still produce a valid program
-    assert!(matches!(&result.node.kind, perl_ast::v2::NodeKind::Program { .. }));
+    assert!(matches!(&result.node.kind, perl_ast_v2::NodeKind::Program { .. }));
     // Leading trivia should contain the comment
     let has_comment =
         result.leading_trivia.iter().any(|t| matches!(&t.trivia, Trivia::LineComment(_)));
@@ -771,7 +771,7 @@ fn trivia_preserving_parser_multiple_statements() -> Result<(), Box<dyn std::err
     let src = "my $x = 1;\nour $y = 2;\n".to_string();
     let parser = TriviaPreservingParser::new(src);
     let result = parser.parse();
-    if let perl_ast::v2::NodeKind::Program { statements } = &result.node.kind {
+    if let perl_ast_v2::NodeKind::Program { statements } = &result.node.kind {
         assert!(statements.len() >= 2, "expected >=2 statements, got {}", statements.len());
     }
     Ok(())

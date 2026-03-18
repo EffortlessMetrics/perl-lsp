@@ -26,6 +26,7 @@ doctest = false
 perl-lexer = { workspace = true }
 perl-position-tracking = { workspace = true }
 perl-ast = { workspace = true }
+perl-ast-v2 = { workspace = true }
 perl-quote = { workspace = true }
 perl-pragma = { workspace = true }
 perl-edit = { workspace = true }

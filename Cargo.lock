@@ -1511,8 +1511,16 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 name = "perl-ast"
 version = "0.11.0"
 dependencies = [
+ "perl-ast-v2",
  "perl-position-tracking",
  "perl-token",
+]
+
+[[package]]
+name = "perl-ast-v2"
+version = "0.11.0"
+dependencies = [
+ "perl-position-tracking",
 ]
 
 [[package]]
@@ -1718,6 +1726,7 @@ name = "perl-error"
 version = "0.11.0"
 dependencies = [
  "perl-ast",
+ "perl-ast-v2",
  "perl-lexer",
  "perl-position-tracking",
  "perl-regex",
@@ -2417,6 +2426,7 @@ name = "perl-parser-core"
 version = "0.11.0"
 dependencies = [
  "perl-ast",
+ "perl-ast-v2",
  "perl-builtins",
  "perl-edit",
  "perl-error",
@@ -2609,6 +2619,7 @@ name = "perl-tokenizer"
 version = "0.11.0"
 dependencies = [
  "perl-ast",
+ "perl-ast-v2",
  "perl-error",
  "perl-lexer",
  "perl-position-tracking",

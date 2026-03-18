@@ -3,7 +3,7 @@
 //! This module provides support for preserving comments and whitespace
 //! in the AST, which is essential for code formatting and refactoring tools.
 
-use perl_ast::v2::{Node, NodeKind};
+use perl_ast_v2::{Node, NodeKind};
 use perl_lexer::TokenType;
 use perl_position_tracking::Range;
 
@@ -271,7 +271,7 @@ pub struct TriviaPreservingParser {
     /// Current lookahead token
     current: Option<(perl_lexer::Token, Vec<TriviaToken>)>,
     /// Node ID generator
-    id_generator: perl_ast::v2::NodeIdGenerator,
+    id_generator: perl_ast_v2::NodeIdGenerator,
 }
 
 impl TriviaPreservingParser {
@@ -280,7 +280,7 @@ impl TriviaPreservingParser {
         let mut parser = TriviaPreservingParser {
             lexer: TriviaLexer::new(source),
             current: None,
-            id_generator: perl_ast::v2::NodeIdGenerator::new(),
+            id_generator: perl_ast_v2::NodeIdGenerator::new(),
         };
         // Prime the lookahead
         parser.advance();
