@@ -218,6 +218,15 @@ fn has_lsp_range(value: &Value) -> bool {
     range.get("start").is_some() && range.get("end").is_some()
 }
 
+fn highlight_kinds(response: &Value) -> Vec<u64> {
+    response
+        .as_array()
+        .map(|items| {
+            items.iter().filter_map(|item| item.get("kind").and_then(Value::as_u64)).collect()
+        })
+        .unwrap_or_default()
+}
+
 fn setup_workspace(files: &[(&str, &str)]) -> Result<(LspHarness, TempWorkspace), String> {
     let (mut harness, workspace) = LspHarness::with_workspace(files)?;
 
@@ -788,6 +797,51 @@ my $result = Foo::process_data();
     let uris = workspace_edit_uris(&edit);
     assert!(uris.contains(&module_uri), "rename should edit declaration file");
     assert!(uris.contains(&main_uri), "rename should edit usage file");
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_document_highlights_distinguish_reads_from_writes() -> Result<(), Box<dyn std::error::Error>>
+{
+    let scenario = BddScenario::new("Document highlights distinguish reads from writes");
+
+    let code = r#"use strict;
+use warnings;
+
+my $count = 1;
+$count += 2;
+print $count;
+"#;
+
+    scenario.given("a Perl file with the same variable declared, mutated, and read");
+    let (mut harness, workspace) = setup_workspace(&[("highlights.pl", code)])?;
+    let uri = workspace.uri("highlights.pl");
+    harness.open(&uri, code)?;
+
+    scenario.when("requesting document highlights on the variable usage");
+    let (line, character) = find_position(code, "$count += 2");
+    let highlights = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": line, "character": character + 1 }
+        }),
+    )?;
+
+    scenario
+        .then("the server returns highlights covering declaration, write, and read occurrences");
+    let kinds = highlight_kinds(&highlights);
+    assert!(kinds.len() >= 3, "expected at least 3 highlights; got {highlights:?}");
+    assert!(
+        kinds.contains(&2),
+        "highlights should include a read occurrence (kind=2); got {kinds:?}"
+    );
+    assert!(
+        kinds.contains(&3),
+        "highlights should include a write occurrence (kind=3); got {kinds:?}"
+    );
 
     Ok(())
 }
