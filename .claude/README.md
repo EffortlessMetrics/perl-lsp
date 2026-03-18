@@ -7,6 +7,7 @@ The canonical runtime surfaces are:
 - `.claude/agents/` — who owns each lane
 - `.claude/skills/` — canonical skill layer for swarm control and core worker procedures
 - `.claude/commands/` — slash entrypoints that currently live as command files
+- `scripts/agent-dashboard.sh` — terminal dashboard for active worktrees, progress bars, and PR state
 - `.claude/settings.json` — shared permissions and hook enforcement
 - `.claude/swarm-state/` — durable queue, dedup, pitfalls, and findings state
 
