@@ -103,6 +103,7 @@ impl CallHierarchyProvider {
     /// Find a callable item at the given position
     fn find_callable_at_position(&self, node: &Node, offset: usize) -> Option<CallHierarchyItem> {
         if offset >= node.location.start && offset <= node.location.end {
+            let uri = &self.uri;
             match &node.kind {
                 NodeKind::Subroutine { name, prototype: _, signature, name_span, .. } => {
                     if let Some(name_str) = name {
@@ -121,7 +122,7 @@ impl CallHierarchyProvider {
                                 return Some(CallHierarchyItem {
                                     name: name_str.clone(),
                                     kind: "function".to_string(),
-                                    uri: self.uri.clone(),
+                                    uri: uri.clone(),
                                     range,
                                     selection_range,
                                     detail,
@@ -141,7 +142,7 @@ impl CallHierarchyProvider {
                             return Some(CallHierarchyItem {
                                 name: name_str.clone(),
                                 kind: "function".to_string(),
-                                uri: self.uri.clone(),
+                                uri: uri.clone(),
                                 range,
                                 selection_range,
                                 detail,
@@ -154,7 +155,7 @@ impl CallHierarchyProvider {
                     return Some(CallHierarchyItem {
                         name: method.clone(),
                         kind: "method".to_string(),
-                        uri: self.uri.clone(),
+                        uri: uri.clone(),
                         range,
                         selection_range: range,
                         detail: None,
@@ -165,7 +166,7 @@ impl CallHierarchyProvider {
                     return Some(CallHierarchyItem {
                         name: name.clone(),
                         kind: "function".to_string(),
-                        uri: self.uri.clone(),
+                        uri: uri.clone(),
                         range,
                         selection_range: range,
                         detail: None,
@@ -189,6 +190,7 @@ impl CallHierarchyProvider {
         calls: &mut Vec<CallHierarchyIncomingCall>,
         current_function: Option<&CallHierarchyItem>,
     ) {
+        let uri = &self.uri;
         match &node.kind {
             NodeKind::Subroutine { name, name_span, .. } => {
                 if let Some(name_str) = name {
@@ -197,7 +199,7 @@ impl CallHierarchyProvider {
                     let item = CallHierarchyItem {
                         name: name_str.clone(),
                         kind: "function".to_string(),
-                        uri: self.uri.clone(),
+                        uri: uri.clone(),
                         range,
                         selection_range,
                         detail: None,
@@ -257,12 +259,13 @@ impl CallHierarchyProvider {
 
     /// Find all function calls within a node
     fn find_outgoing_calls(&self, node: &Node, calls: &mut Vec<CallHierarchyOutgoingCall>) {
+        let uri = &self.uri;
         match &node.kind {
             NodeKind::FunctionCall { name, .. } => {
                 let item = CallHierarchyItem {
                     name: name.clone(),
                     kind: "function".to_string(),
-                    uri: self.uri.clone(),
+                    uri: uri.clone(),
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail: None,
@@ -287,7 +290,7 @@ impl CallHierarchyProvider {
                 let item = CallHierarchyItem {
                     name: method.clone(),
                     kind: "method".to_string(),
-                    uri: self.uri.clone(),
+                    uri: uri.clone(),
                     range: self.node_to_range(node),
                     selection_range: self.node_to_range(node),
                     detail,
