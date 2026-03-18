@@ -417,7 +417,9 @@
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
     "package": "npx @vscode/vsce package",
     "publish": "npx @vscode/vsce publish",
-    "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package"
+    "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package",
+    "publish:openvsx": "npx ovsx publish",
+    "verify:openvsx": "npm run compile && npm run bundle-lsp && npm run package && npx ovsx publish --help"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",

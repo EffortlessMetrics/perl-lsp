@@ -4,6 +4,9 @@ All notable changes to the Perl Language Server extension will be documented in 
 
 ## [Unreleased]
 
+### Added
+- Open VSX packaging/publishing scripts plus release documentation so the extension can be validated and distributed to VSCodium-compatible editors alongside the Visual Studio Marketplace.
+
 ## [0.11.0] - 2026-03-11
 
 ### Fixed

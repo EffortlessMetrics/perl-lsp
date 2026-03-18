@@ -4,11 +4,12 @@
 
 1. **Node.js and npm** installed
 2. **Visual Studio Code** installed
-3. **vsce** (Visual Studio Code Extension manager) installed:
+3. **vsce** (Visual Studio Code Extension manager) and **ovsx** installed:
    ```bash
-   npm install -g @vscode/vsce
+   npm install -g @vscode/vsce ovsx
    ```
 4. **Publisher account** on Visual Studio Marketplace
+5. **Namespace/publisher access** on Open VSX
 
 ## Build Process
 
@@ -28,9 +29,12 @@ cargo build -p perl-lsp --release
 # From vscode-extension/
 npm install
 npm run verify:marketplace
+npm run verify:openvsx
 ```
 
-`verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates a `.vsix` package suitable for pre-release validation.
+`verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates a VS Marketplace-ready `.vsix` package suitable for pre-release validation.
+
+`verify:openvsx` reuses the generated `.vsix` and confirms the Open VSX CLI publish path is available (`ovsx publish --help`) before release, so CI and local environments fail fast when the Open VSX toolchain is missing.
 
 ### 3. Test Locally
 
@@ -84,20 +88,26 @@ If you haven't already:
 2. Create a publisher ID (e.g., "tree-sitter-perl")
 3. Get a Personal Access Token from Azure DevOps
 
-### 6. Login to vsce
+### 6. Login to vsce and ovsx
 
 ```bash
 vsce login <publisher-id>
-# Enter your Personal Access Token when prompted
+# Enter your Visual Studio Marketplace Personal Access Token when prompted
+
+ovsx create-namespace EffortlessMetrics   # one-time setup if needed
+ovsx verify-pat EffortlessMetrics --pat <open-vsx-token>
 ```
 
 ### 7. Publish
 
 ```bash
-# Publish to marketplace (already logged in via vsce)
+# Publish to Visual Studio Marketplace (already logged in via vsce)
 npm run publish
 
-# Or with version bump
+# Publish the same VSIX to Open VSX
+npm run publish:openvsx -- --packagePath perl-lsp-rs-*.vsix
+
+# Or with version bump on VS Marketplace
 vsce publish minor  # 0.5.0 -> 0.6.0
 vsce publish major  # 0.5.0 -> 0.9.x
 vsce publish 0.5.1  # Specific version
@@ -110,12 +120,16 @@ vsce publish 0.5.1  # Specific version
    - Search for "Perl Language Server"
    - Verify description, screenshots, etc.
 
-2. **Update Documentation**
+2. **Verify on Open VSX**
+   - Go to https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs
+   - Confirm version, README rendering, and download/install metadata
+
+3. **Update Documentation**
    - Update main README.md with marketplace link
    - Add installation instructions
    - Update CHANGELOG.md
 
-3. **Create GitHub Release**
+4. **Create GitHub Release**
    - Tag the release: `git tag vscode-extension-v0.5.0`
    - Create release on GitHub
    - Attach the .vsix file
@@ -127,7 +141,7 @@ vsce publish 0.5.1  # Specific version
 1. Update version in `package.json`
 2. Update `CHANGELOG.md`
 3. Rebuild and test
-4. Publish update: `vsce publish`
+4. Publish update: `vsce publish` and `npm run publish:openvsx -- --packagePath perl-lsp-rs-*.vsix`
 
 ### Monitoring
 
@@ -141,7 +155,7 @@ vsce publish 0.5.1  # Specific version
 Update `package.json` with your publisher ID.
 
 ### "Personal Access Token expired"
-Create a new token and login again with `vsce login`.
+Create a new token and login again with `vsce login` or refresh your Open VSX token for `ovsx publish`.
 
 ### Binary not found
 Ensure `bundle-lsp.js` correctly detects platform and copies binaries.
@@ -155,7 +169,7 @@ Before first public launch:
 - [ ] Confirm `package.json` metadata is complete (`publisher`, `icon`, repository links, categories, keywords).
 - [ ] Ensure `README.md` has clear install + configuration guidance.
 - [ ] Ensure `CHANGELOG.md` includes release notes for the exact published version.
-- [ ] Run `npm run verify:marketplace` and install the generated `.vsix` locally.
+- [ ] Run `npm run verify:marketplace` and `npm run verify:openvsx`, then install the generated `.vsix` locally.
 - [ ] Validate extension activation in a clean profile (`code --user-data-dir <tmpdir>`).
 - [ ] Verify binary download fallback works when no bundled binary exists for the host platform.
 - [ ] Publish as pre-release first (recommended for initial alpha), then promote to stable after validation feedback.
