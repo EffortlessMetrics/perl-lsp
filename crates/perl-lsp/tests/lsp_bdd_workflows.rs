@@ -172,6 +172,10 @@ fn diagnostic_items(report: &Value) -> &[Value] {
     report.get("items").and_then(Value::as_array).map_or(&[], Vec::as_slice)
 }
 
+fn highlight_items(response: &Value) -> &[Value] {
+    response.as_array().map_or(&[], Vec::as_slice)
+}
+
 fn diagnostic_error_count(report: &Value) -> usize {
     diagnostic_items(report)
         .iter()
@@ -595,6 +599,74 @@ sub compute_value {
         "fixed code should reduce diagnostics (broken={broken_item_count}, fixed={fixed_item_count})"
     );
     assert_eq!(fixed_errors, 0, "fixed code should have no error diagnostics");
+
+    Ok(())
+}
+
+#[test]
+#[serial]
+fn bdd_local_variable_navigation_and_highlights() -> Result<(), Box<dyn std::error::Error>> {
+    let scenario = BddScenario::new("Local variable navigation and highlights stay aligned");
+
+    let script = r#"use strict;
+use warnings;
+
+my $value = 41;
+my $result = $value + 1;
+print $value;
+$value = $result;
+"#;
+
+    scenario.given("a Perl script with a local variable used for reads and writes");
+    let (mut harness, workspace) = setup_workspace(&[("variable_flow.pl", script)])?;
+    let uri = workspace.uri("variable_flow.pl");
+    harness.open(&uri, script)?;
+
+    scenario.when("requesting declaration from a variable usage");
+    let (usage_line, usage_character) = find_position(script, "$value + 1");
+    let declaration = harness.request(
+        "textDocument/declaration",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": usage_line, "character": usage_character }
+        }),
+    )?;
+
+    scenario.then("the declaration resolves to the original lexical binding");
+    let declaration_uri = first_location_uri(&declaration).unwrap_or_default();
+    assert_eq!(declaration_uri, uri, "declaration should stay within the same file");
+
+    let declaration_line = declaration
+        .as_array()
+        .and_then(|arr| arr.first())
+        .or_else(|| declaration.as_object().map(|_| &declaration))
+        .and_then(|location| location.pointer("/range/start/line"))
+        .and_then(Value::as_u64)
+        .ok_or("declaration should include a start line")?;
+    assert_eq!(declaration_line, 3, "declaration should point to `my $value = 41;`");
+
+    scenario.when("requesting document highlights for the same variable");
+    let highlights = harness.request(
+        "textDocument/documentHighlight",
+        json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": usage_line, "character": usage_character }
+        }),
+    )?;
+
+    scenario.then("all reads and writes for the lexical variable are highlighted");
+    let highlight_entries = highlight_items(&highlights);
+    assert_eq!(
+        highlight_entries.len(),
+        4,
+        "expected declaration, arithmetic use, print use, and assignment target highlights"
+    );
+    assert!(
+        highlight_entries
+            .iter()
+            .all(|entry| entry.get("range").is_some() && entry.get("kind").is_some()),
+        "document highlights should include range and kind for each match"
+    );
 
     Ok(())
 }
