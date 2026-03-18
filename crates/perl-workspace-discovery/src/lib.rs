@@ -9,12 +9,14 @@
 
 use perl_source_file::is_perl_source_path;
 use perl_workspace_ignore::{is_skipped_dir_name, path_contains_skipped_component};
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};
 
 const GIT_LS_FILES_ARGS: [&str; 5] =
     ["ls-files", "-z", "--cached", "--others", "--exclude-standard"];
+const STDERR_PREVIEW_MAX_BYTES: usize = 160;
 
 /// How files were discovered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +40,25 @@ pub struct DiscoveryResult {
     pub excluded_count: usize,
 }
 
+#[derive(Debug)]
+enum GitDiscoveryError {
+    Io(std::io::Error),
+    CommandFailed { status: std::process::ExitStatus, stderr_preview: String },
+}
+
+impl fmt::Display for GitDiscoveryError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Io(error) => write!(f, "git ls-files could not be executed: {error}"),
+            Self::CommandFailed { status, stderr_preview } => write!(
+                f,
+                "git ls-files exited with status {status}{}",
+                format_stderr_suffix(stderr_preview)
+            ),
+        }
+    }
+}
+
 /// Discover Perl source files under `root`.
 ///
 /// Strategy:
@@ -49,20 +70,28 @@ pub fn discover_perl_files(root: &Path) -> DiscoveryResult {
 
     match try_git_discovery(root, start) {
         Ok(result) => result,
-        Err(_) => walk_discovery(root, start),
+        Err(error) => {
+            let result = walk_discovery(root, start);
+            log_git_fallback(root, &error, &result);
+            result
+        }
     }
 }
 
-fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, std::io::Error> {
+fn try_git_discovery(root: &Path, start: Instant) -> Result<DiscoveryResult, GitDiscoveryError> {
     let output = std::process::Command::new("git")
         .args(GIT_LS_FILES_ARGS)
         .current_dir(root)
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::null())
-        .output()?;
+        .stderr(std::process::Stdio::piped())
+        .output()
+        .map_err(GitDiscoveryError::Io)?;
 
     if !output.status.success() {
-        return Err(std::io::Error::other("git ls-files failed"));
+        return Err(GitDiscoveryError::CommandFailed {
+            status: output.status,
+            stderr_preview: stderr_preview(&output.stderr),
+        });
     }
 
     let (files, excluded_count) = parse_git_ls_files_output(root, &output.stdout);
@@ -150,7 +179,7 @@ fn should_skip_dir(entry: &DirEntry) -> bool {
 
 fn log_discovery(result: &DiscoveryResult) {
     eprintln!(
-        "[perl-workspace-discovery] {} files via {:?} in {:.1}ms (excluded: {})",
+        "[perl-workspace-discovery] files={} method={:?} duration_ms={:.1} excluded={}",
         result.files.len(),
         result.method,
         result.duration.as_secs_f64() * 1000.0,
@@ -158,11 +187,39 @@ fn log_discovery(result: &DiscoveryResult) {
     );
 }
 
+fn log_git_fallback(root: &Path, error: &GitDiscoveryError, result: &DiscoveryResult) {
+    eprintln!(
+        "[perl-workspace-discovery] root={} falling back to WalkDir: {}; files={} duration_ms={:.1} excluded={}",
+        root.display(),
+        error,
+        result.files.len(),
+        result.duration.as_secs_f64() * 1000.0,
+        result.excluded_count
+    );
+}
+
+fn stderr_preview(stderr: &[u8]) -> String {
+    if stderr.is_empty() {
+        return String::new();
+    }
+
+    let truncated_len = stderr.len().min(STDERR_PREVIEW_MAX_BYTES);
+    let mut preview = String::from_utf8_lossy(&stderr[..truncated_len]).to_string();
+    if stderr.len() > STDERR_PREVIEW_MAX_BYTES {
+        preview.push('…');
+    }
+    preview.replace(['\r', '\n'], "\\n")
+}
+
+fn format_stderr_suffix(stderr_preview: &str) -> String {
+    if stderr_preview.is_empty() { String::new() } else { format!("; stderr=\"{stderr_preview}\"") }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        DiscoveryMethod, parse_git_ls_files_output, path_contains_skipped_component,
-        should_skip_dir, walk_discovery,
+        DiscoveryMethod, GitDiscoveryError, format_stderr_suffix, parse_git_ls_files_output,
+        path_contains_skipped_component, should_skip_dir, stderr_preview, walk_discovery,
     };
     use std::fs;
     use std::path::Path;
@@ -612,5 +669,32 @@ mod tests {
         assert_eq!(files.len(), 4);
         // README.md + Makefile (non-perl) + node_modules/e.pm (skipped dir)
         assert_eq!(excluded_count, 3);
+    }
+
+    #[test]
+    fn stderr_preview_normalizes_newlines() {
+        let preview = stderr_preview(b"fatal: not a git repository\nhint: inspect the root\r\n");
+        assert!(preview.contains("\\n"));
+        assert!(!preview.contains('\n'));
+        assert!(!preview.contains('\r'));
+    }
+
+    #[test]
+    fn git_discovery_error_display_includes_stderr_preview() -> TestResult {
+        let status = std::process::Command::new("bash").arg("-lc").arg("exit 1").status()?;
+        let error = GitDiscoveryError::CommandFailed {
+            status,
+            stderr_preview: "fatal: not a git repository".to_string(),
+        };
+
+        let rendered = error.to_string();
+        assert!(rendered.contains("git ls-files exited with status"));
+        assert!(rendered.contains("fatal: not a git repository"));
+        assert_eq!(
+            format_stderr_suffix("fatal: not a git repository"),
+            "; stderr=\"fatal: not a git repository\""
+        );
+
+        Ok(())
     }
 }
