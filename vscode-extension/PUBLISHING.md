@@ -4,11 +4,12 @@
 
 1. **Node.js and npm** installed
 2. **Visual Studio Code** installed
-3. **vsce** (Visual Studio Code Extension manager) installed:
+3. **vsce** (Visual Studio Code Extension manager) and **ovsx** (Open VSX CLI) installed:
    ```bash
-   npm install -g @vscode/vsce
+   npm install -g @vscode/vsce ovsx
    ```
 4. **Publisher account** on Visual Studio Marketplace
+5. **Open VSX access token** for `EffortlessMetrics` publisher
 
 ## Build Process
 
@@ -30,7 +31,15 @@ npm install
 npm run verify:marketplace
 ```
 
-`verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates a `.vsix` package suitable for pre-release validation.
+`verify:marketplace` runs TypeScript compilation, bundles the local platform binary, and generates the Marketplace `.vsix` package.
+
+To validate the Open VSX tooling before publishing:
+
+```bash
+npm run check:openvsx
+```
+
+Open VSX publishes the same `perl-lsp-rs-<version>.vsix` artifact used for the Visual Studio Marketplace, so the main extra preflight is confirming the `ovsx` CLI is installed and authenticated.
 
 ### 3. Test Locally
 
@@ -94,10 +103,13 @@ vsce login <publisher-id>
 ### 7. Publish
 
 ```bash
-# Publish to marketplace (already logged in via vsce)
-npm run publish
+# Publish to Visual Studio Marketplace
+npm run publish -- --pat "$VSCE_PAT"
 
-# Or with version bump
+# Publish the Open VSX-specific package
+npm run publish:openvsx -- perl-lsp-rs-*.vsix --pat "$OVSX_PAT"
+
+# Or publish with version bump on Marketplace
 vsce publish minor  # 0.5.0 -> 0.6.0
 vsce publish major  # 0.5.0 -> 0.9.x
 vsce publish 0.5.1  # Specific version
@@ -105,10 +117,12 @@ vsce publish 0.5.1  # Specific version
 
 ## Post-Publishing
 
-1. **Verify on Marketplace**
+1. **Verify on Marketplace and Open VSX**
    - Go to https://marketplace.visualstudio.com/
    - Search for "Perl Language Server"
-   - Verify description, screenshots, etc.
+   - Verify description, screenshots, install command, and version
+   - Open https://open-vsx.org/extension/EffortlessMetrics/perl-lsp-rs
+   - Verify the Open VSX listing, version, and VSCodium install instructions
 
 2. **Update Documentation**
    - Update main README.md with marketplace link

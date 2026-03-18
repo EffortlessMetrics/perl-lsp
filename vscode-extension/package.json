@@ -417,7 +417,9 @@
     "bundle-lsp": "node ./scripts/bundle-lsp.js",
     "package": "npx @vscode/vsce package",
     "publish": "npx @vscode/vsce publish",
-    "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package"
+    "verify:marketplace": "npm run compile && npm run bundle-lsp && npm run package",
+    "publish:openvsx": "npx ovsx publish",
+    "check:openvsx": "npx ovsx --version"
   },
   "dependencies": {
     "adm-zip": "^0.5.16",
@@ -428,7 +430,7 @@
     "@types/adm-zip": "^0.5.7",
     "@types/node": "^25.5.0",
     "@types/tar": "^7.0.87",
-    "@types/vscode": "^1.110.0",
+    "@types/vscode": "^1.88.0",
     "@vscode/vsce": "^3.7.1",
     "typescript": "^5.9.3"
   }
