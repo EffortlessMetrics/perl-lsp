@@ -92,6 +92,8 @@ nix develop -c just ci-gate
 
 # Quick environment diagnostics (recommended when onboarding/troubleshooting)
 just doctor
+# Alias: same diagnostics under a broader devex-oriented name
+just devex
 
 # Fallback without `just`/Nix: run the Rust-native local mirror
 cargo run -p perl-ci-hygiene -- check-local

@@ -112,11 +112,11 @@ rustup update stable
 rustup override set 1.92.0
 ```
 
-#### Proposed Solutions
+#### Current Mitigations
 | Solution | Effort | Status |
 |----------|--------|--------|
-| Automatic version check in justfile | Low | Proposed |
-| Better error messages for version mismatch | Low | Proposed |
+| `just doctor` / `just devex` verify pinned vs active Rust toolchain | Low | Implemented |
+| Doctor output includes explicit fix commands for mismatches | Low | Implemented |
 
 #### Related Documentation
 - [`rust-toolchain.toml`](../../rust-toolchain.toml) - Toolchain specification

@@ -57,6 +57,54 @@ show_version() {
   fi
 }
 
+parse_pinned_toolchain() {
+  if [ ! -f rust-toolchain.toml ]; then
+    return 1
+  fi
+
+  awk -F'"' '/channel/{print $2; exit}' rust-toolchain.toml
+}
+
+check_toolchain_alignment() {
+  local pinned="$1"
+
+  if [ -z "$pinned" ]; then
+    warn "Could not parse rust-toolchain.toml"
+    return 1
+  fi
+
+  pass "Pinned toolchain: $pinned"
+
+  if ! has_cmd rustc; then
+    warn "rustc unavailable; cannot verify active toolchain version"
+    return 1
+  fi
+
+  local rustc_version
+  rustc_version=$(rustc --version 2>/dev/null | awk '{print $2}')
+  if [ -z "$rustc_version" ]; then
+    warn "Could not determine active rustc version"
+    return 1
+  fi
+
+  if [ "$rustc_version" = "$pinned" ]; then
+    pass "Active rustc matches pinned toolchain: $rustc_version"
+  else
+    warn "Active rustc ($rustc_version) does not match pinned toolchain ($pinned)"
+    warn "Fix with: rustup toolchain install $pinned && rustup override set $pinned"
+  fi
+
+  if has_cmd rustup; then
+    local active_toolchain
+    active_toolchain=$(rustup show active-toolchain 2>/dev/null | awk '{print $1}')
+    if [ -n "$active_toolchain" ]; then
+      pass "rustup active toolchain: $active_toolchain"
+    else
+      warn "Could not determine rustup active toolchain"
+    fi
+  fi
+}
+
 MISSING_REQUIRED=0
 
 echo "Repository: $(pwd)"
@@ -82,20 +130,17 @@ printf '== Rust components ==\n'
 check_rust_component rustfmt || true
 check_rust_component clippy || true
 
-if [ -f rust-toolchain.toml ]; then
-  TOOLCHAIN=$(awk -F'"' '/channel/{print $2; exit}' rust-toolchain.toml)
-  if [ -n "${TOOLCHAIN:-}" ]; then
-    pass "Pinned toolchain: $TOOLCHAIN"
-  else
-    warn "Could not parse rust-toolchain.toml"
-  fi
+if PINNED_TOOLCHAIN=$(parse_pinned_toolchain 2>/dev/null); then
+  check_toolchain_alignment "$PINNED_TOOLCHAIN" || true
 else
   warn "rust-toolchain.toml not found"
 fi
 
 echo
 printf '== Suggested next commands ==\n'
+echo "  just doctor"
 echo "  just pr-fast"
+echo "  just devex-targeted"
 echo "  just ci-gate"
 echo "  nix develop -c just ci-gate"
 
