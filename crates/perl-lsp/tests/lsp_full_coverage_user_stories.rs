@@ -73,6 +73,13 @@ impl TestContext {
         }
     }
 
+    fn initialized_story(story_name: &str) -> Self {
+        let mut ctx = Self::new();
+        ctx.book_story(story_name);
+        ctx.initialize();
+        ctx
+    }
+
     fn book_story(&mut self, story_name: &str) {
         self.storybook.push(story_name.to_string());
     }
@@ -300,9 +307,7 @@ impl TestContext {
 
 #[test]
 fn test_user_story_debugging_workflow() {
-    let mut ctx = TestContext::new();
-    ctx.book_story("debugging_workflow");
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("debugging_workflow");
 
     // User story: Debug a complex Perl script with breakpoints and variable inspection
     let code = r#"#!/usr/bin/perl
@@ -354,9 +359,7 @@ print "Fibonacci(10) = $result\n";
 
 #[test]
 fn test_user_story_refactoring_legacy_code() {
-    let mut ctx = TestContext::new();
-    ctx.book_story("refactoring_legacy_code");
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("refactoring_legacy_code");
 
     // User story: Refactor legacy Perl code to modern best practices
     let legacy_code = r#"#!/usr/bin/perl
@@ -406,9 +409,7 @@ foreach $item (@array) {
 
 #[test]
 fn test_user_story_multi_file_project_navigation() {
-    let mut ctx = TestContext::new();
-    ctx.book_story("multi_file_project_navigation");
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("multi_file_project_navigation");
 
     // User story: Navigate between modules in a large project
     let main_script = r#"#!/usr/bin/perl
@@ -481,8 +482,7 @@ sub connect {
 
 #[test]
 fn test_user_story_test_driven_development() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("test_driven_development");
 
     // User story: Write tests first, then implementation
     let test_file = r#"#!/usr/bin/perl
@@ -518,8 +518,7 @@ is($calc->multiply(3, 4), 12, 'Multiplication works');
 
 #[test]
 fn test_user_story_performance_profiling() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("performance_profiling");
 
     // User story: Profile and optimize slow code
     let slow_code = r#"#!/usr/bin/perl
@@ -562,8 +561,7 @@ print "Result: $result, Time: $elapsed seconds\n";
 
 #[test]
 fn test_user_story_regex_development() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("regex_development");
 
     // User story: Develop and test complex regular expressions
     let regex_code = r#"#!/usr/bin/perl
@@ -603,8 +601,7 @@ if ($html =~ m{<div\s+class=['"]([^'"]+)['"]\s*>(.*?)</div>}i) {
 
 #[test]
 fn test_user_story_database_integration() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("database_integration");
 
     // User story: Work with database queries and DBI
     let db_code = r#"#!/usr/bin/perl
@@ -650,8 +647,7 @@ $dbh->disconnect();
 
 #[test]
 fn test_user_story_web_development() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("web_development");
 
     // User story: Develop web applications with Mojolicious/Dancer
     let web_code = r#"#!/usr/bin/perl
@@ -696,8 +692,7 @@ app->start;
 
 #[test]
 fn test_user_story_live_collaboration() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("live_collaboration");
 
     // User story: Multiple developers working on the same file
     let initial_code = r#"#!/usr/bin/perl
@@ -734,8 +729,7 @@ sub process_data {
 
 #[test]
 fn test_user_story_package_management() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("package_management");
 
     // User story: Manage CPAN dependencies and local modules
     let makefile = r#"use ExtUtils::MakeMaker;
@@ -767,8 +761,7 @@ WriteMakefile(
 
 #[test]
 fn test_user_story_documentation_generation() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("documentation_generation");
 
     // User story: Generate and maintain POD documentation
     let module_with_pod = r#"package MyModule;
@@ -851,8 +844,7 @@ This is free software.
 
 #[test]
 fn test_user_story_error_handling() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("error_handling");
 
     // User story: Robust error handling with Try::Tiny and custom exceptions
     let error_handling_code = r#"#!/usr/bin/perl
@@ -900,8 +892,7 @@ finally {
 
 #[test]
 fn test_user_story_configuration_management() {
-    let mut ctx = TestContext::new();
-    ctx.initialize();
+    let mut ctx = TestContext::initialized_story("configuration_management");
 
     // User story: Manage application configuration with Config modules
     let config_code = r#"#!/usr/bin/perl

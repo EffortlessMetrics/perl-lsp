@@ -148,11 +148,17 @@ To keep user-story tests easy to review and maintain, use this lightweight
 ```rust
 #[test]
 fn test_user_story_<capability>_<outcome>() {
+    let mut ctx = TestContext::initialized_story("<capability>_<outcome>");
+
     // Given: <workspace + source setup>
     // When: <LSP request sequence>
     // Then: <editor-visible expectation>
 }
 ```
+
+Using a single story-aware constructor keeps initialization and story booking
+coupled, so every user-story assertion includes the right story context when it
+fails.
 
 This approach keeps user stories deterministic, reviewable, and aligned with
 real editor behavior instead of implementation details.
