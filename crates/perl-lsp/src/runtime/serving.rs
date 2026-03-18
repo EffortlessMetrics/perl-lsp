@@ -84,7 +84,7 @@ impl LspServer {
                     }
                 }
                 RequestClass::ReadOnly => {
-                    if sched.send_read(request).await.is_err() {
+                    if sched.send_read(request, Arc::clone(&self)).await.is_err() {
                         break;
                     }
                 }

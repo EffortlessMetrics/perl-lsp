@@ -14,6 +14,8 @@
 use crate::protocol::JsonRpcRequest;
 use crate::transport::log_response;
 use std::sync::Arc;
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
+use tokio::task::JoinSet;
 
 use super::LspServer;
 
@@ -88,16 +90,18 @@ pub(crate) fn classify(method: &str) -> RequestClass {
 pub(crate) struct Scheduler {
     /// Channel for mutation/lifecycle work (single exclusive worker drains this).
     mutation_tx: tokio::sync::mpsc::Sender<JsonRpcRequest>,
-    /// Channel for read-only work (N workers drain this).
-    read_tx: tokio::sync::mpsc::Sender<JsonRpcRequest>,
-    /// Join handles for background workers (used for shutdown drain).
+    /// Bounded concurrency guard for read-only requests.
+    read_permits: Arc<Semaphore>,
+    /// Tracks in-flight read-only tasks so shutdown can await completion.
+    read_tasks: Arc<Mutex<JoinSet<()>>>,
+    /// Join handles for long-lived background workers (used for shutdown drain).
     workers: Vec<tokio::task::JoinHandle<()>>,
 }
 
-/// Bounded channel capacity for both mutation and read queues.
+/// Bounded channel capacity for the mutation queue.
 const QUEUE_CAPACITY: usize = 64;
 
-/// Number of concurrent read-pool workers.
+/// Maximum number of concurrent read-only requests.
 const READ_WORKERS: usize = 4;
 
 impl Scheduler {
@@ -107,23 +111,19 @@ impl Scheduler {
     /// All workers use `spawn_blocking` for CPU-bound handler execution.
     pub fn new(server: Arc<LspServer>) -> Self {
         let (mutation_tx, mutation_rx) = tokio::sync::mpsc::channel(QUEUE_CAPACITY);
-        let (read_tx, read_rx) = tokio::sync::mpsc::channel(QUEUE_CAPACITY);
 
-        let mut workers = Vec::with_capacity(1 + READ_WORKERS);
+        let mut workers = Vec::with_capacity(1);
 
         // Single exclusive mutation worker — processes lifecycle and mutation
         // requests one at a time, preserving ordering guarantees.
         workers.push(tokio::spawn(Self::mutation_worker(mutation_rx, Arc::clone(&server))));
 
-        // Read pool: N workers share a single receiver via Arc<Mutex<>>.
-        // Each worker competes for the next item (work-stealing pattern).
-        let shared_rx = Arc::new(tokio::sync::Mutex::new(read_rx));
-        for _ in 0..READ_WORKERS {
-            workers
-                .push(tokio::spawn(Self::read_worker(Arc::clone(&shared_rx), Arc::clone(&server))));
+        Self {
+            mutation_tx,
+            read_permits: Arc::new(Semaphore::new(READ_WORKERS)),
+            read_tasks: Arc::new(Mutex::new(JoinSet::new())),
+            workers,
         }
-
-        Self { mutation_tx, read_tx, workers }
     }
 
     /// Send a mutation or lifecycle request to the exclusive worker.
@@ -133,11 +133,23 @@ impl Scheduler {
         self.mutation_tx.send(request).await.map_err(|_| ())
     }
 
-    /// Send a read-only request to the read pool.
+    /// Send a read-only request to the bounded read pool.
     ///
-    /// Returns `Err(())` if all read workers have exited (channel closed).
-    pub async fn send_read(&self, request: JsonRpcRequest) -> Result<(), ()> {
-        self.read_tx.send(request).await.map_err(|_| ())
+    /// Backpressure is enforced by awaiting a semaphore permit before spawning
+    /// the blocking handler. This avoids an extra queue hop and lets newly
+    /// available blocking threads start work immediately.
+    pub async fn send_read(
+        &self,
+        request: JsonRpcRequest,
+        server: Arc<LspServer>,
+    ) -> Result<(), ()> {
+        let permit = Arc::clone(&self.read_permits).acquire_owned().await.map_err(|_| ())?;
+        let read_tasks = Arc::clone(&self.read_tasks);
+
+        let mut tasks = read_tasks.lock().await;
+        Self::drain_finished_read_tasks(&mut tasks);
+        tasks.spawn(Self::run_read_request(request, server, permit));
+        Ok(())
     }
 
     /// Shut down all workers by dropping senders and awaiting completion.
@@ -148,12 +160,15 @@ impl Scheduler {
     pub async fn shutdown(self) {
         // Drop senders so worker recv loops see channel closed.
         drop(self.mutation_tx);
-        drop(self.read_tx);
 
-        // Wait for all workers to finish draining.
+        // Wait for the long-lived workers to finish draining.
         for handle in self.workers {
             let _ = handle.await;
         }
+
+        // Await all in-flight read-only tasks.
+        let mut tasks = self.read_tasks.lock().await;
+        while tasks.join_next().await.is_some() {}
     }
 
     /// Single exclusive mutation worker.
@@ -180,38 +195,27 @@ impl Scheduler {
         }
     }
 
-    /// Read pool worker.
-    ///
-    /// Multiple instances share a single receiver via `Arc<tokio::sync::Mutex<>>`.
-    /// Each worker competes for the next item, runs the handler on the blocking
-    /// thread pool, and sends the response via the outbound channel.
-    async fn read_worker(
-        rx: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<JsonRpcRequest>>>,
+    async fn run_read_request(
+        request: JsonRpcRequest,
         server: Arc<LspServer>,
+        permit: OwnedSemaphorePermit,
     ) {
-        loop {
-            // Hold the receiver lock only long enough to get the next item.
-            let request = {
-                let mut guard = rx.lock().await;
-                guard.recv().await
-            };
+        let outbound = server.outbound.clone();
+        let srv = Arc::clone(&server);
 
-            let request = match request {
-                Some(r) => r,
-                None => break, // channel closed — all senders dropped
-            };
+        // Run CPU-bound handler on blocking thread pool.
+        let result = tokio::task::spawn_blocking(move || srv.handle_request(request)).await;
 
-            let srv = Arc::clone(&server);
-            let outbound = server.outbound.clone();
+        drop(permit);
 
-            // Run CPU-bound handler on blocking thread pool.
-            let result = tokio::task::spawn_blocking(move || srv.handle_request(request)).await;
-
-            if let Ok(Some(response)) = result {
-                log_response(&response);
-                let _ = outbound.send_response(response);
-            }
+        if let Ok(Some(response)) = result {
+            log_response(&response);
+            let _ = outbound.send_response(response);
         }
+    }
+
+    fn drain_finished_read_tasks(tasks: &mut JoinSet<()>) {
+        while tasks.try_join_next().is_some() {}
     }
 }
 
