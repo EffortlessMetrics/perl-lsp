@@ -397,6 +397,19 @@ fn peek_token_multiple_times_same_result() -> R {
 }
 
 #[test]
+fn peek_token_preserves_eof_state() -> R {
+    let mut lexer = PerlLexer::new("42");
+    let _number = lexer.next_token().ok_or("missing number token")?;
+    let peeked_eof = lexer.peek_token().ok_or("missing peeked EOF token")?;
+    assert_eq!(peeked_eof.token_type, TokenType::EOF);
+
+    let actual_eof = lexer.next_token().ok_or("missing actual EOF token")?;
+    assert_eq!(actual_eof.token_type, TokenType::EOF);
+    assert!(lexer.next_token().is_none());
+    Ok(())
+}
+
+#[test]
 fn reset_replays_from_beginning() -> R {
     let mut lexer = PerlLexer::new("my $x = 1;");
     let first_pass = lexer.next_token().ok_or("first token")?;
@@ -407,6 +420,22 @@ fn reset_replays_from_beginning() -> R {
     let after_reset = lexer.next_token().ok_or("after reset")?;
     assert_eq!(first_pass.token_type, after_reset.token_type);
     assert_eq!(first_pass.start, after_reset.start);
+    Ok(())
+}
+
+#[test]
+fn reset_after_eof_replays_eof_token() -> R {
+    let mut lexer = PerlLexer::new("1");
+    let _number = lexer.next_token().ok_or("missing number token")?;
+    let eof = lexer.next_token().ok_or("missing EOF token")?;
+    assert_eq!(eof.token_type, TokenType::EOF);
+
+    lexer.reset();
+
+    let replayed_number = lexer.next_token().ok_or("missing replayed number token")?;
+    assert!(matches!(&replayed_number.token_type, TokenType::Number(text) if &**text == "1"));
+    let replayed_eof = lexer.next_token().ok_or("missing replayed EOF token")?;
+    assert_eq!(replayed_eof.token_type, TokenType::EOF);
     Ok(())
 }
 
