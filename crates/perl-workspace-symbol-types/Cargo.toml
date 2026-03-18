@@ -1,0 +1,24 @@
+[package]
+name = "perl-workspace-symbol-types"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+description = "Shared symbol-domain types for Perl workspace indexing"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/perl-workspace-symbol-types"
+keywords = ["perl", "workspace", "symbol", "index"]
+categories = ["development-tools", "text-editors"]
+
+[lib]
+doctest = false
+
+[dependencies]
+perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
+perl-symbol-types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+[lints]
+workspace = true

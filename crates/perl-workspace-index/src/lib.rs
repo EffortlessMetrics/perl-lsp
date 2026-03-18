@@ -53,9 +53,10 @@ pub use perl_parser_core::{Parser, ast, position};
 /// Workspace indexing and refactoring orchestration.
 pub mod workspace;
 
+/// Workspace-wide symbol index and lookup utilities.
+pub use perl_workspace_symbol_types;
 /// Workspace document storage and cache management.
 pub use workspace::document_store;
-/// Workspace-wide symbol index and lookup utilities.
 pub use workspace::workspace_index;
 /// Workspace rename operations for cross-file symbol changes.
 pub use workspace::workspace_rename;

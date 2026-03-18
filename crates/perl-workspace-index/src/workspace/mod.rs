@@ -13,6 +13,10 @@ pub use cache::{
     AstCacheConfig, BoundedLruCache, CacheConfig, CombinedWorkspaceCacheConfig, EstimateSize,
     SymbolCacheConfig, WorkspaceCacheConfig,
 };
+pub use perl_workspace_symbol_types::{
+    Location, LspWorkspaceSymbol, ReferenceKind, SymKind, SymbolKey, SymbolKind, SymbolReference,
+    VarKind, WorkspaceSymbol, normalize_var, sigil_to_var_kind,
+};
 pub use production_coordinator::{
     CoordinatorStatistics, ProductionCoordinatorConfig, ProductionIndexCoordinator,
     WorkspaceCacheManager,
@@ -22,4 +26,4 @@ pub use state_machine::{
     BuildPhase, DegradationReason, IndexState, IndexStateKind, IndexStateMachine,
     InvalidationReason, ResourceKind, TransitionResult,
 };
-pub use workspace_index::{IndexResourceLimits, Location, WorkspaceIndex};
+pub use workspace_index::{IndexResourceLimits, WorkspaceIndex};

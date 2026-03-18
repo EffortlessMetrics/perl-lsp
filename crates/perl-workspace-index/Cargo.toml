@@ -28,6 +28,7 @@ perl-position-tracking = { workspace = true, features = ["lsp-compat"] }
 perl-symbol-types = { workspace = true }
 perl-uri = { workspace = true }
 perl-workspace-index-slo = { workspace = true }
+perl-workspace-symbol-types = { workspace = true }
 perl-workspace-index-state-machine = { workspace = true }
 parking_lot = "0.12.5"
 serde = { version = "1.0.228", features = ["derive"] }

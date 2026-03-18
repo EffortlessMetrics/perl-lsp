@@ -2718,6 +2718,7 @@ dependencies = [
  "perl-uri",
  "perl-workspace-index-slo",
  "perl-workspace-index-state-machine",
+ "perl-workspace-symbol-types",
  "serde",
  "tempfile",
  "url",
@@ -2737,6 +2738,15 @@ name = "perl-workspace-index-state-machine"
 version = "0.11.0"
 dependencies = [
  "parking_lot",
+]
+
+[[package]]
+name = "perl-workspace-symbol-types"
+version = "0.11.0"
+dependencies = [
+ "perl-position-tracking",
+ "perl-symbol-types",
+ "serde",
 ]
 
 [[package]]
