@@ -32,7 +32,9 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
         save: None,
     }));
 
-    caps.hover_provider = Some(HoverProviderCapability::Simple(true));
+    if build.hover {
+        caps.hover_provider = Some(HoverProviderCapability::Simple(true));
+    }
 
     if build.document_highlight {
         caps.document_highlight_provider = Some(OneOf::Left(true));
@@ -50,20 +52,24 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
         caps.declaration_provider = Some(DeclarationCapability::Simple(true));
     }
 
-    caps.completion_provider = Some(CompletionOptions {
-        resolve_provider: Some(true),
-        trigger_characters: Some(vec![
-            "$".to_string(),
-            "@".to_string(),
-            "%".to_string(),
-            "->".to_string(),
-        ]),
-        all_commit_characters: None,
-        work_done_progress_options: WorkDoneProgressOptions::default(),
-        completion_item: None,
-    });
+    if build.completion {
+        caps.completion_provider = Some(CompletionOptions {
+            resolve_provider: Some(true),
+            trigger_characters: Some(vec![
+                "$".to_string(),
+                "@".to_string(),
+                "%".to_string(),
+                "->".to_string(),
+            ]),
+            all_commit_characters: None,
+            work_done_progress_options: WorkDoneProgressOptions::default(),
+            completion_item: None,
+        });
+    }
 
-    caps.definition_provider = Some(OneOf::Left(true));
+    if build.definition {
+        caps.definition_provider = Some(OneOf::Left(true));
+    }
 
     if build.type_definition {
         caps.type_definition_provider =
@@ -75,9 +81,15 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
             Some(lsp_types::ImplementationProviderCapability::Simple(true));
     }
 
-    caps.references_provider = Some(OneOf::Left(true));
-    caps.document_symbol_provider = Some(OneOf::Left(true));
-    caps.workspace_symbol_provider = Some(OneOf::Left(true));
+    if build.references {
+        caps.references_provider = Some(OneOf::Left(true));
+    }
+    if build.document_symbol {
+        caps.document_symbol_provider = Some(OneOf::Left(true));
+    }
+    if build.workspace_symbol {
+        caps.workspace_symbol_provider = Some(OneOf::Left(true));
+    }
 
     if build.notebook_document_sync {
         caps.notebook_document_sync = Some(OneOf::Left(NotebookDocumentSyncOptions {
@@ -96,7 +108,9 @@ pub fn capabilities_for(build: BuildFlags) -> ServerCapabilities {
         caps.document_range_formatting_provider = Some(OneOf::Left(true));
     }
 
-    caps.folding_range_provider = Some(FoldingRangeProviderCapability::Simple(true));
+    if build.folding_range {
+        caps.folding_range_provider = Some(FoldingRangeProviderCapability::Simple(true));
+    }
 
     // Conditional capabilities
     if build.inlay_hints {
