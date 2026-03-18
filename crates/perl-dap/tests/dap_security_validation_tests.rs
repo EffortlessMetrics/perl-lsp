@@ -12,22 +12,26 @@ use perl_dap::security::{
 };
 use perl_tdd_support::must;
 use std::path::PathBuf;
+use tempfile::TempDir;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+fn temp_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {
+    Ok(tempfile::Builder::new().prefix("perl-dap-security-").tempdir()?)
+}
 
 // ===== Path Validation Tests =====
 
 #[test]
 fn test_path_validation_safe_relative_paths() -> TestResult {
-    let workspace = std::env::current_dir()?.join("test_workspace");
-    std::fs::create_dir_all(&workspace)?;
+    let workspace = temp_workspace()?;
 
     // Safe relative paths
     let safe_paths = vec!["src/main.pl", "./lib/Module.pm", "test.pl"];
 
     for path_str in safe_paths {
         let path = PathBuf::from(path_str);
-        let result = validate_path(&path, &workspace);
+        let result = validate_path(&path, workspace.path());
         assert!(
             result.is_ok(),
             "Path '{}' should be valid within workspace, got error: {:?}",
@@ -36,14 +40,12 @@ fn test_path_validation_safe_relative_paths() -> TestResult {
         );
     }
 
-    std::fs::remove_dir_all(&workspace).ok();
     Ok(())
 }
 
 #[test]
 fn test_path_validation_parent_traversal_attempts() {
-    let workspace = must(std::env::current_dir()).join("test_workspace");
-    std::fs::create_dir_all(&workspace).ok();
+    let workspace = must(temp_workspace());
 
     // Malicious paths with parent directory references
     let malicious_paths =
@@ -51,13 +53,13 @@ fn test_path_validation_parent_traversal_attempts() {
 
     for path_str in malicious_paths {
         let path = PathBuf::from(path_str);
-        let result = validate_path(&path, &workspace);
+        let result = validate_path(&path, workspace.path());
 
         if result.is_ok() {
             eprintln!(
                 "DEBUG: Path '{}' was ALLOWED (workspace: {})",
                 path_str,
-                workspace.display()
+                workspace.path().display()
             );
             eprintln!("DEBUG: Result: {:?}", result);
         }
@@ -66,7 +68,7 @@ fn test_path_validation_parent_traversal_attempts() {
             result.is_err(),
             "Parent traversal path '{}' should be rejected (workspace: {}), result: {:?}",
             path_str,
-            workspace.display(),
+            workspace.path().display(),
             result
         );
 
@@ -84,29 +86,24 @@ fn test_path_validation_parent_traversal_attempts() {
             }
         }
     }
-
-    std::fs::remove_dir_all(&workspace).ok();
 }
 
 #[test]
 fn test_path_validation_absolute_paths() {
-    let workspace = must(std::env::current_dir()).join("test_workspace");
-    std::fs::create_dir_all(&workspace).ok();
+    let workspace = must(temp_workspace());
 
     // Absolute paths outside workspace should be rejected
     let outside_paths = vec!["/etc/passwd", "/root/.ssh/id_rsa"];
 
     for path_str in outside_paths {
         let path = PathBuf::from(path_str);
-        let result = validate_path(&path, &workspace);
+        let result = validate_path(&path, workspace.path());
         assert!(
             result.is_err(),
             "Absolute path '{}' outside workspace should be rejected",
             path_str
         );
     }
-
-    std::fs::remove_dir_all(&workspace).ok();
 }
 
 #[test]
@@ -222,14 +219,11 @@ fn test_security_comprehensive_path_traversal_matrix() {
         ("test.pl", false),
     ];
 
-    let workspace = must(std::env::current_dir()).join("test_workspace_comprehensive");
+    let workspace = must(temp_workspace());
 
     for (path_str, should_reject) in test_cases {
-        // Ensure workspace exists for each test case
-        must(std::fs::create_dir_all(&workspace));
-
         let path = PathBuf::from(path_str);
-        let result = validate_path(&path, &workspace);
+        let result = validate_path(&path, workspace.path());
 
         if should_reject {
             assert!(result.is_err(), "Path '{}' should be rejected but was allowed", path_str);
@@ -243,8 +237,6 @@ fn test_security_comprehensive_path_traversal_matrix() {
             );
         }
     }
-
-    std::fs::remove_dir_all(&workspace).ok();
 }
 
 #[test]

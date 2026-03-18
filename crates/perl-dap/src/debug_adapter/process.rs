@@ -361,6 +361,17 @@ impl DebugAdapter {
                     }
                     Ok(_) => {
                         let text = line.trim_end().to_string();
+                        let sanitized_text = if let Some(re) = ansi_escape_re() {
+                            re.replace_all(&text, "").into_owned()
+                        } else {
+                            text.clone()
+                        };
+                        let normalized_text = DebugAdapter::normalize_debugger_output_line(&text);
+                        let analysis_text = if normalized_text.is_empty() {
+                            sanitized_text.trim().to_string()
+                        } else {
+                            normalized_text
+                        };
                         eprintln!("Debugger output: {}", text); // Debug logging
                         {
                             let mut output = lock_or_recover(
@@ -394,7 +405,7 @@ impl DebugAdapter {
 
                         // Try main context pattern
                         if let Some(re) = context_re()
-                            && let Some(caps) = re.captures(&text)
+                            && let Some(caps) = re.captures(&analysis_text)
                         {
                             if let Some(func) = caps.name("func") {
                                 current_func = func.as_str().to_string();
@@ -414,7 +425,7 @@ impl DebugAdapter {
                         // Try stack frame pattern as fallback
                         if !context_updated
                             && let Some(re) = stack_frame_re()
-                            && let Some(caps) = re.captures(&text)
+                            && let Some(caps) = re.captures(&analysis_text)
                         {
                             if let Some(func) = caps.name("func") {
                                 current_func = func.as_str().to_string();
@@ -431,7 +442,7 @@ impl DebugAdapter {
                         // Check for errors that might provide location info
                         if !context_updated
                             && let Some(re) = error_re()
-                            && let Some(caps) = re.captures(&text)
+                            && let Some(caps) = re.captures(&analysis_text)
                         {
                             if let Some(file) = caps.name("file") {
                                 current_file = file.as_str().to_string();
@@ -461,8 +472,9 @@ impl DebugAdapter {
                             let break_on_warn =
                                 exception_break_on_warn.lock().map(|guard| *guard).unwrap_or(false);
                             let is_exception_line =
-                                exception_re().is_some_and(|re| re.is_match(&text));
-                            let is_warning_line = warning_re().is_some_and(|re| re.is_match(&text));
+                                exception_re().is_some_and(|re| re.is_match(&analysis_text));
+                            let is_warning_line =
+                                warning_re().is_some_and(|re| re.is_match(&analysis_text));
                             let exception_match = break_on_die && is_exception_line;
                             let warning_match =
                                 break_on_warn && is_warning_line && !is_exception_line;
@@ -470,7 +482,7 @@ impl DebugAdapter {
                             // Store exception message for exceptionInfo request
                             if exception_match || warning_match {
                                 if let Ok(mut guard) = last_exception_message.lock() {
-                                    *guard = Some(text.clone());
+                                    *guard = Some(analysis_text.clone());
                                 }
                             }
 
@@ -601,10 +613,7 @@ impl DebugAdapter {
                         }
 
                         // Detect debugger prompt (stopped state) with enhanced pattern matching
-                        if prompt_re().is_some_and(|re| re.is_match(&text))
-                            || text.trim().starts_with("DB<")
-                            || text.trim().starts_with("  DB<")
-                        {
+                        if prompt_re().is_some_and(|re| re.is_match(&sanitized_text)) {
                             _debugger_ready = true;
                             let thread_id = {
                                 let Ok(mut guard) = session.lock() else {
