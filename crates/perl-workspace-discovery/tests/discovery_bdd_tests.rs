@@ -82,3 +82,83 @@ fn given_git_workspace_when_discovering_then_git_strategy_respects_gitignore() -
 
     Ok(())
 }
+
+#[test]
+fn given_git_workspace_with_untracked_sources_when_discovering_then_git_strategy_includes_them()
+-> TestResult {
+    if !git_available() {
+        return Ok(());
+    }
+
+    let tmp = TempDir::new()?;
+    let root = tmp.path();
+
+    run_git(root, &["init", "--quiet"])?;
+    create_file(root, "tracked/Module.pm")?;
+    create_file(root, "untracked/script.pl")?;
+    create_file(root, "notes.txt")?;
+    run_git(root, &["add", "tracked/Module.pm"])?;
+
+    let result = discover_perl_files(root);
+
+    assert_eq!(result.method, DiscoveryMethod::Git);
+    assert!(result.files.iter().any(|path| path.ends_with("tracked/Module.pm")));
+    assert!(result.files.iter().any(|path| path.ends_with("untracked/script.pl")));
+    assert!(!result.files.iter().any(|path| path.ends_with("notes.txt")));
+
+    Ok(())
+}
+
+#[test]
+fn given_git_workspace_with_tracked_noise_inside_skipped_dir_when_discovering_then_skip_rules_still_win()
+-> TestResult {
+    if !git_available() {
+        return Ok(());
+    }
+
+    let tmp = TempDir::new()?;
+    let root = tmp.path();
+
+    run_git(root, &["init", "--quiet"])?;
+    create_file(root, "lib/Kept.pm")?;
+    create_file(root, "target/generated/Tracked.pm")?;
+    create_file(root, "node_modules/vendor/TrackedToo.pm")?;
+    run_git(root, &["add", "."])?;
+
+    let result = discover_perl_files(root);
+
+    assert_eq!(result.method, DiscoveryMethod::Git);
+    assert_eq!(result.files.len(), 1);
+    assert!(result.files.iter().any(|path| path.ends_with("lib/Kept.pm")));
+    assert!(!result.files.iter().any(|path| path.to_string_lossy().contains("target/generated")));
+    assert!(
+        !result.files.iter().any(|path| path.to_string_lossy().contains("node_modules/vendor"))
+    );
+    assert!(result.excluded_count >= 2);
+
+    Ok(())
+}
+
+#[test]
+fn given_git_workspace_with_only_ignored_or_non_perl_files_when_discovering_then_result_is_empty_but_git_strategy_is_used()
+-> TestResult {
+    if !git_available() {
+        return Ok(());
+    }
+
+    let tmp = TempDir::new()?;
+    let root = tmp.path();
+
+    run_git(root, &["init", "--quiet"])?;
+    fs::write(root.join(".gitignore"), "build/\n")?;
+    create_file(root, "README.md")?;
+    create_file(root, "build/ignored.pm")?;
+
+    let result = discover_perl_files(root);
+
+    assert_eq!(result.method, DiscoveryMethod::Git);
+    assert!(result.files.is_empty());
+    assert!(result.excluded_count >= 1);
+
+    Ok(())
+}
