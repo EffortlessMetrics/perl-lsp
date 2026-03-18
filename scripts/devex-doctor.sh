@@ -36,6 +36,44 @@ check_rust_component() {
   return 1
 }
 
+check_toolchain_match() {
+  if [ ! -f rust-toolchain.toml ]; then
+    warn "rust-toolchain.toml not found"
+    return 1
+  fi
+
+  local pinned active
+  pinned=$(awk -F'"' '/channel/{print $2; exit}' rust-toolchain.toml)
+  if [ -z "${pinned:-}" ]; then
+    warn "Could not parse pinned toolchain from rust-toolchain.toml"
+    return 1
+  fi
+
+  if ! has_cmd rustc; then
+    warn "rustc unavailable; cannot compare active toolchain to pinned version"
+    return 1
+  fi
+
+  active=$(rustc --version 2>/dev/null | awk '{print $2}')
+  if [ -z "${active:-}" ]; then
+    warn "Could not determine active rustc version"
+    return 1
+  fi
+
+  if [ "$active" = "$pinned" ]; then
+    pass "Active rustc matches pinned toolchain: $active"
+    return 0
+  fi
+
+  warn "Active rustc ($active) does not match pinned toolchain ($pinned)"
+  if has_cmd rustup; then
+    echo "    Fix: rustup toolchain install $pinned && rustup override set $pinned"
+  else
+    echo "    Fix: install rustup from https://rustup.rs and activate $pinned"
+  fi
+  return 1
+}
+
 check_githook() {
   local hook_path=".git/hooks/pre-push"
   if [ -x "$hook_path" ]; then
@@ -81,6 +119,7 @@ echo
 printf '== Rust components ==\n'
 check_rust_component rustfmt || true
 check_rust_component clippy || true
+check_toolchain_match || true
 
 if [ -f rust-toolchain.toml ]; then
   TOOLCHAIN=$(awk -F'"' '/channel/{print $2; exit}' rust-toolchain.toml)
@@ -95,7 +134,9 @@ fi
 
 echo
 printf '== Suggested next commands ==\n'
+echo "  just doctor"
 echo "  just pr-fast"
+echo "  just devex-targeted"
 echo "  just ci-gate"
 echo "  nix develop -c just ci-gate"
 

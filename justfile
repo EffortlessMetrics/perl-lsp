@@ -38,7 +38,7 @@ _timed name cmd:
     fi
 
 # Tier: PR-fast (required for every PR iteration, must be fast ~1-2 min)
-pr-fast: _check-tools-basic
+pr-fast: _check-tools-basic _check-rust-toolchain
     @echo "=============================================="
     @echo "  PR-FAST GATE (quick validation)"
     @echo "=============================================="
@@ -331,6 +331,35 @@ _check-tools-basic:
         exit 1; \
     fi
 
+# Ensure the active Rust toolchain matches the repo's pinned version.
+[private]
+_check-rust-toolchain:
+    @if [ ! -f rust-toolchain.toml ]; then \
+        echo "⚠️  rust-toolchain.toml not found; skipping toolchain version check"; \
+        exit 0; \
+    fi; \
+    PINNED=$$(awk -F'"' '/channel/{print $$2; exit}' rust-toolchain.toml); \
+    if [ -z "$$PINNED" ]; then \
+        echo "⚠️  Could not parse pinned toolchain from rust-toolchain.toml"; \
+        exit 0; \
+    fi; \
+    if ! command -v rustc >/dev/null 2>&1; then \
+        echo "❌ rustc not found"; \
+        echo "  Install Rust via https://rustup.rs"; \
+        exit 1; \
+    fi; \
+    ACTIVE=$$(rustc --version | awk '{print $$2}'); \
+    if [ "$$ACTIVE" != "$$PINNED" ]; then \
+        echo "❌ Rust toolchain mismatch: active=$$ACTIVE pinned=$$PINNED"; \
+        if command -v rustup >/dev/null 2>&1; then \
+            echo "  Fix: rustup toolchain install $$PINNED && rustup override set $$PINNED"; \
+        else \
+            echo "  Fix: install rustup from https://rustup.rs, then activate $$PINNED"; \
+        fi; \
+        exit 1; \
+    fi; \
+    echo "✅ Rust toolchain matches pinned version ($$PINNED)"
+
 # ============================================================================
 # CI Validation Commands (Issue #211)
 # ============================================================================
@@ -412,7 +441,7 @@ ci-workflow-audit:
 
 # Fast merge gate (~2-5 min) - REQUIRED for all merges
 # This is the canonical pre-push check (same as merge-gate with legacy checks)
-ci-gate:
+ci-gate: _check-tools-basic _check-rust-toolchain
     @echo "Running fast merge gate..."
     just ci-workflow-audit && \
     just ci-check-no-nested-lock && \

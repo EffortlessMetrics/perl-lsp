@@ -115,7 +115,7 @@ rustup override set 1.92.0
 #### Proposed Solutions
 | Solution | Effort | Status |
 |----------|--------|--------|
-| Automatic version check in justfile | Low | Proposed |
+| Automatic version check in justfile | Low | Implemented |
 | Better error messages for version mismatch | Low | Proposed |
 
 #### Related Documentation
