@@ -7,7 +7,8 @@ import {
     LanguageClientOptions,
     ServerOptions,
     TransportKind,
-    State
+    State,
+    Trace
 } from 'vscode-languageclient/node';
 import { PerlTestAdapter } from './testAdapter';
 import { activateDebugger } from './debugAdapter';
@@ -178,6 +179,12 @@ export async function activate(context: vscode.ExtensionContext) {
             await refreshTestAdapter(context);
         }
 
+        if (event.affectsConfiguration('perl-lsp.trace.server') && client) {
+            const newTrace = getTraceLevel();
+            client.setTrace(newTrace);
+            outputChannel.appendLine(`Trace level changed to: ${newTrace}`);
+        }
+
         if (requiresClientRefresh(event)) {
             await promptForClientRefresh(context);
         }
@@ -339,15 +346,18 @@ function createLanguageClient(serverPath: string): LanguageClient {
         synchronize: {
             fileEvents: vscode.workspace.createFileSystemWatcher('**/.perltidyrc')
         },
-        outputChannel
+        outputChannel,
+        traceOutputChannel: outputChannel
     };
 
-    return new LanguageClient(
+    const lc = new LanguageClient(
         'perl-language-server',
         'Perl Language Server',
         serverOptions,
         clientOptions
     );
+    lc.setTrace(getTraceLevel());
+    return lc;
 }
 
 /**
@@ -371,6 +381,19 @@ async function runHealthCheck(serverPath: string): Promise<boolean> {
             resolve(ok);
         });
     });
+}
+
+function getTraceLevel(): Trace {
+    const traceSetting = vscode.workspace.getConfiguration('perl-lsp').get<string>('trace.server', 'off');
+
+    switch ((traceSetting || 'off').toLowerCase()) {
+        case 'messages':
+            return Trace.Messages;
+        case 'verbose':
+            return Trace.Verbose;
+        default:
+            return Trace.Off;
+    }
 }
 
 function getServerArgs(baseArgs: string[]): string[] {
