@@ -1,0 +1,90 @@
+# Documentation Index
+
+This page is the documentation front door for the `perl-lsp` workspace.
+
+## Start Here
+
+Choose the path that matches what you are trying to do:
+
+| I want to... | Read this first |
+|---|---|
+| Install the language server | [Installation Guide](how-to/INSTALLATION.md) |
+| Get a working editor setup quickly | [Getting Started](tutorials/GETTING_STARTED.md) |
+| Configure editor or workspace settings | [Configuration Reference](reference/CONFIG.md) |
+| Troubleshoot startup, indexing, or editor issues | [Troubleshooting](how-to/TROUBLESHOOTING.md) |
+| Understand the server architecture | [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md) |
+| Work on LSP features as a contributor | [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md) |
+| Run builds, tests, and CI commands | [Commands Reference](reference/COMMANDS_REFERENCE.md) |
+| Understand stability and compatibility | [Stability Policy](reference/STABILITY.md) |
+
+## Documentation Map
+
+### Tutorials
+Hands-on guides for learning the system by doing.
+
+- [Getting Started](tutorials/GETTING_STARTED.md)
+- [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md)
+- [DAP User Guide](tutorials/DAP_USER_GUIDE.md)
+- [Comprehensive Testing Guide](tutorials/COMPREHENSIVE_TESTING_GUIDE.md)
+- [AI Build Guide](tutorials/AI_BUILD_GUIDE.md)
+
+### How-to Guides
+Task-focused instructions for common operational and development workflows.
+
+- [Installation Guide](how-to/INSTALLATION.md)
+- [Editor Setup](how-to/EDITOR_SETUP.md)
+- [Troubleshooting](how-to/TROUBLESHOOTING.md)
+- [Contributing LSP Features](how-to/CONTRIBUTING_LSP.md)
+- [Threading Configuration Guide](how-to/THREADING_CONFIGURATION_GUIDE.md)
+- [Performance Tuning](how-to/PERFORMANCE_TUNING.md)
+- [Security Development Guide](how-to/SECURITY_DEVELOPMENT_GUIDE.md)
+
+### Reference
+Authoritative descriptions of configuration, architecture, commands, and feature contracts.
+
+- [Commands Reference](reference/COMMANDS_REFERENCE.md)
+- [Configuration Reference](reference/CONFIG.md)
+- [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md)
+- [LSP Features](reference/LSP_FEATURES.md)
+- [FAQ](reference/FAQ.md)
+- [Parser Feature Matrix](reference/PARSER_FEATURE_MATRIX.md)
+- [Known Limitations](reference/KNOWN_LIMITATIONS.md)
+
+### Explanation
+Background material that explains why the system is designed the way it is.
+
+- [LSP Documentation](explanation/LSP_DOCUMENTATION.md)
+- [Cancellation Architecture Guide](explanation/CANCELLATION_ARCHITECTURE_GUIDE.md)
+- [Pure Rust Parser](explanation/PURE_RUST_PARSER.md)
+- [Slash Disambiguation](explanation/SLASH_DISAMBIGUATION.md)
+
+### Project / ADR / Specs
+Decision records, project status, and planning documents.
+
+- [ADR Index](adr/README.md)
+- [Project Milestones](project/MILESTONES.md)
+- [Feature Governance](project/FEATURE_GOVERNANCE.md)
+- [Latency Caps SLO Spec](specs/LATENCY_CAPS_SLO_SPEC.md)
+- [Release Candidate Baseline](specs/RELEASE_CANDIDATE_BASELINE.md)
+
+## Suggested Reading Order for New Contributors
+
+1. [Getting Started](tutorials/GETTING_STARTED.md)
+2. [Installation Guide](how-to/INSTALLATION.md)
+3. [Commands Reference](reference/COMMANDS_REFERENCE.md)
+4. [Architecture Overview](reference/ARCHITECTURE_OVERVIEW.md)
+5. [LSP Development Guide](tutorials/LSP_DEVELOPMENT_GUIDE.md)
+
+## CLI Quick Reference
+
+These commands are especially useful when validating an installation or triaging an environment issue:
+
+```bash
+perl-lsp --version
+perl-lsp --health
+perl-lsp --info
+perl-lsp --check path/to/file.pl
+perl-lsp --completion bash
+```
+
+For the complete option list and behavior, see the [Commands Reference](reference/COMMANDS_REFERENCE.md).

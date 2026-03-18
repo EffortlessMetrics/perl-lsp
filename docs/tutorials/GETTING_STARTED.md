@@ -45,8 +45,16 @@ perl-lsp --version
 
 # Quick health check
 perl-lsp --health
-# Should output: ok 0.12.0
+# Should output: ok <installed-version>
+
+# Optional: show feature/profile information
+perl-lsp --info
+
+# Optional: validate a Perl file from the CLI
+perl-lsp --check script.pl
 ```
+
+If `--version` and `--health` work but your editor still cannot connect, jump to [Troubleshooting](../how-to/TROUBLESHOOTING.md).
 
 ## Quick Editor Setup
 
@@ -240,7 +248,7 @@ For project-specific settings, the server reads configuration from your editor's
 }
 ```
 
-See [CONFIG.md](../reference/CONFIG.md) for all configuration options.
+See [CONFIG.md](../reference/CONFIG.md) for all configuration options, including workspace paths, inlay hints, test-runner settings, and resource limits.
 
 ## Troubleshooting
 
@@ -342,11 +350,13 @@ For the full troubleshooting guide including DAP debugging, parser edge cases, a
 ## Next Steps
 
 - **[EDITOR_SETUP.md](../how-to/EDITOR_SETUP.md)** - Detailed editor configurations
+- **[INSTALLATION.md](../how-to/INSTALLATION.md)** - Platform-specific installation and verification steps
 - **[CONFIG.md](../reference/CONFIG.md)** - All configuration options
 - **[LSP_FEATURES.md](../reference/LSP_FEATURES.md)** - Complete feature documentation
 - **[FAQ.md](../reference/FAQ.md)** - Frequently asked questions
+- **[Documentation Index](../INDEX.md)** - Documentation front door and routing guide
 
 ## Getting Help
 
 - **Issues**: [GitHub Issues](https://github.com/EffortlessMetrics/perl-lsp/issues)
-- **Documentation**: [docs/INDEX.md](INDEX.md)
+- **Documentation**: [docs/INDEX.md](../INDEX.md)
