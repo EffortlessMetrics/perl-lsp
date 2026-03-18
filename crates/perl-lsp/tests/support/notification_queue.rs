@@ -91,7 +91,7 @@ impl TestContext {
     pub fn open_document(&mut self, uri: &str, text: &str) {
         match self.harness.open(uri, text) {
             Ok(_) => {}
-            Err(e) => assert!(false, "open should succeed: {e}"),
+            Err(e) => must(Err::<(), _>(format!("open should succeed: {e}"))),
         }
     }
 
@@ -100,7 +100,7 @@ impl TestContext {
         self.version_counter += 1;
         match self.harness.change_full(uri, self.version_counter, text) {
             Ok(_) => {}
-            Err(e) => assert!(false, "change should succeed: {e}"),
+            Err(e) => must(Err::<(), _>(format!("change should succeed: {e}"))),
         }
     }
 
@@ -108,7 +108,7 @@ impl TestContext {
     pub fn close_document(&mut self, uri: &str) {
         match self.harness.close(uri) {
             Ok(_) => {}
-            Err(e) => assert!(false, "close should succeed: {e}"),
+            Err(e) => must(Err::<(), _>(format!("close should succeed: {e}"))),
         }
     }
 
