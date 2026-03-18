@@ -9,6 +9,8 @@
 
 use std::error::Error;
 use std::fmt;
+use std::io;
+use std::sync::Once;
 
 use clap::{Args, Parser};
 pub use perl_lsp_feature_governance::{
@@ -16,9 +18,59 @@ pub use perl_lsp_feature_governance::{
     to_json_for_profile,
 };
 use perl_lsp_feature_governance::{feature_profile_supported_tokens, parse_feature_profile_arg};
+use tracing_subscriber::{EnvFilter, fmt as tracing_fmt};
+
+static LOGGING_INIT: Once = Once::new();
 
 /// Default port used by socket transport.
 pub const DEFAULT_LSP_PORT: u16 = 9257;
+
+/// Returns whether runtime logging should be enabled.
+///
+/// Logging activates when the CLI explicitly requests it or when `RUST_LOG`
+/// is already set in the environment, which keeps environment-driven tracing
+/// behavior consistent across binaries.
+pub fn should_enable_logging(explicit_flag: bool) -> bool {
+    explicit_flag || std::env::var_os("RUST_LOG").is_some()
+}
+
+/// Initialize stderr-based tracing once for the current process.
+///
+/// Invalid `RUST_LOG` values fall back to `default_filter`.
+pub fn init_logging(default_filter: &str) {
+    LOGGING_INIT.call_once(|| {
+        let filter = EnvFilter::try_from_default_env()
+            .or_else(|_| EnvFilter::try_new(default_filter))
+            .unwrap_or_else(|_| EnvFilter::new("info"));
+
+        let _ = tracing_fmt()
+            .with_env_filter(filter)
+            .with_writer(io::stderr)
+            .with_target(false)
+            .try_init();
+    });
+}
+
+/// Emit a consistent startup log line for server binaries.
+pub fn log_server_startup(
+    server_name: &str,
+    transport: TransportMode,
+    feature_profile: Option<FeatureProfile>,
+) {
+    tracing::info!(server = server_name, transport = transport.label(), "server starting");
+
+    if let Some(port) = transport.port() {
+        tracing::info!(server = server_name, port, "listening port configured");
+    }
+
+    if let Some(feature_profile) = feature_profile {
+        tracing::info!(
+            server = server_name,
+            feature_profile = feature_profile.as_str(),
+            "feature profile selected"
+        );
+    }
+}
 
 /// Transport options shared by server binaries.
 #[derive(Args, Debug, Clone)]

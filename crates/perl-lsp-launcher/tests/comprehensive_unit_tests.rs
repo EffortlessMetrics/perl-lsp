@@ -6,7 +6,8 @@
 
 use perl_lsp_launcher::{
     DEFAULT_LSP_PORT, FeatureProfile, LaunchConfig, LaunchParseError, TransportMode,
-    catalog_advertised_feature_ids, help_text, parse_args, to_json_for_profile,
+    catalog_advertised_feature_ids, help_text, parse_args, should_enable_logging,
+    to_json_for_profile,
 };
 use perl_tdd_support::must;
 
@@ -105,6 +106,41 @@ fn launch_config_with_all_profile_has_most_features() {
         all.advertised_feature_ids().len() >= ga.advertised_feature_ids().len(),
         "All profile should have at least as many features as GaLock"
     );
+}
+
+#[test]
+fn should_enable_logging_honors_explicit_flag() {
+    assert!(should_enable_logging(true));
+}
+
+#[test]
+fn should_enable_logging_uses_rust_log_environment() {
+    let key = "RUST_LOG";
+    let previous = std::env::var_os(key);
+    unsafe {
+        std::env::set_var(key, "debug");
+    }
+    let enabled = should_enable_logging(false);
+    match previous {
+        Some(value) => unsafe { std::env::set_var(key, value) },
+        None => unsafe { std::env::remove_var(key) },
+    }
+    assert!(enabled);
+}
+
+#[test]
+fn should_enable_logging_is_false_without_flag_or_env() {
+    let key = "RUST_LOG";
+    let previous = std::env::var_os(key);
+    unsafe {
+        std::env::remove_var(key);
+    }
+    let enabled = should_enable_logging(false);
+    match previous {
+        Some(value) => unsafe { std::env::set_var(key, value) },
+        None => unsafe { std::env::remove_var(key) },
+    }
+    assert!(!enabled);
 }
 
 // ---------------------------------------------------------------------------
