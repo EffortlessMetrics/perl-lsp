@@ -150,3 +150,44 @@ pub fn get_mod_spec(operator: &str) -> Option<&'static ModSpec> {
         _ => None, // q, qq, qw, qx don't take modifiers
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_tail_handles_charset_suffixes_and_canonical_run_order() {
+        let parsed = split_tail_for_spec("xmisaa", &QR_SPEC);
+
+        assert_eq!(parsed, Some(("imsx".to_string(), Some("aa"))));
+    }
+
+    #[test]
+    fn split_tail_rejects_invalid_or_misplaced_modifiers() {
+        assert_eq!(split_tail_for_spec("mx1", &M_SPEC), None);
+        assert_eq!(split_tail_for_spec("am", &M_SPEC), None);
+        assert_eq!(split_tail_for_spec("rx", &TR_SPEC), None);
+    }
+
+    #[test]
+    fn quote_operator_helpers_cover_known_and_unknown_values() {
+        assert_eq!(paired_close('{'), Some('}'));
+        assert_eq!(paired_close('/'), None);
+
+        assert!(is_quote_operator("qr"));
+        assert!(!is_quote_operator("say"));
+
+        assert_eq!(get_quote_token_type("y"), TokenType::Transliteration);
+
+        let unknown = get_quote_token_type("unknown");
+        assert!(
+            matches!(&unknown, TokenType::Error(message) if message.contains("Unknown quote operator: unknown"))
+        );
+
+        let tr_spec = get_mod_spec("tr");
+        assert!(
+            matches!(tr_spec, Some(spec) if spec.run == TR_SPEC.run && spec.allow_charset == TR_SPEC.allow_charset)
+        );
+        assert!(get_mod_spec("qq").is_none());
+    }
+}

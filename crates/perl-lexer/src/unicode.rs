@@ -102,3 +102,42 @@ pub fn analyze_unicode_complexity(text: &str) -> (usize, usize, usize) {
 
     (char_count, emoji_count, complex_char_count)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn identifier_start_accepts_ascii_unicode_and_emoji() {
+        reset_unicode_stats();
+
+        assert!(is_perl_identifier_start('_'));
+        assert!(is_perl_identifier_start('λ'));
+        assert!(is_perl_identifier_start('🚀'));
+        assert!(!is_perl_identifier_start('1'));
+
+        let (checks, emoji_hits) = get_unicode_stats();
+        assert_eq!(checks, 4);
+        assert_eq!(emoji_hits, 1);
+    }
+
+    #[test]
+    fn identifier_continue_accepts_joiners_variation_and_skin_tones() {
+        assert!(is_perl_identifier_continue('a'));
+        assert!(is_perl_identifier_continue('\''));
+        assert!(is_perl_identifier_continue('\u{200D}'));
+        assert!(is_perl_identifier_continue('\u{FE0F}'));
+        assert!(is_perl_identifier_continue('\u{1F3FD}'));
+        assert!(!is_perl_identifier_continue('-'));
+    }
+
+    #[test]
+    fn unicode_complexity_counts_complex_scalars_and_emoji() {
+        let text = "aé🚀\u{1F3FD}";
+        let (char_count, emoji_count, complex_char_count) = analyze_unicode_complexity(text);
+
+        assert_eq!(char_count, 4);
+        assert_eq!(emoji_count, 2);
+        assert_eq!(complex_char_count, 2);
+    }
+}
