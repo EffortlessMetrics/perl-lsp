@@ -8,6 +8,8 @@ When the v3 recursive descent parser encounters a construct it cannot handle, it
 
 The result is a concise map from root-cause categories to file counts, telling us exactly where parser improvements will have the largest impact.
 
+> **Data sources**: This document references two corpora. The **system corpus** (7,095 files from `/usr/share/perl`, `/usr/lib/x86_64-linux-gnu/perl`, `/usr/share/perl5`) is the original baseline. The **CPAN corpus** (4,355 files from `target/cpan-corpus/lib/perl5`) covers top-1000 CPAN distributions and is the primary source for current bucket sizes. Both use the same first-error normalization pipeline.
+
 ## Why First-Error Analysis
 
 Consider a file where the parser fails to recognize `split /regex/, $string`. That initial misparse (treating `/` as division) leaves the parser in a confused state, generating a chain of secondary errors: an unexpected token here, an unclosed paren there, a missing semicolon further down. Counting all errors would record perhaps 15 `ERROR` nodes, but only one of them is a root cause.
@@ -19,7 +21,7 @@ First-error analysis solves this by:
 3. Normalizing that single error message into a semantic bucket.
 4. Ignoring every downstream error in that file.
 
-This gives a 1:1 mapping from failing file to root cause. The baseline (7,095 files, 3,420 with errors) produces 3,420 first-error classifications spread across 25 semantic buckets, rather than 66,771 raw error nodes with significant duplication.
+This gives a 1:1 mapping from failing file to root cause. For example, the original baseline (7,095 system files, 3,420 with errors) produced 3,420 first-error classifications spread across 25 semantic buckets, rather than 66,771 raw error nodes with significant duplication. After multiple waves of parser fixes, the current system baseline has 1,908 files with errors (28,383 error nodes) and the CPAN baseline has 1,212 files with errors (7,648 error nodes).
 
 ## The Normalization Pipeline
 
@@ -44,97 +46,175 @@ The first-match-wins ordering matters. For example, `"expected expression, found
 
 ## The Semantic Bucket Table
 
-The table below lists all 25 semantic buckets defined in `SEMANTIC_BUCKETS`, plus the synthetic `catastrophic_parse_failure` bucket (used when the parser itself returns `Err`, e.g., recursion limit exceeded). Counts are from the baseline at commit `1429978a` (2026-03-09, Perl 5.038002, 7,095 files).
+The table below lists all semantic buckets defined in `SEMANTIC_BUCKETS`, plus the synthetic `catastrophic_parse_failure` bucket (used when the parser itself returns `Err`, e.g., recursion limit exceeded).
 
-### Expression Parsing Buckets
+Two sets of counts are shown:
+- **System** column: system Perl corpus baseline at commit `a44f7a6d` (2026-03-16, Perl 5.038002, 7,095 files, 5,139 clean = 72.4%)
+- **CPAN** column: CPAN top-1000 corpus sweep (2026-03-18, 4,355 files). The top-9 priority table uses the latest sweep data; the full tables reference the committed baseline at commit `0ff44b44` (2026-03-17, 3,139 clean = 72.1%).
 
-| Bucket | Trigger Substring | Files | Meaning | Roadmap |
-|--------|-------------------|-------|---------|---------|
-| `unexpected_token_in_expr` | `expected expression, found` | 596 | Parser expected an expression but found an unexpected token; catch-all for expression-start failures not covered by specific buckets below | Waves 3-4 |
-| `unexpected_fat_arrow_expr` | `expected expression, found FatArrow` | 310 | `=>` used where `,` would go (e.g., `push @arr => $val`); valid Perl, auto-quotes LHS | Wave 2B |
-| `unexpected_arrow_expr` | `expected expression, found Arrow` | 142 | `->` method call continuation not recognized after certain expression types (hash/array deref) | Wave 3E |
-| `unexpected_slash_expr` | `expected expression, found Slash` | 105 | `/` treated as division when it should be a regex delimiter (e.g., `split /pattern/`) | Wave 2C |
-| `unexpected_question_expr` | `expected expression, found Question` | 30 | `?` in ternary not recognized in certain complex expression contexts | Wave 3C |
-| `unexpected_return_expr` | `expected expression, found Return` | 30 | `return` in expression context edge cases | Wave 4 |
+The CPAN corpus numbers are the primary reference for current prioritization.
+
+### Top 9 Buckets by CPAN Count (Current Priority Order)
+
+| Rank | Bucket | CPAN | System | Root Cause Notes | Status |
+|------|--------|------|--------|------------------|--------|
+| 1 | `unexpected_token_in_expr` | 146 | 706 | Catch-all for unrecognized expression starts. CPAN count dropped dramatically from original 596 (system baseline pre-Wave 2). Scout reports baselines as stale -- the remaining 146 are a mix of subcategories not yet broken out. | RESOLVED per scout; baselines stale |
+| 2 | `unclosed_paren_identifier` | 140 | 319 | Primary root cause: block-list functions called inside parenthesized expressions. When `map { ... }`, `grep { ... }`, or `sort { ... }` appear inside `(...)`, the parser misidentifies the block's closing `}` and then sees the next identifier where `)` was expected. | Active |
+| 3 | `unexpected_question_expr` | 109 | 52 | Two confirmed root causes: (1) `use constant` with ternary -- `use constant FOO => $x ? 1 : 0` where the parser does not expect `?` after a constant-context expression; (2) named unary operators followed by ternary -- `-e $file ? "yes" : "no"` where the parser consumes the ternary `?` as part of the unary's argument. | Active |
+| 4 | `unclosed_paren` | 106 | 134 | Generic unclosed parenthesis. Mix of cascade errors and genuine misparses in complex nested expressions. | Active |
+| 5 | `unexpected_rbrace_expr` | 83 | -- | `}` found where an expression was expected. Typically occurs when the parser misidentifies a hash dereference block boundary or when a bare block ends in expression context. New bucket (not present in original doc). | Active |
+| 6 | `unexpected_comma_expr` | 70 | -- | `,` found where an expression was expected. Common in list contexts where an empty element or trailing comma in a non-list position confuses the parser. New bucket (not present in original doc). | Active |
+| 7 | `expected_left_brace` | 66 | 54 | Missing `{` to open a block. Regression partially attributed to the `field` keyword: `field $x` declarations in `class` bodies are not yet fully supported, causing the parser to expect a block where none exists. | REGRESSION (field keyword) |
+| 8 | `expected_variable` | 66 | 178 | REGRESSION from the `field` keyword feature (PR #1860). The `field $x :param` declaration syntax triggers a false "expected variable" when attribute parsing is incomplete. Both corpora now show elevated counts. | REGRESSION (field keyword) |
+| 9 | `unexpected_fat_arrow_expr` | 66 | 38 | `=>` used as a general separator (e.g., `push @arr => $val`). Wave 2B fix (PR #1484) addressed 3 code paths but CPAN corpus shows 66 remaining -- additional call sites where `=>` appears in separator position are not yet handled. | Partially fixed |
+
+### Expression Parsing Buckets (Full Table)
+
+| Bucket | Trigger Substring | System | CPAN | Meaning |
+|--------|-------------------|--------|------|---------|
+| `unexpected_token_in_expr` | `expected expression, found` | 706 | 148 | Catch-all for expression-start failures not covered by specific buckets below |
+| `unexpected_fat_arrow_expr` | `expected expression, found '=>'` | 38 | 76 | `=>` used where `,` would go (e.g., `push @arr => $val`); valid Perl, auto-quotes LHS |
+| `unexpected_arrow_expr` | `expected expression, found '->'` | 145 | 14 | `->` method call continuation not recognized after certain expression types |
+| `unexpected_slash_expr` | `expected expression, found '/'` | 2 | 6 | `/` treated as division when it should be a regex delimiter |
+| `unexpected_question_expr` | `expected expression, found '?'` | 52 | 103 | `?` in ternary not recognized in certain complex expression contexts |
+| `unexpected_return_expr` | `expected expression, found 'return'` | -- | -- | `return` in expression context (fixed in Wave 4A, PR #1483) |
+| `unexpected_comma_expr` | `expected expression, found ','` | -- | 68 | `,` found where expression expected; empty list elements or misplaced commas |
+| `unexpected_rbrace_expr` | `expected expression, found '}'` | -- | 83 | `}` found where expression expected; hash/block boundary confusion |
+| `unexpected_rparen_expr` | `expected expression, found ')'` | -- | 2 | `)` found where expression expected |
+| `unexpected_semicolon_expr` | `expected expression, found ';'` | -- | 14 | `;` found where expression expected |
+| `unexpected_eof_expr` | `expected expression, found 'end of input'` | -- | -- | End of input where expression expected |
+| `unexpected_word_op_or` | `expected expression, found 'or'` | -- | 26 | `or` found where expression expected |
+| `unexpected_word_op_and` | `expected expression, found 'and'` | -- | 7 | `and` found where expression expected |
+| `unexpected_word_op_not` | `expected expression, found 'not'` | -- | 8 | `not` found where expression expected |
+| `unexpected_word_op_xor` | `expected expression, found 'xor'` | -- | -- | `xor` found where expression expected |
+| `unexpected_token_unless` | `expected expression, found 'unless'` | -- | -- | Postfix `unless` misidentified as expression token |
+| `unexpected_token_until` | `expected expression, found 'until'` | -- | -- | Postfix `until` misidentified as expression token |
+| `unexpected_token_while` | `expected expression, found 'while'` | -- | -- | Postfix `while` misidentified as expression token |
+| `unexpected_token_else` | `expected expression, found 'else'` | -- | 12 | `else` found where expression expected |
+| `unexpected_token_elsif` | `expected expression, found 'elsif'` | -- | 8 | `elsif` found where expression expected |
+| `unexpected_token_for` | `expected expression, found 'for'` | -- | -- | Postfix `for` misidentified as expression token |
+| `unexpected_token_foreach` | `expected expression, found 'foreach'` | -- | -- | Postfix `foreach` misidentified as expression token |
+| `unexpected_token_use` | `expected expression, found 'use'` | -- | -- | `use` found where expression expected |
+| `unexpected_token_no` | `expected expression, found 'no'` | -- | -- | `no` found where expression expected |
 
 ### Delimiter Mismatch Buckets
 
-| Bucket | Trigger Substring | Files | Meaning | Roadmap |
-|--------|-------------------|-------|---------|---------|
-| `unclosed_bracket` | `expected RightBracket, found` | 544 | Array subscript `[...]` not properly closed; largely from package-qualified variables like `$Pkg::Var[idx]` | Wave 2A |
-| `unclosed_paren_identifier` | `expected RightParen, found Identifier` | 488 | Closing `)` expected but found a bare identifier; often from `map`/`grep` blocks inside `for` iterators | Wave 3A/3B |
-| `unclosed_brace_semicolon` | `expected RightBrace, found Semicolon` | 446 | Block `{...}` terminated by `;` instead of `}`; typically cascade from misparse of statement modifiers | Wave 2D |
-| `unclosed_brace` | `expected RightBrace, found` | 187 | Generic unclosed brace (catch-all for brace mismatches not covered by specific sub-buckets) | Waves 2-4 |
-| `unclosed_paren` | `expected RightParen, found` | 102 | Generic unclosed parenthesis | Waves 3-4 |
-| `unclosed_brace_eof` | `expected RightBrace, found Eof` | 52 | File ends with unclosed block; usually cascade from an earlier misparse | Wave 4 |
-| `unclosed_angle` | `Expected '>' to close angle` | 2 | Unclosed angle bracket in diamond operator or `<FILEHANDLE>` | -- |
+| Bucket | Trigger Substring | System | CPAN | Meaning |
+|--------|-------------------|--------|------|---------|
+| `unclosed_bracket` | `expected ']'` | 16 | 38 | Array subscript `[...]` not properly closed |
+| `unclosed_paren_identifier` | `expected ')', found identifier` | 319 | 180 | Closing `)` expected but found a bare identifier; primary root cause is block-list functions (`map`/`grep`/`sort`) inside parenthesized expressions |
+| `unclosed_brace_semicolon` | `expected '}', found ';'` | 43 | 34 | Block `{...}` terminated by `;` instead of `}` |
+| `unclosed_brace` | `expected '}'` | 50 | 30 | Generic unclosed brace (catch-all for brace mismatches) |
+| `unclosed_paren` | `expected ')'` | 134 | 108 | Generic unclosed parenthesis |
+| `unclosed_brace_eof` | `expected '}', found end of input` | -- | -- | File ends with unclosed block; usually cascade from an earlier misparse |
+| `unclosed_angle` | `Expected '>' to close angle` | 2 | 8 | Unclosed angle bracket in diamond operator or `<FILEHANDLE>` |
 
 ### Expected Token Buckets
 
-| Bucket | Trigger Substring | Files | Meaning | Roadmap |
-|--------|-------------------|-------|---------|---------|
-| `expected_variable` | `Expected variable, found` | 128 | Parser expected a variable (`$x`, `@a`, `%h`) but found something else; common with complex dereferences | Waves 2-3 |
-| `expected_colon` | `expected Colon, found` | 32 | Missing `:` in ternary or label context | Wave 3C |
-| `expected_left_brace` | `expected LeftBrace, found` | 28 | Missing `{` to open a block (e.g., after `sub name`) | Waves 3-4 |
-| `expected_identifier` | `expected Identifier, found` | 20 | Expected a bare identifier (subroutine name, label, etc.) | Waves 3-4 |
-| `expected_left_paren` | `expected LeftParen, found` | 20 | Missing `(` where required by syntax | Waves 3-4 |
-| `expected_comma` | `expected Comma, found` | 12 | Missing comma in list context | Wave 3F |
-| `expected_module_name` | `Expected module name or version` | 10 | `use`/`require` statement with unrecognized module name syntax | -- |
-| `expected_semicolon` | `expected Semicolon, found` | 8 | Statement not properly terminated | Waves 3-4 |
-| `expected_comma_or_close_paren` | `Expected comma or closing parenthesis` | 7 | Argument list parsing failure (not in signature context) | Waves 3-4 |
-| `expected_import_item` | `Expected string or identifier in import` | 6 | Import list (`use Module qw(...)`) contains unexpected token | -- |
+| Bucket | Trigger Substring | System | CPAN | Meaning |
+|--------|-------------------|--------|------|---------|
+| `expected_variable` | `Expected variable, found` | 178 | 8 | Parser expected a variable; system count inflated by `field` keyword regression |
+| `expected_colon` | `expected ':'` | 22 | 26 | Missing `:` in ternary or label context |
+| `expected_left_brace` | `expected '{'` | 54 | 68 | Missing `{` to open a block; partial regression from `field` keyword support |
+| `expected_identifier` | `expected identifier` | 30 | 30 | Expected a bare identifier (subroutine name, label, etc.) |
+| `expected_left_paren` | `expected '('` | 54 | 7 | Missing `(` where required by syntax |
+| `expected_comma` | `expected ','` | 6 | 4 | Missing comma in list context |
+| `expected_module_name` | `Expected module name or version` | 14 | -- | `use`/`require` statement with unrecognized module name syntax |
+| `expected_semicolon` | `expected ';'` | 8 | 11 | Statement not properly terminated |
+| `expected_comma_or_close_paren` | `Expected comma or closing parenthesis` | 11 | 55 | Argument list parsing failure (not in signature context) |
+| `expected_import_item` | `Expected string or identifier in import` | 6 | 12 | Import list (`use Module qw(...)`) contains unexpected token |
 
 ### Special Buckets
 
-| Bucket | Trigger Substring | Files | Meaning | Roadmap |
-|--------|-------------------|-------|---------|---------|
-| `catastrophic_backtracking` | `catastrophic backtracking` | 111 | Regex engine safety guard fired; parser's internal regex for a construct hit exponential behavior | Wave 1 (partially fixed) |
-| `signature_param` | `Expected comma or closing parenthesis in signature` | 2 | Subroutine signature `sub foo($x, $y)` parsing failure | -- |
-| `substitution_misparse` | `Substitution operator should be` | 2 | `s///` substitution with unusual delimiters not recognized | -- |
+| Bucket | Trigger Substring | System | CPAN | Meaning |
+|--------|-------------------|--------|------|---------|
+| `catastrophic_backtracking` | `catastrophic backtracking` | -- | -- | Regex engine safety guard (fixed in Wave 1) |
+| `signature_param` | `Expected comma or closing parenthesis in signature` | 2 | -- | Subroutine signature parsing failure |
+| `substitution_misparse` | `Substitution operator should be` | 2 | 10 | `s///` with unusual delimiters not recognized |
 
 ### Synthetic Bucket
 
-| Bucket | Trigger | Files | Meaning |
-|--------|---------|-------|---------|
-| `catastrophic_parse_failure` | Parser returns `Err(...)` | 0 (baseline) | Parser itself panicked or hit recursion limit; not an AST error node but a total failure. Ratchet enforces this stays at 0. |
+| Bucket | Trigger | System | CPAN | Meaning |
+|--------|---------|--------|------|---------|
+| `catastrophic_parse_failure` | Parser returns `Err(...)` | 0 | 0 | Parser itself panicked or hit recursion limit. Ratchet enforces this stays at 0. |
+
+### Unbucketed Errors
+
+Both corpora contain a small number of errors that do not match any `SEMANTIC_BUCKETS` entry and pass through verbatim. These are individually rare (2-4 files each) and include position-specific messages that the normalization regexes did not fully strip. Examples from the CPAN baseline:
+
+| Raw Message | CPAN Files |
+|-------------|------------|
+| `CHECK must be followed by a block` | 2 |
+| `Expected comma or right parenthesis` | 2 |
+| `Missing replacement in substitution` | 2 |
+| `expected Comma, found Some(Identifier) at position 619` | 2 |
+
+These are candidates for future bucket entries if their counts grow.
 
 ## Ordering Matters
 
 The `SEMANTIC_BUCKETS` table is ordered from most-specific to most-general within each category. This is critical because the lookup uses first-match-wins:
 
 ```
-"expected expression, found FatArrow"   -->  unexpected_fat_arrow_expr
-"expected expression, found Arrow"      -->  unexpected_arrow_expr
-"expected expression, found Slash"      -->  unexpected_slash_expr
-"expected expression, found Question"   -->  unexpected_question_expr
-"expected expression, found Return"     -->  unexpected_return_expr
+"expected expression, found '=>'"       -->  unexpected_fat_arrow_expr
+"expected expression, found '->'"       -->  unexpected_arrow_expr
+"expected expression, found '/'"        -->  unexpected_slash_expr
+"expected expression, found '?'"        -->  unexpected_question_expr
+"expected expression, found 'return'"   -->  unexpected_return_expr
+"expected expression, found 'unless'"   -->  unexpected_token_unless
+  ... (other keyword/operator subcategories) ...
+"expected expression, found ','"        -->  unexpected_comma_expr
+"expected expression, found ';'"        -->  unexpected_semicolon_expr
+"expected expression, found '}'"        -->  unexpected_rbrace_expr
+"expected expression, found ')'"        -->  unexpected_rparen_expr
 "expected expression, found"            -->  unexpected_token_in_expr   (catch-all)
 ```
 
-If the catch-all `"expected expression, found"` appeared first, every `FatArrow`/`Arrow`/`Slash` error would be swallowed into the generic bucket and the roadmap could not distinguish them.
+If the catch-all `"expected expression, found"` appeared first, every subcategory error would be swallowed into the generic bucket and the roadmap could not distinguish them.
 
 The same pattern applies to brace errors:
 
 ```
-"expected RightBrace, found Semicolon"  -->  unclosed_brace_semicolon
-"expected RightBrace, found Eof"        -->  unclosed_brace_eof
-"expected RightBrace, found"            -->  unclosed_brace             (catch-all)
+"expected '}', found ';'"              -->  unclosed_brace_semicolon
+"expected '}', found end of input"     -->  unclosed_brace_eof
+"expected '}'"                         -->  unclosed_brace             (catch-all)
 ```
 
 ## How Buckets Drive Priorities
 
 ### Largest Bucket = Largest Fix
 
-The roadmap in `docs/project/PARSER_EDGE_CASE_ROADMAP.md` orders work by bucket size:
+The roadmap in `docs/project/PARSER_EDGE_CASE_ROADMAP.md` orders work by bucket size. After Waves 1-2 landed (and many original buckets shrank dramatically), the current CPAN corpus priority order is:
 
-| Priority | Bucket(s) | Files | Fix |
-|----------|-----------|-------|-----|
-| Wave 2A | `unclosed_bracket` | 544 | Package-qualified array subscript (`$Pkg::Var[idx]`) |
-| Wave 2B | `unexpected_fat_arrow_expr` | 310 | `=>` as general separator (`push @a => $v`) |
-| Wave 2C | `unexpected_slash_expr` | 105 | `split /regex/` slash disambiguation |
-| Wave 2D | `unclosed_brace_semicolon` | 446 | Statement modifiers after complex expressions |
+| Priority | Bucket(s) | CPAN Files | Root Cause | Status |
+|----------|-----------|------------|------------|--------|
+| Next | `unexpected_token_in_expr` | 146 | Catch-all (baselines stale per scout) | Needs re-triage |
+| Next | `unclosed_paren_identifier` | 140 | Block-list functions in parens (`map`/`grep`/`sort`) | Active |
+| Next | `unexpected_question_expr` | 109 | `use constant` ternary + named unary ternary | Active |
+| Next | `unclosed_paren` | 106 | Generic unclosed parenthesis | Active |
+| Next | `unexpected_rbrace_expr` | 83 | Hash/block boundary confusion | Active |
+| Next | `unexpected_comma_expr` | 70 | Empty list elements / misplaced commas | Active |
+| Next | `expected_left_brace` | 66 | `field` keyword regression | REGRESSION |
+| Next | `expected_variable` | 66 | `field` keyword regression | REGRESSION |
+| Next | `unexpected_fat_arrow_expr` | 66 | Additional `=>` separator sites | Partially fixed |
 
-A single fix for Wave 2A (package-qualified subscripts) addresses 544 files -- the largest single-fix win in the entire corpus.
+The largest single-root-cause win is now `unclosed_paren_identifier` (140 CPAN files), where fixing block-list function parsing inside parenthesized expressions would address the majority of failures. The `unexpected_token_in_expr` catch-all at 146 is technically larger but scout reports indicate its baselines are stale and it needs re-triage into subcategories.
+
+### Known Root Causes (2026-03-18)
+
+The following root causes have been identified through scout analysis of the CPAN corpus:
+
+**`unclosed_paren_identifier` (140 files)** -- Block-list functions (`map`, `grep`, `sort`) called inside parenthesized expressions. When the parser encounters `for my $x (map { BLOCK } @list)`, it misidentifies the block boundary and then sees an identifier where `)` was expected. The fix requires teaching the expression parser to recognize block-list function calls as valid subexpressions within parenthesized contexts.
+
+**`unexpected_question_expr` (109 files)** -- Two distinct root causes confirmed:
+1. *`use constant` with ternary*: `use constant FOO => $x ? 1 : 0` -- the parser does not expect `?` after the expression in a constant declaration context.
+2. *Named unary operators followed by ternary*: `-e $file ? "yes" : "no"` -- the parser consumes the ternary `?` as part of the unary operator's argument rather than recognizing it as a separate binary operator.
+
+**`expected_variable` (66 CPAN / 178 system)** -- REGRESSION from the `field` keyword feature (PR #1860). The `field $x :param` declaration syntax triggers a false "expected variable" error when attribute parsing is incomplete. The CPAN count jumped from 8 to 66, confirming the regression is spreading as more CPAN modules adopt `class`/`field` syntax.
+
+**`expected_left_brace` (66 CPAN / 54 system)** -- Partial regression from `field` keyword support. `field $x` declarations in `class` bodies do not require a block, but the parser expects one. Also includes genuine cases where blocks are missing after `sub`, `if`, etc.
+
+**`unexpected_token_in_expr` (146 CPAN)** -- Scout reports indicate the baseline counts are stale. After Wave 2 fixes landed, many files that previously fell into this catch-all now parse cleanly or fall into more specific subcategory buckets. The remaining 146 are a heterogeneous mix that needs further triage to identify whether additional subcategory buckets should be broken out.
 
 ### Cascade Unmasking
 
@@ -190,15 +270,18 @@ When the parser produces a new error message pattern that appears in multiple fi
 
 1. Add a `(substring, bucket_name)` entry to `SEMANTIC_BUCKETS` in `xtask/src/tasks/parser_corpus_sweep.rs`.
 2. Place it **before** any more-general entry that would match the same substring (first-match-wins).
-3. Run `cargo test -p xtask` to verify the mapping.
+3. Run `cargo test -p xtask` to verify the mapping (the `test_normalize_error_bucket_all_semantic_buckets_reachable` test ensures every entry can be triggered).
 4. Run `just corpus-sweep-update` to regenerate the baseline with the new bucket broken out.
 
 Without a dedicated bucket entry, new error patterns pass through verbatim as their own bucket names. This is intentional -- it surfaces novel errors in the sweep output so they can be triaged and, if common enough, given a proper bucket.
+
+The bucket table has grown significantly since the original 25 entries. As of 2026-03-18, `SEMANTIC_BUCKETS` contains entries for keyword tokens (`unless`, `until`, `while`, `else`, `elsif`, `for`, `foreach`, `use`, `no`), word operators (`or`, `and`, `not`, `xor`), and punctuation subcategories (`,`, `;`, `}`, `)`, `end of input`) -- all broken out from the original `unexpected_token_in_expr` catch-all to enable finer-grained prioritization.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `xtask/src/tasks/parser_corpus_sweep.rs` | Sweep implementation, `SEMANTIC_BUCKETS` table, `normalize_error_bucket()` |
-| `.ci/parser-corpus-baseline.json` | Committed baseline with per-bucket counts |
+| `.ci/parser-corpus-baseline.json` | System Perl corpus baseline with per-bucket counts |
+| `.ci/cpan-corpus-baseline.json` | CPAN top-1000 corpus baseline with per-bucket counts |
 | `docs/project/PARSER_EDGE_CASE_ROADMAP.md` | Fix waves organized by bucket priority |
