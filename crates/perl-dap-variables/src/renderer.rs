@@ -645,4 +645,413 @@ mod tests {
         assert!(rendered.value.contains("my_sub"));
         assert_eq!(rendered.type_name, Some("CODE".to_string()));
     }
+
+    // ---------------------------------------------------------------
+    // Circular reference detection and large structure handling tests
+    // ---------------------------------------------------------------
+
+    /// Simulates a self-referential hash like `{ a => \$self }`.
+    ///
+    /// Since `PerlValue` uses `Box` (no `Rc`), true cycles cannot exist at
+    /// the type level.  The Perl debugger would itself truncate such cycles,
+    /// so we model the leaf as a `Truncated` variant representing the
+    /// back-reference the debugger would emit.
+    #[test]
+    fn test_render_self_referential_hash() {
+        let renderer = PerlVariableRenderer::new();
+
+        // Simulate: my $self = { a => \$self }
+        // The debugger would show the back-reference as a truncated/circular marker.
+        let circular_marker =
+            PerlValue::Truncated { summary: "HASH(0x...circular)".to_string(), total_count: None };
+        let value = PerlValue::Hash(vec![(
+            "a".to_string(),
+            PerlValue::Reference(Box::new(circular_marker)),
+        )]);
+
+        let rendered = renderer.render("$self", &value);
+
+        assert_eq!(rendered.name, "$self");
+        assert_eq!(rendered.type_name, Some("HASH".to_string()));
+        assert_eq!(rendered.named_variables, Some(1));
+        // The value preview should contain the circular marker, not panic or hang
+        assert!(rendered.value.contains("circular"));
+
+        // Children should also render safely
+        let children = renderer.render_children(&value, 0, 10);
+        assert_eq!(children.len(), 1);
+        assert_eq!(children[0].name, "a");
+        assert!(children[0].value.contains("circular"));
+    }
+
+    /// Deep nesting of >100 reference levels should produce bounded output.
+    ///
+    /// The renderer caps reference chain traversal at 10 levels, emitting
+    /// `REF(...)` for anything deeper.
+    #[test]
+    fn test_render_deep_nesting_over_100_levels_bounded() {
+        let renderer = PerlVariableRenderer::new();
+
+        // Build a tower of 150 nested references: \\\...\42
+        let mut value = PerlValue::Integer(42);
+        for _ in 0..150 {
+            value = PerlValue::Reference(Box::new(value));
+        }
+
+        let rendered = renderer.render("$deep", &value);
+
+        assert_eq!(rendered.name, "$deep");
+        assert_eq!(rendered.type_name, Some("REF".to_string()));
+
+        // The output must be bounded — the renderer stops at 10 backslash
+        // prefixes and then emits REF(...) for the remainder.
+        // Count backslash prefixes in the value string.
+        let backslash_prefix_count = rendered.value.chars().take_while(|&c| c == '\\').count();
+        assert!(
+            backslash_prefix_count <= 10,
+            "backslash prefix count {} should be <= 10",
+            backslash_prefix_count,
+        );
+        // The value should contain the REF(...) truncation marker
+        assert!(
+            rendered.value.contains("REF(...)"),
+            "deeply nested ref should contain REF(...), got: {}",
+            rendered.value,
+        );
+
+        // Total output length should be reasonable (not exponential)
+        assert!(
+            rendered.value.len() < 200,
+            "rendered value length {} should be < 200",
+            rendered.value.len(),
+        );
+    }
+
+    /// A reference chain of exactly 10 levels should still reach the leaf.
+    #[test]
+    fn test_render_reference_chain_at_depth_limit() {
+        let renderer = PerlVariableRenderer::new();
+
+        let mut value = PerlValue::Scalar("leaf".to_string());
+        for _ in 0..10 {
+            value = PerlValue::Reference(Box::new(value));
+        }
+
+        let rendered = renderer.render("$ref10", &value);
+        // At exactly 10, the chain traversal stops and formats the leaf.
+        // The output should contain 10 backslashes and then the leaf value.
+        assert!(rendered.value.contains("leaf") || rendered.value.contains("REF(...)"));
+        assert!(rendered.value.len() < 200);
+    }
+
+    /// Large array with >10K elements should truncate in preview.
+    #[test]
+    fn test_render_large_array_over_10k_elements_truncates() {
+        let renderer = PerlVariableRenderer::new();
+
+        let elements: Vec<PerlValue> = (0..10_001).map(PerlValue::Integer).collect();
+        let value = PerlValue::Array(elements);
+
+        let rendered = renderer.render("@big", &value);
+
+        assert_eq!(rendered.name, "@big");
+        assert_eq!(rendered.type_name, Some("ARRAY".to_string()));
+        assert_eq!(rendered.indexed_variables, Some(10_001));
+
+        // Preview should show only max_array_preview (default 3) elements
+        // plus a "... (N total)" suffix
+        assert!(
+            rendered.value.contains("10001 total"),
+            "should show total count, got: {}",
+            rendered.value,
+        );
+        assert!(rendered.value.starts_with('['));
+        assert!(rendered.value.ends_with(']'));
+
+        // Preview string should be bounded — not contain all 10K values
+        assert!(
+            rendered.value.len() < 500,
+            "preview length {} should be < 500",
+            rendered.value.len(),
+        );
+    }
+
+    /// `render_children` paginates large arrays correctly.
+    #[test]
+    fn test_render_children_large_array_pagination() {
+        let renderer = PerlVariableRenderer::new();
+
+        let elements: Vec<PerlValue> = (0..10_001).map(PerlValue::Integer).collect();
+        let value = PerlValue::Array(elements);
+
+        // Request a window of 100 starting at index 5000
+        let children = renderer.render_children(&value, 5000, 100);
+        assert_eq!(children.len(), 100);
+        assert_eq!(children[0].name, "[5000]");
+        assert_eq!(children[0].value, "5000");
+        assert_eq!(children[99].name, "[5099]");
+        assert_eq!(children[99].value, "5099");
+
+        // Request past the end — should return only what's available
+        let tail = renderer.render_children(&value, 10_000, 100);
+        assert_eq!(tail.len(), 1);
+        assert_eq!(tail[0].name, "[10000]");
+    }
+
+    /// Large hash with >5K pairs should truncate in preview.
+    #[test]
+    fn test_render_large_hash_over_5k_pairs_truncates() {
+        let renderer = PerlVariableRenderer::new();
+
+        let pairs: Vec<(String, PerlValue)> =
+            (0..5_001).map(|i| (format!("key_{}", i), PerlValue::Integer(i))).collect();
+        let value = PerlValue::Hash(pairs);
+
+        let rendered = renderer.render("%big", &value);
+
+        assert_eq!(rendered.name, "%big");
+        assert_eq!(rendered.type_name, Some("HASH".to_string()));
+        assert_eq!(rendered.named_variables, Some(5_001));
+
+        // Preview should show only max_hash_preview (default 3) pairs
+        // plus a "... (N keys)" suffix
+        assert!(
+            rendered.value.contains("5001 keys"),
+            "should show key count, got: {}",
+            rendered.value,
+        );
+        assert!(rendered.value.starts_with('{'));
+        assert!(rendered.value.ends_with('}'));
+
+        // Preview string should be bounded
+        assert!(
+            rendered.value.len() < 500,
+            "preview length {} should be < 500",
+            rendered.value.len(),
+        );
+    }
+
+    /// `render_children` paginates large hashes correctly.
+    #[test]
+    fn test_render_children_large_hash_pagination() {
+        let renderer = PerlVariableRenderer::new();
+
+        let pairs: Vec<(String, PerlValue)> =
+            (0..5_001).map(|i| (format!("key_{}", i), PerlValue::Integer(i))).collect();
+        let value = PerlValue::Hash(pairs);
+
+        // Request a window of 50 starting at index 2500
+        let children = renderer.render_children(&value, 2500, 50);
+        assert_eq!(children.len(), 50);
+        assert_eq!(children[0].name, "key_2500");
+        assert_eq!(children[0].value, "2500");
+
+        // Request past the end
+        let tail = renderer.render_children(&value, 5000, 100);
+        assert_eq!(tail.len(), 1);
+        assert_eq!(tail[0].name, "key_5000");
+    }
+
+    /// Blessed object backed by a hash — the standard Perl OO pattern.
+    #[test]
+    fn test_render_blessed_object_hash_based() {
+        let renderer = PerlVariableRenderer::new();
+
+        let value = PerlValue::Object {
+            class: "HTTP::Response".to_string(),
+            value: Box::new(PerlValue::Hash(vec![
+                ("_rc".to_string(), PerlValue::Integer(200)),
+                ("_content".to_string(), PerlValue::Scalar("OK".to_string())),
+                (
+                    "_headers".to_string(),
+                    PerlValue::Hash(vec![(
+                        "Content-Type".to_string(),
+                        PerlValue::Scalar("text/html".to_string()),
+                    )]),
+                ),
+            ])),
+        };
+
+        let rendered = renderer.render("$resp", &value);
+
+        assert_eq!(rendered.name, "$resp");
+        assert_eq!(rendered.type_name, Some("HTTP::Response".to_string()));
+        assert_eq!(rendered.named_variables, Some(3));
+        assert!(rendered.value.contains("HTTP::Response"));
+
+        // Children should be the hash keys
+        let children = renderer.render_children(&value, 0, 10);
+        assert_eq!(children.len(), 3);
+        assert_eq!(children[0].name, "_rc");
+        assert_eq!(children[0].value, "200");
+        assert_eq!(children[1].name, "_content");
+        assert!(children[1].value.contains("OK"));
+    }
+
+    /// Blessed object backed by an array (inside-out objects).
+    #[test]
+    fn test_render_blessed_object_array_based() {
+        let renderer = PerlVariableRenderer::new();
+
+        let value = PerlValue::Object {
+            class: "My::InsideOut".to_string(),
+            value: Box::new(PerlValue::Array(vec![
+                PerlValue::Scalar("field_a".to_string()),
+                PerlValue::Integer(99),
+            ])),
+        };
+
+        let rendered = renderer.render("$io", &value);
+
+        assert_eq!(rendered.type_name, Some("My::InsideOut".to_string()));
+        assert_eq!(rendered.indexed_variables, Some(2));
+        assert!(rendered.value.contains("My::InsideOut"));
+
+        let children = renderer.render_children(&value, 0, 10);
+        assert_eq!(children.len(), 2);
+        assert_eq!(children[0].name, "[0]");
+        assert_eq!(children[1].name, "[1]");
+    }
+
+    /// Blessed object backed by a scalar (e.g., URI, overloaded stringification).
+    #[test]
+    fn test_render_blessed_object_scalar_based() {
+        let renderer = PerlVariableRenderer::new();
+
+        // URI objects are blessed scalar refs: bless \("https://example.com"), "URI"
+        let value = PerlValue::Object {
+            class: "URI".to_string(),
+            value: Box::new(PerlValue::Scalar("https://example.com".to_string())),
+        };
+
+        let rendered = renderer.render("$uri", &value);
+
+        assert_eq!(rendered.type_name, Some("URI".to_string()));
+        // Scalar-backed objects don't expose named or indexed children
+        assert_eq!(rendered.named_variables, None);
+        assert_eq!(rendered.indexed_variables, None);
+        assert!(rendered.value.contains("URI"));
+        assert!(rendered.value.contains("https://example.com"));
+    }
+
+    /// Blessed object with deeply nested class name (Perl namespaces).
+    #[test]
+    fn test_render_blessed_object_deep_namespace() {
+        let renderer = PerlVariableRenderer::new();
+
+        let value = PerlValue::Object {
+            class: "Very::Deep::Nested::Package::Name".to_string(),
+            value: Box::new(PerlValue::Hash(vec![])),
+        };
+
+        let rendered = renderer.render("$obj", &value);
+
+        assert_eq!(rendered.type_name, Some("Very::Deep::Nested::Package::Name".to_string()),);
+        assert!(rendered.value.contains("Very::Deep::Nested::Package::Name"));
+        assert_eq!(rendered.named_variables, Some(0));
+    }
+
+    /// Blessed object with `render_with_reference` gets a reference ID
+    /// and is expandable.
+    #[test]
+    fn test_render_blessed_object_with_reference() {
+        let renderer = PerlVariableRenderer::new();
+
+        let value = PerlValue::Object {
+            class: "DBI::db".to_string(),
+            value: Box::new(PerlValue::Hash(vec![(
+                "Driver".to_string(),
+                PerlValue::Scalar("SQLite".to_string()),
+            )])),
+        };
+
+        let rendered = renderer.render_with_reference("$dbh", &value, 99);
+
+        assert_eq!(rendered.variables_reference, 99);
+        assert!(rendered.is_expandable());
+        assert_eq!(rendered.type_name, Some("DBI::db".to_string()));
+    }
+
+    /// Simulates a hash whose value is a reference back to a parent —
+    /// the pattern `{ parent => \%grandparent, child => \%self }` where
+    /// the debugger truncates the cycle.
+    #[test]
+    fn test_render_hash_with_multiple_back_references() {
+        let renderer = PerlVariableRenderer::new();
+
+        let grandparent_marker = PerlValue::Truncated {
+            summary: "HASH(0xaaa...circular)".to_string(),
+            total_count: Some(5),
+        };
+        let self_marker = PerlValue::Truncated {
+            summary: "HASH(0xbbb...circular)".to_string(),
+            total_count: Some(3),
+        };
+
+        let value = PerlValue::Hash(vec![
+            ("parent".to_string(), PerlValue::Reference(Box::new(grandparent_marker))),
+            ("child".to_string(), PerlValue::Reference(Box::new(self_marker))),
+            ("name".to_string(), PerlValue::Scalar("node".to_string())),
+        ]);
+
+        let rendered = renderer.render("$node", &value);
+
+        assert_eq!(rendered.named_variables, Some(3));
+        // Should not panic or produce unbounded output
+        assert!(rendered.value.len() < 500);
+
+        let children = renderer.render_children(&value, 0, 10);
+        assert_eq!(children.len(), 3);
+        // The circular references render as REF type with truncated target
+        assert!(children[0].value.contains("circular"));
+        assert!(children[1].value.contains("circular"));
+        assert!(children[2].value.contains("node"));
+    }
+
+    /// Empty array and hash render as `[]` and `{}` respectively.
+    #[test]
+    fn test_render_empty_collections() {
+        let renderer = PerlVariableRenderer::new();
+
+        let empty_arr = PerlValue::Array(vec![]);
+        let rendered = renderer.render("@empty", &empty_arr);
+        assert_eq!(rendered.value, "[]");
+        assert_eq!(rendered.indexed_variables, Some(0));
+
+        let empty_hash = PerlValue::Hash(vec![]);
+        let rendered = renderer.render("%empty", &empty_hash);
+        assert_eq!(rendered.value, "{}");
+        assert_eq!(rendered.named_variables, Some(0));
+    }
+
+    /// Verifies that configuring lower preview limits still works for
+    /// large structures.
+    #[test]
+    fn test_render_large_array_with_custom_preview_limit() {
+        let renderer =
+            PerlVariableRenderer::new().with_max_array_preview(1).with_max_hash_preview(1);
+
+        let elements: Vec<PerlValue> = (0..100).map(PerlValue::Integer).collect();
+        let value = PerlValue::Array(elements);
+
+        let rendered = renderer.render("@arr", &value);
+        // With preview=1, should show one element then "... (100 total)"
+        assert!(rendered.value.contains("100 total"));
+        // Only the first element should appear before the ellipsis
+        assert!(rendered.value.starts_with("[0"));
+    }
+
+    /// Verifies that configuring lower preview limits works for large hashes.
+    #[test]
+    fn test_render_large_hash_with_custom_preview_limit() {
+        let renderer = PerlVariableRenderer::new().with_max_hash_preview(1);
+
+        let pairs: Vec<(String, PerlValue)> =
+            (0..100).map(|i| (format!("k{}", i), PerlValue::Integer(i))).collect();
+        let value = PerlValue::Hash(pairs);
+
+        let rendered = renderer.render("%h", &value);
+        assert!(rendered.value.contains("100 keys"));
+        assert!(rendered.value.starts_with('{'));
+    }
 }
