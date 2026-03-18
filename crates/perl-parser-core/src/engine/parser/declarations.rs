@@ -953,6 +953,23 @@ impl<'a> Parser<'a> {
         match self.peek_kind() {
             Some(TokenKind::Number | TokenKind::String) => {
                 args.push(self.consume_token()?.text.to_string());
+                // If an operator follows (e.g. `1 ? 'a' : 'b'` or `'hello' . ' world'`),
+                // the value is a full expression. Slurp the rest until the next value
+                // boundary so the trailing operator is not left orphaned.
+                if !Self::is_statement_terminator(self.peek_kind())
+                    && self.peek_kind() != Some(TokenKind::Comma)
+                    && self.peek_kind() != Some(TokenKind::FatArrow)
+                    && self.peek_kind() != Some(TokenKind::RightParen)
+                    && self.peek_kind() != Some(TokenKind::RightBracket)
+                    && self.peek_kind() != Some(TokenKind::RightBrace)
+                {
+                    while !Self::is_statement_terminator(self.peek_kind())
+                        && self.peek_kind() != Some(TokenKind::Comma)
+                        && self.peek_kind() != Some(TokenKind::FatArrow)
+                    {
+                        args.push(self.consume_token()?.text.to_string());
+                    }
+                }
             }
             Some(TokenKind::Identifier) => {
                 // Peek ahead to see if this identifier is followed by =>
@@ -984,6 +1001,8 @@ impl<'a> Parser<'a> {
                                 | TokenKind::Dot
                                 | TokenKind::WordAnd
                                 | TokenKind::WordOr
+                                | TokenKind::Question
+                                | TokenKind::Colon
                         )
                     ) {
                         while !Self::is_statement_terminator(self.peek_kind())
