@@ -1159,7 +1159,9 @@ impl PureRustPerlParser {
 
                 for p in inner {
                     match p.as_rule() {
-                        Rule::identifier => {
+                        Rule::identifier
+                        | Rule::qualified_name
+                        | Rule::qualified_name_or_identifier => {
                             name = Arc::from(p.as_str());
                         }
                         Rule::list_op_args => {
@@ -2782,5 +2784,44 @@ mod tests {
         let sexp = parser.to_sexp(&ast);
         println!("Hash assignment AST: {:?}", ast);
         println!("S-expression: {}", sexp);
+    }
+
+    #[test]
+    fn test_qualified_function_call_without_parentheses() {
+        let mut parser = PureRustPerlParser::new();
+        let source = "My::Package::run $value, 42;";
+        let ast = must(parser.parse(source));
+
+        let statements = match ast {
+            AstNode::Program(statements) => statements,
+            other => {
+                assert!(matches!(other, AstNode::Program(_)), "expected program root");
+                unreachable!();
+            }
+        };
+        let inner_statements = match statements.first() {
+            Some(AstNode::Program(inner_statements)) => inner_statements,
+            other => {
+                assert!(matches!(other, Some(AstNode::Program(_))), "expected nested program node");
+                unreachable!();
+            }
+        };
+        let statement = match inner_statements.first() {
+            Some(AstNode::Statement(statement)) => statement,
+            other => {
+                assert!(matches!(other, Some(AstNode::Statement(_))), "expected statement");
+                unreachable!();
+            }
+        };
+
+        assert!(
+            matches!(statement.as_ref(), AstNode::FunctionCall { .. }),
+            "expected function call"
+        );
+
+        if let AstNode::FunctionCall { function, args } = statement.as_ref() {
+            assert_eq!(function.as_ref(), &AstNode::Identifier(Arc::from("My::Package::run")));
+            assert_eq!(args.len(), 2);
+        }
     }
 }

@@ -442,7 +442,7 @@ primary_expression = {
 
 // User-defined function calls (with optional arguments)
 user_function_call = {
-    identifier ~ list_op_args
+    qualified_name_or_identifier ~ list_op_args
 }
 
 class_method_call = { identifier ~ ("::" ~ identifier)+ ~ "->" ~ method_name ~ function_args? }

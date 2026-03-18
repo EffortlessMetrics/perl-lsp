@@ -1159,7 +1159,9 @@ impl PureRustPerlParser {
 
                 for p in inner {
                     match p.as_rule() {
-                        Rule::identifier => {
+                        Rule::identifier
+                        | Rule::qualified_name
+                        | Rule::qualified_name_or_identifier => {
                             name = Arc::from(p.as_str());
                         }
                         Rule::list_op_args => {
