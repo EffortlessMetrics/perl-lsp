@@ -1108,6 +1108,49 @@ pub struct WorkspaceIndex {
 }
 
 impl WorkspaceIndex {
+    fn rebuild_symbol_cache(
+        files: &HashMap<String, FileIndex>,
+        symbols: &mut HashMap<String, String>,
+    ) {
+        symbols.clear();
+
+        for file_index in files.values() {
+            for symbol in &file_index.symbols {
+                if let Some(ref qname) = symbol.qualified_name {
+                    symbols.insert(qname.clone(), symbol.uri.clone());
+                }
+                symbols.insert(symbol.name.clone(), symbol.uri.clone());
+            }
+        }
+    }
+
+    fn find_definition_in_files(
+        files: &HashMap<String, FileIndex>,
+        symbol_name: &str,
+        uri_filter: Option<&str>,
+    ) -> Option<(Location, String)> {
+        for file_index in files.values() {
+            if let Some(filter) = uri_filter
+                && file_index.symbols.first().is_some_and(|symbol| symbol.uri != filter)
+            {
+                continue;
+            }
+
+            for symbol in &file_index.symbols {
+                if symbol.name == symbol_name
+                    || symbol.qualified_name.as_deref() == Some(symbol_name)
+                {
+                    return Some((
+                        Location { uri: symbol.uri.clone(), range: symbol.range },
+                        symbol.uri.clone(),
+                    ));
+                }
+            }
+        }
+
+        None
+    }
+
     /// Create a new empty index
     ///
     /// # Returns
@@ -1207,25 +1250,12 @@ impl WorkspaceIndex {
         let mut visitor = IndexVisitor::new(&mut doc, uri_str.clone());
         visitor.visit(&ast, &mut file_index);
 
-        // Update the index
+        // Update the index and refresh the global symbol cache from the current file set.
         {
             let mut files = self.files.write();
             files.insert(key.clone(), file_index);
-        }
-
-        // Update global symbol map
-        {
-            let files = self.files.read();
-            if let Some(file_index) = files.get(&key) {
-                let mut symbols = self.symbols.write();
-                for symbol in &file_index.symbols {
-                    if let Some(ref qname) = symbol.qualified_name {
-                        symbols.insert(qname.clone(), uri_str.clone());
-                    } else {
-                        symbols.insert(symbol.name.clone(), uri_str.clone());
-                    }
-                }
-            }
+            let mut symbols = self.symbols.write();
+            Self::rebuild_symbol_cache(&files, &mut symbols);
         }
 
         Ok(())
@@ -1258,16 +1288,10 @@ impl WorkspaceIndex {
 
         // Remove file index
         let mut files = self.files.write();
-        if let Some(file_index) = files.remove(&key) {
-            // Remove from global symbol map
+        if files.remove(&key).is_some() {
+            // Rebuild the global symbol map so colliding names from other files stay available.
             let mut symbols = self.symbols.write();
-            for symbol in file_index.symbols {
-                if let Some(ref qname) = symbol.qualified_name {
-                    symbols.remove(qname);
-                } else {
-                    symbols.remove(&symbol.name);
-                }
-            }
+            Self::rebuild_symbol_cache(&files, &mut symbols);
         }
     }
 
@@ -1522,21 +1546,26 @@ impl WorkspaceIndex {
     /// let _def = index.find_definition("MyPackage::example");
     /// ```
     pub fn find_definition(&self, symbol_name: &str) -> Option<Location> {
-        let files = self.files.read();
-        println!(
-            "find_definition DEBUG: index has {} files, looking for {}",
-            files.len(),
-            symbol_name
-        );
+        let cached_uri = {
+            let symbols = self.symbols.read();
+            symbols.get(symbol_name).cloned()
+        };
 
-        for (_uri_key, file_index) in files.iter() {
-            for symbol in &file_index.symbols {
-                if symbol.name == symbol_name
-                    || symbol.qualified_name.as_deref() == Some(symbol_name)
-                {
-                    return Some(Location { uri: symbol.uri.clone(), range: symbol.range });
-                }
-            }
+        let files = self.files.read();
+        if let Some(ref uri_str) = cached_uri
+            && let Some((location, _uri)) =
+                Self::find_definition_in_files(&files, symbol_name, Some(uri_str))
+        {
+            return Some(location);
+        }
+
+        let resolved = Self::find_definition_in_files(&files, symbol_name, None);
+        drop(files);
+
+        if let Some((location, uri)) = resolved {
+            let mut symbols = self.symbols.write();
+            symbols.insert(symbol_name.to_string(), uri);
+            return Some(location);
         }
 
         None
@@ -2559,7 +2588,7 @@ pub mod lsp_adapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use perl_tdd_support::must;
+    use perl_tdd_support::{must, must_some};
 
     #[test]
     fn test_basic_indexing() {
@@ -3358,6 +3387,43 @@ sub hello {
         let symbols2 = index.file_symbols(uri.as_str());
         // Symbols should still be found, but content hash differs so it re-indexed
         assert!(symbols2.iter().any(|s| s.name == "hello" && s.kind == SymbolKind::Subroutine));
+    }
+
+    #[test]
+    fn test_reindex_file_refreshes_symbol_cache_for_removed_names() {
+        let index = WorkspaceIndex::new();
+        let uri1 = must(url::Url::parse("file:///lib/A.pm"));
+        let uri2 = must(url::Url::parse("file:///lib/B.pm"));
+        let code1 = "package A;\nsub foo { return 1; }\n1;\n";
+        let code2 = "package B;\nsub foo { return 2; }\n1;\n";
+        let code2_reindexed = "package B;\nsub bar { return 3; }\n1;\n";
+
+        must(index.index_file(uri1.clone(), code1.to_string()));
+        must(index.index_file(uri2.clone(), code2.to_string()));
+        must(index.index_file(uri2.clone(), code2_reindexed.to_string()));
+
+        let foo_location = must_some(index.find_definition("foo"));
+        assert_eq!(foo_location.uri, uri1.to_string());
+
+        let bar_location = must_some(index.find_definition("bar"));
+        assert_eq!(bar_location.uri, uri2.to_string());
+    }
+
+    #[test]
+    fn test_remove_file_preserves_other_colliding_symbol_entries() {
+        let index = WorkspaceIndex::new();
+        let uri1 = must(url::Url::parse("file:///lib/A.pm"));
+        let uri2 = must(url::Url::parse("file:///lib/B.pm"));
+        let code1 = "package A;\nsub foo { return 1; }\n1;\n";
+        let code2 = "package B;\nsub foo { return 2; }\n1;\n";
+
+        must(index.index_file(uri1.clone(), code1.to_string()));
+        must(index.index_file(uri2.clone(), code2.to_string()));
+
+        index.remove_file(uri2.as_str());
+
+        let foo_location = must_some(index.find_definition("foo"));
+        assert_eq!(foo_location.uri, uri1.to_string());
     }
 
     #[test]
