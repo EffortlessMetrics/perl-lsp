@@ -41,7 +41,7 @@ cargo bench -p perl-lsp-tooling          # Run cache benchmarks
 | Module | Key Types | Purpose |
 |--------|-----------|---------|
 | `subprocess_runtime` | `SubprocessRuntime` (trait), `OsSubprocessRuntime`, `SubprocessOutput`, `SubprocessError` | Trait-based subprocess execution abstraction for testability and WASM compat |
-| `perltidy` | `PerlTidyConfig`, `PerlTidyFormatter`, `BuiltInFormatter`, `FormatSuggestion` | Perltidy integration with caching, range formatting, and built-in fallback |
+| `perltidy` | `PerlTidyConfig`, `PerlTidyFormatter`, `BuiltInFormatter`, `FormatSuggestion` | Backward-compatible re-export of the `perl-lsp-perltidy` microcrate |
 | `perl_critic` | `CriticConfig`, `CriticAnalyzer`, `BuiltInAnalyzer`, `Severity`, `Violation`, `Policy` (trait), `QuickFix`, `TextEdit` | Perlcritic integration with caching, built-in policies, and quick fixes |
 | `performance` | `AstCache`, `IncrementalParser`, `SymbolIndex`, `parallel::process_files_parallel` | Large workspace scaling: concurrent AST cache, change tracking, trie-based symbol search |
 

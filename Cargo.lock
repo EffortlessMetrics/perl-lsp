@@ -2143,6 +2143,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "perl-lsp-perltidy"
+version = "0.11.0"
+dependencies = [
+ "perl-subprocess-runtime",
+ "perl-tdd-support",
+ "serde",
+]
+
+[[package]]
 name = "perl-lsp-protocol"
 version = "0.11.0"
 dependencies = [
@@ -2215,6 +2224,7 @@ dependencies = [
  "lsp-types",
  "perl-lsp-critic-parser",
  "perl-lsp-performance",
+ "perl-lsp-perltidy",
  "perl-parser-core",
  "perl-subprocess-runtime",
  "perl-tdd-support",
