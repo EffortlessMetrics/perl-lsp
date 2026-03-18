@@ -219,7 +219,7 @@ impl RecoveryParser {
         match self.context.current_token() {
             Some(token) => match &token.token.token_type {
                 TokenType::Keyword(kw) => match kw.as_ref() {
-                    "my" | "our" | "local" | "state" => self.parse_variable_declaration(),
+                    "my" | "our" | "local" | "state" | "field" => self.parse_variable_declaration(),
                     "if" => self.parse_if_statement(),
                     "while" => self.parse_while_statement(),
                     "sub" => self.parse_subroutine(),

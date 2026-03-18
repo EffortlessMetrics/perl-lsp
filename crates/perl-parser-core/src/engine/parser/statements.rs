@@ -126,7 +126,9 @@ impl<'a> Parser<'a> {
             }
 
             // Variable declarations
-            TokenKind::My | TokenKind::Our | TokenKind::State => self.parse_variable_declaration(),
+            TokenKind::My | TokenKind::Our | TokenKind::State | TokenKind::Field => {
+                self.parse_variable_declaration()
+            }
             TokenKind::Local => self.parse_local_statement(),
 
             // Control flow

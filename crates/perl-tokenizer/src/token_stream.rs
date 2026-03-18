@@ -219,6 +219,7 @@ impl<'a> TokenStream<'a> {
                 "default" => TokenKind::Default,
                 "try" => TokenKind::Try,
                 "catch" => TokenKind::Catch,
+                "field" => TokenKind::Field,
                 "finally" => TokenKind::Finally,
                 "continue" => TokenKind::Continue,
                 "next" => TokenKind::Next,

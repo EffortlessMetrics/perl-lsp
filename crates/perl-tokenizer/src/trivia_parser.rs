@@ -370,7 +370,9 @@ impl TriviaPreservingParser {
 
         // Simple demonstration: parse variable declarations
         match &token.token_type {
-            TokenType::Keyword(kw) if matches!(kw.as_ref(), "my" | "our" | "local" | "state") => {
+            TokenType::Keyword(kw)
+                if matches!(kw.as_ref(), "my" | "our" | "local" | "state" | "field") =>
+            {
                 let start_pos = self.context.position_tracker.offset_to_position(token.start);
 
                 let declarator = kw.to_string();
