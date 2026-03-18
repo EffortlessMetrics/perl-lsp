@@ -18,6 +18,7 @@ include = ["src/**", "src/grammar.pest", "Cargo.toml", "README.md", "LICENSE*"]
 [dependencies]
 pest = "2.8.6"
 pest_derive = "2.8.6"
+regex = "1.12.2"
 stacker = "0.1.23"
 thiserror = "2.0.18"
 serde = { version = "1.0.228", features = ["derive"] }

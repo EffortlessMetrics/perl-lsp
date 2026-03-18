@@ -9,8 +9,9 @@ use pest::{
     iterators::{Pair, Pairs},
 };
 use pest_derive::Parser;
+use regex::Regex;
 use stacker;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -115,6 +116,10 @@ pub enum AstNode {
         false_expr: Box<AstNode>,
     },
     PostfixDereference {
+        expr: Box<AstNode>,
+        deref_type: Arc<str>,
+    },
+    Dereference {
         expr: Box<AstNode>,
         deref_type: Arc<str>,
     },
@@ -323,13 +328,61 @@ impl PureRustPerlParser {
 
     #[inline(always)]
     pub fn parse(&mut self, source: &str) -> Result<AstNode, Box<dyn std::error::Error>> {
-        match <PerlParser as Parser<Rule>>::parse(Rule::program, source) {
+        let normalized = Self::normalize_source(source);
+
+        match <PerlParser as Parser<Rule>>::parse(Rule::program, &normalized) {
             Ok(pairs) => self.build_ast(pairs),
             Err(e) => {
                 // Attempt partial parsing by trying to parse individual statements
-                self.parse_with_recovery(source, e)
+                self.parse_with_recovery(&normalized, e)
             }
         }
+    }
+
+    fn normalize_source(source: &str) -> String {
+        static LOOP_DECL_RE: OnceLock<Option<Regex>> = OnceLock::new();
+        static SIMPLE_SCALAR_DEREF_RE: OnceLock<Option<Regex>> = OnceLock::new();
+        static ASSIGN_BITNOT_RE: OnceLock<Option<Regex>> = OnceLock::new();
+
+        // These are fixed patterns; if one ever fails to compile, skip normalization
+        // rather than panicking inside production parser code.
+        let Some(loop_decl_re) = LOOP_DECL_RE
+            .get_or_init(|| {
+                Regex::new(
+                    r"\b(?P<kw>for(?:each)?)\s+(?:my|our|local|state)\s+(?P<var>\$[A-Za-z_][A-Za-z0-9_:]*)\s*(?P<paren>\()",
+                )
+                .ok()
+            })
+            .as_ref()
+        else {
+            return source.to_string();
+        };
+        let Some(scalar_deref_re) = SIMPLE_SCALAR_DEREF_RE
+            .get_or_init(|| Regex::new(r"\$\$(?P<name>[A-Za-z_][A-Za-z0-9_:]*)").ok())
+            .as_ref()
+        else {
+            return source.to_string();
+        };
+        let Some(assign_bitnot_re) = ASSIGN_BITNOT_RE
+            .get_or_init(|| Regex::new(r"=\s+~\s*(?P<expr>\$[A-Za-z_][A-Za-z0-9_:]*)").ok())
+            .as_ref()
+        else {
+            return source.to_string();
+        };
+
+        let normalized_loops = loop_decl_re.replace_all(source, "$kw $var $paren").into_owned();
+        let normalized_derefs = scalar_deref_re
+            .replace_all(&normalized_loops, |caps: &regex::Captures<'_>| {
+                let variable = format!("${}", &caps["name"]);
+                format!("${{{}}}", variable)
+            })
+            .into_owned();
+
+        assign_bitnot_re
+            .replace_all(&normalized_derefs, |caps: &regex::Captures<'_>| {
+                format!("= bitnot({})", &caps["expr"])
+            })
+            .into_owned()
     }
 
     fn parse_with_recovery(
@@ -1815,11 +1868,15 @@ impl PureRustPerlParser {
                 let mut variable = None;
                 let mut list = None;
                 let mut block = None;
+                let mut declarator = None;
 
                 for p in inner {
                     match p.as_rule() {
                         Rule::label => {
                             label = Some(Arc::from(p.as_str().trim_end_matches(':')));
+                        }
+                        Rule::loop_variable_declarator => {
+                            declarator = Some(Arc::from(p.as_str()));
                         }
                         Rule::variable => {
                             variable = Some(Box::new(
@@ -1840,9 +1897,21 @@ impl PureRustPerlParser {
                     }
                 }
 
+                let final_variable = if let Some(decl) = declarator {
+                    variable.map(|var| {
+                        Box::new(AstNode::VariableDeclaration {
+                            scope: decl,
+                            variables: vec![*var],
+                            initializer: None,
+                        })
+                    })
+                } else {
+                    variable
+                };
+
                 Ok(Some(AstNode::ForeachStatement {
                     label,
-                    variable,
+                    variable: final_variable,
                     list: list.unwrap_or_else(|| Box::new(AstNode::EmptyExpression)),
                     block: block.unwrap_or_else(|| Box::new(AstNode::EmptyExpression)),
                 }))
@@ -1896,16 +1965,13 @@ impl PureRustPerlParser {
                                 self.build_node(p)?.unwrap_or(AstNode::EmptyExpression),
                             ));
                         }
+                        Rule::loop_variable_declarator => {
+                            declarator = Some(Arc::from(p.as_str()));
+                        }
                         Rule::block => {
                             block = self.build_node(p)?.map(Box::new);
                         }
-                        _ => {
-                            // Check for declarators (my, our, local, state)
-                            let text = p.as_str();
-                            if matches!(text, "my" | "our" | "local" | "state") {
-                                declarator = Some(Arc::from(text));
-                            }
-                        }
+                        _ => {}
                     }
                 }
 
@@ -2026,6 +2092,10 @@ impl PureRustPerlParser {
                 let inner = pair.into_inner().next().ok_or("Empty reference")?;
                 self.build_node(inner)
             }
+            Rule::dereference => {
+                let inner = pair.into_inner().next().ok_or("Empty dereference")?;
+                self.build_node(inner)
+            }
             Rule::scalar_reference => {
                 // Since these are atomic rules, use the whole pair's text
                 Ok(Some(AstNode::ScalarReference(Arc::from(pair.as_str()))))
@@ -2046,6 +2116,11 @@ impl PureRustPerlParser {
                 // Since these are atomic rules, use the whole pair's text
                 Ok(Some(AstNode::GlobReference(Arc::from(pair.as_str()))))
             }
+            Rule::scalar_dereference => self.build_dereference_node(pair, "$"),
+            Rule::array_dereference => self.build_dereference_node(pair, "@"),
+            Rule::hash_dereference => self.build_dereference_node(pair, "%"),
+            Rule::code_dereference => self.build_dereference_node(pair, "&"),
+            Rule::glob_dereference => self.build_dereference_node(pair, "*"),
             Rule::primary_expression => {
                 // Handle primary expressions including parenthesized expressions
                 let inner: Vec<_> = pair.into_inner().collect();
@@ -2208,6 +2283,30 @@ impl PureRustPerlParser {
         Ok(args)
     }
 
+    fn build_dereference_node(
+        &mut self,
+        pair: Pair<Rule>,
+        deref_type: &'static str,
+    ) -> Result<Option<AstNode>, Box<dyn std::error::Error>> {
+        let mut inner = pair.into_inner();
+        let expr = if let Some(inner_pair) = inner.next() {
+            match inner_pair.as_rule() {
+                Rule::expression => {
+                    Box::new(self.build_node(inner_pair)?.unwrap_or(AstNode::EmptyExpression))
+                }
+                Rule::variable_name => {
+                    let variable = Arc::<str>::from(format!("${}", inner_pair.as_str()));
+                    Box::new(AstNode::ScalarVariable(variable))
+                }
+                _ => Box::new(self.build_node(inner_pair)?.unwrap_or(AstNode::EmptyExpression)),
+            }
+        } else {
+            Box::new(AstNode::EmptyExpression)
+        };
+
+        Ok(Some(AstNode::Dereference { expr, deref_type: Arc::from(deref_type) }))
+    }
+
     pub fn to_sexp(&self, node: &AstNode) -> String {
         Self::node_to_sexp(node)
     }
@@ -2312,6 +2411,9 @@ impl PureRustPerlParser {
             }
             AstNode::PostfixDereference { expr, deref_type } => {
                 format!("(postfix_deref {} {})", Self::node_to_sexp(expr), deref_type)
+            }
+            AstNode::Dereference { expr, deref_type } => {
+                format!("(dereference {} {})", Self::node_to_sexp(expr), deref_type)
             }
             AstNode::TypeglobSlotAccess { typeglob, slot } => {
                 format!("(typeglob_slot_access {} {})", Self::node_to_sexp(typeglob), slot)
