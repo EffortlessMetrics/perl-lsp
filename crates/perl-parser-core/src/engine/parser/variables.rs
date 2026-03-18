@@ -325,27 +325,10 @@ impl<'a> Parser<'a> {
 
         // Check if next token is an identifier or a keyword that should be treated as identifier
         let next_kind = self.peek_kind();
-        let can_be_sub_name = |k: TokenKind| {
-            matches!(
-                k,
-                TokenKind::Sub
-                    | TokenKind::My
-                    | TokenKind::Our
-                    | TokenKind::If
-                    | TokenKind::Unless
-                    | TokenKind::While
-                    | TokenKind::For
-                    | TokenKind::Return
-                    | TokenKind::Do
-                    | TokenKind::Eval
-                    | TokenKind::Use
-                    | TokenKind::Package
-            )
-        };
 
         let (name, end) = if next_kind == Some(TokenKind::Identifier) ||
                              // Keywords that can be used as subroutine names with & sigil
-                             (sigil == "&" && matches!(next_kind, Some(k) if can_be_sub_name(k)))
+                             (sigil == "&" && matches!(next_kind, Some(k) if Self::can_be_sub_name(k)))
         {
             let name_token = self.tokens.next()?;
             let mut name = name_token.text.to_string();
